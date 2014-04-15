@@ -1,6 +1,6 @@
 .PHONY: test deps
 
-all: deps
+all: deps compile
 
 deps:
 	@./rebar get-deps

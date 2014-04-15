@@ -1,0 +1,18 @@
+
+{application, globalregistry, [
+	{description, "Global registry of data."},
+	{vsn, "1"},
+	{registered, [globalregistry_sup]},
+	{applications, [
+		kernel,
+		stdlib,
+		cowboy
+	]},
+	{modules, [
+		globalregistry_sup,
+		globalregistry_app,
+		hello_world
+	]},
+	{mod, {globalregistry_app, []}},
+	{env, []}
+]}.

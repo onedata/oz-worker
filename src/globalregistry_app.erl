@@ -11,6 +11,9 @@
 
 -behaviour(application).
 
+%% Includes
+-include("rest_config.hrl").
+
 %% Application callbacks
 -export([start/2,
 	stop/1]).
@@ -36,6 +39,7 @@
 	{ok, pid(), State :: term()} |
 	{error, Reason :: term()}).
 start(_StartType, _StartArgs) ->
+	start_cowboy(),
 	case globalregistry_sup:start_link() of
 		{ok, Pid} ->
 			{ok, Pid};
@@ -59,3 +63,13 @@ stop(_State) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+start_cowboy() ->
+	Dispatch = cowboy_router:compile([
+		{'_', [
+			{?TEST_URL, hello_world, []}
+		]}
+	]),
+	{ok, _} = cowboy:start_http(?TEST_REF, ?HTTP_ACCEPTORS, [{port, ?REST_PORT}], [
+		{env, [{dispatch, Dispatch}]}
+	]).
