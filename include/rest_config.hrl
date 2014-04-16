@@ -12,5 +12,5 @@
 -define(HTTP_ACCEPTORS,50).
 
 %% handlers
--define(TEST_REF,hello_world_ref).
--define(TEST_URL,"/hello_world").
+-define(HELLO_WORLD_REF,hello_world_ref).
+-define(HELLO_WORLD_URL,"/hello_world").
