@@ -8,5 +8,8 @@ deps:
 compile:
 	@./rebar compile
 
+generate:
+	@./rebar generate
+
 clean:
 	@./rebar clean

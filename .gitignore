@@ -3,3 +3,4 @@ globalregistry.iml
 
 deps
 ebin
+rel/globalregistry/*

@@ -8,9 +8,8 @@
 %%%-------------------------------------------------------------------
 -author("Tomasz Lichon").
 
--define(REST_PORT,"8080").
+-define(REST_PORT,8080).
 -define(HTTP_ACCEPTORS,50).
 
-%% handlers
--define(HELLO_WORLD_REF,hello_world_ref).
+% Handler urls
 -define(HELLO_WORLD_URL,"/hello_world").

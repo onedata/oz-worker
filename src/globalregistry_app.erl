@@ -70,6 +70,6 @@ start_cowboy() ->
 			{?HELLO_WORLD_URL, hello_world, []}
 		]}
 	]),
-	{ok, _} = cowboy:start_http(?HELLO_WORLD_REF, ?HTTP_ACCEPTORS, [{port, ?REST_PORT}], [
+	{ok, _} = cowboy:start_http(http, ?HTTP_ACCEPTORS, [{port, ?REST_PORT}], [
 		{env, [{dispatch, Dispatch}]}
 	]).
