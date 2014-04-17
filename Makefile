@@ -30,6 +30,14 @@ distclean: clean
 	@rm -rf $(PKG_ID).tar.gz
 
 ##
+## Release targets
+##
+rel: deps compile generate
+
+relclean:
+	rm -rf rel/riak
+
+##
 ## Package generation
 ## (see http://www.erlang-factory.com/upload/presentations/857/JaredEUC-2013.pdf)
 
