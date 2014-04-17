@@ -35,7 +35,7 @@ distclean: clean
 rel: deps compile generate
 
 relclean:
-	rm -rf rel/riak
+	rm -rf rel/globalregistry
 
 ##
 ## Package generation

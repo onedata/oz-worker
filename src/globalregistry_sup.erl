@@ -2,7 +2,7 @@
 %%% @author Tomasz Lichon
 %%% @copyright (C) 2014, ACK CYFRONET AGH
 %%% @doc
-%%%
+%%% Application main supervisor
 %%% @end
 %%% Created : 14. Apr 2014 5:57 PM
 %%%-------------------------------------------------------------------

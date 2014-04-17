@@ -3,6 +3,6 @@ globalregistry.iml
 
 deps
 ebin
-rel/globalregistry/*
+rel/globalregistry
 
 package
