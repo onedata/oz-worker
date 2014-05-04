@@ -12,6 +12,9 @@
 -ifndef(REGISTERED_NAMES_HRL).
 -define(REGISTERED_NAMES_HRL, 1).
 
+%% App name
+-define(APP_Name, globalregistry).
+
 %% Name of Global Registry genserver
 -define(Global_Registry, globalregistry).
 

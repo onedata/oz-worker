@@ -11,6 +11,7 @@
 	{modules, [
 		globalregistry_sup,
 		globalregistry_app,
+		globalregistry,
 		hello_world
 	]},
 	{mod, {globalregistry_app, []}},

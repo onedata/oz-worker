@@ -30,6 +30,13 @@ distclean: clean
 	@rm -rf $(PKG_ID).tar.gz
 
 ##
+## Testing
+##
+
+ct: deps compile
+	@ct_run -spec test_distributed/test.spec
+
+##
 ## Release targets
 ##
 rel: deps compile generate
