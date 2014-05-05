@@ -36,8 +36,7 @@ rest_api_connection_test(_Config) ->
 %% ====================================================================
 
 init_per_suite(Config) ->
-	TestSuiteDataDir = ?config(data_dir,Config),
-	?INIT_CODE_PATH(TestSuiteDataDir),
+	?INIT_CODE_PATH,
 	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST),
 	Config ++ [{node,Node}].
 
