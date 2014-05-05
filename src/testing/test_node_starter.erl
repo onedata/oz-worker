@@ -10,17 +10,22 @@
 -author("Tomasz Lichon").
 
 -include("registered_names.hrl").
+-include("testing/test_node_starter.hrl").
 
 %% API
--export([start_globalregistry_node/2,stop_globalregistry_node/1,start_deps/0,stop_deps/0]).
+-export([start_globalregistry_node/3,stop_globalregistry_node/1,start_deps/0,stop_deps/0]).
 
-%% start_globalregistry_node/2
+%% start_globalregistry_node/3
 %% ====================================================================
 %% @doc Starts new node with globalregistry.
--spec start_globalregistry_node(NodeName :: atom(), Host :: atom()) -> node() | no_return().
+-spec start_globalregistry_node(NodeName :: atom(), Host :: atom(), Verbose :: boolean()) -> node() | no_return().
 %% ====================================================================
-start_globalregistry_node(NodeName,Host) -> % todo add verbose and env setting options
-	{ok,Node} = slave:start(Host, NodeName,make_code_path() ++ " -noshell"),
+start_globalregistry_node(NodeName,Host,Verbose) -> % todo add env override machanism (if necesarry)
+	slave:stop(?NODE(Host,NodeName)),
+	{ok,Node} = case Verbose of
+		true -> slave:start(Host, NodeName,make_code_path());
+		false -> slave:start(Host, NodeName,make_code_path()++" -noshell")
+	end,
 	rpc:call(Node,test_node_starter,start_deps,[]),
 	rpc:call(Node,application,start,[?APP_Name]),
 	Node.

@@ -37,7 +37,7 @@ rest_api_connection_test(_Config) ->
 
 init_per_suite(Config) ->
 	?INIT_CODE_PATH,
-	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST),
+	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST,false),
 	Config ++ [{node,Node}].
 
 end_per_suite(Config) ->
