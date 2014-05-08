@@ -34,7 +34,7 @@ distclean: clean
 ##
 
 ct: deps compile
-	@ct_run -spec test_distributed/test.spec
+	@./test_distributed/start_distributed_test.sh
 
 ##
 ## Release targets

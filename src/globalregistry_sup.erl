@@ -69,10 +69,11 @@ init([]) ->
 	Shutdown = 2000,
 	Type = worker,
 
-	AChild = {?Global_Registry, {globalregistry, start_link, []},
-		Restart, Shutdown, Type, ['AModule']},
-
-	{ok, {SupFlags, [AChild]}}.
+	Globalregisty = {?Global_Registry, {globalregistry, start_link, []},
+		Restart, Shutdown, Type, [globalregistry]},
+	Dao = {?Dao, {dao, start_link, []},
+		Restart, Shutdown, Type, [dao]},
+	{ok, {SupFlags, [Globalregisty,Dao]}}.
 
 %%%===================================================================
 %%% Internal functions

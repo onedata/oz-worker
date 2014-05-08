@@ -6,7 +6,8 @@
 	{applications, [
 		kernel,
 		stdlib,
-		cowboy
+		cowboy,
+		lager
 	]},
 	{modules, [
 		globalregistry_sup,
@@ -15,5 +16,7 @@
 		hello_world
 	]},
 	{mod, {globalregistry_app, []}},
-	{env, []}
+	{env, [
+		{db_nodes,['db@127.0.0.1']}
+	]}
 ]}.

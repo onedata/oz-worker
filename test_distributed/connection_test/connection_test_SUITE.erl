@@ -17,9 +17,9 @@
 
 %% API
 -export([all/0,init_per_suite/1,end_per_suite/1]).
--export([gen_server_connection_test/1,rest_api_connection_test/1]).
+-export([gen_server_connection_test/1,rest_api_connection_test/1,dao_connection_test/1]).
 
-all() -> [gen_server_connection_test,rest_api_connection_test].
+all() -> [gen_server_connection_test,rest_api_connection_test,dao_connection_test].
 
 
 gen_server_connection_test(Config) ->
@@ -31,13 +31,19 @@ rest_api_connection_test(_Config) ->
  	?assertMatch({ok,"200",_,"<html>REST Hello World as HTML!</html>"}, ibrowse:send_req("http://127.0.0.1:8080/hello_world",[],get)),
 	ibrowse:stop().
 
+dao_connection_test(Config) ->
+	Node = ?config(node,Config),
+	?assertMatch({ok,_},rpc:call(Node,dao_lib,apply,[dao_helper,list_dbs,[],1])).
+
 %% ====================================================================
 %% SetUp and TearDown functions
 %% ====================================================================
 
 init_per_suite(Config) ->
 	?INIT_CODE_PATH,
-	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST,false),
+	DbNode = ?NODE(?CURRENT_HOST,db),
+	DbNodesEnv = {db_nodes,[DbNode]},
+	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST,[DbNodesEnv]),
 	Config ++ [{node,Node}].
 
 end_per_suite(Config) ->
