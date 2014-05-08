@@ -1,8 +1,12 @@
 .idea
 globalregistry.iml
+*.beam
 
 deps
 ebin
 rel/globalregistry
+
+test_distributed/logs
+variables-ct*
 
 package
