@@ -5,6 +5,7 @@ globalregistry.iml
 deps
 ebin
 rel/globalregistry
+package
 
 test_distributed/logs
 variables-ct*

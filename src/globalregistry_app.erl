@@ -13,6 +13,7 @@
 
 %% Includes
 -include("rest_config.hrl").
+-include("gui_config.hrl").
 
 %% Application callbacks
 -export([start/2,
@@ -39,7 +40,8 @@
 	{ok, pid(), State :: term()} |
 	{error, Reason :: term()}).
 start(_StartType, _StartArgs) ->
-	start_cowboy(),
+	start_rest(),
+	start_n2o(),
 	case globalregistry_sup:start_link() of
 		{ok, Pid} ->
 			{ok, Pid};
@@ -64,12 +66,59 @@ stop(_State) ->
 %%% Internal functions
 %%%===================================================================
 
-start_cowboy() ->
+%% start_rest/0
+%% ====================================================================
+%% @doc Starts cowboy with rest api
+-spec start_rest() -> {ok,pid()}.
+%% ====================================================================
+start_rest() ->
 	Dispatch = cowboy_router:compile([
 		{'_', [
 			{?HELLO_WORLD_URL, hello_world, []}
 		]}
 	]),
-	{ok, _} = cowboy:start_http(http, ?HTTP_ACCEPTORS, [{port, ?REST_PORT}], [
+	{ok, _} = cowboy:start_http(http, ?REST_HTTP_ACCEPTORS, [{port, ?REST_PORT}], [
 		{env, [{dispatch, Dispatch}]}
 	]).
+
+%% start_n2o/0
+%% ====================================================================
+%% @doc Starts n2o server
+-spec start_n2o() -> {ok,pid()}.
+%% ====================================================================
+start_n2o() ->
+	Dispatch = cowboy_router:compile(
+		[{'_',
+				static_dispatches(?gui_static_root, ?static_paths) ++ [
+				{"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
+				{'_', n2o_cowboy, []}
+			]}
+		]),
+
+	{ok, _} = cowboy:start_https(https, ?gui_https_acceptors,
+		[
+			{port, ?gui_port},
+			{cacertfile, ?ca_cert_file},
+			{certfile, ?cert_file},
+			{keyfile, ?key_file}
+		],
+		[
+			{env, [{dispatch, Dispatch}]},
+			{max_keepalive, ?max_keepalive},
+			{timeout, ?socket_timeout}
+		]).
+
+
+%% static_dispatches/2
+%% ====================================================================
+%% @doc Generates static file routing for cowboy.
+-spec static_dispatches(DocRoot :: string(),StaticPaths :: list(string())) -> {ok,pid()}.
+%% ====================================================================
+static_dispatches(DocRoot, StaticPaths) ->
+	_StaticDispatches = lists:map(fun(Dir) ->
+		Opts = [
+			{mimetypes, {fun mimetypes:path_to_mimes/2, default}},
+			{directory, DocRoot ++ Dir}
+		],
+		{Dir ++ "[...]", cowboy_static, Opts}
+	end, StaticPaths).

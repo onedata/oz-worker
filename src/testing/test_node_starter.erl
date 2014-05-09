@@ -84,6 +84,7 @@ stop_deps() ->
 	application:stop(cowboy),
 	application:stop(ranch),
 	application:stop(crypto),
+	application:stop(mimetypes),
 	application:stop(lager),
 	application:stop(sasl),
 	application:unload(?APP_Name).
@@ -96,6 +97,7 @@ stop_deps() ->
 start_deps() ->
 	application:start(sasl),
 	lager:start(),
+	application:start(mimetypes),
 	application:start(ranch),
 	application:start(crypto),
 	application:start(cowboy),
