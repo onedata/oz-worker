@@ -1,7 +1,7 @@
 REPO			?= globalregistry
 
-PKG_REVISION    ?= $(shell git describe --tags)
-PKG_VERSION		?= $(shell git describe --tags | tr - .)
+PKG_REVISION    ?= $(shell git describe --tags --always)
+PKG_VERSION		?= $(shell git describe --tags --always | tr - .)
 PKG_ID           = globalregistry-$(PKG_VERSION)
 PKG_BUILD        = 1
 BASE_DIR         = $(shell pwd)
