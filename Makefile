@@ -57,11 +57,11 @@ package.src: deps
 	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION)| (cd package && tar -xf -)
 	${MAKE} -C package/$(PKG_ID) deps
 	mkdir -p package/$(PKG_ID)/priv
-	git --git-dir=.git describe --tags >package/$(PKG_ID)/priv/vsn.git
+	git --git-dir=.git describe --tags --always >package/$(PKG_ID)/priv/vsn.git
 	for dep in package/$(PKG_ID)/deps/*; do \
              echo "Processing dep: $${dep}"; \
              mkdir -p $${dep}/priv; \
-             git --git-dir=$${dep}/.git describe --tags >$${dep}/priv/vsn.git; \
+             git --git-dir=$${dep}/.git describe --tags --always >$${dep}/priv/vsn.git; \
         done
 	find package/$(PKG_ID) -depth -name ".git" -exec rm -rf {} \;
 	tar -C package -czf package/$(PKG_ID).tar.gz $(PKG_ID)
