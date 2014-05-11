@@ -7,9 +7,15 @@
 		kernel,
 		stdlib,
 		sasl,
+		lager,
+		public_key,
+		crypto,
+		ssl,
+		erlydtl,
+		n2o,
 		cowboy,
 		mimetypes,
-		lager
+		ibrowse
 	]},
 	{modules, [
 		globalregistry_sup,

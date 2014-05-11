@@ -11,6 +11,7 @@
 
 -include("registered_names.hrl").
 -include("testing/test_node_starter.hrl").
+-include("testing/assertions.hrl").
 
 %% API
 -export([start_globalregistry_node/3,start_globalregistry_node/4,stop_globalregistry_node/1,set_env_vars/1,start_deps/0,stop_deps/0]).
@@ -52,7 +53,7 @@ start_globalregistry_node(NodeName,Host,EnvVars,Verbose) ->
 	% Prepare environment
 	rpc:call(Node,test_node_starter,start_deps,[]),
 	rpc:call(Node,test_node_starter,set_env_vars,[EnvVars]),
-	rpc:call(Node,application,start,[?APP_Name]),
+	?assertMatch(ok,rpc:call(Node,application,start,[?APP_Name])),
 	Node.
 
 %% stop_globalregistry_node/2
@@ -81,10 +82,15 @@ make_code_path() ->
 -spec stop_deps() -> ok.
 %% ====================================================================
 stop_deps() ->
+	application:stop(ibrowse),
+	application:stop(n2o),
 	application:stop(cowboy),
 	application:stop(ranch),
 	application:stop(crypto),
 	application:stop(mimetypes),
+	application:stop(ssl),
+	application:stop(erlydtl),
+	application:stop(gproc),
 	application:stop(lager),
 	application:stop(sasl),
 	application:unload(?APP_Name).
@@ -97,10 +103,15 @@ stop_deps() ->
 start_deps() ->
 	application:start(sasl),
 	lager:start(),
+	ssl:start(),
+	application:start(erlydtl),
 	application:start(mimetypes),
 	application:start(ranch),
 	application:start(crypto),
 	application:start(cowboy),
+	application:start(gproc),
+	application:start(n2o),
+	application:start(ibrowse),
 	application:load(?APP_Name).
 
 %% set_env_vars/1

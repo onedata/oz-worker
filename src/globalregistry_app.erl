@@ -60,6 +60,8 @@ start(_StartType, _StartArgs) ->
 %%--------------------------------------------------------------------
 -spec(stop(State :: term()) -> term()).
 stop(_State) ->
+	cowboy:stop_listener(http),
+	cowboy:stop_listener(https),
 	ok.
 
 %%%===================================================================
@@ -87,6 +89,13 @@ start_rest() ->
 -spec start_n2o() -> {ok,pid()}.
 %% ====================================================================
 start_n2o() ->
+
+	% Set envs needed by n2o
+	% Transition port - the same as gui port
+	ok = application:set_env(n2o, transition_port, ?gui_port),
+	% Custom route handler
+	ok = application:set_env(n2o, route, routes),
+
 	Dispatch = cowboy_router:compile(
 		[{'_',
 				static_dispatches(?gui_static_root, ?static_paths) ++ [
