@@ -91,6 +91,8 @@ start_rest() ->
 start_n2o() ->
 
 	% Set envs needed by n2o
+	% Port - gui port
+	ok = application:set_env(n2o, port, ?gui_port),
 	% Transition port - the same as gui port
 	ok = application:set_env(n2o, transition_port, ?gui_port),
 	% Custom route handler
