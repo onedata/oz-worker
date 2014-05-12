@@ -76,7 +76,8 @@ stop(_State) ->
 start_rest() ->
 	Dispatch = cowboy_router:compile([
 		{'_', [
-			{?HELLO_WORLD_URL, hello_world, []}
+			{?HELLO_WORLD_URL, hello_world, []},
+            user_handler:routes()
 		]}
 	]),
 	{ok, _} = cowboy:start_http(http, ?REST_HTTP_ACCEPTORS, [{port, ?REST_PORT}], [
