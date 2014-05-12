@@ -5,18 +5,18 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: The module handling /user/* rest endpoints.
+%% @doc: The module handling /provider/* rest endpoints.
 %% @end
 %% ===================================================================
--module(user_handler).
+-module(provider_handler).
 -author("Konrad Zemek").
 
 -include("registered_names.hrl").
 
 %% The state of the request.
 %% `resource` :: atom() is the name of the requested resource
-%% `user_id` :: binary() is the binary string containing user's id.
--record(state, {resource, user_id}).
+%% `provider_id` :: binary() is the binary string containing provider's id.
+-record(state, {resource, provider_id}).
 
 %% API
 -export([init/3, allowed_methods/2, content_types_accepted/2, is_authorized/2,
@@ -34,13 +34,9 @@
 %% ====================================================================
 routes() ->
     [
-        {"/user", ?MODULE, #state{resource = main}},
-        {"/user/create", ?MODULE, #state{resource = create}},
-        {"/user/joinGroup", ?MODULE, #state{resource = join_group}},
-        {"/user/joinSpace", ?MODULE, #state{resource = join_space}},
-        {"/user/mergeAccounts", ?MODULE, #state{resource = merge_accounts}},
-        {"/user/tokens/accountMerge/create", ?MODULE, #state{resource = account_merge_token}},
-        {"/user/tokens/spaceCreate/create", ?MODULE, #state{resource = space_create_token}}
+        {"/provider", ?MODULE, #state{resource = main}},
+        {"/provider/create", ?MODULE, #state{resource = create}},
+        {"/provider/supportSpace", ?MODULE, #state{resource = support_space}}
     ].
 
 
@@ -125,8 +121,8 @@ content_types_provided(Req, #state{} = State) ->
 -spec delete_resource(Req :: cowboy_req:req(), State :: #state{}) ->
     {boolean(), cowboy_req:req(), #state{}}.
 %% ====================================================================
-delete_resource(Req, #state{user_id = UserId} = State) ->
-    ok = user_logic:unregister_user(UserId),
+delete_resource(Req, #state{provider_id = ProviderId} = State) ->
+    ok = user_logic:unregister_user(ProviderId),
     {true, Req, State}.
 
 
@@ -148,7 +144,7 @@ is_authorized(Req, #state{} = State) ->
         undefined ->
             {{false, <<"wut">>}, Req2, State}; %% @todo
         X ->
-            {true, Req2, State#state{user_id = X}}
+            {true, Req2, State#state{provider_id = X}}
     end.
 
 
@@ -181,8 +177,8 @@ accept_resource(Req, #state{} = State) ->
 -spec provide_resource(Req :: cowboy_req:req(), State :: #state{}) ->
     {iodata(), cowboy_req:req(), #state{}}.
 %% ====================================================================
-provide_resource(Req, #state{resource = main, user_id = UserId} = State) ->
-    {ok, Data} = user_logic:get_data(UserId),
+provide_resource(Req, #state{resource = main, provider_id = ProviderId} = State) ->
+    {ok, Data} = provider_logic:get_data(ProviderId),
     JSON = mochijson2:encode(Data),
     {JSON, Req, State}.
 
@@ -196,33 +192,19 @@ provide_resource(Req, #state{resource = main, user_id = UserId} = State) ->
     {true, [proplists:property()]} | true | false.
 %% ====================================================================
 process_data(Data, #state{resource = create}) ->
-    [{<<"name">>, Name}] = Data,
-    {ok, UserId} = user_logic:register_user(Name),
-    {true, [{userId, UserId}]};
-process_data(Data, #state{resource = join_space, user_id = UserId}) ->
+    [{<<"url">>, URL}] = Data,
+    {ok, ProviderId} = provider_logic:register_provider(URL),
+    {true, [{providerId, ProviderId}]};
+process_data(Data, #state{resource = support_space, provider_id = ProviderId}) ->
     [{<<"token">>, Token}] = Data,
-    {ok, SpaceId} = user_logic:join_space(UserId, Token),
+    {ok, SpaceId} = provider_logic:support_space(ProviderId, Token),
     {true, [{spaceId, SpaceId}]};
-process_data(Data, #state{resource = merge_accounts, user_id = UserId}) ->
-    [{<<"token">>, Token}] = Data,
-    ok = user_logic:merge_accounts(UserId, Token),
-    true;
-process_data(Data, #state{resource = join_group, user_id = UserId}) ->
-    [{<<"token">>, Token}] = Data,
-    {ok, GroupId} = user_logic:join_group(UserId, Token),
-    {true, [{groupId, GroupId}]};
-process_data(_Data, #state{resource = account_merge_token, user_id = UserId}) ->
-    {ok, Token} = user_logic:new_accounts_merge_token(UserId),
-    {true, [{token, Token}]};
-process_data(_Data, #state{resource = space_create_token, user_id = UserId}) ->
-    {ok, Token} = user_logic:new_space_create_token(UserId),
-    {true, [{token, Token}]};
-process_data(Data, #state{resource = main, user_id = UserId}) ->
-    ok = user_logic:modify_data(UserId, Data),
+process_data(Data, #state{resource = main, provider_id = ProviderId}) ->
+    ok = provider_logic:modify_data(ProviderId, Data),
     true.
 
 
 %% @todo: stub for proper authentication
 -spec authenticate(Req :: cowboy_req:req()) -> {binary() | undefined, cowboy_req:req()}.
 authenticate(Req) ->
-    cowboy_req:header(<<"userid">>, Req).
+    cowboy_req:header(<<"providerid">>, Req).
