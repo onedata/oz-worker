@@ -13,12 +13,11 @@
 -author("Konrad Zemek").
 
 %% API
--export([register_provider/1, get_data/1, modify_data/2, support_space/2,
-    unregister_provider/1]).
+-export([register/1, get_data/1, modify_data/2, support_space/2, unregister/1]).
 
 
--spec register_provider(URL :: binary()) -> {ok, binary()} | {error, any()}.
-register_provider(URL) ->
+-spec register(URL :: binary()) -> {ok, binary()} | {error, any()}.
+register(URL) ->
     {ok, <<"providerid">>}.
 
 
@@ -37,6 +36,6 @@ support_space(ProviderId, Token) ->
     {ok, <<"spaceid">>}.
 
 
--spec unregister_provider(ProviderId :: binary()) -> ok | {error, any()}.
-unregister_provider(ProviderId) ->
+-spec unregister(ProviderId :: binary()) -> ok | {error, any()}.
+unregister(ProviderId) ->
     ok.

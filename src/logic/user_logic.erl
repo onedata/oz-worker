@@ -13,13 +13,13 @@
 -author("Konrad Zemek").
 
 %% API
--export([register_user/1, modify_data/2, new_accounts_merge_token/1,
+-export([register/1, modify_data/2, new_accounts_merge_token/1,
     new_space_create_token/1, merge_accounts/2, join_space/2, join_group/2,
-    unregister_user/1, get_data/1]).
+    unregister/1, get_data/1]).
 
 
--spec register_user(Name :: binary()) -> {ok, binary()} | {error, any()}.
-register_user(Name) ->
+-spec register(Name :: binary()) -> {ok, binary()} | {error, any()}.
+register(Name) ->
     {ok, <<"userid">>}.
 
 
@@ -58,6 +58,6 @@ join_group(UserId, Token) ->
     {ok, <<"groupid">>}.
 
 
--spec unregister_user(UserId :: binary()) -> ok | {error, any()}.
-unregister_user(UserId) ->
+-spec unregister(UserId :: binary()) -> ok | {error, any()}.
+unregister(UserId) ->
     ok.

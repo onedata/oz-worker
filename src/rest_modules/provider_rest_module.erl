@@ -1,0 +1,100 @@
+%% ===================================================================
+%% @author Konrad Zemek
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc: The module handling logic behind /provider REST resource.
+%% @end
+%% ===================================================================
+-module(provider_rest_module).
+-author("Konrad Zemek").
+
+-include("handlers/rest_handler.hrl").
+
+-behavior(rest_module_behavior).
+
+
+%% API
+-export([routes/0, is_authorized/2, accept_resource/3, provide_resource/2,
+    delete_resource/2]).
+
+
+%% routes/0
+%% ====================================================================
+%% @doc Returns a Cowboy-understandable PathList of routes supported by a module
+%% implementing this behavior.
+%% @see rest_module_behavior
+%% @end
+-spec routes() ->
+    [{PathMatch :: string() | binary(), rest_handler, State :: #reqstate{}}].
+%% ====================================================================
+routes() ->
+    S = #reqstate{module = ?MODULE},
+    [
+        {"/provider", rest_handler, S#reqstate{resource = main}},
+        {"/provider/create", rest_handler, S#reqstate{resource = create}},
+        {"/provider/supportSpace", rest_handler, S#reqstate{resource = support_space}}
+    ].
+
+
+%% is_authorized/2
+%% ====================================================================
+%% @doc Returns a boolean() determining if the authenticated client is
+%% authorized to carry the request on the resource.
+%% @see rest_module_behavior
+%% @end
+%% ====================================================================
+-spec is_authorized(Id :: binary(), State :: #reqstate{}) -> boolean().
+%% ====================================================================
+is_authorized(_Id, #reqstate{client = {provider, _}} = _State) ->
+    true.
+
+
+%% accept_resource/3
+%% ====================================================================
+%% @doc Processes data submitted by a client through POST on a REST resource.
+%% @see rest_module_behavior
+%% @end
+%% ====================================================================
+-spec accept_resource(Id :: binary(), Data :: [proplists:property()],
+    State :: #reqstate{}) ->
+    {ok, Response :: [proplists:property()]} | ok | {error, Reason :: term()}.
+%% ====================================================================
+accept_resource(_Id, Data, #reqstate{resource = create, client = undefined}) ->
+    [{<<"url">>, URL}] = Data,
+    {ok, ProviderId} = provider_logic:register(URL),
+    {ok, [{providerId, ProviderId}]};
+accept_resource(_Id, Data, #reqstate{resource = support_space, client = {provider, ProviderId}}) ->
+    [{<<"token">>, Token}] = Data,
+    {ok, SpaceId} = provider_logic:support_space(ProviderId, Token),
+    {ok, [{spaceId, SpaceId}]};
+accept_resource(_Id, Data, #reqstate{resource = main, client = {provider, ProviderId}}) ->
+    provider_logic:modify_data(ProviderId, Data).
+
+
+%% provide_resource/2
+%% ====================================================================
+%% @doc Returns data requested by a client through GET on a REST resource.
+%% @see rest_module_behavior
+%% @end
+%% ====================================================================
+-spec provide_resource(Id :: binary(), State :: #reqstate{}) ->
+    {ok, Data :: [proplists:property()]} | {error, Reason :: term()}.
+%% ====================================================================
+provide_resource(_Id, #reqstate{resource = main, client = {provider, ProviderId}} = _State) ->
+    provider_logic:get_data(ProviderId).
+
+
+%% delete_resource/2
+%% ====================================================================
+%% @doc Deletes the resource identified by the Id parameter.
+%% @see rest_module_behavior
+%% @end
+%% ====================================================================
+-spec delete_resource(Id :: binary(), State :: #reqstate{}) ->
+    ok | {error, Reason :: term()}.
+%% ====================================================================
+delete_resource(_Id, #reqstate{resource = main, client = {provider, ProviderId}} = _State) ->
+    provider_logic:unregister(ProviderId).
