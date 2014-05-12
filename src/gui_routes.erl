@@ -7,7 +7,7 @@
 %%% @end
 %%% Created : 09. May 2014 3:38 PM
 %%%-------------------------------------------------------------------
--module(routes).
+-module(gui_routes).
 -author("Tomasz Lichon").
 
 %% Includes

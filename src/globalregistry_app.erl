@@ -96,7 +96,7 @@ start_n2o() ->
 	% Transition port - the same as gui port
 	ok = application:set_env(n2o, transition_port, ?gui_port),
 	% Custom route handler
-	ok = application:set_env(n2o, route, routes),
+	ok = application:set_env(n2o, route, gui_routes),
 
 	Dispatch = cowboy_router:compile(
 		[{'_',
