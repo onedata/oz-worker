@@ -17,8 +17,8 @@
 
 
 %% API
--export([routes/0, is_authorized/2, accept_resource/3, provide_resource/2,
-    delete_resource/2]).
+-export([routes/0, is_authorized/2, accept_resource/1, provide_resource/1,
+    delete_resource/1]).
 
 
 %% routes/0
@@ -50,68 +50,78 @@ routes() ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Id :: binary(), State :: #reqstate{}) -> boolean().
+-spec is_authorized(Method :: binary(), State :: #reqstate{}) -> boolean().
 %% ====================================================================
-is_authorized(_Id, #reqstate{client = {user, _}} = _State) ->
+is_authorized(_Method, #reqstate{resource = create, client = #reqclient{type = undefined}}) ->
+    true;
+is_authorized(_Method, #reqstate{resource = join_space, client = #reqclient{type = user, id = UserId}, data = Data}) ->
+    Token = proplists:get_value(<<"token">>, Data),
+    user_logic:can_join_space(UserId, Token);
+is_authorized(_Method, #reqstate{resource = join_group, client = #reqclient{type = user, id = UserId}, data = Data}) ->
+    Token = proplists:get_value(<<"token">>, Data),
+    user_logic:can_join_group(UserId, Token);
+is_authorized(_Method, #reqstate{resource = merge_accounts, client = #reqclient{type = user, id = UserId}, data = Data}) ->
+    Token = proplists:get_value(<<"token">>, Data),
+    user_logic:can_merge_accounts(UserId, Token);
+is_authorized(_Method, #reqstate{resource = Res, client = #reqclient{type = user}}) when Res =/= create ->
     true.
 
 
-%% accept_resource/3
+%% accept_resource/1
 %% ====================================================================
 %% @doc Processes data submitted by a client through POST on a REST resource.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec accept_resource(Id :: binary(), Data :: [proplists:property()],
-                      State :: #reqstate{}) ->
-    {ok, Response :: [proplists:property()]} | ok | {error, Reason :: term()}.
+-spec accept_resource(State :: #reqstate{}) ->
+    {ok, Response :: reqdata()} | ok | {error, Reason :: term()}.
 %% ====================================================================
-accept_resource(_Id, Data, #reqstate{resource = create, client = undefined}) ->
-    [{<<"name">>, Name}] = Data,
+accept_resource(#reqstate{resource = create, data = Data}) ->
+    Name = proplists:get_value(<<"name">>, Data),
     {ok, UserId} = user_logic:register(Name),
     {ok, [{userId, UserId}]};
-accept_resource(_Id, Data, #reqstate{resource = join_space, client = {user, UserId}}) ->
-    [{<<"token">>, Token}] = Data,
+accept_resource(#reqstate{resource = join_space, client = #reqclient{id = UserId}, data = Data}) ->
+    Token = proplists:get_value(<<"token">>, Data),
     {ok, SpaceId} = user_logic:join_space(UserId, Token),
     {ok, [{spaceId, SpaceId}]};
-accept_resource(_Id, Data, #reqstate{resource = merge_accounts, client = {user, UserId}}) ->
-    [{<<"token">>, Token}] = Data,
+accept_resource(#reqstate{resource = merge_accounts, client = #reqclient{id = UserId}, data = Data}) ->
+    Token = proplists:get_value(<<"token">>, Data),
     user_logic:merge_accounts(UserId, Token);
-accept_resource(_Id, Data, #reqstate{resource = join_group, client = {user, UserId}}) ->
-    [{<<"token">>, Token}] = Data,
+accept_resource(#reqstate{resource = join_group, client = #reqclient{id = UserId}, data = Data}) ->
+    Token = proplists:get_value(<<"token">>, Data),
     {ok, GroupId} = user_logic:join_group(UserId, Token),
     {ok, [{groupId, GroupId}]};
-accept_resource(_Id, _Data, #reqstate{resource = account_merge_token, client = {user, UserId}}) ->
+accept_resource(#reqstate{resource = account_merge_token, client = #reqclient{id = UserId}}) ->
     {ok, Token} = user_logic:new_accounts_merge_token(UserId),
     {ok, [{token, Token}]};
-accept_resource(_Id, _Data, #reqstate{resource = space_create_token, client = {user, UserId}}) ->
+accept_resource(#reqstate{resource = space_create_token, client = #reqclient{id = UserId}}) ->
     {ok, Token} = user_logic:new_space_create_token(UserId),
     {ok, [{token, Token}]};
-accept_resource(_Id, Data, #reqstate{resource = main, client = {user, UserId}}) ->
+accept_resource(#reqstate{resource = main, client = #reqclient{id = UserId}, data = Data}) ->
     user_logic:modify_data(UserId, Data).
 
 
-%% provide_resource/2
+%% provide_resource/1
 %% ====================================================================
 %% @doc Returns data requested by a client through GET on a REST resource.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(Id :: binary(), State :: #reqstate{}) ->
-    {ok, Data :: [proplists:property()]} | {error, Reason :: term()}.
+-spec provide_resource(State :: #reqstate{}) ->
+    {ok, Data :: reqdata()} | {error, Reason :: term()}.
 %% ====================================================================
-provide_resource(_Id, #reqstate{resource = main, client = {user, UserId}} = _State) ->
+provide_resource(#reqstate{resource = main, client = #reqclient{id = UserId}}) ->
     user_logic:get_data(UserId).
 
 
-%% delete_resource/2
+%% delete_resource/1
 %% ====================================================================
 %% @doc Deletes the resource identified by the Id parameter.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(Id :: binary(), State :: #reqstate{}) ->
+-spec delete_resource(State :: #reqstate{}) ->
     ok | {error, Reason :: term()}.
 %% ====================================================================
-delete_resource(_Id, #reqstate{resource = main, client = {user, UserId}} = _State) ->
+delete_resource(#reqstate{resource = main, client = #reqclient{id = UserId}}) ->
     user_logic:unregister(UserId).

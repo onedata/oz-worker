@@ -13,7 +13,7 @@
 -author("Konrad Zemek").
 
 %% API
--export([register/1, get_data/1, modify_data/2, support_space/2, unregister/1]).
+-export([register/1, get_data/1, modify_data/2, support_space/2, unregister/1, can_support_space/2]).
 
 
 -spec register(URL :: binary()) -> {ok, binary()} | {error, any()}.
@@ -39,3 +39,6 @@ support_space(ProviderId, Token) ->
 -spec unregister(ProviderId :: binary()) -> ok | {error, any()}.
 unregister(ProviderId) ->
     ok.
+
+can_support_space(ProviderId, Token) ->
+    true.

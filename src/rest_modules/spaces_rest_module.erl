@@ -5,10 +5,10 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: The module handling logic behind /provider REST resource.
+%% @doc: The module handling logic behind /spaces REST resources.
 %% @end
 %% ===================================================================
--module(provider_rest_module).
+-module(spaces_rest_module).
 -author("Konrad Zemek").
 
 -include("handlers/rest_handler.hrl").
@@ -33,9 +33,10 @@
 routes() ->
     S = #reqstate{module = ?MODULE},
     [
-        {"/provider", rest_handler, S#reqstate{resource = main}},
-        {"/provider/create", rest_handler, S#reqstate{resource = create}},
-        {"/provider/supportSpace", rest_handler, S#reqstate{resource = support_space}}
+        {"/spaces/create", rest_handler, S#reqstate{resource = create}},
+        {"/spaces/:id", rest_handler, S#reqstate{resource = main}},
+        {"/spaces/:id/tokens/userInvite/create", rest_handler, S#reqstate{resource = user_invite_token}},
+        {"/spaces/:id/tokens/providerSupport/create", rest_handler, S#reqstate{resource = provider_support_token}}
     ].
 
 
@@ -48,13 +49,21 @@ routes() ->
 %% ====================================================================
 -spec is_authorized(Method :: binary(), State :: #reqstate{}) -> boolean().
 %% ====================================================================
-is_authorized(_Method, #reqstate{resource = create, client = #reqclient{type = undefined}}) ->
+is_authorized(<<"POST">>, #reqstate{resource = create, client = #reqclient{type = user}}) ->
     true;
-is_authorized(_Method, #reqstate{resource = support_space, client = #reqclient{type = provider, id = ProviderId}, data = Data}) ->
+is_authorized(<<"POST">>, #reqstate{resource = create, client = #reqclient{type = provider}, data = Data}) ->
     Token = proplists:get_value(<<"token">>, Data),
-    provider_logic:can_support_space(ProviderId, Token);
-is_authorized(_Method, #reqstate{resource = Res, client = #reqclient{type = provider}}) when Res =/= create ->
-    true.
+    space_logic:can_provider_create(Token);
+is_authorized(<<"POST">>, #reqstate{resource = main, client = #reqclient{type = user, id = UserId}, data = Data, resid = SpaceId}) ->
+    space_logic:can_user_modify(SpaceId, UserId, Data);
+is_authorized(<<"GET">>, #reqstate{resource = main, client = Client, resid = SpaceId}) ->
+    space_logic:can_client_view(SpaceId, Client);
+is_authorized(<<"POST">>, #reqstate{resource = user_invite_token, client = #reqclient{type = user, id = UserId}, resid = SpaceId}) ->
+    space_logic:can_user_invite(SpaceId, UserId);
+is_authorized(<<"POST">>, #reqstate{resource = provider_support_token, client = #reqclient{type = user, id = UserId}, resid = SpaceId}) ->
+    space_logic:can_user_add_providers(SpaceId, UserId);
+is_authorized(<<"DELETE">>, #reqstate{resource = main, client = #reqclient{type = user, id = UserId}, resid = SpaceId}) ->
+    space_logic:can_user_delete(SpaceId, UserId).
 
 
 %% accept_resource/1
@@ -66,19 +75,21 @@ is_authorized(_Method, #reqstate{resource = Res, client = #reqclient{type = prov
 -spec accept_resource(State :: #reqstate{}) ->
     {ok, Response :: reqdata()} | ok | {error, Reason :: term()}.
 %% ====================================================================
-accept_resource(#reqstate{resource = create, data = Data}) ->
-    URL = proplists:get_value(<<"url">>, Data),
-    {ok, ProviderId} = provider_logic:register(URL),
-    {ok, [{providerId, ProviderId}]};
-accept_resource(#reqstate{resource = support_space, client = #reqclient{id = ProviderId}, data = Data}) ->
-    Token = proplists:get_value(<<"token">>, Data),
-    {ok, SpaceId} = provider_logic:support_space(ProviderId, Token),
+accept_resource(#reqstate{resource = create, client = Client, data = Data}) ->
+    {ok, SpaceId} = space_logic:create(Client, Data),
     {ok, [{spaceId, SpaceId}]};
-accept_resource(#reqstate{resource = main, client = #reqclient{id = ProviderId}, data = Data}) ->
-    provider_logic:modify_data(ProviderId, Data).
+accept_resource(#reqstate{resource = main, data = Data, resid = SpaceId}) ->
+    space_logic:modify(SpaceId, Data);
+accept_resource(#reqstate{resource = user_invite_token, client = #reqclient{id = UserId}, data = Data}) ->
+    case proplists:get_value(<<"groupId">>, Data) of
+        undefined -> space_logic:new_user_invite_token(UserId);
+        GroupId -> space_logic:new_group_invite_token(GroupId, UserId)
+    end;
+accept_resource(#reqstate{resource = provider_support_token}) ->
+    space_logic:new_support_token().
 
 
-%% provide_resource/2
+%% provide_resource/1
 %% ====================================================================
 %% @doc Returns data requested by a client through GET on a REST resource.
 %% @see rest_module_behavior
@@ -87,17 +98,18 @@ accept_resource(#reqstate{resource = main, client = #reqclient{id = ProviderId},
 -spec provide_resource(State :: #reqstate{}) ->
     {ok, Data :: reqdata()} | {error, Reason :: term()}.
 %% ====================================================================
-provide_resource(#reqstate{resource = main, client = #reqclient{id = ProviderId}}) ->
-    provider_logic:get_data(ProviderId).
+provide_resource(#reqstate{resource = main, client = Client, resid = SpaceId}) ->
+    space_logic:get_data(SpaceId, Client).
 
 
 %% delete_resource/2
 %% ====================================================================
-%% @doc Deletes the resource identified by the Id parameter.
+%% @doc Deletes the resource identified by the SpaceId parameter.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(State :: #reqstate{}) -> ok | {error, Reason :: term()}.
+-spec delete_resource(State :: #reqstate{}) ->
+    ok | {error, Reason :: term()}.
 %% ====================================================================
-delete_resource(#reqstate{resource = main, client = #reqclient{id = ProviderId}}) ->
-    provider_logic:unregister(ProviderId).
+delete_resource(#reqstate{resource = main, resid = SpaceId}) ->
+    space_logic:delete(SpaceId).

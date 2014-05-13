@@ -119,7 +119,14 @@ delete_resource(Req, #reqstate{module = Mod} = State) ->
 %% ====================================================================
 forbidden(Req, #reqstate{module = Mod} = State) ->
     {Id, Req2} = cowboy_req:binding(id, Req),
-    {Mod:is_authorized(Id, State), Req2, State}.
+    {Method, Req3} = cowboy_req:method(Req2),
+    {ok, JSON, Req4} = cowboy_req:body(Req3),
+    Data = mochijson2:decode(JSON, [{format, proplist}]),
+
+    State2 = State#reqstate{data = Data, resid = Id},
+
+    Forbidden = not Mod:is_authorized(Method, State2),
+    {Forbidden, Req4, State2}.
 
 
 %% is_authorized/2
@@ -134,12 +141,14 @@ forbidden(Req, #reqstate{module = Mod} = State) ->
 -spec is_authorized(Req :: cowboy_req:req(), State :: #reqstate{}) ->
     {true | {false, binary()}, cowboy_req:req(), #reqstate{}}.
 %% ====================================================================
+is_authorized(Req, #reqstate{resource = create} = State) ->
+    {true, Req, State};
 is_authorized(Req, #reqstate{} = State) -> %% @todo: proper SSL authentication
     {UserId, Req2} = cowboy_req:header(<<"userid">>, Req),
     {ProviderId, Req3} = cowboy_req:header(<<"providerid">>, Req2),
     Client = if
-        UserId =/= undefined -> {user, UserId};
-        ProviderId =/= undefined -> {provider, ProviderId}
+        UserId =/= undefined -> #reqclient{type = user, id = UserId};
+        ProviderId =/= undefined -> #reqclient{type = provider, id = ProviderId}
     end,
     {true, Req3, State#reqstate{client = Client}}.
 
@@ -153,16 +162,13 @@ is_authorized(Req, #reqstate{} = State) -> %% @todo: proper SSL authentication
     {true | false, cowboy_req:req(), #reqstate{}}.
 %% ====================================================================
 accept_resource(Req, #reqstate{module = Mod} = State) ->
-    {ok, JSON, Req2} = cowboy_req:body(Req),
-    {Id, Req3} = cowboy_req:binding(id, Req2),
-    Data = mochijson2:decode(JSON, [{format, proplist}]),
-    case Mod:accept_resource(Id, Data, State) of
+    case Mod:accept_resource(State) of
         {ok, Response} ->
             ResponseJSON = mochijson2:encode(Response),
-            Req4 = cowboy_req:set_resp_body(ResponseJSON, Req3),
-            {true, Req4, State};
+            Req2 = cowboy_req:set_resp_body(ResponseJSON, Req),
+            {true, Req2, State};
         ok ->
-            {true, Req3, State}
+            {true, Req, State}
     end.
 
 
@@ -175,7 +181,6 @@ accept_resource(Req, #reqstate{module = Mod} = State) ->
     {iodata(), cowboy_req:req(), #reqstate{}}.
 %% ====================================================================
 provide_resource(Req, #reqstate{module = Mod} = State) ->
-    {Id, Req2} = cowboy_req:binding(id, Req),
-    {ok, Data} = Mod:provide_resource(Id, State),
+    {ok, Data} = Mod:provide_resource(State),
     JSON = mochijson2:encode(Data),
-    {JSON, Req2, State}.
+    {JSON, Req, State}.

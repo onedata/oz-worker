@@ -75,11 +75,12 @@ stop(_State) ->
 %% ====================================================================
 start_rest() ->
 	Dispatch = cowboy_router:compile([
-		{'_', [
-			{?HELLO_WORLD_URL, hello_world, []},
-            user_rest_module:routes(), %% @todo: append
-            provider_rest_module:routes() %% @todo: append
-		]}
+		{'_', lists:append([
+			[{?HELLO_WORLD_URL, hello_world, []}],
+            user_rest_module:routes(),
+            provider_rest_module:routes(),
+            spaces_rest_module:routes()
+		])}
 	]),
 	{ok, _} = cowboy:start_http(http, ?REST_HTTP_ACCEPTORS, [{port, ?REST_PORT}], [
 		{env, [{dispatch, Dispatch}]}

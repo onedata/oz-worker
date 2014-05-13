@@ -12,20 +12,18 @@
 
 -include("handlers/rest_handler.hrl").
 
-%% API
--export([]).
-
 
 %% routes/0
 %% ====================================================================
 %% @doc Returns a Cowboy-understandable PathList of routes supported by a module
 %% implementing this behavior. The State shall contain a reqstate record
 %% adhering to following rules:
-%% * the #reqstate.resource shall be set to `main` for the main resource point
+%% * the #reqstate.resource shall be set to `main` for the main resource point,
+%% * the #reqstate.resource shall be set to `create` for the create method.
 %% * the #reqstate.module shall be set to the name of the implementing module.
+%% If the route contains a resource identifier, it shall be bound to :id .
 %% By convention, only the main resource supports GET, POST, DELETE methods;
 %% other resources are assumed to support only POST.
-%% If the route contains a resource identifier, it shall be bound to :id .
 %% @end
 -callback routes() ->
     [{PathMatch :: string() | binary(), rest_handler, State :: #reqstate{}}].
@@ -33,42 +31,35 @@
 
 %% is_authorized/2
 %% ====================================================================
-%% @doc Returns a boolean() determining if the authenticated client is
+%% @doc Returns a boolean determining if the authenticated client is
 %% authorized to carry the request on the resource.
 %% @end
 %% ====================================================================
--callback is_authorized(Id :: binary(), State :: #reqstate{}) ->
+-callback is_authorized(Method :: binary(), State :: #reqstate{}) ->
     boolean().
 
 
 %% accept_resource/3
 %% ====================================================================
 %% @doc Processes data submitted by a client through POST on a REST resource.
-%% The data is given as a proplist where strings are given as binary().
-%% If a Response is returned, it's then enoded to JSON and returned as a body;
-%% thus the returned proplist shall be constructed in such a way that it
-%% will produce a valid JSON response when encoded.
+%% If a Response is returned, it's then enoded to JSON and returned as a body.
 %% @end
 %% ====================================================================
--callback accept_resource(Id :: binary(), Data :: [proplists:property()],
-                          State :: #reqstate{}) ->
-    {ok, Response :: [proplists:property()]} | ok | {error, Reason :: term()}.
+-callback accept_resource(State :: #reqstate{}) ->
+    {ok, Response :: reqdata()} | ok | {error, Reason :: term()}.
 
 
 %% provide_resource/2
 %% ====================================================================
 %% @doc Returns data requested by a client through GET on a REST resource.
-%% The data returned shall be a proplist constructed in such a way that it
-%% will produce a valid JSON response when encoded.
-%% @end
 %% ====================================================================
--callback provide_resource(Id :: binary(), State :: #reqstate{}) ->
-    {ok, Data :: [proplists:property()]} | {error, Reason :: term()}.
+-callback provide_resource(State :: #reqstate{}) ->
+    {ok, Data :: reqdata()} | {error, Reason :: term()}.
 
 
 %% delete_resource/2
 %% ====================================================================
-%% @doc Deletes the resource identified by the Id parameter.
+%% @doc Deletes the resource.
 %% ====================================================================
--callback delete_resource(Id :: binary(), State :: #reqstate{}) ->
+-callback delete_resource(State :: #reqstate{}) ->
     ok | {error, Reason :: term()}.

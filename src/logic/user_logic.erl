@@ -15,7 +15,7 @@
 %% API
 -export([register/1, modify_data/2, new_accounts_merge_token/1,
     new_space_create_token/1, merge_accounts/2, join_space/2, join_group/2,
-    unregister/1, get_data/1]).
+    unregister/1, get_data/1, can_join_space/2, can_merge_accounts/2, can_join_group/2]).
 
 
 -spec register(Name :: binary()) -> {ok, binary()} | {error, any()}.
@@ -61,3 +61,12 @@ join_group(UserId, Token) ->
 -spec unregister(UserId :: binary()) -> ok | {error, any()}.
 unregister(UserId) ->
     ok.
+
+can_join_space(UserId, Token) ->
+    true.
+
+can_merge_accounts(UserId, Token) ->
+    true.
+
+can_join_group(UserId, Token) ->
+    true.
