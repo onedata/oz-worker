@@ -27,6 +27,11 @@
 -define(dao_record_info(R),
     case R of
         some_record         -> ?record_info_gen(some_record);
+		user                -> ?record_info_gen(user);
+		provider            -> ?record_info_gen(provider);
+		space               -> ?record_info_gen(space);
+		token               -> ?record_info_gen(token);
+		user_group          -> ?record_info_gen(user_group);
         _ -> {error, unsupported_record}
     end).
 
@@ -53,11 +58,7 @@
 %% DB definitions
 %% ====================================================================
 %% DB Names
--ifdef(TEST).
-  -define(SYSTEM_DB_NAME, "system_data_test").
--else.
-  -define(SYSTEM_DB_NAME, "system_data").
--endif.
+-define(SYSTEM_DB_NAME, "system_data").
 
 %% Design Names
 

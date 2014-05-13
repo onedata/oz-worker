@@ -12,9 +12,12 @@
 -include("registered_names.hrl").
 -include("testing/test_node_starter.hrl").
 -include("testing/assertions.hrl").
+-include("dao/dao.hrl").
 
 %% API
--export([start_globalregistry_node/3,start_globalregistry_node/4,stop_globalregistry_node/1,set_env_vars/1,start_deps/0,stop_deps/0]).
+-export([start_globalregistry_node/3,start_globalregistry_node/4,stop_globalregistry_node/1]).
+-export([set_env_vars/1,start_deps/0,stop_deps/0]).
+-export([clear_db/0]).
 
 
 %% start_globalregistry_node/3
@@ -124,3 +127,13 @@ set_env_vars([]) ->
 set_env_vars([{Variable, Value} | Vars]) ->
 	application:set_env(?APP_Name, Variable, Value),
 	set_env_vars(Vars).
+
+%% clear_db/0
+%% ====================================================================
+%% @doc Clears database between tests.
+-spec clear_db() -> ok.
+%% ====================================================================
+clear_db() ->
+	ibrowse:start(),
+	lists:foreach(fun(Db)-> ibrowse:send_req("http://127.0.0.1:5984/"++Db,[],delete) end, ?DB_LIST),
+	ibrowse:stop().
