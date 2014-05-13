@@ -79,7 +79,8 @@ start_rest() ->
 			[{?HELLO_WORLD_URL, hello_world, []}],
             user_rest_module:routes(),
             provider_rest_module:routes(),
-            spaces_rest_module:routes()
+            spaces_rest_module:routes(),
+            groups_rest_module:routes()
 		])}
 	]),
 	{ok, _} = cowboy:start_http(http, ?REST_HTTP_ACCEPTORS, [{port, ?REST_PORT}], [

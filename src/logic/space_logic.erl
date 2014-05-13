@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: The module implementing the business logic for registry's users.
+%% @doc: The module implementing the business logic for spaces in the registry.
 %% This module serves as a buffer between the database and the REST API.
 %% @end
 %% ===================================================================

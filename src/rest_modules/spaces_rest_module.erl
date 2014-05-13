@@ -35,7 +35,7 @@ routes() ->
     [
         {"/spaces/create", rest_handler, S#reqstate{resource = create}},
         {"/spaces/:id", rest_handler, S#reqstate{resource = main}},
-        {"/spaces/:id/tokens/userInvite/create", rest_handler, S#reqstate{resource = user_invite_token}},
+        {"/spaces/:id/tokens/userInvite/create", rest_handler, S#reqstate{resource = invite_token}},
         {"/spaces/:id/tokens/providerSupport/create", rest_handler, S#reqstate{resource = provider_support_token}}
     ].
 
@@ -60,7 +60,7 @@ is_authorized(<<"GET">>, #reqstate{resource = main, client = #reqclient{type = u
     space_logic:can_user_view(SpaceId, UserId);
 is_authorized(<<"GET">>, #reqstate{resource = main, client = #reqclient{type = provider, id = ProviderId}, resid = SpaceId}) ->
     space_logic:can_provider_view(SpaceId, ProviderId);
-is_authorized(<<"POST">>, #reqstate{resource = user_invite_token, client = #reqclient{type = user, id = UserId}, resid = SpaceId}) ->
+is_authorized(<<"POST">>, #reqstate{resource = invite_token, client = #reqclient{type = user, id = UserId}, resid = SpaceId}) ->
     space_logic:can_invite(SpaceId, UserId);
 is_authorized(<<"POST">>, #reqstate{resource = provider_support_token, client = #reqclient{type = user, id = UserId}, resid = SpaceId}) ->
     space_logic:can_add_providers(SpaceId, UserId);
@@ -88,7 +88,7 @@ accept_resource(#reqstate{resource = create, client = #reqclient{type = provider
     {ok, [{spaceId, SpaceId}]};
 accept_resource(#reqstate{resource = main, client = #reqclient{id = UserId}, data = Data, resid = SpaceId}) ->
     space_logic:modify(SpaceId, UserId, Data);
-accept_resource(#reqstate{resource = user_invite_token, client = #reqclient{id = UserId}, data = Data,  resid = SpaceId}) ->
+accept_resource(#reqstate{resource = invite_token, client = #reqclient{id = UserId}, data = Data, resid = SpaceId}) ->
     case proplists:get_value(<<"groupId">>, Data) of
         undefined -> space_logic:new_user_invite_token(SpaceId, UserId);
         GroupId -> space_logic:new_group_invite_token(SpaceId, GroupId, UserId)
