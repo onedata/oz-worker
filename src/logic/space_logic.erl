@@ -14,43 +14,89 @@
 
 %% API
 
--export([can_provider_create/1, can_user_modify/3, can_client_view/2, can_user_invite/2, can_user_add_providers/2, can_user_delete/2, create/2, modify/2, new_user_invite_token/1, new_group_invite_token/2, new_support_token/0, get_data/2, delete/1]).
+-export([can_provider_create/2, can_modify/3, can_user_view/2,
+    can_provider_view/2, can_invite/2, can_add_providers/2, can_delete/2]).
 
-can_provider_create(Token) ->
+-export([user_create/2, provider_create/3, modify/3, new_user_invite_token/2,
+    new_group_invite_token/3, new_support_token/2, user_view/2, provider_view/2,
+    delete/2]).
+
+
+-spec can_provider_create(ProviderId :: binary(), Token :: binary()) -> boolean().
+can_provider_create(ProviderId, Token) ->
     true.
 
-can_user_modify(SpaceId, UserId, Data) ->
+
+-spec can_modify(SpaceId :: binary(), UserId :: binary(), Modifications :: [proplists:property()]) -> boolean().
+can_modify(SpaceId, UserId, Modifications) ->
     true.
 
-can_client_view(SpaceId, Client) ->
+
+-spec can_user_view(SpaceId :: binary(), UserId :: binary()) -> boolean().
+can_user_view(SpaceId, UserId) ->
     true.
 
-can_user_invite(SpaceId, UserId) ->
+
+-spec can_provider_view(SpaceId :: binary(), ProviderId :: binary()) -> boolean().
+can_provider_view(SpaceId, ProviderId) ->
     true.
 
-can_user_add_providers(SpaceId, UserId) ->
+
+-spec can_invite(SpaceId :: binary(), UserId :: binary()) -> boolean().
+can_invite(SpaceId, UserId) ->
     true.
 
-can_user_delete(SpaceId, UserId) ->
+
+-spec can_add_providers(SpaceId :: binary(), UserId :: binary()) -> boolean().
+can_add_providers(SpaceId, UserId) ->
     true.
 
-create(Client, Data) ->
+
+-spec can_delete(SpaceId :: binary(), UserId :: binary()) -> boolean().
+can_delete(SpaceId, UserId) ->
+    true.
+
+
+-spec user_create(Name :: binary(), UserId :: binary()) -> {ok, SpaceId :: binary()} | {error, Reason :: term()}.
+user_create(Name, UserId) ->
     {ok, <<"spaceid">>}.
 
-modify(SpaceId, Data) ->
+
+-spec provider_create(Name :: binary(), ProviderId :: binary(), Token :: binary()) -> {ok, SpaceId :: binary()} | {error, Reason :: term()}.
+provider_create(Name, ProviderId, Token) ->
+    {ok, <<"spaceid">>}.
+
+
+-spec modify(SpaceId :: binary(), UserId :: binary(), Modifications :: [proplists:property()]) -> ok | {error, Reason :: term()}.
+modify(SpaceId, UserId, Modifications) ->
     ok.
 
-new_user_invite_token(UserId) ->
-    <<"spaceuserinvitetoken">>.
 
-new_group_invite_token(GroupId, UserId) ->
-    <<"spacegroupinvitetoken">>.
+-spec new_user_invite_token(SpaceId :: binary(), UserId :: binary()) -> {ok, Token :: binary()} | {error, Reason :: term()}.
+new_user_invite_token(SpaceId, UserId) ->
+    {ok, <<"spaceuserinvitetoken">>}.
 
-new_support_token() ->
-    <<"spacesupporttoken">>.
 
-get_data(SpaceId, Client) ->
+-spec new_group_invite_token(SpaceId :: binary(), GroupId :: binary(), UserId :: binary()) -> {ok, Token :: binary()} | {error, Reason :: term()}.
+new_group_invite_token(SpaceId, GroupId, UserId) ->
+    {ok, <<"spacegroupinvitetoken">>}.
+
+
+-spec new_support_token(SpaceId :: binary(), UserId :: binary()) -> {ok, Token :: binary()} | {error, Reason :: term()}.
+new_support_token(SpaceId, UserId) ->
+    {ok, <<"spacesupporttoken">>}.
+
+
+-spec user_view(SpaceId :: binary(), UserId :: binary()) -> {ok, [proplists:property()]} | {error, Reason :: term()}.
+user_view(SpaceId, UserId) ->
     {ok, [{<<"data">>, 1}]}.
 
-delete(SpaceId) ->
+
+-spec provider_view(SpaceId :: binary(), UserId :: binary()) -> {ok, [proplists:property()]} | {error, Reason :: term()}.
+provider_view(SpaceId, UserId) ->
+    {ok, [{<<"data">>, 1}]}.
+
+
+-spec delete(SpaceId :: binary(), UserId :: binary()) -> ok | {error, Reason :: term()}.
+delete(SpaceId, UserId) ->
     ok.

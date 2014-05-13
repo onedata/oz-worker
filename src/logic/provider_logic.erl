@@ -31,6 +31,11 @@ modify_data(ProviderId, Modifications) ->
     ok.
 
 
+-spec can_support_space(ProviderId :: binary(), Token :: binary()) -> boolean().
+can_support_space(ProviderId, Token) ->
+    true.
+
+
 -spec support_space(ProviderId :: binary(), Token :: binary()) -> {ok, binary()} | {error, any()}.
 support_space(ProviderId, Token) ->
     {ok, <<"spaceid">>}.
@@ -40,5 +45,3 @@ support_space(ProviderId, Token) ->
 unregister(ProviderId) ->
     ok.
 
-can_support_space(ProviderId, Token) ->
-    true.
