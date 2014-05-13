@@ -9,6 +9,7 @@
 
 %% Aliases
 {alias, connection_test, "./connection_test/"}.
+{alias, dao_test, "./dao_test/"}.
 
 %% Common dirs
 {include, ["../include","."]}.
@@ -16,3 +17,4 @@
 
 %% Suites
 {suites, connection_test, all}.
+{suites, dao_test, all}.
