@@ -62,11 +62,14 @@ join_group(UserId, Token) ->
 unregister(UserId) ->
     ok.
 
+-spec can_join_space(UserId :: binary(), Token :: binary()) -> boolean().
 can_join_space(UserId, Token) ->
     true.
 
+-spec can_merge_accounts(UserId :: binary(), Token :: binary()) -> boolean().
 can_merge_accounts(UserId, Token) ->
     true.
 
+-spec can_join_group(UserId :: binary(), Token :: binary()) -> boolean().
 can_join_group(UserId, Token) ->
     true.
