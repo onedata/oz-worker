@@ -28,7 +28,10 @@ gen_server_connection_test(Config) ->
 
 rest_api_connection_test(_Config) ->
 	ibrowse:start(),
- 	?assertMatch({ok,"200",_,"<html>REST Hello World as HTML!</html>"}, ibrowse:send_req("http://127.0.0.1:8080/hello_world",[],get)),
+	ssl:start(),
+	Ans = ibrowse:send_req("https://127.0.0.1:8080/hello_world",[],get),
+	?assertMatch({ok,"200",_,"<html>REST Hello World as HTML!</html>"}, Ans),
+	ssl:stop(),
 	ibrowse:stop().
 
 dao_connection_test(Config) ->
@@ -43,7 +46,14 @@ init_per_suite(Config) ->
 	?INIT_CODE_PATH,
 	DbNode = ?NODE(?CURRENT_HOST,db),
 	DbNodesEnv = {db_nodes,[DbNode]},
-	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST,[DbNodesEnv]),
+	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST,
+		[
+			DbNodesEnv,
+			{ca_cert_file,"../../../cacerts/ca.crt"},
+			{cert_file,"../../../cacerts/server.crt"},
+	 		{key_file,"../../../cacerts/server.key"}
+		],
+		true),
 	Config ++ [{node,Node}].
 
 end_per_suite(Config) ->
