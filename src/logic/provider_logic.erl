@@ -12,9 +12,13 @@
 -module(provider_logic).
 -author("Konrad Zemek").
 
+-include("dao/dao_types.hrl").
+
 
 %% API
--export([create/1, modify/2, get_data/1, get_spaces/1, remove/1]).
+-export([create/1, modify/2]).
+-export([get_data/1, get_spaces/1]).
+-export([remove/1]).
 
 
 %% create/1
@@ -22,10 +26,11 @@
 %% @doc Create a provider's account.
 %% ====================================================================
 -spec create(URL :: binary()) ->
-    {ok, ProviderId :: binary()} | {error, Reason :: any()}.
+    {ok, ProviderId :: binary()} | no_return().
 %% ====================================================================
 create(URL) ->
-    {ok, <<"ProviderId">>}.
+    ProviderId = logic_helper:save(#provider{url = URL}),
+    {ok, ProviderId}.
 
 
 %% modify/2
@@ -33,9 +38,13 @@ create(URL) ->
 %% @doc Modify provider's details.
 %% ====================================================================
 -spec modify(ProviderId :: binary(), URL :: binary()) ->
-    ok | {error, Reason :: any()}.
+    ok | no_return().
 %% ====================================================================
 modify(ProviderId, URL) ->
+    Doc = logic_helper:provider_doc(ProviderId),
+    #veil_document{record = Provider} = Doc,
+    ProviderNew = Provider#provider{url = URL},
+    logic_helper:save(Doc#veil_document{record = ProviderNew}),
     ok.
 
 
@@ -44,10 +53,14 @@ modify(ProviderId, URL) ->
 %% @doc Get provider's details.
 %% ====================================================================
 -spec get_data(ProviderId :: binary()) ->
-    {ok, Data :: [proplists:property()]} | {error, Reason :: any()}.
+    {ok, Data :: [proplists:property()]} | no_return().
 %% ====================================================================
 get_data(ProviderId) ->
-    {ok, [{url, <<"providerurl">>}]}.
+    #provider{url = URL} = logic_helper:provider(ProviderId),
+    {ok, [
+        {providerId, ProviderId},
+        {url, URL}
+    ]}.
 
 
 %% get_spaces/1
@@ -55,10 +68,11 @@ get_data(ProviderId) ->
 %% @doc Get Spaces supported by the provider.
 %% ====================================================================
 -spec get_spaces(ProviderId :: binary()) ->
-    {ok, Data :: [proplists:property()]} | {error, Reason :: any()}.
+    {ok, Data :: [proplists:property()]} | no_return().
 %% ====================================================================
 get_spaces(ProviderId) ->
-    {ok, [{spaces, [<<"space">>]}]}.
+    #provider{spaces = Spaces} = logic_helper:provider(ProviderId),
+    {ok, [{spaces, Spaces}]}.
 
 
 %% remove/1
@@ -68,4 +82,13 @@ get_spaces(ProviderId) ->
 -spec remove(ProviderId :: binary()) -> boolean().
 %% ====================================================================
 remove(ProviderId) ->
-    true.
+    #provider{spaces = Spaces} = logic_helper:provider(ProviderId),
+
+    lists:foreach(fun(SpaceId) ->
+        SpaceDoc = logic_helper:space_doc(SpaceId),
+        #veil_document{record = #space{providers = Providers} = Space} = SpaceDoc,
+        SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers)},
+        logic_helper:save(SpaceDoc#veil_document{record = SpaceNew})
+    end, Spaces),
+
+    logic_helper:provider_remove(ProviderId).

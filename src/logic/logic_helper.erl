@@ -17,7 +17,7 @@
 
 
 %% API
--export([space_doc/1, user_doc/1, group_doc/1, token_doc/1, provider_doc/1, save/1, user_remove/1, space_remove/1, group_remove/1, token_remove/1, provider_remove/1]).
+-export([space_doc/1, user_doc/1, group_doc/1, token_doc/1, provider_doc/1, save/1, user_remove/1, space_remove/1, group_remove/1, token_remove/1, provider_remove/1, space/1, user/1, group/1, token/1, provider/1]).
 
 
 -spec save(Doc :: veil_doc() | space_info() | user_info() | group_info() |
@@ -39,6 +39,31 @@ save_doc(#veil_document{record = #token{}} = Doc) ->
     dao_lib:apply(dao_tokens, save_token, [Doc], 1);
 save_doc(#veil_document{record = #provider{}} = Doc) ->
     dao_lib:apply(dao_providers, save_provider, [Doc], 1).
+
+-spec space(SpaceId :: binary()) -> space_info() | no_return().
+space(SpaceId) ->
+    #veil_document{record = Space} = space_doc(SpaceId),
+    Space.
+
+-spec user(UserId :: binary()) -> user_info() | no_return().
+user(UserId) ->
+    #veil_document{record = User} = user_doc(UserId),
+    User.
+
+-spec group(GroupId :: binary()) -> group_info() | no_return().
+group(GroupId) ->
+    #veil_document{record = Group} = group_doc(GroupId),
+    Group.
+
+-spec token(TokenId :: binary()) -> token_info() | no_return().
+token(TokenId) ->
+    #veil_document{record = Token} = token_doc(TokenId),
+    Token.
+
+-spec provider(ProviderId :: binary()) -> provider_info() | no_return().
+provider(ProviderId) ->
+    #veil_document{record = Provider} = provider_doc(ProviderId),
+    Provider.
 
 
 -spec space_doc(SpaceId :: binary()) -> space_doc() | no_return().
