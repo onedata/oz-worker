@@ -22,24 +22,13 @@
 
 -export([load_auth_config/0, get_auth_config/1, get_auth_providers/0]).
 
--export([init_state_memory/0, generate_state_token/1, lookup_state_token/1, clear_expired_tokens/0]).
+-export([init_state_memory/0, generate_state_token/1, lookup_state_token/1, clear_expired_tokens/0, generate_uuid/0]).
 
 -export([get_provider_module/1, get_provider_app_id/1, get_provider_app_secret/1]).
 -export([get_provider_button_text/1, get_provider_button_icon/1, get_provider_button_color/1]).
 
--export([test/0]).
-
 -define(STATE_TTL, 60).
 -define(STATE_ETS, auth_state_ets).
-
-
-test() ->
-    UserInfo = #user_info{emails = ["a", "b"], preferred_login = "penis", preferred_name = "dupa", provider_infos = [
-        #provider_user_info{provider_id = github, email = "a", login = "penis", name = "dupa"},
-        #provider_user_info{provider_id = facebook, email = "b", login = "cycki", name = "odbyt"}
-    ]},
-    ets:insert(?STATE_ETS, {user, UserInfo}),
-    ?dump(ets:lookup(?STATE_ETS, user)).
 
 
 proplist_to_params(List) ->
@@ -100,11 +89,7 @@ init_state_memory() ->
 
 generate_state_token(HandlerModule) ->
     clear_expired_tokens(),
-    {M, S, N} = now(),
-    Time = M * 1000000000000 + S * 1000000 + N,
-    TimeHex = string:right(integer_to_list(Time, 16), 14, $0),
-    Rand = [lists:nth(1, integer_to_list(random:uniform(16) - 1, 16)) || _ <- lists:seq(1, 18)],
-    Token = list_to_binary(string:to_lower(string:concat(TimeHex, Rand))),
+    {Token, Time} = generate_uuid(),
 
     RedirectAfterLogin = case wf:q(<<"x">>) of
                              undefined -> <<"/">>;
@@ -117,6 +102,14 @@ generate_state_token(HandlerModule) ->
 
     ets:insert(?STATE_ETS, {Token, Time, StateInfo}),
     Token.
+
+generate_uuid() ->
+    {M, S, N} = now(),
+    Time = M * 1000000000000 + S * 1000000 + N,
+    TimeHex = string:right(integer_to_list(Time, 16), 14, $0),
+    Rand = [lists:nth(1, integer_to_list(random:uniform(16) - 1, 16)) || _ <- lists:seq(1, 18)],
+    UUID = list_to_binary(string:to_lower(string:concat(TimeHex, Rand))),
+    {UUID, Time}.
 
 
 lookup_state_token(Token) ->

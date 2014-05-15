@@ -21,22 +21,25 @@
 
 
 test() ->
-    UserInfo = #user_info{emails = ["a", "b"], preferred_login = "a", preferred_name = "a", provider_infos = [
-        #provider_user_info{provider_id = github, user_id = "a", email = "a", login = "a", name = "a"},
-        #provider_user_info{provider_id = facebook, user_id = "b", email = "b", login = "b", name = "b"}
+    UserInfo = #user_info{global_id = "ab", emails = ["a", "b"], preferred_login = "a", preferred_name = "a", provider_infos = [
+        #provider_user_info{provider_id = github, user_id = "a", emails = "a", login = "a", name = "a"},
+        #provider_user_info{provider_id = facebook, user_id = "b", emails = "b", login = "b", name = "b"}
     ]},
 
     save_user(UserInfo),
     ?dump(get_user({github, "a"})),
+    ?dump(get_user({global, "ab"})),
 
-    UserInfo2 = #user_info{emails = ["c", "d"], preferred_login = "c", preferred_name = "c", provider_infos = [
-        #provider_user_info{provider_id = github, user_id = "c", email = "c", login = "c", name = "c"},
-        #provider_user_info{provider_id = facebook, user_id = "d", email = "d", login = "d", name = "d"}
+    UserInfo2 = #user_info{global_id = "cd", emails = ["c", "d"], preferred_login = "c", preferred_name = "c", provider_infos = [
+        #provider_user_info{provider_id = github, user_id = "c", emails = "c", login = "c", name = "c"},
+        #provider_user_info{provider_id = facebook, user_id = "d", emails = "d", login = "d", name = "d"}
     ]},
 
-    update_user({github, "a"}, UserInfo2),
+    update_user({global, "ab"}, UserInfo2),
     ?dump(get_user({github, "a"})),
     ?dump(get_user({github, "c"})),
+    ?dump(get_user({global, "ab"})),
+    ?dump(get_user({global, "cd"})),
 
     ok.
 
@@ -50,6 +53,18 @@ init() ->
 
 save_user(User = #user_info{}) ->
     save_all_users([User | get_all_users()]).
+
+
+get_user({global, ID}) ->
+    LookupUser =
+        fun(User = #user_info{global_id = GlobalID}, Acc) ->
+            case ID of
+                GlobalID -> User;
+                _ -> Acc
+            end
+        end,
+
+    lists:foldl(LookupUser, undefined, get_all_users());
 
 
 get_user({Provider, ID}) ->
@@ -74,6 +89,18 @@ get_user({Provider, ID}) ->
         end,
 
     lists:foldl(LookupUser, undefined, get_all_users()).
+
+
+update_user({global, ID}, NewUserInfo) ->
+    UpdateUser =
+        fun(User = #user_info{global_id = GlobalID}) ->
+            case ID of
+                GlobalID -> NewUserInfo;
+                _ -> User
+            end
+        end,
+
+    save_all_users(lists:map(UpdateUser, get_all_users()));
 
 
 update_user({Provider, ID}, NewUserInfo) ->

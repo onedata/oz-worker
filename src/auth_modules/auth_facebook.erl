@@ -13,6 +13,7 @@
 -behaviour(auth_module_behaviour).
 
 -include("logging.hrl").
+-include("auth_common.hrl").
 
 -define(PROVIDER_NAME, facebook).
 
@@ -37,6 +38,7 @@ get_redirect_url() ->
         ParamsProplist = [
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
+            {<<"scope">>, <<"email">>},
             {<<"state">>, auth_utils:generate_state_token(?MODULE)}
         ],
         Params = auth_utils:proplist_to_params(ParamsProplist),
@@ -75,14 +77,29 @@ validate_login(ParamsProplist) ->
 
         % Form user info request
         URL2 = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
-        % Send request to GitHub endpoint
+        % Send request to Facebook endpoint
         {ok, "200", _, JSON} = ibrowse:send_req(
             binary_to_list(URL2),
             [{content_type, "application/x-www-form-urlencoded"}],
             get, [], [{response_format, binary}]),
+
         % Parse received JSON
-        n2o_json:decode(JSON)
+        {struct, JSONProplist} = n2o_json:decode(JSON),
+        ProvUserInfo = #provider_user_info{
+            provider_id = ?PROVIDER_NAME,
+            user_id = proplists:get_value(<<"id">>, JSONProplist, <<"">>),
+            emails = extract_emails(JSONProplist),
+            name = proplists:get_value(<<"name">>, JSONProplist, <<"">>)
+        },
+        {ok, ProvUserInfo}
     catch
         Type:Message ->
             {error, {Type, Message}}
+    end.
+
+
+extract_emails(JSONProplist) ->
+    case proplists:get_value(<<"email">>, JSONProplist, <<"">>) of
+        <<"">> -> [];
+        Email -> [Email]
     end.

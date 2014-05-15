@@ -15,6 +15,7 @@
 -define(local_auth_endpoint, "/validate_login").
 
 -record(user_info, {
+    global_id = "",
     preferred_login = "",
     preferred_name = "",
     emails = [],
@@ -26,7 +27,7 @@
     user_id = "",
     login = "",
     name = "",
-    email = ""
+    emails = ""
 }).
 
 -endif.

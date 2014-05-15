@@ -13,6 +13,7 @@
 -behaviour(auth_module_behaviour).
 
 -include("logging.hrl").
+-include("auth_common.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 -define(PROVIDER_NAME, plgrid).
@@ -106,24 +107,34 @@ validate_login(ParamsProplist) ->
         Response = <<"is_valid:true\n">>,
 
         % Gather user info
-        Login = gui_utils:to_list(proplists:get_value(<<"openid.sreg.nickname">>, ParamsProplist, <<"">>)),
-        Name = gui_utils:to_list(proplists:get_value(<<"openid.sreg.fullname">>, ParamsProplist, <<"">>)),
-        Teams = parse_teams(gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.teams">>, ParamsProplist, <<"">>))),
-        Email = gui_utils:to_list(proplists:get_value(<<"openid.sreg.email">>, ParamsProplist, <<"">>)),
-        DN1 = gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.dn1">>, ParamsProplist, <<"">>)),
-        DN2 = gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.dn2">>, ParamsProplist, <<"">>)),
-        DN3 = gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.dn3">>, ParamsProplist, <<"">>)),
-        DnList = lists:filter(
+        Login = proplists:get_value(<<"openid.sreg.nickname">>, ParamsProplist, <<"">>),
+        % Login is also user id, cannot be empty
+        true = (Login /= <<"">>),
+        Name = proplists:get_value(<<"openid.sreg.fullname">>, ParamsProplist, <<"">>),
+        Emails =
+            case proplists:get_value(<<"openid.sreg.email">>, ParamsProplist, <<"">>) of
+                <<"">> -> [];
+                Email -> [Email]
+            end,
+
+        % TODO Unused
+        _Teams = parse_teams(gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.teams">>, ParamsProplist, <<"">>))),
+        DN1 = proplists:get_value(<<"openid.ext1.value.dn1">>, ParamsProplist, <<"">>),
+        DN2 = proplists:get_value(<<"openid.ext1.value.dn2">>, ParamsProplist, <<"">>),
+        DN3 = proplists:get_value(<<"openid.ext1.value.dn3">>, ParamsProplist, <<"">>),
+        _DnList = lists:filter(
             fun(X) ->
                 (X /= [])
             end, [DN1, DN2, DN3]),
-        [
-            {login, Login},
-            {name, Name},
-            {teams, Teams},
-            {email, Email},
-            {dn_list, lists:usort(DnList)}
-        ]
+
+        ProvUserInfo = #provider_user_info{
+            provider_id = ?PROVIDER_NAME,
+            user_id = Login,
+            login = Login,
+            emails = Emails,
+            name = Name
+        },
+        {ok, ProvUserInfo}
 
     catch
         Type:Message ->

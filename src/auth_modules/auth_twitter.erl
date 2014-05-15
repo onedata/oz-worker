@@ -13,6 +13,7 @@
 -behaviour(auth_module_behaviour).
 
 -include("logging.hrl").
+-include("auth_common.hrl").
 
 -define(PROVIDER_NAME, twitter).
 
@@ -32,10 +33,14 @@ user_info_endpoint() ->
     <<"https://api.github.com/user">>.
 
 
+user_emails_endpoint() ->
+    <<"https://api.github.com/user/emails">>.
+
+
 get_redirect_url() ->
     try
         ParamsProplist = [
-            {<<"client_id">>, <<"ab87491bb2cc9ebee095">>},
+            {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
             {<<"scope">>, <<"user,user:email">>},
             {<<"state">>, auth_utils:generate_state_token(?MODULE)}
@@ -79,10 +84,39 @@ validate_login(ParamsProplist) ->
         {ok, "200", _, JSON} = ibrowse:send_req(
             binary_to_list(URL),
             [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}],
-            get),
+            get, [], [{response_format, binary}]),
+
+        % Form user email request
+        URLEmail = <<(user_emails_endpoint())/binary, "?access_token=", AccessToken/binary>>,
+        % Send request to GitHub endpoint
+        {ok, "200", _, JSONEmails} = ibrowse:send_req(
+            binary_to_list(URLEmail),
+            [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}],
+            get, [], [{response_format, binary}]),
+
         % Parse received JSON
-        n2o_json:decode(JSON)
+        {struct, JSONProplist} = n2o_json:decode(JSON),
+        ProvUserInfo = #provider_user_info{
+            provider_id = ?PROVIDER_NAME,
+            user_id = proplists:get_value(<<"id">>, JSONProplist, <<"">>),
+            emails = extract_emails(JSONEmails),
+            name = proplists:get_value(<<"name">>, JSONProplist, <<"">>),
+            login = proplists:get_value(<<"login">>, JSONProplist, <<"">>)
+        },
+        {ok, ProvUserInfo}
     catch
         Type:Message ->
             {error, {Type, Message}}
     end.
+
+
+extract_emails(JSON) ->
+    EmailsJSON =
+        case n2o_json:decode(JSON) of
+            {struct, Email} -> [{struct, Email}];
+            List when is_list(List) -> List
+        end,
+    lists:map(
+        fun({struct, Email}) ->
+            proplists:get_value(<<"email">>, Email)
+        end, EmailsJSON).

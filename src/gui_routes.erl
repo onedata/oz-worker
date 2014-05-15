@@ -28,5 +28,6 @@ init(State, Ctx) ->
 
 route(<<"/">>) -> page_hello;
 route(<<"/test">>) -> page_test;
+route(<<"/login">>) -> page_login;
 route(<<"/validate_login">>) -> page_test_val;
 route(_) -> page_404.
