@@ -5,8 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: The module handling logic behind /user REST resources.
-%% @end
+%% @doc The module handling logic behind /user REST resources.
 %% ===================================================================
 -module(user_rest_module).
 -author("Konrad Zemek").
@@ -17,8 +16,8 @@
 
 
 %% API
--export([routes/0, is_authorized/2, accept_resource/1, provide_resource/1,
-    delete_resource/1]).
+-export([routes/0, is_authorized/4, accept_resource/6, provide_resource/4,
+    delete_resource/3, resource_exists/3]).
 
 
 %% routes/0
@@ -28,18 +27,22 @@
 %% @see rest_module_behavior
 %% @end
 -spec routes() ->
-    [{PathMatch :: string() | binary(), rest_handler, State :: #reqstate{}}].
+    [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 %% ====================================================================
 routes() ->
-    S = #reqstate{module = ?MODULE},
+    S = #rstate{module = ?MODULE},
+    M = rest_handler,
     [
-        {"/user", rest_handler, S#reqstate{resource = main}},
-        {"/user/create", rest_handler, S#reqstate{resource = create}},
-        {"/user/joinGroup", rest_handler, S#reqstate{resource = join_group}},
-        {"/user/joinSpace", rest_handler, S#reqstate{resource = join_space}},
-        {"/user/mergeAccounts", rest_handler, S#reqstate{resource = merge_accounts}},
-        {"/user/tokens/accountMerge/create", rest_handler, S#reqstate{resource = account_merge_token}},
-        {"/user/tokens/spaceCreate/create", rest_handler, S#reqstate{resource = space_create_token}}
+        {<<"/user">>,               M, S#rstate{resource = user,    methods = [get, post, patch, delete]}},
+        {<<"/user/spaces">>,        M, S#rstate{resource = spaces,  methods = [get, post]   }},
+        {<<"/user/spaces/join">>,   M, S#rstate{resource = sjoin,   methods = [post]        }},
+        {<<"/user/spaces/token">>,  M, S#rstate{resource = screate, methods = [get]         }},
+        {<<"/user/spaces/:sid">>,   M, S#rstate{resource = space,   methods = [get, delete] }},
+        {<<"/user/groups">>,        M, S#rstate{resource = groups,  methods = [get, post]   }},
+        {<<"/user/groups/join">>,   M, S#rstate{resource = gjoin,   methods = [post]        }},
+        {<<"/user/groups/:gid">>,   M, S#rstate{resource = group,   methods = [get, delete] }},
+        {<<"/user/merge">>,         M, S#rstate{resource = merge,   methods = [post]        }},
+        {<<"/user/merge/token">>,   M, S#rstate{resource = mtoken,  methods = [get]         }}
     ].
 
 

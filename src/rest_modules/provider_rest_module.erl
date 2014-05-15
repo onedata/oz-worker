@@ -17,8 +17,8 @@
 
 
 %% API
--export([routes/0, is_authorized/2, accept_resource/1, provide_resource/1,
-    delete_resource/1]).
+-export([routes/0, is_authorized/4, accept_resource/6, provide_resource/4,
+    delete_resource/3, resource_exists/3]).
 
 
 %% routes/0
@@ -28,14 +28,16 @@
 %% @see rest_module_behavior
 %% @end
 -spec routes() ->
-    [{PathMatch :: string() | binary(), rest_handler, State :: #reqstate{}}].
+    [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 %% ====================================================================
 routes() ->
-    S = #reqstate{module = ?MODULE},
+    S = #rstate{module = ?MODULE},
+    M = rest_handler,
     [
-        {"/provider", rest_handler, S#reqstate{resource = main}},
-        {"/provider/create", rest_handler, S#reqstate{resource = create}},
-        {"/provider/supportSpace", rest_handler, S#reqstate{resource = support_space}}
+        {<<"/provider">>,                   M, S#rstate{resource = provider,    methods = [get, post, patch, delete]}},
+        {<<"/provider/spaces/">>,           M, S#rstate{resource = spaces,      methods = [get, post]   }},
+        {<<"/provider/spaces/support">>,    M, S#rstate{resource = ssupport,    methods = [post]        }},
+        {<<"/provider/spaces/:sid">>,       M, S#rstate{resource = space,       methods = [get, delete] }}
     ].
 
 
