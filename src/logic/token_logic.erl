@@ -15,8 +15,8 @@
 
 %% Atoms representing types of valid tokens.
 -type token_type() :: group_invite_token | space_create_token |
-    space_invite_user_token | space_invite_group_token | accounts_merge_token |
-    space_support_token.
+    space_create_group_token | space_invite_user_token |
+    space_invite_group_token | accounts_merge_token | space_support_token.
 
 
 %% API

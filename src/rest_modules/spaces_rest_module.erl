@@ -6,7 +6,6 @@
 %% @end
 %% ===================================================================
 %% @doc The module handling logic behind /spaces REST resources.
-%% @end
 %% ===================================================================
 -module(spaces_rest_module).
 -author("Konrad Zemek").
@@ -31,22 +30,22 @@
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 %% ====================================================================
 routes() ->
-    O = #rstate{module = ?MODULE},
+    S = #rstate{module = ?MODULE},
     M = rest_handler,
     [
-        {<<"/spaces">>,                              M, O#rstate{resource = spaces,    methods = [post]        }},
-        {<<"/spaces/:id">>,                          M, O#rstate{resource = space,     methods = [get, patch, delete]}},
-        {<<"/spaces/:id/users">>,                    M, O#rstate{resource = users,     methods = [get]         }},
-        {<<"/spaces/:id/users/token">>,              M, O#rstate{resource = uinvite,   methods = [get]         }},
-        {<<"/spaces/:id/users/:uid">>,               M, O#rstate{resource = user,      methods = [get, delete] }},
-        {<<"/spaces/:id/users/:uid/privileges">>,    M, O#rstate{resource = upriv,     methods = [get, put]    }},
-        {<<"/spaces/:id/groups">>,                   M, O#rstate{resource = groups,    methods = [get]         }},
-        {<<"/spaces/:id/groups/token">>,             M, O#rstate{resource = ginvite,   methods = [get]         }},
-        {<<"/spaces/:id/groups/:gid">>,              M, O#rstate{resource = group,     methods = [get, delete] }},
-        {<<"/spaces/:id/groups/:gid/privileges">>,   M, O#rstate{resource = gpriv,     methods = [get, put]    }},
-        {<<"/spaces/:id/providers">>,                M, O#rstate{resource = providers, methods = [get]         }},
-        {<<"/spaces/:id/providers/token">>,          M, O#rstate{resource = pinvite,   methods = [get]         }},
-        {<<"/spaces/:id/providers/:pid">>,           M, O#rstate{resource = provider,  methods = [get, delete] }}
+        {<<"/spaces">>,                              M, S#rstate{resource = spaces,    methods = [post]        }},
+        {<<"/spaces/:id">>,                          M, S#rstate{resource = space,     methods = [get, patch, delete]}},
+        {<<"/spaces/:id/users">>,                    M, S#rstate{resource = users,     methods = [get]         }},
+        {<<"/spaces/:id/users/token">>,              M, S#rstate{resource = uinvite,   methods = [get]         }},
+        {<<"/spaces/:id/users/:uid">>,               M, S#rstate{resource = user,      methods = [get, delete] }},
+        {<<"/spaces/:id/users/:uid/privileges">>,    M, S#rstate{resource = upriv,     methods = [get, put]    }},
+        {<<"/spaces/:id/groups">>,                   M, S#rstate{resource = groups,    methods = [get]         }},
+        {<<"/spaces/:id/groups/token">>,             M, S#rstate{resource = ginvite,   methods = [get]         }},
+        {<<"/spaces/:id/groups/:gid">>,              M, S#rstate{resource = group,     methods = [get, delete] }},
+        {<<"/spaces/:id/groups/:gid/privileges">>,   M, S#rstate{resource = gpriv,     methods = [get, put]    }},
+        {<<"/spaces/:id/providers">>,                M, S#rstate{resource = providers, methods = [get]         }},
+        {<<"/spaces/:id/providers/token">>,          M, S#rstate{resource = pinvite,   methods = [get]         }},
+        {<<"/spaces/:id/providers/:pid">>,           M, S#rstate{resource = provider,  methods = [get, delete] }}
     ].
 
 
@@ -60,8 +59,9 @@ routes() ->
 -spec is_authorized(Resource :: atom(), Method :: method(), SpaceId :: binary(),
                     Client :: client()) -> boolean().
 %% ====================================================================
-is_authorized(spaces, post, _SpaceId, #client{type = ClientType})
-        when ClientType =/= undefined ->
+is_authorized(_, _, _, #client{type = undefined}) ->
+    false;
+is_authorized(spaces, post, _SpaceId, _Client) ->
     true;
 is_authorized(space, patch, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_privilege(SpaceId, UserId, space_change_data);
@@ -102,11 +102,6 @@ is_authorized(_, _, _, _) ->
 %% ====================================================================
 resource_exists(spaces, _SpaceId, _Bindings) ->
     true;
-resource_exists(SpaceBound, SpaceId, _Bindings)
-        when SpaceBound =:= space; SpaceBound =:= users; SpaceBound =:= uinvite;
-             SpaceBound =:= groups; SpaceBound =:= ginvite;
-             SpaceBound =:= providers; SpaceBound =:= pinvite ->
-    space_logic:exists(SpaceId);
 resource_exists(UserBound, SpaceId, Bindings) when UserBound =:= user; UserBound =:= upriv ->
     UID = proplists:get_value(uid, Bindings),
     space_logic:has_user(SpaceId, UID);
@@ -115,7 +110,9 @@ resource_exists(GroupBound, SpaceId, Bindings) when GroupBound =:= group; GroupB
     space_logic:has_group(SpaceId, GID);
 resource_exists(provider, SpaceId, Bindings) ->
     PID = proplists:get_value(pid, Bindings),
-    space_logic:has_provider(SpaceId, PID).
+    space_logic:has_provider(SpaceId, PID);
+resource_exists(_, SpaceId, _Bindings) ->
+    space_logic:exists(SpaceId).
 
 
 %% accept_resource/6
@@ -211,7 +208,7 @@ provide_resource(groups, SpaceId, _Client, _Bindings) ->
     Groups;
 provide_resource(ginvite, SpaceId, _Client, _Bindings) ->
     {ok, Token} = token_logic:create(space_invite_group_token, SpaceId),
-    {ok, [{token, Token}]};
+    [{token, Token}];
 provide_resource(group, SpaceId, _Client, Bindings) ->
     GID = proplists:get_value(gid, Bindings),
     {ok, Group} = space_logic:get_group(SpaceId, GID),
@@ -219,13 +216,13 @@ provide_resource(group, SpaceId, _Client, Bindings) ->
 provide_resource(gpriv, SpaceId, _Client, Bindings) ->
     GID = proplists:get_value(gid, Bindings),
     {ok, Privileges} = space_logic:get_privileges(SpaceId, {group, GID}),
-    {ok, [{privileges, Privileges}]};
+    [{privileges, Privileges}];
 provide_resource(providers, SpaceId, #client{type = ClientType}, _Bindings) ->
     {ok, Providers} = space_logic:get_providers(SpaceId, ClientType),
     Providers;
 provide_resource(pinvite, SpaceId, _Client, _Bindings) ->
     {ok, Token} = token_logic:create(space_support_token, SpaceId),
-    {ok, [{token, Token}]};
+    [{token, Token}];
 provide_resource(provider, SpaceId, #client{type = ClientType}, Bindings) ->
     PID = proplists:get_value(pid, Bindings),
     {ok, Provider} = space_logic:get_provider(SpaceId, ClientType, PID),

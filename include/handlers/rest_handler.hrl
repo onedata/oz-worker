@@ -14,32 +14,32 @@
 -define(HANDLERS_REST_HANDLER_HRL, true).
 
 
-%% A subset of [proplists:property()] that allows for easy encoding to - and
-%% decoding from JSON.
--type reqdata() :: [{binary() | atom(), binary() | atom() | integer()}].
+%% A type describing atoms relating to REST methods.
+-type method() :: post | patch | get | put | delete.
 
 
 %% A description of REST request's client.
 %% `type` is the client's type.
 %% `id` is the client's ID in the database.
--record(reqclient, {
+-record(client, {
     type :: user | provider,
     id :: binary()
 }).
+-type client() :: #client{}.
 
 
-%% The state of the request.
+%% The options associated with a particular request.
 %% `module` is the identifier of the REST module handling request's details.
 %% `resource` is the name of the requested resource.
-%% `client` is the request's client (the requester).
-%% `data` is the parsed data submitted by the client as a part of the request.
-%% `resid` is the id of the resource if found in the resource's address.
--record(reqstate, {
+%% `methods` is an array of REST methods the resource accepts.
+%% `client` is the authenticated client's data.
+-record(rstate, {
     module :: module(),
     resource :: atom(),
-    client :: #reqclient{},
-    data :: reqdata(),
-    resid :: binary()
+    methods :: [method()],
+    client :: client()
 }).
+-type rstate() :: #rstate{}.
+
 
 -endif. %% HANDLERS_REST_HANDLER_HRL

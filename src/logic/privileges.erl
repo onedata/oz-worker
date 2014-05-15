@@ -13,6 +13,7 @@
 
 -export([space_user/0, space_manager/0, space_admin/0]).
 -export([group_user/0, group_manager/0, group_space_manager/0, group_admin/0]).
+-export_type([space_privilege/0, group_privilege/0, privilege/0]).
 
 
 %% User privileges with regards to Space management.
@@ -26,7 +27,7 @@
 -type group_privilege() :: group_change_data | group_invite_user |
     group_remove_user | group_join_space | group_create_space |
     group_set_privileges | group_remove | group_leave_space |
-    group_view_data.
+    group_view_data | group_create_space_token.
 
 
 %% User privileges.
@@ -137,6 +138,7 @@ group_admin() ->
         group_space_manager(),
         sets:from_list([
             group_create_space,
+            group_create_space_token,
             group_join_space,
             group_leave_space,
             group_set_privileges,

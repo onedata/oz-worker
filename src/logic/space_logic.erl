@@ -15,7 +15,7 @@
 
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_group/2, has_privilege/3]).
--export([create/2, create/3, modify/2, set_privileges/3]).
+-export([create/2, create/3, modify/2, set_privileges/3, join/2]).
 -export([get_data/2, get_users/2, get_groups/1, get_providers/2, get_user/3,
     get_group/2, get_provider/3, get_privileges/2]).
 -export([remove/1, remove_user/2, remove_group/2, remove_provider/2]).
@@ -85,10 +85,10 @@ has_privilege(SpaceId, UserId, Privilege) ->
 %% ====================================================================
 %% @doc Creates a Space for a user.
 %% ====================================================================
--spec create({user, UserId :: binary()}, Name :: binary()) ->
+-spec create({user | group, Id :: binary()}, Name :: binary()) ->
     {ok, SpaceId :: binary()} | {error, Reason :: any()}.
 %% ====================================================================
-create({user, UserId}, Name) ->
+create({Type, Id}, Name) ->
     {ok, <<"new_space_id">>}.
 
 
@@ -127,6 +127,17 @@ set_privileges(SpaceId, {user, UserId}, Privileges) ->
     ok;
 set_privileges(SpaceId, {group, GroupId}, Privileges) ->
     ok.
+
+
+%% join/2
+%% ====================================================================
+%% @doc Adds a new member to a Space identified by a token.
+%% ====================================================================
+-spec join({group | user, Id :: binary()}, Token :: binary()) ->
+    {ok, SpaceId :: binary()} | {error, Reason :: any()}.
+%% ====================================================================
+join(Member, Token) ->
+    {ok, <<"the space you joined">>}.
 
 
 %% get_data/2
