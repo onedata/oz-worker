@@ -12,8 +12,8 @@
 
 
 -export([space_user/0, space_manager/0, space_admin/0]).
--export([group_user/0, group_manager/0, group_space_manager/0, group_admin/0]).
--export_type([space_privilege/0, group_privilege/0, privilege/0]).
+-export([group_user/0, group_manager/0, group_admin/0]).
+-export_type([space_privilege/0, group_privilege/0]).
 
 
 %% User privileges with regards to Space management.
@@ -30,27 +30,21 @@
     group_view_data | group_create_space_token.
 
 
-%% User privileges.
--type privilege() :: space_privilege() | group_privilege().
-
-
 %% space_user/0
 %% ====================================================================
 %% @doc A privilege level of a Space user.
 %% ====================================================================
--spec space_user() -> ordsets:ordset(space_privilege()).
+-spec space_user() -> [space_privilege()].
 %% ====================================================================
 space_user() ->
-    ordsets:from_list([
-        space_view_data
-    ]).
+    [space_view_data].
 
 
 %% space_manager/0
 %% ====================================================================
 %% @doc A privilege level of a Space manager.
 %% ====================================================================
--spec space_manager() -> ordsets:ordset(space_privilege()).
+-spec space_manager() -> [space_privilege()].
 %% ====================================================================
 space_manager() ->
     ordsets:union(
@@ -68,7 +62,7 @@ space_manager() ->
 %% ====================================================================
 %% @doc A privilege level of a Space administrator.
 %% ====================================================================
--spec space_admin() -> ordsets:ordset(space_privilege()).
+-spec space_admin() -> [space_privilege()].
 %% ====================================================================
 space_admin() ->
     ordsets:union(
@@ -87,22 +81,17 @@ space_admin() ->
 %% ====================================================================
 %% @doc A privilege level of a group user.
 %% ====================================================================
--spec group_user() -> ordsets:ordset(privilege()).
+-spec group_user() -> [group_privilege()].
 %% ====================================================================
 group_user() ->
-    ordsets:union(
-        space_user(),
-        ordsets:from_list([
-            group_view_data
-        ])
-    ).
+    [group_view_data].
 
 
 %% group_manager/0
 %% ====================================================================
 %% @doc A privilege level of a group manager.
 %% ====================================================================
--spec group_manager() -> ordsets:ordset(privilege()).
+-spec group_manager() -> [group_privilege()].
 %% ====================================================================
 group_manager() ->
     ordsets:union(
@@ -114,28 +103,15 @@ group_manager() ->
     ).
 
 
-%% group_space_manager/0
-%% ====================================================================
-%% @doc A privilege level of a group manager allowed to manage group's Spaces.
-%% ====================================================================
--spec group_space_manager() -> ordsets:ordset(privilege()).
-%% ====================================================================
-group_space_manager() ->
-    ordsets:union(
-        group_manager(),
-        space_manager()
-    ).
-
-
 %% group_admin/0
 %% ====================================================================
 %% @doc A privilege level of a group administrator.
 %% ====================================================================
--spec group_admin() -> ordsets:ordset(privilege()).
+-spec group_admin() -> [group_privilege()].
 %% ====================================================================
 group_admin() ->
     ordsets:union(
-        group_space_manager(),
+        group_manager(),
         ordsets:from_list([
             group_create_space,
             group_create_space_token,

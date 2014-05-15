@@ -141,7 +141,7 @@ join(UserId, Token) ->
 %% @doc Sets privileges for a member of the group.
 %% ====================================================================
 -spec set_privileges(GroupId :: binary(), UserId :: binary(),
-                     Privileges :: [privileges:privilege()]) ->
+                     Privileges :: [privileges:group_privileges()]) ->
     ok | no_return().
 %% ====================================================================
 set_privileges(GroupId, UserId, Privileges) ->
