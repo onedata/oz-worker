@@ -63,7 +63,7 @@ is_valid(Token, TokenType) ->
 create(TokenType, Resource) ->
     TokenRec = #token{type = TokenType, resource = Resource}, %% @todo: expiration time
     {ok, STokenId} = dao_lib:apply(dao_tokens, save_token, [TokenRec], 1),
-    TokenId = <<STokenId>>,
+    TokenId = binary:list_to_bin(STokenId),
     encrypt(TokenId).
 
 

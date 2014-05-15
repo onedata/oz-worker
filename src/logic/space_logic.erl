@@ -97,7 +97,7 @@ has_group(SpaceId, GroupId) ->
     Privilege :: privileges:space_privilege()) -> boolean().
 %% ====================================================================
 has_privilege(SpaceId, UserId, Privilege) ->
-    case exists(SpaceId) of
+    case exists(SpaceId) andalso has_user(SpaceId, UserId) of
         false -> false;
         true ->
             UserPrivileges = get_effective_privileges(SpaceId, UserId),
@@ -414,7 +414,7 @@ remove(SpaceId) ->
 %% ====================================================================
 -spec remove_user(SpaceId :: binary(), UserId :: binary()) -> boolean().
 %% ====================================================================
-remove_user(SpaceId, UserId) ->
+remove_user(SpaceId, UserId) -> %% @todo: when nobody's left, space should be destroyed
     SUserId = binary:bin_to_list(UserId),
     SpaceDoc = get_doc(SpaceId),
     {ok, UserDoc} = dao_lib:apply(dao_users, get_user, [SUserId], 1),
@@ -518,26 +518,45 @@ remove_provider(SpaceId, ProviderId) ->
                            Providers :: [binary()]) ->
     {ok, SpaceId :: binary()} | no_return().
 %% ====================================================================
-create_with_provider(Member, Name, Providers) ->
+create_with_provider({user, UserId}, Name, Providers) -> %% @todo: may do with some deduplication
+    SUserId = binary:bin_to_list(UserId),
+    {ok, UserDoc} = dao_lib:apply(dao_users, get_user, [SUserId], 1),
+    #veil_document{record = #user{spaces = Spaces} = User} = UserDoc,
+
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, providers = Providers},
-    Space2 = case Member of
-        {user, UserId} -> Space#space{users = [{UserId, Privileges}]};
-        {group, GroupId} -> Space#space{groups = [{GroupId, Privileges}]}
-    end,
-    {ok, SSpaceId} = dao_lib:apply(dao_spaces, save_space, [Space2], 1),
-    {ok, <<SSpaceId>>}.
+    Space = #space{name = Name, providers = Providers, users = [{UserId, Privileges}]},
+    {ok, SSpaceId} = dao_lib:apply(dao_spaces, save_space, [Space], 1),
+    SpaceId = binary:list_to_bin(SSpaceId),
+
+    UserNew = User#user{spaces = [SpaceId | Spaces]},
+    UserDocNew = UserDoc#veil_document{record = UserNew},
+    {ok, _} = dao_lib:apply(dao_users, save_user, [UserDocNew], 1),
+    {ok, SpaceId};
+create_with_provider({group, GroupId}, Name, Providers) ->
+    SGroupId = binary:bin_to_list(GroupId),
+    {ok, GroupDoc} = dao_lib:apply(dao_groups, get_group, [SGroupId], 1),
+    #veil_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
+
+    Privileges = privileges:space_admin(),
+    Space = #space{name = Name, providers = Providers, groups = [{GroupId, Privileges}]},
+    {ok, SSpaceId} = dao_lib:apply(dao_spaces, save_space, [Space], 1),
+    SpaceId = binary:list_to_bin(SSpaceId),
+
+    GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
+    GroupDocNew = GroupDoc#veil_document{record = GroupNew},
+    {ok, _} = dao_lib:apply(dao_groups, save_group, [GroupDocNew], 1),
+    {ok, SpaceId}.
 
 
 %% get_doc/1
 %% ====================================================================
 %% @doc Retrieves a space from the database.
 %% ====================================================================
--spec get_doc(SpaceId :: binary) -> veil_doc() | no_return().
+-spec get_doc(SpaceId :: binary()) -> #veil_document{} | no_return().
 %% ====================================================================
 get_doc(SpaceId) ->
     SSpaceId = binary:bin_to_list(SpaceId),
-    {ok, Doc} = dao_lib:apply(dao_spaces, get_space, [SSpaceId], 1),
+    {ok, #veil_document{record = #space{}} = Doc} = dao_lib:apply(dao_spaces, get_space, [SSpaceId], 1),
     Doc.
 
 

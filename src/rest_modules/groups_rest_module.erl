@@ -79,7 +79,7 @@ is_authorized(sjoin, post, GroupId, #client{id = UserId}) ->
 is_authorized(screate, get, GroupId, #client{id = UserId}) ->
     group_logic:has_privilege(GroupId, UserId, group_create_space_token);
 is_authorized(space, delete, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_remove_space);
+    group_logic:has_privilege(GroupId, UserId, group_leave_space);
 is_authorized(_, get, GroupId, #client{id = UserId}) ->
     group_logic:has_privilege(GroupId, UserId, group_view_data);
 is_authorized(_, _, _, _) ->

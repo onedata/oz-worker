@@ -13,7 +13,7 @@
 %% This record defines a group of users
 -record(user_group, {
     name :: binary(),
-    users = [] :: [{UserId :: binary(), privileges:group_privilege()}],
+    users = [] :: [{UserId :: binary(), [privileges:group_privilege()]}],
     spaces = [] :: [SpaceId :: binary()]
 }).
 
