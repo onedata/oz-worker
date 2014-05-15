@@ -12,10 +12,13 @@
 -module(user_logic).
 -author("Konrad Zemek").
 
+-include("dao/dao_types.hrl").
+
 
 %% API
--export([create/1, modify/2, merge/2, get_data/1, get_spaces/1, get_groups/1,
-    remove/1]).
+-export([create/1, modify/2, merge/2]).
+-export([get_data/1, get_spaces/1, get_groups/1]).
+-export([remove/1]).
 
 
 %% create/1
@@ -23,10 +26,11 @@
 %% @doc Creates a user account.
 %% ====================================================================
 -spec create(Name :: binary()) ->
-    {ok, UserId :: binary()} | {error, Reason :: any()}.
+    {ok, UserId :: binary()} | no_return().
 %% ====================================================================
 create(Name) ->
-    {ok, <<"userid">>}.
+    UserId = logic_helper:save(#user{name = Name}),
+    {ok, UserId}.
 
 
 %% modify/2
@@ -34,9 +38,12 @@ create(Name) ->
 %% @doc Modifies user details.
 %% ====================================================================
 -spec modify(UserId :: binary(), Name :: binary()) ->
-    ok | {error, Reason :: any()}.
+    ok | no_return().
 %% ====================================================================
 modify(UserId, Name) ->
+    #veil_document{record = User} = Doc = logic_helper:user_doc(UserId),
+    DocNew = Doc#veil_document{record = User#user{name = Name}},
+    logic_helper:save(DocNew),
     ok.
 
 
@@ -45,9 +52,11 @@ modify(UserId, Name) ->
 %% @doc Merges an account identified by token into current user's account.
 %% ====================================================================
 -spec merge(UserId :: binary(), Token :: binary()) ->
-    ok | {error, Reason :: any()}.
+    ok | no_return().
 %% ====================================================================
-merge(UserId, Token) ->
+merge(_UserId, _Token) ->
+    %% @todo: a proper authentication must come first, so that a certificate
+    %% or whatever is redirected to new user id
     ok.
 
 
@@ -56,10 +65,15 @@ merge(UserId, Token) ->
 %% @doc Returns user details.
 %% ====================================================================
 -spec get_data(UserId :: binary()) ->
-    {ok, [proplists:property()]} | {error, Reason :: any()}.
+    {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_data(UserId) ->
-    {ok, [{name, <<"username">>}]}.
+    #veil_document{record = User} = logic_helper:user_doc(UserId),
+    #user{name = Name} = User,
+    {ok, [
+        {userId, UserId},
+        {name, Name}
+    ]}.
 
 
 %% get_spaces/1
@@ -67,10 +81,12 @@ get_data(UserId) ->
 %% @doc Returns user's spaces.
 %% ====================================================================
 -spec get_spaces(UserId :: binary()) ->
-    {ok, [proplists:property()]} | {error, Reason :: any()}.
+    {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_spaces(UserId) ->
-    {ok, [{spaces, <<"spaces">>}]}.
+    Doc = logic_helper:user_doc(UserId),
+    #veil_document{record = #user{spaces = Spaces}} = Doc,
+    {ok, [{spaces, Spaces}]}.
 
 
 %% get_groups/1
@@ -78,10 +94,12 @@ get_spaces(UserId) ->
 %% @doc Returns user's groups.
 %% ====================================================================
 -spec get_groups(UserId :: binary()) ->
-    {ok, [proplists:property()]} | {error, Reason :: any()}.
+    {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_groups(UserId) ->
-    {ok, [{groups, <<"groups">>}]}.
+    Doc = logic_helper:user_doc(UserId),
+    #veil_document{record = #user{groups = Groups}} = Doc,
+    {ok, [{groups, Groups}]}.
 
 
 %% remove/1
@@ -91,4 +109,21 @@ get_groups(UserId) ->
 -spec remove(UserId :: binary()) -> boolean().
 %% ====================================================================
 remove(UserId) ->
-    true.
+    Doc = logic_helper:user_doc(UserId),
+    #veil_document{record = #user{groups = Groups, spaces = Spaces}} = Doc,
+
+    lists:foreach(fun(GroupId) ->
+        GroupDoc = logic_helper:group_doc(GroupId),
+        #veil_document{record = #user_group{users = Users} = Group} = GroupDoc,
+        GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
+        logic_helper:save(GroupDoc#veil_document{record = GroupNew})
+    end, Groups),
+
+    lists:foreach(fun(SpaceId) ->
+        SpaceDoc = logic_helper:space_doc(SpaceId),
+        #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
+        SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
+        logic_helper:save(SpaceDoc#veil_document{record = SpaceNew})
+    end, Spaces),
+
+    logic_helper:user_remove(UserId).
