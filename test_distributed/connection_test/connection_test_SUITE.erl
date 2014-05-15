@@ -52,8 +52,8 @@ init_per_suite(Config) ->
 			{ca_cert_file,"../../../cacerts/ca.crt"},
 			{cert_file,"../../../cacerts/server.crt"},
 	 		{key_file,"../../../cacerts/server.key"}
-		],
-		true),
+		]
+	),
 	Config ++ [{node,Node}].
 
 end_per_suite(Config) ->
