@@ -32,6 +32,8 @@ distclean: clean
 ##
 ## Testing
 ##
+test: deps compile
+	@./rebar skip_deps=true eunit
 
 ct: deps compile
 	@./test_distributed/start_distributed_test.sh
