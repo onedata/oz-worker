@@ -18,7 +18,7 @@
 -define(PROVIDER_NAME, github).
 
 %% API
--export([get_redirect_url/0, validate_login/1]).
+-export([get_redirect_url/1, validate_login/1]).
 
 
 authorize_endpoint() ->
@@ -37,13 +37,13 @@ user_emails_endpoint() ->
     <<"https://api.github.com/user/emails">>.
 
 
-get_redirect_url() ->
+get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
             {<<"scope">>, <<"user,user:email">>},
-            {<<"state">>, auth_utils:generate_state_token(?MODULE)}
+            {<<"state">>, auth_utils:generate_state_token(?MODULE, ConnectAccount)}
         ],
         Params = auth_utils:proplist_to_params(ParamsProplist),
 

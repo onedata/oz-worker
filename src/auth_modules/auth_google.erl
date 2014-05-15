@@ -18,7 +18,7 @@
 -define(PROVIDER_NAME, google).
 
 %% API
--export([get_redirect_url/0, validate_login/1]).
+-export([get_redirect_url/1, validate_login/1]).
 
 
 xrds_endpoint() ->
@@ -37,14 +37,14 @@ user_info_endpoint() ->
     parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"userinfo_endpoint">>).
 
 
-get_redirect_url() ->
+get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"response_type">>, <<"code">>},
             {<<"scope">>, <<"openid email profile">>},
             {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
-            {<<"state">>, auth_utils:generate_state_token(?MODULE)}
+            {<<"state">>, auth_utils:generate_state_token(?MODULE, ConnectAccount)}
         ],
         Params = auth_utils:proplist_to_params(ParamsProplist),
 

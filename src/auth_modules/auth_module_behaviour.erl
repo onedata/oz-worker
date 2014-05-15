@@ -24,7 +24,7 @@
 %% ====================================================================
 behaviour_info(callbacks) ->
     [
-        {get_redirect_url, 0},
+        {get_redirect_url, 1},
         {validate_login, 1}
     ];
 

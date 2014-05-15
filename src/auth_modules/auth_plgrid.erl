@@ -19,7 +19,7 @@
 -define(PROVIDER_NAME, plgrid).
 
 %% API
--export([get_redirect_url/0, validate_login/1]).
+-export([get_redirect_url/1, validate_login/1]).
 
 
 xrds_endpoint() ->
@@ -30,15 +30,10 @@ plgrid_endpoint() ->
     discover_op_endpoint(auth_utils:get_xrds(xrds_endpoint())).
 
 
-get_redirect_url() ->
+get_redirect_url(ConnectAccount) ->
     try
-        % TODO trezba cos zrobic z tymi www. W plgrdidzie mamy zgłoszone bez www.
-        HostName1 = auth_utils:fully_qualified_url(gui_utils:get_requested_hostname()),
-        <<"https://www.", Rest1/binary>> = HostName1,
-        HostName = <<"https://", Rest1/binary>>,
-        RedirectURI2 = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_utils:generate_state_token(?MODULE))/binary>>,
-        <<"https://www.", Rest2/binary>> = RedirectURI2,
-        RedirectURI = <<"https://", Rest2/binary>>,
+        HostName = auth_utils:fully_qualified_url(gui_utils:get_requested_hostname()),
+        RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_utils:generate_state_token(?MODULE, ConnectAccount))/binary>>,
 
         ParamsProplist = [
             {<<"openid.mode">>, <<"checkid_setup">>},

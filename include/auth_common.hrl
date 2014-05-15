@@ -12,22 +12,25 @@
 -ifndef(AUTH_COMMON_HRL).
 -define(AUTH_COMMON_HRL, 1).
 
+% Endpoint for OpenID / OAuth validation
 -define(local_auth_endpoint, "/validate_login").
 
+% Error atom indicating that login request is invalid
+-define(error_auth_invalid_request, invalid_request).
+
 -record(user_info, {
-    global_id = "",
-    preferred_login = "",
-    preferred_name = "",
+    global_id = <<"">>,
+    preferred_name = <<"">>,
     emails = [],
     provider_infos = []
 }).
 
 -record(provider_user_info, {
     provider_id = undefined,
-    user_id = "",
-    login = "",
-    name = "",
-    emails = ""
+    user_id = <<"">>,
+    login = <<"">>,
+    name = <<"">>,
+    emails = <<"">>
 }).
 
 -endif.

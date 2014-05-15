@@ -26,8 +26,11 @@ init(State, Ctx) ->
 	                end,
 	{ok, State, Ctx#context{path = Path, module = route(RequestedPage)}}.
 
-route(<<"/">>) -> page_hello;
-route(<<"/test">>) -> page_test;
+route(<<"/">>) -> page_manage_account;
 route(<<"/login">>) -> page_login;
-route(<<"/validate_login">>) -> page_test_val;
+route(<<"/logout">>) -> page_logout;
+route(<<"/validate_login">>) -> page_validate_login;
+route(<<"/manage_account">>) -> page_manage_account;
+route(<<"/about">>) -> page_about;
+route(<<"/error">>) -> page_error;
 route(_) -> page_404.

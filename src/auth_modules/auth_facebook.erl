@@ -18,7 +18,7 @@
 -define(PROVIDER_NAME, facebook).
 
 %% API
--export([get_redirect_url/0, validate_login/1]).
+-export([get_redirect_url/1, validate_login/1]).
 
 
 authorize_endpoint() ->
@@ -33,13 +33,13 @@ user_info_endpoint() ->
     <<"https://graph.facebook.com/me">>.
 
 
-get_redirect_url() ->
+get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
             {<<"scope">>, <<"email">>},
-            {<<"state">>, auth_utils:generate_state_token(?MODULE)}
+            {<<"state">>, auth_utils:generate_state_token(?MODULE, ConnectAccount)}
         ],
         Params = auth_utils:proplist_to_params(ParamsProplist),
 

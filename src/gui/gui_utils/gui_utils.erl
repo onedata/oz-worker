@@ -10,6 +10,7 @@
 %% ===================================================================
 
 -module(gui_utils).
+-include("auth_common.hrl").
 -include("gui_common.hrl").
 -include("logging.hrl").
 
@@ -68,13 +69,14 @@ get_requested_page() ->
 -spec get_user_dn() -> string().
 %% ====================================================================
 get_user_dn() ->
-    try user_logic:get_dn_list(wf:session(user_doc)) of
-        [] -> undefined;
-        L when is_list(L) -> lists:nth(1, L);
-        _ -> undefined
-    catch _:_ ->
-        undefined
-    end.
+    undefined.
+%%     try user_logic:get_dn_list(wf:session(user_doc)) of
+%%         [] -> undefined;
+%%         L when is_list(L) -> lists:nth(1, L);
+%%         _ -> undefined
+%%     catch _:_ ->
+%%         undefined
+%%     end.
 
 
 %% get_request_params/0
@@ -107,11 +109,12 @@ user_logged_in() ->
 -spec storage_defined() -> boolean().
 %% ====================================================================
 storage_defined() ->
-    case dao_lib:apply(dao_vfs, list_storage, [], 1) of
-        {ok, []} -> false;
-        {ok, L} when is_list(L) -> true;
-        _ -> false
-    end.
+    false.
+%%     case dao_lib:apply(dao_vfs, list_storage, [], 1) of
+%%         {ok, []} -> false;
+%%         {ok, L} when is_list(L) -> true;
+%%         _ -> false
+%%     end.
 
 
 %% dn_and_storage_defined/0
@@ -131,7 +134,8 @@ dn_and_storage_defined() ->
 -spec can_view_logs() -> boolean().
 %% ====================================================================
 can_view_logs() ->
-    user_logic:get_role(wf:session(user_doc)) /= user.
+    false.
+    %user_logic:get_role(wf:session(user_doc)) /= user.
 
 
 %% maybe_redirect/4
@@ -256,30 +260,33 @@ top_menu(ActiveTabID) ->
 %% ====================================================================
 top_menu(ActiveTabID, SubMenuBody) ->
     % Tab, that will be displayed optionally
-    LogsPageCaptions = case can_view_logs() of
-                           false ->
-                               [];
-                           true ->
-                               [{logs_tab, #li{body = [
-                                   #link{style = <<"padding: 18px;">>, url = <<"/logs">>, body = <<"Logs">>}
-                               ]}}]
-                       end,
+%%     LogsPageCaptions = case can_view_logs() of
+%%                            false ->
+%%                                [];
+%%                            true ->
+%%                                [{logs_tab, #li{body = [
+%%                                    #link{style = <<"padding: 18px;">>, url = <<"/logs">>, body = <<"Logs">>}
+%%                                ]}}]
+%%                        end,
     % Define menu items with ids, so that proper tab can be made active via function parameter 
     % see old_menu_captions()
     MenuCaptions =
-        [
-            {file_manager_tab, #li{body = [
-                #link{style = <<"padding: 18px;">>, url = <<"/file_manager">>, body = <<"File manager">>}
-            ]}},
-            {shared_files_tab, #li{body = [
-                #link{style = <<"padding: 18px;">>, url = <<"/shared_files">>, body = <<"Shared files">>}
-            ]}}
-        ] ++ LogsPageCaptions,
+        [],
+%%         [
+%%             {file_manager_tab, #li{body = [
+%%                 #link{style = <<"padding: 18px;">>, url = <<"/file_manager">>, body = <<"File manager">>}
+%%             ]}},
 
+%%             {shared_files_tab, #li{body = [
+%%                 #link{style = <<"padding: 18px;">>, url = <<"/shared_files">>, body = <<"Shared files">>}
+%%             ]}}
+%%         ] ++ LogsPageCaptions,
+
+    #user_info{preferred_name = PreferredName} = temp_user_logic:get_user({global, wf:user()}),
     MenuIcons =
         [
             {manage_account_tab, #li{body = #link{style = <<"padding: 18px;">>, title = <<"Manage account">>,
-                url = <<"/manage_account">>, body = [user_logic:get_name(wf:session(user_doc)), #span{class = <<"fui-user">>,
+                url = <<"/manage_account">>, body = [PreferredName, #span{class = <<"fui-user">>,
                     style = <<"margin-left: 10px;">>}]}}},
             %{contact_support_tab, #li { body=#link{ style="padding: 18px;", title="Contact & Support",
             %    url="/contact_support", body=#span{ class="fui-question" } } } },
