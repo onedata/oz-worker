@@ -11,6 +11,10 @@
 -define(DAO_GROUPS_HRL, 1).
 
 %% This record defines a group of users
--record(user_group, {name = "", users = [], spaces = []}).
+-record(user_group, {
+    name :: binary(),
+    users = [] :: [{UserId :: binary(), privileges:group_privilege()}],
+    spaces = [] :: [SpaceId :: binary()]
+}).
 
 -endif.

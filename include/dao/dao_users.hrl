@@ -12,9 +12,9 @@
 
 %% This record defines a user and is handled as a database document
 -record(user, {
-    name = "",
-    spaces = [],
-    groups = []
+    name :: binary(),
+    spaces = [] :: [SpaceId :: binary()],
+    groups = [] :: [GroupId :: binary()]
 }).
 
 -endif.

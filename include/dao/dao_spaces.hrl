@@ -13,8 +13,8 @@
 %% This record defines a space that can be used by users to store their files
 -record(space, {
     name :: binary(),
-    users = [] :: [{UserId :: binary(), Privileges :: [privileges:space_privilege()]}],
-    groups = [] :: [{GroupId :: binary(), Privileges :: [privileges:space_privilege()]}],
+    users = [] :: [{UserId :: binary(), [privileges:space_privilege()]}],
+    groups = [] :: [{GroupId :: binary(), [privileges:space_privilege()]}],
     providers = [] :: [ProviderId :: binary()]
 }).
 
