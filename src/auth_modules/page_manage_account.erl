@@ -43,64 +43,80 @@ main_table() ->
     #table{style = <<"border-width: 0px; width: auto;">>, body = [
         #tbody{body = [
             #tr{cells = [
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body =
+                #td{style = <<"border-width: 0px; padding: 10px 10px; vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Name">>}},
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = #p{body = get_user_name()}}
+                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = user_name_section()}
             ]},
 
             #tr{cells = [
                 #td{style = <<"border-width: 0px; padding: 10px 10px; vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"E-mails">>}},
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = get_user_emails()}
+                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = user_emails_section()}
             ]},
 
             #tr{cells = [
                 #td{style = <<"border-width: 0px; padding: 10px 10px;  vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Connected<br />accounts">>}},
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = get_connected_accounts_table()}
+                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = connected_accounts_section()}
             ]}
         ]}
     ]}.
 
 
-get_user_name() ->
+user_name_section() ->
     #user_info{preferred_name = Name} = temp_user_logic:get_user({global, wf:user()}),
-    Name.
+    [
+        #span{style = <<"font-size: 18px;">>, id = <<"displayed_name">>, body = Name},
+        #link{id = <<"change_name_button">>, class = <<"glyph-link">>, style = <<"margin-left: 10px;">>,
+            postback = {action, show_name_edition, [true]}, body =
+            #span{class = <<"fui-new">>, style = <<"font-size: 16px;">>}},
+        #textbox{id = <<"new_name_textbox">>, class = <<"flat">>, body = <<"">>, style = <<"display: none;">>,
+            placeholder = <<"New name">>, postback = {action, update_name},
+            source = ["new_name_textbox"]},
+        #link{id = <<"new_name_submit">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
+            postback = {action, update_name}, source = ["new_name_textbox"], body =
+            #span{class = <<"fui-check-inverted">>, style = <<"font-size: 20px;">>}},
+        #link{id = <<"new_name_cancel">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
+            postback = {action, show_name_edition, [false]}, body =
+            #span{class = <<"fui-cross-inverted">>, style = <<"font-size: 20px;">>}}
+    ].
 
 
 % HTML list with emails printed
-get_user_emails() ->
+user_emails_section() ->
     #user_info{emails = Emails} = temp_user_logic:get_user({global, wf:user()}),
-    #list{numbered = true, body =
-    lists:map(
-        fun(Email) ->
-            #li{style = <<"font-size: 18px; padding: 0 0 10px;">>, body = #span{body =
+
+    {CurrentEmails, _} = lists:mapfoldl(
+        fun(Email, Acc) ->
+            Body = #li{style = <<"font-size: 18px; padding: 5px 0;">>, body = #span{body =
             [
                 Email,
-                #link{id = <<"remove_email_button">>, class = <<"glyph-link">>, style = <<"margin-left: 10px;">>,
-                    postback = a, body =
+                #link{id = <<"remove_email_button", (integer_to_binary(Acc))/binary>>, class = <<"glyph-link">>, style = <<"margin-left: 10px;">>,
+                    postback = {action, update_email, [{remove, Email}]}, body =
                     #span{class = <<"fui-cross">>, style = <<"font-size: 16px;">>}}
-            ]}}
-        end, Emails)
-    ++ [
+            ]}},
+            {Body, Acc + 1}
+        end, 1, Emails),
+    NewEmail = [
         #li{style = <<"font-size: 18px; padding: 5px 0;">>, body = [
             #link{id = <<"add_email_button">>, class = <<"glyph-link">>, style = <<"margin-left: 10px;">>,
                 postback = {action, show_email_adding, [true]}, body =
                 #span{class = <<"fui-plus">>, style = <<"font-size: 16px; position: relative;">>}},
             #textbox{id = <<"new_email_textbox">>, class = <<"flat">>, body = <<"">>, style = <<"display: none;">>,
-                placeholder = <<"New email address">>, postback = a,
+                placeholder = <<"New email address">>, postback = {action, update_email, [{add, submitted}]},
                 source = ["new_email_textbox"]},
             #link{id = <<"new_email_submit">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
-                postback = a, source = ["new_email_textbox"], body =
+                postback = {action, update_email, [{add, submitted}]}, source = ["new_email_textbox"], body =
                 #span{class = <<"fui-check-inverted">>, style = <<"font-size: 20px;">>}},
             #link{id = <<"new_email_cancel">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
                 postback = {action, show_email_adding, [false]}, body =
                 #span{class = <<"fui-cross-inverted">>, style = <<"font-size: 20px;">>}}
         ]}
-    ]}.
+    ],
+    #list{numbered = true, body = CurrentEmails ++ NewEmail}.
 
 
-get_connected_accounts_table() ->
+connected_accounts_section() ->
     #user_info{provider_infos = ProviderInfos} = temp_user_logic:get_user({global, wf:user()}),
     TableHead = #tr{cells = [
         #th{body = <<"">>},
@@ -115,20 +131,21 @@ get_connected_accounts_table() ->
             ProviderName = auth_utils:get_provider_name(Provider),
 
             % Checkbox
-            {CheckboxIcon, CheckboxTitle, CheckboxStyle} =
+            {CheckboxIcon, CheckboxTitle, CheckboxStyle, CheckboxPostback} =
                 case ProviderInfo of
                     undefined ->
                         {<<"fui-checkbox-unchecked">>,
                             <<"Connect ", ProviderName/binary, " account">>,
-                            <<"line-height: 32px; font-size: 25px; color: rgb(200,200,200);">>};
+                            <<"line-height: 32px; font-size: 25px; color: rgb(200,200,200);">>,
+                            {action, connect_account, [Provider]}};
                     _ ->
                         {<<"fui-checkbox-checked">>,
                             <<"Disonnect ", ProviderName/binary, " account">>,
-                            <<"line-height: 32px; font-size: 25px; color: #1ABC9C;">>}
+                            <<"line-height: 32px; font-size: 25px; color: #1ABC9C;">>,
+                            {action, disconnect_account_prompt, [Provider]}}
                 end,
 
-            Checkbox = #link{title = CheckboxTitle, style = CheckboxStyle,
-                postback = {toggle_account, Provider}, body = #span{class = CheckboxIcon}},
+            Checkbox = #link{title = CheckboxTitle, style = CheckboxStyle, postback = CheckboxPostback, body = #span{class = CheckboxIcon}},
 
             % Provider label
             Icon = auth_utils:get_provider_button_icon(Provider),
@@ -212,33 +229,36 @@ find_provider_info(Provider, ProviderInfos) ->
 % Postback event handling
 event(init) -> ok;
 
-event({toggle_account, Provider}) ->
+event({action, Fun}) ->
+    event({action, Fun, []});
+
+event({action, Fun, Args}) ->
+    gui_utils:apply_or_redirect(?MODULE, Fun, Args, false).
+
+
+connect_account(Provider) ->
+    HandlerModule = auth_utils:get_provider_module(Provider),
+    {ok, URL} = HandlerModule:get_redirect_url(true),
+    wf:redirect(URL).
+
+
+disconnect_account_prompt(Provider) ->
     % Get user info doc
     #user_info{provider_infos = ProviderInfos} = temp_user_logic:get_user({global, wf:user()}),
     % Get provider name
     ProviderName = auth_utils:get_provider_name(Provider),
-    % Get provider info from user info doc
-    ProviderInfo = find_provider_info(Provider, ProviderInfos),
-    case ProviderInfo of
-        undefined ->
-            % The user hasn't yet connected his account from this provider, do it
-            HandlerModule = auth_utils:get_provider_module(Provider),
-            {ok, URL} = HandlerModule:get_redirect_url(true),
-            wf:redirect(URL);
+    case length(ProviderInfos) of
+        1 ->
+            % Prevent from disconnecting last account
+            wf:wire(#alert{text = <<"You cannot disconnect your last account.">>});
         _ ->
-            % The user has already connected his account from this provider
-            case length(ProviderInfos) of
-                1 ->
-                    % Prevent from disconnecting last account
-                    wf:wire(#alert{text = <<"You cannot disconnect your last account.">>});
-                _ ->
-                    % Prompt for confirmation to delete
-                    wf:wire(#confirm{text = <<"Are you sure you want to disconnect your ", ProviderName/binary, " account?">>,
-                        postback = {disconnect, Provider}})
-            end
-    end;
+            % Prompt for confirmation to delete
+            wf:wire(#confirm{text = <<"Are you sure you want to disconnect your ", ProviderName/binary, " account?">>,
+                postback = {action, disconnect_account, [Provider]}})
+    end.
 
-event({disconnect, Provider}) ->
+
+disconnect_account(Provider) ->
     GlobalID = wf:user(),
     % Find the user, remove provider info from his user info doc and reload the page
     UserInfo = #user_info{provider_infos = ProviderInfos} = temp_user_logic:get_user({global, GlobalID}),
@@ -247,5 +267,68 @@ event({disconnect, Provider}) ->
         UserInfo#user_info{provider_infos = ProviderInfos -- [ProviderInfo]}),
     wf:redirect(<<"/manage_account">>).
 
+
+% Update email list - add or remove one and save new user doc
+update_email(AddOrRemove) ->
+    GlobalID = wf:user(),
+    UserInfo = #user_info{emails = OldEmailList} = temp_user_logic:get_user({global, GlobalID}),
+    case AddOrRemove of
+        {add, submitted} ->
+            NewEmail = auth_utils:normalize_email(gui_utils:to_binary(wf:q("new_email_textbox"))),
+            case temp_user_logic:get_user({email, NewEmail}) of
+                undefined ->
+                    temp_user_logic:update_user({global, GlobalID}, UserInfo#user_info{emails = OldEmailList ++ [NewEmail]});
+                _ ->
+                    wf:wire(#alert{text = <<"This e-mail address is in use.">>})
+            end;
+        {remove, Email} ->
+            temp_user_logic:update_user({global, GlobalID}, UserInfo#user_info{emails = OldEmailList -- [Email]})
+    end,
+    gui_utils:update("main_table", main_table()).
+
+
+% Update email list - add or remove one and save new user doc
+update_name() ->
+    GlobalID = wf:user(),
+    UserInfo = #user_info{} = temp_user_logic:get_user({global, GlobalID}),
+    NewName = gui_utils:to_binary(wf:q("new_name_textbox")),
+    temp_user_logic:update_user({global, GlobalID}, UserInfo#user_info{preferred_name = NewName}),
+    gui_utils:update("main_table", main_table()).
+
+
+% Show email adding form
+show_email_adding(Flag) ->
+    case Flag of
+        true ->
+            wf:wire(#jquery{target = "add_email_button", method = ["hide"]}),
+            wf:wire(#jquery{target = "new_email_textbox", method = ["fadeIn"], args = [300]}),
+            wf:wire(#jquery{target = "new_email_cancel", method = ["fadeIn"], args = [300]}),
+            wf:wire(#jquery{target = "new_email_submit", method = ["fadeIn"], args = [300]}),
+            wf:wire(#jquery{target = "new_email_textbox", method = ["focus"]});
+        false ->
+            wf:wire(#jquery{target = "add_email_button", method = ["fadeIn"], args = [300]}),
+            wf:wire(#jquery{target = "new_email_textbox", method = ["hide"]}),
+            wf:wire(#jquery{target = "new_email_cancel", method = ["hide"]}),
+            wf:wire(#jquery{target = "new_email_submit", method = ["hide"]})
+    end.
+
+
+% Show email adding form
+show_name_edition(Flag) ->
+    case Flag of
+        true ->
+            wf:wire(#jquery{target = "displayed_name", method = ["hide"]}),
+            wf:wire(#jquery{target = "change_name_button", method = ["hide"]}),
+            wf:wire(#jquery{target = "new_name_textbox", method = ["fadeIn"], args = [300]}),
+            wf:wire(#jquery{target = "new_name_cancel", method = ["fadeIn"], args = [300]}),
+            wf:wire(#jquery{target = "new_name_submit", method = ["fadeIn"], args = [300]}),
+            wf:wire(#jquery{target = "new_name_textbox", method = ["focus"]});
+        false ->
+            wf:wire(#jquery{target = "displayed_name", method = ["fadeIn"], args = [300]}),
+            wf:wire(#jquery{target = "change_name_button", method = ["fadeIn"], args = [300]}),
+            wf:wire(#jquery{target = "new_name_textbox", method = ["hide"]}),
+            wf:wire(#jquery{target = "new_name_cancel", method = ["hide"]}),
+            wf:wire(#jquery{target = "new_name_submit", method = ["hide"]})
+    end.
 
 

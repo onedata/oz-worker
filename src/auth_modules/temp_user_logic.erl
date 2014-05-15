@@ -21,7 +21,7 @@
 
 
 test() ->
-    UserInfo = #user_info{global_id = "ab", emails = ["a", "b"], preferred_login = "a", preferred_name = "a", provider_infos = [
+    UserInfo = #user_info{global_id = "ab", emails = ["a", "b"], preferred_name = "a", provider_infos = [
         #provider_user_info{provider_id = github, user_id = "a", emails = "a", login = "a", name = "a"},
         #provider_user_info{provider_id = facebook, user_id = "b", emails = "b", login = "b", name = "b"}
     ]},
@@ -30,7 +30,7 @@ test() ->
     ?dump(get_user({github, "a"})),
     ?dump(get_user({global, "ab"})),
 
-    UserInfo2 = #user_info{global_id = "cd", emails = ["c", "d"], preferred_login = "c", preferred_name = "c", provider_infos = [
+    UserInfo2 = #user_info{global_id = "cd", emails = ["c", "d"], preferred_name = "c", provider_infos = [
         #provider_user_info{provider_id = github, user_id = "c", emails = "c", login = "c", name = "c"},
         #provider_user_info{provider_id = facebook, user_id = "d", emails = "d", login = "d", name = "d"}
     ]},
@@ -53,6 +53,30 @@ init() ->
 
 save_user(User = #user_info{}) ->
     save_all_users([User | get_all_users()]).
+
+
+get_user({email, Email}) ->
+    LookupProvider =
+        fun(#provider_user_info{emails = Emails}, Acc) ->
+            case Acc of
+                true -> true;
+                _ -> lists:member(Email, Emails)
+            end
+        end,
+
+    LookupUser =
+        fun(User = #user_info{provider_infos = ProviderInfos, emails = Emails}, Acc) ->
+            case lists:member(Email, Emails) of
+                true -> User;
+                _ ->
+                    case lists:foldl(LookupProvider, false, ProviderInfos) of
+                        true -> User;
+                        _ -> Acc
+                    end
+            end
+        end,
+
+    lists:foldl(LookupUser, undefined, get_all_users());
 
 
 get_user({global, ID}) ->

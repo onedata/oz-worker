@@ -16,7 +16,7 @@
 -include_lib("ibrowse/include/ibrowse.hrl").
 
 %% API
--export([proplist_to_params/1, fully_qualified_url/1]).
+-export([proplist_to_params/1, fully_qualified_url/1, normalize_email/1]).
 
 -export([get_xrds/1, local_auth_endpoint/0, validate_login/0]).
 
@@ -58,6 +58,15 @@ fully_qualified_url(Binary) ->
     end.
 
 
+normalize_email(Email) ->
+    case binary:split(Email, [<<"@">>], [global]) of
+        [Account, Domain] ->
+            <<(binary:replace(Account, <<".">>, <<"">>, [global]))/binary, "@", Domain/binary>>;
+        _ ->
+            Email
+    end.
+
+
 local_auth_endpoint() ->
     <<(auth_utils:fully_qualified_url(gui_utils:get_requested_hostname()))/binary, ?local_auth_endpoint>>.
 
@@ -85,20 +94,38 @@ validate_login() ->
                         ?alert("Security breach attempt spotted. Reason:~p~nRequest params:~n~p", [Reason, ParamsProplist]),
                         {error, ?error_auth_invalid_request};
 
-                    {ok, ProvUserInfo = #provider_user_info{provider_id = ProviderID, user_id = UserID, emails = Emails, name = Name}} ->
+                    {ok, OriginalProvUserInfo = #provider_user_info{provider_id = ProviderID, user_id = UserID, emails = OriginalEmails, name = Name}} ->
+                        Emails = lists:map(fun(Email) -> auth_utils:normalize_email(Email) end, OriginalEmails),
+                        ProvUserInfo = OriginalProvUserInfo#provider_user_info{emails = Emails},
                         case proplists:get_value(connect_account, Props) of
                             false ->
                                 % Standard login, check if there is an account belonging to the user
                                 case temp_user_logic:get_user({ProviderID, UserID}) of
                                     undefined ->
                                         % This is a first login
-                                        {GlobalID, _} = auth_utils:generate_uuid(),
-                                        UserInfo = #user_info{global_id = GlobalID, emails = Emails, preferred_name = Name, provider_infos = [
-                                            ProvUserInfo
-                                        ]},
-                                        temp_user_logic:save_user(UserInfo),
-                                        wf:user(GlobalID),
-                                        new_user;
+                                        % Check if any of emails is in use
+                                        EmailUsed = lists:foldl(
+                                            fun(Email, Acc) ->
+                                                case Acc of
+                                                    true -> true;
+                                                    _ -> temp_user_logic:get_user({email, Email}) /= undefined
+                                                end
+                                            end, false, Emails),
+
+                                        case EmailUsed of
+                                            true ->
+                                                % At least one email is in database, cannot create account
+                                                {error, ?error_auth_new_email_occupied};
+                                            false ->
+                                                % All email are available, proceed
+                                                {GlobalID, _} = auth_utils:generate_uuid(),
+                                                UserInfo = #user_info{global_id = GlobalID, emails = Emails, preferred_name = Name, provider_infos = [
+                                                    ProvUserInfo
+                                                ]},
+                                                temp_user_logic:save_user(UserInfo),
+                                                wf:user(GlobalID),
+                                                new_user
+                                        end;
                                     #user_info{global_id = GlobalID} ->
                                         % The account already exists
                                         wf:user(GlobalID),
@@ -106,11 +133,34 @@ validate_login() ->
                                 end;
 
                             true ->
-                                % Account adding flow, get the user and add new provider info
-                                GlobalID = wf:user(),
-                                NewUserInfo = merge_provider_info(ProvUserInfo, temp_user_logic:get_user({global, GlobalID})),
-                                temp_user_logic:update_user({global, GlobalID}, NewUserInfo),
-                                {redirect, <<"/manage_account">>}
+                                % Account adding flow
+                                % Check if this account isn't connected to other profile
+                                case temp_user_logic:get_user({ProviderID, UserID}) of
+                                    undefined ->
+                                        % Check if any of emails is in use
+                                        EmailUsed = lists:foldl(
+                                            fun(Email, Acc) ->
+                                                case Acc of
+                                                    true -> true;
+                                                    _ -> temp_user_logic:get_user({email, Email}) /= undefined
+                                                end
+                                            end, false, Emails),
+
+                                        case EmailUsed of
+                                            true ->
+                                                % At least one email is in database, cannot create account
+                                                {error, ?error_auth_connect_email_occupied};
+                                            false ->
+                                                % Everything ok, get the user and add new provider info
+                                                GlobalID = wf:user(),
+                                                NewUserInfo = merge_provider_info(ProvUserInfo, temp_user_logic:get_user({global, GlobalID})),
+                                                temp_user_logic:update_user({global, GlobalID}, NewUserInfo),
+                                                {redirect, <<"/manage_account">>}
+                                        end;
+                                    _ ->
+                                        % The account is used on some other profile, cannot proceed
+                                        {error, ?error_auth_account_already_connected}
+                                end
                         end
                 end
         end
@@ -123,8 +173,19 @@ validate_login() ->
 merge_provider_info(ProvUserInfo, UserInfo) ->
     #user_info{preferred_name = Name, emails = Emails, provider_infos = ProviderInfos} = UserInfo,
     #provider_user_info{name = ProvName, emails = ProvEmails} = ProvUserInfo,
-    NewName = Name,
-    NewEmails = Emails,
+    % If no name is specified, take the one provided with new info
+    NewName = case Name of
+                  <<"">> -> ProvName;
+                  _ -> Name
+              end,
+    % Add emails from provider that are not yet added to account
+    NewEmails = lists:foldl(
+        fun(Email, Acc) ->
+            case lists:member(Email, Acc) of
+                true -> Acc;
+                false -> Acc ++ [Email]
+            end
+        end, Emails, ProvEmails),
     UserInfo#user_info{preferred_name = NewName, emails = NewEmails, provider_infos = ProviderInfos ++ [ProvUserInfo]}.
 
 

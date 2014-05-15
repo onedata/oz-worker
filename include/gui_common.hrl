@@ -15,24 +15,6 @@
 -include_lib("n2o/include/wf.hrl").
 -include_lib("gui_elements.hrl").
 
-% Relative suffix of GUI address, leading to shared files
--define(shared_files_download_path, "/share/").
-
-% Identifier for requests of user content
--define(shared_files_request_type, shared_files).
-
-% Relative suffix of GUI address, leading to user content download
--define(user_content_download_path, "/user_content").
-
-% Identifier for requests of user content
--define(user_content_request_type, user_content).
-
-% Relative suffix of GUI address, leading to file upload service
--define(file_upload_path, "/upload").
-
-% Include from dao, cannot include whole hrl because of collision with wf.hrl
--record(veil_document, {uuid = "", rev_info = 0, record = none, force_update = false}).
-
 
 %% Includes from cowboy
 -type cookie_option() :: {max_age, non_neg_integer()}

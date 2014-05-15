@@ -50,6 +50,14 @@ get_reason_and_description() ->
 id_to_reason_and_message(?error_auth_invalid_request) ->
     {<<"Invalid request state">>, <<"This OpenID or OAuth request could not be validated.">>};
 
+id_to_reason_and_message(?error_auth_new_email_occupied) ->
+    {<<"Cannot create new account">>, <<"One or more e-mail addresses returned by the OpenID / OAuth provider are occupied.">>};
+
+id_to_reason_and_message(?error_auth_connect_email_occupied) ->
+    {<<"Cannot connect chosen account to the profile">>, <<"One or more e-mail addresses returned by the OpenID / OAuth provider are occupied.">>};
+
+id_to_reason_and_message(?error_auth_account_already_connected) ->
+    {<<"Cannot connect chosen account to the profile">>, <<"This account has already been connected with other profile.">>};
 
 id_to_reason_and_message(_) ->
     {<<"Unknown">>, <<"No description">>}.
