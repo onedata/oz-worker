@@ -166,9 +166,15 @@ is_authorized(Req, #rstate{} = State) -> %% @todo: proper certificate-based auth
     {boolean(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
-    {ResId, Bindings, Req2} = get_res_id(Req, State),
-    Exists = Mod:resource_exists(Resource, ResId, Bindings),
-    {Exists, Req2, State}.
+    {Method, Req2} = cowboy_req:method(Req),
+    case Method of
+        %% Global Registry REST API always creates new resource on POST
+        <<"POST">> -> {false, Req2, State};
+        _ ->
+            {ResId, Bindings, Req3} = get_res_id(Req2, State),
+            Exists = Mod:resource_exists(Resource, ResId, Bindings),
+            {Exists, Req3, State}
+    end.
 
 
 %% accept_resource/2

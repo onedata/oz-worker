@@ -102,7 +102,7 @@ accept_resource(user, post, _UserId, Data, _Client, _Bindings) ->
     if
         Name =:= undefined -> false;
         true ->
-            {ok, _UserId} = user_logic:create(Name),
+            {ok, _} = user_logic:create(Name),
             {true, <<"/user">>}
     end;
 accept_resource(user, patch, UserId, Data, _Client, _Bindings) ->

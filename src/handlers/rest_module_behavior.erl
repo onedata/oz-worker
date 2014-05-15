@@ -41,6 +41,9 @@
 %% ====================================================================
 %% @doc Returns whether a resource exists. ResId shall be set to the value of
 %% :id binding or client's Id if there's no binding defined.
+%% Note: The resource is always assumed to not exist when POST method is used,
+%% so that 201 Created is returned. That means that POST shall only be used
+%% to create a resource.
 %% @end
 %% ====================================================================
 -callback resource_exists(Resource :: atom(), ResId :: binary() | undefined,

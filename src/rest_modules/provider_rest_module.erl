@@ -93,7 +93,7 @@ accept_resource(provider, post, _ProviderId, Data, _Client, _Bindings) ->
     if
         URL =:= undefined -> false;
         true ->
-            {ok, _ProviderId} = provider_logic:create(URL),
+            {ok, _} = provider_logic:create(URL),
             {true, <<"/provider">>}
     end;
 accept_resource(provider, patch, ProviderId, Data, _Client, _Bindings) ->
