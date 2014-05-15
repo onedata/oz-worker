@@ -6,13 +6,29 @@
 	{applications, [
 		kernel,
 		stdlib,
-		cowboy
+		sasl,
+		lager,
+		public_key,
+		crypto,
+		ssl,
+		erlydtl,
+		n2o,
+		cowboy,
+		mimetypes,
+		ibrowse
 	]},
 	{modules, [
 		globalregistry_sup,
 		globalregistry_app,
+		globalregistry,
 		hello_world
 	]},
 	{mod, {globalregistry_app, []}},
-	{env, []}
+	{env, [
+		{db_nodes,['db@127.0.0.1']},
+		% todo generate dedicated certs (this are example ones)
+		{ca_cert_file,"./cacerts/ca.crt"},
+		{cert_file,"./cacerts/server.crt"},
+		{key_file,"./cacerts/server.key"}
+	]}
 ]}.

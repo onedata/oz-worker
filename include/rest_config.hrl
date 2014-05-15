@@ -2,14 +2,21 @@
 %%% @author Tomasz Lichon
 %%% @copyright (C) 2014, ACK CYFRONET AGH
 %%% @doc
-%%%
+%%% Definitions connected with rest service
 %%% @end
 %%% Created : 15. Apr 2014 3:19 PM
 %%%-------------------------------------------------------------------
 -author("Tomasz Lichon").
 
--define(REST_PORT,8080).
--define(HTTP_ACCEPTORS,50).
+-ifndef(REST_CONFIG_HRL).
+-define(REST_CONFIG_HRL, 1).
+
+-define(rest_port,8080).
+-define(rest_https_acceptors,50).
+-define(rest_listener, rest).
 
 % Handler urls
--define(HELLO_WORLD_URL,"/hello_world").
+-define(hello_world_url,"/hello_world").
+
+
+-endif.

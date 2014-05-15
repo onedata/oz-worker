@@ -24,15 +24,7 @@ content_types_provided(Req, State) ->
 	], Req, State}.
 
 hello_to_html(Req, State) ->
-	Body = <<"<html>
-<head>
-	<meta charset=\"utf-8\">
-	<title>REST Hello World!</title>
-</head>
-<body>
-	<p>REST Hello World as HTML!</p>
-</body>
-</html>">>,
+	Body = <<"<html>REST Hello World as HTML!</html>">>,
 	{Body, Req, State}.
 
 hello_to_json(Req, State) ->

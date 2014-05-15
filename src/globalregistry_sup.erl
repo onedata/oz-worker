@@ -11,6 +11,9 @@
 
 -behaviour(supervisor).
 
+%% Includes
+-include("registered_names.hrl").
+
 %% API
 -export([start_link/0]).
 
@@ -62,14 +65,15 @@ init([]) ->
 
 	SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
 
-%% 	Restart = permanent,
-%% 	Shutdown = 2000,
-%% 	Type = worker,
+	Restart = permanent,
+	Shutdown = 2000,
+	Type = worker,
 
-%% 	AChild = {'AName', {'AModule', start_link, []},
-%% 		Restart, Shutdown, Type, ['AModule']},
-
-	{ok, {SupFlags, []}}.
+	Globalregisty = {?Global_Registry, {globalregistry, start_link, []},
+		Restart, Shutdown, Type, [globalregistry]},
+	Dao = {?Dao, {dao, start_link, []},
+		Restart, Shutdown, Type, [dao]},
+	{ok, {SupFlags, [Globalregisty,Dao]}}.
 
 %%%===================================================================
 %%% Internal functions

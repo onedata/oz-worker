@@ -1,7 +1,7 @@
 REPO			?= globalregistry
 
-PKG_REVISION    ?= $(shell git describe --tags)
-PKG_VERSION		?= $(shell git describe --tags | tr - .)
+PKG_REVISION    ?= $(shell git describe --tags --always)
+PKG_VERSION		?= $(shell git describe --tags --always | tr - .)
 PKG_ID           = globalregistry-$(PKG_VERSION)
 PKG_BUILD        = 1
 BASE_DIR         = $(shell pwd)
@@ -30,6 +30,15 @@ distclean: clean
 	@rm -rf $(PKG_ID).tar.gz
 
 ##
+## Testing
+##
+test: deps compile
+	@./rebar skip_deps=true eunit
+
+ct: deps compile
+	@./test_distributed/start_distributed_test.sh
+
+##
 ## Release targets
 ##
 rel: deps compile generate
@@ -50,11 +59,11 @@ package.src: deps
 	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION)| (cd package && tar -xf -)
 	${MAKE} -C package/$(PKG_ID) deps
 	mkdir -p package/$(PKG_ID)/priv
-	git --git-dir=.git describe --tags >package/$(PKG_ID)/priv/vsn.git
+	git --git-dir=.git describe --tags --always >package/$(PKG_ID)/priv/vsn.git
 	for dep in package/$(PKG_ID)/deps/*; do \
              echo "Processing dep: $${dep}"; \
              mkdir -p $${dep}/priv; \
-             git --git-dir=$${dep}/.git describe --tags >$${dep}/priv/vsn.git; \
+             git --git-dir=$${dep}/.git describe --tags --always >$${dep}/priv/vsn.git; \
         done
 	find package/$(PKG_ID) -depth -name ".git" -exec rm -rf {} \;
 	tar -C package -czf package/$(PKG_ID).tar.gz $(PKG_ID)
