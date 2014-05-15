@@ -38,10 +38,10 @@
 %% ====================================================================
 %% @doc A privilege level of a Space user.
 %% ====================================================================
--spec space_user() -> sets:set(space_privilege()).
+-spec space_user() -> ordsets:ordset(space_privilege()).
 %% ====================================================================
 space_user() ->
-    sets:from_list([
+    ordsets:from_list([
         space_view_data
     ]).
 
@@ -50,12 +50,12 @@ space_user() ->
 %% ====================================================================
 %% @doc A privilege level of a Space manager.
 %% ====================================================================
--spec space_manager() -> sets:set(space_privilege()).
+-spec space_manager() -> ordsets:ordset(space_privilege()).
 %% ====================================================================
 space_manager() ->
-    sets:union(
+    ordsets:union(
         space_user(),
-        sets:from_list([
+        ordsets:from_list([
             space_invite_user,
             space_remove_user,
             space_invite_group,
@@ -68,12 +68,12 @@ space_manager() ->
 %% ====================================================================
 %% @doc A privilege level of a Space administrator.
 %% ====================================================================
--spec space_admin() -> sets:set(space_privilege()).
+-spec space_admin() -> ordsets:ordset(space_privilege()).
 %% ====================================================================
 space_admin() ->
-    sets:union(
+    ordsets:union(
         space_manager(),
-        sets:from_list([
+        ordsets:from_list([
             space_add_provider,
             space_remove_provider,
             space_set_privileges,
@@ -87,12 +87,12 @@ space_admin() ->
 %% ====================================================================
 %% @doc A privilege level of a group user.
 %% ====================================================================
--spec group_user() -> sets:set(privilege()).
+-spec group_user() -> ordsets:ordset(privilege()).
 %% ====================================================================
 group_user() ->
-    sets:union(
+    ordsets:union(
         space_user(),
-        sets:from_list([
+        ordsets:from_list([
             group_view_data
         ])
     ).
@@ -102,12 +102,12 @@ group_user() ->
 %% ====================================================================
 %% @doc A privilege level of a group manager.
 %% ====================================================================
--spec group_manager() -> sets:set(privilege()).
+-spec group_manager() -> ordsets:ordset(privilege()).
 %% ====================================================================
 group_manager() ->
-    sets:union(
+    ordsets:union(
         group_user(),
-        sets:from_list([
+        ordsets:from_list([
             group_invite_user,
             group_remove_user
         ])
@@ -118,10 +118,10 @@ group_manager() ->
 %% ====================================================================
 %% @doc A privilege level of a group manager allowed to manage group's Spaces.
 %% ====================================================================
--spec group_space_manager() -> sets:set(privilege()).
+-spec group_space_manager() -> ordsets:ordset(privilege()).
 %% ====================================================================
 group_space_manager() ->
-    sets:union(
+    ordsets:union(
         group_manager(),
         space_manager()
     ).
@@ -131,12 +131,12 @@ group_space_manager() ->
 %% ====================================================================
 %% @doc A privilege level of a group administrator.
 %% ====================================================================
--spec group_admin() -> sets:set(privilege()).
+-spec group_admin() -> ordsets:ordset(privilege()).
 %% ====================================================================
 group_admin() ->
-    sets:union(
+    ordsets:union(
         group_space_manager(),
-        sets:from_list([
+        ordsets:from_list([
             group_create_space,
             group_create_space_token,
             group_join_space,

@@ -181,7 +181,7 @@ provide_resource(users, GroupId, _Client, _Bindings) ->
     {ok, Users} = group_logic:get_users(GroupId),
     Users;
 provide_resource(uinvite, GroupId, _Client, _Bindings) ->
-    {ok, Token} = token_logic:create(group_invite_token, GroupId),
+    {ok, Token} = token_logic:create(group_invite_token, {group, GroupId}),
     [{token, Token}];
 provide_resource(user, GroupId, _Client, Bindings) ->
     UID = proplists:get_value(uid, Bindings),
@@ -195,7 +195,7 @@ provide_resource(spaces, GroupId, _Client, _Bindings) ->
     {ok, Spaces} = group_logic:get_spaces(GroupId),
     Spaces;
 provide_resource(screate, GroupId, _Client, _Bindings) ->
-    {ok, Token} = token_logic:create(space_create_group_token, GroupId),
+    {ok, Token} = token_logic:create(space_create_token, {group, GroupId}),
     [{token, Token}];
 provide_resource(space, _GroupId, _Client, Bindings) ->
     SID = proplists:get_value(sid, Bindings),

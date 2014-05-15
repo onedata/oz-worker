@@ -11,6 +11,10 @@
 -define(DAO_TOKENS_HRL, 1).
 
 %% This record defines a token that can be used by user to do something
--record(token, {type = undefined, expires = []}).
+-record(token, {
+    type :: token_logic:token_type(),
+    expires :: calendar:datetime(),
+    resource :: {Type :: token_logic:resource_type(), Resource :: binary()}
+}).
 
 -endif.

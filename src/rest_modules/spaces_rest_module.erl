@@ -196,7 +196,7 @@ provide_resource(users, SpaceId, #client{type = ClientType}, _Bindings) ->
     {ok, Users} = space_logic:get_users(SpaceId, ClientType),
     Users;
 provide_resource(uinvite, SpaceId, _Client, _Bindings) ->
-    {ok, Token} = token_logic:create(space_invite_user_token, SpaceId),
+    {ok, Token} = token_logic:create(space_invite_user_token, {space, SpaceId}),
     [{token, Token}];
 provide_resource(user, SpaceId, #client{type = ClientType}, Bindings) ->
     UID = proplists:get_value(uid, Bindings),
@@ -210,7 +210,7 @@ provide_resource(groups, SpaceId, _Client, _Bindings) ->
     {ok, Groups} = space_logic:get_groups(SpaceId),
     Groups;
 provide_resource(ginvite, SpaceId, _Client, _Bindings) ->
-    {ok, Token} = token_logic:create(space_invite_group_token, SpaceId),
+    {ok, Token} = token_logic:create(space_invite_group_token, {space, SpaceId}),
     [{token, Token}];
 provide_resource(group, SpaceId, _Client, Bindings) ->
     GID = proplists:get_value(gid, Bindings),
@@ -224,7 +224,7 @@ provide_resource(providers, SpaceId, #client{type = ClientType}, _Bindings) ->
     {ok, Providers} = space_logic:get_providers(SpaceId, ClientType),
     Providers;
 provide_resource(pinvite, SpaceId, _Client, _Bindings) ->
-    {ok, Token} = token_logic:create(space_support_token, SpaceId),
+    {ok, Token} = token_logic:create(space_support_token, {space, SpaceId}),
     [{token, Token}];
 provide_resource(provider, SpaceId, #client{type = ClientType}, Bindings) ->
     PID = proplists:get_value(pid, Bindings),

@@ -161,7 +161,7 @@ provide_resource(spaces, UserId, _Client, _Bindings) ->
     {ok, Spaces} = user_logic:get_spaces(UserId),
     Spaces;
 provide_resource(screate, UserId, _Client, _Bindings) ->
-    {ok, Token} = token_logic:create(space_create_token, UserId),
+    {ok, Token} = token_logic:create(space_create_token, {user, UserId}),
     [{token, Token}];
 provide_resource(space, _UserId, _Client, Bindings) ->
     SID = proplists:get_value(sid, Bindings),
@@ -175,7 +175,7 @@ provide_resource(group, _UserId, _Client, Bindings) ->
     {ok, Group} = group_logic:get_data(SID),
     Group;
 provide_resource(mtoken, UserId, _Client, _Bindings) ->
-    {ok, Token} = token_logic:create(accounts_merge_token, UserId),
+    {ok, Token} = token_logic:create(accounts_merge_token, {user, UserId}),
     [{token, Token}].
 
 

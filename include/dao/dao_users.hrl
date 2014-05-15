@@ -11,6 +11,10 @@
 -define(DAO_USERS_HRL, 1).
 
 %% This record defines a user and is handled as a database document
--record(user, {name = "", spaces = [], groups = []}).
+-record(user, {
+    name = "",
+    spaces = [],
+    groups = []
+}).
 
 -endif.
