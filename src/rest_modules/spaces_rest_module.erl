@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: The module handling logic behind /spaces REST resources.
+%% @doc The module handling logic behind /spaces REST resources.
 %% @end
 %% ===================================================================
 -module(spaces_rest_module).
@@ -28,25 +28,25 @@
 %% @see rest_module_behavior
 %% @end
 -spec routes() ->
-    [{PathMatch :: string() | binary(), rest_handler, State :: #reqstate{}}].
+    [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 %% ====================================================================
 routes() ->
-    O = #opts{module = ?MODULE},
+    O = #rstate{module = ?MODULE},
     M = rest_handler,
     [
-        {<<"/spaces">>,                              M, O#opts{resource = spaces,    methods = [post]        }},
-        {<<"/spaces/:id">>,                          M, O#opts{resource = space,     methods = [get, patch, delete]}},
-        {<<"/spaces/:id/users">>,                    M, O#opts{resource = users,     methods = [get]         }},
-        {<<"/spaces/:id/users/token">>,              M, O#opts{resource = uinvite,   methods = [get]         }},
-        {<<"/spaces/:id/users/:uid">>,               M, O#opts{resource = user,      methods = [get, delete] }},
-        {<<"/spaces/:id/users/:uid/privileges">>,    M, O#opts{resource = upriv,     methods = [get, put]    }},
-        {<<"/spaces/:id/groups">>,                   M, O#opts{resource = groups,    methods = [get]         }},
-        {<<"/spaces/:id/groups/token">>,             M, O#opts{resource = ginvite,   methods = [get]         }},
-        {<<"/spaces/:id/groups/:gid">>,              M, O#opts{resource = group,     methods = [get, delete] }},
-        {<<"/spaces/:id/groups/:gid/privileges">>,   M, O#opts{resource = gpriv,     methods = [get, put]    }},
-        {<<"/spaces/:id/providers">>,                M, O#opts{resource = providers, methods = [get]         }},
-        {<<"/spaces/:id/providers/token">>,          M, O#opts{resource = pinvite,   methods = [get]         }},
-        {<<"/spaces/:id/providers/:pid">>,           M, O#opts{resource = provider,  methods = [get, delete] }}
+        {<<"/spaces">>,                              M, O#rstate{resource = spaces,    methods = [post]        }},
+        {<<"/spaces/:id">>,                          M, O#rstate{resource = space,     methods = [get, patch, delete]}},
+        {<<"/spaces/:id/users">>,                    M, O#rstate{resource = users,     methods = [get]         }},
+        {<<"/spaces/:id/users/token">>,              M, O#rstate{resource = uinvite,   methods = [get]         }},
+        {<<"/spaces/:id/users/:uid">>,               M, O#rstate{resource = user,      methods = [get, delete] }},
+        {<<"/spaces/:id/users/:uid/privileges">>,    M, O#rstate{resource = upriv,     methods = [get, put]    }},
+        {<<"/spaces/:id/groups">>,                   M, O#rstate{resource = groups,    methods = [get]         }},
+        {<<"/spaces/:id/groups/token">>,             M, O#rstate{resource = ginvite,   methods = [get]         }},
+        {<<"/spaces/:id/groups/:gid">>,              M, O#rstate{resource = group,     methods = [get, delete] }},
+        {<<"/spaces/:id/groups/:gid/privileges">>,   M, O#rstate{resource = gpriv,     methods = [get, put]    }},
+        {<<"/spaces/:id/providers">>,                M, O#rstate{resource = providers, methods = [get]         }},
+        {<<"/spaces/:id/providers/token">>,          M, O#rstate{resource = pinvite,   methods = [get]         }},
+        {<<"/spaces/:id/providers/:pid">>,           M, O#rstate{resource = provider,  methods = [get, delete] }}
     ].
 
 
@@ -57,11 +57,11 @@ routes() ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Resource :: atom(), Method :: rest_handler:method(),
-                    SpaceId :: binary(), Client :: rest_handler:client()) ->
-    boolean().
+-spec is_authorized(Resource :: atom(), Method :: method(), SpaceId :: binary(),
+                    Client :: client()) -> boolean().
 %% ====================================================================
-is_authorized(spaces, post, _SpaceId, _Client) ->
+is_authorized(spaces, post, _SpaceId, #client{type = ClientType})
+        when ClientType =/= undefined ->
     true;
 is_authorized(space, patch, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_privilege(SpaceId, UserId, space_change_data);
@@ -125,10 +125,9 @@ resource_exists(provider, SpaceId, Bindings) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec accept_resource(Resource :: atom(), Method :: rest_handler:method(),
+-spec accept_resource(Resource :: atom(), Method :: method(),
                       SpaceId :: binary(), Data :: [proplists:property()],
-                      Client :: rest_handler:client(),
-                      Bindings :: [{atom(), any()}]) ->
+                      Client :: client(), Bindings :: [{atom(), any()}]) ->
     {true, URL :: binary()} | boolean().
 %% ====================================================================
 accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, _Bindings) ->
@@ -180,25 +179,24 @@ accept_resource(gpriv, put, SpaceId, Data, _Client, Bindings) ->
     end.
 
 
-%% provide_resource/1
+%% provide_resource/4
 %% ====================================================================
 %% @doc Returns data requested by a client through GET on a REST resource.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
 -spec provide_resource(Resource :: atom(), SpaceId :: binary(),
-                       Client :: rest_handler:client(),
-                       Bindings :: [{atom(), any()}]) ->
-    {ok, Data :: reqdata()} | {error, Reason :: term()}.
+                       Client :: client(), Bindings :: [{atom(), any()}]) ->
+    Data :: [proplists:property()].
 %% ====================================================================
 provide_resource(space, SpaceId, #client{type = ClientType}, _Bindings) ->
     {ok, Data} = space_logic:get_data(SpaceId, ClientType),
-    Data
+    Data;
 provide_resource(users, SpaceId, #client{type = ClientType}, _Bindings) ->
     {ok, Users} = space_logic:get_users(SpaceId, ClientType),
     Users;
 provide_resource(uinvite, SpaceId, _Client, _Bindings) ->
-    {ok, Token} = token_logic:create(space_invite_user_token, SpaceId, user),
+    {ok, Token} = token_logic:create(space_invite_user_token, SpaceId),
     [{token, Token}];
 provide_resource(user, SpaceId, #client{type = ClientType}, Bindings) ->
     UID = proplists:get_value(uid, Bindings),
@@ -210,9 +208,9 @@ provide_resource(upriv, SpaceId, _Client, Bindings) ->
     [{privileges, Privileges}];
 provide_resource(groups, SpaceId, _Client, _Bindings) ->
     {ok, Groups} = space_logic:get_groups(SpaceId),
-    Groups
+    Groups;
 provide_resource(ginvite, SpaceId, _Client, _Bindings) ->
-    {ok, Token} = token_logic:create(space_invite_group_token, SpaceId, group),
+    {ok, Token} = token_logic:create(space_invite_group_token, SpaceId),
     {ok, [{token, Token}]};
 provide_resource(group, SpaceId, _Client, Bindings) ->
     GID = proplists:get_value(gid, Bindings),
@@ -234,13 +232,14 @@ provide_resource(provider, SpaceId, #client{type = ClientType}, Bindings) ->
     Provider.
 
 
-%% delete_resource/2
+%% delete_resource/3
 %% ====================================================================
 %% @doc Deletes the resource identified by the SpaceId parameter.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(Resource :: atom(), SpaceId :: binary(), Bindings :: [{atom(), binary()}]) -> boolean().
+-spec delete_resource(Resource :: atom(), SpaceId :: binary(),
+                      Bindings :: [{atom(), any()}]) -> boolean().
 %% ====================================================================
 delete_resource(space, SpaceId, _Bindings) ->
     space_logic:remove(SpaceId);

@@ -15,11 +15,12 @@
 
 %% Atoms representing types of valid tokens.
 -type token_type() :: group_invite_token | space_create_token |
-    space_invite_token | accounts_merge_token | space_support_token.
+    space_invite_user_token | space_invite_group_token | accounts_merge_token |
+    space_support_token.
 
 
 %% API
--export([is_valid/2]).
+-export([is_valid/2, create/2]).
 
 
 %% is_valid/2
@@ -30,3 +31,14 @@
 %% ====================================================================
 is_valid(Token, TokenType) ->
     true.
+
+
+%% create/2
+%% ====================================================================
+%% @doc Creates a token of a given type.
+%% ====================================================================
+-spec create(TokenType :: token_type(), ResId :: binary()) ->
+    {ok, Token :: binary()} | {error, Reason :: any()}.
+%% ====================================================================
+create(TokenType, ResId) ->
+    {ok, <<"a token">>}.
