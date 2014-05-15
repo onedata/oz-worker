@@ -5,8 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: The module handling logic behind /provider REST resource.
-%% @end
+%% @doc The module handling logic behind /provider REST resource.
 %% ===================================================================
 -module(provider_rest_module).
 -author("Konrad Zemek").
@@ -41,65 +40,120 @@ routes() ->
     ].
 
 
-%% is_authorized/2
+%% is_authorized/4
 %% ====================================================================
 %% @doc Returns a boolean() determining if the authenticated client is
 %% authorized to carry the request on the resource.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Method :: binary(), State :: #reqstate{}) -> boolean().
+-spec is_authorized(Resource :: atom(), Method :: method(),
+                    ProviderId :: binary(), Client :: client()) -> boolean().
 %% ====================================================================
-is_authorized(_Method, #reqstate{resource = create, client = #reqclient{type = undefined}}) ->
+is_authorized(_, _, _, #client{type = user}) ->
+    false;
+is_authorized(provider, post, _, #client{type = undefined}) ->
     true;
-is_authorized(_Method, #reqstate{resource = support_space, client = #reqclient{type = provider, id = ProviderId}, data = Data}) ->
-    Token = proplists:get_value(<<"token">>, Data),
-    provider_logic:can_support_space(ProviderId, Token);
-is_authorized(_Method, #reqstate{resource = Res, client = #reqclient{type = provider}}) when Res =/= create ->
-    true.
+is_authorized(_, _, _, #client{type = provider}) ->
+    true;
+is_authorized(_, _, _, _) ->
+    false.
 
 
-%% accept_resource/1
+%% resource_exists/3
 %% ====================================================================
-%% @doc Processes data submitted by a client through POST on a REST resource.
+%% @doc Returns whether a resource exists.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec accept_resource(State :: #reqstate{}) ->
-    {ok, Response :: reqdata()} | ok | {error, Reason :: term()}.
+-spec resource_exists(Resource :: atom(), ProviderId :: binary(),
+                      Bindings :: [{atom(), any()}]) -> boolean().
 %% ====================================================================
-accept_resource(#reqstate{resource = create, data = Data}) ->
+resource_exists(space, ProviderId, Bindings) ->
+    SID = proplists:get_value(sid, Bindings),
+    space_logic:has_provider(SID, ProviderId);
+resource_exists(_, _, _) ->
+    true.
+
+
+%% accept_resource/6
+%% ====================================================================
+%% @doc Processes data submitted by a client through POST, PATCH on a REST
+%% resource.
+%% @see rest_module_behavior
+%% @end
+%% ====================================================================
+-spec accept_resource(Resource :: atom(), Method :: method(),
+                      ProviderId :: binary(), Data :: [proplists:property()],
+                      Client :: client(), Bindings :: [{atom(), any()}]) ->
+    {true, URL :: binary()} | boolean().
+%% ====================================================================
+accept_resource(provider, post, _ProviderId, Data, _Client, _Bindings) ->
     URL = proplists:get_value(<<"url">>, Data),
-    {ok, ProviderId} = provider_logic:register(URL),
-    {ok, [{providerId, ProviderId}]};
-accept_resource(#reqstate{resource = support_space, client = #reqclient{id = ProviderId}, data = Data}) ->
+    if
+        URL =:= undefined -> false;
+        true ->
+            {ok, _ProviderId} = provider_logic:create(URL),
+            {true, <<"/provider">>}
+    end;
+accept_resource(provider, patch, ProviderId, Data, _Client, _Bindings) ->
+    URL = proplists:get_value(<<"url">>, Data),
+    if
+        URL =:= undefined -> false;
+        true ->
+            ok = provider_logic:modify(ProviderId, URL),
+            true
+    end;
+accept_resource(spaces, post, _ProviderId, Data, Client, Bindings) ->
+    spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Bindings);
+accept_resource(ssupport, post, ProviderId, Data, _Client, _Bindings) ->
     Token = proplists:get_value(<<"token">>, Data),
-    {ok, SpaceId} = provider_logic:support_space(ProviderId, Token),
-    {ok, [{spaceId, SpaceId}]};
-accept_resource(#reqstate{resource = main, client = #reqclient{id = ProviderId}, data = Data}) ->
-    provider_logic:modify_data(ProviderId, Data).
+    if
+        Token =:= undefined -> false;
+        not token_logic:is_valid(Token, space_support_token) -> false;
+        true ->
+            {ok, SpaceId} = space_logic:support(ProviderId, Token),
+            {true, <<"/provider/spaces/", SpaceId/binary>>}
+    end.
 
 
-%% provide_resource/2
+%% provide_resource/4
 %% ====================================================================
 %% @doc Returns data requested by a client through GET on a REST resource.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(State :: #reqstate{}) ->
-    {ok, Data :: reqdata()} | {error, Reason :: term()}.
+-spec provide_resource(Resource :: atom(), ProviderId :: binary(),
+                       Client :: client(), Bindings :: [{atom(), any()}]) ->
+    Data :: [proplists:property()].
 %% ====================================================================
-provide_resource(#reqstate{resource = main, client = #reqclient{id = ProviderId}}) ->
-    provider_logic:get_data(ProviderId).
+provide_resource(provider, ProviderId, _Client, _Bindings) ->
+    {ok, Provider} = provider_logic:get_data(ProviderId),
+    Provider;
+provide_resource(spaces, ProviderId, _Client, _Bindings) ->
+    {ok, Spaces} = provider_logic:get_spaces(ProviderId),
+    Spaces;
+provide_resource(space, _ProviderId, _Client, Bindings) ->
+    SID = proplists:get_value(sid, Bindings),
+    {ok, Space} = space_logic:get_data(SID, provider),
+    Space.
 
 
-%% delete_resource/2
+%% delete_resource/3
 %% ====================================================================
-%% @doc Deletes the resource identified by the Id parameter.
+%% @doc Deletes the resource identified by the SpaceId parameter.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(State :: #reqstate{}) -> ok | {error, Reason :: term()}.
+%% {<<"/provider">>,                   M, S#rstate{resource = provider,    methods = [get, post, patch, delete]}},
+%% {<<"/provider/spaces/">>,           M, S#rstate{resource = spaces,      methods = [get, post]   }},
+%% {<<"/provider/spaces/support">>,    M, S#rstate{resource = ssupport,    methods = [post]        }},
+%% {<<"/provider/spaces/:sid">>,       M, S#rstate{resource = space,       methods = [get, delete] }}
+-spec delete_resource(Resource :: atom(), ProviderId :: binary(),
+                      Bindings :: [{atom(), any()}]) -> boolean().
 %% ====================================================================
-delete_resource(#reqstate{resource = main, client = #reqclient{id = ProviderId}}) ->
-    provider_logic:unregister(ProviderId).
+delete_resource(provider, ProviderId, _Bindings) ->
+    provider_logic:remove(ProviderId);
+delete_resource(space, ProviderId, Bindings) ->
+    SID = proplists:get_value(sid, Bindings),
+    space_logic:remove_provider(SID, ProviderId).

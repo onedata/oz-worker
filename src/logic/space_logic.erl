@@ -15,7 +15,7 @@
 
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_group/2, has_privilege/3]).
--export([create/2, create/3, modify/2, set_privileges/3, join/2]).
+-export([create/2, create/3, modify/2, set_privileges/3, join/2, support/2]).
 -export([get_data/2, get_users/2, get_groups/1, get_providers/2, get_user/3,
     get_group/2, get_provider/3, get_privileges/2]).
 -export([remove/1, remove_user/2, remove_group/2, remove_provider/2]).
@@ -137,6 +137,17 @@ set_privileges(SpaceId, {group, GroupId}, Privileges) ->
     {ok, SpaceId :: binary()} | {error, Reason :: any()}.
 %% ====================================================================
 join(Member, Token) ->
+    {ok, <<"the space you joined">>}.
+
+
+%% support/2
+%% ====================================================================
+%% @doc Adds a new supporting provider to a Space identified by a token.
+%% ====================================================================
+-spec support(ProviderId :: binary(), Token :: binary()) ->
+    {ok, SpaceId :: binary()} | {error, Reason :: any()}.
+%% ====================================================================
+support(Member, Token) ->
     {ok, <<"the space you joined">>}.
 
 

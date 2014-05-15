@@ -198,7 +198,7 @@ provide_resource(screate, GroupId, _Client, _Bindings) ->
     [{token, Token}];
 provide_resource(space, GroupId, _Client, Bindings) ->
     SID = proplists:get_value(sid, Bindings),
-    {ok, Space} = group_logic:get_space(GroupId, SID),
+    {ok, Space} = space_logic:get_data(SID, user),
     Space.
 
 
@@ -218,4 +218,4 @@ delete_resource(user, GroupId, Bindings) ->
     group_logic:remove_user(GroupId, UID);
 delete_resource(space, GroupId, Bindings) ->
     SID = proplists:get_value(sid, Bindings),
-    group_logic:remove_space(GroupId, SID).
+    space_logic:remove_group(SID, GroupId).

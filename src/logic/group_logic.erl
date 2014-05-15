@@ -16,9 +16,8 @@
 %% API
 -export([exists/1, has_user/2, has_privilege/3]).
 -export([create/2, modify/2, set_privileges/3]).
--export([get_data/1, get_users/1, get_spaces/1, get_user/2, get_space/2,
-    get_privileges/2]).
--export([remove/1, remove_user/2, remove_space/2]).
+-export([get_data/1, get_users/1, get_spaces/1, get_user/2, get_privileges/2]).
+-export([remove/1, remove_user/2]).
 
 
 %% exists/1
@@ -135,17 +134,6 @@ get_user(GroupId, UserId) ->
     {ok, [{name, [<<"name">>]}]}.
 
 
-%% get_space/2
-%% ====================================================================
-%% @doc Returns details about group's space.
-%% ====================================================================
--spec get_space(GroupId :: binary(), SpaceId :: binary()) ->
-    {ok, [proplists:property()]} | {error, Reason :: any()}.
-%% ====================================================================
-get_space(GroupId, SpaceId) ->
-    {ok, [{name, [<<"name">>]}]}.
-
-
 %% get_privileges/2
 %% ====================================================================
 %% @doc Returns list of group's member privileges.
@@ -179,17 +167,4 @@ remove(GroupId) ->
 -spec remove_user(GroupId :: binary(), UserId :: binary()) -> boolean().
 %% ====================================================================
 remove_user(GroupId, UserId) ->
-    true.
-
-
-%% remove_space/2
-%% ====================================================================
-%% @doc Removes Space from the group. Should return true if after the call the
-%% group will no longer be a member of the Space; in particular if it never
-%% was a member or the group didn't exist.
-%% @end
-%% ====================================================================
--spec remove_space(GroupId :: binary(), SpaceId :: binary()) -> boolean().
-%% ====================================================================
-remove_space(GroupId, SpaceId) ->
     true.

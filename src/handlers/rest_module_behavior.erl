@@ -28,7 +28,8 @@
 %% is_authorized/4
 %% ====================================================================
 %% @doc Returns a boolean determining if the client is authorized to carry the
-%% request on the resource.
+%% request on the resource. ResId shall be set to the value of :id binding or
+%% client's Id if there's no binding defined.
 %% @end
 %% ====================================================================
 -callback is_authorized(Resource :: atom(), Method :: method(),
@@ -37,7 +38,9 @@
 
 %% resource_exists/3
 %% ====================================================================
-%% @doc Returns whether a resource exists.
+%% @doc Returns whether a resource exists. ResId shall be set to the value of
+%% :id binding or client's Id if there's no binding defined.
+%% @end
 %% ====================================================================
 -callback resource_exists(Resource :: atom(), ResId :: binary(),
                           Bindings :: [{atom(), any()}]) -> boolean().
@@ -48,7 +51,8 @@
 %% @doc Processes data submitted by a client through POST, PUT, PATCH on a REST
 %% resource. The callback shall return {true, URL} with an URL pointing to the
 %% newly created resource if it was created. Otherwise, it shall return whether
-%% the operation was performed successfuly.
+%% the operation was performed successfuly. ResId shall be set to the value of
+%% :id binding or client's Id if there's no binding defined.
 %% @end
 %% ====================================================================
 -callback accept_resource(Resource :: atom(), Method :: method(),
@@ -60,7 +64,8 @@
 %% provide_resource/4
 %% ====================================================================
 %% @doc Returns data requested by a client through GET request on a REST
-%% resource.
+%% resource. ResId shall be set to the value of :id binding or client's Id if
+%% there's no binding defined.
 %% @end
 %% ====================================================================
 -callback provide_resource(Resource :: atom(), ResId :: binary(),
@@ -71,6 +76,9 @@
 %% delete_resource/3
 %% ====================================================================
 %% @doc Deletes the resource. Returns whether the deletion was successful.
+%% ResId shall be set to the value of :id binding or client's Id if there's no
+%% binding defined.
+%% @end
 %% ====================================================================
 -callback delete_resource(Resource :: atom(), ResId :: binary(),
                           Bindings :: [{atom(), any()}]) -> boolean().

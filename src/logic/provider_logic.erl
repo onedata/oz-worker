@@ -5,43 +5,67 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: The module implementing the business logic for space providers.
+%% @doc The module implementing the business logic for space providers.
 %% This module serves as a buffer between the database and the REST API.
 %% @end
 %% ===================================================================
 -module(provider_logic).
 -author("Konrad Zemek").
 
+
 %% API
--export([register/1, get_data/1, modify_data/2, support_space/2, unregister/1, can_support_space/2]).
+-export([create/1, modify/2, get_data/1, get_spaces/1, remove/1]).
 
 
--spec register(URL :: binary()) -> {ok, binary()} | {error, any()}.
-register(URL) ->
-    {ok, <<"providerid">>}.
+%% create/1
+%% ====================================================================
+%% @doc Create a provider's account.
+%% ====================================================================
+-spec create(URL :: binary()) ->
+    {ok, ProviderId :: binary()} | {error, Reason :: any()}.
+%% ====================================================================
+create(URL) ->
+    {ok, <<"ProviderId">>}.
 
 
--spec get_data(ProviderId :: binary()) -> {ok, [proplists:property()]} | {error, any()}.
+%% modify/2
+%% ====================================================================
+%% @doc Modify provider's details.
+%% ====================================================================
+-spec modify(ProviderId :: binary(), URL :: binary()) ->
+    ok | {error, Reason :: any()}.
+%% ====================================================================
+modify(ProviderId, URL) ->
+    ok.
+
+
+%% get_data/1
+%% ====================================================================
+%% @doc Get provider's details.
+%% ====================================================================
+-spec get_data(ProviderId :: binary()) ->
+    {ok, Data :: [proplists:property()]} | {error, Reason :: any()}.
+%% ====================================================================
 get_data(ProviderId) ->
-    {ok, [{<<"name">>, <<"lolprovider">>}]}.
+    {ok, [{url, <<"providerurl">>}]].
 
 
--spec modify_data(ProviderId :: binary(), Modifications :: [proplists:property()]) -> ok | {error, any()}.
-modify_data(ProviderId, Modifications) ->
-    ok.
+%% get_spaces/1
+%% ====================================================================
+%% @doc Get Spaces supported by the provider.
+%% ====================================================================
+-spec get_spaces(ProviderId :: binary()) ->
+    {ok, Data :: [proplists:property()]} | {error, Reason :: any()}.
+%% ====================================================================
+get_spaces(ProviderId) ->
+    {ok, [{spaces, [<<"space">>]}]}.
 
 
--spec can_support_space(ProviderId :: binary(), Token :: binary()) -> boolean().
-can_support_space(ProviderId, Token) ->
+%% remove/1
+%% ====================================================================
+%% @doc Remove provider's account.
+%% ====================================================================
+-spec remove(ProviderId :: binary()) -> boolean().
+%% ====================================================================
+remove(ProviderId) ->
     true.
-
-
--spec support_space(ProviderId :: binary(), Token :: binary()) -> {ok, binary()} | {error, any()}.
-support_space(ProviderId, Token) ->
-    {ok, <<"spaceid">>}.
-
-
--spec unregister(ProviderId :: binary()) -> ok | {error, any()}.
-unregister(ProviderId) ->
-    ok.
-

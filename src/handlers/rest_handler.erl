@@ -108,8 +108,7 @@ content_types_provided(Req, #rstate{} = State) ->
     {boolean(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    ResId = proplists:get_value(id, Bindings),
+    {ResId, Bindings, Req2} = get_res_id(Req, State),
     Result = Mod:delete_resource(Resource, ResId, Bindings),
     {Result, Req2, State}.
 
@@ -125,7 +124,7 @@ delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {boolean(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 forbidden(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
-    {ResId, Req2} = cowboy_req:binding(id, Req),
+    {ResId, _Bindings, Req2} = get_res_id(Req, State),
     {BinMethod, Req3} = cowboy_req:method(Req2),
     Method = binary_to_method(BinMethod),
 
@@ -167,8 +166,7 @@ is_authorized(Req, #rstate{} = State) -> %% @todo: proper certificate-based auth
     boolean().
 %% ====================================================================
 resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    ResId = proplists:get_value(id, Bindings),
+    {ResId, Bindings, Req2} = get_res_id(Req, State),
     Exists = Mod:resource_exists(Resource, ResId, Bindings),
     {Exists, Req2, State}.
 
@@ -183,11 +181,10 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 accept_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
-    {BinMethod, Req2} = cowboy_req:method(Req),
-    {Bindings, Req3} = cowboy_req:bindings(Req2),
+    {ResId, Bindings, Req2} = get_res_id(Req, State),
+    {BinMethod, Req3} = cowboy_req:method(Req2),
     {Body, Req4} = cowboy_req:body(Req3),
     Method = binary_to_method(BinMethod),
-    ResId = proplists:get_value(id, Bindings),
     Data = mochijson2:decode(Body, [{format, proplist}]),
 
     AcceptResult = Mod:accept_resource(Resource, Method, ResId, Data, Client, Bindings),
@@ -204,9 +201,7 @@ accept_resource(Req, #rstate{module = Mod, resource = Resource, client = Client}
     {iodata(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 provide_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    ResId = proplists:get_value(id, Bindings),
-
+    {ResId, Bindings, Req2} = get_res_id(Req, State),
     Data = Mod:provide_resource(Resource, ResId, Client, Bindings),
     JSON = mochijson2:encode(Data),
     {JSON, Req2, State}.
@@ -240,3 +235,21 @@ binary_to_method(<<"PATCH">>)  -> patch;
 binary_to_method(<<"GET">>)    -> get;
 binary_to_method(<<"PUT">>)    -> put;
 binary_to_method(<<"DELETE">>) -> delete.
+
+
+%% get_res_id/2
+%% ====================================================================
+%% @doc Returns the resource id for the request or client's id if the resource
+%% id is undefined. Also returns a list of other bindings.
+%% @end
+%% ====================================================================
+-spec get_res_id(Req :: cowboy_req:req(), State :: rstate()) ->
+    {ResId :: binary(), Bindings :: [{atom(), any()}], cowboy_req:req()}.
+%% ====================================================================
+get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    ResId = case proplists:get_value(id, Bindings) of
+        undefined -> ClientId;
+        X -> X
+    end,
+    {ResId, Bindings, Req2}.
