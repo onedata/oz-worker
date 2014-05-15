@@ -23,6 +23,7 @@
 
 -record(provider_user_info, {
     provider_id = undefined,
+    user_id = "",
     login = "",
     name = "",
     email = ""

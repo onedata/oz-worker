@@ -13,6 +13,7 @@
 -behaviour(auth_module_behaviour).
 
 -include("logging.hrl").
+-include_lib("xmerl/include/xmerl.hrl").
 
 -define(PROVIDER_NAME, plgrid).
 
@@ -20,31 +21,46 @@
 -export([get_redirect_url/0, validate_login/1]).
 
 
-authorize_endpoint() ->
-    <<"https://github.com/login/oauth/authorize">>.
+xrds_endpoint() ->
+    <<"https://openid.plgrid.pl/gateway">>.
 
 
-access_token_endpoint() ->
-    <<"https://github.com/login/oauth/access_token">>.
-
-
-user_info_endpoint() ->
-    <<"https://api.github.com/user">>.
+plgrid_endpoint() ->
+    discover_op_endpoint(auth_utils:get_xrds(xrds_endpoint())).
 
 
 get_redirect_url() ->
     try
+        % TODO trezba cos zrobic z tymi www. W plgrdidzie mamy zgłoszone bez www.
+        HostName1 = auth_utils:fully_qualified_url(gui_utils:get_requested_hostname()),
+        <<"https://www.", Rest1/binary>> = HostName1,
+        HostName = <<"https://", Rest1/binary>>,
+        RedirectURI2 = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_utils:generate_state_token(?MODULE))/binary>>,
+        <<"https://www.", Rest2/binary>> = RedirectURI2,
+        RedirectURI = <<"https://", Rest2/binary>>,
+
         ParamsProplist = [
-            {<<"client_id">>, <<"ab87491bb2cc9ebee095">>},
-            {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
-            {<<"scope">>, <<"user,user:email">>},
-            {<<"state">>, auth_utils:generate_state_token(?MODULE)}
+            {<<"openid.mode">>, <<"checkid_setup">>},
+            {<<"openid.ns">>, <<"http://specs.openid.net/auth/2.0">>},
+            {<<"openid.return_to">>, RedirectURI},
+            {<<"openid.claimed_id">>, <<"http://specs.openid.net/auth/2.0/identifier_select">>},
+            {<<"openid.identity">>, <<"http://specs.openid.net/auth/2.0/identifier_select">>},
+            {<<"openid.realm">>, HostName},
+            {<<"openid.sreg.required">>, <<"nickname,email,fullname">>},
+            {<<"openid.ns.ext1">>, <<"http://openid.net/srv/ax/1.0">>},
+            {<<"openid.ext1.mode">>, <<"fetch_request">>},
+            {<<"openid.ext1.type.dn1">>, <<"http://openid.plgrid.pl/certificate/dn1">>},
+            {<<"openid.ext1.type.dn2">>, <<"http://openid.plgrid.pl/certificate/dn2">>},
+            {<<"openid.ext1.type.dn3">>, <<"http://openid.plgrid.pl/certificate/dn3">>},
+            {<<"openid.ext1.type.teams">>, <<"http://openid.plgrid.pl/userTeamsXML">>},
+            {<<"openid.ext1.if_available">>, <<"dn1,dn2,dn3,teams">>}
         ],
         Params = auth_utils:proplist_to_params(ParamsProplist),
 
-        {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
+        {ok, <<(plgrid_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
+            ?error_stacktrace("~p ~p ~p", [gui_utils:to_list(?PROVIDER_NAME), Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -52,36 +68,134 @@ get_redirect_url() ->
 
 validate_login(ParamsProplist) ->
     try
-        % Parse out code parameter
-        Code = proplists:get_value(<<"code">>, ParamsProplist),
-        % Form access token request
-        NewParamsProplist = [
-            {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
-            {<<"client_secret">>, auth_utils:get_provider_app_secret(?PROVIDER_NAME)},
-            {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
-            {<<"code">>, <<Code/binary>>}
-        ],
-        % Convert proplist to params string
+        % Make sure received endpoint is really the PLGrid endpoint
+        ReceivedEndpoint = proplists:get_value(<<"openid.op_endpoint">>, ParamsProplist),
+        true = (plgrid_endpoint() =:= ReceivedEndpoint),
+
+        % 'openid.signed' contains parameters that must be contained in validation request
+        Signed = proplists:get_value(<<"openid.signed">>, ParamsProplist),
+        SignedArgsNoPrefix = binary:split(Signed, <<",">>, [global]),
+        % Add 'openid.' prefix to all parameters
+        % And add 'openid.sig' and 'openid.signed' params which are required for validation
+        SignedArgs = lists:map(
+            fun(X) ->
+                <<"openid.", X/binary>>
+            end, SignedArgsNoPrefix) ++ [<<"openid.sig">>, <<"openid.signed">>],
+
+        % Gather values for parameters that were signed
+        NewParamsProplist = lists:map(
+            fun(Key) ->
+                Value = case proplists:get_value(Key, ParamsProplist) of
+                            undefined -> throw("Value for " ++ gui_utils:to_list(Key) ++ " not found");
+                            Val -> Val
+                        end,
+                {Key, Value}
+            end, SignedArgs),
+
+        % Create a POST request body
         Params = auth_utils:proplist_to_params(NewParamsProplist),
-        % Send request to GitHub endpoint
+        RequestBody = <<"openid.mode=check_authentication&", Params/binary>>,
+
+        % Send validation request
         {ok, "200", _, Response} = ibrowse:send_req(
-            binary_to_list(access_token_endpoint()),
+            binary_to_list(ReceivedEndpoint),
             [{content_type, "application/x-www-form-urlencoded"}],
-            post, Params, [{response_format, binary}]),
+            post, RequestBody, [{response_format, binary}]),
 
-        % Parse out received access token
-        AccessToken = proplists:get_value(<<"access_token">>, cowboy_http:x_www_form_urlencoded(Response)),
+        % Check if server responded positively
+        Response = <<"is_valid:true\n">>,
 
-        % Form user info request
-        URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
-        % Send request to GitHub endpoint
-        {ok, "200", _, JSON} = ibrowse:send_req(
-            binary_to_list(URL),
-            [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}],
-            get),
-        % Parse received JSON
-        n2o_json:decode(JSON)
+        % Gather user info
+        Login = gui_utils:to_list(proplists:get_value(<<"openid.sreg.nickname">>, ParamsProplist, <<"">>)),
+        Name = gui_utils:to_list(proplists:get_value(<<"openid.sreg.fullname">>, ParamsProplist, <<"">>)),
+        Teams = parse_teams(gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.teams">>, ParamsProplist, <<"">>))),
+        Email = gui_utils:to_list(proplists:get_value(<<"openid.sreg.email">>, ParamsProplist, <<"">>)),
+        DN1 = gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.dn1">>, ParamsProplist, <<"">>)),
+        DN2 = gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.dn2">>, ParamsProplist, <<"">>)),
+        DN3 = gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.dn3">>, ParamsProplist, <<"">>)),
+        DnList = lists:filter(
+            fun(X) ->
+                (X /= [])
+            end, [DN1, DN2, DN3]),
+        [
+            {login, Login},
+            {name, Name},
+            {teams, Teams},
+            {email, Email},
+            {dn_list, lists:usort(DnList)}
+        ]
+
     catch
         Type:Message ->
             {error, {Type, Message}}
     end.
+
+
+%% ====================================================================
+%% Internal functions
+%% ====================================================================
+
+%% discover_op_endpoint/1
+%% ====================================================================
+%% @doc
+%% Retrieves an XRDS document from given endpoint URL and parses out the URI which will
+%% be used for OpenID login redirect.
+%% @end
+-spec discover_op_endpoint(binary()) -> binary().
+%% ====================================================================
+discover_op_endpoint(XRDS) ->
+    {Xml, _} = xmerl_scan:string(binary_to_list(XRDS)),
+    list_to_binary(xml_extract_value("URI", Xml)).
+
+
+%% xml_extract_value/2
+%% ====================================================================
+%% @doc
+%% Extracts value from under a certain key
+%% @end
+-spec xml_extract_value(string(), #xmlElement{}) -> string().
+%% ====================================================================
+xml_extract_value(KeyName, Xml) ->
+    [#xmlElement{content = [#xmlText{value = Value} | _]}] = xmerl_xpath:string("//" ++ KeyName, Xml),
+    Value.
+
+
+%% parse_teams/1
+%% ====================================================================
+%% @doc
+%% Parses user's teams from XML to a list of strings. Returns an empty list
+%% for empty XML.
+%% @end
+-spec parse_teams(string()) -> [string()].
+%% ====================================================================
+parse_teams([]) ->
+    [];
+
+parse_teams(XMLContent) ->
+    {XML, _} = xmerl_scan:string(XMLContent),
+    #xmlElement{content = TeamList} = find_XML_node(teams, XML),
+    lists:map(
+        fun(#xmlElement{content = [#xmlText{value = Value}]}) ->
+            binary_to_list(unicode:characters_to_binary(Value, unicode))
+        end, TeamList).
+
+
+%% find_XML_node/2
+%% ====================================================================
+%% @doc
+%% Finds certain XML node. Assumes that node exists, and checks only
+%% the first child of every node going deeper and deeper.
+%% @end
+-spec find_XML_node(atom(), #xmlElement{}) -> [string()].
+%% ====================================================================
+find_XML_node(NodeName, #xmlElement{name = NodeName} = XMLElement) ->
+    XMLElement;
+
+find_XML_node(NodeName, #xmlElement{} = XMLElement) ->
+    [SubNode] = XMLElement#xmlElement.content,
+    find_XML_node(NodeName, SubNode);
+
+find_XML_node(_NodeName, _) ->
+    undefined.
+
+

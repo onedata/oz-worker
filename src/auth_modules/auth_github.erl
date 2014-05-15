@@ -35,7 +35,7 @@ user_info_endpoint() ->
 get_redirect_url() ->
     try
         ParamsProplist = [
-            {<<"client_id">>, <<"ab87491bb2cc9ebee095">>},
+            {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
             {<<"scope">>, <<"user,user:email">>},
             {<<"state">>, auth_utils:generate_state_token(?MODULE)}
@@ -45,6 +45,7 @@ get_redirect_url() ->
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
+            ?error_stacktrace(gui_utils:to_list(?PROVIDER_NAME)),
             {error, {Type, Message}}
     end.
 
@@ -78,7 +79,7 @@ validate_login(ParamsProplist) ->
         {ok, "200", _, JSON} = ibrowse:send_req(
             binary_to_list(URL),
             [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}],
-            get),
+            get, [], [{response_format, binary}]),
         % Parse received JSON
         n2o_json:decode(JSON)
     catch

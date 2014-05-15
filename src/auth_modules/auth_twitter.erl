@@ -45,6 +45,7 @@ get_redirect_url() ->
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
+            ?error_stacktrace(gui_utils:to_list(?PROVIDER_NAME)),
             {error, {Type, Message}}
     end.
 

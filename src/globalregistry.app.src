@@ -15,7 +15,8 @@
 		n2o,
 		cowboy,
 		mimetypes,
-		ibrowse
+		ibrowse,
+        xmerl
 	]},
 	{modules, [
 		globalregistry_sup,

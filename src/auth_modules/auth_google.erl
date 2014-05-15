@@ -20,24 +20,25 @@
 -export([get_redirect_url/0, validate_login/1]).
 
 
+xrds_endpoint() ->
+    <<"https://accounts.google.com/.well-known/openid-configuration">>.
+
+
 authorize_endpoint() ->
-    <<"https://github.com/login/oauth/authorize">>.
+    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"authorization_endpoint">>).
 
 
 access_token_endpoint() ->
-    <<"https://github.com/login/oauth/access_token">>.
-
-
-user_info_endpoint() ->
-    <<"https://api.github.com/user">>.
+    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"token_endpoint">>).
 
 
 get_redirect_url() ->
     try
         ParamsProplist = [
-            {<<"client_id">>, <<"ab87491bb2cc9ebee095">>},
+            {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
+            {<<"response_type">>, <<"code">>},
+            {<<"scope">>, <<"openid profile email">>},
             {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
-            {<<"scope">>, <<"user,user:email">>},
             {<<"state">>, auth_utils:generate_state_token(?MODULE)}
         ],
         Params = auth_utils:proplist_to_params(ParamsProplist),
@@ -45,6 +46,7 @@ get_redirect_url() ->
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
+            ?error_stacktrace(gui_utils:to_list(?PROVIDER_NAME)),
             {error, {Type, Message}}
     end.
 
@@ -56,10 +58,11 @@ validate_login(ParamsProplist) ->
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request
         NewParamsProplist = [
+            {<<"code">>, <<Code/binary>>},
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"client_secret">>, auth_utils:get_provider_app_secret(?PROVIDER_NAME)},
             {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
-            {<<"code">>, <<Code/binary>>}
+            {<<"grant_type">>, <<"authorization_code">>}
         ],
         % Convert proplist to params string
         Params = auth_utils:proplist_to_params(NewParamsProplist),
@@ -67,21 +70,63 @@ validate_login(ParamsProplist) ->
         {ok, "200", _, Response} = ibrowse:send_req(
             binary_to_list(access_token_endpoint()),
             [{content_type, "application/x-www-form-urlencoded"}],
-            post, Params, [{response_format, binary}]),
+            post, Params, [{response_format, binary}]), Response,
 
-        % Parse out received access token
-        AccessToken = proplists:get_value(<<"access_token">>, cowboy_http:x_www_form_urlencoded(Response)),
+        % Parse out received ID token
+        JWT = parse_json(Response, <<"id_token">>),
+        JSON = parse_jwt(JWT),
+        JSON
 
-        % Form user info request
-        URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
-        % Send request to GitHub endpoint
-        {ok, "200", _, JSON} = ibrowse:send_req(
-            binary_to_list(URL),
-            [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}],
-            get),
-        % Parse received JSON
-        n2o_json:decode(JSON)
     catch
         Type:Message ->
             {error, {Type, Message}}
     end.
+
+
+parse_json(Body, Key) ->
+    {struct, Proplist} = n2o_json:decode(Body),
+    proplists:get_value(Key, Proplist).
+
+
+parse_jwt(Token) ->
+    try
+        [_Header, ClaimSet, _Signature] = binary:split(Token, [<<".">>], [global]),
+        % TODO check signature
+%%         {struct, HeaderJSON} = n2o_json:decode(base64decode(Header)),
+%%         <<"RS256">> = proplists:get_value(<<"alg">>, HeaderJSON),
+%%         Kid = proplists:get_value(<<"kid">>, HeaderJSON),
+%%         Signature2 = base64encode(crypto:hmac(sha256, Kid, <<Header/binary, ".", ClaimSet/binary>>)),
+%%         Signature3 = public_key:sign(<<Header/binary, ".", ClaimSet/binary>>, sha256, Kid),
+%%         ?dump(Signature),
+%%         ?dump(Signature2),
+%%         ?dump(Signature3),
+        {struct, ClaimSetJSON} = n2o_json:decode(base64decode(ClaimSet)),
+        ClaimSetJSON
+    catch
+        T:M ->
+            ?error_stacktrace("~p:~p", [T, M]),
+            error
+    end.
+
+
+%% base64encode(Bin) when is_binary(Bin) ->
+%%     << << (urlencode_digit(D)) >> || <<D>> <= base64:encode(Bin), D =/= $= >>.
+
+%% urlencode_digit($/) -> $_;
+%% urlencode_digit($+) -> $-;
+%% urlencode_digit(D) -> D.
+
+
+base64decode(Bin) when is_binary(Bin) ->
+    Bin2 = case byte_size(Bin) rem 4 of
+               2 -> <<Bin/binary, "==">>;
+               3 -> <<Bin/binary, "=">>;
+               _ -> Bin
+           end,
+    base64:decode(<< << (urldecode_digit(D)) >> || <<D>> <= Bin2 >>).
+
+
+
+urldecode_digit($_) -> $/;
+urldecode_digit($-) -> $+;
+urldecode_digit(D) -> D.

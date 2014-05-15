@@ -13,11 +13,12 @@
 
 -include("logging.hrl").
 -include("auth_common.hrl").
+-include_lib("ibrowse/include/ibrowse.hrl").
 
 %% API
 -export([proplist_to_params/1, fully_qualified_url/1]).
 
--export([local_auth_endpoint/0, validate_login/0]).
+-export([get_xrds/1, local_auth_endpoint/0, validate_login/0]).
 
 -export([load_auth_config/0, get_auth_config/1, get_auth_providers/0]).
 
@@ -33,9 +34,9 @@
 
 
 test() ->
-    UserInfo = #user_info {emails = ["a", "b"], preferred_login = "penis", preferred_name = "dupa", provider_infos = [
-        #provider_user_info {provider_id = github, email = "a", login = "penis", name = "dupa"},
-        #provider_user_info {provider_id = facebook, email = "b", login = "cycki", name = "odbyt"}
+    UserInfo = #user_info{emails = ["a", "b"], preferred_login = "penis", preferred_name = "dupa", provider_infos = [
+        #provider_user_info{provider_id = github, email = "a", login = "penis", name = "dupa"},
+        #provider_user_info{provider_id = facebook, email = "b", login = "cycki", name = "odbyt"}
     ]},
     ets:insert(?STATE_ETS, {user, UserInfo}),
     ?dump(ets:lookup(?STATE_ETS, user)).
@@ -135,6 +136,18 @@ clear_expired_tokens() ->
     ets:select_delete(?STATE_ETS, [{{'$1', '$2', '$3'}, [{'<', '$2', Time - (?STATE_TTL * 1000000)}], ['$_']}]).
 
 
+%% get_xrds/1
+%% ====================================================================
+%% @doc
+%% Downloads an XRDS document from given URL.
+%% @end
+-spec get_xrds(string()) -> string().
+%% ====================================================================
+get_xrds(URL) ->
+    % Maximum redirection count = 5
+    get_xrds(gui_utils:to_list(URL), 5).
+
+
 load_auth_config() ->
     {ok, [Config]} = file:consult("gui_static/auth.config"),
     application:set_env(veil_cluster_node, auth_config, Config).
@@ -175,3 +188,56 @@ get_provider_button_icon(Provider) ->
 
 get_provider_button_color(Provider) ->
     proplists:get_value(button_color, get_auth_config(Provider)).
+
+
+%% ===================================================================
+%% Internal functions
+%% ===================================================================
+
+%% get_xrds/2
+%% ====================================================================
+%% @doc
+%% Downloads xrds file performing GET on provided URL. Supports redirects.
+%% @end
+-spec get_xrds(string(), integer()) -> string().
+%% ====================================================================
+get_xrds(URL, Redirects) ->
+    ReqHeaders =
+        [
+            %{"Accept", "application/xrds+xml;level=1, */*"},
+            {"Connection", "close"}
+        ],
+    {ok, "200", _, Response} = ibrowse:send_req(URL, ReqHeaders, get, [], [{response_format, binary}]),
+    case Response of
+        {ok, Rcode, RespHeaders, _Body} when Rcode > 300 andalso Rcode < 304 andalso Redirects > 0 ->
+            case get_redirect_url(URL, RespHeaders) of
+                undefined -> Response;
+                URL -> Response;
+                NewURL -> get_xrds(NewURL, Redirects - 1)
+            end;
+        Response -> Response
+    end.
+
+
+%% get_redirect_url/1
+%% ====================================================================
+%% @doc
+%% Retrieves redirect URL from a HTTP response.
+%% @end
+-spec get_redirect_url(string(), list()) -> string().
+%% ====================================================================
+get_redirect_url(OldURL, Headers) ->
+    Location = proplists:get_value("location", Headers),
+    case Location of
+        "http://" ++ _ -> Location;
+        "https://" ++ _ -> Location;
+        [$/ | _] = Location ->
+            #url{protocol = Protocol, host = Host, port = Port} = ibrowse_lib:parse_url(OldURL),
+            PortFrag = case {Protocol, Port} of
+                           {http, 80} -> "";
+                           {https, 443} -> "";
+                           _ -> ":" ++ integer_to_list(Port)
+                       end,
+            atom_to_list(Protocol) ++ "://" ++ Host ++ PortFrag ++ Location;
+        _ -> undefined
+    end.
