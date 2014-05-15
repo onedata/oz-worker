@@ -533,11 +533,11 @@ create_with_provider(Member, Name, Providers) ->
 %% ====================================================================
 %% @doc Retrieves a space from the database.
 %% ====================================================================
--spec get_doc(SpaceId :: binary) -> space_doc() | no_return().
+-spec get_doc(SpaceId :: binary) -> veil_doc() | no_return().
 %% ====================================================================
 get_doc(SpaceId) ->
     SSpaceId = binary:bin_to_list(SpaceId),
-    {ok, #veil_document{record = #space{}} = Doc} = dao_lib:apply(dao_spaces, get_space, [SSpaceId], 1),
+    {ok, Doc} = dao_lib:apply(dao_spaces, get_space, [SSpaceId], 1),
     Doc.
 
 
