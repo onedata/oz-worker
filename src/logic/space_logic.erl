@@ -238,7 +238,7 @@ get_provider(SpaceId, Client, ProviderId) ->
     {ok, [privileges:space_privilege()]} | {error, Reason :: any()}.
 %% ====================================================================
 get_privileges(SpaceId, {MemberType, Id}) ->
-    sets:to_list(privileges:space_admin()).
+    {ok, sets:to_list(privileges:space_admin())}.
 
 
 %% remove/1

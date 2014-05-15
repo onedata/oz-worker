@@ -15,7 +15,7 @@
 
 %% API
 -export([exists/1, has_user/2, has_privilege/3]).
--export([create/2, modify/2, set_privileges/3]).
+-export([create/2, modify/2, join/2, set_privileges/3]).
 -export([get_data/1, get_users/1, get_spaces/1, get_user/2, get_privileges/2]).
 -export([remove/1, remove_user/2]).
 
@@ -78,6 +78,17 @@ modify(GroupId, Name) ->
     ok.
 
 
+%% join/2
+%% ====================================================================
+%% @doc Adds user to a group identified by a token.
+%% ====================================================================
+-spec join(UserId :: binary(), Token :: binary()) ->
+    {ok, GroupId :: binary()} | {error, Reason :: any()}.
+%% ====================================================================
+join(UserId, Token) ->
+    {ok, <<"groupid">>}.
+
+
 %% set_privileges/3
 %% ====================================================================
 %% @doc Sets privileges for a member of the group.
@@ -138,11 +149,11 @@ get_user(GroupId, UserId) ->
 %% ====================================================================
 %% @doc Returns list of group's member privileges.
 %% ====================================================================
--spec get_privileges(GroupId :: binary(), UserId) ->
+-spec get_privileges(GroupId :: binary(), UserId :: binary()) ->
     {ok, [privileges:group_privilege()]} | {error, Reason :: any()}.
 %% ====================================================================
 get_privileges(GroupId, UserId) ->
-    sets:to_list(privileges:group_admin()).
+    {ok, sets:to_list(privileges:group_admin())}.
 
 
 %% remove/1

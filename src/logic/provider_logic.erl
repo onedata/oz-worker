@@ -47,7 +47,7 @@ modify(ProviderId, URL) ->
     {ok, Data :: [proplists:property()]} | {error, Reason :: any()}.
 %% ====================================================================
 get_data(ProviderId) ->
-    {ok, [{url, <<"providerurl">>}]].
+    {ok, [{url, <<"providerurl">>}]}.
 
 
 %% get_spaces/1

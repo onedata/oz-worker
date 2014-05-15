@@ -56,8 +56,9 @@ routes() ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Resource :: atom(), Method :: method(), SpaceId :: binary(),
-                    Client :: client()) -> boolean().
+-spec is_authorized(Resource :: atom(), Method :: method(),
+                    SpaceId :: binary() | undefined, Client :: client()) ->
+    boolean().
 %% ====================================================================
 is_authorized(_, _, _, #client{type = undefined}) ->
     false;
@@ -97,7 +98,7 @@ is_authorized(_, _, _, _) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec resource_exists(Resource :: atom(), SpaceId :: binary(),
+-spec resource_exists(Resource :: atom(), SpaceId :: binary() | undefined,
                       Bindings :: [{atom(), any()}]) -> boolean().
 %% ====================================================================
 resource_exists(spaces, _SpaceId, _Bindings) ->
@@ -123,8 +124,9 @@ resource_exists(_, SpaceId, _Bindings) ->
 %% @end
 %% ====================================================================
 -spec accept_resource(Resource :: atom(), Method :: method(),
-                      SpaceId :: binary(), Data :: [proplists:property()],
-                      Client :: client(), Bindings :: [{atom(), any()}]) ->
+                      SpaceId :: binary() | undefined,
+                      Data :: [proplists:property()], Client :: client(),
+                      Bindings :: [{atom(), any()}]) ->
     {true, URL :: binary()} | boolean().
 %% ====================================================================
 accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, _Bindings) ->
@@ -140,11 +142,12 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = Prov
     Token = proplists:get_value(<<"token">>, Data),
     if
         Name =:= undefined -> false;
-        Token =:= undefined -> false;
-        not token_logic:is_valid(Token, space_create_token) -> false;
-        true ->
-            {ok, SpaceId} = space_logic:create({provider, ProviderId}, Name, Token),
-            {true, <<"/spaces/", SpaceId/binary>>}
+        true -> case token_logic:is_valid(Token, space_create_token) of
+            false -> false;
+            true ->
+                {ok, SpaceId} = space_logic:create({provider, ProviderId}, Name, Token),
+                {true, <<"/spaces/", SpaceId/binary>>}
+        end
     end;
 accept_resource(space, patch, SpaceId, Data, _Client, _Bindings) ->
     Name = proplists:get_value(<<"name">>, Data),
@@ -182,7 +185,7 @@ accept_resource(gpriv, put, SpaceId, Data, _Client, Bindings) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(Resource :: atom(), SpaceId :: binary(),
+-spec provide_resource(Resource :: atom(), SpaceId :: binary() | undefined,
                        Client :: client(), Bindings :: [{atom(), any()}]) ->
     Data :: [proplists:property()].
 %% ====================================================================
@@ -235,7 +238,7 @@ provide_resource(provider, SpaceId, #client{type = ClientType}, Bindings) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(Resource :: atom(), SpaceId :: binary(),
+-spec delete_resource(Resource :: atom(), SpaceId :: binary() | undefined,
                       Bindings :: [{atom(), any()}]) -> boolean().
 %% ====================================================================
 delete_resource(space, SpaceId, _Bindings) ->

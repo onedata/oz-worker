@@ -54,8 +54,9 @@ routes() ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Resource :: atom(), Method :: method(), GroupId :: binary(),
-                    Client :: client()) -> boolean().
+-spec is_authorized(Resource :: atom(), Method :: method(),
+                    GroupId :: binary() | undefined, Client :: client()) ->
+    boolean().
 %% ====================================================================
 is_authorized(_, _, _, #client{type = ClientType}) when ClientType =/= user ->
     false;
@@ -91,7 +92,7 @@ is_authorized(_, _, _, _) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec resource_exists(Resource :: atom(), GroupId :: binary(),
+-spec resource_exists(Resource :: atom(), GroupId :: binary() | undefined,
                       Bindings :: [{atom(), any()}]) -> boolean().
 %% ====================================================================
 resource_exists(groups, _GroupId, _Bindings) ->
@@ -114,8 +115,9 @@ resource_exists(_, GroupId, _Bindings) ->
 %% @end
 %% ====================================================================
 -spec accept_resource(Resource :: atom(), Method :: method(),
-                      GroupId :: binary(), Data :: [proplists:property()],
-                      Client :: client(), Bindings :: [{atom(), any()}]) ->
+                      GroupId :: binary() | undefined,
+                      Data :: [proplists:property()], Client :: client(),
+                      Bindings :: [{atom(), any()}]) ->
     {true, URL :: binary()} | boolean().
 %% ====================================================================
 accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, _Bindings) ->
@@ -154,9 +156,8 @@ accept_resource(spaces, post, GroupId, Data, _Client, _Bindings) ->
     end;
 accept_resource(sjoin, post, GroupId, Data, _Client, _Bindings) ->
     Token = proplists:get_value(<<"token">>, Data),
-    if
-        Token =:= undefined -> false;
-        not token_logic:is_valid(Token, space_invite_group_token) -> false;
+    case token_logic:is_valid(Token, space_invite_group_token) of
+        false -> false;
         true ->
             {ok, SpaceId} = space_logic:join({group, GroupId}, Token),
             {true, <<"/groups/", GroupId/binary, "/spaces/", SpaceId/binary>>}
@@ -169,7 +170,7 @@ accept_resource(sjoin, post, GroupId, Data, _Client, _Bindings) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(Resource :: atom(), GroupId :: binary(),
+-spec provide_resource(Resource :: atom(), GroupId :: binary() | undefined,
                        Client :: client(), Bindings :: [{atom(), any()}]) ->
     Data :: [proplists:property()].
 %% ====================================================================
@@ -196,7 +197,7 @@ provide_resource(spaces, GroupId, _Client, _Bindings) ->
 provide_resource(screate, GroupId, _Client, _Bindings) ->
     {ok, Token} = token_logic:create(space_create_group_token, GroupId),
     [{token, Token}];
-provide_resource(space, GroupId, _Client, Bindings) ->
+provide_resource(space, _GroupId, _Client, Bindings) ->
     SID = proplists:get_value(sid, Bindings),
     {ok, Space} = space_logic:get_data(SID, user),
     Space.
@@ -208,7 +209,7 @@ provide_resource(space, GroupId, _Client, Bindings) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(Resource :: atom(), GroupId :: binary(),
+-spec delete_resource(Resource :: atom(), GroupId :: binary() | undefined,
                       Bindings :: [{atom(), any()}]) -> boolean().
 %% ====================================================================
 delete_resource(group, GroupId, _Bindings) ->

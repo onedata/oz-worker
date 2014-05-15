@@ -46,85 +46,153 @@ routes() ->
     ].
 
 
-%% is_authorized/2
+%% is_authorized/4
 %% ====================================================================
 %% @doc Returns a boolean() determining if the authenticated client is
 %% authorized to carry the request on the resource.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Method :: binary(), State :: #reqstate{}) -> boolean().
+-spec is_authorized(Resource :: atom(), Method :: method(),
+                    UserId :: binary() | undefined, Client :: client()) ->
+    boolean().
 %% ====================================================================
-is_authorized(_Method, #reqstate{resource = create, client = #reqclient{type = undefined}}) ->
+is_authorized(user, post, _UserId, #client{type = undefined}) ->
     true;
-is_authorized(_Method, #reqstate{resource = join_space, client = #reqclient{type = user, id = UserId}, data = Data}) ->
-    Token = proplists:get_value(<<"token">>, Data),
-    user_logic:can_join_space(UserId, Token);
-is_authorized(_Method, #reqstate{resource = join_group, client = #reqclient{type = user, id = UserId}, data = Data}) ->
-    Token = proplists:get_value(<<"token">>, Data),
-    user_logic:can_join_group(UserId, Token);
-is_authorized(_Method, #reqstate{resource = merge_accounts, client = #reqclient{type = user, id = UserId}, data = Data}) ->
-    Token = proplists:get_value(<<"token">>, Data),
-    user_logic:can_merge_accounts(UserId, Token);
-is_authorized(_Method, #reqstate{resource = Res, client = #reqclient{type = user}}) when Res =/= create ->
-    true.
+is_authorized(_, _, _, #client{type = user}) ->
+    true;
+is_authorized(_, _, _, _) ->
+    false.
 
 
-%% accept_resource/1
+%% resource_exists/3
 %% ====================================================================
-%% @doc Processes data submitted by a client through POST on a REST resource.
+%% @doc Returns whether a resource exists.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec accept_resource(State :: #reqstate{}) ->
-    {ok, Response :: reqdata()} | ok | {error, Reason :: term()}.
+-spec resource_exists(Resource :: atom(), UserId :: binary() | undefined,
+                      Bindings :: [{atom(), any()}]) -> boolean().
 %% ====================================================================
-accept_resource(#reqstate{resource = create, data = Data}) ->
+resource_exists(space, UserId, Bindings) ->
+    SID = proplists:get_value(sid, Bindings),
+    space_logic:has_user(SID, UserId);
+resource_exists(group, UserId, Bindings) ->
+    GID = proplists:get_value(gid, Bindings),
+    group_logic:has_user(GID, UserId);
+resource_exists(_, _, _) ->
+    true.
+
+
+%% accept_resource/6
+%% ====================================================================
+%% @doc Processes data submitted by a client through POST, PATCH on a REST
+%% resource.
+%% @see rest_module_behavior
+%% @end
+%% ====================================================================
+-spec accept_resource(Resource :: atom(), Method :: method(),
+                      UserId :: binary() | undefined,
+                      Data :: [proplists:property()], Client :: client(),
+                      Bindings :: [{atom(), any()}]) ->
+    {true, URL :: binary()} | boolean().
+%% ====================================================================
+accept_resource(user, post, _UserId, Data, _Client, _Bindings) ->
     Name = proplists:get_value(<<"name">>, Data),
-    {ok, UserId} = user_logic:register(Name),
-    {ok, [{userId, UserId}]};
-accept_resource(#reqstate{resource = join_space, client = #reqclient{id = UserId}, data = Data}) ->
+    if
+        Name =:= undefined -> false;
+        true ->
+            {ok, _UserId} = user_logic:create(Name),
+            {true, <<"/user">>}
+    end;
+accept_resource(user, patch, UserId, Data, _Client, _Bindings) ->
+    Name = proplists:get_value(<<"name">>, Data),
+    if
+        Name =:= undefined -> false;
+        true ->
+            ok = user_logic:modify(UserId, Name),
+            true
+    end;
+accept_resource(spaces, post, _UserId, Data, Client, Bindings) ->
+    spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Bindings);
+accept_resource(sjoin, post, UserId, Data, _Client, _Bindings) ->
     Token = proplists:get_value(<<"token">>, Data),
-    {ok, SpaceId} = user_logic:join_space(UserId, Token),
-    {ok, [{spaceId, SpaceId}]};
-accept_resource(#reqstate{resource = merge_accounts, client = #reqclient{id = UserId}, data = Data}) ->
+    case token_logic:is_valid(Token, space_invite_user_token) of
+        false -> false;
+        true ->
+            {ok, SpaceId} = space_logic:join(UserId, Token),
+            {true, <<"/user/spaces/", SpaceId/binary>>}
+    end;
+accept_resource(groups, post, _UserId, Data, Client, Bindings) ->
+    groups_rest_module:accept_resource(groups, post, undefined, Data, Client, Bindings);
+accept_resource(gjoin, post, UserId, Data, _Client, _Bindings) ->
     Token = proplists:get_value(<<"token">>, Data),
-    user_logic:merge_accounts(UserId, Token);
-accept_resource(#reqstate{resource = join_group, client = #reqclient{id = UserId}, data = Data}) ->
+    case token_logic:is_valid(Token, group_invite_token) of
+        false -> false;
+        true ->
+            {ok, GroupId} = group_logic:join(UserId, Token),
+            {true, <<"/user/groups/", GroupId/binary>>}
+    end;
+accept_resource(merge, post, UserId, Data, _Client, _Bindings) ->
     Token = proplists:get_value(<<"token">>, Data),
-    {ok, GroupId} = user_logic:join_group(UserId, Token),
-    {ok, [{groupId, GroupId}]};
-accept_resource(#reqstate{resource = account_merge_token, client = #reqclient{id = UserId}}) ->
-    {ok, Token} = user_logic:new_accounts_merge_token(UserId),
-    {ok, [{token, Token}]};
-accept_resource(#reqstate{resource = space_create_token, client = #reqclient{id = UserId}}) ->
-    {ok, Token} = user_logic:new_space_create_token(UserId),
-    {ok, [{token, Token}]};
-accept_resource(#reqstate{resource = main, client = #reqclient{id = UserId}, data = Data}) ->
-    user_logic:modify_data(UserId, Data).
+    case token_logic:is_valid(Token, accounts_merge_token) of
+        false -> false;
+        true ->
+            ok = user_logic:merge(UserId, Token),
+            true
+    end.
 
 
-%% provide_resource/1
+
+%% provide_resource/4
 %% ====================================================================
 %% @doc Returns data requested by a client through GET on a REST resource.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(State :: #reqstate{}) ->
-    {ok, Data :: reqdata()} | {error, Reason :: term()}.
+-spec provide_resource(Resource :: atom(), UserId :: binary() | undefined,
+                       Client :: client(), Bindings :: [{atom(), any()}]) ->
+    Data :: [proplists:property()].
 %% ====================================================================
-provide_resource(#reqstate{resource = main, client = #reqclient{id = UserId}}) ->
-    user_logic:get_data(UserId).
+provide_resource(user, UserId, _Client, _Bindings) ->
+    {ok, User} = user_logic:get_data(UserId),
+    User;
+provide_resource(spaces, UserId, _Client, _Bindings) ->
+    {ok, Spaces} = user_logic:get_spaces(UserId),
+    Spaces;
+provide_resource(screate, UserId, _Client, _Bindings) ->
+    {ok, Token} = token_logic:create(space_create_token, UserId),
+    [{token, Token}];
+provide_resource(space, _UserId, _Client, Bindings) ->
+    SID = proplists:get_value(sid, Bindings),
+    {ok, Space} = space_logic:get_data(SID, user),
+    Space;
+provide_resource(groups, UserId, _Client, _Bindings) ->
+    {ok, Groups} = user_logic:get_groups(UserId),
+    Groups;
+provide_resource(group, _UserId, _Client, Bindings) ->
+    SID = proplists:get_value(sid, Bindings),
+    {ok, Group} = group_logic:get_data(SID),
+    Group;
+provide_resource(mtoken, UserId, _Client, _Bindings) ->
+    {ok, Token} = token_logic:create(accounts_merge_token, UserId),
+    [{token, Token}].
 
 
-%% delete_resource/1
+%% delete_resource/3
 %% ====================================================================
-%% @doc Deletes the resource identified by the Id parameter.
+%% @doc Deletes the resource identified by the SpaceId parameter.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(State :: #reqstate{}) ->
-    ok | {error, Reason :: term()}.
+-spec delete_resource(Resource :: atom(), UserId :: binary() | undefined,
+                      Bindings :: [{atom(), any()}]) -> boolean().
 %% ====================================================================
-delete_resource(#reqstate{resource = main, client = #reqclient{id = UserId}}) ->
-    user_logic:unregister(UserId).
+delete_resource(user, UserId, _Bindings) ->
+    user_logic:remove(UserId);
+delete_resource(space, UserId, Bindings) ->
+    SID = proplists:get_value(sid, Bindings),
+    space_logic:remove_user(SID, UserId);
+delete_resource(group, UserId, Bindings) ->
+    GID = proplists:get_value(gid, Bindings),
+    group_logic:remove_user(GID, UserId).

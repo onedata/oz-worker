@@ -33,7 +33,8 @@
 %% @end
 %% ====================================================================
 -callback is_authorized(Resource :: atom(), Method :: method(),
-                        ResId :: binary(), Client :: client()) -> boolean().
+                        ResId :: binary() | undefined, Client :: client()) ->
+    boolean().
 
 
 %% resource_exists/3
@@ -42,7 +43,7 @@
 %% :id binding or client's Id if there's no binding defined.
 %% @end
 %% ====================================================================
--callback resource_exists(Resource :: atom(), ResId :: binary(),
+-callback resource_exists(Resource :: atom(), ResId :: binary() | undefined,
                           Bindings :: [{atom(), any()}]) -> boolean().
 
 
@@ -56,8 +57,9 @@
 %% @end
 %% ====================================================================
 -callback accept_resource(Resource :: atom(), Method :: method(),
-                          ResId :: binary(), Data :: [proplists:property()],
-                          Client :: client(), Bindings :: [{atom(), any()}]) ->
+                          ResId :: binary() | undefined,
+                          Data :: [proplists:property()], Client :: client(),
+                          Bindings :: [{atom(), any()}]) ->
     {true, URL :: binary()} | boolean().
 
 
@@ -68,7 +70,7 @@
 %% there's no binding defined.
 %% @end
 %% ====================================================================
--callback provide_resource(Resource :: atom(), ResId :: binary(),
+-callback provide_resource(Resource :: atom(), ResId :: binary() | undefined,
                            Client :: client(), Bindings :: [{atom(), any()}]) ->
     Data :: [proplists:property()].
 
@@ -80,5 +82,5 @@
 %% binding defined.
 %% @end
 %% ====================================================================
--callback delete_resource(Resource :: atom(), ResId :: binary(),
+-callback delete_resource(Resource :: atom(), ResId :: binary() | undefined,
                           Bindings :: [{atom(), any()}]) -> boolean().

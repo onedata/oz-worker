@@ -163,7 +163,7 @@ is_authorized(Req, #rstate{} = State) -> %% @todo: proper certificate-based auth
 %% @end
 %% ====================================================================
 -spec resource_exists(Req :: cowboy_req:req(), State :: rstate()) ->
-    boolean().
+    {boolean(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {ResId, Bindings, Req2} = get_res_id(Req, State),
@@ -183,7 +183,7 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
 accept_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
     {ResId, Bindings, Req2} = get_res_id(Req, State),
     {BinMethod, Req3} = cowboy_req:method(Req2),
-    {Body, Req4} = cowboy_req:body(Req3),
+    {ok, Body, Req4} = cowboy_req:body(Req3),
     Method = binary_to_method(BinMethod),
     Data = mochijson2:decode(Body, [{format, proplist}]),
 
