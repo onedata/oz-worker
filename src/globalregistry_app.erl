@@ -81,9 +81,13 @@ start_rest() ->
   {ok,KeyFile} = application:get_env(?APP_Name,key_file),
 
   Dispatch = cowboy_router:compile([
-    {'_', [
-      {?hello_world_url, hello_world, []}
-    ]}
+    {'_', lists:append([
+      [{?hello_world_url, hello_world, []}],
+      user_rest_module:routes(),
+      provider_rest_module:routes(),
+      spaces_rest_module:routes(),
+      groups_rest_module:routes()
+    ])}
   ]),
   {ok, Ans} = cowboy:start_https(?rest_listener, ?rest_https_acceptors,
     [

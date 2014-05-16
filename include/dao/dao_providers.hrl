@@ -11,6 +11,9 @@
 -define(DAO_PROVIDERS_HRL, 1).
 
 %% This record defines a user and is handled as a database document
--record(provider, {address = "", spaces = [], groups = []}).
+-record(provider, {
+    url :: binary(),
+    spaces = [] :: [SpaceId :: binary()]
+}).
 
 -endif.
