@@ -120,7 +120,7 @@ accept_resource(sjoin, post, UserId, Data, _Client, _Bindings) ->
     case token_logic:is_valid(Token, space_invite_user_token) of
         false -> false;
         true ->
-            {ok, SpaceId} = space_logic:join(UserId, Token),
+            {ok, SpaceId} = space_logic:join({user, UserId}, Token),
             {true, <<"/user/spaces/", SpaceId/binary>>}
     end;
 accept_resource(groups, post, _UserId, Data, Client, Bindings) ->
