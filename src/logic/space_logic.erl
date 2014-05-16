@@ -20,7 +20,7 @@
 -export([create/2, create/3, modify/2, set_privileges/3, join/2, support/2]).
 -export([get_data/2, get_users/2, get_groups/1, get_providers/2, get_user/3,
     get_group/2, get_provider/3, get_privileges/2]).
--export([remove/1, remove_user/2, remove_group/2, remove_provider/2]).
+-export([remove/1, remove_user/2, remove_group/2, remove_provider/2, cleanup/1]).
 
 
 %% exists/1
@@ -30,9 +30,7 @@
 -spec exists(SpaceId :: binary()) -> boolean().
 %% ====================================================================
 exists(SpaceId) ->
-    SSpaceId = binary:bin_to_list(SpaceId),
-    {ok, Exists} = dao_lib:apply(dao_spaces, exist_space, [SSpaceId], 1),
-    Exists.
+    logic_helper:space_exists(SpaceId).
 
 
 %% has_provider/2
@@ -47,7 +45,7 @@ has_provider(SpaceId, ProviderId) ->
     case exists(SpaceId) of
         false -> false;
         true ->
-            #veil_document{record = #space{providers = Providers}} = get_doc(SpaceId),
+            #space{providers = Providers} = logic_helper:space(SpaceId),
             lists:member(ProviderId, Providers)
     end.
 
@@ -64,7 +62,7 @@ has_user(SpaceId, UserId) ->
     case exists(SpaceId) of
         false -> false;
         true ->
-            #veil_document{record = #space{users = Users}} = get_doc(SpaceId),
+            #space{users = Users} = logic_helper:space(SpaceId),
             lists:keymember(UserId, 1, Users)
     end.
 
@@ -81,7 +79,7 @@ has_group(SpaceId, GroupId) ->
     case exists(SpaceId) of
         false -> false;
         true ->
-            #veil_document{record = #space{groups = Groups}} = get_doc(SpaceId),
+            #space{groups = Groups} = logic_helper:space(SpaceId),
             lists:keymember(GroupId, 1, Groups)
     end.
 
@@ -97,7 +95,7 @@ has_group(SpaceId, GroupId) ->
     Privilege :: privileges:space_privilege()) -> boolean().
 %% ====================================================================
 has_privilege(SpaceId, UserId, Privilege) ->
-    case exists(SpaceId) andalso has_user(SpaceId, UserId) of
+    case has_user(SpaceId, UserId) of
         false -> false;
         true ->
             UserPrivileges = get_effective_privileges(SpaceId, UserId),
@@ -137,10 +135,9 @@ create({provider, ProviderId}, Name, Token) ->
     ok | no_return().
 %% ====================================================================
 modify(SpaceId, Name) ->
-    Doc = get_doc(SpaceId),
-    #veil_document{record = Space} = Doc,
-    DocNew = Doc#veil_document{record = Space#space{name = Name}},
-    {ok, _} = dao_lib:apply(dao_spaces, save_space, [DocNew], 1),
+    #veil_document{record = Space} = Doc = logic_helper:space_doc(SpaceId),
+    SpaceNew = Space#space{name = Name},
+    logic_helper:save(Doc#veil_document{record = SpaceNew}),
     ok.
 
 
@@ -152,21 +149,11 @@ modify(SpaceId, Name) ->
                      Privileges :: [privileges:space_privilege()]) ->
     ok | no_return().
 %% ====================================================================
-set_privileges(SpaceId, {MemberType, MemberId}, Privileges) ->
-    SetPrivileges = ordsets:from_list(Privileges),
-    Doc = get_doc(SpaceId),
-    Space = Doc#veil_document.record,
-    Members = case MemberType of
-        user -> Space#space.users;
-        group -> Space#space.groups
-    end,
-    Members2 = lists:keyreplace(MemberId, 1, Members, {MemberId, ordsets:to_list(SetPrivileges)}),
-    Space2 = case MemberType of
-        user -> Space#space{users = Members2};
-        group -> Space#space{groups = Members2}
-    end,
-    Doc2 = Doc#veil_document{record = Space2},
-    {ok, _} = dao_lib:apply(dao_spaces, save_space, [Doc2], 1),
+set_privileges(SpaceId, Member, Privileges) ->
+    #veil_document{record = Space} = Doc = logic_helper:space_doc(SpaceId),
+    PrivilegesNew = ordsets:from_list(Privileges),
+    SpaceNew = set_privileges_aux(Space, Member, PrivilegesNew),
+    logic_helper:save(Doc#veil_document{record = SpaceNew}),
     ok.
 
 
@@ -178,54 +165,40 @@ set_privileges(SpaceId, {MemberType, MemberId}, Privileges) ->
     {ok, SpaceId :: binary()} | no_return().
 %% ====================================================================
 join({user, UserId}, Token) ->
-    SUserId = binary:bin_to_list(UserId),
     {ok, {space, SpaceId}} = token_logic:consume(Token, space_invite_user_token),
-    {ok, UserDoc} = dao_lib:apply(dao_users, get_user, [SUserId], 1),
-    SpaceDoc = get_doc(SpaceId),
+    case has_user(SpaceId, UserId) of
+        true -> ok;
+        false ->
+            Privileges = privileges:space_user(),
+            SpaceDoc = logic_helper:space_doc(SpaceId),
+            #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
+            SpaceNew = Space#space{users = [{UserId, Privileges} | Users]},
 
-    #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
-    SpaceNew = Space#space{users = [{UserId, privileges:space_user()} | Users]},
-    SpaceDocNew = SpaceDoc#veil_document{record = SpaceNew},
+            UserDoc = logic_helper:user_doc(UserId),
+            #veil_document{record = #user{spaces = Spaces} = User} = UserDoc,
+            UserNew = User#user{spaces = [SpaceId | Spaces]},
 
-    #veil_document{record = #user{spaces = Spaces} = User} = UserDoc,
-    UserNew = User#user{spaces = [SpaceId | Spaces]},
-    UserDocNew = UserDoc#veil_document{record = UserNew},
-
-    {ok, _} = dao_lib:apply(dao_spaces, save_space, [SpaceDocNew], 1),
-    try
-        {ok, _} = dao_lib:apply(dao_users, save_user, [UserDocNew], 1)
-    catch
-        error:Error ->
-            dao_lib:apply(dao_spaces, save_space, [SpaceDoc], 1),
-            dao_lib:apply(dao_users, save_space, [UserDoc], 1),
-            error(Error)
+            logic_helper:save(SpaceDoc#veil_document{record = SpaceNew}),
+            logic_helper:save(UserDoc#veil_document{record = UserNew})
     end,
-
     {ok, SpaceId};
 join({group, GroupId}, Token) ->
-    SGroupId = binary:bin_to_list(GroupId),
     {ok, {space, SpaceId}} = token_logic:consume(Token, space_invite_group_token),
-    {ok, GroupDoc} = dao_lib:apply(dao_groups, get_group, [SGroupId], 1),
-    SpaceDoc = get_doc(SpaceId),
+    case has_group(SpaceId, GroupId) of
+        true -> ok;
+        false ->
+            Privileges = privileges:space_user(),
+            SpaceDoc = logic_helper:space_doc(SpaceId),
+            #veil_document{record = #space{groups = Groups} = Space} = SpaceDoc,
+            SpaceNew = Space#space{groups = [{GroupId, Privileges} | Groups]},
 
-    #veil_document{record = #space{groups = Groups} = Space} = SpaceDoc,
-    SpaceNew = Space#space{groups = [{GroupId, privileges:space_user()} | Groups]},
-    SpaceDocNew = SpaceDoc#veil_document{record = SpaceNew},
+            GroupDoc = logic_helper:group_doc(GroupId),
+            #veil_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
+            GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
 
-    #veil_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
-    GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
-    GroupDocNew = GroupDoc#veil_document{record = GroupNew},
-
-    {ok, _} = dao_lib:apply(dao_spaces, save_space, [SpaceDocNew], 1),
-    try
-        {ok, _} = dao_lib:apply(dao_groups, save_group, [GroupDocNew], 1)
-    catch
-        Type:Error ->
-            dao_lib:apply(dao_spaces, save_space, [SpaceDoc], 1),
-            dao_lib:apply(dao_groups, save_group, [GroupDoc], 1),
-            error({Type, Error})
+            logic_helper:save(SpaceDoc#veil_document{record = SpaceNew}),
+            logic_helper:save(GroupDoc#veil_document{record = GroupNew})
     end,
-
     {ok, SpaceId}.
 
 
@@ -237,29 +210,21 @@ join({group, GroupId}, Token) ->
     {ok, SpaceId :: binary()} | no_return().
 %% ====================================================================
 support(ProviderId, Token) ->
-    SProviderId = binary:bin_to_list(ProviderId),
     {ok, {space, SpaceId}} = token_logic:consume(Token, space_support_token),
-    {ok, ProviderDoc} = dao_lib:apply(dao_providers, get_provider, [SProviderId], 1),
-    SpaceDoc = get_doc(SpaceId),
+    case has_provider(SpaceId, ProviderId) of
+        true -> ok;
+        false ->
+            SpaceDoc = logic_helper:space_doc(SpaceId),
+            #veil_document{record = #space{providers = Providers} = Space} = SpaceDoc,
+            SpaceNew = Space#space{providers = [ProviderId | Providers]},
 
-    #veil_document{record = #space{providers = Providers} = Space} = SpaceDoc,
-    SpaceNew = Space#space{providers = [ProviderId | Providers]},
-    SpaceDocNew = SpaceDoc#veil_document{record = SpaceNew},
+            ProviderDoc = logic_helper:provider_doc(ProviderId),
+            #veil_document{record = #provider{spaces = Spaces} = Provider} = ProviderDoc,
+            ProviderNew = Provider#provider{spaces = [SpaceId | Spaces]},
 
-    #veil_document{record = #provider{spaces = Spaces} = Provider} = ProviderDoc,
-    ProviderNew = Provider#provider{spaces = [SpaceId | Spaces]},
-    ProviderDocNew = ProviderDoc#veil_document{record = ProviderNew},
-
-    {ok, _} = dao_lib:apply(dao_spaces, save_space, [SpaceDocNew], 1),
-    try
-        {ok, _} = dao_lib:apply(dao_providers, save_provider, [ProviderDocNew], 1)
-    catch
-        Type:Error ->
-            dao_lib:apply(dao_spaces, save_space, [SpaceDoc], 1),
-            dao_lib:apply(dao_providers, save_provider, [ProviderDoc], 1),
-            error({Type, Error})
+            logic_helper:save(SpaceDoc#veil_document{record = SpaceNew}),
+            logic_helper:save(ProviderDoc#veil_document{record = ProviderNew})
     end,
-
     {ok, SpaceId}.
 
 
@@ -271,7 +236,7 @@ support(ProviderId, Token) ->
     {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_data(SpaceId, _Client) ->
-    #veil_document{record = #space{name = Name}} = get_doc(SpaceId),
+    #space{name = Name} = logic_helper:space(SpaceId),
     {ok, [
         {spaceId, SpaceId},
         {name, Name}
@@ -286,24 +251,22 @@ get_data(SpaceId, _Client) ->
     {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_users(SpaceId, user) ->
-    #veil_document{record = #space{users = Users}} = get_doc(SpaceId),
+    #space{users = Users} = logic_helper:space(SpaceId),
     {UserIds, _} = lists:unzip(Users),
     {ok, [{users, UserIds}]};
 get_users(SpaceId, provider) ->
-    #veil_document{record = #space{users = SpaceUsers, groups = Groups}} = get_doc(SpaceId),
-    GrUIDs = lists:map(fun({GroupId, _}) ->
-        SGroupId = binary:bin_to_list(GroupId),
-        {ok, GroupDoc} = dao_lib:apply(dao_groups, get_group, [SGroupId], 1),
-        #veil_document{record = #user_group{users = GroupUsers}} = GroupDoc,
-        {Ids, _} = lists:unzip(GroupUsers),
-        ordsets:from_list(Ids)
-    end, Groups),
-    {SpUserIds, _} = lists:unzip(SpaceUsers),
+    #space{users = SpaceUserTuples, groups = GroupTuples} = logic_helper:space(SpaceId),
 
-    SpaceUserIds = ordsets:from_list(SpUserIds),
-    GroupUserIds = ordsets:union(GrUIDs),
-    AllUserIds = ordsets:union(SpaceUserIds, GroupUserIds),
+    GroupUsersSets = lists:map(fun({GroupId, _}) ->
+        #user_group{users = GroupUserTuples} = logic_helper:group(GroupId),
+        {GroupUsers, _} = lists:unzip(GroupUserTuples),
+        ordsets:from_list(GroupUsers)
+    end, GroupTuples),
 
+    {SpaceUsers, _} = lists:unzip(SpaceUserTuples),
+    SpaceUsersSet = ordsets:from_list(SpaceUsers),
+
+    AllUserIds = ordsets:union([SpaceUsersSet | GroupUsersSets]),
     {ok, [{users, ordsets:to_list(AllUserIds)}]}.
 
 
@@ -315,9 +278,9 @@ get_users(SpaceId, provider) ->
     {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_groups(SpaceId) ->
-    #veil_document{record = #space{groups = Groups}} = get_doc(SpaceId),
-    {GroupIds, _} = lists:unzip(Groups),
-    {ok, [{groups, GroupIds}]}.
+    #space{groups = GroupTuples} = logic_helper:space(SpaceId),
+    {Groups, _} = lists:unzip(GroupTuples),
+    {ok, [{groups, Groups}]}.
 
 
 %% get_providers/2
@@ -328,7 +291,7 @@ get_groups(SpaceId) ->
     {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_providers(SpaceId, _Client) ->
-    #veil_document{record = #space{providers = Providers}} = get_doc(SpaceId),
+    #space{providers = Providers} = logic_helper:space(SpaceId),
     {ok, [{providers, Providers}]}.
 
 
@@ -378,135 +341,108 @@ get_provider(_SpaceId, _Client, ProviderId) ->
     {ok, [privileges:space_privilege()]} | no_return().
 %% ====================================================================
 get_privileges(SpaceId, {user, UserId}) ->
-    #veil_document{record = #space{users = Users}} = get_doc(SpaceId),
+    #space{users = Users} = logic_helper:space(SpaceId),
     {_, Privileges} = lists:keyfind(UserId, 1, Users),
     {ok, Privileges};
 get_privileges(SpaceId, {group, GroupId}) ->
-    #veil_document{record = #space{groups = Groups}} = get_doc(SpaceId),
+    #space{groups = Groups} = logic_helper:space(SpaceId),
     {_, Privileges} = lists:keyfind(GroupId, 1, Groups),
     {ok, Privileges}.
 
 
 %% remove/1
 %% ====================================================================
-%% @doc Removes the Space. Should return true if after the call the Space
-%% doesn't exist; in particular if it never existed at all.
-%% @end
+%% @doc Removes the Space.
 %% ====================================================================
 -spec remove(SpaceId :: binary()) -> boolean().
 %% ====================================================================
 remove(SpaceId) ->
-    case exists(SpaceId) of
-        false -> true;
-        true ->
-            SSpaceId = binary:bin_to_list(SpaceId),
-            ok = dao_lib:apply(dao_spaces, remove_space, [SSpaceId], 1),
-            true
-    end.
+    Space = logic_helper:space(SpaceId),
+    #space{users = Users, groups = Groups, providers = Providers} = Space,
+
+    lists:foreach(fun({UserId, _}) ->
+        UserDoc = logic_helper:user_doc(UserId),
+        #veil_document{record = #user{spaces = USpaces} = User} = UserDoc,
+        NewUser = User#user{spaces = lists:delete(SpaceId, USpaces)},
+        logic_helper:save(UserDoc#veil_document{record = NewUser})
+    end, Users),
+
+    lists:foreach(fun({GroupId, _}) ->
+        GroupDoc = logic_helper:group_doc(GroupId),
+        #veil_document{record = #user_group{spaces = GSpaces} = Group} = GroupDoc,
+        NewGroup = Group#user_group{spaces = lists:delete(SpaceId, GSpaces)},
+        logic_helper:save(GroupDoc#veil_document{record = NewGroup})
+    end, Groups),
+
+    lists:foreach(fun(ProviderId) ->
+        ProviderDoc = logic_helper:provider_doc(ProviderId),
+        #veil_document{record = #provider{spaces = PSpaces} = Provider} = ProviderDoc,
+        NewProvider = Provider#provider{spaces = lists:delete(SpaceId, PSpaces)},
+        logic_helper:save(ProviderDoc#veil_document{record = NewProvider})
+    end, Providers),
+
+    logic_helper:space_remove(SpaceId).
 
 
 %% remove_user/2
 %% ====================================================================
-%% @doc Removes user from the Space. Should return true if after the call the
-%% user will no longer be a member of the Space; in particular if he never
-%% was a member or the Space didn't exist.
-%% @end
+%% @doc Removes user from the Space.
 %% ====================================================================
 -spec remove_user(SpaceId :: binary(), UserId :: binary()) -> boolean().
 %% ====================================================================
-remove_user(SpaceId, UserId) -> %% @todo: when nobody's left, space should be destroyed
-    SUserId = binary:bin_to_list(UserId),
-    SpaceDoc = get_doc(SpaceId),
-    {ok, UserDoc} = dao_lib:apply(dao_users, get_user, [SUserId], 1),
-
-    #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
-    SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
-    SpaceDocNew = SpaceDoc#veil_document{record = SpaceNew},
-
+remove_user(SpaceId, UserId) ->
+    UserDoc = logic_helper:user_doc(UserId),
     #veil_document{record = #user{spaces = Spaces} = User} = UserDoc,
     UserNew = User#user{spaces = lists:delete(SpaceId, Spaces)},
-    UserNewDoc = UserDoc#veil_document{record = UserNew},
 
-    {ok, _} = dao_lib:apply(dao_spaces, save_space, [SpaceDocNew], 1),
-    try
-        {ok, _} = dao_lib:apply(dao_users, save_user, [UserNewDoc], 1)
-    catch
-        Type:Error ->
-            dao_lib:apply(dao_spaces, save_space, [SpaceDoc], 1),
-            dao_lib:apply(dao_users, save_user, [UserNew], 1),
-            error({Type, Error})
-    end,
+    SpaceDoc = logic_helper:space_doc(SpaceId),
+    #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
+    SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
 
+    logic_helper:save(UserDoc#veil_document{record = UserNew}),
+    logic_helper:save(SpaceDoc#veil_document{record = SpaceNew}),
+    cleanup(SpaceId),
     true.
 
 
 %% remove_group/2
 %% ====================================================================
-%% @doc Removes group from the Space. Should return true if after the call the
-%% group will no longer be a member of the Space; in particular if it never
-%% was a member or the Space didn't exist.
-%% @end
+%% @doc Removes group from the Space.
 %% ====================================================================
 -spec remove_group(SpaceId :: binary(), GroupId :: binary()) -> boolean().
 %% ====================================================================
 remove_group(SpaceId, GroupId) ->
-    SGroupId = binary:bin_to_list(GroupId),
-    SpaceDoc = get_doc(SpaceId),
-    {ok, GroupDoc} = dao_lib:apply(dao_groups, get_group, [SGroupId], 1),
-
-    #veil_document{record = #space{groups = Groups} = Space} = SpaceDoc,
-    SpaceNew = Space#space{groups = lists:keydelete(GroupId, 1, Groups)},
-    SpaceDocNew = SpaceDoc#veil_document{record = SpaceNew},
-
+    GroupDoc = logic_helper:group_doc(GroupId),
     #veil_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
     GroupNew = Group#user_group{spaces = lists:delete(SpaceId, Spaces)},
-    GroupNewDoc = GroupDoc#veil_document{record = GroupNew},
 
-    {ok, _} = dao_lib:apply(dao_spaces, save_space, [SpaceDocNew], 1),
-    try
-        {ok, _} = dao_lib:apply(dao_groups, save_group, [GroupNewDoc], 1)
-    catch
-        Type:Error ->
-            dao_lib:apply(dao_spaces, save_space, [SpaceDoc], 1),
-            dao_lib:apply(dao_groups, save_group, [GroupNew], 1),
-            error({Type, Error})
-    end,
+    SpaceDoc = logic_helper:space_doc(SpaceId),
+    #veil_document{record = #space{groups = Groups} = Space} = SpaceDoc,
+    SpaceNew = Space#space{groups = lists:keydelete(GroupId, 1, Groups)},
 
+    logic_helper:save(GroupDoc#veil_document{record = GroupNew}),
+    logic_helper:save(SpaceDoc#veil_document{record = SpaceNew}),
+    cleanup(SpaceId),
     true.
 
 
 %% remove_provider/2
 %% ====================================================================
-%% @doc Removes provider from the Space. Should return true if after the call
-%% the provider will no longer support the Space; in particular if he never
-%% supported it or the Space didn't exist.
-%% @end
+%% @doc Removes provider from the Space.
 %% ====================================================================
 -spec remove_provider(SpaceId :: binary(), ProviderId :: binary()) -> boolean().
 %% ====================================================================
 remove_provider(SpaceId, ProviderId) ->
-    SProviderId = binary:bin_to_list(ProviderId),
-    SpaceDoc = get_doc(SpaceId),
-    {ok, ProviderDoc} = dao_lib:apply(dao_providers, get_provider, [SProviderId], 1),
-
-    #veil_document{record = #space{providers = Providers} = Space} = SpaceDoc,
-    SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers)},
-    SpaceDocNew = SpaceDoc#veil_document{record = SpaceNew},
-
+    ProviderDoc = logic_helper:provider_doc(ProviderId),
     #veil_document{record = #provider{spaces = Spaces} = Provider} = ProviderDoc,
     ProviderNew = Provider#provider{spaces = lists:delete(SpaceId, Spaces)},
-    ProviderNewDoc = ProviderDoc#veil_document{record = ProviderNew},
 
-    {ok, _} = dao_lib:apply(dao_spaces, save_space, [SpaceDocNew], 1),
-    try
-        {ok, _} = dao_lib:apply(dao_providers, save_provider, [ProviderNewDoc], 1)
-    catch
-        Type:Error ->
-            dao_lib:apply(dao_spaces, save_space, [SpaceDoc], 1),
-            dao_lib:apply(dao_providers, save_provider, [ProviderNew], 1),
-            error({Type, Error})
-    end,
+    SpaceDoc = logic_helper:space_doc(SpaceId),
+    #veil_document{record = #space{providers = Providers} = Space} = SpaceDoc,
+    SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers)},
 
+    logic_helper:save(ProviderDoc#veil_document{record = ProviderNew}),
+    logic_helper:save(SpaceDoc#veil_document{record = SpaceNew}),
     true.
 
 
@@ -518,46 +454,45 @@ remove_provider(SpaceId, ProviderId) ->
                            Providers :: [binary()]) ->
     {ok, SpaceId :: binary()} | no_return().
 %% ====================================================================
-create_with_provider({user, UserId}, Name, Providers) -> %% @todo: may do with some deduplication
-    SUserId = binary:bin_to_list(UserId),
-    {ok, UserDoc} = dao_lib:apply(dao_users, get_user, [SUserId], 1),
+create_with_provider({user, UserId}, Name, Providers) ->
+    UserDoc = logic_helper:user_doc(UserId),
     #veil_document{record = #user{spaces = Spaces} = User} = UserDoc,
 
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, providers = Providers, users = [{UserId, Privileges}]},
-    {ok, SSpaceId} = dao_lib:apply(dao_spaces, save_space, [Space], 1),
-    SpaceId = binary:list_to_bin(SSpaceId),
+    SpaceId = logic_helper:save(Space),
 
     UserNew = User#user{spaces = [SpaceId | Spaces]},
-    UserDocNew = UserDoc#veil_document{record = UserNew},
-    {ok, _} = dao_lib:apply(dao_users, save_user, [UserDocNew], 1),
+    logic_helper:save(UserDoc#veil_document{record = UserNew}),
+
     {ok, SpaceId};
 create_with_provider({group, GroupId}, Name, Providers) ->
-    SGroupId = binary:bin_to_list(GroupId),
-    {ok, GroupDoc} = dao_lib:apply(dao_groups, get_group, [SGroupId], 1),
+    GroupDoc = logic_helper:group_doc(GroupId),
     #veil_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
 
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, providers = Providers, groups = [{GroupId, Privileges}]},
-    {ok, SSpaceId} = dao_lib:apply(dao_spaces, save_space, [Space], 1),
-    SpaceId = binary:list_to_bin(SSpaceId),
+    SpaceId = logic_helper:save(Space),
 
     GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
-    GroupDocNew = GroupDoc#veil_document{record = GroupNew},
-    {ok, _} = dao_lib:apply(dao_groups, save_group, [GroupDocNew], 1),
+    logic_helper:save(GroupDoc#veil_document{record = GroupNew}),
+
     {ok, SpaceId}.
 
 
-%% get_doc/1
+%% cleanup/1
 %% ====================================================================
-%% @doc Retrieves a space from the database.
+%% @doc Removes the space if empty.
 %% ====================================================================
--spec get_doc(SpaceId :: binary()) -> #veil_document{} | no_return().
+-spec cleanup(SpaceId :: binary()) -> ok.
 %% ====================================================================
-get_doc(SpaceId) ->
-    SSpaceId = binary:bin_to_list(SpaceId),
-    {ok, #veil_document{record = #space{}} = Doc} = dao_lib:apply(dao_spaces, get_space, [SSpaceId], 1),
-    Doc.
+cleanup(SpaceId) ->
+    #space{groups = Groups, users = Users} = logic_helper:space(SpaceId),
+    case {Groups, Users} of
+        {[], []} -> remove(SpaceId);
+        _ -> ok
+    end,
+    ok.
 
 
 %% get_effective_privileges/2
@@ -570,9 +505,8 @@ get_doc(SpaceId) ->
     ordsets:ordset(privileges:space_privilege()).
 %% ====================================================================
 get_effective_privileges(SpaceId, UserId) ->
-    SUserId = binary:bin_to_list(UserId),
-    {ok, #user{groups = UGroups}} = dao_lib:apply(dao_users, get_user, [SUserId], 1),
-    #veil_document{record = #space{users = UserTuples, groups = SGroupTuples}} = get_doc(SpaceId),
+    #user{groups = UGroups} = logic_helper:user(UserId),
+    #space{users = UserTuples, groups = SGroupTuples} = logic_helper:space(SpaceId),
 
     UserGroups = sets:from_list(UGroups),
     PrivilegesSets = lists:filtermap(fun({GroupId, Privileges}) ->
@@ -586,3 +520,19 @@ get_effective_privileges(SpaceId, UserId) ->
     UserPrivileges = ordsets:from_list(UPrivileges),
 
     ordsets:union([UserPrivileges | PrivilegesSets]).
+
+
+%% set_privileges_aux/3
+%% ====================================================================
+%% @doc Transforms a space to include new privileges.
+%% ====================================================================
+-spec set_privileges_aux(Space :: space_info(), {user | group, Id :: binary()},
+                         Privileges :: [privileges:space_privilege()]) ->
+    space_info().
+%% ====================================================================
+set_privileges_aux(#space{users = Users} = Space, {user, UserId}, Privileges) ->
+    UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, Privileges}),
+    Space#space{users = UsersNew};
+set_privileges_aux(#space{groups = Groups} = Space, {group, GroupId}, Privileges) ->
+    GroupsNew = lists:keyreplace(GroupId, 1, Groups, {GroupId, Privileges}),
+    Space#space{groups = GroupsNew}.

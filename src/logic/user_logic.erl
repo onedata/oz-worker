@@ -116,14 +116,16 @@ remove(UserId) ->
         GroupDoc = logic_helper:group_doc(GroupId),
         #veil_document{record = #user_group{users = Users} = Group} = GroupDoc,
         GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
-        logic_helper:save(GroupDoc#veil_document{record = GroupNew})
+        logic_helper:save(GroupDoc#veil_document{record = GroupNew}),
+        group_logic:cleanup(GroupId)
     end, Groups),
 
     lists:foreach(fun(SpaceId) ->
         SpaceDoc = logic_helper:space_doc(SpaceId),
         #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
         SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
-        logic_helper:save(SpaceDoc#veil_document{record = SpaceNew})
+        logic_helper:save(SpaceDoc#veil_document{record = SpaceNew}),
+        space_logic:cleanup(SpaceId)
     end, Spaces),
 
     logic_helper:user_remove(UserId).

@@ -41,13 +41,10 @@ is_valid(Token, TokenType) ->
     case decrypt(Token) of
         false -> false;
         {true, TokenId} ->
-            STokenId = binary:bin_to_list(TokenId),
-            {ok, Exists} = dao_lib:apply(dao_tokens, exist_token, [STokenId], 1),
-            case Exists of
+            case logic_helper:token_exists(TokenId) of
                 false -> false;
                 true ->
-                    {ok, TokenDoc} = dao_lib:apply(dao_tokens, get_token, [STokenId], 1),
-                    #veil_document{record = #token{type = Type}} = TokenDoc, %% @todo: expiration time
+                    #token{type = Type} = logic_helper:token(TokenId), %% @todo: expiration time
                     Type =:= TokenType
             end
     end.
@@ -62,8 +59,7 @@ is_valid(Token, TokenType) ->
 %% ====================================================================
 create(TokenType, Resource) ->
     TokenRec = #token{type = TokenType, resource = Resource}, %% @todo: expiration time
-    {ok, STokenId} = dao_lib:apply(dao_tokens, save_token, [TokenRec], 1),
-    TokenId = binary:list_to_bin(STokenId),
+    TokenId = logic_helper:save(TokenRec),
     encrypt(TokenId).
 
 
@@ -76,10 +72,8 @@ create(TokenType, Resource) ->
 %% ====================================================================
 consume(Token, TokenType) ->
     {true, TokenId} = decrypt(Token),
-    STokenId = binary:bin_to_list(TokenId),
-    {ok, TokenDoc} = dao_lib:apply(dao_tokens, get_token, [STokenId], 1),
-    #veil_document{record = #token{type = TokenType, resource = Resource}} = TokenDoc, %% @todo: expiration time
-    dao_lib:apply(dao_tokens, remove_token, [STokenId], 1),
+    #token{type = TokenType, resource = Resource} = logic_helper:token(TokenId), %% @todo: expiration time
+    logic_helper:token_remove(TokenId),
     {ok, Resource}.
 
 
