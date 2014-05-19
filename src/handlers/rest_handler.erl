@@ -253,9 +253,11 @@ binary_to_method(<<"DELETE">>) -> delete.
     {ResId :: binary(), Bindings :: [{atom(), any()}], cowboy_req:req()}.
 %% ====================================================================
 get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {BaseBindings, Req2} = cowboy_req:bindings(Req),
+		{Peer,Req3} = cowboy_req:peer(Req2),
+		Bindings = [{peer, Peer} | BaseBindings],
     ResId = case proplists:get_value(id, Bindings) of
         undefined -> ClientId;
         X -> X
     end,
-    {ResId, Bindings, Req2}.
+    {ResId, Bindings, Req3}.

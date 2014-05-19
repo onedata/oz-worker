@@ -11,7 +11,7 @@
 -ifndef(REST_CONFIG_HRL).
 -define(REST_CONFIG_HRL, 1).
 
--define(rest_port,8080).
+-define(rest_port,8443).
 -define(rest_https_acceptors,50).
 -define(rest_listener, rest).
 

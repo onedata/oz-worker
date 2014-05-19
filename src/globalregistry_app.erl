@@ -89,7 +89,7 @@ start_rest() ->
       groups_rest_module:routes()
     ])}
   ]),
-  {ok, Ans} = cowboy:start_https(?rest_listener, ?rest_https_acceptors,
+  {ok, _Ans} = cowboy:start_https(?rest_listener, ?rest_https_acceptors,
     [
       {port, ?rest_port},
       {cacertfile, CaCertFile},

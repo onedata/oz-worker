@@ -33,10 +33,11 @@ routes() ->
     S = #rstate{module = ?MODULE},
     M = rest_handler,
     [
-        {<<"/provider">>,                   M, S#rstate{resource = provider,    methods = [get, post, patch, delete]}},
-        {<<"/provider/spaces/">>,           M, S#rstate{resource = spaces,      methods = [get, post]   }},
-        {<<"/provider/spaces/support">>,    M, S#rstate{resource = ssupport,    methods = [post]        }},
-        {<<"/provider/spaces/:sid">>,       M, S#rstate{resource = space,       methods = [get, delete] }}
+        {<<"/provider">>,                   			 M, S#rstate{resource = provider,    methods = [get, post, patch, delete]}},
+        {<<"/provider/spaces/">>,           			 M, S#rstate{resource = spaces,      methods = [get, post]   }},
+        {<<"/provider/spaces/support">>,    			 M, S#rstate{resource = ssupport,    methods = [post]        }},
+        {<<"/provider/spaces/:sid">>,       			 M, S#rstate{resource = space,       methods = [get, delete] }},
+        {<<"/provider/test/what_is_my_ip">>,       M, S#rstate{resource = ip,       	 methods = [get] }}
     ].
 
 
@@ -135,7 +136,10 @@ provide_resource(spaces, ProviderId, _Client, _Bindings) ->
 provide_resource(space, _ProviderId, _Client, Bindings) ->
     SID = proplists:get_value(sid, Bindings),
     {ok, Space} = space_logic:get_data(SID, provider),
-    Space.
+    Space;
+provide_resource(ip, _ProviderId, _Client, Bindings) ->
+		{Ip,_Port} = proplists:get_value(peer, Bindings),
+    list_to_binary(inet_parse:ntoa(Ip)).
 
 
 %% delete_resource/3
