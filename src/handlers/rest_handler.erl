@@ -207,8 +207,8 @@ accept_resource(Req, #rstate{module = Mod, resource = Resource, client = Client}
     {iodata(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 provide_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
-    {ResId, Bindings, Req2} = get_res_id(Req, State),
-    Data = Mod:provide_resource(Resource, ResId, Client, Bindings),
+    {ResId, _Bindings, Req2} = get_res_id(Req, State),
+    Data = Mod:provide_resource(Resource, ResId, Client, Req2),
     JSON = mochijson2:encode(Data),
     {JSON, Req2, State}.
 
@@ -253,11 +253,9 @@ binary_to_method(<<"DELETE">>) -> delete.
     {ResId :: binary(), Bindings :: [{atom(), any()}], cowboy_req:req()}.
 %% ====================================================================
 get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
-    {BaseBindings, Req2} = cowboy_req:bindings(Req),
-		{Peer,Req3} = cowboy_req:peer(Req2),
-		Bindings = [{peer, Peer} | BaseBindings],
+    {Bindings, Req2} = cowboy_req:bindings(Req),
     ResId = case proplists:get_value(id, Bindings) of
         undefined -> ClientId;
         X -> X
     end,
-    {ResId, Bindings, Req3}.
+    {ResId, Bindings, Req2}.

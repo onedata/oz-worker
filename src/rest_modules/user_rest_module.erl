@@ -151,30 +151,32 @@ accept_resource(merge, post, UserId, Data, _Client, _Bindings) ->
 %% @end
 %% ====================================================================
 -spec provide_resource(Resource :: atom(), UserId :: binary() | undefined,
-                       Client :: client(), Bindings :: [{atom(), any()}]) ->
+                       Client :: client(), Req :: cowboy_req:req()) ->
     Data :: [proplists:property()].
 %% ====================================================================
-provide_resource(user, UserId, _Client, _Bindings) ->
+provide_resource(user, UserId, _Client, _Req) ->
     {ok, User} = user_logic:get_data(UserId),
     User;
-provide_resource(spaces, UserId, _Client, _Bindings) ->
+provide_resource(spaces, UserId, _Client, _Req) ->
     {ok, Spaces} = user_logic:get_spaces(UserId),
     Spaces;
-provide_resource(screate, UserId, _Client, _Bindings) ->
+provide_resource(screate, UserId, _Client, _Req) ->
     {ok, Token} = token_logic:create(space_create_token, {user, UserId}),
     [{token, Token}];
-provide_resource(space, _UserId, _Client, Bindings) ->
+provide_resource(space, _UserId, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     {ok, Space} = space_logic:get_data(SID, user),
     Space;
-provide_resource(groups, UserId, _Client, _Bindings) ->
+provide_resource(groups, UserId, _Client, _Req) ->
     {ok, Groups} = user_logic:get_groups(UserId),
     Groups;
-provide_resource(group, _UserId, _Client, Bindings) ->
+provide_resource(group, _UserId, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     {ok, Group} = group_logic:get_data(SID),
     Group;
-provide_resource(mtoken, UserId, _Client, _Bindings) ->
+provide_resource(mtoken, UserId, _Client, _Req) ->
     {ok, Token} = token_logic:create(accounts_merge_token, {user, UserId}),
     [{token, Token}].
 

@@ -19,6 +19,7 @@
 -export([create/1, modify/2]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
+-export([test_connection/1]).
 
 
 %% create/1
@@ -92,3 +93,24 @@ remove(ProviderId) ->
     end, Spaces),
 
     logic_helper:provider_remove(ProviderId).
+
+%% test_connection/1
+%% ====================================================================
+%% @doc Tests connection to given url, returns <<"ok">> or <<"error">> status for each element
+%% ====================================================================
+-spec test_connection(ToCheck :: list({ServiceName :: binary(),Url :: binary()})) -> list(ConnStatus) when
+    ConnStatus :: {ServiceName :: binary(), Status :: binary()}.
+%% ====================================================================
+test_connection([]) ->
+    [];
+test_connection([ {ServiceName,Url} | Rest]) ->
+    UrlString = binary_to_list(Url),
+    ServiceNameString = binary_to_list(ServiceName),
+    ConnStatus = case ibrowse:send_req(UrlString,[],get) of
+        {ok, "200", _, ServiceNameString} ->
+            <<"ok">>;
+        Error ->
+            lager:info("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
+            <<"error">>
+    end,
+    [{ServiceName,ConnStatus} | test_connection(Rest)].

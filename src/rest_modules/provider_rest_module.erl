@@ -37,7 +37,8 @@ routes() ->
         {<<"/provider/spaces/">>,           			 M, S#rstate{resource = spaces,      methods = [get, post]   }},
         {<<"/provider/spaces/support">>,    			 M, S#rstate{resource = ssupport,    methods = [post]        }},
         {<<"/provider/spaces/:sid">>,       			 M, S#rstate{resource = space,       methods = [get, delete] }},
-        {<<"/provider/test/what_is_my_ip">>,       M, S#rstate{resource = ip,       	 methods = [get] }}
+        {<<"/provider/test/check_my_ip">>,               M, S#rstate{resource = ip,       	 methods = [get] }},
+        {<<"/provider/test/check_my_ports">>,            M, S#rstate{resource = ports,       methods = [get] }}
     ].
 
 
@@ -52,6 +53,10 @@ routes() ->
                     ProviderId :: binary() | undefined, Client :: client()) ->
     boolean().
 %% ====================================================================
+is_authorized(ip, get, _, _) ->
+    true;
+is_authorized(ports, get, _, _) ->
+    true;
 is_authorized(provider, post, _, #client{type = undefined}) ->
     true;
 is_authorized(_, _, _, #client{type = provider}) ->
@@ -124,23 +129,28 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, _Bindings) ->
 %% @end
 %% ====================================================================
 -spec provide_resource(Resource :: atom(), ProviderId :: binary() | undefined,
-                       Client :: client(), Bindings :: [{atom(), any()}]) ->
+                       Client :: client(), Req :: cowboy_req:req()) ->
     Data :: [proplists:property()].
 %% ====================================================================
-provide_resource(provider, ProviderId, _Client, _Bindings) ->
+provide_resource(provider, ProviderId, _Client, _Req) ->
     {ok, Provider} = provider_logic:get_data(ProviderId),
     Provider;
-provide_resource(spaces, ProviderId, _Client, _Bindings) ->
+provide_resource(spaces, ProviderId, _Client, _Req) ->
     {ok, Spaces} = provider_logic:get_spaces(ProviderId),
     Spaces;
-provide_resource(space, _ProviderId, _Client, Bindings) ->
+provide_resource(space, _ProviderId, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     {ok, Space} = space_logic:get_data(SID, provider),
     Space;
-provide_resource(ip, _ProviderId, _Client, Bindings) ->
-		{Ip,_Port} = proplists:get_value(peer, Bindings),
-    list_to_binary(inet_parse:ntoa(Ip)).
-
+provide_resource(ip, _ProviderId, _Client, Req) ->
+    {{Ip,_Port},_Req2} = cowboy_req:peer(Req),
+    list_to_binary(inet_parse:ntoa(Ip));
+provide_resource(ports, _ProviderId, _Client, Req) ->
+    {ok, Body, _Req2} = cowboy_req:body(Req),
+    Data = mochijson2:decode(Body, [{format, proplist}]),
+    Ret = provider_logic:test_connection(Data),
+    Ret.
 
 %% delete_resource/3
 %% ====================================================================

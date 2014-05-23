@@ -1,9 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% @author Tomasz Lichon
 %%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc This module tests the functionality of formatters module.
-%%% It contains unit tests that base on eunit.
-%%%
+%%% @doc This module tests is the example eunit test
 %%% @end
 %%% Created : 15. May 2014 12:11
 %%%-------------------------------------------------------------------
@@ -46,7 +44,9 @@ mock_example() ->
   ExpectedAns="<html></html>",
   meck:new(ibrowse),
   meck:expect(ibrowse,send_req,fun(_,_,_) -> ExpectedAns end),
-  ?assertEqual(ExpectedAns, ibrowse:send_req("url",[],get)).
+  ?assertEqual(ExpectedAns, ibrowse:send_req("url",[],get)),
+  meck:unload(ibrowse).
+
 
 %%%===================================================================
 %%% Internal functions

@@ -74,7 +74,7 @@
 %% @end
 %% ====================================================================
 -callback provide_resource(Resource :: atom(), ResId :: binary() | undefined,
-                           Client :: client(), Bindings :: [{atom(), any()}]) ->
+                           Client :: client(), Req :: cowboy_req:req()) ->
     Data :: [proplists:property()].
 
 

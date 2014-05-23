@@ -171,33 +171,36 @@ accept_resource(sjoin, post, GroupId, Data, _Client, _Bindings) ->
 %% @end
 %% ====================================================================
 -spec provide_resource(Resource :: atom(), GroupId :: binary() | undefined,
-                       Client :: client(), Bindings :: [{atom(), any()}]) ->
+                       Client :: client(), Req :: cowboy_req:req()) ->
     Data :: [proplists:property()].
 %% ====================================================================
-provide_resource(group, GroupId, _Client, _Bindings) ->
+provide_resource(group, GroupId, _Client, _Req) ->
     {ok, Data} = group_logic:get_data(GroupId),
     Data;
-provide_resource(users, GroupId, _Client, _Bindings) ->
+provide_resource(users, GroupId, _Client, _Req) ->
     {ok, Users} = group_logic:get_users(GroupId),
     Users;
-provide_resource(uinvite, GroupId, _Client, _Bindings) ->
+provide_resource(uinvite, GroupId, _Client, _Req) ->
     {ok, Token} = token_logic:create(group_invite_token, {group, GroupId}),
     [{token, Token}];
-provide_resource(user, GroupId, _Client, Bindings) ->
+provide_resource(user, GroupId, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     UID = proplists:get_value(uid, Bindings),
     {ok, User} = group_logic:get_user(GroupId, UID),
     User;
-provide_resource(upriv, GroupId, _Client, Bindings) ->
+provide_resource(upriv, GroupId, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     UID = proplists:get_value(uid, Bindings),
     {ok, Privileges} = group_logic:get_privileges(GroupId, UID),
     [{privileges, Privileges}];
-provide_resource(spaces, GroupId, _Client, _Bindings) ->
+provide_resource(spaces, GroupId, _Client, _Req) ->
     {ok, Spaces} = group_logic:get_spaces(GroupId),
     Spaces;
-provide_resource(screate, GroupId, _Client, _Bindings) ->
+provide_resource(screate, GroupId, _Client, _Req) ->
     {ok, Token} = token_logic:create(space_create_token, {group, GroupId}),
     [{token, Token}];
-provide_resource(space, _GroupId, _Client, Bindings) ->
+provide_resource(space, _GroupId, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     {ok, Space} = space_logic:get_data(SID, user),
     Space.
