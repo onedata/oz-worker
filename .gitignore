@@ -7,7 +7,7 @@ ebin
 rel/globalregistry
 package
 
+.eunit
+test/results
 test_distributed/logs
 variables-ct*
-
-package

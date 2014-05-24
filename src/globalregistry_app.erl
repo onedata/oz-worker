@@ -14,6 +14,7 @@
 %% Includes
 -include("rest_config.hrl").
 -include("gui_config.hrl").
+-include("registered_names.hrl").
 
 %% Application callbacks
 -export([start/2,
@@ -60,8 +61,8 @@ start(_StartType, _StartArgs) ->
 %%--------------------------------------------------------------------
 -spec(stop(State :: term()) -> term()).
 stop(_State) ->
-	cowboy:stop_listener(http),
-	cowboy:stop_listener(https),
+	cowboy:stop_listener(?rest_listener),
+	cowboy:stop_listener(?gui_https_listener),
 	ok.
 
 %%%===================================================================
@@ -74,14 +75,30 @@ stop(_State) ->
 -spec start_rest() -> {ok,pid()}.
 %% ====================================================================
 start_rest() ->
-	Dispatch = cowboy_router:compile([
-		{'_', [
-			{?HELLO_WORLD_URL, hello_world, []}
-		]}
-	]),
-	{ok, _} = cowboy:start_http(http, ?REST_HTTP_ACCEPTORS, [{port, ?REST_PORT}], [
-		{env, [{dispatch, Dispatch}]}
-	]).
+  % Get cert paths
+  {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
+  {ok,CertFile} = application:get_env(?APP_Name,cert_file),
+  {ok,KeyFile} = application:get_env(?APP_Name,key_file),
+
+  Dispatch = cowboy_router:compile([
+    {'_', lists:append([
+      [{?hello_world_url, hello_world, []}],
+      user_rest_module:routes(),
+      provider_rest_module:routes(),
+      spaces_rest_module:routes(),
+      groups_rest_module:routes()
+    ])}
+  ]),
+  {ok, Ans} = cowboy:start_https(?rest_listener, ?rest_https_acceptors,
+    [
+      {port, ?rest_port},
+      {cacertfile, CaCertFile},
+      {certfile, CertFile},
+      {keyfile, KeyFile}
+    ],
+    [
+      {env, [{dispatch, Dispatch}]}
+    ]).
 
 %% start_n2o/0
 %% ====================================================================
@@ -89,6 +106,10 @@ start_rest() ->
 -spec start_n2o() -> {ok,pid()}.
 %% ====================================================================
 start_n2o() ->
+  % Get cert paths
+  {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
+  {ok,CertFile} = application:get_env(?APP_Name,cert_file),
+  {ok,KeyFile} = application:get_env(?APP_Name,key_file),
 
 	% Set envs needed by n2o
 	% Port - gui port
@@ -113,12 +134,12 @@ start_n2o() ->
 			]}
 		]),
 
-	{ok, _} = cowboy:start_https(https, ?gui_https_acceptors,
+	{ok, _} = cowboy:start_https(?gui_https_listener, ?gui_https_acceptors,
 		[
 			{port, ?gui_port},
-			{cacertfile, ?ca_cert_file},
-			{certfile, ?cert_file},
-			{keyfile, ?key_file}
+			{cacertfile, CaCertFile},
+			{certfile, CertFile},
+			{keyfile, KeyFile}
 		],
 		[
 			{env, [{dispatch, Dispatch}]},

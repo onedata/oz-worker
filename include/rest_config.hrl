@@ -11,10 +11,12 @@
 -ifndef(REST_CONFIG_HRL).
 -define(REST_CONFIG_HRL, 1).
 
--define(REST_PORT,8080).
--define(REST_HTTP_ACCEPTORS,50).
+-define(rest_port,8080).
+-define(rest_https_acceptors,50).
+-define(rest_listener, rest).
 
 % Handler urls
--define(HELLO_WORLD_URL,"/hello_world").
+-define(hello_world_url,"/hello_world").
+
 
 -endif.

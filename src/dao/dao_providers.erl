@@ -1,0 +1,66 @@
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C) 2014, ACK CYFRONET AGH
+%%% @doc
+%%% This module provides high level DB API for handling providers documents.
+%%% @end
+%%% Created : 12. May 2014 2:10 PM
+%%%-------------------------------------------------------------------
+-module(dao_providers).
+
+%% Includes
+-include("dao/dao_providers.hrl").
+-include("dao/dao.hrl").
+-include("dao/dao_types.hrl").
+
+%% API
+-export([save_provider/1, remove_provider/1, exist_provider/1, get_provider/1]).
+
+%% save_provider/1
+%% ====================================================================
+%% @doc Saves provider to DB. Argument should be either #provider{} record
+%% (if you want to save it as new document) <br/>
+%% or #veil_document{} that wraps #provider{} if you want to update descriptor in DB. <br/>
+%% See {@link dao:save_record/1} and {@link dao:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% @end
+-spec save_provider(Provider :: provider_info() | provider_doc()) -> {ok, provider_id()} | {error, any()} | no_return().
+%% ====================================================================
+save_provider(#provider{} = Provider) ->
+	save_provider(#veil_document{record = Provider});
+save_provider(#veil_document{record = #provider{}, uuid = UUID} = ProviderDoc) when is_list(UUID) ->
+	dao:save_record(ProviderDoc).
+
+
+%% remove_provider/1
+%% ====================================================================
+%% @doc Removes provider from DB
+%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% @end
+-spec remove_provider(ProviderId:: uuid()) ->
+	ok | {error, any()} | no_return().
+%% ====================================================================
+remove_provider(ProviderId) ->
+	dao:remove_record(ProviderId).
+
+%% exist_provider/1
+%% ====================================================================
+%% @doc Checks whether provider exists in DB.
+%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% @end
+-spec exist_provider(ProviderId :: uuid()) -> {ok, true | false} | {error, any()}.
+%% ====================================================================
+exist_provider(ProviderId) ->
+	dao:exist_record(ProviderId).
+
+%% get_provider/1
+%% ====================================================================
+%% @doc Gets provider from DB
+%% Non-error return value is always {ok, #veil_document{record = #provider}.
+%% See {@link dao:save_record/1} and {@link dao:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% @end
+-spec get_provider(ProviderId :: uuid()) -> {ok, provider_doc()} | {error, any()} | no_return().
+%% ====================================================================
+get_provider(ProviderId) ->
+	dao:get_record(ProviderId).

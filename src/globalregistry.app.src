@@ -26,6 +26,10 @@
 	]},
 	{mod, {globalregistry_app, []}},
 	{env, [
-		{db_nodes,['db@172.16.67.26']}
+		{db_nodes,['db@127.0.0.1']},
+		% todo generate dedicated certs (this are example ones)
+		{ca_cert_file,"./cacerts/ca.crt"},
+		{cert_file,"./cacerts/server.crt"},
+		{key_file,"./cacerts/server.key"}
 	]}
 ]}.

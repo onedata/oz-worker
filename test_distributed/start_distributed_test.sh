@@ -9,10 +9,11 @@
 ## @doc: This script starts distributed tests.
 ## ===================================================================
 
-# get host ip, to set cookie
+# Get host ip, to set cookie
 IFCONFIG_LINE=`ifconfig | grep "inet addr:.*Bcast:"`
 COLON_INDEX=`awk -v a="$IFCONFIG_LINE" -v b=":" 'BEGIN{print index(a, b)}'`
 BCAST_INDEX=`awk -v a="$IFCONFIG_LINE" -v b="Bcast" 'BEGIN{print index(a, b)}'`
 COOKIE=${IFCONFIG_LINE:COLON_INDEX:((BCAST_INDEX - COLON_INDEX - 3))}
 
-ct_run -spec test_distributed/test.spec -name tester -setcookie $COOKIE
+# Run tests
+ct_run -noshell -spec test_distributed/test.spec -name tester -setcookie $COOKIE

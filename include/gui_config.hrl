@@ -13,16 +13,12 @@
 
 
 -define(gui_port,443).
+-define(gui_https_listener,https).
 % Paths in gui static directory
 -define(static_paths, ["/css/", "/fonts/", "/images/", "/js/", "/n2o/"]).
 -define(gui_https_acceptors,100).
 -define(socket_timeout,60000).
 -define(max_keepalive,30).
 -define(gui_static_root,"./gui_static").
-
-% todo generate dedicated certs (this are example ones)
--define(ca_cert_file,"./cacerts/ca.crt").
--define(cert_file,"./cacerts/server.crt").
--define(key_file,"./cacerts/server.key").
 
 -endif.
