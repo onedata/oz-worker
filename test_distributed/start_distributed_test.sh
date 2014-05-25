@@ -16,4 +16,4 @@ BCAST_INDEX=`awk -v a="$IFCONFIG_LINE" -v b="Bcast" 'BEGIN{print index(a, b)}'`
 COOKIE=${IFCONFIG_LINE:COLON_INDEX:((BCAST_INDEX - COLON_INDEX - 3))}
 
 # Run tests
-ct_run -noshell -spec test_distributed/test.spec -name tester -setcookie $COOKIE
+ct_run -pa ./deps/**/ebin -noshell -spec test_distributed/test.spec -name tester -setcookie $COOKIE

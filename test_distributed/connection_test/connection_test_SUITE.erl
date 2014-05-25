@@ -12,8 +12,8 @@
 %% Includes
 -include_lib("common_test/include/ct.hrl").
 -include("registered_names.hrl").
--include("testing/test_node_starter.hrl").
--include("testing/assertions.hrl").
+-include_lib("ctool/include/test_node_starter.hrl").
+-include_lib("ctool/include/assertions.hrl").
 
 %% API
 -export([all/0,init_per_suite/1,end_per_suite/1]).
