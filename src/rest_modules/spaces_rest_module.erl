@@ -99,20 +99,23 @@ is_authorized(_, _, _, _) ->
 %% @end
 %% ====================================================================
 -spec resource_exists(Resource :: atom(), SpaceId :: binary() | undefined,
-                      Bindings :: [{atom(), any()}]) -> boolean().
+                      Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-resource_exists(spaces, _SpaceId, _Bindings) ->
+resource_exists(spaces, _SpaceId, _Req) ->
     true;
-resource_exists(UserBound, SpaceId, Bindings) when UserBound =:= user; UserBound =:= upriv ->
+resource_exists(UserBound, SpaceId, Req) when UserBound =:= user; UserBound =:= upriv ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     UID = proplists:get_value(uid, Bindings),
     space_logic:has_user(SpaceId, UID);
-resource_exists(GroupBound, SpaceId, Bindings) when GroupBound =:= group; GroupBound =:= gpriv ->
+resource_exists(GroupBound, SpaceId, Req) when GroupBound =:= group; GroupBound =:= gpriv ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     GID = proplists:get_value(gid, Bindings),
     space_logic:has_group(SpaceId, GID);
-resource_exists(provider, SpaceId, Bindings) ->
+resource_exists(provider, SpaceId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     PID = proplists:get_value(pid, Bindings),
     space_logic:has_provider(SpaceId, PID);
-resource_exists(_, SpaceId, _Bindings) ->
+resource_exists(_, SpaceId, _Req) ->
     space_logic:exists(SpaceId).
 
 
@@ -126,10 +129,10 @@ resource_exists(_, SpaceId, _Bindings) ->
 -spec accept_resource(Resource :: atom(), Method :: method(),
                       SpaceId :: binary() | undefined,
                       Data :: [proplists:property()], Client :: client(),
-                      Bindings :: [{atom(), any()}]) ->
+                      Req :: cowboy_req:req()) ->
     {true, URL :: binary()} | boolean().
 %% ====================================================================
-accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, _Bindings) ->
+accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
     if
         Name =:= undefined -> false;
@@ -137,7 +140,7 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId},
             {ok, SpaceId} = space_logic:create({user, UserId}, Name),
             {true, <<"/spaces/", SpaceId/binary>>}
     end;
-accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, _Bindings) ->
+accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
     Token = proplists:get_value(<<"token">>, Data),
     if
@@ -149,7 +152,7 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = Prov
                 {true, <<"/spaces/", SpaceId/binary>>}
         end
     end;
-accept_resource(space, patch, SpaceId, Data, _Client, _Bindings) ->
+accept_resource(space, patch, SpaceId, Data, _Client, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
     if
         Name =:= undefined -> false;
@@ -157,7 +160,8 @@ accept_resource(space, patch, SpaceId, Data, _Client, _Bindings) ->
             ok = space_logic:modify(SpaceId, Name),
             true
     end;
-accept_resource(upriv, put, SpaceId, Data, _Client, Bindings) ->
+accept_resource(upriv, put, SpaceId, Data, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     UID = proplists:get_value(uid, Bindings),
     BinPrivileges = proplists:get_value(<<"privileges">>, Data),
     if
@@ -167,7 +171,8 @@ accept_resource(upriv, put, SpaceId, Data, _Client, Bindings) ->
             ok = space_logic:set_privileges(SpaceId, {user, UID}, Privileges),
             true
     end;
-accept_resource(gpriv, put, SpaceId, Data, _Client, Bindings) ->
+accept_resource(gpriv, put, SpaceId, Data, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     GID = proplists:get_value(gid, Bindings),
     BinPrivileges = proplists:get_value(<<"privileges">>, Data),
     if
@@ -244,16 +249,19 @@ provide_resource(provider, SpaceId, #client{type = ClientType}, Req) ->
 %% @end
 %% ====================================================================
 -spec delete_resource(Resource :: atom(), SpaceId :: binary() | undefined,
-                      Bindings :: [{atom(), any()}]) -> boolean().
+                      Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-delete_resource(space, SpaceId, _Bindings) ->
+delete_resource(space, SpaceId, _Req) ->
     space_logic:remove(SpaceId);
-delete_resource(user, SpaceId, Bindings) ->
+delete_resource(user, SpaceId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     UID = proplists:get_value(uid, Bindings),
     space_logic:remove_user(SpaceId, UID);
-delete_resource(group, SpaceId, Bindings) ->
+delete_resource(group, SpaceId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     GID = proplists:get_value(gid, Bindings),
     space_logic:remove_group(SpaceId, GID);
-delete_resource(provider, SpaceId, Bindings) ->
+delete_resource(provider, SpaceId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     PID = proplists:get_value(pid, Bindings),
     space_logic:remove_provider(SpaceId, PID).

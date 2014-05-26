@@ -108,8 +108,8 @@ content_types_provided(Req, #rstate{} = State) ->
     {boolean(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
-    {ResId, Bindings, Req2} = get_res_id(Req, State),
-    Result = Mod:delete_resource(Resource, ResId, Bindings),
+    {ResId, Req2} = get_res_id(Req, State),
+    Result = Mod:delete_resource(Resource, ResId, Req2),
     {Result, Req2, State}.
 
 
@@ -124,7 +124,7 @@ delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {boolean(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 forbidden(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
-    {ResId, _Bindings, Req2} = get_res_id(Req, State),
+    {ResId, Req2} = get_res_id(Req, State),
     {BinMethod, Req3} = cowboy_req:method(Req2),
     Method = binary_to_method(BinMethod),
 
@@ -171,8 +171,8 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
         %% Global Registry REST API always creates new resource on POST
         <<"POST">> -> {false, Req2, State};
         _ ->
-            {ResId, Bindings, Req3} = get_res_id(Req2, State),
-            Exists = Mod:resource_exists(Resource, ResId, Bindings),
+            {ResId, Req3} = get_res_id(Req2, State),
+            Exists = Mod:resource_exists(Resource, ResId, Req3),
             {Exists, Req3, State}
     end.
 
@@ -187,13 +187,13 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 accept_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
-    {ResId, Bindings, Req2} = get_res_id(Req, State),
+    {ResId, Req2} = get_res_id(Req, State),
     {BinMethod, Req3} = cowboy_req:method(Req2),
     {ok, Body, Req4} = cowboy_req:body(Req3),
     Method = binary_to_method(BinMethod),
     Data = mochijson2:decode(Body, [{format, proplist}]),
 
-    AcceptResult = Mod:accept_resource(Resource, Method, ResId, Data, Client, Bindings),
+    AcceptResult = Mod:accept_resource(Resource, Method, ResId, Data, Client, Req4),
     {AcceptResult, Req4, State}.
 
 
@@ -207,7 +207,7 @@ accept_resource(Req, #rstate{module = Mod, resource = Resource, client = Client}
     {iodata(), cowboy_req:req(), rstate()}.
 %% ====================================================================
 provide_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
-    {ResId, _Bindings, Req2} = get_res_id(Req, State),
+    {ResId, Req2} = get_res_id(Req, State),
     Data = Mod:provide_resource(Resource, ResId, Client, Req2),
     JSON = mochijson2:encode(Data),
     {JSON, Req2, State}.
@@ -246,11 +246,11 @@ binary_to_method(<<"DELETE">>) -> delete.
 %% get_res_id/2
 %% ====================================================================
 %% @doc Returns the resource id for the request or client's id if the resource
-%% id is undefined. Also returns a list of other bindings.
+%% id is undefined.
 %% @end
 %% ====================================================================
 -spec get_res_id(Req :: cowboy_req:req(), State :: rstate()) ->
-    {ResId :: binary(), Bindings :: [{atom(), any()}], cowboy_req:req()}.
+    {ResId :: binary(), cowboy_req:req()}.
 %% ====================================================================
 get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
@@ -258,4 +258,4 @@ get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
         undefined -> ClientId;
         X -> X
     end,
-    {ResId, Bindings, Req2}.
+    {ResId, Req2}.

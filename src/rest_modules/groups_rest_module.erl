@@ -93,17 +93,19 @@ is_authorized(_, _, _, _) ->
 %% @end
 %% ====================================================================
 -spec resource_exists(Resource :: atom(), GroupId :: binary() | undefined,
-                      Bindings :: [{atom(), any()}]) -> boolean().
+                      Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-resource_exists(groups, _GroupId, _Bindings) ->
+resource_exists(groups, _GroupId, _Req) ->
     true;
-resource_exists(UserBound, GroupId, Bindings) when UserBound =:= user; UserBound =:= upriv ->
+resource_exists(UserBound, GroupId, Req) when UserBound =:= user; UserBound =:= upriv ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     UID = proplists:get_value(uid, Bindings),
     group_logic:has_user(GroupId, UID);
-resource_exists(space, GroupId, Bindings) ->
+resource_exists(space, GroupId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     space_logic:has_group(SID, GroupId);
-resource_exists(_, GroupId, _Bindings) ->
+resource_exists(_, GroupId, _Req) ->
     group_logic:exists(GroupId).
 
 
@@ -117,10 +119,10 @@ resource_exists(_, GroupId, _Bindings) ->
 -spec accept_resource(Resource :: atom(), Method :: method(),
                       GroupId :: binary() | undefined,
                       Data :: [proplists:property()], Client :: client(),
-                      Bindings :: [{atom(), any()}]) ->
+                      Req :: cowboy_req:req()) ->
     {true, URL :: binary()} | boolean().
 %% ====================================================================
-accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, _Bindings) ->
+accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
     if
         Name =:= undefined -> false;
@@ -128,7 +130,7 @@ accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, _Bindings) -
             {ok, GroupId} = group_logic:create(UserId, Name),
             {true, <<"/groups/", GroupId/binary>>}
     end;
-accept_resource(group, patch, GroupId, Data, _Client, _Bindings) ->
+accept_resource(group, patch, GroupId, Data, _Client, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
     if
         Name =:= undefined -> false;
@@ -136,7 +138,8 @@ accept_resource(group, patch, GroupId, Data, _Client, _Bindings) ->
             ok = group_logic:modify(GroupId, Name),
             true
     end;
-accept_resource(upriv, put, GroupId, Data, _Client, Bindings) ->
+accept_resource(upriv, put, GroupId, Data, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     UID = proplists:get_value(uid, Bindings),
     BinPrivileges = proplists:get_value(<<"privileges">>, Data),
     if
@@ -146,7 +149,7 @@ accept_resource(upriv, put, GroupId, Data, _Client, Bindings) ->
             ok = group_logic:set_privileges(GroupId, UID, Privileges),
             true
     end;
-accept_resource(spaces, post, GroupId, Data, _Client, _Bindings) ->
+accept_resource(spaces, post, GroupId, Data, _Client, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
     if
         Name =:= undefined -> false;
@@ -154,7 +157,7 @@ accept_resource(spaces, post, GroupId, Data, _Client, _Bindings) ->
             {ok, SpaceId} = space_logic:create({group, GroupId}, Name),
             {true, <<"/spaces/", SpaceId/binary>>}
     end;
-accept_resource(sjoin, post, GroupId, Data, _Client, _Bindings) ->
+accept_resource(sjoin, post, GroupId, Data, _Client, _Req) ->
     Token = proplists:get_value(<<"token">>, Data),
     case token_logic:is_valid(Token, space_invite_group_token) of
         false -> false;
@@ -213,13 +216,15 @@ provide_resource(space, _GroupId, _Client, Req) ->
 %% @end
 %% ====================================================================
 -spec delete_resource(Resource :: atom(), GroupId :: binary() | undefined,
-                      Bindings :: [{atom(), any()}]) -> boolean().
+                      Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-delete_resource(group, GroupId, _Bindings) ->
+delete_resource(group, GroupId, _Req) ->
     group_logic:remove(GroupId);
-delete_resource(user, GroupId, Bindings) ->
+delete_resource(user, GroupId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     UID = proplists:get_value(uid, Bindings),
     group_logic:remove_user(GroupId, UID);
-delete_resource(space, GroupId, Bindings) ->
+delete_resource(space, GroupId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     space_logic:remove_group(SID, GroupId).

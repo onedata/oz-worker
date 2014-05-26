@@ -72,9 +72,10 @@ is_authorized(_, _, _, _) ->
 %% @end
 %% ====================================================================
 -spec resource_exists(Resource :: atom(), ProviderId :: binary() | undefined,
-                      Bindings :: [{atom(), any()}]) -> boolean().
+                      Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-resource_exists(space, ProviderId, Bindings) ->
+resource_exists(space, ProviderId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     space_logic:has_provider(SID, ProviderId);
 resource_exists(_, _, _) ->
@@ -91,10 +92,10 @@ resource_exists(_, _, _) ->
 -spec accept_resource(Resource :: atom(), Method :: method(),
                       ProviderId :: binary() | undefined,
                       Data :: [proplists:property()], Client :: client(),
-                      Bindings :: [{atom(), any()}]) ->
+                      Req :: cowboy_req:req()) ->
     {true, URL :: binary()} | boolean().
 %% ====================================================================
-accept_resource(provider, post, _ProviderId, Data, _Client, _Bindings) ->
+accept_resource(provider, post, _ProviderId, Data, _Client, _Req) ->
     URL = proplists:get_value(<<"url">>, Data),
     if
         URL =:= undefined -> false;
@@ -102,7 +103,7 @@ accept_resource(provider, post, _ProviderId, Data, _Client, _Bindings) ->
             {ok, _} = provider_logic:create(URL),
             {true, <<"/provider">>}
     end;
-accept_resource(provider, patch, ProviderId, Data, _Client, _Bindings) ->
+accept_resource(provider, patch, ProviderId, Data, _Client, _Req) ->
     URL = proplists:get_value(<<"url">>, Data),
     if
         URL =:= undefined -> false;
@@ -110,9 +111,9 @@ accept_resource(provider, patch, ProviderId, Data, _Client, _Bindings) ->
             ok = provider_logic:modify(ProviderId, URL),
             true
     end;
-accept_resource(spaces, post, _ProviderId, Data, Client, Bindings) ->
-    spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Bindings);
-accept_resource(ssupport, post, ProviderId, Data, _Client, _Bindings) ->
+accept_resource(spaces, post, _ProviderId, Data, Client, Req) ->
+    spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
+accept_resource(ssupport, post, ProviderId, Data, _Client, _Req) ->
     Token = proplists:get_value(<<"token">>, Data),
     case token_logic:is_valid(Token, space_support_token) of
         false -> false;
@@ -159,10 +160,11 @@ provide_resource(ports, _ProviderId, _Client, Req) ->
 %% @end
 %% ====================================================================
 -spec delete_resource(Resource :: atom(), ProviderId :: binary() | undefined,
-                      Bindings :: [{atom(), any()}]) -> boolean().
+                      Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-delete_resource(provider, ProviderId, _Bindings) ->
+delete_resource(provider, ProviderId, _Req) ->
     provider_logic:remove(ProviderId);
-delete_resource(space, ProviderId, Bindings) ->
+delete_resource(space, ProviderId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     space_logic:remove_provider(SID, ProviderId).

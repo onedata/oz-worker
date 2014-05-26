@@ -47,7 +47,7 @@
 %% @end
 %% ====================================================================
 -callback resource_exists(Resource :: atom(), ResId :: binary() | undefined,
-                          Bindings :: [{atom(), any()}]) -> boolean().
+                          Req :: cowboy_req:req()) -> boolean().
 
 
 %% accept_resource/6
@@ -62,7 +62,7 @@
 -callback accept_resource(Resource :: atom(), Method :: method(),
                           ResId :: binary() | undefined,
                           Data :: [proplists:property()], Client :: client(),
-                          Bindings :: [{atom(), any()}]) ->
+                          Req :: cowboy_req:req()) ->
     {true, URL :: binary()} | boolean().
 
 
@@ -86,4 +86,4 @@
 %% @end
 %% ====================================================================
 -callback delete_resource(Resource :: atom(), ResId :: binary() | undefined,
-                          Bindings :: [{atom(), any()}]) -> boolean().
+                          Req :: cowboy_req:req()) -> boolean().
