@@ -9,6 +9,9 @@
 -module(connection_test_SUITE).
 -author("Tomasz Lichon").
 
+-define(start_deps,[sasl,lager,ssl,erlydtl,mimetypes,ranch,crypto,cowboy,gproc,n2o,ibrowse]).
+-define(stop_deps,[ibrowse,n2o,cowboy,ranch,crypto,mimetypes,ssl,erlydtl,gproc,lager,sasl]).
+
 %% Includes
 -include_lib("common_test/include/ct.hrl").
 -include("registered_names.hrl").
@@ -46,16 +49,16 @@ init_per_suite(Config) ->
 	?INIT_CODE_PATH,
 	DbNode = ?NODE(?CURRENT_HOST,db),
 	DbNodesEnv = {db_nodes,[DbNode]},
-	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST,
+	Node = test_node_starter:start_test_node(globalregistry_test_node,?CURRENT_HOST, ?APP_Name, ?start_deps,
 		[
 			DbNodesEnv,
 			{ca_cert_file,"../../../cacerts/ca.crt"},
 			{cert_file,"../../../cacerts/server.crt"},
 	 		{key_file,"../../../cacerts/server.key"}
-		]
+		],true
 	),
 	Config ++ [{node,Node}].
 
 end_per_suite(Config) ->
 	Node = ?config(node,Config),
-	test_node_starter:stop_globalregistry_node(Node).
+	test_node_starter:stop_test_node(Node,?APP_Name,?stop_deps).
