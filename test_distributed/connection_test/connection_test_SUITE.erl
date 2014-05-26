@@ -46,6 +46,7 @@ dao_connection_test(Config) ->
 %% ====================================================================
 
 init_per_suite(Config) ->
+    ct:print(file:get_cwd()),
 	?INIT_CODE_PATH,
 	DbNode = ?NODE(?CURRENT_HOST,db),
 	DbNodesEnv = {db_nodes,[DbNode]},
@@ -55,7 +56,7 @@ init_per_suite(Config) ->
 			{ca_cert_file,"../../../cacerts/ca.crt"},
 			{cert_file,"../../../cacerts/server.crt"},
 	 		{key_file,"../../../cacerts/server.key"}
-		],true
+		]
 	),
 	Config ++ [{node,Node}].
 
