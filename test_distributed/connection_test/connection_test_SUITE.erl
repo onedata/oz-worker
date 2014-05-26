@@ -46,8 +46,8 @@ dao_connection_test(Config) ->
 %% ====================================================================
 
 init_per_suite(Config) ->
-    ct:print(file:get_cwd()),
-	?INIT_CODE_PATH,
+    ct:print("~p",[file:get_cwd()]),
+	?INIT_DIST_TEST,
 	DbNode = ?NODE(?CURRENT_HOST,db),
 	DbNodesEnv = {db_nodes,[DbNode]},
 	Node = test_node_starter:start_test_node(globalregistry_test_node,?CURRENT_HOST, ?APP_Name, ?start_deps,
