@@ -46,7 +46,6 @@ dao_connection_test(Config) ->
 %% ====================================================================
 
 init_per_suite(Config) ->
-    ct:print("~p",[file:get_cwd()]),
 	?INIT_DIST_TEST,
 	DbNode = ?NODE(?CURRENT_HOST,db),
 	DbNodesEnv = {db_nodes,[DbNode]},
