@@ -27,7 +27,7 @@ body() ->
         false ->
             Buttons = lists:map(
                 fun(Provider) ->
-                    ButtonText = auth_utils:get_provider_button_text(Provider),
+                    ButtonText = <<"Sign in with ", (auth_utils:get_provider_name(Provider))/binary>>,
                     ButtonIcon = auth_utils:get_provider_button_icon(Provider),
                     ButtonColor = auth_utils:get_provider_button_color(Provider),
                     HandlerModule = auth_utils:get_provider_module(Provider),

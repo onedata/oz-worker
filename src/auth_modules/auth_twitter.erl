@@ -41,7 +41,7 @@ get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
-            {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
+            {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"scope">>, <<"user,user:email">>},
             {<<"state">>, auth_utils:generate_state_token(?MODULE, ConnectAccount)}
         ],
@@ -64,7 +64,7 @@ validate_login(ParamsProplist) ->
         NewParamsProplist = [
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"client_secret">>, auth_utils:get_provider_app_secret(?PROVIDER_NAME)},
-            {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
+            {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"code">>, <<Code/binary>>}
         ],
         % Convert proplist to params string

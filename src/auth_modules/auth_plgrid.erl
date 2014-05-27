@@ -102,21 +102,21 @@ validate_login(ParamsProplist) ->
         Response = <<"is_valid:true\n">>,
 
         % Gather user info
-        Login = proplists:get_value(<<"openid.sreg.nickname">>, ParamsProplist, <<"">>),
+        Login = get_signed_param(<<"openid.sreg.nickname">>, ParamsProplist, SignedArgs),
         % Login is also user id, cannot be empty
         true = (Login /= <<"">>),
-        Name = proplists:get_value(<<"openid.sreg.fullname">>, ParamsProplist, <<"">>),
+        Name = get_signed_param(<<"openid.sreg.fullname">>, ParamsProplist, SignedArgs),
         Emails =
-            case proplists:get_value(<<"openid.sreg.email">>, ParamsProplist, <<"">>) of
+            case get_signed_param(<<"openid.sreg.email">>, ParamsProplist, SignedArgs) of
                 <<"">> -> [];
                 Email -> [Email]
             end,
 
         % TODO Unused
-        _Teams = parse_teams(gui_utils:to_list(proplists:get_value(<<"openid.ext1.value.teams">>, ParamsProplist, <<"">>))),
-        DN1 = proplists:get_value(<<"openid.ext1.value.dn1">>, ParamsProplist, <<"">>),
-        DN2 = proplists:get_value(<<"openid.ext1.value.dn2">>, ParamsProplist, <<"">>),
-        DN3 = proplists:get_value(<<"openid.ext1.value.dn3">>, ParamsProplist, <<"">>),
+        _Teams = parse_teams(gui_utils:to_list(get_signed_param(<<"openid.ext1.value.teams">>, ParamsProplist, SignedArgs))),
+        DN1 = get_signed_param(<<"openid.ext1.value.dn1">>, ParamsProplist, SignedArgs),
+        DN2 = get_signed_param(<<"openid.ext1.value.dn2">>, ParamsProplist, SignedArgs),
+        DN3 = get_signed_param(<<"openid.ext1.value.dn3">>, ParamsProplist, SignedArgs),
         _DnList = lists:filter(
             fun(X) ->
                 (X /= [])
@@ -204,4 +204,17 @@ find_XML_node(NodeName, #xmlElement{} = XMLElement) ->
 find_XML_node(_NodeName, _) ->
     undefined.
 
+
+%% get_signed_param/2
+%% ====================================================================
+%% @doc
+%% Retrieves given request parameter, but only if it was signed by the provider
+%% @end
+-spec get_signed_param(binary(), [binary()], [binary()]) -> string().
+%% ====================================================================
+get_signed_param(ParamName, ParamsProplist, SignedParams) ->
+    case lists:member(ParamName, SignedParams) of
+        true -> proplists:get_value(ParamName, ParamsProplist, <<"">>);
+        false -> <<"">>
+    end.
 

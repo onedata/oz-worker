@@ -43,7 +43,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"response_type">>, <<"code">>},
             {<<"scope">>, <<"openid email profile">>},
-            {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
+            {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"state">>, auth_utils:generate_state_token(?MODULE, ConnectAccount)}
         ],
         Params = auth_utils:proplist_to_params(ParamsProplist),
@@ -66,7 +66,7 @@ validate_login(ParamsProplist) ->
             {<<"code">>, <<Code/binary>>},
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"client_secret">>, auth_utils:get_provider_app_secret(?PROVIDER_NAME)},
-            {<<"redirect_uri">>, <<(auth_utils:local_auth_endpoint())/binary>>},
+            {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"grant_type">>, <<"authorization_code">>}
         ],
         % Convert proplist to params string

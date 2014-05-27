@@ -18,6 +18,7 @@
 
 %% API
 -export([test/0, init/0, save_user/1, get_user/1, update_user/2]).
+-export([create_association/2, get_association/1]).
 
 
 test() ->
@@ -48,6 +49,7 @@ init() ->
     catch ets:delete(?USER_LOGIC_ETS),
     ets:new(?USER_LOGIC_ETS, [named_table, public, bag, {read_concurrency, true}]),
     ets:insert(?USER_LOGIC_ETS, {users, []}),
+    ets:insert(?USER_LOGIC_ETS, {associations, []}),
     ok.
 
 
@@ -157,5 +159,26 @@ get_all_users() ->
 
 
 save_all_users(Users) ->
-    ets:delete_all_objects(?USER_LOGIC_ETS),
+    ets:delete_object(?USER_LOGIC_ETS, {users, get_all_users()}),
     ets:insert(?USER_LOGIC_ETS, {users, Users}).
+
+
+create_association(AuthorizationCode, UserGlobalID) ->
+    save_all_associations([{AuthorizationCode, UserGlobalID} | get_all_associations()]).
+
+
+get_association(AuthorizationCode) ->
+    Associations = get_all_associations(),
+    UserID = proplists:get_value(AuthorizationCode, Associations, undefined),
+    save_all_associations(proplists:delete(AuthorizationCode, Associations)),
+    UserID.
+
+
+get_all_associations() ->
+    [{associations, Associations}] = ets:lookup(?USER_LOGIC_ETS, associations),
+    Associations.
+
+
+save_all_associations(Associations) ->
+    ets:delete_object(?USER_LOGIC_ETS, {associations, get_all_associations()}),
+    ets:insert(?USER_LOGIC_ETS, {associations, Associations}).

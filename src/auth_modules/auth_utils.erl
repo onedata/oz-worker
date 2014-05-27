@@ -5,8 +5,8 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: This module provides convenience functions that can be used from
-%% auth modules.
+%% @doc: This module provides functionalities used in authentication flow
+%% and convenience functions that can be used from auth modules.
 %% @end
 %% ===================================================================
 -module(auth_utils).
@@ -25,7 +25,7 @@
 -export([init_state_memory/0, generate_state_token/2, lookup_state_token/1, clear_expired_tokens/0, generate_uuid/0]).
 
 -export([get_provider_module/1, get_provider_app_id/1, get_provider_app_secret/1, get_provider_name/1]).
--export([get_provider_button_text/1, get_provider_button_icon/1, get_provider_button_color/1]).
+-export([get_provider_button_icon/1, get_provider_button_color/1]).
 
 -define(STATE_TTL, 60).
 -define(STATE_ETS, auth_state_ets).
@@ -284,12 +284,9 @@ get_provider_app_id(Provider) ->
 get_provider_app_secret(Provider) ->
     proplists:get_value(app_secret, get_auth_config(Provider)).
 
+
 get_provider_name(Provider) ->
     proplists:get_value(name, get_auth_config(Provider)).
-
-
-get_provider_button_text(Provider) ->
-    proplists:get_value(button_text, get_auth_config(Provider)).
 
 
 get_provider_button_icon(Provider) ->

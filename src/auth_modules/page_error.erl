@@ -47,6 +47,9 @@ get_reason_and_description() ->
     id_to_reason_and_message(binary_to_atom(IDBinary, latin1)).
 
 
+id_to_reason_and_message(?error_internal_server_error) ->
+    {<<"500 - Internal server error">>, <<"Server encountered an unexpected error. Please contact the site administrator if the problem persists.">>};
+
 id_to_reason_and_message(?error_auth_invalid_request) ->
     {<<"Invalid request state">>, <<"This OpenID or OAuth request could not be validated.">>};
 

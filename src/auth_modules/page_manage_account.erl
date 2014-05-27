@@ -34,7 +34,8 @@ body() ->
         gui_utils:top_menu(manage_account_tab),
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
-            #panel{id = <<"main_table">>, body = main_table()}
+            #panel{id = <<"main_table">>, body = main_table()},
+            #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
         ]}
     ] ++ gui_utils:logotype_footer(20)}.
 
@@ -332,3 +333,5 @@ show_name_edition(Flag) ->
     end.
 
 
+redirect_to_veilcluster() ->
+    ?dump(trolololol).

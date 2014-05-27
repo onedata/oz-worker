@@ -229,8 +229,7 @@ apply_or_redirect(Module, Fun, Args, NeedDN) ->
         end
     catch Type:Message ->
         ?error_stacktrace("Error in ~p - ~p:~p", [Module, Type, Message]),
-        page_error:redirect_with_error(<<"Internal server error">>,
-            <<"Server encountered an unexpected error. Please contact the site administrator if the problem persists.">>),
+        page_error:redirect_with_error(?error_internal_server_error),
         case is_comet_process() of
             true ->
                 flush();

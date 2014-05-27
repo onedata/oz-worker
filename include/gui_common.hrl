@@ -15,6 +15,8 @@
 -include_lib("n2o/include/wf.hrl").
 -include_lib("gui_elements.hrl").
 
+-define(error_internal_server_error, internal_server_error).
+
 
 %% Includes from cowboy
 -type cookie_option() :: {max_age, non_neg_integer()}
