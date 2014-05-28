@@ -22,14 +22,18 @@
 -export([get_redirect_url/1, validate_login/1]).
 
 
-xrds_endpoint() ->
-    <<"https://openid.plgrid.pl/gateway">>.
+%% ====================================================================
+%% API functions
+%% ====================================================================
 
-
-plgrid_endpoint() ->
-    discover_op_endpoint(auth_utils:get_xrds(xrds_endpoint())).
-
-
+%% get_redirect_url/1
+%% ====================================================================
+%% @doc Returns full URL, where the user will be redirected for authorization.
+%% See function specification in auth_module_behaviour.
+%% @end
+%% ====================================================================
+-spec get_redirect_url(boolean()) -> method().
+%% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
         HostName = auth_utils:fully_qualified_url(gui_utils:get_requested_hostname()),
@@ -61,7 +65,14 @@ get_redirect_url(ConnectAccount) ->
     end.
 
 
-
+%% validate_login/1
+%% ====================================================================
+%% @doc Validates login request that came back from the provider.
+%% See function specification in auth_module_behaviour.
+%% @end
+%% ====================================================================
+-spec validate_login([{binary(), binary()}]) -> method().
+%% ====================================================================
 validate_login(ParamsProplist) ->
     try
         % Make sure received endpoint is really the PLGrid endpoint
@@ -140,6 +151,17 @@ validate_login(ParamsProplist) ->
 %% ====================================================================
 %% Internal functions
 %% ====================================================================
+
+%% authorize_endpoint/0
+%% ====================================================================
+%% @doc Provider endpoint, where users are redirected for authorization.
+%% @end
+%% ====================================================================
+-spec authorize_endpoint() -> method().
+%% ====================================================================
+plgrid_endpoint() ->
+    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)),
+    discover_op_endpoint(auth_utils:get_xrds(XRDSEndpoint)).
 
 %% discover_op_endpoint/1
 %% ====================================================================

@@ -191,11 +191,6 @@ merge_provider_info(ProvUserInfo, UserInfo) ->
 
 init_state_memory() ->
     ets:new(?STATE_ETS, [named_table, public, bag, {read_concurrency, true}]),
-    {A_SEED, B_SEED, C_SEED} = now(),
-    L_SEED = atom_to_list(node()),
-    {_, Sum_SEED} = lists:foldl(fun(Elem_SEED, {N_SEED, Acc_SEED}) ->
-        {N_SEED * 137, Acc_SEED + Elem_SEED * N_SEED} end, {1, 0}, L_SEED),
-    random:seed(Sum_SEED * 10000 + A_SEED, B_SEED, C_SEED),
     ok.
 
 
@@ -218,6 +213,11 @@ generate_state_token(HandlerModule, ConnectAccount) ->
     Token.
 
 generate_uuid() ->
+    {A_SEED, B_SEED, C_SEED} = now(),
+    L_SEED = atom_to_list(node()),
+    {_, Sum_SEED} = lists:foldl(fun(Elem_SEED, {N_SEED, Acc_SEED}) ->
+        {N_SEED * 137, Acc_SEED + Elem_SEED * N_SEED} end, {1, 0}, L_SEED),
+    random:seed(Sum_SEED * 10000 + A_SEED, B_SEED, C_SEED),
     {M, S, N} = now(),
     Time = M * 1000000000000 + S * 1000000 + N,
     TimeHex = string:right(integer_to_list(Time, 16), 14, $0),

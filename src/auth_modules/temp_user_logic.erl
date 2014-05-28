@@ -18,7 +18,7 @@
 
 %% API
 -export([test/0, init/0, save_user/1, get_user/1, update_user/2]).
--export([create_association/2, get_association/1]).
+-export([create_association/2, get_association/1, get_user_to_json/1]).
 
 
 test() ->
@@ -182,3 +182,21 @@ get_all_associations() ->
 save_all_associations(Associations) ->
     ets:delete_object(?USER_LOGIC_ETS, {associations, get_all_associations()}),
     ets:insert(?USER_LOGIC_ETS, {associations, Associations}).
+
+
+get_user_to_json(UserID) ->
+    try
+        #user_info{
+            global_id = GlobalID,
+            preferred_name = PrefName,
+            emails = Emails,
+            provider_infos = ProvInfo} = get_user({global, UserID}),
+        UserStruct = [
+            {global_id, GlobalID},
+            {preffered_name, PrefName},
+            {emails, Emails}
+        ],
+        JSON = mochijson2:encode(UserStruct)
+    catch
+        _:_ -> <<"error">>
+    end.

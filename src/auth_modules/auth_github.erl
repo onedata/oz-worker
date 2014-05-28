@@ -21,22 +21,18 @@
 -export([get_redirect_url/1, validate_login/1]).
 
 
-authorize_endpoint() ->
-    <<"https://github.com/login/oauth/authorize">>.
+%% ====================================================================
+%% API functions
+%% ====================================================================
 
-
-access_token_endpoint() ->
-    <<"https://github.com/login/oauth/access_token">>.
-
-
-user_info_endpoint() ->
-    <<"https://api.github.com/user">>.
-
-
-user_emails_endpoint() ->
-    <<"https://api.github.com/user/emails">>.
-
-
+%% get_redirect_url/1
+%% ====================================================================
+%% @doc Returns full URL, where the user will be redirected for authorization.
+%% See function specification in auth_module_behaviour.
+%% @end
+%% ====================================================================
+-spec get_redirect_url(boolean()) -> method().
+%% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
@@ -55,7 +51,14 @@ get_redirect_url(ConnectAccount) ->
     end.
 
 
-
+%% validate_login/1
+%% ====================================================================
+%% @doc Validates login request that came back from the provider.
+%% See function specification in auth_module_behaviour.
+%% @end
+%% ====================================================================
+-spec validate_login([{binary(), binary()}]) -> method().
+%% ====================================================================
 validate_login(ParamsProplist) ->
     try
         % Parse out code parameter
@@ -70,10 +73,7 @@ validate_login(ParamsProplist) ->
         % Convert proplist to params string
         Params = auth_utils:proplist_to_params(NewParamsProplist),
         % Send request to GitHub endpoint
-        {ok, "200", _, Response} = ibrowse:send_req(
-            binary_to_list(access_token_endpoint()),
-            [{content_type, "application/x-www-form-urlencoded"}],
-            post, Params, [{response_format, binary}]),
+        {ok, Response} = gui_utils:https_post(access_token_endpoint(), [{content_type, "application/x-www-form-urlencoded"}], Params),
 
         % Parse out received access token
         AccessToken = proplists:get_value(<<"access_token">>, cowboy_http:x_www_form_urlencoded(Response)),
@@ -81,18 +81,12 @@ validate_login(ParamsProplist) ->
         % Form user info request
         URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, "200", _, JSON} = ibrowse:send_req(
-            binary_to_list(URL),
-            [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}],
-            get, [], [{response_format, binary}]),
+        {ok, JSON} = gui_utils:https_get(URL, [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}]),
 
         % Form user email request
         URLEmail = <<(user_emails_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, "200", _, JSONEmails} = ibrowse:send_req(
-            binary_to_list(URLEmail),
-            [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}],
-            get, [], [{response_format, binary}]),
+        {ok, JSONEmails} = gui_utils:https_get(URLEmail, [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}]),
 
         % Parse received JSON
         {struct, JSONProplist} = n2o_json:decode(JSON),
@@ -110,6 +104,61 @@ validate_login(ParamsProplist) ->
     end.
 
 
+%% ====================================================================
+%% Internal functions
+%% ====================================================================
+
+%% authorize_endpoint/0
+%% ====================================================================
+%% @doc Provider endpoint, where users are redirected for authorization.
+%% @end
+%% ====================================================================
+-spec authorize_endpoint() -> method().
+%% ====================================================================
+authorize_endpoint() ->
+    proplists:get_value(authorize_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
+
+
+%% access_token_endpoint/0
+%% ====================================================================
+%% @doc Provider endpoint, where access token is aquired.
+%% @end
+%% ====================================================================
+-spec access_token_endpoint() -> method().
+%% ====================================================================
+access_token_endpoint() ->
+    proplists:get_value(access_token_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
+
+
+%% user_info_endpoint/0
+%% ====================================================================
+%% @doc Provider endpoint, where user info is aquired.
+%% @end
+%% ====================================================================
+-spec user_info_endpoint() -> method().
+%% ====================================================================
+user_info_endpoint() ->
+    proplists:get_value(user_info_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
+
+
+%% user_info_endpoint/0
+%% ====================================================================
+%% @doc Provider endpoint, where user's emails are aquired.
+%% @end
+%% ====================================================================
+-spec user_info_endpoint() -> method().
+%% ====================================================================
+user_emails_endpoint() ->
+    proplists:get_value(user_emails_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
+
+
+%% extract_emails/1
+%% ====================================================================
+%% @doc Extracts email list from JSON.
+%% @end
+%% ====================================================================
+-spec extract_emails([{term(), term()}]) -> method().
+%% ====================================================================
 extract_emails(JSON) ->
     EmailsJSON =
         case n2o_json:decode(JSON) of

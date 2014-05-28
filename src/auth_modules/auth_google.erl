@@ -21,22 +21,18 @@
 -export([get_redirect_url/1, validate_login/1]).
 
 
-xrds_endpoint() ->
-    <<"https://accounts.google.com/.well-known/openid-configuration">>.
+%% ====================================================================
+%% API functions
+%% ====================================================================
 
-
-authorize_endpoint() ->
-    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"authorization_endpoint">>).
-
-
-access_token_endpoint() ->
-    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"token_endpoint">>).
-
-
-user_info_endpoint() ->
-    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"userinfo_endpoint">>).
-
-
+%% get_redirect_url/1
+%% ====================================================================
+%% @doc Returns full URL, where the user will be redirected for authorization.
+%% See function specification in auth_module_behaviour.
+%% @end
+%% ====================================================================
+-spec get_redirect_url(boolean()) -> method().
+%% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
@@ -56,7 +52,14 @@ get_redirect_url(ConnectAccount) ->
     end.
 
 
-
+%% validate_login/1
+%% ====================================================================
+%% @doc Validates login request that came back from the provider.
+%% See function specification in auth_module_behaviour.
+%% @end
+%% ====================================================================
+-spec validate_login([{binary(), binary()}]) -> method().
+%% ====================================================================
 validate_login(ParamsProplist) ->
     try
         % Parse out code parameter
@@ -102,6 +105,61 @@ validate_login(ParamsProplist) ->
     end.
 
 
+%% ====================================================================
+%% Internal functions
+%% ====================================================================
+
+%% authorize_endpoint/0
+%% ====================================================================
+%% @doc Provider endpoint, where users are redirected for authorization.
+%% @end
+%% ====================================================================
+-spec authorize_endpoint() -> method().
+%% ====================================================================
+xrds_endpoint() ->
+    proplists:get_value(xrds_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
+
+
+%% access_token_endpoint/0
+%% ====================================================================
+%% @doc Provider endpoint, where access token is aquired.
+%% @end
+%% ====================================================================
+-spec access_token_endpoint() -> method().
+%% ====================================================================
+authorize_endpoint() ->
+    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"authorization_endpoint">>).
+
+
+%% access_token_endpoint/0
+%% ====================================================================
+%% @doc Provider endpoint, where access token is aquired.
+%% @end
+%% ====================================================================
+-spec access_token_endpoint() -> method().
+%% ====================================================================
+access_token_endpoint() ->
+    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"token_endpoint">>).
+
+
+%% user_info_endpoint/0
+%% ====================================================================
+%% @doc Provider endpoint, where user info is aquired.
+%% @end
+%% ====================================================================
+-spec user_info_endpoint() -> method().
+%% ====================================================================
+user_info_endpoint() ->
+    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"userinfo_endpoint">>).
+
+
+%% extract_emails/1
+%% ====================================================================
+%% @doc Extracts email list from JSON in erlang format (after decoding).
+%% @end
+%% ====================================================================
+-spec extract_emails([{term(), term()}]) -> method().
+%% ====================================================================
 extract_emails(JSONProplist) ->
     case proplists:get_value(<<"email">>, JSONProplist, <<"">>) of
         <<"">> -> [];
@@ -109,53 +167,13 @@ extract_emails(JSONProplist) ->
     end.
 
 
-parse_json(Body, Key) ->
-    {struct, Proplist} = n2o_json:decode(Body),
+%% parse_json/2
+%% ====================================================================
+%% @doc Extracts a given key from flat JSON (nested one level).
+%% @end
+%% ====================================================================
+-spec parse_json(binary(), binary()) -> method().
+%% ====================================================================
+parse_json(JSON, Key) ->
+    {struct, Proplist} = n2o_json:decode(JSON),
     proplists:get_value(Key, Proplist).
-
-
-% Alternative flow: this can be used with id_token to get user id, and then make a request
-% to https://www.googleapis.com/plus/v1/people/<user-id>
-
-%% parse_jwt(Token) ->
-%%     try
-%%         [_Header, ClaimSet, _Signature] = binary:split(Token, [<<".">>], [global]),
-%%         % TODO check signature
-%% %%         {struct, HeaderJSON} = n2o_json:decode(base64decode(Header)),
-%% %%         <<"RS256">> = proplists:get_value(<<"alg">>, HeaderJSON),
-%% %%         Kid = proplists:get_value(<<"kid">>, HeaderJSON),
-%% %%         Signature2 = base64encode(crypto:hmac(sha256, Kid, <<Header/binary, ".", ClaimSet/binary>>)),
-%% %%         Signature3 = public_key:sign(<<Header/binary, ".", ClaimSet/binary>>, sha256, Kid),
-%% %%         ?dump(Signature),
-%% %%         ?dump(Signature2),
-%% %%         ?dump(Signature3),
-%%         {struct, ClaimSetJSON} = n2o_json:decode(base64decode(ClaimSet)),
-%%         ClaimSetJSON
-%%     catch
-%%         T:M ->
-%%             ?error_stacktrace("~p:~p", [T, M]),
-%%             error
-%%     end.
-%%
-%%
-%% %% base64encode(Bin) when is_binary(Bin) ->
-%% %%     << << (urlencode_digit(D)) >> || <<D>> <= base64:encode(Bin), D =/= $= >>.
-%%
-%% %% urlencode_digit($/) -> $_;
-%% %% urlencode_digit($+) -> $-;
-%% %% urlencode_digit(D) -> D.
-%%
-%%
-%% base64decode(Bin) when is_binary(Bin) ->
-%%     Bin2 = case byte_size(Bin) rem 4 of
-%%                2 -> <<Bin/binary, "==">>;
-%%                3 -> <<Bin/binary, "=">>;
-%%                _ -> Bin
-%%            end,
-%%     base64:decode(<<<<(urldecode_digit(D))>> || <<D>> <= Bin2>>).
-%%
-%%
-%%
-%% urldecode_digit($_) -> $/;
-%% urldecode_digit($-) -> $+;
-%% urldecode_digit(D) -> D.

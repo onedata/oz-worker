@@ -17,11 +17,11 @@
 -include("logging.hrl").
 
 %% API
--export([get_redirect_to_provider_url/2]).
+-export([get_redirect_to_provider_url/2, generate_authorization_code/1]).
 
 
 get_redirect_to_provider_url(ProviderIP, UserGlobalID) ->
-    AuthorizationCode = generate_authorization_code(),
+    AuthorizationCode = generate_authorization_code(UserGlobalID),
     temp_user_logic:create_association(AuthorizationCode, UserGlobalID),
     ParamsProplist = [
         {<<"authorization_code">>, AuthorizationCode}
@@ -30,6 +30,7 @@ get_redirect_to_provider_url(ProviderIP, UserGlobalID) ->
     <<ProviderIP/binary, ?provider_login_endpoint, "?", ParamsString/binary>>.
 
 
-generate_authorization_code() ->
+generate_authorization_code(UserID) ->
     {Code, _} = auth_utils:generate_uuid(),
+    temp_user_logic:create_association(Code, UserID),
     Code.

@@ -334,4 +334,8 @@ show_name_edition(Flag) ->
 
 
 redirect_to_veilcluster() ->
-    ?dump(trolololol).
+    UserID = wf:user(),
+    RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),
+    wf:redirect(RedirectURL).
+%%     <<"veilfsdev.com/openid_login?authorization_code=", Rest/binary>> = _RedirectURL,
+%%     wf:redirect(<<"https://onedata.org/auth_endpoint?authorization_code=", Rest/binary>>).
