@@ -76,9 +76,9 @@ stop(_State) ->
 %% ====================================================================
 start_rest() ->
   % Get cert paths
-  {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
-  {ok,CertFile} = application:get_env(?APP_Name,cert_file),
-  {ok,KeyFile} = application:get_env(?APP_Name,key_file),
+  {ok,CaCertFile} = application:get_env(?APP_Name,grpca_cert_file),
+  {ok,CertFile} = application:get_env(?APP_Name,rest_cert_file),
+  {ok,KeyFile} = application:get_env(?APP_Name,rest_key_file),
 
   Dispatch = cowboy_router:compile([
     {'_', lists:append([
@@ -94,7 +94,8 @@ start_rest() ->
       {port, ?rest_port},
       {cacertfile, CaCertFile},
       {certfile, CertFile},
-      {keyfile, KeyFile}
+      {keyfile, KeyFile},
+      {verify, verify_peer}
     ],
     [
       {env, [{dispatch, Dispatch}]}

@@ -63,7 +63,8 @@
                           ResId :: binary() | undefined,
                           Data :: [proplists:property()], Client :: client(),
                           Req :: cowboy_req:req()) ->
-    {true, URL :: binary()} | boolean().
+    {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
+        boolean().
 
 
 %% provide_resource/4

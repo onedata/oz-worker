@@ -130,7 +130,8 @@ resource_exists(_, SpaceId, _Req) ->
                       SpaceId :: binary() | undefined,
                       Data :: [proplists:property()], Client :: client(),
                       Req :: cowboy_req:req()) ->
-    {true, URL :: binary()} | boolean().
+    {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
+        boolean().
 %% ====================================================================
 accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
@@ -138,7 +139,7 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId},
         Name =:= undefined -> false;
         true ->
             {ok, SpaceId} = space_logic:create({user, UserId}, Name),
-            {true, <<"/spaces/", SpaceId/binary>>}
+            {true, {url, <<"/spaces/", SpaceId/binary>>}}
     end;
 accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
@@ -149,7 +150,7 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = Prov
             false -> false;
             true ->
                 {ok, SpaceId} = space_logic:create({provider, ProviderId}, Name, Token),
-                {true, <<"/spaces/", SpaceId/binary>>}
+                {true, {url, <<"/spaces/", SpaceId/binary>>}}
         end
     end;
 accept_resource(space, patch, SpaceId, Data, _Client, _Req) ->

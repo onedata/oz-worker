@@ -29,6 +29,11 @@
 		% todo generate dedicated certs (this are example ones)
 		{ca_cert_file,"./cacerts/ca.crt"},
 		{cert_file,"./cacerts/server.crt"},
-		{key_file,"./cacerts/server.key"}
+		{key_file,"./cacerts/server.key"},
+        {grpca_cert_file,"./grpca/cacert.pem"},
+        {grpca_key_file,"./grpca/private/cakey.pem"},
+        {grpca_crl_file,"./grpca/crl.pem"},
+        {rest_cert_file,"./grpca/rest.pem"},
+        {rest_key_file,"./grpca/rest_key.pem"}
 	]}
 ]}.

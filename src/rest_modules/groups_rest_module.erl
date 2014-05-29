@@ -120,7 +120,8 @@ resource_exists(_, GroupId, _Req) ->
                       GroupId :: binary() | undefined,
                       Data :: [proplists:property()], Client :: client(),
                       Req :: cowboy_req:req()) ->
-    {true, URL :: binary()} | boolean().
+    {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
+        boolean().
 %% ====================================================================
 accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
@@ -128,7 +129,7 @@ accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, _Req) ->
         Name =:= undefined -> false;
         true ->
             {ok, GroupId} = group_logic:create(UserId, Name),
-            {true, <<"/groups/", GroupId/binary>>}
+            {true, {url, <<"/groups/", GroupId/binary>>}}
     end;
 accept_resource(group, patch, GroupId, Data, _Client, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
@@ -155,7 +156,7 @@ accept_resource(spaces, post, GroupId, Data, _Client, _Req) ->
         Name =:= undefined -> false;
         true ->
             {ok, SpaceId} = space_logic:create({group, GroupId}, Name),
-            {true, <<"/spaces/", SpaceId/binary>>}
+            {true, {url, <<"/spaces/", SpaceId/binary>>}}
     end;
 accept_resource(sjoin, post, GroupId, Data, _Client, _Req) ->
     Token = proplists:get_value(<<"token">>, Data),
@@ -163,7 +164,7 @@ accept_resource(sjoin, post, GroupId, Data, _Client, _Req) ->
         false -> false;
         true ->
             {ok, SpaceId} = space_logic:join({group, GroupId}, Token),
-            {true, <<"/groups/", GroupId/binary, "/spaces/", SpaceId/binary>>}
+            {true, {url, <<"/groups/", GroupId/binary, "/spaces/", SpaceId/binary>>}}
     end.
 
 

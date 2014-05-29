@@ -17,8 +17,9 @@
 
 %% API
 -export([init/3, allowed_methods/2, content_types_accepted/2, is_authorized/2,
-    content_types_provided/2, delete_resource/2, accept_resource/2,
-    provide_resource/2, rest_init/2, forbidden/2, resource_exists/2]).
+    content_types_provided/2, delete_resource/2, accept_resource_json/2,
+    accept_resource_form/2, provide_resource/2, rest_init/2, forbidden/2,
+    resource_exists/2]).
 
 
 %% init/3
@@ -27,11 +28,11 @@
 %% Upgrade the protocol to cowboy_rest.
 %% @end
 %% ====================================================================
--spec init({TransportName :: tcp | ssl | atom(), ProtocolName :: http | atom()},
+-spec init({TransportName :: ssl, ProtocolName :: http},
            Req :: cowboy_req:req(), Opts :: any()) ->
     {upgrade, protocol, cowboy_rest}.
 %% ====================================================================
-init(_Transport, _Req, _Opts) -> %% @todo: Only accept ssl
+init({ssl, http}, _Req, _Opts) ->
     {upgrade, protocol, cowboy_rest}.
 
 
@@ -77,7 +78,10 @@ allowed_methods(Req, #rstate{methods = Methods} = State) ->
     AcceptResource :: atom().
 %% ====================================================================
 content_types_accepted(Req, #rstate{} = State) ->
-    {[{<<"application/json">>, accept_resource}], Req, State}.
+    {[
+        {<<"application/json">>, accept_resource_json},
+        {<<"application/x-www-form-urlencoded">>, accept_resource_form}
+    ], Req, State}.
 
 
 %% content_types_provided/2
@@ -146,14 +150,21 @@ forbidden(Req, #rstate{module = Mod, resource = Resource, client = Client} = Sta
     {true | {false, binary()}, cowboy_req:req(), rstate()}.
 %% ====================================================================
 is_authorized(Req, #rstate{} = State) -> %% @todo: proper certificate-based authentication
-    {UserId, Req2} = cowboy_req:header(<<"userid">>, Req),
-    {ProviderId, Req3} = cowboy_req:header(<<"providerid">>, Req2),
-    Client = if
-        UserId =/= undefined -> #client{type = user, id = UserId};
-        ProviderId =/= undefined -> #client{type = provider, id = ProviderId};
-        true -> #client{}
-    end,
-    {true, Req3, State#rstate{client = Client}}.
+    %% @todo: "Mod:requires_authentication()"
+    try
+        {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
+        {ok, ProviderId} = grpca:verify(PeerCert),
+        {UserId, Req2} = cowboy_req:header(<<"userid">>, Req),
+        Client = if
+            UserId =/= undefined -> #client{type = user, id = UserId};
+            true -> #client{type = provider, id = ProviderId}
+        end,
+        {true, Req2, State#rstate{client = Client}}
+    catch
+        error:{badmatch, Reason} ->
+            io:format("~p~n", [{badmatch, Reason}]),
+            {true, Req, State#rstate{client = #client{}}}
+    end.
 
 
 %% resource_exists/2
@@ -177,24 +188,58 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
     end.
 
 
+%% accept_resource_json/2
+%% ====================================================================
+%% @doc Cowboy callback function.
+%% Process the request body of application/json content type.
+%% @end
+%% ====================================================================
+-spec accept_resource_json(Req :: cowboy_req:req(), State :: rstate()) ->
+    {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
+%% ====================================================================
+accept_resource_json(Req, #rstate{} = State) ->
+    {ok, Body, Req2} = cowboy_req:body(Req),
+    Data = mochijson2:decode(Body, [{format, proplist}]),
+    accept_resource(Data, Req, State).
+
+
+%% accept_resource_form/2
+%% ====================================================================
+%% @doc Cowboy callback function.
+%% Process the request body of application/x-www-form-urlencoded content type.
+%% @end
+%% ====================================================================
+-spec accept_resource_form(Req :: cowboy_req:req(), State :: rstate()) ->
+    {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
+%% ====================================================================
+accept_resource_form(Req, #rstate{} = State) ->
+    {ok, Data, Req2} = cowboy_req:body_qs(Req),
+    accept_resource(Data, Req, State).
+
+
 %% accept_resource/2
 %% ====================================================================
 %% @doc Cowboy callback function.
 %% Process the request body.
 %% @end
 %% ====================================================================
--spec accept_resource(Req :: cowboy_req:req(), State :: rstate()) ->
+-spec accept_resource(Data :: [proplists:property()], Req :: cowboy_req:req(),
+                      State :: rstate()) ->
     {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
 %% ====================================================================
-accept_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
+accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
     {ResId, Req2} = get_res_id(Req, State),
     {BinMethod, Req3} = cowboy_req:method(Req2),
-    {ok, Body, Req4} = cowboy_req:body(Req3),
     Method = binary_to_method(BinMethod),
-    Data = mochijson2:decode(Body, [{format, proplist}]),
 
-    AcceptResult = Mod:accept_resource(Resource, Method, ResId, Data, Client, Req4),
-    {AcceptResult, Req4, State}.
+    case Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3) of % @todo: should return req
+        {true, {url, URL}} -> {{true, URL}, Req3, State};
+        {true, {data, Response}} ->
+            JSON = mochijson2:encode(Response),
+            Req4 = cowboy_req:set_resp_body(JSON, Req3),
+            {true, Req4, State};
+        B -> {B, Req3, State}
+    end.
 
 
 %% provide_resource/2

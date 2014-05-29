@@ -13,10 +13,12 @@
 -author("Konrad Zemek").
 
 -include("dao/dao_types.hrl").
+-include("registered_names.hrl").
 
+-include_lib("public_key/include/public_key.hrl").
 
 %% API
--export([create/1, modify/2]).
+-export([create/2, modify/2]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
 -export([test_connection/1]).
@@ -26,12 +28,13 @@
 %% ====================================================================
 %% @doc Create a provider's account.
 %% ====================================================================
--spec create(URL :: binary()) ->
-    {ok, ProviderId :: binary()} | no_return().
+-spec create(URL :: binary(), CSR :: binary()) ->
+    {ok, ProviderId :: binary(), ProviderCertPem :: binary()} | no_return().
 %% ====================================================================
-create(URL) ->
+create(URL, CSRBin) ->
     ProviderId = logic_helper:save(#provider{url = URL}),
-    {ok, ProviderId}.
+    {ok, ProviderCertPem} = grpca:sign_csr(CSRBin, ProviderId),
+    {ok, ProviderId, ProviderCertPem}.
 
 
 %% modify/2
