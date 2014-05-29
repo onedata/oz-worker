@@ -41,7 +41,7 @@
 	{ok, pid(), State :: term()} |
 	{error, Reason :: term()}).
 start(_StartType, _StartArgs) ->
-	start_rest(),
+    start_rest(),
 	start_n2o(),
 	case globalregistry_sup:start_link() of
 		{ok, Pid} ->
@@ -63,6 +63,7 @@ start(_StartType, _StartArgs) ->
 stop(_State) ->
 	cowboy:stop_listener(?rest_listener),
 	cowboy:stop_listener(?gui_https_listener),
+    grpca:stop(),
 	ok.
 
 %%%===================================================================
@@ -76,9 +77,12 @@ stop(_State) ->
 %% ====================================================================
 start_rest() ->
   % Get cert paths
-  {ok,CaCertFile} = application:get_env(?APP_Name,grpca_cert_file),
-  {ok,CertFile} = application:get_env(?APP_Name,rest_cert_file),
-  {ok,KeyFile} = application:get_env(?APP_Name,rest_key_file),
+  {ok, GRPCADir} = application:get_env(?APP_Name, grpca_dir),
+  {ok, RestCertFile} = application:get_env(?APP_Name, rest_cert_file),
+  {ok, RestKeyFile} = application:get_env(?APP_Name, rest_key_file),
+  {ok, RestCertDomain} = application:get_env(?APP_Name, rest_cert_domain),
+
+  grpca:start(GRPCADir, RestCertFile, RestKeyFile, RestCertDomain),
 
   Dispatch = cowboy_router:compile([
     {'_', lists:append([
@@ -92,9 +96,9 @@ start_rest() ->
   {ok, _Ans} = cowboy:start_https(?rest_listener, ?rest_https_acceptors,
     [
       {port, ?rest_port},
-      {cacertfile, CaCertFile},
-      {certfile, CertFile},
-      {keyfile, KeyFile},
+      {cacertfile, grpca:cacert_path(GRPCADir)},
+      {certfile, RestCertFile},
+      {keyfile, RestKeyFile},
       {verify, verify_peer}
     ],
     [

@@ -33,7 +33,7 @@
 %% ====================================================================
 create(URL, CSRBin) ->
     ProviderId = logic_helper:save(#provider{url = URL}),
-    {ok, ProviderCertPem} = grpca:sign_csr(CSRBin, ProviderId),
+    {ok, ProviderCertPem} = grpca:sign_provider_req(ProviderId, CSRBin),
     {ok, ProviderId, ProviderCertPem}.
 
 
