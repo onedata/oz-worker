@@ -18,7 +18,7 @@
 -include_lib("public_key/include/public_key.hrl").
 
 %% API
--export([create/2, modify/2]).
+-export([create/3, modify/2]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
 -export([test_connection/1]).
@@ -28,11 +28,11 @@
 %% ====================================================================
 %% @doc Create a provider's account.
 %% ====================================================================
--spec create(URL :: binary(), CSR :: binary()) ->
+-spec create(URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()} | no_return().
 %% ====================================================================
-create(URL, CSRBin) ->
-    ProviderId = logic_helper:save(#provider{url = URL}),
+create(URLs, RedirectionPoint, CSRBin) ->
+    ProviderId = logic_helper:save(#provider{urls = URLs, redirection_point = RedirectionPoint}),
     {ok, ProviderCertPem} = grpca:sign_provider_req(ProviderId, CSRBin),
     {ok, ProviderId, ProviderCertPem}.
 
@@ -41,13 +41,17 @@ create(URL, CSRBin) ->
 %% ====================================================================
 %% @doc Modify provider's details.
 %% ====================================================================
--spec modify(ProviderId :: binary(), URL :: binary()) ->
+-spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
     ok | no_return().
 %% ====================================================================
-modify(ProviderId, URL) ->
+modify(ProviderId, Data) ->
     Doc = logic_helper:provider_doc(ProviderId),
     #veil_document{record = Provider} = Doc,
-    ProviderNew = Provider#provider{url = URL},
+
+    URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
+    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
+
+    ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint},
     logic_helper:save(Doc#veil_document{record = ProviderNew}),
     ok.
 
@@ -60,10 +64,11 @@ modify(ProviderId, URL) ->
     {ok, Data :: [proplists:property()]} | no_return().
 %% ====================================================================
 get_data(ProviderId) ->
-    #provider{url = URL} = logic_helper:provider(ProviderId),
+    #provider{urls = URLs, redirection_point = RedirectionPoint} = logic_helper:provider(ProviderId),
     {ok, [
         {providerId, ProviderId},
-        {url, URL}
+        {urls, URLs},
+        {redirectionPoint, RedirectionPoint}
     ]}.
 
 

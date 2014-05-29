@@ -12,8 +12,8 @@
 
 %% This record defines a user and is handled as a database document
 -record(provider, {
-    url :: binary(),
-    serial_number :: integer(),
+    redirection_point :: binary(),
+    urls :: [binary()],
     spaces = [] :: [SpaceId :: binary()]
 }).
 
