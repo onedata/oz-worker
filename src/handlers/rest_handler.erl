@@ -149,21 +149,23 @@ forbidden(Req, #rstate{module = Mod, resource = Resource, client = Client} = Sta
 -spec is_authorized(Req :: cowboy_req:req(), State :: rstate()) ->
     {true | {false, binary()}, cowboy_req:req(), rstate()}.
 %% ====================================================================
-is_authorized(Req, #rstate{} = State) -> %% @todo: proper certificate-based authentication
-    %% @todo: "Mod:requires_authentication()"
-    try
-        {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
-        {ok, ProviderId} = grpca:verify_provider(PeerCert),
-        {UserId, Req2} = cowboy_req:header(<<"userid">>, Req),
-        Client = if
-            UserId =/= undefined -> #client{type = user, id = UserId};
-            true -> #client{type = provider, id = ProviderId}
-        end,
-        {true, Req2, State#rstate{client = Client}}
-    catch
-        error:{badmatch, Reason} ->
-            io:format("~p~n", [{badmatch, Reason}]),
-            {true, Req, State#rstate{client = #client{}}}
+is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
+    {BinMethod, Req2} = cowboy_req:method(Req),
+    Method = binary_to_method(BinMethod),
+    case lists:member(Method, NoAuth) of
+        true -> {true, Req, State#rstate{client = #client{}}};
+        false ->
+            {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req2)),
+            {ok, ProviderId} = grpca:verify_provider(PeerCert),
+
+            %% @todo: OpenID user identification
+            {UserId, Req3} = cowboy_req:header(<<"userid">>, Req2),
+            Client = if
+                UserId =/= undefined -> #client{type = user, id = UserId};
+                true -> #client{type = provider, id = ProviderId}
+            end,
+            
+            {true, Req3, State#rstate{client = Client}}
     end.
 
 
