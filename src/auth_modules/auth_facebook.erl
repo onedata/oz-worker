@@ -31,7 +31,7 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec get_redirect_url(boolean()) -> method().
+-spec get_redirect_url(boolean()) -> binary().
 %% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
@@ -57,7 +57,8 @@ get_redirect_url(ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec validate_login([{binary(), binary()}]) -> method().
+-spec validate_login([{binary(), binary()}]) ->
+    {ok, #oauth_account{}} | {error, term()}.
 %% ====================================================================
 validate_login(ParamsProplist) ->
     try
@@ -86,7 +87,7 @@ validate_login(ParamsProplist) ->
 
         % Parse received JSON
         {struct, JSONProplist} = n2o_json:decode(JSON),
-        ProvUserInfo = #provider_user_info{
+        ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = proplists:get_value(<<"id">>, JSONProplist, <<"">>),
             emails = extract_emails(JSONProplist),
@@ -108,7 +109,7 @@ validate_login(ParamsProplist) ->
 %% @doc Provider endpoint, where users are redirected for authorization.
 %% @end
 %% ====================================================================
--spec authorize_endpoint() -> method().
+-spec authorize_endpoint() -> binary().
 %% ====================================================================
 authorize_endpoint() ->
     proplists:get_value(authorize_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
@@ -119,7 +120,7 @@ authorize_endpoint() ->
 %% @doc Provider endpoint, where access token is aquired.
 %% @end
 %% ====================================================================
--spec access_token_endpoint() -> method().
+-spec access_token_endpoint() -> binary().
 %% ====================================================================
 access_token_endpoint() ->
     proplists:get_value(access_token_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
@@ -130,7 +131,7 @@ access_token_endpoint() ->
 %% @doc Provider endpoint, where user info is aquired.
 %% @end
 %% ====================================================================
--spec user_info_endpoint() -> method().
+-spec user_info_endpoint() -> binary().
 %% ====================================================================
 user_info_endpoint() ->
     proplists:get_value(user_info_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
@@ -141,7 +142,7 @@ user_info_endpoint() ->
 %% @doc Extracts email list from JSON in erlang format (after decoding).
 %% @end
 %% ====================================================================
--spec extract_emails([{term(), term()}]) -> method().
+-spec extract_emails([{term(), term()}]) -> [binary()].
 %% ====================================================================
 extract_emails(JSONProplist) ->
     case proplists:get_value(<<"email">>, JSONProplist, <<"">>) of

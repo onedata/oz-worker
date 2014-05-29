@@ -32,7 +32,7 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec get_redirect_url(boolean()) -> method().
+-spec get_redirect_url(boolean()) -> binary().
 %% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
@@ -71,7 +71,8 @@ get_redirect_url(ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec validate_login([{binary(), binary()}]) -> method().
+-spec validate_login([{binary(), binary()}]) ->
+    {ok, #oauth_account{}} | {error, term()}.
 %% ====================================================================
 validate_login(ParamsProplist) ->
     try
@@ -133,7 +134,7 @@ validate_login(ParamsProplist) ->
                 (X /= [])
             end, [DN1, DN2, DN3]),
 
-        ProvUserInfo = #provider_user_info{
+        ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = Login,
             login = Login,
@@ -152,16 +153,21 @@ validate_login(ParamsProplist) ->
 %% Internal functions
 %% ====================================================================
 
-%% authorize_endpoint/0
+%% plgrid_endpoint/0
 %% ====================================================================
 %% @doc Provider endpoint, where users are redirected for authorization.
 %% @end
 %% ====================================================================
--spec authorize_endpoint() -> method().
+-spec plgrid_endpoint() -> binary().
 %% ====================================================================
 plgrid_endpoint() ->
     XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)),
-    discover_op_endpoint(auth_utils:get_xrds(XRDSEndpoint)).
+    {ok, XRDS} = gui_utils:https_get(XRDSEndpoint, [
+        {"Accept", "application/xrds+xml;level=1, */*"},
+        {"Connection", "close"}
+    ]),
+    discover_op_endpoint(XRDS).
+
 
 %% discover_op_endpoint/1
 %% ====================================================================
@@ -239,4 +245,3 @@ get_signed_param(ParamName, ParamsProplist, SignedParams) ->
         true -> proplists:get_value(ParamName, ParamsProplist, <<"">>);
         false -> <<"">>
     end.
-

@@ -110,7 +110,7 @@ accept_resource(user, patch, UserId, Data, _Client, _Bindings) ->
     if
         Name =:= undefined -> false;
         true ->
-            ok = user_logic:modify(UserId, Name),
+            ok = user_logic:modify(UserId, {name, Name}),
             true
     end;
 accept_resource(spaces, post, _UserId, Data, Client, Bindings) ->

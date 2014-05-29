@@ -29,12 +29,12 @@
 
 -record(user_info, {
     global_id = <<"">>,
-    preferred_name = <<"">>,
+    name = <<"">>,
     emails = [],
-    provider_infos = []
+    connected_accounts = []
 }).
 
--record(provider_user_info, {
+-record(oauth_account, {
     provider_id = undefined,
     user_id = <<"">>,
     login = <<"">>,

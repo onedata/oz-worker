@@ -22,18 +22,18 @@
 
 
 test() ->
-    UserInfo = #user_info{global_id = "ab", emails = ["a", "b"], preferred_name = "a", provider_infos = [
-        #provider_user_info{provider_id = github, user_id = "a", emails = "a", login = "a", name = "a"},
-        #provider_user_info{provider_id = facebook, user_id = "b", emails = "b", login = "b", name = "b"}
+    UserInfo = #user_info{global_id = "ab", emails = ["a", "b"], name = "a", connected_accounts = [
+        #oauth_account{provider_id = github, user_id = "a", emails = "a", login = "a", name = "a"},
+        #oauth_account{provider_id = facebook, user_id = "b", emails = "b", login = "b", name = "b"}
     ]},
 
     save_user(UserInfo),
     ?dump(get_user({github, "a"})),
     ?dump(get_user({global, "ab"})),
 
-    UserInfo2 = #user_info{global_id = "cd", emails = ["c", "d"], preferred_name = "c", provider_infos = [
-        #provider_user_info{provider_id = github, user_id = "c", emails = "c", login = "c", name = "c"},
-        #provider_user_info{provider_id = facebook, user_id = "d", emails = "d", login = "d", name = "d"}
+    UserInfo2 = #user_info{global_id = "cd", emails = ["c", "d"], name = "c", connected_accounts = [
+        #oauth_account{provider_id = github, user_id = "c", emails = "c", login = "c", name = "c"},
+        #oauth_account{provider_id = facebook, user_id = "d", emails = "d", login = "d", name = "d"}
     ]},
 
     update_user({global, "ab"}, UserInfo2),
@@ -48,18 +48,19 @@ test() ->
 init() ->
     catch ets:delete(?USER_LOGIC_ETS),
     ets:new(?USER_LOGIC_ETS, [named_table, public, bag, {read_concurrency, true}]),
-    ets:insert(?USER_LOGIC_ETS, {users, []}),
+%%     ets:insert(?USER_LOGIC_ETS, {users, []}),
     ets:insert(?USER_LOGIC_ETS, {associations, []}),
     ok.
 
 
 save_user(User = #user_info{}) ->
+%%     user_logic:create(User).
     save_all_users([User | get_all_users()]).
 
 
 get_user({email, Email}) ->
     LookupProvider =
-        fun(#provider_user_info{emails = Emails}, Acc) ->
+        fun(#oauth_account{emails = Emails}, Acc) ->
             case Acc of
                 true -> true;
                 _ -> lists:member(Email, Emails)
@@ -67,11 +68,11 @@ get_user({email, Email}) ->
         end,
 
     LookupUser =
-        fun(User = #user_info{provider_infos = ProviderInfos, emails = Emails}, Acc) ->
+        fun(User = #user_info{connected_accounts = ConnectedAccounts, emails = Emails}, Acc) ->
             case lists:member(Email, Emails) of
                 true -> User;
                 _ ->
-                    case lists:foldl(LookupProvider, false, ProviderInfos) of
+                    case lists:foldl(LookupProvider, false, ConnectedAccounts) of
                         true -> User;
                         _ -> Acc
                     end
@@ -81,7 +82,9 @@ get_user({email, Email}) ->
     lists:foldl(LookupUser, undefined, get_all_users());
 
 
-get_user({global, ID}) ->
+get_user({global_id, ID}) ->
+%%     {ok, User} = user_logic:get_user(Key),
+%%     User.
     LookupUser =
         fun(User = #user_info{global_id = GlobalID}, Acc) ->
             case ID of
@@ -95,7 +98,7 @@ get_user({global, ID}) ->
 
 get_user({Provider, ID}) ->
     LookupProvider =
-        fun(#provider_user_info{provider_id = ProviderID, user_id = UserID}, Acc) ->
+        fun(#oauth_account{provider_id = ProviderID, user_id = UserID}, Acc) ->
             Res = case {Provider, ID} of
                       {ProviderID, UserID} -> true;
                       _ -> false
@@ -107,7 +110,7 @@ get_user({Provider, ID}) ->
         end,
 
     LookupUser =
-        fun(User = #user_info{provider_infos = ProviderInfos}, Acc) ->
+        fun(User = #user_info{connected_accounts = ProviderInfos}, Acc) ->
             case lists:foldl(LookupProvider, false, ProviderInfos) of
                 true -> User;
                 _ -> Acc
@@ -131,7 +134,7 @@ update_user({global, ID}, NewUserInfo) ->
 
 update_user({Provider, ID}, NewUserInfo) ->
     LookupProvider =
-        fun(#provider_user_info{provider_id = ProviderID, user_id = UserID}, Acc) ->
+        fun(#oauth_account{provider_id = ProviderID, user_id = UserID}, Acc) ->
             Res = case {Provider, ID} of
                       {ProviderID, UserID} -> true;
                       _ -> false
@@ -143,7 +146,7 @@ update_user({Provider, ID}, NewUserInfo) ->
         end,
 
     UpdateUser =
-        fun(User = #user_info{provider_infos = ProviderInfos}) ->
+        fun(User = #user_info{connected_accounts = ProviderInfos}) ->
             case lists:foldl(LookupProvider, false, ProviderInfos) of
                 true -> NewUserInfo;
                 _ -> User
@@ -188,12 +191,12 @@ get_user_to_json(UserID) ->
     try
         #user_info{
             global_id = GlobalID,
-            preferred_name = PrefName,
+            name = Name,
             emails = Emails,
-            provider_infos = ProvInfo} = get_user({global, UserID}),
+            connected_accounts = ProvInfo} = get_user({global, UserID}),
         UserStruct = [
             {global_id, GlobalID},
-            {preffered_name, PrefName},
+            {name, Name},
             {emails, Emails}
         ],
         JSON = mochijson2:encode(UserStruct)

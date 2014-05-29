@@ -18,7 +18,7 @@
 %% API
 -export([proplist_to_params/1, fully_qualified_url/1, normalize_email/1]).
 
--export([get_xrds/1, local_auth_endpoint/0, validate_login/0]).
+-export([local_auth_endpoint/0, validate_login/0]).
 
 -export([load_auth_config/0, get_auth_config/1, get_auth_providers/0]).
 
@@ -94,9 +94,9 @@ validate_login() ->
                         ?alert("Security breach attempt spotted. Reason:~p~nRequest params:~n~p", [Reason, ParamsProplist]),
                         {error, ?error_auth_invalid_request};
 
-                    {ok, OriginalProvUserInfo = #provider_user_info{provider_id = ProviderID, user_id = UserID, emails = OriginalEmails, name = Name}} ->
+                    {ok, OriginalProvUserInfo = #oauth_account{provider_id = ProviderID, user_id = UserID, emails = OriginalEmails, name = Name}} ->
                         Emails = lists:map(fun(Email) -> auth_utils:normalize_email(Email) end, OriginalEmails),
-                        ProvUserInfo = OriginalProvUserInfo#provider_user_info{emails = Emails},
+                        ProvUserInfo = OriginalProvUserInfo#oauth_account{emails = Emails},
                         case proplists:get_value(connect_account, Props) of
                             false ->
                                 % Standard login, check if there is an account belonging to the user
@@ -119,7 +119,7 @@ validate_login() ->
                                             false ->
                                                 % All email are available, proceed
                                                 {GlobalID, _} = auth_utils:generate_uuid(),
-                                                UserInfo = #user_info{global_id = GlobalID, emails = Emails, preferred_name = Name, provider_infos = [
+                                                UserInfo = #user_info{global_id = GlobalID, emails = Emails, name = Name, connected_accounts = [
                                                     ProvUserInfo
                                                 ]},
                                                 temp_user_logic:save_user(UserInfo),
@@ -153,8 +153,8 @@ validate_login() ->
                                             false ->
                                                 % Everything ok, get the user and add new provider info
                                                 GlobalID = wf:user(),
-                                                NewUserInfo = merge_provider_info(ProvUserInfo, temp_user_logic:get_user({global, GlobalID})),
-                                                temp_user_logic:update_user({global, GlobalID}, NewUserInfo),
+                                                NewUserInfo = merge_connected_accounts(ProvUserInfo, temp_user_logic:get_user({global_id, GlobalID})),
+                                                temp_user_logic:update_user({global_id, GlobalID}, NewUserInfo),
                                                 {redirect, <<"/manage_account">>}
                                         end;
                                     _ ->
@@ -170,9 +170,9 @@ validate_login() ->
             {error, ?error_auth_invalid_request}
     end.
 
-merge_provider_info(ProvUserInfo, UserInfo) ->
-    #user_info{preferred_name = Name, emails = Emails, provider_infos = ProviderInfos} = UserInfo,
-    #provider_user_info{name = ProvName, emails = ProvEmails} = ProvUserInfo,
+merge_connected_accounts(OAuthAccount, UserInfo) ->
+    #user_info{name = Name, emails = Emails, connected_accounts = ConnectedAccounts} = UserInfo,
+    #oauth_account{name = ProvName, emails = ProvEmails} = OAuthAccount,
     % If no name is specified, take the one provided with new info
     NewName = case Name of
                   <<"">> -> ProvName;
@@ -186,7 +186,7 @@ merge_provider_info(ProvUserInfo, UserInfo) ->
                 false -> Acc ++ [Email]
             end
         end, Emails, ProvEmails),
-    UserInfo#user_info{preferred_name = NewName, emails = NewEmails, provider_infos = ProviderInfos ++ [ProvUserInfo]}.
+    UserInfo#user_info{name = NewName, emails = NewEmails, connected_accounts = ConnectedAccounts ++ [OAuthAccount]}.
 
 
 init_state_memory() ->
@@ -243,18 +243,6 @@ clear_expired_tokens() ->
     ets:select_delete(?STATE_ETS, [{{'$1', '$2', '$3'}, [{'<', '$2', Time - (?STATE_TTL * 1000000)}], ['$_']}]).
 
 
-%% get_xrds/1
-%% ====================================================================
-%% @doc
-%% Downloads an XRDS document from given URL.
-%% @end
--spec get_xrds(string()) -> string().
-%% ====================================================================
-get_xrds(URL) ->
-    % Maximum redirection count = 5
-    get_xrds(gui_utils:to_list(URL), 5).
-
-
 load_auth_config() ->
     {ok, [Config]} = file:consult("gui_static/auth.config"),
     application:set_env(veil_cluster_node, auth_config, Config).
@@ -295,56 +283,3 @@ get_provider_button_icon(Provider) ->
 
 get_provider_button_color(Provider) ->
     proplists:get_value(button_color, get_auth_config(Provider)).
-
-
-%% ===================================================================
-%% Internal functions
-%% ===================================================================
-
-%% get_xrds/2
-%% ====================================================================
-%% @doc
-%% Downloads xrds file performing GET on provided URL. Supports redirects.
-%% @end
--spec get_xrds(string(), integer()) -> string().
-%% ====================================================================
-get_xrds(URL, Redirects) ->
-    ReqHeaders =
-        [
-            %{"Accept", "application/xrds+xml;level=1, */*"},
-            {"Connection", "close"}
-        ],
-    {ok, "200", _, Response} = ibrowse:send_req(URL, ReqHeaders, get, [], [{response_format, binary}]),
-    case Response of
-        {ok, Rcode, RespHeaders, _Body} when Rcode > 300 andalso Rcode < 304 andalso Redirects > 0 ->
-            case get_redirect_url(URL, RespHeaders) of
-                undefined -> Response;
-                URL -> Response;
-                NewURL -> get_xrds(NewURL, Redirects - 1)
-            end;
-        Response -> Response
-    end.
-
-
-%% get_redirect_url/1
-%% ====================================================================
-%% @doc
-%% Retrieves redirect URL from a HTTP response.
-%% @end
--spec get_redirect_url(string(), list()) -> string().
-%% ====================================================================
-get_redirect_url(OldURL, Headers) ->
-    Location = proplists:get_value("location", Headers),
-    case Location of
-        "http://" ++ _ -> Location;
-        "https://" ++ _ -> Location;
-        [$/ | _] = Location ->
-            #url{protocol = Protocol, host = Host, port = Port} = ibrowse_lib:parse_url(OldURL),
-            PortFrag = case {Protocol, Port} of
-                           {http, 80} -> "";
-                           {https, 443} -> "";
-                           _ -> ":" ++ integer_to_list(Port)
-                       end,
-            atom_to_list(Protocol) ++ "://" ++ Host ++ PortFrag ++ Location;
-        _ -> undefined
-    end.

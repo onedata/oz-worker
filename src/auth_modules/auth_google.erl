@@ -31,7 +31,7 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec get_redirect_url(boolean()) -> method().
+-spec get_redirect_url(boolean()) -> binary().
 %% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
@@ -58,7 +58,8 @@ get_redirect_url(ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec validate_login([{binary(), binary()}]) -> method().
+-spec validate_login([{binary(), binary()}]) ->
+    {ok, #oauth_account{}} | {error, term()}.
 %% ====================================================================
 validate_login(ParamsProplist) ->
     try
@@ -92,7 +93,7 @@ validate_login(ParamsProplist) ->
 
         % Parse JSON with user info
         {struct, JSONProplist} = n2o_json:decode(Response2),
-        ProvUserInfo = #provider_user_info{
+        ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = proplists:get_value(<<"sub">>, JSONProplist, <<"">>),
             emails = extract_emails(JSONProplist),
@@ -109,26 +110,27 @@ validate_login(ParamsProplist) ->
 %% Internal functions
 %% ====================================================================
 
-%% authorize_endpoint/0
+%% xrds_endpoint/0
 %% ====================================================================
-%% @doc Provider endpoint, where users are redirected for authorization.
+%% @doc Provider endpoint for XRDS file, which contains entries about other endpoints.
 %% @end
 %% ====================================================================
--spec authorize_endpoint() -> method().
+-spec xrds_endpoint() -> binary().
 %% ====================================================================
 xrds_endpoint() ->
     proplists:get_value(xrds_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
 
 
-%% access_token_endpoint/0
+%% authorize_endpoint/0
 %% ====================================================================
-%% @doc Provider endpoint, where access token is aquired.
+%% @doc Provider endpoint, where users are redirected for authorization.
 %% @end
 %% ====================================================================
--spec access_token_endpoint() -> method().
+-spec authorize_endpoint() -> binary().
 %% ====================================================================
 authorize_endpoint() ->
-    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"authorization_endpoint">>).
+    {ok, XRDS} = gui_utils:https_get(xrds_endpoint(), []),
+    parse_json(XRDS, <<"authorization_endpoint">>).
 
 
 %% access_token_endpoint/0
@@ -136,10 +138,11 @@ authorize_endpoint() ->
 %% @doc Provider endpoint, where access token is aquired.
 %% @end
 %% ====================================================================
--spec access_token_endpoint() -> method().
+-spec access_token_endpoint() -> binary().
 %% ====================================================================
 access_token_endpoint() ->
-    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"token_endpoint">>).
+    {ok, XRDS} = gui_utils:https_get(xrds_endpoint(), []),
+    parse_json(XRDS, <<"token_endpoint">>).
 
 
 %% user_info_endpoint/0
@@ -147,10 +150,11 @@ access_token_endpoint() ->
 %% @doc Provider endpoint, where user info is aquired.
 %% @end
 %% ====================================================================
--spec user_info_endpoint() -> method().
+-spec user_info_endpoint() -> binary().
 %% ====================================================================
 user_info_endpoint() ->
-    parse_json(auth_utils:get_xrds(xrds_endpoint()), <<"userinfo_endpoint">>).
+    {ok, XRDS} = gui_utils:https_get(xrds_endpoint(), []),
+    parse_json(XRDS, <<"userinfo_endpoint">>).
 
 
 %% extract_emails/1
@@ -158,7 +162,7 @@ user_info_endpoint() ->
 %% @doc Extracts email list from JSON in erlang format (after decoding).
 %% @end
 %% ====================================================================
--spec extract_emails([{term(), term()}]) -> method().
+-spec extract_emails([{term(), term()}]) -> [binary()].
 %% ====================================================================
 extract_emails(JSONProplist) ->
     case proplists:get_value(<<"email">>, JSONProplist, <<"">>) of
@@ -172,7 +176,7 @@ extract_emails(JSONProplist) ->
 %% @doc Extracts a given key from flat JSON (nested one level).
 %% @end
 %% ====================================================================
--spec parse_json(binary(), binary()) -> method().
+-spec parse_json(binary(), binary()) -> binary().
 %% ====================================================================
 parse_json(JSON, Key) ->
     {struct, Proplist} = n2o_json:decode(JSON),

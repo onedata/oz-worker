@@ -144,7 +144,7 @@ dn_and_storage_defined() ->
 %% ====================================================================
 can_view_logs() ->
     false.
-    %user_logic:get_role(wf:session(user_doc)) /= user.
+%user_logic:get_role(wf:session(user_doc)) /= user.
 
 
 %% maybe_redirect/4
@@ -290,11 +290,11 @@ top_menu(ActiveTabID, SubMenuBody) ->
 %%             ]}}
 %%         ] ++ LogsPageCaptions,
 
-    #user_info{preferred_name = PreferredName} = temp_user_logic:get_user({global, wf:user()}),
+    #user_info{name = Name} = temp_user_logic:get_user({global_id, wf:user()}),
     MenuIcons =
         [
             {manage_account_tab, #li{body = #link{style = <<"padding: 18px;">>, title = <<"Manage account">>,
-                url = <<"/manage_account">>, body = [PreferredName, #span{class = <<"fui-user">>,
+                url = <<"/manage_account">>, body = [Name, #span{class = <<"fui-user">>,
                     style = <<"margin-left: 10px;">>}]}}},
             %{contact_support_tab, #li { body=#link{ style="padding: 18px;", title="Contact & Support",
             %    url="/contact_support", body=#span{ class="fui-question" } } } },
@@ -770,7 +770,8 @@ ssl_opts(ReqHostname) ->
                 {Valid, RequestedHostname}
         end,
 
-    CaCertFileAtom = case application:get_env(veil_cluster_node, root_cacert_file) of
+
+    CaCertFileAtom = case application:get_env(globalregistry, root_cacert_file) of
                          {ok, Val} -> Val;
                          _ -> throw("root_cacert_file env missing")
                      end,
@@ -781,8 +782,6 @@ ssl_opts(ReqHostname) ->
         {verify_fun, {VerifyFun, ReqHostname}},
         {depth, ?ca_cert_max_depth}
     ].
-
-
 
 
 % old_menu_captions() ->

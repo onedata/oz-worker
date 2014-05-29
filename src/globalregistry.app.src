@@ -1,35 +1,35 @@
-
 {application, globalregistry, [
-	{description, "Global registry of data."},
-	{vsn, "1"},
-	{registered, [globalregistry_sup]},
-	{applications, [
-		kernel,
-		stdlib,
-		sasl,
-		lager,
-		public_key,
-		crypto,
-		ssl,
-		erlydtl,
-		n2o,
-		cowboy,
-		mimetypes,
-		ibrowse,
+    {description, "Global registry of data."},
+    {vsn, "1"},
+    {registered, [globalregistry_sup]},
+    {applications, [
+        kernel,
+        stdlib,
+        sasl,
+        lager,
+        public_key,
+        crypto,
+        ssl,
+        erlydtl,
+        n2o,
+        cowboy,
+        mimetypes,
+        ibrowse,
         xmerl
-	]},
-	{modules, [
-		globalregistry_sup,
-		globalregistry_app,
-		globalregistry,
-		hello_world
-	]},
-	{mod, {globalregistry_app, []}},
-	{env, [
-		{db_nodes,['db@172.16.67.26']},
-		% todo generate dedicated certs (this are example ones)
-		{ca_cert_file,"./cacerts/ca.crt"},
-		{cert_file,"./cacerts/server.crt"},
-		{key_file,"./cacerts/server.key"}
-	]}
+    ]},
+    {modules, [
+        globalregistry_sup,
+        globalregistry_app,
+        globalregistry,
+        hello_world
+    ]},
+    {mod, {globalregistry_app, []}},
+    {env, [
+        {db_nodes, ['db@172.16.67.26']},
+        % todo generate dedicated certs (this are example ones)
+        {ca_cert_file, "./cacerts/ca.crt"},
+        {cert_file, "./cacerts/server.crt"},
+        {key_file, "./cacerts/server.key"},
+        {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'}
+    ]}
 ]}.

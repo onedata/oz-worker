@@ -10,29 +10,33 @@
 %% @end
 %% ===================================================================
 -module(auth_module_behaviour).
+-include("auth_common.hrl").
 
--export([behaviour_info/1]).
 
-%% behaviour_info/1
+%% get_redirect_url/1
 %% ====================================================================
-%% @doc Defines the behaviour (lists the callbacks and their arity)
--spec behaviour_info(Arg) -> Result when
-    Arg :: callbacks | Other,
-    Result :: [Fun_def] | undefined,
-    Fun_def :: tuple(),
-    Other :: any().
+%% @doc Returns full URL, where the user will be redirected for authorization.
+%% For the authentication flow to work, the request must include a state
+%% token, which must be generated with auth_utils:generate_state_token/2.
+%% This allows to store some information between the authentication request and
+%% redirect back from the provider. The information is:
+%% - where the user should be redirected after login
+%% - if this was signing in or connecting next account to the profile.
+%% @end
 %% ====================================================================
-behaviour_info(callbacks) ->
-    [
-        {get_redirect_url, 1},
-        {validate_login, 1}
-    ];
+-callback get_redirect_url(boolean()) -> binary().
 
-behaviour_info(_Other) ->
-    undefined.
 
+%% validate_login/1
 %% ====================================================================
-%% Callbacks descriptions
+%% @doc Validates login request that came back from the provider.
+%% Will be called from auth_utils:validate_login/0 when the request
+%% has been pre-validated. The argument is a proplist (pair of Key and Value)
+%% representing the content of URL params. Beside validating the request,
+%% the function must retrieve user info from the provider.
+%% Must return provider_user_info record upon success,
+%% or error and its desription otherwise.
+%% @end
 %% ====================================================================
-
-%% TODO Wziac z rest_module_beh
+-callback validate_login([{binary(), binary()}]) ->
+    {ok, #oauth_account{}} | {error, term()}.

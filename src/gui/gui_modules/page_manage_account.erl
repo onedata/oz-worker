@@ -5,7 +5,8 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: This file contains n2o website code
+%% @doc: This file contains n2o website code.
+%% The page displays information about the user and allows some editing.
 %% @end
 %% ===================================================================
 
@@ -35,37 +36,38 @@ body() ->
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
             #panel{id = <<"main_table">>, body = main_table()},
-            #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
+            #button{body = <<"Go to your files - UWAGA TO NIE DZIALA - chociaz czasem tak">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
         ]}
     ] ++ gui_utils:logotype_footer(20)}.
 
 
 main_table() ->
+    User = temp_user_logic:get_user({global_id, wf:user()}),
     #table{style = <<"border-width: 0px; width: auto;">>, body = [
         #tbody{body = [
             #tr{cells = [
                 #td{style = <<"border-width: 0px; padding: 10px 10px; vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Name">>}},
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = user_name_section()}
+                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = user_name_section(User)}
             ]},
 
             #tr{cells = [
                 #td{style = <<"border-width: 0px; padding: 10px 10px; vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"E-mails">>}},
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = user_emails_section()}
+                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = user_emails_section(User)}
             ]},
 
             #tr{cells = [
                 #td{style = <<"border-width: 0px; padding: 10px 10px;  vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Connected<br />accounts">>}},
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = connected_accounts_section()}
+                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = connected_accounts_section(User)}
             ]}
         ]}
     ]}.
 
 
-user_name_section() ->
-    #user_info{preferred_name = Name} = temp_user_logic:get_user({global, wf:user()}),
+user_name_section(User) ->
+    #user_info{name = Name} = User,
     [
         #span{style = <<"font-size: 18px;">>, id = <<"displayed_name">>, body = Name},
         #link{id = <<"change_name_button">>, class = <<"glyph-link">>, style = <<"margin-left: 10px;">>,
@@ -84,8 +86,8 @@ user_name_section() ->
 
 
 % HTML list with emails printed
-user_emails_section() ->
-    #user_info{emails = Emails} = temp_user_logic:get_user({global, wf:user()}),
+user_emails_section(User) ->
+    #user_info{emails = Emails} = User,
 
     {CurrentEmails, _} = lists:mapfoldl(
         fun(Email, Acc) ->
@@ -117,8 +119,8 @@ user_emails_section() ->
     #list{numbered = true, body = CurrentEmails ++ NewEmail}.
 
 
-connected_accounts_section() ->
-    #user_info{provider_infos = ProviderInfos} = temp_user_logic:get_user({global, wf:user()}),
+connected_accounts_section(User) ->
+    #user_info{connected_accounts = ProviderInfos} = User,
     TableHead = #tr{cells = [
         #th{body = <<"">>},
         #th{body = <<"provider">>},
@@ -128,7 +130,7 @@ connected_accounts_section() ->
     ]},
     TableBody = lists:map(
         fun(Provider) ->
-            ProviderInfo = find_provider_info(Provider, ProviderInfos),
+            ProviderInfo = find_connected_account(Provider, ProviderInfos),
             ProviderName = auth_utils:get_provider_name(Provider),
 
             % Checkbox
@@ -166,7 +168,7 @@ connected_accounts_section() ->
             Emails = case ProviderInfo of
                          undefined ->
                              <<"">>;
-                         #provider_user_info{emails = List} ->
+                         #oauth_account{emails = List} ->
                              case List of
                                  [] ->
                                      <<"-">>;
@@ -185,7 +187,7 @@ connected_accounts_section() ->
             Login = case ProviderInfo of
                         undefined ->
                             <<"">>;
-                        #provider_user_info{login = SomeLogin} ->
+                        #oauth_account{login = SomeLogin} ->
                             case SomeLogin of
                                 <<"">> -> <<"-">>;
                                 _ -> SomeLogin
@@ -196,7 +198,7 @@ connected_accounts_section() ->
             Name = case ProviderInfo of
                        undefined ->
                            <<"">>;
-                       #provider_user_info{name = SomeName} ->
+                       #oauth_account{name = SomeName} ->
                            case SomeName of
                                <<"">> -> <<"-">>;
                                _ -> SomeName
@@ -218,8 +220,8 @@ connected_accounts_section() ->
     #panel{style = <<"position: relative;">>, body = Table}.
 
 
-find_provider_info(Provider, ProviderInfos) ->
-    lists:foldl(fun(ProvUserInfo = #provider_user_info{provider_id = ProviderID}, Acc) ->
+find_connected_account(Provider, ProviderInfos) ->
+    lists:foldl(fun(ProvUserInfo = #oauth_account{provider_id = ProviderID}, Acc) ->
         case Provider of
             ProviderID -> ProvUserInfo;
             _ -> Acc
@@ -245,10 +247,10 @@ connect_account(Provider) ->
 
 disconnect_account_prompt(Provider) ->
     % Get user info doc
-    #user_info{provider_infos = ProviderInfos} = temp_user_logic:get_user({global, wf:user()}),
+    #user_info{connected_accounts = ConnectedAccounts} = temp_user_logic:get_user({global_id, wf:user()}),
     % Get provider name
     ProviderName = auth_utils:get_provider_name(Provider),
-    case length(ProviderInfos) of
+    case length(ConnectedAccounts) of
         1 ->
             % Prevent from disconnecting last account
             wf:wire(#alert{text = <<"You cannot disconnect your last account.">>});
@@ -262,17 +264,17 @@ disconnect_account_prompt(Provider) ->
 disconnect_account(Provider) ->
     GlobalID = wf:user(),
     % Find the user, remove provider info from his user info doc and reload the page
-    UserInfo = #user_info{provider_infos = ProviderInfos} = temp_user_logic:get_user({global, GlobalID}),
-    ProviderInfo = find_provider_info(Provider, ProviderInfos),
+    UserInfo = #user_info{connected_accounts = ConnectedAccounts} = temp_user_logic:get_user({global_id, GlobalID}),
+    OAuthAccount = find_connected_account(Provider, ConnectedAccounts),
     temp_user_logic:update_user({global, GlobalID},
-        UserInfo#user_info{provider_infos = ProviderInfos -- [ProviderInfo]}),
+        UserInfo#user_info{connected_accounts = ConnectedAccounts -- [OAuthAccount]}),
     wf:redirect(<<"/manage_account">>).
 
 
 % Update email list - add or remove one and save new user doc
 update_email(AddOrRemove) ->
     GlobalID = wf:user(),
-    UserInfo = #user_info{emails = OldEmailList} = temp_user_logic:get_user({global, GlobalID}),
+    UserInfo = #user_info{emails = OldEmailList} = temp_user_logic:get_user({global_id, GlobalID}),
     case AddOrRemove of
         {add, submitted} ->
             NewEmail = auth_utils:normalize_email(gui_utils:to_binary(wf:q("new_email_textbox"))),
@@ -291,9 +293,9 @@ update_email(AddOrRemove) ->
 % Update email list - add or remove one and save new user doc
 update_name() ->
     GlobalID = wf:user(),
-    UserInfo = #user_info{} = temp_user_logic:get_user({global, GlobalID}),
+    UserInfo = #user_info{} = temp_user_logic:get_user({global_id, GlobalID}),
     NewName = gui_utils:to_binary(wf:q("new_name_textbox")),
-    temp_user_logic:update_user({global, GlobalID}, UserInfo#user_info{preferred_name = NewName}),
+    temp_user_logic:update_user({global, GlobalID}, UserInfo#user_info{name = NewName}),
     gui_utils:update("main_table", main_table()).
 
 
