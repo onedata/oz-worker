@@ -27,7 +27,8 @@
 -define(dao_record_info(R),
     case R of
         some_record         -> ?record_info_gen(some_record);
-		user                -> ?record_info_gen(user);
+        user                -> ?record_info_gen(user);
+        oauth_account       -> ?record_info_gen(oauth_account);
 		provider            -> ?record_info_gen(provider);
 		space               -> ?record_info_gen(space);
 		token               -> ?record_info_gen(token);
@@ -59,10 +60,15 @@
 %% ====================================================================
 %% DB Names
 -define(SYSTEM_DB_NAME, "system_data").
+-define(USERS_DB_NAME, "users").
 
 %% Design Names
+-define(USER_BY_EMAIL_DESIGN_NAME, "user_by_email").
+-define(USER_BY_PROVIDER_ID_DESIGN_NAME, "user_by_provider_id").
 
 %% Views
+-define(USER_BY_EMAIL_VIEW, #view_info{name = "user_by_email", design = ?USER_BY_EMAIL_DESIGN_NAME, db_name = ?USERS_DB_NAME}).
+-define(USER_BY_PROVIDER_ID_VIEW, #view_info{name = "user_by_provider_id", design = ?USER_BY_PROVIDER_ID_DESIGN_NAME, db_name = ?USERS_DB_NAME}).
 
 %% Others
 -define(RECORD_INSTANCES_DOC_PREFIX, "record_instances_").

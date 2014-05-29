@@ -17,13 +17,13 @@
     user_id = <<"">>,
     login = <<"">>,
     name = <<"">>,
-    emails = <<"">>
+    email_list = []
 }).
 
 %% This record defines a user and is handled as a database document
 -record(user, {
     name = <<"">> :: binary(),
-    emails = [] :: [binary()],
+    email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],
     spaces = [] :: [SpaceId :: binary()],
     groups = [] :: [GroupId :: binary()]

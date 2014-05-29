@@ -61,13 +61,13 @@ modify(UserId, Proplist) ->
     #veil_document{record = User} = Doc = logic_helper:user_doc(UserId),
     #user{
         name = Name,
-        emails = Emails,
+        email_list = Emails,
         connected_accounts = ConnectedAccounts,
         spaces = Spaces,
         groups = Groups} = User,
     NewUser = #user{
         name = proplists:get_value(name, Proplist, Name),
-        emails = proplists:get_value(emails, Proplist, Emails),
+        email_list = proplists:get_value(emails, Proplist, Emails),
         connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
         spaces = proplists:get_value(spaces, Proplist, Spaces),
         groups = proplists:get_value(groups, Proplist, Groups)},
