@@ -29,7 +29,7 @@ gen_server_connection_test(Config) ->
 rest_api_connection_test(_Config) ->
 	ibrowse:start(),
 	ssl:start(),
-	Ans = ibrowse:send_req("https://127.0.0.1:8080/hello_world",[],get),
+	Ans = ibrowse:send_req("https://127.0.0.1:8443/hello_world",[],get),
 	?assertMatch({ok,"200",_,"<html>REST Hello World as HTML!</html>"}, Ans),
 	ssl:stop(),
 	ibrowse:stop().

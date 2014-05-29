@@ -13,24 +13,28 @@
 -author("Konrad Zemek").
 
 -include("dao/dao_types.hrl").
+-include("registered_names.hrl").
 
+-include_lib("public_key/include/public_key.hrl").
 
 %% API
--export([create/1, modify/2]).
+-export([create/2, modify/2]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
+-export([test_connection/1]).
 
 
 %% create/1
 %% ====================================================================
 %% @doc Create a provider's account.
 %% ====================================================================
--spec create(URL :: binary()) ->
-    {ok, ProviderId :: binary()} | no_return().
+-spec create(URL :: binary(), CSR :: binary()) ->
+    {ok, ProviderId :: binary(), ProviderCertPem :: binary()} | no_return().
 %% ====================================================================
-create(URL) ->
+create(URL, CSRBin) ->
     ProviderId = logic_helper:save(#provider{url = URL}),
-    {ok, ProviderId}.
+    {ok, ProviderCertPem} = grpca:sign_provider_req(ProviderId, CSRBin),
+    {ok, ProviderId, ProviderCertPem}.
 
 
 %% modify/2
@@ -92,3 +96,24 @@ remove(ProviderId) ->
     end, Spaces),
 
     logic_helper:provider_remove(ProviderId).
+
+%% test_connection/1
+%% ====================================================================
+%% @doc Tests connection to given url, returns <<"ok">> or <<"error">> status for each element
+%% ====================================================================
+-spec test_connection(ToCheck :: list({ServiceName :: binary(),Url :: binary()})) -> list(ConnStatus) when
+    ConnStatus :: {ServiceName :: binary(), Status :: binary()}.
+%% ====================================================================
+test_connection([]) ->
+    [];
+test_connection([ {ServiceName,Url} | Rest]) ->
+    UrlString = binary_to_list(Url),
+    ServiceNameString = binary_to_list(ServiceName),
+    ConnStatus = case ibrowse:send_req(UrlString,[],get) of
+        {ok, "200", _, ServiceNameString} ->
+            <<"ok">>;
+        Error ->
+            lager:info("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
+            <<"error">>
+    end,
+    [{ServiceName,ConnStatus} | test_connection(Rest)].

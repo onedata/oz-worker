@@ -5,9 +5,9 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc The module handling logic behind /provider REST resource.
+%% @doc The module handling logic behind /auth REST resources.
 %% ===================================================================
--module(provider_rest_module).
+-module(auth_rest_module).
 -author("Konrad Zemek").
 
 -include("handlers/rest_handler.hrl").
@@ -33,12 +33,7 @@ routes() ->
     S = #rstate{module = ?MODULE},
     M = rest_handler,
     [
-        {<<"/provider">>,                   			 M, S#rstate{resource = provider,    methods = [get, post, patch, delete]}},
-        {<<"/provider/spaces/">>,           			 M, S#rstate{resource = spaces,      methods = [get, post]   }},
-        {<<"/provider/spaces/support">>,    			 M, S#rstate{resource = ssupport,    methods = [post]        }},
-        {<<"/provider/spaces/:sid">>,       			 M, S#rstate{resource = space,       methods = [get, delete] }},
-        {<<"/provider/test/check_my_ip">>,               M, S#rstate{resource = ip,       	 methods = [get] }},
-        {<<"/provider/test/check_my_ports">>,            M, S#rstate{resource = ports,       methods = [get] }}
+        {<<"/openid/token">>, M, S#rstate{resource = token, methods = [post]}}
     ].
 
 
@@ -53,16 +48,8 @@ routes() ->
                     ProviderId :: binary() | undefined, Client :: client()) ->
     boolean().
 %% ====================================================================
-is_authorized(ip, get, _, _) ->
-    true;
-is_authorized(ports, get, _, _) ->
-    true;
-is_authorized(provider, post, _, #client{type = undefined}) ->
-    true;
-is_authorized(_, _, _, #client{type = provider}) ->
-    true;
-is_authorized(_, _, _, _) ->
-    false.
+is_authorized(_, _, _ProviderId, #client{type = provider}) ->
+    true.
 
 
 %% resource_exists/3
@@ -74,11 +61,7 @@ is_authorized(_, _, _, _) ->
 -spec resource_exists(Resource :: atom(), ProviderId :: binary() | undefined,
                       Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-resource_exists(space, ProviderId, Req) ->
-    {Bindings, _Req2} = cowboy_req:bindings(Req),
-    SID = proplists:get_value(sid, Bindings),
-    space_logic:has_provider(SID, ProviderId);
-resource_exists(_, _, _) ->
+resource_exists(_, _ProviderId, _Req) ->
     true.
 
 
@@ -96,33 +79,16 @@ resource_exists(_, _, _) ->
     {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
         boolean().
 %% ====================================================================
-accept_resource(provider, post, _ProviderId, Data, _Client, _Req) ->
-    URL = proplists:get_value(<<"url">>, Data),
-    CSR = proplists:get_value(<<"csr">>, Data),
+accept_resource(token, post, ProviderId, Data, _Client, Req) ->
+    {ok, {<<"application">>, <<"x-www-form-urlencoded">>}, _Req2} =
+        cowboy_req:parse_header(<<"content-type">>, Req), %%@todo: req2, return instead of breaking
+    GrantType = proplists:get_value(<<"grant_type">>, Data),
+    Code = proplists:get_value(<<"code">>, Data),
     if
-        URL =:= undefined -> false;
-        CSR =:= undefined -> false;
+        GrantType =/= <<"authorization_code">> -> false; %% @todo: refresh
+        Code =:= undefined -> false;
         true ->
-            {ok, ProviderId, SignedPem} = provider_logic:create(URL, CSR),
-            {true, {data, [{providerId, ProviderId}, {certificate, SignedPem}]}}
-    end;
-accept_resource(provider, patch, ProviderId, Data, _Client, _Req) ->
-    URL = proplists:get_value(<<"url">>, Data),
-    if
-        URL =:= undefined -> false;
-        true ->
-            ok = provider_logic:modify(ProviderId, URL),
-            true
-    end;
-accept_resource(spaces, post, _ProviderId, Data, Client, Req) ->
-    spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
-accept_resource(ssupport, post, ProviderId, Data, _Client, _Req) ->
-    Token = proplists:get_value(<<"token">>, Data),
-    case token_logic:is_valid(Token, space_support_token) of
-        false -> false;
-        true ->
-            {ok, SpaceId} = space_logic:support(ProviderId, Token),
-            {true, {url, <<"/provider/spaces/", SpaceId/binary>>}}
+            {true, auth_logic:grant_token(ProviderId, Code)}
     end.
 
 
@@ -136,25 +102,9 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, _Req) ->
                        Client :: client(), Req :: cowboy_req:req()) ->
     Data :: [proplists:property()].
 %% ====================================================================
-provide_resource(provider, ProviderId, _Client, _Req) ->
-    {ok, Provider} = provider_logic:get_data(ProviderId),
-    Provider;
-provide_resource(spaces, ProviderId, _Client, _Req) ->
-    {ok, Spaces} = provider_logic:get_spaces(ProviderId),
-    Spaces;
-provide_resource(space, _ProviderId, _Client, Req) ->
-    {Bindings, _Req2} = cowboy_req:bindings(Req),
-    SID = proplists:get_value(sid, Bindings),
-    {ok, Space} = space_logic:get_data(SID, provider),
-    Space;
-provide_resource(ip, _ProviderId, _Client, Req) ->
-    {{Ip,_Port},_Req2} = cowboy_req:peer(Req),
-    list_to_binary(inet_parse:ntoa(Ip));
-provide_resource(ports, _ProviderId, _Client, Req) ->
-    {ok, Body, _Req2} = cowboy_req:body(Req),
-    Data = mochijson2:decode(Body, [{format, proplist}]),
-    Ret = provider_logic:test_connection(Data),
-    Ret.
+provide_resource(auth, _ProviderId, _Client, _Req) ->
+    []. %% @todo: reply with not-implemented
+
 
 %% delete_resource/3
 %% ====================================================================
@@ -165,9 +115,5 @@ provide_resource(ports, _ProviderId, _Client, Req) ->
 -spec delete_resource(Resource :: atom(), ProviderId :: binary() | undefined,
                       Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-delete_resource(provider, ProviderId, _Req) ->
-    provider_logic:remove(ProviderId);
-delete_resource(space, ProviderId, Req) ->
-    {Bindings, _Req2} = cowboy_req:bindings(Req),
-    SID = proplists:get_value(sid, Bindings),
-    space_logic:remove_provider(SID, ProviderId).
+delete_resource(_, _ProviderId, _Req) ->
+    true.
