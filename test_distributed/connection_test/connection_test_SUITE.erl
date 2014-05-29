@@ -10,10 +10,11 @@
 -author("Tomasz Lichon").
 
 %% Includes
--include_lib("common_test/include/ct.hrl").
 -include("registered_names.hrl").
--include("testing/test_node_starter.hrl").
--include("testing/assertions.hrl").
+-include("testing/test_utils.hrl").
+-include_lib("common_test/include/ct.hrl").
+-include_lib("ctool/include/test/test_node_starter.hrl").
+-include_lib("ctool/include/test/assertions.hrl").
 
 %% API
 -export([all/0,init_per_suite/1,end_per_suite/1]).
@@ -23,7 +24,7 @@ all() -> [gen_server_connection_test,rest_api_connection_test,dao_connection_tes
 
 
 gen_server_connection_test(Config) ->
-	Node = ?config(node,Config),
+	[Node] = ?config(nodes,Config),
 	?assertEqual(pong, gen_server:call({?Global_Registry,Node},ping)).
 
 rest_api_connection_test(_Config) ->
@@ -35,7 +36,7 @@ rest_api_connection_test(_Config) ->
 	ibrowse:stop().
 
 dao_connection_test(Config) ->
-	Node = ?config(node,Config),
+	[Node] = ?config(nodes,Config),
 	?assertMatch({ok,_},rpc:call(Node,dao_lib,apply,[dao_helper,list_dbs,[],1])).
 
 %% ====================================================================
@@ -44,18 +45,19 @@ dao_connection_test(Config) ->
 
 init_per_suite(Config) ->
 	?INIT_CODE_PATH,
-	DbNode = ?NODE(?CURRENT_HOST,db),
-	DbNodesEnv = {db_nodes,[DbNode]},
-	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST,
-		[
+	DbNodesEnv = {db_nodes,[?DB_NODE]},
+    Nodes = test_node_starter:start_test_nodes(1),
+	test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,
+		[[
 			DbNodesEnv,
 			{ca_cert_file,"../../../cacerts/ca.crt"},
 			{cert_file,"../../../cacerts/server.crt"},
 	 		{key_file,"../../../cacerts/server.key"}
-		]
+		]]
 	),
-	Config ++ [{node,Node}].
+	Config ++ [{nodes,Nodes}].
 
 end_per_suite(Config) ->
-	Node = ?config(node,Config),
-	test_node_starter:stop_globalregistry_node(Node).
+	Nodes = ?config(nodes,Config),
+	test_node_starter:stop_app_on_nodes(?APP_Name,?GR_DEPS,Nodes),
+	test_node_starter:stop_test_nodes(Nodes).
