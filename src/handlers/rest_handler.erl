@@ -164,7 +164,7 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
                 UserId =/= undefined -> #client{type = user, id = UserId};
                 true -> #client{type = provider, id = ProviderId}
             end,
-            
+
             {true, Req3, State#rstate{client = Client}}
     end.
 

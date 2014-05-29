@@ -97,23 +97,20 @@ resource_exists(_, _, _) ->
         boolean().
 %% ====================================================================
 accept_resource(provider, post, _ProviderId, Data, _Client, _Req) ->
-    URL = proplists:get_value(<<"url">>, Data),
+    URLs = proplists:get_value(<<"urls">>, Data),
     CSR = proplists:get_value(<<"csr">>, Data),
+    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data),
     if
-        URL =:= undefined -> false;
+        URLs =:= undefined -> false;
         CSR =:= undefined -> false;
+        RedirectionPoint =:= undefined -> false;
         true ->
-            {ok, ProviderId, SignedPem} = provider_logic:create(URL, CSR),
+            {ok, ProviderId, SignedPem} = provider_logic:create(URLs, RedirectionPoint, CSR),
             {true, {data, [{providerId, ProviderId}, {certificate, SignedPem}]}}
     end;
 accept_resource(provider, patch, ProviderId, Data, _Client, _Req) ->
-    URL = proplists:get_value(<<"url">>, Data),
-    if
-        URL =:= undefined -> false;
-        true ->
-            ok = provider_logic:modify(ProviderId, URL),
-            true
-    end;
+    ok = provider_logic:modify(ProviderId, Data),
+    true;
 accept_resource(spaces, post, _ProviderId, Data, Client, Req) ->
     spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
 accept_resource(ssupport, post, ProviderId, Data, _Client, _Req) ->
