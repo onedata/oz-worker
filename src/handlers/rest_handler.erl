@@ -153,7 +153,7 @@ is_authorized(Req, #rstate{} = State) -> %% @todo: proper certificate-based auth
     %% @todo: "Mod:requires_authentication()"
     try
         {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
-        {ok, ProviderId} = grpca:verify(PeerCert),
+        {ok, ProviderId} = grpca:verify_provider(PeerCert),
         {UserId, Req2} = cowboy_req:header(<<"userid">>, Req),
         Client = if
             UserId =/= undefined -> #client{type = user, id = UserId};

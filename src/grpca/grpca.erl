@@ -21,7 +21,7 @@
 -define(CACERT_FILE, "cacert.pem").
 -define(CAKEY_FILE, filename:join("private", "cakey.pem")).
 
--record(dn, {commonName = "Global Registry REST",
+-record(dn, {commonName,
     organizationalUnitName = "REST",
     organizationName = "OneData",
     localityName = "Krakow",
@@ -110,7 +110,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
         " -batch",
         " -notext",
         " -extensions user_cert",
-        " -subj \"/CN=", binary:bin_to_list(ProviderId), "/O=OneData/OL=Providers\"",
+        " -subj \"/CN=", binary:bin_to_list(ProviderId), "/O=OneData/OU=Providers\"",
         " -in ", CSRFile,
         " -out ", CertFile]),
 
@@ -165,12 +165,12 @@ loop(CaDir) ->
     receive %% @todo: deduplication?
         {Requester, {sign_provider_req, ProviderId, CSRPem}} ->
             Reply = (catch sign_provider_req_imp(ProviderId, CSRPem, CaDir)),
-            Requester ! Reply,
+            Requester ! {ok, Reply},
             loop(CaDir);
 
         {Requester, {verify_provider, ProviderId}} ->
             Reply = (catch verify_provider_imp(ProviderId, CaDir)),
-            Requester ! Reply,
+            Requester ! {ok, Reply},
             loop(CaDir);
 
         stop -> ok
