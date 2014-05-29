@@ -103,6 +103,15 @@ remove(ProviderId) ->
 %% ====================================================================
 test_connection([]) ->
     [];
+test_connection([ {<<"undefined">>,Url} | Rest]) ->
+    UrlString = binary_to_list(Url),
+    ConnStatus = case ibrowse:send_req(UrlString,[],get) of
+                     {ok, "200", _, _} ->
+                         <<"ok">>;
+                     _ ->
+                         <<"error">>
+                 end,
+    [{Url,ConnStatus} | test_connection(Rest)];
 test_connection([ {ServiceName,Url} | Rest]) ->
     UrlString = binary_to_list(Url),
     ServiceNameString = binary_to_list(ServiceName),
@@ -110,7 +119,7 @@ test_connection([ {ServiceName,Url} | Rest]) ->
         {ok, "200", _, ServiceNameString} ->
             <<"ok">>;
         Error ->
-            lager:info("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
+            lager:debug("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
             <<"error">>
     end,
-    [{ServiceName,ConnStatus} | test_connection(Rest)].
+    [{Url,ConnStatus} | test_connection(Rest)].
