@@ -13,8 +13,8 @@
 -include("registered_names.hrl").
 -include("testing/test_utils.hrl").
 -include_lib("common_test/include/ct.hrl").
--include_lib("ctool/include/test_node_starter.hrl").
--include_lib("ctool/include/assertions.hrl").
+-include_lib("ctool/include/test/test_node_starter.hrl").
+-include_lib("ctool/include/test/assertions.hrl").
 
 %% API
 -export([all/0,init_per_suite/1,end_per_suite/1]).
