@@ -22,4 +22,4 @@ cp rel/files/sys.config test_distributed
 ct_run -pa ./deps/**/ebin -noshell -spec test_distributed/test.spec -name tester -setcookie $COOKIE
 
 #cleanup
-rm test_distributed/sys.config
+rm -f test_distributed/sys.config
