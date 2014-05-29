@@ -194,7 +194,7 @@ connected_accounts_section(User) ->
                             end
                     end,
 
-            % Login
+            % Name
             Name = case ProviderInfo of
                        undefined ->
                            <<"">>;
@@ -266,7 +266,7 @@ disconnect_account(Provider) ->
     % Find the user, remove provider info from his user info doc and reload the page
     UserInfo = #user_info{connected_accounts = ConnectedAccounts} = temp_user_logic:get_user({global_id, GlobalID}),
     OAuthAccount = find_connected_account(Provider, ConnectedAccounts),
-    temp_user_logic:update_user({global, GlobalID},
+    temp_user_logic:update_user({global_id, GlobalID},
         UserInfo#user_info{connected_accounts = ConnectedAccounts -- [OAuthAccount]}),
     wf:redirect(<<"/manage_account">>).
 
@@ -280,12 +280,12 @@ update_email(AddOrRemove) ->
             NewEmail = auth_utils:normalize_email(gui_utils:to_binary(wf:q("new_email_textbox"))),
             case temp_user_logic:get_user({email, NewEmail}) of
                 undefined ->
-                    temp_user_logic:update_user({global, GlobalID}, UserInfo#user_info{emails = OldEmailList ++ [NewEmail]});
+                    temp_user_logic:update_user({global_id, GlobalID}, UserInfo#user_info{emails = OldEmailList ++ [NewEmail]});
                 _ ->
                     wf:wire(#alert{text = <<"This e-mail address is in use.">>})
             end;
         {remove, Email} ->
-            temp_user_logic:update_user({global, GlobalID}, UserInfo#user_info{emails = OldEmailList -- [Email]})
+            temp_user_logic:update_user({global_id, GlobalID}, UserInfo#user_info{emails = OldEmailList -- [Email]})
     end,
     gui_utils:update("main_table", main_table()).
 
@@ -295,7 +295,7 @@ update_name() ->
     GlobalID = wf:user(),
     UserInfo = #user_info{} = temp_user_logic:get_user({global_id, GlobalID}),
     NewName = gui_utils:to_binary(wf:q("new_name_textbox")),
-    temp_user_logic:update_user({global, GlobalID}, UserInfo#user_info{name = NewName}),
+    temp_user_logic:update_user({global_id, GlobalID}, UserInfo#user_info{name = NewName}),
     gui_utils:update("main_table", main_table()).
 
 

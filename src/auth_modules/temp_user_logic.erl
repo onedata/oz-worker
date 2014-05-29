@@ -29,18 +29,18 @@ test() ->
 
     save_user(UserInfo),
     ?dump(get_user({github, "a"})),
-    ?dump(get_user({global, "ab"})),
+    ?dump(get_user({global_id, "ab"})),
 
     UserInfo2 = #user_info{global_id = "cd", emails = ["c", "d"], name = "c", connected_accounts = [
         #oauth_account{provider_id = github, user_id = "c", emails = "c", login = "c", name = "c"},
         #oauth_account{provider_id = facebook, user_id = "d", emails = "d", login = "d", name = "d"}
     ]},
 
-    update_user({global, "ab"}, UserInfo2),
+    update_user({global_id, "ab"}, UserInfo2),
     ?dump(get_user({github, "a"})),
     ?dump(get_user({github, "c"})),
-    ?dump(get_user({global, "ab"})),
-    ?dump(get_user({global, "cd"})),
+    ?dump(get_user({global_id, "ab"})),
+    ?dump(get_user({global_id, "cd"})),
 
     ok.
 
@@ -48,7 +48,7 @@ test() ->
 init() ->
     catch ets:delete(?USER_LOGIC_ETS),
     ets:new(?USER_LOGIC_ETS, [named_table, public, bag, {read_concurrency, true}]),
-%%     ets:insert(?USER_LOGIC_ETS, {users, []}),
+    ets:insert(?USER_LOGIC_ETS, {users, []}),
     ets:insert(?USER_LOGIC_ETS, {associations, []}),
     ok.
 
@@ -120,7 +120,7 @@ get_user({Provider, ID}) ->
     lists:foldl(LookupUser, undefined, get_all_users()).
 
 
-update_user({global, ID}, NewUserInfo) ->
+update_user({global_id, ID}, NewUserInfo) ->
     UpdateUser =
         fun(User = #user_info{global_id = GlobalID}) ->
             case ID of
@@ -193,13 +193,15 @@ get_user_to_json(UserID) ->
             global_id = GlobalID,
             name = Name,
             emails = Emails,
-            connected_accounts = ProvInfo} = get_user({global, UserID}),
+            connected_accounts = _ProvInfo} = get_user({global_id, UserID}),
         UserStruct = [
             {global_id, GlobalID},
             {name, Name},
             {emails, Emails}
         ],
-        JSON = mochijson2:encode(UserStruct)
+        _JSON = mochijson2:encode(UserStruct)
     catch
-        _:_ -> <<"error">>
+        T:M ->
+            ?error_stacktrace("get_user_to_json ~p:~p", [T, M]),
+            <<"error">>
     end.

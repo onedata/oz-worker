@@ -34,7 +34,7 @@
 %% has been pre-validated. The argument is a proplist (pair of Key and Value)
 %% representing the content of URL params. Beside validating the request,
 %% the function must retrieve user info from the provider.
-%% Must return provider_user_info record upon success,
+%% Must return oauth_account record upon success,
 %% or error and its desription otherwise.
 %% @end
 %% ====================================================================

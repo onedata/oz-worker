@@ -33,6 +33,7 @@
         {grpca_dir, "./grpca"},
         {rest_cert_file, "./grpca/rest.pem"},
         {rest_key_file, "./grpca/rest_key.pem"},
-        {rest_cert_domain, "172.16.67.26"}
+        {rest_cert_domain, "172.16.67.26"},
+        {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'}
     ]}
 ]}.

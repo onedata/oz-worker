@@ -11,7 +11,7 @@
 %% ===================================================================
 -module(onedata_auth).
 -define(provider_nonce_endpoint, "/rest/latest/openid_nonce").
--define(provider_login_endpoint, "/openid_login").
+-define(provider_login_endpoint, "/openid/login").
 
 
 -include("logging.hrl").
