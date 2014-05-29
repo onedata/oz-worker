@@ -29,6 +29,7 @@
 save_group(#user_group{} = Group) ->
 	save_group(#veil_document{record = Group});
 save_group(#veil_document{record = #user_group{}, uuid = UUID} = GroupDoc) when is_list(UUID) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:save_record(GroupDoc).
 
 
@@ -41,6 +42,7 @@ save_group(#veil_document{record = #user_group{}, uuid = UUID} = GroupDoc) when 
 	ok | {error, any()} | no_return().
 %% ====================================================================
 remove_group(GroupId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:remove_record(GroupId).
 
 %% exist_group/1
@@ -51,6 +53,7 @@ remove_group(GroupId) ->
 -spec exist_group(GroupId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_group(GroupId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:exist_record(GroupId).
 
 %% get_group/1
@@ -63,4 +66,5 @@ exist_group(GroupId) ->
 -spec get_group(GroupId :: uuid()) -> {ok, group_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_group(GroupId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:get_record(GroupId).

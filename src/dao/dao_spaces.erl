@@ -29,6 +29,7 @@
 save_space(#space{} = Space) ->
 	save_space(#veil_document{record = Space});
 save_space(#veil_document{record = #space{}, uuid = UUID} = SpaceDoc) when is_list(UUID) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:save_record(SpaceDoc).
 
 
@@ -41,6 +42,7 @@ save_space(#veil_document{record = #space{}, uuid = UUID} = SpaceDoc) when is_li
 	ok | {error, any()} | no_return().
 %% ====================================================================
 remove_space(SpaceId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:remove_record(SpaceId).
 
 %% exist_space/1
@@ -51,6 +53,7 @@ remove_space(SpaceId) ->
 -spec exist_space(SpaceId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_space(SpaceId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:exist_record(SpaceId).
 
 %% get_space/1
@@ -63,4 +66,5 @@ exist_space(SpaceId) ->
 -spec get_space(SpaceId :: uuid()) -> {ok, space_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_space(SpaceId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:get_record(SpaceId).

@@ -47,6 +47,13 @@ get_redirection_uri(UserId, ProviderId) ->
     <<RedirectURL/binary, "?code=", AuthCode/binary>>.
 
 
+-record(user_info, {
+    global_id = <<"">>,
+    name = <<"">>,
+    emails = [],
+    connected_accounts = []
+}).
+
 -spec grant_token(ProviderId :: binary(), AuthCode :: binary()) ->
     [proplists:property()].
 grant_token(ProviderId, AuthCode) ->
@@ -60,6 +67,11 @@ grant_token(ProviderId, AuthCode) ->
     ets:insert(?ACCESS_TOKEN, {AccessToken, {ProviderId, UserId, AccessTokenExpirationTime}}),
     ets:insert(?REFRESH_TOKEN, {RefreshToken, {ProviderId, UserId, RefreshTokenExpirationTime}}),
 
+    #user_info{
+        name = Name,
+        emails = Emails
+    } = temp_user_logic:get_user({global_id, UserId}),
+    EmailsList = lists:map(fun(Email) -> {struct, [{email, Email}]} end, Emails),
     [
         {access_token, AccessToken},
         {token_type, bearer},
@@ -70,6 +82,8 @@ grant_token(ProviderId, AuthCode) ->
             {iss, ?ISSUER_URL},
             {sub, UserId},
             {aud, ProviderId},
+            {name, Name},
+            {email, EmailsList},
             {exp, wut}, %% @todo: expiration time
             {iat, now} %% @todo: now
         ])}

@@ -29,6 +29,7 @@
 save_token(#token{} = Token) ->
 	save_token(#veil_document{record = Token});
 save_token(#veil_document{record = #token{}, uuid = UUID} = TokenDoc) when is_list(UUID) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:save_record(TokenDoc).
 
 
@@ -41,6 +42,7 @@ save_token(#veil_document{record = #token{}, uuid = UUID} = TokenDoc) when is_li
 	ok | {error, any()} | no_return().
 %% ====================================================================
 remove_token(TokenId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:remove_record(TokenId).
 
 %% exist_token/1
@@ -51,6 +53,7 @@ remove_token(TokenId) ->
 -spec exist_token(TokenId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_token(TokenId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:exist_record(TokenId).
 
 %% get_token/1
@@ -63,4 +66,5 @@ exist_token(TokenId) ->
 -spec get_token(TokenId :: uuid()) -> {ok, token_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_token(TokenId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:get_record(TokenId).

@@ -10,9 +10,21 @@
 -ifndef(DAO_USERS_HRL).
 -define(DAO_USERS_HRL, 1).
 
+%% This record defines user's account info
+%% received from an openid / oauth provider
+-record(oauth_account, {
+    provider_id = undefined,
+    user_id = <<"">>,
+    login = <<"">>,
+    name = <<"">>,
+    email_list = []
+}).
+
 %% This record defines a user and is handled as a database document
 -record(user, {
-    name :: binary(),
+    name = <<"">> :: binary(),
+    email_list = [] :: [binary()],
+    connected_accounts = [] :: [#oauth_account{}],
     spaces = [] :: [SpaceId :: binary()],
     groups = [] :: [GroupId :: binary()]
 }).

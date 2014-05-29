@@ -13,10 +13,11 @@
 -author("Konrad Zemek").
 
 -include("dao/dao_types.hrl").
+-include("logging.hrl").
 
 
 %% API
--export([create/1, modify/2, merge/2]).
+-export([create/1, get_user/1, modify/2, merge/2]).
 -export([get_data/1, get_spaces/1, get_groups/1]).
 -export([remove/1]).
 
@@ -33,16 +34,50 @@ create(Name) ->
     {ok, UserId}.
 
 
+%% get_user/1
+%% ====================================================================
+%% @doc Creates a user account.
+%% ====================================================================
+-spec get_user(Key) -> {ok, #user{}} | {error, term()} when
+    Key :: binary() | {global_id, binary()}.
+%% ====================================================================
+get_user(Key) ->
+    try
+    case Key of
+        Bin when is_binary(Bin) ->
+            logic_helper:user_doc(Key);
+        Key ->
+            #veil_document{record = User} = logic_helper:user_doc_from_view(Key),
+            {ok, User}
+    end
+catch T:M -> ?error_stacktrace("~p:~p", [T, M]) end.
+
+
 %% modify/2
 %% ====================================================================
-%% @doc Modifies user details.
+%% @doc Modifies user details. Second argument is proplist with keys
+%% corresponding to record field names. The proplist may contain any
+%% subset of fields to change.
 %% ====================================================================
--spec modify(UserId :: binary(), Name :: binary()) ->
+-spec modify(UserId :: binary(), Proplist :: [{atom(), binary()}]) ->
     ok | no_return().
 %% ====================================================================
-modify(UserId, Name) ->
+modify(UserId, Proplist) ->
+    ?dump({uuid, UserId}),
     #veil_document{record = User} = Doc = logic_helper:user_doc(UserId),
-    DocNew = Doc#veil_document{record = User#user{name = Name}},
+    #user{
+        name = Name,
+        email_list = Emails,
+        connected_accounts = ConnectedAccounts,
+        spaces = Spaces,
+        groups = Groups} = User,
+    NewUser = #user{
+        name = proplists:get_value(name, Proplist, Name),
+        email_list = proplists:get_value(email_list, Proplist, Emails),
+        connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
+        spaces = proplists:get_value(spaces, Proplist, Spaces),
+        groups = proplists:get_value(groups, Proplist, Groups)},
+    DocNew = Doc#veil_document{record = NewUser},
     logic_helper:save(DocNew),
     ok.
 

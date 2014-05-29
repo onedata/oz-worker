@@ -11,10 +11,10 @@
 -author("Konrad Zemek").
 
 -include("dao/dao_types.hrl").
+-include("logging.hrl").
 
 
--type dao_module() :: dao_users | dao_groups | dao_tokens | dao_spaces |
-    dao_providers.
+-type dao_module() :: dao_users | dao_groups | dao_tokens | dao_spaces | dao_providers.
 
 
 %% API
@@ -22,7 +22,7 @@
     provider_exists/1]).
 -export([save/1]).
 -export([space/1, user/1, group/1, token/1, provider/1]).
--export([space_doc/1, user_doc/1, group_doc/1, token_doc/1, provider_doc/1]).
+-export([space_doc/1, user_doc/1, user_doc_from_view/1, group_doc/1, token_doc/1, provider_doc/1]).
 -export([user_remove/1, space_remove/1, group_remove/1, token_remove/1,
     provider_remove/1]).
 
@@ -82,7 +82,7 @@ provider_exists(ProviderId) ->
 %% @doc Creates a new document or updates an existing one.
 %% ====================================================================
 -spec save(Doc :: veil_doc() | space_info() | user_info() | group_info() |
-    token_info() | provider_info()) -> Id :: binary() | no_return().
+token_info() | provider_info()) -> Id :: binary() | no_return().
 %% ====================================================================
 save(#veil_document{} = Doc) ->
     {ok, StrId} = save_doc(Doc),
@@ -165,6 +165,17 @@ space_doc(SpaceId) ->
 %% ====================================================================
 user_doc(UserId) ->
     #veil_document{record = #user{}} = UserDoc = get_doc(UserId, dao_users, get_user),
+    UserDoc.
+
+
+%% user_doc_from_view/1
+%% ====================================================================
+%% @doc Returns a user document from the database, querying a view.
+%% ====================================================================
+-spec user_doc_from_view(Key :: {email, Email :: binary()}) -> user_doc() | no_return().
+%% ====================================================================
+user_doc_from_view(Key) ->
+    {ok, #veil_document{record = #user{}} = UserDoc} = dao_lib:apply(dao_users, get_user, [Key], 1),
     UserDoc.
 
 
