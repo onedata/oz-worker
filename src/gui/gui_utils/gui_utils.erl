@@ -12,7 +12,7 @@
 -module(gui_utils).
 -include_lib("ibrowse/include/ibrowse.hrl").
 -include_lib("public_key/include/public_key.hrl").
--include("auth_common.hrl").
+-include("dao/dao_types.hrl").
 -include("gui_common.hrl").
 -include("logging.hrl").
 
@@ -290,7 +290,7 @@ top_menu(ActiveTabID, SubMenuBody) ->
 %%             ]}}
 %%         ] ++ LogsPageCaptions,
 
-    #user_info{name = Name} = temp_user_logic:get_user({global_id, wf:user()}),
+    {ok, #veil_document{record = #user{name = Name}}} = user_logic:get_user(wf:user()),
     MenuIcons =
         [
             {manage_account_tab, #li{body = #link{style = <<"padding: 18px;">>, title = <<"Manage account">>,

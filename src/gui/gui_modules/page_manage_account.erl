@@ -13,6 +13,7 @@
 -module(page_manage_account).
 -compile(export_all).
 
+-include("dao/dao_types.hrl").
 -include("auth_common.hrl").
 -include("gui_common.hrl").
 -include("logging.hrl").
@@ -42,7 +43,7 @@ body() ->
 
 
 main_table() ->
-    User = temp_user_logic:get_user({global_id, wf:user()}),
+    User = get_user_record(wf:user()),
     #table{style = <<"border-width: 0px; width: auto;">>, body = [
         #tbody{body = [
             #tr{cells = [
@@ -67,7 +68,7 @@ main_table() ->
 
 
 user_name_section(User) ->
-    #user_info{name = Name} = User,
+    #user{name = Name} = User,
     [
         #span{style = <<"font-size: 18px;">>, id = <<"displayed_name">>, body = Name},
         #link{id = <<"change_name_button">>, class = <<"glyph-link">>, style = <<"margin-left: 10px;">>,
@@ -87,7 +88,7 @@ user_name_section(User) ->
 
 % HTML list with emails printed
 user_emails_section(User) ->
-    #user_info{emails = Emails} = User,
+    #user{email_list = Emails} = User,
 
     {CurrentEmails, _} = lists:mapfoldl(
         fun(Email, Acc) ->
@@ -120,7 +121,7 @@ user_emails_section(User) ->
 
 
 connected_accounts_section(User) ->
-    #user_info{connected_accounts = ProviderInfos} = User,
+    #user{connected_accounts = ConnectedAccounts} = User,
     TableHead = #tr{cells = [
         #th{body = <<"">>},
         #th{body = <<"provider">>},
@@ -130,7 +131,7 @@ connected_accounts_section(User) ->
     ]},
     TableBody = lists:map(
         fun(Provider) ->
-            ProviderInfo = find_connected_account(Provider, ProviderInfos),
+            ProviderInfo = find_connected_account(Provider, ConnectedAccounts),
             ProviderName = auth_utils:get_provider_name(Provider),
 
             % Checkbox
@@ -168,7 +169,7 @@ connected_accounts_section(User) ->
             Emails = case ProviderInfo of
                          undefined ->
                              <<"">>;
-                         #oauth_account{emails = List} ->
+                         #oauth_account{email_list = List} ->
                              case List of
                                  [] ->
                                      <<"-">>;
@@ -247,7 +248,7 @@ connect_account(Provider) ->
 
 disconnect_account_prompt(Provider) ->
     % Get user info doc
-    #user_info{connected_accounts = ConnectedAccounts} = temp_user_logic:get_user({global_id, wf:user()}),
+    #user{connected_accounts = ConnectedAccounts} = get_user_record(wf:user()),
     % Get provider name
     ProviderName = auth_utils:get_provider_name(Provider),
     case length(ConnectedAccounts) of
@@ -262,30 +263,29 @@ disconnect_account_prompt(Provider) ->
 
 
 disconnect_account(Provider) ->
-    GlobalID = wf:user(),
+    UserId = wf:user(),
     % Find the user, remove provider info from his user info doc and reload the page
-    UserInfo = #user_info{connected_accounts = ConnectedAccounts} = temp_user_logic:get_user({global_id, GlobalID}),
+    #user{connected_accounts = ConnectedAccounts} = get_user_record(UserId),
     OAuthAccount = find_connected_account(Provider, ConnectedAccounts),
-    temp_user_logic:update_user({global_id, GlobalID},
-        UserInfo#user_info{connected_accounts = ConnectedAccounts -- [OAuthAccount]}),
+    user_logic:modify(UserId, [{connected_accounts, ConnectedAccounts -- [OAuthAccount]}]),
     wf:redirect(<<"/manage_account">>).
 
 
 % Update email list - add or remove one and save new user doc
 update_email(AddOrRemove) ->
-    GlobalID = wf:user(),
-    UserInfo = #user_info{emails = OldEmailList} = temp_user_logic:get_user({global_id, GlobalID}),
+    UserId = wf:user(),
+    #user{email_list = OldEmailList} = get_user_record(UserId),
     case AddOrRemove of
         {add, submitted} ->
             NewEmail = auth_utils:normalize_email(gui_utils:to_binary(wf:q("new_email_textbox"))),
-            case temp_user_logic:get_user({email, NewEmail}) of
+            case get_user_record({email, NewEmail}) of
                 undefined ->
-                    temp_user_logic:update_user({global_id, GlobalID}, UserInfo#user_info{emails = OldEmailList ++ [NewEmail]});
+                    user_logic:modify(UserId, [{email_list, OldEmailList ++ [NewEmail]}]);
                 _ ->
                     wf:wire(#alert{text = <<"This e-mail address is in use.">>})
             end;
         {remove, Email} ->
-            temp_user_logic:update_user({global_id, GlobalID}, UserInfo#user_info{emails = OldEmailList -- [Email]})
+            user_logic:modify(UserId, [{email_list, OldEmailList -- [Email]}])
     end,
     gui_utils:update("main_table", main_table()).
 
@@ -293,9 +293,8 @@ update_email(AddOrRemove) ->
 % Update email list - add or remove one and save new user doc
 update_name() ->
     GlobalID = wf:user(),
-    UserInfo = #user_info{} = temp_user_logic:get_user({global_id, GlobalID}),
     NewName = gui_utils:to_binary(wf:q("new_name_textbox")),
-    temp_user_logic:update_user({global_id, GlobalID}, UserInfo#user_info{name = NewName}),
+    user_logic:modify(GlobalID, [{name, NewName}]),
     gui_utils:update("main_table", main_table()).
 
 
@@ -346,3 +345,10 @@ redirect_to_veilcluster() ->
     end.
 %%     <<"veilfsdev.com/openid_login?authorization_code=", Rest/binary>> = _RedirectURL,
 %%     wf:redirect(<<"https://onedata.org/auth_endpoint?authorization_code=", Rest/binary>>).
+
+
+get_user_record(Key) ->
+    case user_logic:get_user(Key) of
+        {ok, #veil_document{record = UserRecord}} -> UserRecord;
+        _ -> undefined
+    end.

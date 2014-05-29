@@ -29,8 +29,8 @@
 -spec create(Name :: binary()) ->
     {ok, UserId :: binary()} | no_return().
 %% ====================================================================
-create(Name) ->
-    UserId = logic_helper:save(#user{name = Name}),
+create(#user{} = User) ->
+    UserId = logic_helper:save(User),
     {ok, UserId}.
 
 
@@ -47,8 +47,7 @@ get_user(Key) ->
         Bin when is_binary(Bin) ->
             logic_helper:user_doc(Key);
         Key ->
-            #veil_document{record = User} = logic_helper:user_doc_from_view(Key),
-            {ok, User}
+            logic_helper:user_doc_from_view(Key)
     end
 catch T:M -> ?error_stacktrace("~p:~p", [T, M]) end.
 
@@ -63,8 +62,7 @@ catch T:M -> ?error_stacktrace("~p:~p", [T, M]) end.
     ok | no_return().
 %% ====================================================================
 modify(UserId, Proplist) ->
-    ?dump({uuid, UserId}),
-    #veil_document{record = User} = Doc = logic_helper:user_doc(UserId),
+    {ok, #veil_document{record = User} = Doc} = logic_helper:user_doc(UserId),
     #user{
         name = Name,
         email_list = Emails,

@@ -10,6 +10,7 @@
 -module(user_rest_module).
 -author("Konrad Zemek").
 
+-include("dao/dao_users.hrl").
 -include("handlers/rest_handler.hrl").
 
 -behavior(rest_module_behavior).
@@ -105,7 +106,7 @@ accept_resource(user, post, _UserId, Data, _Client, _Req) ->
     if
         Name =:= undefined -> false;
         true ->
-            {ok, _} = user_logic:create(Name),
+            {ok, _} = user_logic:create(#user{name = Name}),
             true
     end;
 accept_resource(user, patch, UserId, Data, _Client, _Req) ->

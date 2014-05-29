@@ -132,7 +132,6 @@ start_n2o() ->
 
     auth_utils:load_auth_config(),
     auth_utils:init_state_memory(),
-    temp_user_logic:init(),
     application:set_env(globalregistry, current_loglevel, 2),
     application:set_env(globalregistry, include_stacktrace, true),
 

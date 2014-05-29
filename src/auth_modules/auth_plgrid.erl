@@ -14,6 +14,7 @@
 
 -include("logging.hrl").
 -include("auth_common.hrl").
+-include("dao/dao_types.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 -define(PROVIDER_NAME, plgrid).
@@ -138,7 +139,7 @@ validate_login(ParamsProplist) ->
             provider_id = ?PROVIDER_NAME,
             user_id = Login,
             login = Login,
-            emails = Emails,
+            email_list = Emails,
             name = Name
         },
         {ok, ProvUserInfo}
