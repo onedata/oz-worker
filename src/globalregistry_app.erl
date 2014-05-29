@@ -63,7 +63,7 @@ start(_StartType, _StartArgs) ->
 stop(_State) ->
 	cowboy:stop_listener(?rest_listener),
 	cowboy:stop_listener(?gui_https_listener),
-    grpca:stop(),
+    stop_rest(),
 	ok.
 
 %%%===================================================================
@@ -83,6 +83,7 @@ start_rest() ->
   {ok, RestCertDomain} = application:get_env(?APP_Name, rest_cert_domain),
 
   grpca:start(GRPCADir, RestCertFile, RestKeyFile, RestCertDomain),
+  auth_logic:start(),
 
   Dispatch = cowboy_router:compile([
     {'_', lists:append([
@@ -90,7 +91,8 @@ start_rest() ->
       user_rest_module:routes(),
       provider_rest_module:routes(),
       spaces_rest_module:routes(),
-      groups_rest_module:routes()
+      groups_rest_module:routes(),
+      auth_rest_module:routes()
     ])}
   ]),
   {ok, _Ans} = cowboy:start_https(?rest_listener, ?rest_https_acceptors,
@@ -104,6 +106,10 @@ start_rest() ->
     [
       {env, [{dispatch, Dispatch}]}
     ]).
+
+stop_rest() ->
+    auth_logic:stop(),
+    grpca:stop().
 
 %% start_n2o/0
 %% ====================================================================

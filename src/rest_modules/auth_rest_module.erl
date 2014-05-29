@@ -80,15 +80,15 @@ resource_exists(_, _ProviderId, _Req) ->
         boolean().
 %% ====================================================================
 accept_resource(token, post, ProviderId, Data, _Client, Req) ->
-    {ok, {<<"application">>, <<"x-www-form-urlencoded">>}, _Req2} =
-        cowboy_req:parse_header(<<"content-type">>, Req), %%@todo: req2, return instead of breaking
+%%     {ok, {<<"application">>, <<"x-www-form-urlencoded">>}, _Req2} =
+%%         cowboy_req:parse_header(<<"content-type">>, Req), %%@todo: req2, return instead of breaking
     GrantType = proplists:get_value(<<"grant_type">>, Data),
     Code = proplists:get_value(<<"code">>, Data),
     if
         GrantType =/= <<"authorization_code">> -> false; %% @todo: refresh
         Code =:= undefined -> false;
         true ->
-            {true, auth_logic:grant_token(ProviderId, Code)}
+            {true, {data, auth_logic:grant_token(ProviderId, Code)}}
     end.
 
 

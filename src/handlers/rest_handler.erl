@@ -158,11 +158,14 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
             {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req2)),
             {ok, ProviderId} = grpca:verify_provider(PeerCert),
 
-            %% @todo: OpenID user identification
-            {UserId, Req3} = cowboy_req:header(<<"userid">>, Req2),
-            Client = if
-                UserId =/= undefined -> #client{type = user, id = UserId};
-                true -> #client{type = provider, id = ProviderId}
+            {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
+            Client = case Authorization of
+                <<"Bearer ", Token/binary>> ->
+                    UserId = auth_logic:validate_token(ProviderId, Token),
+                    #client{type = user, id = UserId};
+
+                undefined ->
+                    #client{type = provider, id = ProviderId} %% @todo: else?
             end,
 
             {true, Req3, State#rstate{client = Client}}
