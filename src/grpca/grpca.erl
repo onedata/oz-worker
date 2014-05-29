@@ -114,7 +114,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
         " -in ", CSRFile,
         " -out ", CertFile]),
 
-    Pem = file:read_file(CertFile),
+    {ok, Pem} = file:read_file(CertFile),
     mochitemp:rmtempdir(TmpDir),
 
     {ok, Pem}.
