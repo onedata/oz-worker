@@ -7,5 +7,9 @@
 %%% Created : 29. May 2014 11:58
 %%%-------------------------------------------------------------------
 
+-ifndef(TEST_UTILS_HRL).
+-define(TEST_UTILS_HRL, 1).
+
 -define(GR_DEPS,[sasl,lager,ssl,erlydtl,mimetypes,ranch,crypto,cowboy,gproc,n2o,ibrowse]).
 
+-endif().
