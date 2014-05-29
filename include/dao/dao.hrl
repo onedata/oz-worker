@@ -64,11 +64,11 @@
 
 %% Design Names
 -define(USER_BY_EMAIL_DESIGN_NAME, "user_by_email").
--define(USER_BY_PROVIDER_ID_DESIGN_NAME, "user_by_provider_id").
+-define(USER_BY_CONNECTED_ACCOUNT_USER_ID_DESIGN_NAME, "user_by_connected_account_user_id").
 
 %% Views
 -define(USER_BY_EMAIL_VIEW, #view_info{name = "user_by_email", design = ?USER_BY_EMAIL_DESIGN_NAME, db_name = ?USERS_DB_NAME}).
--define(USER_BY_PROVIDER_ID_VIEW, #view_info{name = "user_by_provider_id", design = ?USER_BY_PROVIDER_ID_DESIGN_NAME, db_name = ?USERS_DB_NAME}).
+-define(USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_info{name = "user_by_connected_account_user_id", design = ?USER_BY_CONNECTED_ACCOUNT_USER_ID_DESIGN_NAME, db_name = ?USERS_DB_NAME}).
 
 %% Others
 -define(RECORD_INSTANCES_DOC_PREFIX, "record_instances_").
@@ -79,9 +79,9 @@
 -define(RECORD_META_FIELD_NAME, "record__").
 
 %% List of all used databases :: [string()]
--define(DB_LIST, [?SYSTEM_DB_NAME]).
+-define(DB_LIST, [?SYSTEM_DB_NAME, ?USERS_DB_NAME]).
 %% List of all used views :: [#view_info]
--define(VIEW_LIST, []).
+-define(VIEW_LIST, [?USER_BY_EMAIL_VIEW, ?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW]).
 %% Default database name
 -define(DEFAULT_DB, lists:nth(1, ?DB_LIST)).
 

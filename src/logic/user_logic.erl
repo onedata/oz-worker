@@ -13,6 +13,7 @@
 -author("Konrad Zemek").
 
 -include("dao/dao_types.hrl").
+-include("logging.hrl").
 
 
 %% API
@@ -38,14 +39,18 @@ create(Name) ->
 %% @doc Creates a user account.
 %% ====================================================================
 -spec get_user(Key) -> {ok, #user{}} | {error, term()} when
-    Key :: {global_id, binary()}.
+    Key :: binary() | {global_id, binary()}.
 %% ====================================================================
 get_user(Key) ->
+    try
     case Key of
-        {global_id, GlobalID} ->
-            #veil_document{record = User} = logic_helper:user_doc(GlobalID),
+        Bin when is_binary(Bin) ->
+            logic_helper:user_doc(Key);
+        Key ->
+            #veil_document{record = User} = logic_helper:user_doc_from_view(Key),
             {ok, User}
-    end.
+    end
+catch T:M -> ?error_stacktrace("~p:~p", [T, M]) end.
 
 
 %% modify/2
@@ -58,6 +63,7 @@ get_user(Key) ->
     ok | no_return().
 %% ====================================================================
 modify(UserId, Proplist) ->
+    ?dump({uuid, UserId}),
     #veil_document{record = User} = Doc = logic_helper:user_doc(UserId),
     #user{
         name = Name,
@@ -67,7 +73,7 @@ modify(UserId, Proplist) ->
         groups = Groups} = User,
     NewUser = #user{
         name = proplists:get_value(name, Proplist, Name),
-        email_list = proplists:get_value(emails, Proplist, Emails),
+        email_list = proplists:get_value(email_list, Proplist, Emails),
         connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
         spaces = proplists:get_value(spaces, Proplist, Spaces),
         groups = proplists:get_value(groups, Proplist, Groups)},

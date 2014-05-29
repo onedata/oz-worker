@@ -4,7 +4,7 @@ function (doc) {
         for (key in doc.email_list)
             emit(doc.email_list[key], null);
         for (acc in doc.connected_accounts)
-            for (key in doc.connected_accounts[acc])
+            for (key in doc.connected_accounts[acc].email_list)
                 emit(doc.connected_accounts[acc].email_list[key], null);
     }
 }

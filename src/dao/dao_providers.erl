@@ -29,6 +29,7 @@
 save_provider(#provider{} = Provider) ->
 	save_provider(#veil_document{record = Provider});
 save_provider(#veil_document{record = #provider{}, uuid = UUID} = ProviderDoc) when is_list(UUID) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:save_record(ProviderDoc).
 
 
@@ -41,6 +42,7 @@ save_provider(#veil_document{record = #provider{}, uuid = UUID} = ProviderDoc) w
 	ok | {error, any()} | no_return().
 %% ====================================================================
 remove_provider(ProviderId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:remove_record(ProviderId).
 
 %% exist_provider/1
@@ -51,6 +53,7 @@ remove_provider(ProviderId) ->
 -spec exist_provider(ProviderId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_provider(ProviderId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:exist_record(ProviderId).
 
 %% get_provider/1
@@ -63,4 +66,5 @@ exist_provider(ProviderId) ->
 -spec get_provider(ProviderId :: uuid()) -> {ok, provider_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_provider(ProviderId) ->
+    dao:set_db(?SYSTEM_DB_NAME),
 	dao:get_record(ProviderId).

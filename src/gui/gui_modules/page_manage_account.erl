@@ -337,7 +337,12 @@ show_name_edition(Flag) ->
 
 redirect_to_veilcluster() ->
     UserID = wf:user(),
-    RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),
-    wf:redirect(RedirectURL).
+%%     RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),\
+    try
+        RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fa8bb6023fe681363340a99ae3de72">>),
+        wf:redirect(RedirectURL)
+    catch T:M ->
+        ?error_stacktrace("tutut ~p:~p", [T, M])
+    end.
 %%     <<"veilfsdev.com/openid_login?authorization_code=", Rest/binary>> = _RedirectURL,
 %%     wf:redirect(<<"https://onedata.org/auth_endpoint?authorization_code=", Rest/binary>>).
