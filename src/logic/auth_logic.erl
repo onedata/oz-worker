@@ -12,10 +12,16 @@
 -module(auth_logic).
 -author("Konrad Zemek").
 
--define(AUTH_TOKEN, auth_token).
+-define(AUTH_CODE, aUTH_CODE).
 -define(ACCESS_TOKEN, access_token).
 -define(REFRESH_TOKEN, refresh_token).
--define(TABLES, [?AUTH_TOKEN, ?ACCESS_TOKEN, ?REFRESH_TOKEN]).
+-define(TABLES, [?AUTH_CODE, ?ACCESS_TOKEN, ?REFRESH_TOKEN]).
+
+%% @todo: config
+-define(AUTH_CODE_EXPIRATION_SECS, 600).
+-define(ACCESS_TOKEN_EXPIRATION_SECS, 36000).
+-define(REFRESH_TOKEN_EXPIRATION_SECS, 36000).
+-define(ISSUER_URL, "https://onedata.org").
 
 
 %% API
@@ -33,39 +39,58 @@ stop() ->
 -spec get_redirection_uri(UserId :: binary(), ProviderId :: binary()) ->
     RedirectionUri :: binary().
 get_redirection_uri(UserId, ProviderId) ->
-    AuthToken = binary:list_to_bin(get_random_string(32)), %% @todo: configurable length
-    ets:insert(?AUTH_TOKEN, {AuthToken, {ProviderId, UserId}}), %% @todo: expiration time
-    ProviderData = provider_logic:get_data(ProviderId),
-    [RedirectURL | _] = proplists:get_value(urls, ProviderData), %% @todo: check urls
-    <<"https://", RedirectURL/binary, "/login?code=", AuthToken/binary>>. %% @todo: move most of this to provider_logic
+    AuthCode = random_token(),
+    ExpirationTime = now_s() + ?AUTH_CODE_EXPIRATION_SECS,
+    ets:insert(?AUTH_CODE, {AuthCode, {ProviderId, UserId, ExpirationTime}}),
+    {ok, ProviderData} = provider_logic:get_data(ProviderId),
+    {redirectionPoint, RedirectURL} = lists:keyfind(redirectionPoint, 1, ProviderData),
+    <<RedirectURL/binary, "?code=", AuthCode/binary>>.
 
 
--spec grant_token(ProviderId :: binary(), AuthToken :: binary()) ->
+-spec grant_token(ProviderId :: binary(), AuthCode :: binary()) ->
     [proplists:property()].
-grant_token(ProviderId, AuthToken) ->
-    [{IntendedProviderId, UserId}] = ets:lookup(?AUTH_TOKEN, AuthToken),
-    ProviderId = IntendedProviderId, %% @todo: revoke
-    ets:delete(?AUTH_TOKEN, AuthToken),
+grant_token(ProviderId, AuthCode) ->
+    [{AuthCode, {ProviderId, UserId, ExpirationTime}}] = ets:lookup(?AUTH_CODE, AuthCode),
+    ets:delete(?AUTH_CODE, AuthCode),
 
-    AccessToken = binary:list_to_bin(get_random_string(32)),
-    RefreshToken = binary:list_to_bin(get_random_string(32)),
-    ets:insert(?ACCESS_TOKEN, {AccessToken, {ProviderId, UserId}}),
-    ets:insert(?REFRESH_TOKEN, {RefreshToken, {ProviderId, UserId}}),
+    AccessToken = random_token(),
+    RefreshToken = random_token(),
+    AccessTokenExpirationTime = now_s() + ?ACCESS_TOKEN_EXPIRATION_SECS,
+    RefreshTokenExpirationTime = now_s() + ?REFRESH_TOKEN_EXPIRATION_SECS,
+    ets:insert(?ACCESS_TOKEN, {AccessToken, {ProviderId, UserId, AccessTokenExpirationTime}}),
+    ets:insert(?REFRESH_TOKEN, {RefreshToken, {ProviderId, UserId, RefreshTokenExpirationTime}}),
 
     [
         {access_token, AccessToken},
         {token_type, bearer},
-        {expires_in, 3600}, %% @todo: custom expiration time
+        {expires_in, ?ACCESS_TOKEN_EXPIRATION_SECS},
         {refresh_token, RefreshToken},
         {scope, openid},
         {id_token, jwt_encode([
-            {iss, omg}, %% @todo: issuer url, can be also used to create rest cert
+            {iss, ?ISSUER_URL},
             {sub, UserId},
             {aud, ProviderId},
             {exp, wut}, %% @todo: expiration time
             {iat, now} %% @todo: now
         ])}
     ].
+
+
+%% @todo:
+%% validate_authorization_request(ProviderId, AuthCode) ->
+%%     SavedData = ets:lookup(?AUTH_CODE, AuthCode),
+%%     validate_authorization_request(ProviderId, AuthCode, SavedData).
+%%
+%% validate_authorization_request(ProviderId, AuthCode, []) -> [{error, invalid_grant}];
+%% validate_authorization_request(ProviderId, AuthCode, [{IntendedProviderId, UserId}])
+%%     when IntendedProviderId =/= ProviderId -> [{error, invalid_request}]
+
+
+-spec validate_token(ProviderId :: binary(), AccessToken :: binary()) ->
+    UserId :: binary().
+validate_token(ProviderId, AccessToken) ->
+    [{AccessToken, {ProviderId, UserId, ExpirationTime}}] = ets:lookup(?ACCESS_TOKEN, AccessToken),
+    UserId.
 
 
 jwt_encode(Claims) ->
@@ -76,18 +101,15 @@ jwt_encode(Claims) ->
     <<Header64/binary, ".", Payload64/binary, ".">>.
 
 
--spec validate_token(ProviderId :: binary(), AccessToken :: binary()) ->
-    UserId :: binary().
-validate_token(ProviderId, AccessToken) ->
-    [{IntendedProviderId, UserId}] = ets:lookup(?ACCESS_TOKEN, AccessToken),
-    ProviderId = IntendedProviderId, %% @todo: revoke
-    UserId.
+-spec random_token() -> string().
+random_token() ->
+    binary:list_to_bin(
+        mochihex:to_hex(
+            crypto:hash(sha,
+                term_to_binary({make_ref(), node(), now()})))).
 
 
-%% @todo: deduplicate (grpca)
--spec get_random_string(Length :: integer()) -> string().
-get_random_string(Length) ->
-    AllowedChars = "qwertyuiopasdfghjklzxcvbnm1234567890",
-    lists:foldl(fun(_, Acc) ->
-        [lists:nth(random:uniform(length(AllowedChars)), AllowedChars) | Acc]
-    end, [], lists:seq(1, Length)).
+-spec now_s() -> integer().
+now_s() ->
+    {MegaSecs, Secs, _} = erlang:now(),
+    MegaSecs*1000000 + Secs.
