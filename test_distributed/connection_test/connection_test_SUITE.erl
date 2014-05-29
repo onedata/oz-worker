@@ -43,7 +43,7 @@ dao_connection_test(Config) ->
 %% ====================================================================
 
 init_per_suite(Config) ->
-	?INIT_CODE_PATH,
+	?INIT_DIST_TEST,
 	DbNode = ?NODE(?CURRENT_HOST,db),
 	DbNodesEnv = {db_nodes,[DbNode]},
 	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST,
