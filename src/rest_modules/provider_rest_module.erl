@@ -37,8 +37,8 @@ routes() ->
         {<<"/provider/spaces/">>,           			 M, S#rstate{resource = spaces,      methods = [get, post]   }},
         {<<"/provider/spaces/support">>,    			 M, S#rstate{resource = ssupport,    methods = [post]        }},
         {<<"/provider/spaces/:sid">>,       			 M, S#rstate{resource = space,       methods = [get, delete] }},
-        {<<"/provider/test/check_my_ip">>,               M, S#rstate{resource = ip,       	 methods = [get] }},
-        {<<"/provider/test/check_my_ports">>,            M, S#rstate{resource = ports,       methods = [get] }}
+        {<<"/provider/test/check_my_ip">>,               M, S#rstate{resource = ip,       	 methods = [get], noauth = [get] }},
+        {<<"/provider/test/check_my_ports">>,            M, S#rstate{resource = ports,       methods = [get], noauth = [get] }}
     ].
 
 
