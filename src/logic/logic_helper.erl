@@ -165,7 +165,7 @@ space_doc(SpaceId) ->
 %% ====================================================================
 user_doc(UserId) ->
     #veil_document{record = #user{}} = UserDoc = get_doc(UserId, dao_users, get_user),
-    UserDoc.
+    {ok, UserDoc}.
 
 
 %% user_doc_from_view/1
@@ -175,8 +175,7 @@ user_doc(UserId) ->
 -spec user_doc_from_view(Key :: {email, Email :: binary()}) -> user_doc() | no_return().
 %% ====================================================================
 user_doc_from_view(Key) ->
-    {ok, #veil_document{record = #user{}} = UserDoc} = dao_lib:apply(dao_users, get_user, [Key], 1),
-    UserDoc.
+    dao_lib:apply(dao_users, get_user, [Key], 1).
 
 
 %% group_doc/1

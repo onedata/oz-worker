@@ -14,6 +14,7 @@
 
 -include("logging.hrl").
 -include("auth_common.hrl").
+-include("dao/dao_types.hrl").
 
 -define(PROVIDER_NAME, google).
 
@@ -96,7 +97,7 @@ validate_login(ParamsProplist) ->
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = proplists:get_value(<<"sub">>, JSONProplist, <<"">>),
-            emails = extract_emails(JSONProplist),
+            email_list = extract_emails(JSONProplist),
             name = proplists:get_value(<<"name">>, JSONProplist, <<"">>)
         },
         {ok, ProvUserInfo}

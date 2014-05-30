@@ -27,20 +27,5 @@
 % Error atom indicating that account has already been connected to other profile
 -define(error_auth_account_already_connected, account_already_connected).
 
--record(user_info, {
-    global_id = <<"">>,
-    name = <<"">>,
-    emails = [],
-    connected_accounts = []
-}).
-
--record(oauth_account, {
-    provider_id = undefined,
-    user_id = <<"">>,
-    login = <<"">>,
-    name = <<"">>,
-    emails = <<"">>
-}).
-
 -endif.
 

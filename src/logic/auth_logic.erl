@@ -23,6 +23,7 @@
 -define(REFRESH_TOKEN_EXPIRATION_SECS, 36000).
 -define(ISSUER_URL, "https://onedata.org").
 
+-include("dao/dao_users.hrl").
 
 %% API
 -export([start/0, stop/0, get_redirection_uri/2, grant_token/2, validate_token/2]).
@@ -46,18 +47,10 @@ get_redirection_uri(UserId, ProviderId) ->
     {redirectionPoint, RedirectURL} = lists:keyfind(redirectionPoint, 1, ProviderData),
     <<RedirectURL/binary, "?code=", AuthCode/binary>>.
 
-
--record(user_info, {
-    global_id = <<"">>,
-    name = <<"">>,
-    emails = [],
-    connected_accounts = []
-}).
-
 -spec grant_token(ProviderId :: binary(), AuthCode :: binary()) ->
     [proplists:property()].
 grant_token(ProviderId, AuthCode) ->
-    [{AuthCode, {ProviderId, UserId, ExpirationTime}}] = ets:lookup(?AUTH_CODE, AuthCode),
+    [{AuthCode, {ProviderId, UserId, _ExpirationTime}}] = ets:lookup(?AUTH_CODE, AuthCode),
     ets:delete(?AUTH_CODE, AuthCode),
 
     AccessToken = random_token(),
@@ -67,10 +60,10 @@ grant_token(ProviderId, AuthCode) ->
     ets:insert(?ACCESS_TOKEN, {AccessToken, {ProviderId, UserId, AccessTokenExpirationTime}}),
     ets:insert(?REFRESH_TOKEN, {RefreshToken, {ProviderId, UserId, RefreshTokenExpirationTime}}),
 
-    #user_info{
+    #user{
         name = Name,
-        emails = Emails
-    } = temp_user_logic:get_user({global_id, UserId}),
+        email_list = Emails
+    } = user_logic:get_user(UserId),
     EmailsList = lists:map(fun(Email) -> {struct, [{email, Email}]} end, Emails),
     [
         {access_token, AccessToken},
@@ -103,7 +96,7 @@ grant_token(ProviderId, AuthCode) ->
 -spec validate_token(ProviderId :: binary(), AccessToken :: binary()) ->
     UserId :: binary().
 validate_token(ProviderId, AccessToken) ->
-    [{AccessToken, {ProviderId, UserId, ExpirationTime}}] = ets:lookup(?ACCESS_TOKEN, AccessToken),
+    [{AccessToken, {ProviderId, UserId, _ExpirationTime}}] = ets:lookup(?ACCESS_TOKEN, AccessToken),
     UserId.
 
 
@@ -126,4 +119,4 @@ random_token() ->
 -spec now_s() -> integer().
 now_s() ->
     {MegaSecs, Secs, _} = erlang:now(),
-    MegaSecs*1000000 + Secs.
+    MegaSecs * 1000000 + Secs.

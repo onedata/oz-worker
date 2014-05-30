@@ -79,7 +79,7 @@ resource_exists(_, _ProviderId, _Req) ->
     {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
         boolean().
 %% ====================================================================
-accept_resource(token, post, ProviderId, Data, _Client, Req) ->
+accept_resource(token, post, ProviderId, Data, _Client, _Req) ->
 %%     {ok, {<<"application">>, <<"x-www-form-urlencoded">>}, _Req2} =
 %%         cowboy_req:parse_header(<<"content-type">>, Req), %%@todo: req2, return instead of breaking
     GrantType = proplists:get_value(<<"grant_type">>, Data),

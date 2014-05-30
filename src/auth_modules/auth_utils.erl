@@ -12,6 +12,7 @@
 -module(auth_utils).
 
 -include("logging.hrl").
+-include("dao/dao_types.hrl").
 -include("auth_common.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").
 
@@ -94,21 +95,30 @@ validate_login() ->
                         ?alert("Security breach attempt spotted. Reason:~p~nRequest params:~n~p", [Reason, ParamsProplist]),
                         {error, ?error_auth_invalid_request};
 
-                    {ok, OriginalProvUserInfo = #oauth_account{provider_id = ProviderID, user_id = UserID, emails = OriginalEmails, name = Name}} ->
+                    {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderID, user_id = UserID, email_list = OriginalEmails, name = Name}} ->
                         Emails = lists:map(fun(Email) -> auth_utils:normalize_email(Email) end, OriginalEmails),
-                        ProvUserInfo = OriginalProvUserInfo#oauth_account{emails = Emails},
+                        OAuthAccount = OriginalOAuthAccount#oauth_account{email_list = Emails},
                         case proplists:get_value(connect_account, Props) of
                             false ->
                                 % Standard login, check if there is an account belonging to the user
-                                case temp_user_logic:get_user({ProviderID, UserID}) of
-                                    undefined ->
+                                case user_logic:get_user({connected_account_user_id, {ProviderID, UserID}}) of
+                                    {ok, #veil_document{uuid = GlobalID}} ->
+                                        % The account already exists
+                                        wf:user(GlobalID),
+                                        {redirect, Redirect};
+                                    _ ->
+                                        % Error
                                         % This is a first login
                                         % Check if any of emails is in use
                                         EmailUsed = lists:foldl(
                                             fun(Email, Acc) ->
                                                 case Acc of
                                                     true -> true;
-                                                    _ -> temp_user_logic:get_user({email, Email}) /= undefined
+                                                    _ ->
+                                                        case user_logic:get_user({email, Email}) of
+                                                            {ok, _} -> true;
+                                                            _ -> false
+                                                        end
                                                 end
                                             end, false, Emails),
 
@@ -118,31 +128,34 @@ validate_login() ->
                                                 {error, ?error_auth_new_email_occupied};
                                             false ->
                                                 % All email are available, proceed
-                                                {GlobalID, _} = auth_utils:generate_uuid(),
-                                                UserInfo = #user_info{global_id = GlobalID, emails = Emails, name = Name, connected_accounts = [
-                                                    ProvUserInfo
+                                                UserInfo = #user{email_list = Emails, name = Name, connected_accounts = [
+                                                    OAuthAccount
                                                 ]},
-                                                temp_user_logic:save_user(UserInfo),
-                                                wf:user(GlobalID),
+                                                {ok, UserId} = user_logic:create(UserInfo),
+                                                wf:user(UserId),
                                                 new_user
-                                        end;
-                                    #user_info{global_id = GlobalID} ->
-                                        % The account already exists
-                                        wf:user(GlobalID),
-                                        {redirect, Redirect}
+                                        end
                                 end;
 
                             true ->
                                 % Account adding flow
                                 % Check if this account isn't connected to other profile
-                                case temp_user_logic:get_user({ProviderID, UserID}) of
-                                    undefined ->
+                                case user_logic:get_user({connected_account_user_id, {ProviderID, UserID}}) of
+                                    {ok, _} ->
+                                        % The account is used on some other profile, cannot proceed
+                                        {error, ?error_auth_account_already_connected};
+                                    _ ->
+                                        % Not found, ok
                                         % Check if any of emails is in use
                                         EmailUsed = lists:foldl(
                                             fun(Email, Acc) ->
                                                 case Acc of
                                                     true -> true;
-                                                    _ -> temp_user_logic:get_user({email, Email}) /= undefined
+                                                    _ ->
+                                                        case user_logic:get_user({email, Email}) of
+                                                            {ok, _} -> true;
+                                                            _ -> false
+                                                        end
                                                 end
                                             end, false, Emails),
 
@@ -152,14 +165,12 @@ validate_login() ->
                                                 {error, ?error_auth_connect_email_occupied};
                                             false ->
                                                 % Everything ok, get the user and add new provider info
-                                                GlobalID = wf:user(),
-                                                NewUserInfo = merge_connected_accounts(ProvUserInfo, temp_user_logic:get_user({global_id, GlobalID})),
-                                                temp_user_logic:update_user({global_id, GlobalID}, NewUserInfo),
+                                                UserId = wf:user(),
+                                                {ok, #veil_document{record = UserRecord}} = user_logic:get_user(UserId),
+                                                ModificationProplist = merge_connected_accounts(OAuthAccount, UserRecord),
+                                                user_logic:modify(UserId, ModificationProplist),
                                                 {redirect, <<"/manage_account">>}
-                                        end;
-                                    _ ->
-                                        % The account is used on some other profile, cannot proceed
-                                        {error, ?error_auth_account_already_connected}
+                                        end
                                 end
                         end
                 end
@@ -171,8 +182,8 @@ validate_login() ->
     end.
 
 merge_connected_accounts(OAuthAccount, UserInfo) ->
-    #user_info{name = Name, emails = Emails, connected_accounts = ConnectedAccounts} = UserInfo,
-    #oauth_account{name = ProvName, emails = ProvEmails} = OAuthAccount,
+    #user{name = Name, email_list = Emails, connected_accounts = ConnectedAccounts} = UserInfo,
+    #oauth_account{name = ProvName, email_list = ConnAccEmails} = OAuthAccount,
     % If no name is specified, take the one provided with new info
     NewName = case Name of
                   <<"">> -> ProvName;
@@ -185,8 +196,12 @@ merge_connected_accounts(OAuthAccount, UserInfo) ->
                 true -> Acc;
                 false -> Acc ++ [Email]
             end
-        end, Emails, ProvEmails),
-    UserInfo#user_info{name = NewName, emails = NewEmails, connected_accounts = ConnectedAccounts ++ [OAuthAccount]}.
+        end, Emails, ConnAccEmails),
+    [
+        {name, NewName},
+        {email_list, NewEmails},
+        {connected_accounts, ConnectedAccounts ++ [OAuthAccount]}
+    ].
 
 
 init_state_memory() ->
