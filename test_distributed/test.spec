@@ -18,3 +18,9 @@
 %% Suites
 {suites, connection_test, all}.
 {suites, dao_test, all}.
+
+{ct_hooks, [
+  {cth_surefire, [
+    {path,"TEST-report.xml"}
+  ]}
+]}.
