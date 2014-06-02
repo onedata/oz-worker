@@ -12,4 +12,4 @@
 
 -define(GR_DEPS,[sasl,lager,ssl,erlydtl,mimetypes,ranch,crypto,cowboy,gproc,n2o,ibrowse]).
 
--endif().
+-endif.
