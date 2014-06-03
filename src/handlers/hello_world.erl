@@ -1,11 +1,13 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Hello world rest handler
-%%% @end
-%%% Created : 15. Apr 2014 3:28 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Rest handler example with hello world api
+%% @end
+%% ===================================================================
 -module(hello_world).
 -author("Tomasz Lichon").
 

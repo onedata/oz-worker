@@ -1,11 +1,13 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Connection test suite
-%%% @end
-%%% Created : 29. Apr 2014 2:53 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Basic tests that check connection to main parts of application
+%% @end
+%% ===================================================================
 -module(connection_test_SUITE).
 -author("Tomasz Lichon").
 

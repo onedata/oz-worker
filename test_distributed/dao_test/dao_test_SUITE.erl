@@ -1,11 +1,16 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Connection test suite
-%%% @end
-%%% Created : 12. May 2014 3:28 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This file contains tests for basic create-read-update-delete
+%% operations on: users, groups, spaces and providers
+%% @end
+%% ===================================================================
+-author("Tomasz Lichon").
+
 -module(dao_test_SUITE).
 -author("Tomasz Lichon").
 

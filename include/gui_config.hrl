@@ -1,12 +1,15 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Definitions connected with n2o
-%%% @end
-%%% Created : 09. May 2014 12:48 PM
-%%%-------------------------------------------------------------------
--author("Tomasz Lichoń").
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Gui common definitions
+%% @end
+%% ===================================================================
+-author("Tomasz Lichon").
+
 
 -ifndef(N2O_CONFIG_HRL).
 -define(N2O_CONFIG_HRL, 1).

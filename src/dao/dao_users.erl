@@ -1,12 +1,15 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% This module provides high level DB API for handling user documents.
-%%% @end
-%%% Created : 12. May 2014 2:09 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This module provides high level DB API for handling users documents.
+%% @end
+%% ===================================================================
 -module(dao_users).
+-author("Tomasz Lichon").
 
 %% Includes
 -include("dao/dao_users.hrl").

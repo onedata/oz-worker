@@ -1,11 +1,13 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Application main supervisor
-%%% @end
-%%% Created : 14. Apr 2014 5:57 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Application main supervisor
+%% @end
+%% ===================================================================
 -module(globalregistry_sup).
 -author("Tomasz Lichon").
 

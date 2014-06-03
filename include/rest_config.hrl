@@ -1,11 +1,13 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Definitions connected with rest service
-%%% @end
-%%% Created : 15. Apr 2014 3:19 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Rest common definitions
+%% @end
+%% ===================================================================
 -author("Tomasz Lichon").
 
 -ifndef(REST_CONFIG_HRL).

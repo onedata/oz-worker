@@ -1,11 +1,14 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% This module provides high level DB API for handling tokens documents.
-%%% @end
-%%% Created : 12. May 2014 2:10 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This module provides high level DB API for handling tokens documents.
+%% @end
+%% ===================================================================
+-author("Tomasz Lichon").
 -module(dao_tokens).
 
 %% Includes
