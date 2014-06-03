@@ -26,22 +26,21 @@
 %%% Application callbacks
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @private
+%% start/2
+%%====================================================================
 %% @doc
 %% This function is called whenever an application is started using
 %% application:start/[1,2], and should start the processes of the
 %% application. If the application is structured according to the OTP
 %% design principles as a supervision tree, this means starting the
 %% top supervisor of the tree.
-%%
 %% @end
-%%--------------------------------------------------------------------
 -spec(start(StartType :: normal | {takeover, node()} | {failover, node()},
 	StartArgs :: term()) ->
 	{ok, pid()} |
 	{ok, pid(), State :: term()} |
 	{error, Reason :: term()}).
+%%====================================================================
 start(_StartType, _StartArgs) ->
 	start_rest(),
 	start_n2o(),
@@ -52,16 +51,15 @@ start(_StartType, _StartArgs) ->
 			Error
 	end.
 
-%%--------------------------------------------------------------------
-%% @private
+%% stop/1
+%%====================================================================
 %% @doc
 %% This function is called whenever an application has stopped. It
 %% is intended to be the opposite of Module:start/2 and should do
 %% any necessary cleaning up. The return value is ignored.
-%%
 %% @end
-%%--------------------------------------------------------------------
 -spec(stop(State :: term()) -> term()).
+%%====================================================================
 stop(_State) ->
 	cowboy:stop_listener(?rest_listener),
 	cowboy:stop_listener(?gui_https_listener),
@@ -91,7 +89,7 @@ start_rest() ->
       groups_rest_module:routes()
     ])}
   ]),
-  {ok, Ans} = cowboy:start_https(?rest_listener, ?rest_https_acceptors,
+  {ok, _Ans} = cowboy:start_https(?rest_listener, ?rest_https_acceptors,
     [
       {port, ?rest_port},
       {cacertfile, CaCertFile},

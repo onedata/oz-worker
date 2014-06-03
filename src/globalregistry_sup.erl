@@ -28,14 +28,12 @@
 %%% API functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Starts the supervisor
-%%
-%% @end
-%%--------------------------------------------------------------------
+%% start_link/0
+%%====================================================================
+%% @doc Starts the supervisor
 -spec(start_link() ->
 	{ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+%%====================================================================
 start_link() ->
 	supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
@@ -43,16 +41,14 @@ start_link() ->
 %%% Supervisor callbacks
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @private
+%% init/1
+%%====================================================================
 %% @doc
 %% Whenever a supervisor is started using supervisor:start_link/[2,3],
 %% this function is called by the new process to find out about
 %% restart strategy, maximum restart frequency and child
 %% specifications.
-%%
 %% @end
-%%--------------------------------------------------------------------
 -spec(init(Args :: term()) ->
 	{ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
 		MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
@@ -60,6 +56,7 @@ start_link() ->
 	}} |
 	ignore |
 	{error, Reason :: term()}).
+%%====================================================================
 init([]) ->
 	RestartStrategy = one_for_one,
 	MaxRestarts = 1000,
