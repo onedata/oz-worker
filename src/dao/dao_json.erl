@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: BigCouch document management module (very simple - BigCouch specific - JSON creator)
+%% @doc BigCouch document management module (very simple - BigCouch specific - JSON creator)
 %% @end
 %% ===================================================================
 -module(dao_json).

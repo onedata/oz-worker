@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: Low level BigCouch DB API
+%% @doc Low level BigCouch DB API
 %% @end
 %% ===================================================================
 -module(dao_helper).

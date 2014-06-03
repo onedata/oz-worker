@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: This module manages hosts and connections to VeilFS DB
+%% @doc This module manages hosts and connections to VeilFS DB
 %% @end
 %% ===================================================================
 -module(dao_hosts).

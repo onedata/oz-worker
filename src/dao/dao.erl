@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: This module implements {@link worker_plugin_behaviour} callbacks and contains utility API methods. <br/>
+%% @doc This module implements {@link worker_plugin_behaviour} callbacks and contains utility API methods. <br/>
 %% DAO API functions are implemented in DAO sub-modules like: {@link dao_cluster}, {@link dao_vfs}. <br/>
 %% All DAO API functions Should not be used directly, use {@link dao:handle/2} instead.
 %% Module :: atom() is module suffix (prefix is 'dao_'), MethodName :: atom() is the method name
@@ -47,14 +47,12 @@
 %%% Start gen_server api
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Starts the server
-%%
-%% @end
-%%--------------------------------------------------------------------
+%% start_link/0
+%% ===================================================================
+%% @doc Starts the server
 -spec(start_link() ->
 	{ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+%% ===================================================================
 start_link() ->
 	gen_server:start_link({local, ?Dao}, ?MODULE, [], []).
 
@@ -63,20 +61,13 @@ start_link() ->
 %%% gen_server callbacks
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Initializes the server
-%%
-%% @spec init(Args) -> {ok, State} |
-%%                     {ok, State, Timeout} |
-%%                     ignore |
-%%                     {stop, Reason}
-%% @end
-%%--------------------------------------------------------------------
+%% init/1
+%% ===================================================================
+%% @doc Initializes the server
 -spec(init(Args :: term()) ->
 	{ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
 	{stop, Reason :: term()} | ignore).
+%% ===================================================================
 init({Args, {init_status, undefined}}) ->
 	ets:new(db_host_store, [named_table, public, bag, {read_concurrency, true}]),
 	init({Args, {init_status, table_initialized}});
@@ -94,13 +85,9 @@ init({Args, {init_status, _TableInfo}}) ->
 init(Args) ->
 	init({Args, {init_status, ets:info(db_host_store)}}).
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Handling call messages
-%%
-%% @end
-%%--------------------------------------------------------------------
+%% handle_call/3
+%% ===================================================================
+%% @doc Handling call messages
 -spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
 	State :: #state{}) ->
 	{reply, Reply :: term(), NewState :: #state{}} |
@@ -109,6 +96,7 @@ init(Args) ->
 	{noreply, NewState :: #state{}, timeout() | hibernate} |
 	{stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
 	{stop, Reason :: term(), NewState :: #state{}}).
+%% ===================================================================
 handle_call({ProtocolVersion,Target, Method, Args},_From,State) when is_atom(Target), is_atom(Method), is_list(Args) ->
 	put(protocol_version, ProtocolVersion), %% Some sub-modules may need it to communicate with DAO' gen_server
 	Module =
@@ -138,13 +126,10 @@ handle_call(_Request,_From,State) ->
 	lager:error("Unknown call request ~p ", [_Request]),
 	{reply,{error, wrong_args},State}.
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Handling cast messages
-%%
-%% @end
-%%--------------------------------------------------------------------
+%% handle_cast/2
+%% ===================================================================
+%% @doc Handling cast messages
+%% ===================================================================
 -spec(handle_cast(Request :: term(), State :: #state{}) ->
 	{noreply, NewState :: #state{}} |
 	{noreply, NewState :: #state{}, timeout() | hibernate} |
@@ -153,52 +138,39 @@ handle_cast(_Request, State) ->
 	lager:error("Unknown cast request ~p ", [_Request]),
 	{noreply, State}.
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Handling all non call/cast messages
-%%
-%% @spec handle_info(Info, State) -> {noreply, State} |
-%%                                   {noreply, State, Timeout} |
-%%                                   {stop, Reason, State}
-%% @end
-%%--------------------------------------------------------------------
+%% handle_info/2
+%% ===================================================================
+%% @doc Handling all non call/cast messages
 -spec(handle_info(Info :: timeout() | term(), State :: #state{}) ->
 	{noreply, NewState :: #state{}} |
 	{noreply, NewState :: #state{}, timeout() | hibernate} |
 	{stop, Reason :: term(), NewState :: #state{}}).
+%% ===================================================================
 handle_info(_Info, State) ->
 	lager:error("Unknown info request ~p ", [_Info]),
 	{noreply, State}.
 
-%%--------------------------------------------------------------------
-%% @private
+%% terminate/2
+%% ===================================================================
 %% @doc
 %% This function is called by a gen_server when it is about to
 %% terminate. It should be the opposite of Module:init/1 and do any
 %% necessary cleaning up. When it returns, the gen_server terminates
 %% with Reason. The return value is ignored.
-%%
-%% @spec terminate(Reason, State) -> void()
 %% @end
-%%--------------------------------------------------------------------
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
 	State :: #state{}) -> term()).
+%% ===================================================================
 terminate(_Reason, _State) ->
 	ok.
 
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Convert process state when code is changed
-%%
-%% @spec code_change(OldVsn, State, Extra) -> {ok, NewState}
-%% @end
-%%--------------------------------------------------------------------
+%% code_change/3
+%% ===================================================================
+%% @doc Convert process state when code is changed
 -spec(code_change(OldVsn :: term() | {down, term()}, State :: #state{},
 	Extra :: term()) ->
 	{ok, NewState :: #state{}} | {error, Reason :: term()}).
+%% ===================================================================
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 

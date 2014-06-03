@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: Common defines for dao module
+%% @doc Common defines for dao module
 %% @end
 %% ===================================================================
 

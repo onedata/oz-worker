@@ -27,7 +27,7 @@
 %%%===================================================================
 
 %% start/2
-%%====================================================================
+%% ===================================================================
 %% @doc
 %% This function is called whenever an application is started using
 %% application:start/[1,2], and should start the processes of the
@@ -40,7 +40,7 @@
 	{ok, pid()} |
 	{ok, pid(), State :: term()} |
 	{error, Reason :: term()}).
-%%====================================================================
+%% ===================================================================
 start(_StartType, _StartArgs) ->
 	start_rest(),
 	start_n2o(),
@@ -52,14 +52,14 @@ start(_StartType, _StartArgs) ->
 	end.
 
 %% stop/1
-%%====================================================================
+%% ===================================================================
 %% @doc
 %% This function is called whenever an application has stopped. It
 %% is intended to be the opposite of Module:start/2 and should do
 %% any necessary cleaning up. The return value is ignored.
 %% @end
 -spec(stop(State :: term()) -> term()).
-%%====================================================================
+%% ===================================================================
 stop(_State) ->
 	cowboy:stop_listener(?rest_listener),
 	cowboy:stop_listener(?gui_https_listener),
@@ -70,10 +70,10 @@ stop(_State) ->
 %%%===================================================================
 
 %% start_rest/0
-%% ====================================================================
+%% ===================================================================
 %% @doc Starts cowboy with rest api
 -spec start_rest() -> {ok,pid()}.
-%% ====================================================================
+%% ===================================================================
 start_rest() ->
   % Get cert paths
   {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
@@ -101,10 +101,10 @@ start_rest() ->
     ]).
 
 %% start_n2o/0
-%% ====================================================================
+%% ===================================================================
 %% @doc Starts n2o server
 -spec start_n2o() -> {ok,pid()}.
-%% ====================================================================
+%% ===================================================================
 start_n2o() ->
   % Get cert paths
   {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
@@ -142,10 +142,10 @@ start_n2o() ->
 
 
 %% static_dispatches/2
-%% ====================================================================
+%% ===================================================================
 %% @doc Generates static file routing for cowboy.
 -spec static_dispatches(DocRoot :: string(),StaticPaths :: list(string())) -> {ok,pid()}.
-%% ====================================================================
+%% ===================================================================
 static_dispatches(DocRoot, StaticPaths) ->
 	_StaticDispatches = lists:map(fun(Dir) ->
 		Opts = [
