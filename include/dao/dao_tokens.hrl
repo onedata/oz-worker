@@ -8,6 +8,7 @@
 %% @doc Dao definitions for token records
 %% @end
 %% ===================================================================
+-module(dao_tokens).
 -author("Tomasz Lichon").
 
 -ifndef(DAO_TOKENS_HRL).
