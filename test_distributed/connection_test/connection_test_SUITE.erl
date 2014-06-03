@@ -20,14 +20,9 @@
 
 %% API
 -export([all/0,init_per_suite/1,end_per_suite/1]).
--export([gen_server_connection_test/1,rest_api_connection_test/1,dao_connection_test/1]).
+-export([rest_api_connection_test/1,dao_connection_test/1]).
 
-all() -> [gen_server_connection_test,rest_api_connection_test,dao_connection_test].
-
-
-gen_server_connection_test(Config) ->
-	[Node] = ?config(nodes,Config),
-	?assertEqual(pong, gen_server:call({?Global_Registry,Node},ping)).
+all() -> [rest_api_connection_test,dao_connection_test].
 
 rest_api_connection_test(_Config) ->
 	ibrowse:start(),

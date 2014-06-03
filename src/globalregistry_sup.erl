@@ -68,11 +68,9 @@ init([]) ->
 	Shutdown = 2000,
 	Type = worker,
 
-	Globalregisty = {?Global_Registry, {globalregistry, start_link, []},
-		Restart, Shutdown, Type, [globalregistry]},
 	Dao = {?Dao, {dao, start_link, []},
 		Restart, Shutdown, Type, [dao]},
-	{ok, {SupFlags, [Globalregisty,Dao]}}.
+	{ok, {SupFlags, [Dao]}}.
 
 %%%===================================================================
 %%% Internal functions
