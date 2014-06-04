@@ -9,8 +9,6 @@
 %% operations on: users, groups, spaces and providers
 %% @end
 %% ===================================================================
--author("Tomasz Lichon").
-
 -module(dao_test_SUITE).
 -author("Tomasz Lichon").
 
