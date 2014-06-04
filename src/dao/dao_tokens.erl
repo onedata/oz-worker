@@ -8,8 +8,8 @@
 %% @doc This module provides high level DB API for handling tokens documents.
 %% @end
 %% ===================================================================
--author("Tomasz Lichon").
 -module(dao_tokens).
+-author("Tomasz Lichon").
 
 %% Includes
 -include("dao/dao_tokens.hrl").
