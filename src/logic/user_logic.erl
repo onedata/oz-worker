@@ -106,7 +106,7 @@ get_groups(UserId) ->
 %% ====================================================================
 %% @doc Remove user's account.
 %% ====================================================================
--spec remove(UserId :: binary()) -> boolean().
+-spec remove(UserId :: binary()) -> true | no_return().
 %% ====================================================================
 remove(UserId) ->
     Doc = logic_helper:user_doc(UserId),

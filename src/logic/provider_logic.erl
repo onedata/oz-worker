@@ -79,7 +79,7 @@ get_spaces(ProviderId) ->
 %% ====================================================================
 %% @doc Remove provider's account.
 %% ====================================================================
--spec remove(ProviderId :: binary()) -> boolean().
+-spec remove(ProviderId :: binary()) -> true | no_return().
 %% ====================================================================
 remove(ProviderId) ->
     #provider{spaces = Spaces} = logic_helper:provider(ProviderId),

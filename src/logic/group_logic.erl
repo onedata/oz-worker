@@ -218,7 +218,7 @@ get_privileges(GroupId, UserId) ->
 %% ====================================================================
 %% @doc Removes the group.
 %% ====================================================================
--spec remove(GroupId :: binary()) -> boolean().
+-spec remove(GroupId :: binary()) -> true | no_return().
 %% ====================================================================
 remove(GroupId) ->
     Group = logic_helper:group(GroupId),
@@ -246,7 +246,7 @@ remove(GroupId) ->
 %% ====================================================================
 %% @doc Removes user from the group.
 %% ====================================================================
--spec remove_user(GroupId :: binary(), UserId :: binary()) -> boolean().
+-spec remove_user(GroupId :: binary(), UserId :: binary()) -> true | no_return().
 %% ====================================================================
 remove_user(GroupId, UserId) ->
     UserDoc = logic_helper:user_doc(UserId),

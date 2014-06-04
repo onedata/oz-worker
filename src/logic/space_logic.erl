@@ -354,7 +354,7 @@ get_privileges(SpaceId, {group, GroupId}) ->
 %% ====================================================================
 %% @doc Removes the Space.
 %% ====================================================================
--spec remove(SpaceId :: binary()) -> boolean().
+-spec remove(SpaceId :: binary()) -> true | no_return().
 %% ====================================================================
 remove(SpaceId) ->
     Space = logic_helper:space(SpaceId),
@@ -388,7 +388,7 @@ remove(SpaceId) ->
 %% ====================================================================
 %% @doc Removes user from the Space.
 %% ====================================================================
--spec remove_user(SpaceId :: binary(), UserId :: binary()) -> boolean().
+-spec remove_user(SpaceId :: binary(), UserId :: binary()) -> true | no_return().
 %% ====================================================================
 remove_user(SpaceId, UserId) ->
     UserDoc = logic_helper:user_doc(UserId),
@@ -409,7 +409,7 @@ remove_user(SpaceId, UserId) ->
 %% ====================================================================
 %% @doc Removes group from the Space.
 %% ====================================================================
--spec remove_group(SpaceId :: binary(), GroupId :: binary()) -> boolean().
+-spec remove_group(SpaceId :: binary(), GroupId :: binary()) -> true | no_return().
 %% ====================================================================
 remove_group(SpaceId, GroupId) ->
     GroupDoc = logic_helper:group_doc(GroupId),
@@ -430,7 +430,7 @@ remove_group(SpaceId, GroupId) ->
 %% ====================================================================
 %% @doc Removes provider from the Space.
 %% ====================================================================
--spec remove_provider(SpaceId :: binary(), ProviderId :: binary()) -> boolean().
+-spec remove_provider(SpaceId :: binary(), ProviderId :: binary()) -> true | no_return().
 %% ====================================================================
 remove_provider(SpaceId, ProviderId) ->
     ProviderDoc = logic_helper:provider_doc(ProviderId),
