@@ -13,7 +13,7 @@
 
 %% Includes
 -include("registered_names.hrl").
--include("testing/test_utils.hrl").
+-include("test_utils.hrl").
 -include_lib("common_test/include/ct.hrl").
 -include_lib("ctool/include/test/test_node_starter.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
