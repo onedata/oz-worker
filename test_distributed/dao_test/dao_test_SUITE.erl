@@ -196,7 +196,7 @@ init_per_suite(Config) ->
 	?INIT_CODE_PATH,
 	DbNodesEnv = {db_nodes,[?DB_NODE]},
 	Nodes = test_node_starter:start_test_nodes(1),
-    test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,[[DbNodesEnv]]),
+    test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,[[DbNodesEnv,?cert_paths]]),
 	Config ++ [{nodes,Nodes}].
 
 end_per_suite(Config) ->

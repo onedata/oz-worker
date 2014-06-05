@@ -49,9 +49,7 @@ init_per_suite(Config) ->
 	test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,
 		[[
 			DbNodesEnv,
-			{ca_cert_file,"../../../cacerts/ca.crt"},
-			{cert_file,"../../../cacerts/server.crt"},
-	 		{key_file,"../../../cacerts/server.key"}
+			?cert_paths
 		]]
 	),
 	Config ++ [{nodes,Nodes}].
