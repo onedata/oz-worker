@@ -42,14 +42,21 @@
 	{error, Reason :: term()}).
 %% ===================================================================
 start(_StartType, _StartArgs) ->
-	start_rest(),
-	start_n2o(),
-	case globalregistry_sup:start_link() of
-		{ok, Pid} ->
-			{ok, Pid};
-		Error ->
-			Error
-	end.
+    {RestAns,_}=start_rest(),
+    {GuiAns,_}=start_n2o(),
+    case {RestAns,GuiAns} of
+        {ok,ok} ->
+            case globalregistry_sup:start_link() of
+                {ok, Pid} ->
+                    {ok, Pid};
+                Error ->
+                    Error
+            end;
+        {error,_} ->
+            {error, cannot_start_rest};
+        {_,error} ->
+            {error, cannot_start_gui}
+    end.
 
 %% stop/1
 %% ===================================================================
@@ -72,82 +79,94 @@ stop(_State) ->
 %% start_rest/0
 %% ===================================================================
 %% @doc Starts cowboy with rest api
--spec start_rest() -> {ok,pid()}.
+-spec start_rest() -> {ok,pid()} | {error,any()}.
 %% ===================================================================
 start_rest() ->
-  % Get rest config
-  {ok,RestPort} = application:get_env(?APP_Name,rest_port),
-  {ok,RestHttpsAcceptors} = application:get_env(?APP_Name,rest_https_acceptors),
+    try
+        % Get rest config
+        {ok,RestPort} = application:get_env(?APP_Name,rest_port),
+        {ok,RestHttpsAcceptors} = application:get_env(?APP_Name,rest_https_acceptors),
 
-  % Get cert paths
-  {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
-  {ok,CertFile} = application:get_env(?APP_Name,cert_file),
-  {ok,KeyFile} = application:get_env(?APP_Name,key_file),
+        % Get cert paths
+        {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
+        {ok,CertFile} = application:get_env(?APP_Name,cert_file),
+        {ok,KeyFile} = application:get_env(?APP_Name,key_file),
 
-  Dispatch = cowboy_router:compile([
-    {'_', lists:append([
-      user_rest_module:routes(),
-      provider_rest_module:routes(),
-      spaces_rest_module:routes(),
-      groups_rest_module:routes()
-    ])}
-  ]),
-  {ok, _Ans} = cowboy:start_https(?rest_listener, RestHttpsAcceptors,
-    [
-      {port, RestPort},
-      {cacertfile, CaCertFile},
-      {certfile, CertFile},
-      {keyfile, KeyFile}
-    ],
-    [
-      {env, [{dispatch, Dispatch}]}
-    ]).
+        Dispatch = cowboy_router:compile([
+        {'_', lists:append([
+          user_rest_module:routes(),
+          provider_rest_module:routes(),
+          spaces_rest_module:routes(),
+          groups_rest_module:routes()
+        ])}
+        ]),
+
+        cowboy:start_https(?rest_listener, RestHttpsAcceptors,
+        [
+          {port, RestPort},
+          {cacertfile, CaCertFile},
+          {certfile, CertFile},
+          {keyfile, KeyFile}
+        ],
+        [
+          {env, [{dispatch, Dispatch}]}
+        ])
+    catch
+    _Type:Error  ->
+        lager:error("Could not start rest, error: ~p",[Error]),
+        {error,Error}
+    end.
 
 %% start_n2o/0
 %% ===================================================================
 %% @doc Starts n2o server
--spec start_n2o() -> {ok,pid()}.
+-spec start_n2o() -> {ok,pid()} | {error,any()}.
 %% ===================================================================
 start_n2o() ->
-  % Get gui config
-  {ok,GuiPort} = application:get_env(?APP_Name,gui_port),
-  {ok,GuiHttpsAcceptors} = application:get_env(?APP_Name,gui_https_acceptors),
-  {ok,GuiSocketTimeout} = application:get_env(?APP_Name,gui_socket_timeout),
-  {ok,GuiMaxKeepalive} = application:get_env(?APP_Name,gui_max_keepalive),
-  % Get cert paths
-  {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
-  {ok,CertFile} = application:get_env(?APP_Name,cert_file),
-  {ok,KeyFile} = application:get_env(?APP_Name,key_file),
+    try
+        % Get gui config
+        {ok,GuiPort} = application:get_env(?APP_Name,gui_port),
+        {ok,GuiHttpsAcceptors} = application:get_env(?APP_Name,gui_https_acceptors),
+        {ok,GuiSocketTimeout} = application:get_env(?APP_Name,gui_socket_timeout),
+        {ok,GuiMaxKeepalive} = application:get_env(?APP_Name,gui_max_keepalive),
+        % Get cert paths
+        {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
+        {ok,CertFile} = application:get_env(?APP_Name,cert_file),
+        {ok,KeyFile} = application:get_env(?APP_Name,key_file),
 
-	% Set envs needed by n2o
-	% Port - gui port
-	ok = application:set_env(n2o, port, GuiPort),
-	% Transition port - the same as gui port
-	ok = application:set_env(n2o, transition_port, GuiPort),
-	% Custom route handler
-	ok = application:set_env(n2o, route, gui_routes),
+        % Set envs needed by n2o
+        % Port - gui port
+        ok = application:set_env(n2o, port, GuiPort),
+        % Transition port - the same as gui port
+        ok = application:set_env(n2o, transition_port, GuiPort),
+        % Custom route handler
+        ok = application:set_env(n2o, route, gui_routes),
 
-	Dispatch = cowboy_router:compile(
-		[{'_',
-				static_dispatches(?gui_static_root, ?static_paths) ++ [
-				{"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
-				{'_', n2o_cowboy, []}
-			]}
-		]),
+        Dispatch = cowboy_router:compile(
+            [{'_',
+                    static_dispatches(?gui_static_root, ?static_paths) ++ [
+                    {"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
+                    {'_', n2o_cowboy, []}
+                ]}
+            ]),
 
-	{ok, _} = cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
-		[
-			{port, GuiPort},
-			{cacertfile, CaCertFile},
-			{certfile, CertFile},
-			{keyfile, KeyFile}
-		],
-		[
-			{env, [{dispatch, Dispatch}]},
-			{max_keepalive, GuiMaxKeepalive},
-			{timeout, GuiSocketTimeout}
-		]).
-
+        cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
+            [
+                {port, GuiPort},
+                {cacertfile, CaCertFile},
+                {certfile, CertFile},
+                {keyfile, KeyFile}
+            ],
+            [
+                {env, [{dispatch, Dispatch}]},
+                {max_keepalive, GuiMaxKeepalive},
+                {timeout, GuiSocketTimeout}
+            ])
+    catch
+    _Type:Error  ->
+        lager:error("Could not start gui, error: ~p",[Error]),
+        {error,Error}
+    end.
 
 %% static_dispatches/2
 %% ===================================================================
