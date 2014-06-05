@@ -16,9 +16,6 @@
 %% App name
 -define(APP_Name, globalregistry).
 
-%% Name of Global Registry genserver
--define(Global_Registry, globalregistry).
-
 %% Name of dao genserver
 -define(Dao,dao).
 

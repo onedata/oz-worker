@@ -75,6 +75,10 @@ stop(_State) ->
 -spec start_rest() -> {ok,pid()}.
 %% ===================================================================
 start_rest() ->
+  % Get rest config
+  {ok,RestPort} = application:get_env(?APP_Name,rest_port),
+  {ok,RestHttpsAcceptors} = application:get_env(?APP_Name,rest_https_acceptors),
+
   % Get cert paths
   {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
   {ok,CertFile} = application:get_env(?APP_Name,cert_file),
@@ -82,16 +86,15 @@ start_rest() ->
 
   Dispatch = cowboy_router:compile([
     {'_', lists:append([
-      [{?hello_world_url, hello_world, []}],
       user_rest_module:routes(),
       provider_rest_module:routes(),
       spaces_rest_module:routes(),
       groups_rest_module:routes()
     ])}
   ]),
-  {ok, _Ans} = cowboy:start_https(?rest_listener, ?rest_https_acceptors,
+  {ok, _Ans} = cowboy:start_https(?rest_listener, RestHttpsAcceptors,
     [
-      {port, ?rest_port},
+      {port, RestPort},
       {cacertfile, CaCertFile},
       {certfile, CertFile},
       {keyfile, KeyFile}
@@ -106,6 +109,11 @@ start_rest() ->
 -spec start_n2o() -> {ok,pid()}.
 %% ===================================================================
 start_n2o() ->
+  % Get gui config
+  {ok,GuiPort} = application:get_env(?APP_Name,gui_port),
+  {ok,GuiHttpsAcceptors} = application:get_env(?APP_Name,gui_https_acceptors),
+  {ok,GuiSocketTimeout} = application:get_env(?APP_Name,gui_socket_timeout),
+  {ok,GuiMaxKeepalive} = application:get_env(?APP_Name,gui_max_keepalive),
   % Get cert paths
   {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
   {ok,CertFile} = application:get_env(?APP_Name,cert_file),
@@ -113,9 +121,9 @@ start_n2o() ->
 
 	% Set envs needed by n2o
 	% Port - gui port
-	ok = application:set_env(n2o, port, ?gui_port),
+	ok = application:set_env(n2o, port, GuiPort),
 	% Transition port - the same as gui port
-	ok = application:set_env(n2o, transition_port, ?gui_port),
+	ok = application:set_env(n2o, transition_port, GuiPort),
 	% Custom route handler
 	ok = application:set_env(n2o, route, gui_routes),
 
@@ -127,17 +135,17 @@ start_n2o() ->
 			]}
 		]),
 
-	{ok, _} = cowboy:start_https(?gui_https_listener, ?gui_https_acceptors,
+	{ok, _} = cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
 		[
-			{port, ?gui_port},
+			{port, GuiPort},
 			{cacertfile, CaCertFile},
 			{certfile, CertFile},
 			{keyfile, KeyFile}
 		],
 		[
 			{env, [{dispatch, Dispatch}]},
-			{max_keepalive, ?max_keepalive},
-			{timeout, ?socket_timeout}
+			{max_keepalive, GuiMaxKeepalive},
+			{timeout, GuiSocketTimeout}
 		]).
 
 

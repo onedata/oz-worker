@@ -24,11 +24,13 @@
 
 all() -> [rest_api_connection_test,dao_connection_test].
 
-rest_api_connection_test(_Config) ->
+rest_api_connection_test(Config) ->
 	ibrowse:start(),
 	ssl:start(),
-	Ans = ibrowse:send_req("https://127.0.0.1:8080/hello_world",[],get),
-	?assertMatch({ok,"200",_,"<html>REST Hello World as HTML!</html>"}, Ans),
+    [Node]=?config(nodes,Config),
+    {ok,RestPort} = rpc:call(Node,application,get_env,[?APP_Name,rest_port]),
+	Ans = ibrowse:send_req("https://127.0.0.1:"++integer_to_list(RestPort)++"/provider/test/check_my_ip",[],get),
+	?assertMatch({ok,_,_,_}, Ans),
 	ssl:stop(),
 	ibrowse:stop().
 
