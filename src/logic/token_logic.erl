@@ -41,10 +41,10 @@ is_valid(Token, TokenType) ->
     case decrypt(Token) of
         false -> false;
         {true, TokenId} ->
-            case logic_helper:token_exists(TokenId) of
+            case dao_adapter:token_exists(TokenId) of
                 false -> false;
                 true ->
-                    #token{type = Type} = logic_helper:token(TokenId), %% @todo: expiration time
+                    #token{type = Type} = dao_adapter:token(TokenId), %% @todo: expiration time
                     Type =:= TokenType
             end
     end.
@@ -59,7 +59,7 @@ is_valid(Token, TokenType) ->
 %% ====================================================================
 create(TokenType, Resource) ->
     TokenRec = #token{type = TokenType, resource = Resource}, %% @todo: expiration time
-    TokenId = logic_helper:save(TokenRec),
+    TokenId = dao_adapter:save(TokenRec),
     encrypt(TokenId).
 
 
@@ -72,8 +72,8 @@ create(TokenType, Resource) ->
 %% ====================================================================
 consume(Token, TokenType) ->
     {true, TokenId} = decrypt(Token),
-    #token{type = TokenType, resource = Resource} = logic_helper:token(TokenId), %% @todo: expiration time
-    logic_helper:token_remove(TokenId),
+    #token{type = TokenType, resource = Resource} = dao_adapter:token(TokenId), %% @todo: expiration time
+    dao_adapter:token_remove(TokenId),
     {ok, Resource}.
 
 
