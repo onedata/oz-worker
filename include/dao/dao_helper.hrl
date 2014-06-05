@@ -13,5 +13,7 @@
 -define(DAO_HELPER_HRL, 1).
 
 -include_lib("dao/couch_db.hrl").
+-define(ADMIN_USER_CTX, {user_ctx, #user_ctx{roles = [<<"_admin">>]}}).
+
 
 -endif.
