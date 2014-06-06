@@ -30,6 +30,8 @@
 %% space_exists/1
 %% ====================================================================
 %% @doc Returns whether a Space exists in the database.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec space_exists(Key :: term()) -> boolean() | no_return().
 %% ====================================================================
@@ -40,6 +42,8 @@ space_exists(Key) ->
 %% user_exists/1
 %% ====================================================================
 %% @doc Returns whether a user exists in the database.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec user_exists(Key :: term()) -> boolean() | no_return().
 %% ====================================================================
@@ -50,6 +54,8 @@ user_exists(Key) ->
 %% group_exists/1
 %% ====================================================================
 %% @doc Returns whether a group exists in the database.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec group_exists(Key :: term()) -> boolean() | no_return().
 %% ====================================================================
@@ -60,6 +66,8 @@ group_exists(Key) ->
 %% token_exists/1
 %% ====================================================================
 %% @doc Returns whether a token exists in the database.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec token_exists(Key :: term()) -> boolean() | no_return().
 %% ====================================================================
@@ -70,6 +78,8 @@ token_exists(Key) ->
 %% provider_exists/1
 %% ====================================================================
 %% @doc Returns whether a provider exists in the database.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec provider_exists(Key :: term()) -> boolean() | no_return().
 %% ====================================================================
@@ -270,7 +280,7 @@ exists(Key, Module, Method) ->
 %% @doc Creates a new document or updates an existing one. Internal function.
 %% ====================================================================
 -spec save_doc(Doc :: veil_doc()) ->
-    {ok, uuid()} | {error, any()} | no_return().
+    {ok, uuid()} | {error, any()}.
 %% ====================================================================
 save_doc(#veil_document{record = #space{}} = Doc) ->
     dao_lib:apply(dao_spaces, save_space, [Doc], 1);

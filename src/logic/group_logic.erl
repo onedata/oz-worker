@@ -25,8 +25,10 @@
 %% exists/1
 %% ====================================================================
 %% @doc Returns whether a group exists.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
--spec exists(GroupId :: binary()) -> boolean().
+-spec exists(GroupId :: binary()) -> boolean() | no_return().
 %% ====================================================================
 exists(GroupId) ->
     dao_adapter:group_exists(GroupId).
