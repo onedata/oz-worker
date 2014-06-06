@@ -33,9 +33,11 @@
 %% is_valid/2
 %% ====================================================================
 %% @doc Checks if a given token is a valid token of a given type.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec is_valid(Token :: binary(), TokenType :: token_type()) ->
-    boolean().
+    boolean() | no_return().
 %% ====================================================================
 is_valid(Token, TokenType) ->
     case decrypt(Token) of
@@ -53,6 +55,8 @@ is_valid(Token, TokenType) ->
 %% create/2
 %% ====================================================================
 %% @doc Creates a token of a given type.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec create(TokenType :: token_type(), Resource :: {resource_type(), binary()}) ->
     {ok, Token :: binary()} | no_return().
@@ -66,9 +70,11 @@ create(TokenType, Resource) ->
 %% consume/2
 %% ====================================================================
 %% @doc Consumes a token, returning associated resource.
+%% Throws exception when call to dao fails, or token doesn't exist in db.
+%% @end
 %% ====================================================================
 -spec consume(Token :: binary(), TokenType :: token_type()) ->
-    {ok, {resource_type(), binary()}}.
+    {ok, {resource_type(), binary()}} | no_return().
 %% ====================================================================
 consume(Token, TokenType) ->
     {true, TokenId} = decrypt(Token),

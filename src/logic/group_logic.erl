@@ -38,9 +38,10 @@ exists(GroupId) ->
 %% ====================================================================
 %% @doc Returns whether the user identified by UserId is a member of the group.
 %% Shall return false in any other case (group doesn't exist, etc).
+%% Throws exception when call to dao fails, or group doesn't exist.
 %% @end
 %% ====================================================================
--spec has_user(GroupId :: binary(), UserId :: binary()) -> boolean().
+-spec has_user(GroupId :: binary(), UserId :: binary()) -> boolean() | no_return().
 %% ====================================================================
 has_user(GroupId, UserId) ->
     case exists(GroupId) of
@@ -56,10 +57,11 @@ has_user(GroupId, UserId) ->
 %% @doc Returns whether the group's member identified by UserId has privilege
 %% in the group. Shall return false in any other case (group doesn't exist,
 %% user is not group's member, etc).
+%% Throws exception when call to dao fails, or group doesn't exist.
 %% @end
 %% ====================================================================
 -spec has_privilege(GroupId :: binary(), UserId :: binary(),
-                    Privilege :: privileges:group_privilege()) -> boolean().
+                    Privilege :: privileges:group_privilege()) -> boolean() | no_return().
 %% ====================================================================
 has_privilege(GroupId, UserId, Privilege) ->
     case has_user(GroupId, UserId) of
@@ -74,6 +76,8 @@ has_privilege(GroupId, UserId, Privilege) ->
 %% create/2
 %% ====================================================================
 %% @doc Creates a group for a user.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec create(UserId :: binary(), Name :: binary()) ->
     {ok, GroupId :: binary()} | no_return().
@@ -95,6 +99,8 @@ create(UserId, Name) ->
 %% modify/2
 %% ====================================================================
 %% @doc Modifies group's data.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec modify(GroupId :: binary(), Name :: binary()) ->
     ok | no_return().
@@ -110,6 +116,8 @@ modify(GroupId, Name) ->
 %% join/2
 %% ====================================================================
 %% @doc Adds user to a group identified by a token.
+%% Throws exception when call to dao fails, or token/user/group_from_token doesn't exist in db.
+%% @end
 %% ====================================================================
 -spec join(UserId :: binary(), Token :: binary()) ->
     {ok, GroupId :: binary()} | no_return().
@@ -137,6 +145,8 @@ join(UserId, Token) ->
 %% set_privileges/3
 %% ====================================================================
 %% @doc Sets privileges for a member of the group.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec set_privileges(GroupId :: binary(), UserId :: binary(),
                      Privileges :: [privileges:group_privileges()]) ->
@@ -154,6 +164,8 @@ set_privileges(GroupId, UserId, Privileges) ->
 %% get_data/1
 %% ====================================================================
 %% @doc Returns details about the group.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_data(GroupId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
@@ -169,6 +181,8 @@ get_data(GroupId) ->
 %% get_users/1
 %% ====================================================================
 %% @doc Returns details about group's members.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_users(GroupId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
@@ -182,6 +196,8 @@ get_users(GroupId) ->
 %% get_spaces/1
 %% ====================================================================
 %% @doc Returns details about group's spaces.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_spaces(GroupId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
@@ -194,6 +210,8 @@ get_spaces(GroupId) ->
 %% get_user/2
 %% ====================================================================
 %% @doc Returns details about group's member.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_user(GroupId :: binary(), UserId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
@@ -206,6 +224,8 @@ get_user(_GroupId, UserId) ->
 %% get_privileges/2
 %% ====================================================================
 %% @doc Returns list of group's member privileges.
+%% Throws exception when call to dao fails, or group/user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_privileges(GroupId :: binary(), UserId :: binary()) ->
     {ok, [privileges:group_privilege()]} | no_return().
@@ -219,6 +239,8 @@ get_privileges(GroupId, UserId) ->
 %% remove/1
 %% ====================================================================
 %% @doc Removes the group.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec remove(GroupId :: binary()) -> true | no_return().
 %% ====================================================================
@@ -247,6 +269,8 @@ remove(GroupId) ->
 %% remove_user/2
 %% ====================================================================
 %% @doc Removes user from the group.
+%% Throws exception when call to dao fails, or group/user doesn't exist.
+%% @end
 %% ====================================================================
 -spec remove_user(GroupId :: binary(), UserId :: binary()) -> true | no_return().
 %% ====================================================================
@@ -268,6 +292,8 @@ remove_user(GroupId, UserId) ->
 %% cleanup/1
 %% ====================================================================
 %% @doc Removes the group if empty.
+%% Throws exception when call to dao fails, or group is already removed.
+%% @end
 %% ====================================================================
 -spec cleanup(GroupId :: binary()) -> ok.
 %% ====================================================================

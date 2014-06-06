@@ -24,6 +24,8 @@
 %% create/1
 %% ====================================================================
 %% @doc Create a provider's account.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec create(URL :: binary()) ->
     {ok, ProviderId :: binary()} | no_return().
@@ -36,6 +38,8 @@ create(URL) ->
 %% modify/2
 %% ====================================================================
 %% @doc Modify provider's details.
+%% Throws exception when call to dao fails, or provider doesn't exist.
+%% @end
 %% ====================================================================
 -spec modify(ProviderId :: binary(), URL :: binary()) ->
     ok | no_return().
@@ -51,6 +55,8 @@ modify(ProviderId, URL) ->
 %% get_data/1
 %% ====================================================================
 %% @doc Get provider's details.
+%% Throws exception when call to dao fails, or provider doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_data(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]} | no_return().
@@ -66,6 +72,8 @@ get_data(ProviderId) ->
 %% get_spaces/1
 %% ====================================================================
 %% @doc Get Spaces supported by the provider.
+%% Throws exception when call to dao fails, or provider doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_spaces(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]} | no_return().
@@ -78,6 +86,8 @@ get_spaces(ProviderId) ->
 %% remove/1
 %% ====================================================================
 %% @doc Remove provider's account.
+%% Throws exception when call to dao fails, or provider is already removed.
+%% @end
 %% ====================================================================
 -spec remove(ProviderId :: binary()) -> true | no_return().
 %% ====================================================================

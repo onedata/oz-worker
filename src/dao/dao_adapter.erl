@@ -90,6 +90,8 @@ provider_exists(Key) ->
 %% save/1
 %% ====================================================================
 %% @doc Creates a new document or updates an existing one.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec save(Doc :: veil_doc() | space_info() | user_info() | group_info() |
     token_info() | provider_info()) -> Id :: binary() | no_return().
@@ -104,6 +106,8 @@ save(Resource) ->
 %% space/1
 %% ====================================================================
 %% @doc Returns a space object from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec space(Key :: term()) -> space_info() | no_return().
 %% ====================================================================
@@ -115,6 +119,8 @@ space(Key) ->
 %% user/1
 %% ====================================================================
 %% @doc Returns a user object from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec user(Key :: term()) -> user_info() | no_return().
 %% ====================================================================
@@ -126,6 +132,8 @@ user(Key) ->
 %% group/1
 %% ====================================================================
 %% @doc Returns a group object from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec group(Key :: term()) -> group_info() | no_return().
 %% ====================================================================
@@ -137,6 +145,8 @@ group(Key) ->
 %% token/1
 %% ====================================================================
 %% @doc Returns a token object from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec token(Key :: term()) -> token_info() | no_return().
 %% ====================================================================
@@ -148,6 +158,8 @@ token(Key) ->
 %% provider/1
 %% ====================================================================
 %% @doc Returns a provider object from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec provider(Key :: term()) -> provider_info() | no_return().
 %% ====================================================================
@@ -159,6 +171,8 @@ provider(Key) ->
 %% space_doc/1
 %% ====================================================================
 %% @doc Returns a space document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec space_doc(Key :: term()) -> space_doc() | no_return().
 %% ====================================================================
@@ -170,6 +184,8 @@ space_doc(Key) ->
 %% user_doc/1
 %% ====================================================================
 %% @doc Returns a user document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec user_doc(Key :: term()) -> user_doc() | no_return().
 %% ====================================================================
@@ -181,6 +197,8 @@ user_doc(Key) ->
 %% group_doc/1
 %% ====================================================================
 %% @doc Returns a group document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec group_doc(Key :: term()) -> group_doc() | no_return().
 %% ====================================================================
@@ -192,6 +210,8 @@ group_doc(Key) ->
 %% token_doc/1
 %% ====================================================================
 %% @doc Returns a token document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec token_doc(Key :: term()) -> token_doc() | no_return().
 %% ====================================================================
@@ -203,6 +223,8 @@ token_doc(Key) ->
 %% provider_doc/1
 %% ====================================================================
 %% @doc Returns a provider document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec provider_doc(Key :: term()) -> provider_doc() | no_return().
 %% ====================================================================
@@ -214,6 +236,8 @@ provider_doc(Key) ->
 %% user_remove/1
 %% ====================================================================
 %% @doc Removes a user document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec user_remove(Key :: term()) -> true | no_return().
 %% ====================================================================
@@ -224,6 +248,8 @@ user_remove(Key) ->
 %% space_remove/1
 %% ====================================================================
 %% @doc Removes a space document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec space_remove(Key :: term()) -> true | no_return().
 %% ====================================================================
@@ -234,6 +260,8 @@ space_remove(Key) ->
 %% group_remove/1
 %% ====================================================================
 %% @doc Removes a group document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec group_remove(Key :: term()) -> true | no_return().
 %% ====================================================================
@@ -244,6 +272,8 @@ group_remove(Key) ->
 %% token_remove/1
 %% ====================================================================
 %% @doc Removes a token document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec token_remove(Key :: term()) -> true | no_return().
 %% ====================================================================
@@ -254,6 +284,8 @@ token_remove(Key) ->
 %% provider_remove/1
 %% ====================================================================
 %% @doc Removes a provider document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec provider_remove(Key :: term()) -> true | no_return().
 %% ====================================================================
@@ -261,9 +293,15 @@ provider_remove(Key) ->
     remove(Key, dao_providers, remove_provider).
 
 
+%% ====================================================================
+%% Internal Functions
+%% ====================================================================
+
 %% exists/3
 %% ====================================================================
 %% @doc Returns whether a resource exists in the database. Internal function.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec exists(Key :: binary(), Module :: dao_module(), Method :: atom()) ->
     boolean() | no_return().
@@ -297,6 +335,8 @@ save_doc(#veil_document{record = #provider{}} = Doc) ->
 %% get_doc/3
 %% ====================================================================
 %% @doc Returns a document from the database. Internal function.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_doc(Key :: term(), Module :: dao_module(), Method :: atom()) ->
     veil_doc() | no_return().
@@ -311,6 +351,8 @@ get_doc(Key, Module, Method)  ->
 %% remove/3
 %% ====================================================================
 %% @doc Removes a document from the database. Internal function.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
 %% ====================================================================
 -spec remove(Key :: term(), Module :: dao_module(), Method :: atom()) ->
     true | no_return().

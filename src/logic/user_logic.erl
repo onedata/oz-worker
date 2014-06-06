@@ -24,6 +24,8 @@
 %% create/1
 %% ====================================================================
 %% @doc Creates a user account.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec create(Name :: binary()) ->
     {ok, UserId :: binary()} | no_return().
@@ -36,6 +38,8 @@ create(Name) ->
 %% modify/2
 %% ====================================================================
 %% @doc Modifies user details.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec modify(UserId :: binary(), Name :: binary()) ->
     ok | no_return().
@@ -63,6 +67,8 @@ merge(_UserId, _Token) ->
 %% get_data/1
 %% ====================================================================
 %% @doc Returns user details.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_data(UserId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
@@ -79,6 +85,8 @@ get_data(UserId) ->
 %% get_spaces/1
 %% ====================================================================
 %% @doc Returns user's spaces.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_spaces(UserId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
@@ -92,6 +100,8 @@ get_spaces(UserId) ->
 %% get_groups/1
 %% ====================================================================
 %% @doc Returns user's groups.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_groups(UserId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
@@ -105,6 +115,8 @@ get_groups(UserId) ->
 %% remove/1
 %% ====================================================================
 %% @doc Remove user's account.
+%% Throws exception when call to dao fails, or user is already deleted.
+%% @end
 %% ====================================================================
 -spec remove(UserId :: binary()) -> true | no_return().
 %% ====================================================================
