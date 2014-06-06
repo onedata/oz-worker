@@ -303,7 +303,7 @@ provider_remove(Key) ->
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec exists(Key :: binary(), Module :: dao_module(), Method :: atom()) ->
+-spec exists(Key :: term(), Module :: dao_module(), Method :: atom()) ->
     boolean() | no_return().
 %% ====================================================================
 exists(Key, Module, Method) when is_binary(Key) ->

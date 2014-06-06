@@ -54,8 +54,7 @@ start_link() ->
 		MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
 		[ChildSpec :: supervisor:child_spec()]
 	}} |
-	ignore |
-	{error, Reason :: term()}).
+	ignore).
 %% ===================================================================
 init([]) ->
 	RestartStrategy = one_for_one,
