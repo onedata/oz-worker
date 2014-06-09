@@ -10,6 +10,7 @@
 %% @end
 %% ===================================================================
 -module(dao_lib).
+-author("Rafal Slota").
 
 -include("dao/dao.hrl").
 -include("registered_names.hrl").

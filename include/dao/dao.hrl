@@ -12,7 +12,7 @@
 -ifndef(DAO_HRL).
 -define(DAO_HRL, 1).
 
--include_lib("dao/common.hrl").
+-include_lib("dao/include/common.hrl").
 
 %% record definition used in record registration example
 -record(some_record, {field1 = "", field2 = "", field3 = ""}).

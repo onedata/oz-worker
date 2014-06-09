@@ -11,7 +11,7 @@
 
 -ifndef(DAO_TYPES_HRL).
 -define(DAO_TYPES_HRL, 1).
--include_lib("dao/dao.hrl").
+-include("dao/dao.hrl").
 -include("dao/dao_users.hrl").
 -include("dao/dao_providers.hrl").
 -include("dao/dao_groups.hrl").

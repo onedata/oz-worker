@@ -16,11 +16,12 @@
 %% ===================================================================
 -module(dao).
 -behaviour(gen_server).
+-author("Rafal Slota").
 
--include_lib("dao/dao.hrl").
--include_lib("dao/couch_db.hrl").
--include_lib("dao/dao_types.hrl").
--include_lib("registered_names.hrl").
+-include("dao/dao.hrl").
+-include_lib("dao/include/couch_db.hrl").
+-include("dao/dao_types.hrl").
+-include("registered_names.hrl").
 
 -import(dao_helper, [name/1]).
 
