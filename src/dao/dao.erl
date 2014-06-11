@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: This module implements {@link worker_plugin_behaviour} callbacks and contains utility API methods. <br/>
+%% @doc This module implements {@link worker_plugin_behaviour} callbacks and contains utility API methods. <br/>
 %% DAO API functions are implemented in DAO sub-modules like: {@link dao_cluster}, {@link dao_vfs}. <br/>
 %% All DAO API functions Should not be used directly, use {@link dao:handle/2} instead.
 %% Module :: atom() is module suffix (prefix is 'dao_'), MethodName :: atom() is the method name
