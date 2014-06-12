@@ -16,6 +16,6 @@
 
 -define(GR_DEPS,[sasl,lager,ssl,erlydtl,mimetypes,ranch,crypto,cowboy,gproc,n2o,ibrowse]).
 
--define(cert_paths,{ca_cert_file,"../../../cacerts/ca.crt"},{cert_file,"../../../cacerts/server.crt"},{key_file,"../../../cacerts/server.key"}).
+-define(cert_paths,{ca_cert_file,"../../test_certs/ca.crt"},{cert_file,"../../test_certs/server.crt"},{key_file,"../../test_certs/server.key"}).
 
 -endif.
