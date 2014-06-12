@@ -5,9 +5,10 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: DAO types definitions
+%% @doc DAO types definitions
 %% @end
 %% ===================================================================
+-author("Rafal Slota").
 
 -ifndef(DAO_TYPES_HRL).
 -define(DAO_TYPES_HRL, 1).

@@ -5,15 +5,13 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: Low level BigCouch DB API
+%% @doc Low level BigCouch DB API
 %% @end
 %% ===================================================================
 -module(dao_helper).
 
 -include_lib("dao/dao.hrl").
 -include_lib("dao/dao_helper.hrl").
-
--define(ADMIN_USER_CTX, {user_ctx, #user_ctx{roles = [<<"_admin">>]}}).
 
 -ifdef(TEST).
 -compile([export_all]).

@@ -5,14 +5,17 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc Rest common definitions
+%% @doc Common definitions for ct tests
 %% @end
 %% ===================================================================
 -author("Tomasz Lichon").
 
--ifndef(REST_CONFIG_HRL).
--define(REST_CONFIG_HRL, 1).
 
--define(rest_listener, rest).
+-ifndef(TEST_UTILS_HRL).
+-define(TEST_UTILS_HRL, 1).
+
+-define(GR_DEPS,[sasl,lager,ssl,erlydtl,mimetypes,ranch,crypto,cowboy,gproc,n2o,ibrowse]).
+
+-define(cert_paths,{ca_cert_file,"../../test_certs/ca.crt"},{cert_file,"../../test_certs/server.crt"},{key_file,"../../test_certs/server.key"}).
 
 -endif.

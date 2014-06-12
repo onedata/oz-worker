@@ -5,11 +5,11 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: This file contains n2o website code.
+%% @doc This file contains n2o error 404 website code.
 %% @end
 %% ===================================================================
-
 -module(page_404).
+-author("Krzysztof Trzepla").
 -compile(export_all).
 
 % Includes

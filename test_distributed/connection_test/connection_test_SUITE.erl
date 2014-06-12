@@ -1,37 +1,36 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Connection test suite
-%%% @end
-%%% Created : 29. Apr 2014 2:53 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Basic tests that check connection to main parts of application
+%% @end
+%% ===================================================================
 -module(connection_test_SUITE).
 -author("Tomasz Lichon").
 
 %% Includes
 -include("registered_names.hrl").
--include("testing/test_utils.hrl").
+-include("test_utils.hrl").
 -include_lib("common_test/include/ct.hrl").
 -include_lib("ctool/include/test/test_node_starter.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 
 %% API
 -export([all/0,init_per_suite/1,end_per_suite/1]).
--export([gen_server_connection_test/1,rest_api_connection_test/1,dao_connection_test/1]).
+-export([rest_api_connection_test/1,dao_connection_test/1]).
 
-all() -> [gen_server_connection_test,rest_api_connection_test,dao_connection_test].
+all() -> [rest_api_connection_test,dao_connection_test].
 
-
-gen_server_connection_test(Config) ->
-	[Node] = ?config(nodes,Config),
-	?assertEqual(pong, gen_server:call({?Global_Registry,Node},ping)).
-
-rest_api_connection_test(_Config) ->
+rest_api_connection_test(Config) ->
 	ibrowse:start(),
 	ssl:start(),
-	Ans = ibrowse:send_req("https://127.0.0.1:8080/hello_world",[],get),
-	?assertMatch({ok,"200",_,"<html>REST Hello World as HTML!</html>"}, Ans),
+    [Node]=?config(nodes,Config),
+    {ok,RestPort} = rpc:call(Node,application,get_env,[?APP_Name,rest_port]),
+	Ans = ibrowse:send_req("https://127.0.0.1:"++integer_to_list(RestPort)++"/provider/test/check_my_ip",[],get),
+	?assertMatch({ok,_,_,_}, Ans),
 	ssl:stop(),
 	ibrowse:stop().
 
@@ -50,9 +49,7 @@ init_per_suite(Config) ->
 	test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,
 		[[
 			DbNodesEnv,
-			{ca_cert_file,"../../../cacerts/ca.crt"},
-			{cert_file,"../../../cacerts/server.crt"},
-	 		{key_file,"../../../cacerts/server.key"}
+			?cert_paths
 		]]
 	),
 	Config ++ [{nodes,Nodes}].
