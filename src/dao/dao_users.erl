@@ -10,7 +10,6 @@
 
 %% Includes
 -include("dao/dao_users.hrl").
--include("dao/dao.hrl").
 -include("dao/dao_types.hrl").
 
 %% API
@@ -29,7 +28,7 @@
 save_user(#user{} = User) ->
 	save_user(#veil_document{record = User});
 save_user(#veil_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(UUID) ->
-	dao:save_record(UserDoc).
+    dao_records:save_record(UserDoc).
 
 
 %% remove_user/1
@@ -41,7 +40,7 @@ save_user(#veil_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(
 	ok | {error, any()} | no_return().
 %% ====================================================================
 remove_user(UserId) ->
-	dao:remove_record(UserId).
+    dao_records:remove_record(UserId).
 
 %% exist_user/1
 %% ====================================================================
@@ -51,7 +50,7 @@ remove_user(UserId) ->
 -spec exist_user(UserId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_user(UserId) ->
-	dao:exist_record(UserId).
+    dao_records:exist_record(UserId).
 
 %% get_user/1
 %% ====================================================================
@@ -63,4 +62,4 @@ exist_user(UserId) ->
 -spec get_user(UserId :: uuid()) -> {ok, user_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_user(UserId) ->
-	dao:get_record(UserId).
+    dao_records:get_record(UserId).

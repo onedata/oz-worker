@@ -12,7 +12,7 @@
 -module(dao_lib).
 -author("Rafal Slota").
 
--include("dao/dao.hrl").
+-include_lib("dao/include/common.hrl").
 -include("registered_names.hrl").
 
 %% API

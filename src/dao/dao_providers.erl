@@ -10,7 +10,6 @@
 
 %% Includes
 -include("dao/dao_providers.hrl").
--include("dao/dao.hrl").
 -include("dao/dao_types.hrl").
 
 %% API
@@ -29,7 +28,7 @@
 save_provider(#provider{} = Provider) ->
 	save_provider(#veil_document{record = Provider});
 save_provider(#veil_document{record = #provider{}, uuid = UUID} = ProviderDoc) when is_list(UUID) ->
-	dao:save_record(ProviderDoc).
+    dao_records:save_record(ProviderDoc).
 
 
 %% remove_provider/1
@@ -41,7 +40,7 @@ save_provider(#veil_document{record = #provider{}, uuid = UUID} = ProviderDoc) w
 	ok | {error, any()} | no_return().
 %% ====================================================================
 remove_provider(ProviderId) ->
-	dao:remove_record(ProviderId).
+    dao_records:remove_record(ProviderId).
 
 %% exist_provider/1
 %% ====================================================================
@@ -51,7 +50,7 @@ remove_provider(ProviderId) ->
 -spec exist_provider(ProviderId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_provider(ProviderId) ->
-	dao:exist_record(ProviderId).
+    dao_records:exist_record(ProviderId).
 
 %% get_provider/1
 %% ====================================================================
@@ -63,4 +62,4 @@ exist_provider(ProviderId) ->
 -spec get_provider(ProviderId :: uuid()) -> {ok, provider_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_provider(ProviderId) ->
-	dao:get_record(ProviderId).
+    dao_records:get_record(ProviderId).
