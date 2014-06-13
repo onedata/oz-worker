@@ -20,7 +20,7 @@
 %% @doc Saves user to DB. Argument should be either #user{} record
 %% (if you want to save it as new document) <br/>
 %% or #veil_document{} that wraps #user{} if you want to update descriptor in DB. <br/>
-%% See {@link dao:save_record/1} and {@link dao:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
 %% @end
 -spec save_user(User :: user_info() | user_doc()) -> {ok, user_id()} | {error, any()} | no_return().
@@ -56,7 +56,7 @@ exist_user(UserId) ->
 %% ====================================================================
 %% @doc Gets user from DB
 %% Non-error return value is always {ok, #veil_document{record = #user}.
-%% See {@link dao:save_record/1} and {@link dao:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
 %% @end
 -spec get_user(UserId :: uuid()) -> {ok, user_doc()} | {error, any()} | no_return().

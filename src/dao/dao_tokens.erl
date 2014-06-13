@@ -20,7 +20,7 @@
 %% @doc Saves token to DB. Argument should be either #token{} record
 %% (if you want to save it as new document) <br/>
 %% or #veil_document{} that wraps #token{} if you want to update descriptor in DB. <br/>
-%% See {@link dao:save_record/1} and {@link dao:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
 %% @end
 -spec save_token(Token :: token_info() | token_doc()) -> {ok, token_id()} | {error, any()} | no_return().
@@ -56,7 +56,7 @@ exist_token(TokenId) ->
 %% ====================================================================
 %% @doc Gets token from DB
 %% Non-error return value is always {ok, #veil_document{record = #token}.
-%% See {@link dao:save_record/1} and {@link dao:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
 %% @end
 -spec get_token(TokenId :: uuid()) -> {ok, token_doc()} | {error, any()} | no_return().
