@@ -13,6 +13,7 @@
 -author("Konrad Zemek").
 
 -include("dao/dao_types.hrl").
+-include_lib("dao/include/common.hrl").
 
 
 %% API
