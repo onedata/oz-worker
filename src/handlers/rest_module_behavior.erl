@@ -7,7 +7,7 @@
 %% ===================================================================
 %% @doc The behavior implemented by different logic handlers behind the REST API.
 %% ===================================================================
--module(rest_module_behaviour).
+-module(rest_module_behavior).
 -author("Konrad Zemek").
 
 -include("handlers/rest_handler.hrl").
