@@ -7,14 +7,14 @@
 %% ===================================================================
 %% @doc This module implements {@link worker_plugin_behaviour} callbacks and contains utility API methods. <br/>
 %% DAO API functions are implemented in DAO sub-modules like: {@link dao_cluster}, {@link dao_vfs}. <br/>
-%% All DAO API functions Should not be used directly, use {@link dao:handle/2} instead.
+%% All DAO API functions Should not be used directly, use {@link dao_worker:handle/2} instead.
 %% Module :: atom() is module suffix (prefix is 'dao_'), MethodName :: atom() is the method name
 %% and ListOfArgs :: [term()] is list of argument for the method. <br/>
 %% If you want to call utility methods from this module - use Module = utils
-%% See {@link dao:handle/2} for more details.
+%% See {@link dao_worker:handle/2} for more details.
 %% @end
 %% ===================================================================
--module(dao).
+-module(dao_worker).
 -behaviour(gen_server).
 -author("Rafal Slota").
 

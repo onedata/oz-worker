@@ -21,7 +21,7 @@
 %% (if you want to save it as new document) <br/>
 %% or #veil_document{} that wraps #group{} if you want to update descriptor in DB. <br/>
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec save_group(Group :: group_info() | group_doc()) -> {ok, group_id()} | {error, any()} | no_return().
 %% ====================================================================
@@ -34,7 +34,7 @@ save_group(#veil_document{record = #user_group{}, uuid = UUID} = GroupDoc) when 
 %% remove_group/1
 %% ====================================================================
 %% @doc Removes group from DB
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec remove_group(GroupId:: uuid()) ->
 	ok | {error, any()} | no_return().
@@ -45,7 +45,7 @@ remove_group(GroupId) ->
 %% exist_group/1
 %% ====================================================================
 %% @doc Checks whether group exists in DB.
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec exist_group(GroupId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
@@ -57,7 +57,7 @@ exist_group(GroupId) ->
 %% @doc Gets group from DB
 %% Non-error return value is always {ok, #veil_document{record = #group}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec get_group(GroupId :: uuid()) -> {ok, group_doc()} | {error, any()} | no_return().
 %% ====================================================================

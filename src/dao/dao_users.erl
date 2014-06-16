@@ -21,7 +21,7 @@
 %% (if you want to save it as new document) <br/>
 %% or #veil_document{} that wraps #user{} if you want to update descriptor in DB. <br/>
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec save_user(User :: user_info() | user_doc()) -> {ok, user_id()} | {error, any()} | no_return().
 %% ====================================================================
@@ -34,7 +34,7 @@ save_user(#veil_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(
 %% remove_user/1
 %% ====================================================================
 %% @doc Removes user from DB
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec remove_user(UserId:: uuid()) ->
 	ok | {error, any()} | no_return().
@@ -45,7 +45,7 @@ remove_user(UserId) ->
 %% exist_user/1
 %% ====================================================================
 %% @doc Checks whether user exists in DB.
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec exist_user(UserId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
@@ -57,7 +57,7 @@ exist_user(UserId) ->
 %% @doc Gets user from DB
 %% Non-error return value is always {ok, #veil_document{record = #user}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec get_user(UserId :: uuid()) -> {ok, user_doc()} | {error, any()} | no_return().
 %% ====================================================================

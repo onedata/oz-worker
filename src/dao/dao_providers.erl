@@ -21,7 +21,7 @@
 %% (if you want to save it as new document) <br/>
 %% or #veil_document{} that wraps #provider{} if you want to update descriptor in DB. <br/>
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec save_provider(Provider :: provider_info() | provider_doc()) -> {ok, provider_id()} | {error, any()} | no_return().
 %% ====================================================================
@@ -34,7 +34,7 @@ save_provider(#veil_document{record = #provider{}, uuid = UUID} = ProviderDoc) w
 %% remove_provider/1
 %% ====================================================================
 %% @doc Removes provider from DB
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec remove_provider(ProviderId:: uuid()) ->
 	ok | {error, any()} | no_return().
@@ -45,7 +45,7 @@ remove_provider(ProviderId) ->
 %% exist_provider/1
 %% ====================================================================
 %% @doc Checks whether provider exists in DB.
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec exist_provider(ProviderId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
@@ -57,7 +57,7 @@ exist_provider(ProviderId) ->
 %% @doc Gets provider from DB
 %% Non-error return value is always {ok, #veil_document{record = #provider}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao:handle/2} instead (See {@link dao:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
 %% @end
 -spec get_provider(ProviderId :: uuid()) -> {ok, provider_doc()} | {error, any()} | no_return().
 %% ====================================================================
