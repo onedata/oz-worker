@@ -12,6 +12,8 @@
 -module(dao_driver).
 -author("Tomasz Lichon").
 
+-behaviour(dao_driver_behaviour).
+
 -include_lib("dao/dao_driver.hrl").
 
 %% API

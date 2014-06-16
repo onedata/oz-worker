@@ -12,7 +12,7 @@
 
 -include("handlers/rest_handler.hrl").
 
--behavior(rest_module_behavior).
+-behaviour(rest_module_behavior).
 
 
 %% API

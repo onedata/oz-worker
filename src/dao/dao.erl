@@ -256,28 +256,3 @@ load_view_def(Name, Type) ->
         {ok, Data} -> binary_to_list(Data);
         _ -> ""
     end.
-
-%% is_valid_record/1
-%% ====================================================================
-%% @doc Checks if given record/record name is supported and existing record
-%% @end
--spec is_valid_record(Record :: atom() | string() | tuple()) -> boolean().
-%% ====================================================================
-is_valid_record(Record) when is_list(Record) ->
-    is_valid_record(list_to_atom(Record));
-is_valid_record(Record) when is_atom(Record) ->
-    case ?dao_record_info(Record) of
-        {_Size, _Fields, _} -> true;    %% When checking only name of record, we omit size check
-        _ -> false
-    end;
-is_valid_record(Record) when not is_tuple(Record); not is_atom(element(1, Record)) ->
-    false;
-is_valid_record(Record) ->
-    case ?dao_record_info(element(1, Record)) of
-        {Size, Fields, _} when is_list(Fields), tuple_size(Record) =:= Size ->
-            true;
-        _ -> false
-    end.
-
-
-
