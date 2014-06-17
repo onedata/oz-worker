@@ -71,8 +71,8 @@ init([]) ->
 
 	Globalregisty = {?Global_Registry, {globalregistry, start_link, []},
 		Restart, Shutdown, Type, [globalregistry]},
-	Dao = {?Dao, {dao, start_link, []},
-		Restart, Shutdown, Type, [dao]},
+	Dao = {?Dao, {dao_worker, start_link, []},
+		Restart, Shutdown, Type, [dao_worker]},
 	{ok, {SupFlags, [Globalregisty,Dao]}}.
 
 %%%===================================================================
