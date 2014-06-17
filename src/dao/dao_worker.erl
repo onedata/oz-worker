@@ -106,7 +106,7 @@ handle_call({ProtocolVersion,Target, Method, Args},_From,State) when is_atom(Tar
 	put(protocol_version, ProtocolVersion), %% Some sub-modules may need it to communicate with DAO' gen_server
 	Module =
 		case atom_to_list(Target) of
-			"utils" -> dao;
+			"utils" -> dao_worker;
 			[$d, $a, $o, $_ | T] -> list_to_atom("dao_" ++ T);
 			T -> list_to_atom("dao_" ++ T)
 		end,
