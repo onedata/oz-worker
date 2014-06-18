@@ -33,6 +33,7 @@
 %% @doc Starts the supervisor
 -spec(start_link() ->
 	{ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+%% ===================================================================
 start_link() ->
 	supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
@@ -47,9 +48,7 @@ start_link() ->
 %% this function is called by the new process to find out about
 %% restart strategy, maximum restart frequency and child
 %% specifications.
-%%
 %% @end
-%%--------------------------------------------------------------------
 -spec(init(Args :: term()) ->
 	{ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
 		MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
