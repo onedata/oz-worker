@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: DAO helper/utility functional methods. Those can be used in other modules
+%% @doc DAO helper/utility functional methods. Those can be used in other modules
 %% bypassing worker_host and gen_server.
 %% @end
 %% ===================================================================

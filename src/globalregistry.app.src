@@ -24,7 +24,18 @@
 	{mod, {globalregistry_app, []}},
 	{env, [
 		{db_nodes,['db@127.0.0.1']},
-		% todo generate dedicated certs (this are example ones)
+
+        % rest config
+        {rest_port,8080},
+        {rest_https_acceptors,50},
+
+        % gui config
+        {gui_port,443},
+        {gui_https_acceptors,100},
+        {gui_socket_timeout,60000},
+        {gui_max_keepalive,30},
+
+		% certs todo generate dedicated certs (this are example ones)
 		{ca_cert_file,"./cacerts/ca.crt"},
 		{cert_file,"./cacerts/server.crt"},
 		{key_file,"./cacerts/server.key"}

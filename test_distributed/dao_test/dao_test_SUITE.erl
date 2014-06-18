@@ -1,18 +1,21 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Connection test suite
-%%% @end
-%%% Created : 12. May 2014 3:28 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This file contains tests for basic create-read-update-delete
+%% operations on: users, groups, spaces and providers
+%% @end
+%% ===================================================================
 -module(dao_test_SUITE).
 -author("Tomasz Lichon").
 
 %% Includes
 -include("registered_names.hrl").
 -include("dao/dao_types.hrl").
--include("testing/test_utils.hrl").
+-include("test_utils.hrl").
 -include_lib("common_test/include/ct.hrl").
 -include_lib("ctool/include/test/test_node_starter.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -193,7 +196,7 @@ init_per_suite(Config) ->
 	?INIT_CODE_PATH,
 	DbNodesEnv = {db_nodes,[?DB_NODE]},
 	Nodes = test_node_starter:start_test_nodes(1),
-    test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,[[DbNodesEnv]]),
+    test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,[[DbNodesEnv,?cert_paths]]),
 	Config ++ [{nodes,Nodes}].
 
 end_per_suite(Config) ->

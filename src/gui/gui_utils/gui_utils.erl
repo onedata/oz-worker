@@ -5,11 +5,11 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: This file contains useful functions commonly used in control_panel modules.
+%% @doc This file contains useful functions commonly used in control_panel modules.
 %% @end
 %% ===================================================================
-
 -module(gui_utils).
+-author("Lukasz Opiola").
 -include_lib("n2o/include/wf.hrl").
 
 -export([logotype_footer/1]).
