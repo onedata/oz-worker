@@ -20,9 +20,6 @@
 -include("dao/dao_users.hrl").
 -include_lib("dao/include/common.hrl").
 
-%% record definition used in record registration example
--record(some_record, {field1 = "", field2 = "", field3 = ""}).
-
 %% Helper macro. See macro ?dao_record_info/1 for more details.
 -define(record_info_gen(X), {record_info(size, X), record_info(fields, X), #X{}}).
 
@@ -32,7 +29,7 @@
 %% where 'record_name' is the name of the record. 'some_record' is an example.
 -define(dao_record_info(R),
     case R of
-        some_record         -> ?record_info_gen(some_record);
+        some_record         -> ?record_info_gen(some_record);   %example record from dao common.hrl
         user                -> ?record_info_gen(user);
         provider            -> ?record_info_gen(provider);
         space               -> ?record_info_gen(space);
