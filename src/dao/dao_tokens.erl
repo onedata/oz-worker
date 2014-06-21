@@ -24,7 +24,7 @@
 %% (if you want to save it as new document) <br/>
 %% or #veil_document{} that wraps #token{} if you want to update descriptor in DB. <br/>
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec save_token(Token :: token_info() | token_doc()) -> {ok, token_id()} | {error, any()} | no_return().
 %% ====================================================================
@@ -37,7 +37,7 @@ save_token(#veil_document{record = #token{}, uuid = UUID} = TokenDoc) when is_li
 %% remove_token/1
 %% ====================================================================
 %% @doc Removes token from DB
-%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec remove_token(TokenId:: uuid()) ->
 	ok | {error, any()} | no_return().
@@ -48,7 +48,7 @@ remove_token(TokenId) ->
 %% exist_token/1
 %% ====================================================================
 %% @doc Checks whether token exists in DB.
-%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec exist_token(TokenId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
@@ -60,7 +60,7 @@ exist_token(TokenId) ->
 %% @doc Gets token from DB
 %% Non-error return value is always {ok, #veil_document{record = #token}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec get_token(TokenId :: uuid()) -> {ok, token_doc()} | {error, any()} | no_return().
 %% ====================================================================

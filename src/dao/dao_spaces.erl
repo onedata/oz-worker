@@ -24,7 +24,7 @@
 %% (if you want to save it as new document) <br/>
 %% or #veil_document{} that wraps #space{} if you want to update descriptor in DB. <br/>
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec save_space(Space :: space_info() | space_doc()) -> {ok, space_id()} | {error, any()} | no_return().
 %% ====================================================================
@@ -37,7 +37,7 @@ save_space(#veil_document{record = #space{}, uuid = UUID} = SpaceDoc) when is_li
 %% remove_space/1
 %% ====================================================================
 %% @doc Removes space from DB
-%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec remove_space(SpaceId:: uuid()) ->
 	ok | {error, any()} | no_return().
@@ -48,7 +48,7 @@ remove_space(SpaceId) ->
 %% exist_space/1
 %% ====================================================================
 %% @doc Checks whether space exists in DB.
-%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec exist_space(SpaceId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
@@ -60,7 +60,7 @@ exist_space(SpaceId) ->
 %% @doc Gets space from DB
 %% Non-error return value is always {ok, #veil_document{record = #space}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
-%% Should not be used directly, use {@link dao_worker:handle/2} instead (See {@link dao_worker:handle/2} for more details).
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec get_space(SpaceId :: uuid()) -> {ok, space_doc()} | {error, any()} | no_return().
 %% ====================================================================
