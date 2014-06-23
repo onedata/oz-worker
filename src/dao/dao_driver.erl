@@ -15,9 +15,12 @@
 -behaviour(dao_driver_behaviour).
 
 -include_lib("dao/dao_driver.hrl").
+-include("registered_names.hrl").
+
+-define(synch_call_timeout,1000).
 
 %% API
--export([set_db/1, get_db/0, record_info/1, is_valid_record/1]).
+-export([set_db/1, get_db/0, record_info/1, is_valid_record/1, sequential_synch_call/3]).
 
 %% set_db/1
 %% ====================================================================
@@ -72,3 +75,17 @@ is_valid_record(Record) ->
 %% ====================================================================
 record_info(Record) ->
     ?dao_record_info(Record).
+
+%% sequential_synch_call/3
+%% ====================================================================
+%% @doc Synchronizes sequentially multiple calls to given dao function.
+-spec sequential_synch_call(Module :: atom(), Function ::atom(), Args :: list()) -> Result :: term().
+%% ====================================================================
+sequential_synch_call(Module,Function,Args) ->
+    try
+        gen_server:call(?Dao,{get(protocol_version),Module,Function,Args},?synch_call_timeout)
+    catch
+        _Type:Error  ->
+            lager:error("Sequential synch call ~p:~p(~p) error: ~p",[Module,Function,Args,Error]),
+            {error,Error}
+    end.
