@@ -9,12 +9,12 @@
 %% library to work with database
 %% @end
 %% ===================================================================
--module(dao_driver).
+-module(dao_external).
 -author("Tomasz Lichon").
 
--behaviour(dao_driver_behaviour).
+-behaviour(dao_external_behaviour).
 
--include_lib("dao/dao_driver.hrl").
+-include_lib("dao/dao_external.hrl").
 -include("registered_names.hrl").
 
 -define(synch_call_timeout,1000).

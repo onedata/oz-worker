@@ -19,7 +19,7 @@
 
 -include_lib("dao/include/common.hrl").
 -include_lib("dao/include/couch_db.hrl").
--include("dao/dao_driver.hrl").
+-include("dao/dao_external.hrl").
 -include("dao/dao_types.hrl").
 -include("registered_names.hrl").
 
