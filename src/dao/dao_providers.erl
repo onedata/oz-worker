@@ -65,4 +65,4 @@ exist_provider(ProviderId) ->
 -spec get_provider(ProviderId :: uuid()) -> {ok, provider_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_provider(ProviderId) ->
-    dao_records:get_record(ProviderId).
+    {ok, #veil_document{record = #provider}} = dao_records:get_record(ProviderId).

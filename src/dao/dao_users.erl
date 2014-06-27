@@ -65,4 +65,4 @@ exist_user(UserId) ->
 -spec get_user(UserId :: uuid()) -> {ok, user_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_user(UserId) ->
-    dao_records:get_record(UserId).
+    {ok, #veil_document{record = #user}} = dao_records:get_record(UserId).

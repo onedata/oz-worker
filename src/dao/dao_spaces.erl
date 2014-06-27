@@ -65,4 +65,4 @@ exist_space(SpaceId) ->
 -spec get_space(SpaceId :: uuid()) -> {ok, space_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_space(SpaceId) ->
-    dao_records:get_record(SpaceId).
+    {ok, #veil_document{record = #space}} = dao_records:get_record(SpaceId).
