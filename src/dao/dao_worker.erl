@@ -123,7 +123,7 @@ handle_call({ProtocolVersion,Target, Method, Args},_From,State) when is_atom(Tar
 		error:{badmatch, {error, Err}} ->
             {reply, {error, Err}, State};
         error:{badmatch, Reason} ->
-            {reply, {error, Reason}};
+            {reply, {error, Reason},State};
 		Type:Error ->
             lager:error("Handling ~p:~p with args ~p interrupted by exception: ~p:~p ~n ~p", [Module, Method, Args, Type, Error, erlang:get_stacktrace()]),
 			{reply, {error, Error}, State}
