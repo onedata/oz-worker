@@ -65,4 +65,4 @@ exist_token(TokenId) ->
 -spec get_token(TokenId :: uuid()) -> {ok, token_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_token(TokenId) ->
-    {ok, #veil_document{record = #token}} = dao_records:get_record(TokenId).
+    {ok, #veil_document{record = #token{}}} = dao_records:get_record(TokenId).

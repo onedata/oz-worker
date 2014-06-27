@@ -65,4 +65,4 @@ exist_group(GroupId) ->
 -spec get_group(GroupId :: uuid()) -> {ok, group_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_group(GroupId) ->
-    {ok, #veil_document{record = #user_group}} = dao_records:get_record(GroupId).
+    {ok, #veil_document{record = #user_group{}}} = dao_records:get_record(GroupId).
