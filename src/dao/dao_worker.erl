@@ -119,7 +119,7 @@ handle_call({ProtocolVersion,Target, Method, Args},_From,State) when is_atom(Tar
 			{reply, {error, Other}, State}
 	catch
         error:{badmatch, {ok, Record}} ->
-            {error, {badrecord,Record}};
+            {reply, {error, {badrecord,Record}}, State};
 		error:{badmatch, {error, Err}} ->
             {reply, {error, Err}, State};
         error:{badmatch, Reason} ->
