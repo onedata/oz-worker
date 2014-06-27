@@ -14,7 +14,7 @@ COOKIE=`hostname -f`
 
 #prepare
 cp rel/files/app.config test_distributed/sys.config
-rm -rf test_distributed/log/TEST-report.xml
+find test_distributed -name "TEST-report.xml" -exec rm -rf {} \;
 
 # Run tests
 ct_run -pa ./deps -pa ./deps/**/ebin -noshell -spec test_distributed/test.spec -name tester -setcookie $COOKIE
