@@ -51,9 +51,13 @@ dialyzer_init: compile .dialyzer.plt
 ##
 test: deps compile
 	@./rebar skip_deps=true eunit
+	@for tout in `find test -name "TEST-*.xml"`; do awk '/testcase/{gsub("_[0-9]+\"", "_" ++i "\"")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
+
 
 ct: deps compile
 	@./test_distributed/start_distributed_test.sh
+	@for tout in `find test_distributed/log -name "TEST-report.xml"`; do awk '/testcase/{gsub("<testcase name=\"[a-z]+_per_suite\"(([^/>]*/>)|([^>]*>[^<]*</testcase>))", "")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
+
 
 ##
 ## Release targets

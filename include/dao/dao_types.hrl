@@ -12,12 +12,12 @@
 
 -ifndef(DAO_TYPES_HRL).
 -define(DAO_TYPES_HRL, 1).
--include_lib("dao/dao.hrl").
 -include("dao/dao_users.hrl").
 -include("dao/dao_providers.hrl").
 -include("dao/dao_groups.hrl").
 -include("dao/dao_spaces.hrl").
 -include("dao/dao_tokens.hrl").
+-include_lib("dao/include/common.hrl").
 
 
 -type uuid() :: string(). %% Pattern: "^[0-9a-f]+$"

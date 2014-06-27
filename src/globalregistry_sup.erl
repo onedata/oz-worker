@@ -67,8 +67,8 @@ init([]) ->
 	Shutdown = 2000,
 	Type = worker,
 
-	Dao = {?Dao, {dao, start_link, []},
-		Restart, Shutdown, Type, [dao]},
+	Dao = {?Dao, {dao_worker, start_link, []},
+		Restart, Shutdown, Type, [dao_worker]},
 	{ok, {SupFlags, [Dao]}}.
 
 %%%===================================================================

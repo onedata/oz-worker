@@ -17,6 +17,6 @@
 -define(APP_Name, globalregistry).
 
 %% Name of dao genserver
--define(Dao,dao).
+-define(Dao,dao_worker).
 
 -endif.
