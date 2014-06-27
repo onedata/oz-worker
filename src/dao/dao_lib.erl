@@ -53,10 +53,6 @@ apply(Module, {Mode, Method}, Args, ProtocolVersion, _Timeout) ->
 				ok
 		end
     catch
-        error:{badmatch, {error,Reason}} ->
-            {error,Reason};
-        error:{badmatch, {ok, Record}} ->
-            {error, {badrecord,Record}};
         Type:Error ->
             lager:error("Cannot make call to dao, Reason: ~p", [{Type, Error}]),
             {error, {Type, Error}}

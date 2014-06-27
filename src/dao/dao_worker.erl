@@ -118,7 +118,12 @@ handle_call({ProtocolVersion,Target, Method, Args},_From,State) when is_atom(Tar
 			lager:error("Handling ~p:~p with args ~p returned unknown response: ~p", [Module, Method, Args, Other]),
 			{reply, {error, Other}, State}
 	catch
-		error:{badmatch, {error, Err}} -> {reply, {error, Err}, State};
+        error:{badmatch, {ok, Record}} ->
+            {error, {badrecord,Record}};
+		error:{badmatch, {error, Err}} ->
+            {reply, {error, Err}, State};
+        error:{badmatch, Reason} ->
+            {reply, {error, Reason}};
 		Type:Error ->
             lager:error("Handling ~p:~p with args ~p interrupted by exception: ~p:~p ~n ~p", [Module, Method, Args, Type, Error, erlang:get_stacktrace()]),
 			{reply, {error, Error}, State}
