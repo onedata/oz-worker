@@ -37,7 +37,7 @@ body() ->
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
             #panel{id = <<"main_table">>, body = main_table()},
-            #button{body = <<"Go to your files - UWAGA TO NIE DZIALA - chociaz czasem tak">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
+            #button{body = <<"Go to your files - UWAGA TO NIE DZIALA">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
         ]}
     ] ++ gui_utils:logotype_footer(20)}.
 
@@ -338,7 +338,7 @@ redirect_to_veilcluster() ->
     UserID = wf:user(),
 %%     RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),\
     try
-        RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fa8bb6023fe681363340a99ae3de72">>),
+        RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fa9242bcdc9cb0a1bfe72d3df9054d">>),
         wf:redirect(RedirectURL)
     catch T:M ->
         ?error_stacktrace("tutut ~p:~p", [T, M])

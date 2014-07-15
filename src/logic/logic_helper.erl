@@ -164,6 +164,7 @@ space_doc(SpaceId) ->
 -spec user_doc(UserId :: binary()) -> user_doc() | no_return().
 %% ====================================================================
 user_doc(UserId) ->
+
     #veil_document{record = #user{}} = UserDoc = get_doc(UserId, dao_users, get_user),
     {ok, UserDoc}.
 

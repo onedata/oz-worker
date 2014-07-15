@@ -23,7 +23,8 @@
 -define(REFRESH_TOKEN_EXPIRATION_SECS, 36000).
 -define(ISSUER_URL, "https://onedata.org").
 
--include("dao/dao_users.hrl").
+-include("dao/dao_types.hrl").
+-include("logging.hrl").
 
 %% API
 -export([start/0, stop/0, get_redirection_uri/2, grant_token/2, validate_token/2]).
@@ -60,10 +61,7 @@ grant_token(ProviderId, AuthCode) ->
     ets:insert(?ACCESS_TOKEN, {AccessToken, {ProviderId, UserId, AccessTokenExpirationTime}}),
     ets:insert(?REFRESH_TOKEN, {RefreshToken, {ProviderId, UserId, RefreshTokenExpirationTime}}),
 
-    #user{
-        name = Name,
-        email_list = Emails
-    } = user_logic:get_user(UserId),
+    {ok, #veil_document{record = #user{name = Name, email_list = Emails}}} = user_logic:get_user(UserId),
     EmailsList = lists:map(fun(Email) -> {struct, [{email, Email}]} end, Emails),
     [
         {access_token, AccessToken},

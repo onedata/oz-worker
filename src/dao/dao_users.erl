@@ -69,6 +69,7 @@ exist_user(UserId) ->
 -spec get_user(UserId :: uuid() | {email, Email :: binary()}) -> {ok, user_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_user(UUID) when is_list(UUID) ->
+    dao:set_db(?USERS_DB_NAME),
     dao:get_record(UUID);
 
 get_user({Key, Value}) ->

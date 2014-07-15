@@ -102,9 +102,10 @@ validate_login() ->
                             false ->
                                 % Standard login, check if there is an account belonging to the user
                                 case user_logic:get_user({connected_account_user_id, {ProviderID, UserID}}) of
-                                    {ok, #veil_document{uuid = GlobalID}} ->
+                                    {ok, #veil_document{uuid = UserIdString}} ->
+                                        UserId = list_to_binary(UserIdString),
                                         % The account already exists
-                                        wf:user(GlobalID),
+                                        wf:user(UserId),
                                         {redirect, Redirect};
                                     _ ->
                                         % Error
