@@ -5,13 +5,14 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: DAO helper/utility functional methods. Those can be used in other modules
+%% @doc DAO helper/utility functional methods. Those can be used in other modules
 %% bypassing worker_host and gen_server.
 %% @end
 %% ===================================================================
 -module(dao_lib).
+-author("Rafal Slota").
 
--include("dao/dao.hrl").
+-include_lib("dao/include/common.hrl").
 -include("registered_names.hrl").
 
 %% API

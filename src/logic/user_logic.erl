@@ -25,12 +25,14 @@
 %% create/1
 %% ====================================================================
 %% @doc Creates a user account.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec create(Name :: binary()) ->
     {ok, UserId :: binary()} | no_return().
 %% ====================================================================
-create(#user{} = User) ->
-    UserId = logic_helper:save(User),
+create(Name) ->
+    UserId = dao_adapter:save(#user{name = Name}),
     {ok, UserId}.
 
 
@@ -57,12 +59,14 @@ catch T:M -> ?error_stacktrace("~p:~p", [T, M]) end.
 %% @doc Modifies user details. Second argument is proplist with keys
 %% corresponding to record field names. The proplist may contain any
 %% subset of fields to change.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec modify(UserId :: binary(), Proplist :: [{atom(), binary()}]) ->
     ok | no_return().
 %% ====================================================================
 modify(UserId, Proplist) ->
-    {ok, #veil_document{record = User} = Doc} = logic_helper:user_doc(UserId),
+    #veil_document{record = User} = Doc = dao_adapter:user_doc(UserId),
     #user{
         name = Name,
         email_list = Emails,
@@ -76,7 +80,7 @@ modify(UserId, Proplist) ->
         spaces = proplists:get_value(spaces, Proplist, Spaces),
         groups = proplists:get_value(groups, Proplist, Groups)},
     DocNew = Doc#veil_document{record = NewUser},
-    logic_helper:save(DocNew),
+    dao_adapter:save(DocNew),
     ok.
 
 
@@ -96,12 +100,14 @@ merge(_UserId, _Token) ->
 %% get_data/1
 %% ====================================================================
 %% @doc Returns user details.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_data(UserId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_data(UserId) ->
-    #veil_document{record = User} = logic_helper:user_doc(UserId),
+    #veil_document{record = User} = dao_adapter:user_doc(UserId),
     #user{name = Name} = User,
     {ok, [
         {userId, UserId},
@@ -112,12 +118,14 @@ get_data(UserId) ->
 %% get_spaces/1
 %% ====================================================================
 %% @doc Returns user's spaces.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_spaces(UserId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_spaces(UserId) ->
-    Doc = logic_helper:user_doc(UserId),
+    Doc = dao_adapter:user_doc(UserId),
     #veil_document{record = #user{spaces = Spaces}} = Doc,
     {ok, [{spaces, Spaces}]}.
 
@@ -125,12 +133,14 @@ get_spaces(UserId) ->
 %% get_groups/1
 %% ====================================================================
 %% @doc Returns user's groups.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_groups(UserId :: binary()) ->
     {ok, [proplists:property()]} | no_return().
 %% ====================================================================
 get_groups(UserId) ->
-    Doc = logic_helper:user_doc(UserId),
+    Doc = dao_adapter:user_doc(UserId),
     #veil_document{record = #user{groups = Groups}} = Doc,
     {ok, [{groups, Groups}]}.
 
@@ -138,27 +148,29 @@ get_groups(UserId) ->
 %% remove/1
 %% ====================================================================
 %% @doc Remove user's account.
+%% Throws exception when call to dao fails, or user is already deleted.
+%% @end
 %% ====================================================================
--spec remove(UserId :: binary()) -> boolean().
+-spec remove(UserId :: binary()) -> true | no_return().
 %% ====================================================================
 remove(UserId) ->
-    Doc = logic_helper:user_doc(UserId),
+    Doc = dao_adapter:user_doc(UserId),
     #veil_document{record = #user{groups = Groups, spaces = Spaces}} = Doc,
 
     lists:foreach(fun(GroupId) ->
-        GroupDoc = logic_helper:group_doc(GroupId),
+        GroupDoc = dao_adapter:group_doc(GroupId),
         #veil_document{record = #user_group{users = Users} = Group} = GroupDoc,
         GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
-        logic_helper:save(GroupDoc#veil_document{record = GroupNew}),
+        dao_adapter:save(GroupDoc#veil_document{record = GroupNew}),
         group_logic:cleanup(GroupId)
     end, Groups),
 
     lists:foreach(fun(SpaceId) ->
-        SpaceDoc = logic_helper:space_doc(SpaceId),
+        SpaceDoc = dao_adapter:space_doc(SpaceId),
         #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
         SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
-        logic_helper:save(SpaceDoc#veil_document{record = SpaceNew}),
+        dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew}),
         space_logic:cleanup(SpaceId)
     end, Spaces),
 
-    logic_helper:user_remove(UserId).
+    dao_adapter:user_remove(UserId).

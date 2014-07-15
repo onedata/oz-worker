@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: Common definitions for REST handlers.
+%% @doc Common definitions for REST handlers.
 %% @end
 %% ===================================================================
 -author("Konrad Zemek").

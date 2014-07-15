@@ -5,11 +5,12 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: This file contains useful functions commonly used in control_panel modules.
+%% @doc This file contains useful functions commonly used in control_panel modules.
 %% @end
 %% ===================================================================
-
 -module(gui_utils).
+-author("Lukasz Opiola").
+-include_lib("n2o/include/wf.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include("dao/dao_types.hrl").

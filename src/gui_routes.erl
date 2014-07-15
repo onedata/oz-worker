@@ -1,12 +1,14 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% This module provides mapping of globalregistry paths to modules
-%%% that will render the pages.
-%%% @end
-%%% Created : 09. May 2014 3:38 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This module provides mapping of globalregistry paths to modules
+%% that will render the pages.
+%% @end
+%% ===================================================================
 -module(gui_routes).
 -author("Tomasz Lichon").
 

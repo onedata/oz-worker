@@ -1,16 +1,19 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% dao_groups header
-%%% @end
-%%% Created : 12. May 2014 12:41 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Dao definitions for group records
+%% @end
+%% ===================================================================
+-author("Tomasz Lichon").
 
 -ifndef(DAO_GROUPS_HRL).
 -define(DAO_GROUPS_HRL, 1).
 
-%% This record defines a group of users
+%% This record defines a group of users, it has: name, list of users that belongs to it, list of spaces that are used by this group
 -record(user_group, {
     name :: binary(),
     users = [] :: [{UserId :: binary(), [privileges:group_privilege()]}],

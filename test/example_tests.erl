@@ -1,11 +1,15 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc This module tests is the example eunit test
-%%% @end
-%%% Created : 15. May 2014 12:11
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This is an example test module. It contains unit tests that base on eunit.
+%% @end
+%% ===================================================================
 -module(example_tests).
+-author("Tomasz Lichon").
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -44,9 +48,7 @@ mock_example() ->
   ExpectedAns="<html></html>",
   meck:new(ibrowse),
   meck:expect(ibrowse,send_req,fun(_,_,_) -> ExpectedAns end),
-  ?assertEqual(ExpectedAns, ibrowse:send_req("url",[],get)),
-  meck:unload(ibrowse).
-
+  ?assertEqual(ExpectedAns, ibrowse:send_req("url",[],get)).
 
 %%%===================================================================
 %%% Internal functions
