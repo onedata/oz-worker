@@ -79,8 +79,7 @@ validate_login(ParamsProplist) ->
 
 
         % Parse out received access token
-%%         AccessToken = proplists:get_value(<<"access_token">>, cow_qs:qs(Response)),
-        AccessToken = cow_qs:qs(<<"access_token">>),
+        AccessToken = proplists:get_value(<<"access_token">>, cow_qs:parse_qs(Response)),
 
         % Form user info request
         URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,

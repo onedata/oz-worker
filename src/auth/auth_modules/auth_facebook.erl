@@ -79,7 +79,7 @@ validate_login(ParamsProplist) ->
         {ok, Response} = gui_utils:https_get(URL, [{content_type, "application/x-www-form-urlencoded"}]),
 
         % Parse out received access token
-        AccessToken = proplists:get_value(<<"access_token">>, cowboy_http:x_www_form_urlencoded(Response)),
+        AccessToken = proplists:get_value(<<"access_token">>, cow_qs:parse_qs(Response)),
 
         % Form user info request
         URL2 = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,

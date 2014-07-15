@@ -18,7 +18,7 @@
 -export([main/0, event/1]).
 
 %% Template points to the template file, which will be filled with content
-main() -> #dtl{file = "bare", app = ?App_name, bindings = [{title, title()}, {body, body()}]}.
+main() -> #dtl{file = "bare", app = ?App_name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}.
 
 %% Page title
 title() -> <<"Logout page">>.

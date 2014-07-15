@@ -21,7 +21,7 @@
 -export([redirect_with_error/1]).
 
 %% Template points to the template file, which will be filled with content
-main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}]}.
+main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}.
 
 %% Page title
 title() -> <<"Error">>.
