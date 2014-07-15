@@ -15,6 +15,7 @@
 -include("dao/dao_types.hrl").
 -include("registered_names.hrl").
 
+-include_lib("dao/include/common.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -28,12 +29,14 @@
 %% create/1
 %% ====================================================================
 %% @doc Create a provider's account.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec create(URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()} | no_return().
 %% ====================================================================
 create(URLs, RedirectionPoint, CSRBin) ->
-    ProviderId = logic_helper:save(#provider{urls = URLs, redirection_point = RedirectionPoint}),
+    ProviderId = dao_adapter:save(#provider{urls = URLs, redirection_point = RedirectionPoint}),
     {ok, ProviderCertPem} = grpca:sign_provider_req(ProviderId, CSRBin),
     {ok, ProviderId, ProviderCertPem}.
 
@@ -41,31 +44,35 @@ create(URLs, RedirectionPoint, CSRBin) ->
 %% modify/2
 %% ====================================================================
 %% @doc Modify provider's details.
+%% Throws exception when call to dao fails, or provider doesn't exist.
+%% @end
 %% ====================================================================
 -spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
     ok | no_return().
 %% ====================================================================
 modify(ProviderId, Data) ->
-    Doc = logic_helper:provider_doc(ProviderId),
+    Doc = dao_adapter:provider_doc(ProviderId),
     #veil_document{record = Provider} = Doc,
 
     URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
     RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
 
     ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint},
-    logic_helper:save(Doc#veil_document{record = ProviderNew}),
+    dao_adapter:save(Doc#veil_document{record = ProviderNew}),
     ok.
 
 
 %% get_data/1
 %% ====================================================================
 %% @doc Get provider's details.
+%% Throws exception when call to dao fails, or provider doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_data(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]} | no_return().
 %% ====================================================================
 get_data(ProviderId) ->
-    #provider{urls = URLs, redirection_point = RedirectionPoint} = logic_helper:provider(ProviderId),
+    #provider{urls = URLs, redirection_point = RedirectionPoint} = dao_adapter:provider(ProviderId),
     {ok, [
         {providerId, ProviderId},
         {urls, URLs},
@@ -76,32 +83,36 @@ get_data(ProviderId) ->
 %% get_spaces/1
 %% ====================================================================
 %% @doc Get Spaces supported by the provider.
+%% Throws exception when call to dao fails, or provider doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_spaces(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]} | no_return().
 %% ====================================================================
 get_spaces(ProviderId) ->
-    #provider{spaces = Spaces} = logic_helper:provider(ProviderId),
+    #provider{spaces = Spaces} = dao_adapter:provider(ProviderId),
     {ok, [{spaces, Spaces}]}.
 
 
 %% remove/1
 %% ====================================================================
 %% @doc Remove provider's account.
+%% Throws exception when call to dao fails, or provider is already removed.
+%% @end
 %% ====================================================================
--spec remove(ProviderId :: binary()) -> boolean().
+-spec remove(ProviderId :: binary()) -> true | no_return().
 %% ====================================================================
 remove(ProviderId) ->
-    #provider{spaces = Spaces} = logic_helper:provider(ProviderId),
+    #provider{spaces = Spaces} = dao_adapter:provider(ProviderId),
 
     lists:foreach(fun(SpaceId) ->
-        SpaceDoc = logic_helper:space_doc(SpaceId),
+        SpaceDoc = dao_adapter:space_doc(SpaceId),
         #veil_document{record = #space{providers = Providers} = Space} = SpaceDoc,
         SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers)},
-        logic_helper:save(SpaceDoc#veil_document{record = SpaceNew})
+        dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew})
     end, Spaces),
 
-    logic_helper:provider_remove(ProviderId).
+    dao_adapter:provider_remove(ProviderId).
 
 %% test_connection/1
 %% ====================================================================
@@ -112,6 +123,15 @@ remove(ProviderId) ->
 %% ====================================================================
 test_connection([]) ->
     [];
+test_connection([ {<<"undefined">>,Url} | Rest]) ->
+    UrlString = binary_to_list(Url),
+    ConnStatus = case ibrowse:send_req(UrlString,[],get) of
+                     {ok, "200", _, _} ->
+                         <<"ok">>;
+                     _ ->
+                         <<"error">>
+                 end,
+    [{Url,ConnStatus} | test_connection(Rest)];
 test_connection([ {ServiceName,Url} | Rest]) ->
     UrlString = binary_to_list(Url),
     ServiceNameString = binary_to_list(ServiceName),
@@ -119,7 +139,8 @@ test_connection([ {ServiceName,Url} | Rest]) ->
         {ok, "200", _, ServiceNameString} ->
             <<"ok">>;
         Error ->
-            ?info("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
+            ?debug("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
             <<"error">>
     end,
-    [{ServiceName,ConnStatus} | test_connection(Rest)].
+    [{Url,ConnStatus} | test_connection(Rest)].
+

@@ -33,12 +33,12 @@ routes() ->
     S = #rstate{module = ?MODULE},
     M = rest_handler,
     [
-        {<<"/provider">>,                   			 M, S#rstate{resource = provider,    methods = [get, post, patch, delete], noauth = [post]}},
-        {<<"/provider/spaces/">>,           			 M, S#rstate{resource = spaces,      methods = [get, post]   }},
-        {<<"/provider/spaces/support">>,    			 M, S#rstate{resource = ssupport,    methods = [post]        }},
-        {<<"/provider/spaces/:sid">>,       			 M, S#rstate{resource = space,       methods = [get, delete] }},
-        {<<"/provider/test/check_my_ip">>,               M, S#rstate{resource = ip,       	 methods = [get] }},
-        {<<"/provider/test/check_my_ports">>,            M, S#rstate{resource = ports,       methods = [get] }}
+        {<<"/provider">>,                               M, S#rstate{resource = provider,    methods = [get, post, patch, delete], noauth = [post]}},
+        {<<"/provider/spaces/">>,                       M, S#rstate{resource = spaces,      methods = [get, post]           }},
+        {<<"/provider/spaces/support">>,                M, S#rstate{resource = ssupport,    methods = [post]                }},
+        {<<"/provider/spaces/:sid">>,                   M, S#rstate{resource = space,       methods = [get, delete]         }},
+        {<<"/provider/test/check_my_ip">>,              M, S#rstate{resource = ip,          methods = [get], noauth = [get] }},
+        {<<"/provider/test/check_my_ports">>,           M, S#rstate{resource = ports,       methods = [get], noauth = [get] }}
     ].
 
 

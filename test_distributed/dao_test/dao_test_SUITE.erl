@@ -1,20 +1,24 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Connection test suite
-%%% @end
-%%% Created : 12. May 2014 3:28 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This file contains tests for basic create-read-update-delete
+%% operations on: users, groups, spaces and providers
+%% @end
+%% ===================================================================
 -module(dao_test_SUITE).
 -author("Tomasz Lichon").
 
 %% Includes
--include_lib("common_test/include/ct.hrl").
 -include("registered_names.hrl").
--include("testing/test_node_starter.hrl").
--include("testing/assertions.hrl").
 -include("dao/dao_types.hrl").
+-include("test_utils.hrl").
+-include_lib("common_test/include/ct.hrl").
+-include_lib("ctool/include/test/test_node_starter.hrl").
+-include_lib("ctool/include/test/assertions.hrl").
 
 %% API
 -export([all/0,init_per_suite/1,end_per_suite/1]).
@@ -23,7 +27,7 @@
 all() -> [users_crud_test,groups_crud_test,spaces_crud_test,providers_crud_test,tokens_crud_test].
 
 users_crud_test(Config) ->
-	Node = ?config(node,Config),
+	[Node] = ?config(nodes,Config),
 
 	% Data
 	User = #user{name = "name",spaces = ["uuid1","uuid2"], groups = ["uuid3","uuid4"] },
@@ -55,7 +59,7 @@ users_crud_test(Config) ->
 	?assertEqual({error,{not_found,deleted}},AnsD3).
 
 groups_crud_test(Config) ->
-	Node = ?config(node,Config),
+    [Node] = ?config(nodes,Config),
 
 	% Data
 	Group = #user_group{name = "name",spaces = ["uuid1","uuid2"], users = ["uuid3","uuid4"] },
@@ -87,11 +91,11 @@ groups_crud_test(Config) ->
 	?assertEqual({error,{not_found,deleted}},AnsD3).
 
 providers_crud_test(Config) ->
-	Node = ?config(node,Config),
+    [Node] = ?config(nodes,Config),
 
 	% Data
-	Provider = #provider{address = "1.1.1.1",spaces = ["uuid1","uuid2"], groups = ["uuid3","uuid4"] },
-	UpdatedProvider = Provider#provider{address="2.2.2.2"},
+	Provider = #provider{url = <<"1.1.1.1">>,spaces = [<<"uuid1">>,<<"uuid2">>]},
+	UpdatedProvider = Provider#provider{url = <<"2.2.2.2">>},
 
 	% Create
 	{AnsC1,ProviderId} = rpc:call(Node,dao_lib,apply,[dao_providers,save_provider,[Provider],1]),
@@ -119,11 +123,11 @@ providers_crud_test(Config) ->
 	?assertEqual({error,{not_found,deleted}},AnsD3).
 
 spaces_crud_test(Config) ->
-	Node = ?config(node,Config),
+    [Node] = ?config(nodes,Config),
 
 	% Data
-	Space = #space{name = "name",users_and_privileges = [{"uuid1",none},{"uuid2",invite},{"uuid3",admin}], groups_and_privileges = [{"uuid4",invite}] },
-	UpdatedSpace = Space#space{name="name2"},
+	Space = #space{name = <<"name">>,users = [{<<"uuid1">>,[space_invite_user]}], groups = [{<<"uuid4">>,[]}], providers = [<<"uuid5">>] },
+	UpdatedSpace = Space#space{name = <<"name2">>},
 
 	% Create
 	{AnsC1,SpaceId} = rpc:call(Node,dao_lib,apply,[dao_spaces,save_space,[Space],1]),
@@ -151,7 +155,7 @@ spaces_crud_test(Config) ->
 	?assertEqual({error,{not_found,deleted}},AnsD3).
 
 tokens_crud_test(Config) ->
-	Node = ?config(node,Config),
+    [Node] = ?config(nodes,Config),
 
 	% Data
 	Token = #token{type = some_type1,expires = time_in_some_format },
@@ -190,13 +194,12 @@ tokens_crud_test(Config) ->
 
 init_per_suite(Config) ->
 	?INIT_CODE_PATH,
-	DbNode = ?NODE(?CURRENT_HOST,db),
-	DbNodesEnv = {db_nodes,[DbNode]},
-	test_node_starter:clear_db(),
-	Node = test_node_starter:start_globalregistry_node(globalregistry_test_node,?CURRENT_HOST,[DbNodesEnv]),
-	Config ++ [{node,Node}].
+	DbNodesEnv = {db_nodes,[?DB_NODE]},
+	Nodes = test_node_starter:start_test_nodes(1),
+    test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,[[DbNodesEnv,?cert_paths]]),
+	Config ++ [{nodes,Nodes}].
 
 end_per_suite(Config) ->
-	Node = ?config(node,Config),
-	test_node_starter:stop_globalregistry_node(Node),
-	test_node_starter:clear_db().
+	Nodes = ?config(nodes,Config),
+	test_node_starter:stop_app_on_nodes(?APP_Name,?GR_DEPS,Nodes),
+	test_node_starter:stop_test_nodes(Nodes).

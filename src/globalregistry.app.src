@@ -17,21 +17,30 @@
     ]},
     {modules, [
         globalregistry_sup,
-        globalregistry_app,
-        globalregistry,
-        hello_world
+        globalregistry_app
     ]},
     {mod, {globalregistry_app, []}},
     {env, [
-        {db_nodes, ['db@172.16.67.26']},
-        % todo generate dedicated certs (this are example ones)
-        {ca_cert_file, "./cacerts/ca.crt"},
-        {cert_file, "./cacerts/server.crt"},
-        {key_file, "./cacerts/server.key"},
+        {db_nodes,['db@127.0.0.1']},
+
+        % rest config
+        {rest_port,8443},
+        {rest_https_acceptors,50},
         {grpca_dir, "./grpca"},
         {rest_cert_file, "./grpca/rest.pem"},
         {rest_key_file, "./grpca/rest_key.pem"},
-        {rest_cert_domain, "172.16.67.26"},
-        {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'}
+        {rest_cert_domain, "127.0.0.1"},
+        {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'},
+
+        % gui config
+        {gui_port,443},
+        {gui_https_acceptors,100},
+        {gui_socket_timeout,60000},
+        {gui_max_keepalive,30},
+
+        % certs todo generate dedicated certs (this are example ones)
+        {ca_cert_file,"./cacerts/ca.crt"},
+        {cert_file,"./cacerts/server.crt"},
+        {key_file,"./cacerts/server.key"}
     ]}
 ]}.
