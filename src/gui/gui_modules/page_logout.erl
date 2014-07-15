@@ -11,19 +11,22 @@
 %% ===================================================================
 
 -module(page_logout).
--compile(export_all).
--include("gui_common.hrl").
--include("logging.hrl").
+
+-include("gui/common.hrl").
+
+% n2o API
+-export([main/0, event/1]).
 
 %% Template points to the template file, which will be filled with content
-main() -> #dtl{file = "bare", app = veil_cluster_node, bindings = [{title, title()}, {body, body()}]}.
+main() -> #dtl{file = "bare", app = ?App_name, bindings = [{title, title()}, {body, body()}]}.
 
 %% Page title
 title() -> <<"Logout page">>.
 
 %% This will be placed in the template instead of {{body}} tag
 body() ->
-    wf:user(undefined),
+    ?debug("User ~p logged out", [gui_ctx:get_user_id()]),
+    gui_session_handler:clear(),
     %wf:logout(), % Not yet implemented in n2o stable realease
     #panel{style = <<"position: relative;">>, body =
     [
@@ -33,10 +36,11 @@ body() ->
             #button{postback = to_login, class = <<"btn btn-primary btn-block">>, body = <<"Login page">>}
         ]}
     ]
-    ++ gui_utils:logotype_footer(120)
+    ++ gr_gui_utils:logotype_footer(120)
         ++ [#p{body = <<"<iframe src=\"https://openid.plgrid.pl/logout\" style=\"display:none\"></iframe>">>}]
     }.
 
-event(init) -> ok;
 
-event(to_login) -> gui_utils:redirect_to_login(false).
+event(init) -> ok;
+event(to_login) -> gui_jq:redirect_to_login(false);
+event(terminate) -> ok.

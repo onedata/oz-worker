@@ -8,19 +8,21 @@
 %% @doc: This file contains n2o website code.
 %% @end
 %% ===================================================================
-
 -module(page_404).
--compile(export_all).
 
-% Includes
--include_lib("n2o/include/wf.hrl").
--include("registered_names.hrl").
+-include("gui/common.hrl").
+
+% n2o API
+-export([main/0, event/1]).
+
 
 %% Template points to the template file, which will be filled with content
 main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}]}.
 
+
 %% Page title
 title() -> <<"Error 404">>.
+
 
 %% This will be placed in the template instead of {{body}} tag
 body() ->
@@ -28,6 +30,8 @@ body() ->
 		#panel{class = <<"alert alert-danger login-page">>, body = [
 			#h3{body = <<"Error 404">>}
 		]}
-	] ++ gui_utils:logotype_footer(120)}.
+	] ++ gr_gui_utils:logotype_footer(120)}.
 
-event(init) -> ok.
+
+event(init) -> ok;
+event(terminate) -> ok.

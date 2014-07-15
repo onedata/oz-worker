@@ -11,7 +11,7 @@
 %% ===================================================================
 -module(auth_utils).
 
--include("logging.hrl").
+-include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
 -include("auth_common.hrl").
 -include_lib("ibrowse/include/ibrowse.hrl").
@@ -39,8 +39,8 @@ proplist_to_params(List) ->
                                              {Key, Value, no_encode} ->
                                                  {Key, Value};
                                              {Key, Value} ->
-                                                 {gui_utils:to_binary(wf:url_encode(Key)),
-                                                     gui_utils:to_binary(wf:url_encode(Value))}
+                                                 {gui_str:to_binary(wf:url_encode(Key)),
+                                                     gui_str:to_binary(wf:url_encode(Value))}
                                          end,
             Suffix = case Acc of
                          <<"">> -> <<"">>;
@@ -69,13 +69,13 @@ normalize_email(Email) ->
 
 
 local_auth_endpoint() ->
-    <<(auth_utils:fully_qualified_url(gui_utils:get_requested_hostname()))/binary, ?local_auth_endpoint>>.
+    <<(auth_utils:fully_qualified_url(gui_ctx:get_requested_hostname()))/binary, ?local_auth_endpoint>>.
 
 
 validate_login() ->
     try
         % Check url params for state parameter
-        ParamsProplist = gui_utils:get_request_params(),
+        ParamsProplist = gui_ctx:get_request_params(),
         State = proplists:get_value(<<"state">>, ParamsProplist),
         StateInfo = auth_utils:lookup_state_token(State),
         case StateInfo of

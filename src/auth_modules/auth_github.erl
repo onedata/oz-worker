@@ -12,7 +12,7 @@
 -module(auth_github).
 -behaviour(auth_module_behaviour).
 
--include("logging.hrl").
+-include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
 -include("dao/dao_types.hrl").
 
@@ -47,7 +47,7 @@ get_redirect_url(ConnectAccount) ->
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
-            ?error_stacktrace(gui_utils:to_list(?PROVIDER_NAME)),
+            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_NAME]),
             {error, {Type, Message}}
     end.
 
@@ -77,8 +77,10 @@ validate_login(ParamsProplist) ->
         % Send request to GitHub endpoint
         {ok, Response} = gui_utils:https_post(access_token_endpoint(), [{content_type, "application/x-www-form-urlencoded"}], Params),
 
+
         % Parse out received access token
-        AccessToken = proplists:get_value(<<"access_token">>, cowboy_http:x_www_form_urlencoded(Response)),
+%%         AccessToken = proplists:get_value(<<"access_token">>, cow_qs:qs(Response)),
+        AccessToken = cow_qs:qs(<<"access_token">>),
 
         % Form user info request
         URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,

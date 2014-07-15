@@ -11,9 +11,11 @@
 %% ===================================================================
 
 -module(page_about).
--compile(export_all).
--include("gui_common.hrl").
--include("registered_names.hrl").
+
+-include("gui/common.hrl").
+
+% n2o API
+-export([main/0, event/1]).
 
 -define(LICENSE_FILE, "LICENSE.txt").
 -define(CONTACT_EMAIL, "support@onedata.org").
@@ -22,9 +24,9 @@
 main() ->
     case gui_utils:maybe_redirect(true, false, false, true) of
         true ->
-            #dtl{file = "bare", app = veil_cluster_node, bindings = [{title, <<"">>}, {body, <<"">>}]};
+            #dtl{file = "bare", app = ?APP_Name, bindings = [{title, <<"">>}, {body, <<"">>}]};
         false ->
-            #dtl{file = "bare", app = veil_cluster_node, bindings = [{title, title()}, {body, body()}]}
+            #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}]}
     end.
 
 %% Page title
@@ -37,7 +39,7 @@ body() ->
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #panel{id = <<"about_table">>, body = about_table()}
         ]}
-    ] ++ gui_utils:logotype_footer(20)}.
+    ] ++ gr_gui_utils:logotype_footer(20)}.
 
 about_table() ->
     #table{style = <<"border-width: 0px; width: auto">>, body = [
@@ -88,4 +90,6 @@ get_team() ->
         end, Members)
     }.
 
-event(init) -> ok.
+
+event(init) -> ok;
+event(terminate) -> ok.

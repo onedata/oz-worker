@@ -11,12 +11,15 @@
 %% ===================================================================
 
 -module(page_validate_login).
--compile(export_all).
--include("gui_common.hrl").
--include("logging.hrl").
+
+-include_lib("ctool/include/logging.hrl").
+-include("gui/common.hrl").
+
+% n2o API
+-export([main/0, event/1]).
 
 %% Template points to the template file, which will be filled with content
-main() -> #dtl{file = "bare", app = veil_cluster_node, bindings = [{title, title()}, {body, body()}]}.
+main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}]}.
 
 %% Page title
 title() -> <<"Validate login">>.
@@ -25,8 +28,10 @@ title() -> <<"Validate login">>.
 body() ->
     case auth_utils:validate_login() of
         {redirect, URL} ->
-            wf:redirect(URL);
+            ?debug("User ~p logged in", [gui_ctx:get_user_id()]),
+            gui_jq:redirect(URL);
         new_user ->
+            ?debug("User ~p logged in for the first time", [gui_ctx:get_user_id()]),
             #panel{style = <<"position: relative;">>, body = [
                 #panel{class = <<"alert alert-success login-page">>, body = [
                     #h3{body = <<"First login">>},
@@ -35,7 +40,7 @@ body() ->
                     "and connect another accounts to your profile.">>},
                     #button{class = <<"btn btn-primary btn-block">>, postback = to_manage_account, body = <<"Proceed">>}
                 ]}
-            ] ++ gui_utils:logotype_footer(120)};
+            ] ++ gr_gui_utils:logotype_footer(120)};
         {error, ErrorID} ->
             page_error:redirect_with_error(ErrorID)
     end.

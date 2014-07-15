@@ -11,12 +11,17 @@
 %% ===================================================================
 
 -module(page_error).
--compile(export_all).
+
+-include("gui/common.hrl").
 -include("auth_common.hrl").
--include("gui_common.hrl").
+
+% n2o API
+-export([main/0, event/1]).
+% Functions used externally
+-export([redirect_with_error/1]).
 
 %% Template points to the template file, which will be filled with content
-main() -> #dtl{file = "bare", app = veil_cluster_node, bindings = [{title, title()}, {body, body()}]}.
+main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}]}.
 
 %% Page title
 title() -> <<"Error">>.
@@ -31,16 +36,17 @@ body() ->
             #p{class = <<"login-info">>, body = Description},
             #button{postback = to_login, class = <<"btn btn-warning btn-block">>, body = <<"Login page">>}
         ]}
-    ] ++ gui_utils:logotype_footer(120)}.
+    ] ++ gr_gui_utils:logotype_footer(120)}.
+
 
 event(init) -> ok;
-
-event(to_login) -> gui_utils:redirect_to_login(false).
+event(to_login) -> gui_utils:redirect_to_login(false);
+event(terminate) -> ok.
 
 
 % This function causes a HTTP rediurect to error page, which displays an error message.
 redirect_with_error(ErrorID) ->
-    wf:redirect(<<"/error?id=", (gui_utils:to_binary(ErrorID))/binary>>).
+    gui_jq:redirect(<<"/error?id=", (gui_utils:to_binary(ErrorID))/binary>>).
 
 
 get_reason_and_description() ->

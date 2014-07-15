@@ -9,11 +9,11 @@
 -module(dao_users).
 
 %% Includes
+-include_lib("ctool/include/logging.hrl").
 -include("dao/dao_users.hrl").
 -include("dao/dao.hrl").
 -include("dao/dao_helper.hrl").
 -include("dao/dao_types.hrl").
--include("logging.hrl").
 
 %% API
 -export([save_user/1, remove_user/1, exist_user/1, get_user/1]).

@@ -23,8 +23,8 @@
 -define(REFRESH_TOKEN_EXPIRATION_SECS, 36000).
 -define(ISSUER_URL, "https://onedata.org").
 
+-include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
--include("logging.hrl").
 
 %% API
 -export([start/0, stop/0, get_redirection_uri/2, grant_token/2, validate_token/2]).

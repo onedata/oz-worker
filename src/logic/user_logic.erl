@@ -12,8 +12,8 @@
 -module(user_logic).
 -author("Konrad Zemek").
 
+-include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
--include("logging.hrl").
 
 
 %% API

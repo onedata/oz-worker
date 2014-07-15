@@ -11,6 +11,7 @@
 %% ===================================================================
 -module(dao_lib).
 
+-include_lib("ctool/include/logging.hrl").
 -include("dao/dao.hrl").
 -include("registered_names.hrl").
 
@@ -53,7 +54,7 @@ apply(Module, {Mode, Method}, Args, ProtocolVersion, _Timeout) ->
 		end
     catch
         Type:Error ->
-            lager:error("Cannot make call to dao, Reason: ~p", [{Type, Error}]),
+            ?error("Cannot make call to dao, Reason: ~p", [{Type, Error}]),
             {error, {Type, Error}}
     end;
 apply(Module, Method, Args, ProtocolVersion, Timeout) ->

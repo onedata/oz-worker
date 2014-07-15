@@ -11,20 +11,22 @@
 %% ===================================================================
 
 -module(page_manage_account).
--compile(export_all).
 
+-include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
 -include("auth_common.hrl").
--include("gui_common.hrl").
--include("logging.hrl").
+-include("gui/common.hrl").
+
+% n2o API
+-export([main/0, event/1]).
 
 %% Template points to the template file, which will be filled with content
 main() ->
-    case gui_utils:maybe_redirect(true, false, false, true) of
+    case gr_gui_utils:maybe_redirect(true, false, false, true) of
         true ->
-            #dtl{file = "bare", app = veil_cluster_node, bindings = [{title, <<"">>}, {body, <<"">>}]};
+            #dtl{file = "bare", app = ?APP_Name, bindings = [{title, <<"">>}, {body, <<"">>}]};
         false ->
-            #dtl{file = "bare", app = veil_cluster_node, bindings = [{title, title()}, {body, body()}]}
+            #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}]}
     end.
 
 %% Page title
@@ -39,7 +41,7 @@ body() ->
             #panel{id = <<"main_table">>, body = main_table()},
             #button{body = <<"Go to your files - UWAGA TO NIE DZIALA">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
         ]}
-    ] ++ gui_utils:logotype_footer(20)}.
+    ] ++ gr_gui_utils:logotype_footer(20)}.
 
 
 main_table() ->

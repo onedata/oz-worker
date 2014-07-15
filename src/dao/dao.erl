@@ -17,6 +17,7 @@
 -module(dao).
 -behaviour(gen_server).
 
+-include_lib("ctool/include/logging.hrl").
 -include_lib("dao/dao.hrl").
 -include_lib("dao/couch_db.hrl").
 -include_lib("dao/dao_types.hrl").
@@ -86,7 +87,7 @@ init({_Args, {init_status, table_initialized}}) -> %% Final stage of initializat
 			[dao_hosts:insert(Node) || Node <- Nodes, is_atom(Node)],
 			catch setup_views(?DATABASE_DESIGN_STRUCTURE);
 		_ ->
-			lager:warning("There are no DB hosts given in application env variable.")
+			?warning("There are no DB hosts given in application env variable.")
 	end,
 	{ok,#state{}};
 init({Args, {init_status, _TableInfo}}) ->
@@ -119,23 +120,23 @@ handle_call({ProtocolVersion,Target, Method, Args},_From,State) when is_atom(Tar
 		end,
 	try apply(Module, Method, Args) of
 		{error, Err} ->
-			lager:error("Handling ~p:~p with args ~p returned error: ~p", [Module, Method, Args, Err]),
+			?error("Handling ~p:~p with args ~p returned error: ~p", [Module, Method, Args, Err]),
 			{reply, {error, Err}, State};
 		{ok, Response} -> {reply, {ok, Response}, State};
 		ok -> {reply, ok, State};
 		Other ->
-			lager:error("Handling ~p:~p with args ~p returned unknown response: ~p", [Module, Method, Args, Other]),
+			?error("Handling ~p:~p with args ~p returned unknown response: ~p", [Module, Method, Args, Other]),
 			{reply, {error, Other}, State}
 	catch
 		error:{badmatch, {error, Err}} -> {reply, {error, Err}, State};
 		Type:Error ->
-            lager:error("Handling ~p:~p with args ~p interrupted by exception: ~p:~p ~n ~p", [Module, Method, Args, Type, Error, erlang:get_stacktrace()]),
+            ?error("Handling ~p:~p with args ~p interrupted by exception: ~p:~p ~n ~p", [Module, Method, Args, Type, Error, erlang:get_stacktrace()]),
 			{reply, {error, Error}, State}
 	end;
 handle_call({ProtocolVersion, Method, Args},_From,State) when is_atom(Method), is_list(Args) ->
 	{reply,gen_server:call(?Dao,{ProtocolVersion, cluster, Method, Args}),State};
 handle_call(_Request,_From,State) ->
-	lager:error("Unknown call request ~p ", [_Request]),
+	?error("Unknown call request ~p ", [_Request]),
 	{reply,{error, wrong_args},State}.
 
 %%--------------------------------------------------------------------
@@ -150,7 +151,7 @@ handle_call(_Request,_From,State) ->
 	{noreply, NewState :: #state{}, timeout() | hibernate} |
 	{stop, Reason :: term(), NewState :: #state{}}).
 handle_cast(_Request, State) ->
-	lager:error("Unknown cast request ~p ", [_Request]),
+	?error("Unknown cast request ~p ", [_Request]),
 	{noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -168,7 +169,7 @@ handle_cast(_Request, State) ->
 	{noreply, NewState :: #state{}, timeout() | hibernate} |
 	{stop, Reason :: term(), NewState :: #state{}}).
 handle_info(_Info, State) ->
-	lager:error("Unknown info request ~p ", [_Info]),
+	?error("Unknown info request ~p ", [_Info]),
 	{noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -229,7 +230,7 @@ save_record(#veil_document{uuid = Id, rev_info = RevInfo, record = Rec, force_up
     if
         Valid -> ok;
         true ->
-            lager:error("Cannot save record: ~p because it's not supported", [Rec]),
+            ?error("Cannot save record: ~p because it's not supported", [Rec]),
             throw(unsupported_record)
     end,
     Revs =
@@ -355,7 +356,7 @@ list_records(#view_info{name = ViewName, design = DesignName, db_name = DbName},
               {ok, #view_result{total = length(Rows2), offset = 0, rows = FormattedRows2}};
           {error, _} = E -> throw(E);
             Other ->
-                lager:error("dao_helper:query_view has returned unknown query result: ~p", [Other]),
+                ?error("dao_helper:query_view has returned unknown query result: ~p", [Other]),
                 throw({unknown_query_result, Other})
         end.
 
@@ -413,23 +414,23 @@ setup_views(DesignStruct) ->
                         DbVersion = dao_helper:name(integer_to_list(binary:decode_unsigned(crypto:hash_final(LastCTX1)), 16)),
                         case DbVersion of %% Compare DbVersion with LocalVersion
                             LocalVersion ->
-                                lager:info("DB version of design ~p is ~p and matches local version. Design is up to date", [Name, LocalVersion]),
+                                ?info("DB version of design ~p is ~p and matches local version. Design is up to date", [Name, LocalVersion]),
                                 [];
                             _Other ->
-                                lager:info("DB version of design ~p is ~p and does not match ~p. Rebuilding design document", [Name, _Other, LocalVersion]),
+                                ?info("DB version of design ~p is ~p and does not match ~p. Rebuilding design document", [Name, _Other, LocalVersion]),
                                 ViewList
                         end;
                     _ ->
-                        lager:info("Design document ~p in DB ~p not exists. Creating...", [Name, DbName]),
+                        ?info("Design document ~p in DB ~p not exists. Creating...", [Name, DbName]),
                         ViewList
                 end,
 
             lists:map(fun(#view_info{name = ViewName}) -> %% Foreach view
                 case dao_helper:create_view(DbName, Name, ViewName, load_view_def(ViewName, map), load_view_def(ViewName, reduce), LocalVersion) of
                     ok ->
-                        lager:info("View ~p in design ~p, DB ~p has been created.", [ViewName, Name, DbName]);
+                        ?info("View ~p in design ~p, DB ~p has been created.", [ViewName, Name, DbName]);
                     _Err ->
-                        lager:error("View ~p in design ~p, DB ~p creation failed. Error: ~p", [ViewName, Name, DbName, _Err])
+                        ?error("View ~p in design ~p, DB ~p creation failed. Error: ~p", [ViewName, Name, DbName, _Err])
                 end
             end, NewViewList),
             DbName
@@ -526,7 +527,7 @@ term_to_doc(Field) when is_tuple(Field) ->
     {_, {Ret}} = lists:foldl(FoldFun, {1, InitObj}, LField),
     {lists:reverse(Ret)};
 term_to_doc(Field) ->
-    lager:error("Cannot convert term to document because field: ~p is not supported", [Field]),
+    ?error("Cannot convert term to document because field: ~p is not supported", [Field]),
     throw({unsupported_field, Field}).
 
 
@@ -554,7 +555,7 @@ doc_to_term(Field) when is_binary(Field) -> %% Binary type means that it is atom
 			Pid -> Pid
 		catch
 			_:_Error ->
-				lager:warning("Cannot convert document to term: cannot read PID ~p. Node missing?", [PidString]),
+				?warning("Cannot convert document to term: cannot read PID ~p. Node missing?", [PidString]),
 				undefined
 		end;
 	    true -> unicode:characters_to_list(list_to_binary(SField))

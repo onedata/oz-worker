@@ -10,8 +10,8 @@
 -module(logic_helper).
 -author("Konrad Zemek").
 
+-include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
--include("logging.hrl").
 
 
 -type dao_module() :: dao_users | dao_groups | dao_tokens | dao_spaces | dao_providers.

@@ -11,11 +11,15 @@
 %% ===================================================================
 
 -module(page_login).
--compile(export_all).
--include("gui_common.hrl").
+
+-include_lib("ctool/include/logging.hrl").
+-include("gui/common.hrl").
+
+% n2o API
+-export([main/0, event/1]).
 
 %% Template points to the template file, which will be filled with content
-main() -> #dtl{file = "bare", app = veil_cluster_node, bindings = [{title, title()}, {body, body()}]}.
+main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}]}.
 
 %% Page title
 title() -> <<"Login page">>.
@@ -55,7 +59,7 @@ body() ->
                     #p{class = <<"login-info">>, body = <<"You can sign in using one of your existing accounts.">>},
                     #panel{style = <<"">>, body = Buttons}
                 ]}
-            ] ++ gui_utils:logotype_footer(120)}
+            ] ++ gr_gui_utils:logotype_footer(120)}
     end.
 
 
@@ -65,4 +69,6 @@ event(init) -> ok;
 
 event({auth, HandlerModule}) ->
     {ok, URL} = HandlerModule:get_redirect_url(false),
-    wf:redirect(URL).
+    gui_jq:redirect(URL);
+
+event(terminate) -> ok.

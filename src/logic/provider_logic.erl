@@ -16,6 +16,7 @@
 -include("registered_names.hrl").
 
 -include_lib("public_key/include/public_key.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([create/3, modify/2]).
@@ -118,7 +119,7 @@ test_connection([ {ServiceName,Url} | Rest]) ->
         {ok, "200", _, ServiceNameString} ->
             <<"ok">>;
         Error ->
-            lager:info("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
+            ?info("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
             <<"error">>
     end,
     [{ServiceName,ConnStatus} | test_connection(Rest)].

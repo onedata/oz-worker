@@ -12,7 +12,7 @@
 -module(auth_facebook).
 -behaviour(auth_module_behaviour).
 
--include("logging.hrl").
+-include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
 -include("dao/dao_types.hrl").
 
@@ -47,7 +47,7 @@ get_redirect_url(ConnectAccount) ->
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
-            ?error_stacktrace(gui_utils:to_list(?PROVIDER_NAME)),
+            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_NAME]),
             {error, {Type, Message}}
     end.
 
