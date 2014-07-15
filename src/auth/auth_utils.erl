@@ -32,6 +32,13 @@
 -define(STATE_ETS, auth_state_ets).
 
 
+%% proplist_to_params/1
+%% ====================================================================
+%% @doc Converts a proplist to a single x-www-urlencoded binary.
+%% @end
+%% ====================================================================
+-spec proplist_to_params([{binary(), binary()}]) -> binary().
+%% ====================================================================
 proplist_to_params(List) ->
     lists:foldl(
         fun(Tuple, Acc) ->
@@ -50,6 +57,13 @@ proplist_to_params(List) ->
         end, <<"">>, List).
 
 
+%% fully_qualified_url/1
+%% ====================================================================
+%% @doc Converts the given URL to a fully quialified url, without leading www.
+%% @end
+%% ====================================================================
+-spec fully_qualified_url(binary()) -> binary().
+%% ====================================================================
 fully_qualified_url(Binary) ->
     case Binary of
         <<"https://www.", Rest/binary>> -> <<"https://", Rest/binary>>;
@@ -59,6 +73,13 @@ fully_qualified_url(Binary) ->
     end.
 
 
+%% normalize_email/1
+%% ====================================================================
+%% @doc Performs email normalization by removing all the dots in the local part.
+%% @end
+%% ====================================================================
+-spec normalize_email(binary()) -> binary().
+%% ====================================================================
 normalize_email(Email) ->
     case binary:split(Email, [<<"@">>], [global]) of
         [Account, Domain] ->
