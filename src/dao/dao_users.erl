@@ -13,8 +13,11 @@
 
 %% Includes
 -include_lib("ctool/include/logging.hrl").
+-include_lib("dao/include/dao_helper.hrl").
 -include("dao/dao_users.hrl").
 -include("dao/dao_types.hrl").
+-include("dao/dao_external.hrl").
+
 
 %% API
 -export([save_user/1, remove_user/1, exist_user/1, get_user/1]).
@@ -66,11 +69,11 @@ exist_user(UserId) ->
 -spec get_user(UserId :: uuid()) -> {ok, user_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_user(UUID) when is_list(UUID) ->
-    dao:set_db(?USERS_DB_NAME),
-    dao:get_record(UUID);
+    dao_external:set_db(?USERS_DB_NAME),
+    dao_records:get_record(UUID);
 
 get_user({Key, Value}) ->
-    dao:set_db(?USERS_DB_NAME),
+    dao_external:set_db(?USERS_DB_NAME),
 
     {View, QueryArgs} = case Key of
                             connected_account_user_id ->
@@ -88,7 +91,7 @@ get_user({Key, Value}) ->
                                 [<<?RECORD_FIELD_BINARY_PREFIX, (dao_helper:name(Value))/binary>>], include_docs = true}}
                         end,
 
-    case dao:list_records(View, QueryArgs) of
+    case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = FDoc}]}} ->
             {ok, FDoc};
         {ok, #view_result{rows = []}} ->

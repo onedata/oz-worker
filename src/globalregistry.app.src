@@ -9,11 +9,13 @@
         public_key,
         crypto,
         ssl,
+        xmerl,
+        % ctool already requires those apps below, but they are here
+        % for awareness of them being used in the project and
+        % to make sure they are started before the application.
         lager,
         ibrowse,
-        ranch,
-        cowboy,
-        xmerl
+        cowboy
     ]},
     {modules, [
         globalregistry_sup,

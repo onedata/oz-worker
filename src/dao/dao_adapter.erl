@@ -10,7 +10,6 @@
 -module(dao_adapter).
 -author("Konrad Zemek").
 
--include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
 
 

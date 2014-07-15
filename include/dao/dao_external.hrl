@@ -43,15 +43,18 @@
 %% ====================================================================
 %% DB Names
 -define(SYSTEM_DB_NAME, "system_data").
-
-%% Design Names
-
-%% Views
+-define(USERS_DB_NAME, "user_data").
 
 %% List of all used databases :: [string()]
--define(DB_LIST, [?SYSTEM_DB_NAME]).
+-define(DB_LIST, [?SYSTEM_DB_NAME, ?USERS_DB_NAME]).
+
+%% Views
+-define(USER_BY_EMAIL_VIEW, #view_info{name = "user_by_email", db_name = ?USERS_DB_NAME}).
+-define(USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_info{name = "user_by_connected_account_user_id", db_name = ?USERS_DB_NAME}).
+
+
 %% List of all used views :: [#view_info]
--define(VIEW_LIST, []).
+-define(VIEW_LIST, [?USER_BY_EMAIL_VIEW, ?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW]).
 %% Default database name
 -define(DEFAULT_DB, lists:nth(1, ?DB_LIST)).
 
