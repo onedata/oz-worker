@@ -28,7 +28,6 @@ title() -> <<"Logout page">>.
 body() ->
     ?debug("User ~p logged out", [gui_ctx:get_user_id()]),
     gui_session_handler:clear(),
-    %wf:logout(), % Not yet implemented in n2o stable realease
     #panel{style = <<"position: relative;">>, body =
     [
         #panel{class = <<"alert alert-success login-page">>, body = [

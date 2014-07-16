@@ -26,9 +26,9 @@ title() -> <<"Login page">>.
 
 %% This will be placed in the template instead of {{body}} tag
 body() ->
-    case gui_utils:user_logged_in() of
+    case gui_ctx:user_logged_in() of
         true ->
-            wf:redirect(<<"/">>);
+            gui_jq:redirect(<<"/">>);
         false ->
             Buttons = lists:map(
                 fun(Provider) ->
@@ -46,7 +46,7 @@ body() ->
                         ]}
                 end, auth_utils:get_auth_providers()),
 
-            ErrorPanelStyle = case wf:q(<<"x">>) of
+            ErrorPanelStyle = case gui_ctx:url_param(<<"x">>) of
                                   undefined -> <<"display: none;">>;
                                   _ -> <<"">>
                               end,

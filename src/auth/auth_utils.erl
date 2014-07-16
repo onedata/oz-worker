@@ -46,8 +46,7 @@ proplist_to_params(List) ->
                                              {Key, Value, no_encode} ->
                                                  {Key, Value};
                                              {Key, Value} ->
-                                                 {gui_str:to_binary(wf:url_encode(Key)),
-                                                     gui_str:to_binary(wf:url_encode(Value))}
+                                                 {gui_str:url_encode(Key), gui_str:url_encode(Value)}
                                          end,
             Suffix = case Acc of
                          <<"">> -> <<"">>;
@@ -126,7 +125,8 @@ validate_login() ->
                                     {ok, #veil_document{uuid = UserIdString}} ->
                                         UserId = list_to_binary(UserIdString),
                                         % The account already exists
-                                        wf:user(UserId),
+                                        gui_ctx:create_session(),
+                                        gui_ctx:set_user_id(UserId),
                                         {redirect, Redirect};
                                     _ ->
                                         % Error
@@ -154,7 +154,7 @@ validate_login() ->
                                                     OAuthAccount
                                                 ]},
                                                 {ok, UserId} = user_logic:create(UserInfo),
-                                                wf:user(UserId),
+                                                gui_ctx:set_user_id(UserId),
                                                 new_user
                                         end
                                 end;
@@ -187,7 +187,7 @@ validate_login() ->
                                                 {error, ?error_auth_connect_email_occupied};
                                             false ->
                                                 % Everything ok, get the user and add new provider info
-                                                UserId = wf:user(),
+                                                UserId = gui_ctx:get_user_id(),
                                                 {ok, #veil_document{record = UserRecord}} = user_logic:get_user(UserId),
                                                 ModificationProplist = merge_connected_accounts(OAuthAccount, UserRecord),
                                                 user_logic:modify(UserId, ModificationProplist),
@@ -235,7 +235,7 @@ generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_tokens(),
     {Token, Time} = generate_uuid(),
 
-    RedirectAfterLogin = case wf:q(<<"x">>) of
+    RedirectAfterLogin = case gui_ctx:url_param(<<"x">>) of
                              undefined -> <<"/">>;
                              TargetPage -> TargetPage
                          end,

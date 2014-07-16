@@ -40,17 +40,17 @@ body() ->
 
 
 event(init) -> ok;
-event(to_login) -> gui_utils:redirect_to_login(false);
+event(to_login) -> gui_jq:redirect_to_login(false);
 event(terminate) -> ok.
 
 
 % This function causes a HTTP rediurect to error page, which displays an error message.
 redirect_with_error(ErrorID) ->
-    gui_jq:redirect(<<"/error?id=", (gui_utils:to_binary(ErrorID))/binary>>).
+    gui_jq:redirect(<<"/error?id=", (gui_str:to_binary(ErrorID))/binary>>).
 
 
 get_reason_and_description() ->
-    IDBinary = gui_utils:to_binary(wf:q(<<"id">>)),
+    IDBinary = gui_ctx:url_param(<<"id">>),
     id_to_reason_and_message(binary_to_atom(IDBinary, latin1)).
 
 

@@ -14,124 +14,48 @@
 -include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-% Functions connected with user's session
--export([get_user_dn/0, storage_defined/0, dn_and_storage_defined/0, can_view_logs/0, can_view_monitoring/0]).
-
-% Saving and retrieving information that does not change during one session
--export([set_user_fullname/1, get_user_fullname/0, set_user_role/1, get_user_role/0]).
-
 % Functions to check for user's session
--export([apply_or_redirect/3, apply_or_redirect/4, maybe_redirect/4]).
+-export([apply_or_redirect/2, apply_or_redirect/3, maybe_redirect/2]).
 
 % Functions to generate page elements
 -export([top_menu/1, top_menu/2, logotype_footer/1, empty_page/0]).
 
 
+%% apply_or_redirect/2
 %% ====================================================================
-%% API functions
-%% ====================================================================
-
-%% get_user_dn/0
-%% ====================================================================
-%% @doc Returns user's DN retrieved from his session state.
+%% @doc Checks if the client has right to do the operation (is logged in and possibly 
+%% has a certificate DN defined). If so, it executes the code.
 %% @end
--spec get_user_dn() -> string().
+-spec apply_or_redirect(Module :: atom, Fun :: atom) -> boolean().
 %% ====================================================================
-get_user_dn() ->
+apply_or_redirect(Module, Fun) ->
+    apply_or_redirect(Module, Fun, []).
+
+%% apply_or_redirect/3
+%% ====================================================================
+%% @doc Checks if the client has right to do the operation (is logged in and possibly 
+%% has a certificate DN defined). If so, it executes the code.
+%% @end
+-spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: list()) -> boolean() | no_return.
+%% ====================================================================
+apply_or_redirect(Module, Fun, Args) ->
     try
-        {ok, UserDoc} = user_logic:get_user({login, gui_ctx:get_user_id()}),
-        case user_logic:get_dn_list(UserDoc) of
-            [] -> undefined;
-            L when is_list(L) -> lists:nth(1, L);
-            _ -> undefined
+        case gui_ctx:user_logged_in() of
+            false ->
+                gui_jq:redirect_to_login(true);
+            true ->
+                erlang:apply(Module, Fun, Args)
         end
-    catch _:_ ->
-        undefined
+    catch Type:Message ->
+        ?error_stacktrace("Error in ~p - ~p:~p", [Module, Type, Message]),
+        page_error:redirect_with_error(?error_internal_server_error),
+        case gui_comet:is_comet_process() of
+            true ->
+                gui_comet:flush();
+            false ->
+                ok
+        end
     end.
-
-
-%% set_user_fullname/1
-%% ====================================================================
-%% @doc Returns user's full name retrieved from his session state.
-%% @end
--spec set_user_fullname(Fullname :: string()) -> string().
-%% ====================================================================
-set_user_fullname(Fullname) ->
-    wf:session(fullname, Fullname).
-
-
-%% get_user_fullname/0
-%% ====================================================================
-%% @doc Returns user's full name retrieved from his session state.
-%% @end
--spec get_user_fullname() -> string().
-%% ====================================================================
-get_user_fullname() ->
-    wf:session(fullname).
-
-
-%% set_user_role/1
-%% ====================================================================
-%% @doc Returns user's role retrieved from his session state.
-%% @end
--spec set_user_role(Role :: atom()) -> atom().
-%% ====================================================================
-set_user_role(Role) ->
-    wf:session(role, Role).
-
-
-%% get_user_role/0
-%% ====================================================================
-%% @doc Returns user's role retrieved from his session state.
-%% @end
--spec get_user_role() -> atom().
-%% ====================================================================
-get_user_role() ->
-    wf:session(role).
-
-
-%% storage_defined/0
-%% ====================================================================
-%% @doc Checks if any storage is defined in the database.
-%% @end
--spec storage_defined() -> boolean().
-%% ====================================================================
-storage_defined() ->
-    case dao_lib:apply(dao_vfs, list_storage, [], 1) of
-        {ok, []} -> false;
-        {ok, L} when is_list(L) -> true;
-        _ -> false
-    end.
-
-
-%% dn_and_storage_defined/0
-%% ====================================================================
-%% @doc Convienience function to check both conditions.
-%% @end
--spec dn_and_storage_defined() -> boolean().
-%% ====================================================================
-dn_and_storage_defined() ->
-    (get_user_dn() /= undefined) and storage_defined().
-
-
-%% can_view_logs/0
-%% ====================================================================
-%% @doc Determines if current user is allowed to view cluster logs.
-%% @end
--spec can_view_logs() -> boolean().
-%% ====================================================================
-can_view_logs() ->
-    get_user_role() /= user.
-
-
-%% can_view_monitoring/0
-%% ====================================================================
-%% @doc Determines if current user is allowed to view cluster monitoring.
-%% @end
--spec can_view_monitoring() -> boolean().
-%% ====================================================================
-can_view_monitoring() ->
-    get_user_role() /= user.
 
 
 %% maybe_redirect/4
@@ -142,67 +66,15 @@ can_view_monitoring() ->
 %% Setting "SaveSourcePage" on true will allow a redirect back from login.
 %% NOTE: Should be called from page:main().
 %% @end
--spec maybe_redirect(NeedLogin :: boolean(), NeedDN :: boolean(), NeedStorage :: boolean(), SaveSourcePage :: boolean()) -> ok.
+-spec maybe_redirect(NeedLogin :: boolean(), SaveSourcePage :: boolean()) -> ok.
 %% ====================================================================
-maybe_redirect(NeedLogin, NeedDN, NeedStorage, SaveSourcePage) ->
+maybe_redirect(NeedLogin, SaveSourcePage) ->
     case NeedLogin and (not gui_ctx:user_logged_in()) of
         true ->
             gui_jq:redirect_to_login(SaveSourcePage),
             true;
         false ->
-            case NeedDN and (vcn_gui_utils:get_user_dn() =:= undefined) of
-                true ->
-                    gui_jq:redirect(<<"/manage_account">>),
-                    true;
-                false ->
-                    case NeedStorage and (not vcn_gui_utils:storage_defined()) of
-                        true ->
-                            gui_jq:redirect(<<"/manage_account">>),
-                            true;
-                        false ->
-                            false
-                    end
-            end
-    end.
-
-
-%% apply_or_redirect/3
-%% ====================================================================
-%% @doc Checks if the client has right to do the operation (is logged in and possibly 
-%% has a certificate DN defined). If so, it executes the code.
-%% @end
--spec apply_or_redirect(Module :: atom, Fun :: atom, NeedDN :: boolean()) -> boolean().
-%% ====================================================================
-apply_or_redirect(Module, Fun, NeedDN) ->
-    apply_or_redirect(Module, Fun, [], NeedDN).
-
-%% apply_or_redirect/4
-%% ====================================================================
-%% @doc Checks if the client has right to do the operation (is logged in and possibly 
-%% has a certificate DN defined). If so, it executes the code.
-%% @end
--spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: list(), NeedDN :: boolean()) -> boolean() | no_return.
-%% ====================================================================
-apply_or_redirect(Module, Fun, Args, NeedDN) ->
-    try
-        case gui_ctx:user_logged_in() of
-            false ->
-                gui_jq:redirect_to_login(true);
-            true ->
-                case NeedDN and (not dn_and_storage_defined()) of
-                    true -> gui_jq:redirect(<<"/manage_account">>);
-                    false -> erlang:apply(Module, Fun, Args)
-                end
-        end
-    catch Type:Message ->
-        ?error_stacktrace("Error in ~p - ~p:~p", [Module, Type, Message]),
-        page_error:redirect_with_error(?error_internal_server_error),
-        case gui_comet:is_comet_process() of
-            true ->
-                gui_comet:flush();
-            false ->
-                skip
-        end
+            false
     end.
 
 
@@ -245,7 +117,8 @@ top_menu(ActiveTabID, SubMenuBody) ->
             ]
         end,
     % Define menu items with ids, so that proper tab can be made active via function parameter
-    % see old_menu_captions()
+    {ok, #veil_document{record = #user{name = Name}}} = user_logic:get_user(gui_ctx:get_user_id()),
+
     MenuCaptions =
         [
             {file_manager_tab, #li{body = [
@@ -259,7 +132,7 @@ top_menu(ActiveTabID, SubMenuBody) ->
     MenuIcons =
         [
             {manage_account_tab, #li{body = #link{style = <<"padding: 18px;">>, title = <<"Manage account">>,
-                url = <<"/manage_account">>, body = [gui_str:unicode_list_to_binary(get_user_fullname()), #span{class = <<"fui-user">>,
+                url = <<"/manage_account">>, body = [Name, #span{class = <<"fui-user">>,
                     style = <<"margin-left: 10px;">>}]}}},
             %{contact_support_tab, #li { body=#link{ style="padding: 18px;", title="Contact & Support",
             %    url="/contact_support", body=#span{ class="fui-question" } } } },
@@ -333,36 +206,3 @@ empty_page() ->
         #br{}, #br{}, #br{}, #br{}, #br{},
         #br{}, #br{}, #br{}, #br{}, #br{}
     ].
-
-
-% old_menu_captions() ->
-% _MenuCaptions =
-%     [
-%         {data_tab, #li { body=[
-%             #link{ style="padding: 18px;", url="/file_manager", body="Data" },
-%             #list { style="top: 37px;", body=[
-%                 #li { body=#link{ url="/file_manager", body="File manager" } },
-%                 #li { body=#link{ url="/shared_files", body="Shared files" } }
-%             ]}
-%         ]}},
-%         {rules_tab, #li { body=[
-%             #link{ style="padding: 18px;", url="/rules_composer", body="Rules" },
-%             #list {  style="top: 37px;", body=[
-%                 #li { body=#link{ url="/rules_composer", body="Rules composer" } },
-%                 #li { body=#link{ url="/rules_viewer", body="Rules viewer" } },
-%                 #li { body=#link{ url="/rules_simulator", body="Rules simulator" } }
-%             ]}
-%         ]}},
-%         {administration_tab, #li { body=[
-%             #link{ style="padding: 18px;", url="/system_state", body="Administration" },
-%             #list {  style="top: 37px;", body=[
-%                 #li { body=#link{ url="/system_state", body="System state" } },
-%                 #li { body=#link{ url="/events", body="Events" } }
-%             ]}
-%         ]}}
-%     ].
-
-
-
-
-
