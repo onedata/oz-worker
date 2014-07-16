@@ -12,13 +12,14 @@
 
 -module(page_logout).
 
+-include_lib("ctool/include/logging.hrl").
 -include("gui/common.hrl").
 
 % n2o API
 -export([main/0, event/1]).
 
 %% Template points to the template file, which will be filled with content
-main() -> #dtl{file = "bare", app = ?App_name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}.
+main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}.
 
 %% Page title
 title() -> <<"Logout page">>.

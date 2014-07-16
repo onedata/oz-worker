@@ -15,6 +15,9 @@
 -include_lib("ctool/include/gui/common.hrl").
 -include("registered_names.hrl").
 
+% Relative suffix of GUI address, leading to privacy policy page
+-define(privacy_policy_url, <<"/privacy_policy">>).
+
 % Macros used as ids of errors that can appear on GUI pages
 -define(error_internal_server_error, internal_server_error).
 
