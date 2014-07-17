@@ -17,15 +17,11 @@
 -include_lib("ibrowse/include/ibrowse.hrl").
 
 %% API
+% Convenience functions
+-export([local_auth_endpoint/0]).
+
 % Authentication flow handling
 -export([validate_login/0]).
-
-% Convenience functions
--export([local_auth_endpoint/0, proplist_to_params/1, fully_qualified_url/1, normalize_email/1]).
-
--define(STATE_TTL, 60).
--define(STATE_ETS, auth_state_ets).
-
 
 %% ====================================================================
 %% API functions
@@ -40,9 +36,20 @@
 -spec local_auth_endpoint() -> binary().
 %% ====================================================================
 local_auth_endpoint() ->
-    <<(auth_utils:fully_qualified_url(gui_ctx:get_requested_hostname()))/binary, ?local_auth_endpoint>>.
+    <<(gui_utils:fully_qualified_url(gui_ctx:get_requested_hostname()))/binary, ?local_auth_endpoint>>.
 
 
+%% validate_login/0
+%% ====================================================================
+%% @doc Function used to validate login by processing a redirect that came from
+%% an OAuth provider. Must be called from n2o context to work. Returns one of the following:
+%% 1. atom 'new_user' if the login has been verified and a new user has been created
+%% 2. {redirect, URL} if the account already exists, to state where the user should be redirected now
+%% 3. {error, Desription} if the validation failed or any other error occurred.
+%% @end
+%% ====================================================================
+-spec validate_login() -> new_user | {redirect, URL :: binary()} | {error, term()}.
+%% ====================================================================
 validate_login() ->
     try
         % Check url params for state parameter
@@ -67,7 +74,7 @@ validate_login() ->
                         {error, ?error_auth_invalid_request};
 
                     {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderID, user_id = UserID, email_list = OriginalEmails, name = Name}} ->
-                        Emails = lists:map(fun(Email) -> auth_utils:normalize_email(Email) end, OriginalEmails),
+                        Emails = lists:map(fun(Email) -> gui_utils:normalize_email(Email) end, OriginalEmails),
                         OAuthAccount = OriginalOAuthAccount#oauth_account{email_list = Emails},
                         case proplists:get_value(connect_account, Props) of
                             false ->
@@ -92,7 +99,6 @@ validate_login() ->
                                                 UserInfo = #user{email_list = Emails, name = Name, connected_accounts = [
                                                     OAuthAccount
                                                 ]},
-                                                ?dump(UserInfo),
                                                 {ok, UserId} = user_logic:create(UserInfo),
                                                 gui_ctx:create_session(),
                                                 gui_ctx:set_user_id(UserId),
@@ -132,6 +138,34 @@ validate_login() ->
             {error, ?error_auth_invalid_request}
     end.
 
+
+%% ====================================================================
+%% Internal functions
+%% ====================================================================
+
+%% is_any_email_in_use/1
+%% ====================================================================
+%% @doc Returns true if any of the given emails is in use.
+%% ====================================================================
+-spec is_any_email_in_use(Emails :: [binary()]) -> true | false.
+%% ====================================================================
+is_any_email_in_use(Emails) ->
+    lists:foldl(
+        fun(Email, Acc) ->
+            case Acc of
+                true -> true;
+                _ -> user_logic:exists({email, Email})
+            end
+        end, false, Emails).
+
+
+%% merge_connected_accounts/2
+%% ====================================================================
+%% @doc Merges user account with information gathered from new connected account.
+%% @end
+%% ====================================================================
+-spec merge_connected_accounts(OAuthAccount :: #oauth_account{}, UserInfo :: #user{}) -> binary().
+%% ====================================================================
 merge_connected_accounts(OAuthAccount, UserInfo) ->
     #user{name = Name, email_list = Emails, connected_accounts = ConnectedAccounts} = UserInfo,
     #oauth_account{name = ProvName, email_list = ConnAccEmails} = OAuthAccount,
@@ -153,79 +187,3 @@ merge_connected_accounts(OAuthAccount, UserInfo) ->
         {email_list, NewEmails},
         {connected_accounts, ConnectedAccounts ++ [OAuthAccount]}
     ].
-
-
-%% proplist_to_params/1
-%% ====================================================================
-%% @doc Converts a proplist to a single x-www-urlencoded binary.
-%% @end
-%% ====================================================================
--spec proplist_to_params([{binary(), binary()}]) -> binary().
-%% ====================================================================
-proplist_to_params(List) ->
-    lists:foldl(
-        fun(Tuple, Acc) ->
-            {KeyEncoded, ValueEncoded} = case Tuple of
-                                             {Key, Value, no_encode} ->
-                                                 {Key, Value};
-                                             {Key, Value} ->
-                                                 {gui_str:url_encode(Key), gui_str:url_encode(Value)}
-                                         end,
-            Suffix = case Acc of
-                         <<"">> -> <<"">>;
-                         _ -> <<Acc/binary, "&">>
-                     end,
-            <<Suffix/binary, KeyEncoded/binary, "=", ValueEncoded/binary>>
-        end, <<"">>, List).
-
-
-%% fully_qualified_url/1
-%% ====================================================================
-%% @doc Converts the given URL to a fully quialified url, without leading www.
-%% @end
-%% ====================================================================
--spec fully_qualified_url(binary()) -> binary().
-%% ====================================================================
-fully_qualified_url(Binary) ->
-    case Binary of
-        <<"https://www.", Rest/binary>> -> <<"https://", Rest/binary>>;
-        <<"https://", _/binary>> -> Binary;
-        <<"www.", Rest/binary>> -> <<"https://", Rest/binary>>;
-        _ -> <<"https://", Binary/binary>>
-    end.
-
-
-%% normalize_email/1
-%% ====================================================================
-%% @doc Performs email normalization by removing all the dots in the local part.
-%% @end
-%% ====================================================================
--spec normalize_email(binary()) -> binary().
-%% ====================================================================
-normalize_email(Email) ->
-    case binary:split(Email, [<<"@">>], [global]) of
-        [Account, Domain] ->
-            <<(binary:replace(Account, <<".">>, <<"">>, [global]))/binary, "@", Domain/binary>>;
-        _ ->
-            Email
-    end.
-
-
-%% ====================================================================
-%% Internal functions
-%% ====================================================================
-
-%% is_any_email_in_use/1
-%% ====================================================================
-%% @doc Creates a new document or updates an existing one. Internal function.
-%% ====================================================================
--spec is_any_email_in_use(Email :: binary()) -> true | false.
-%% ====================================================================
-is_any_email_in_use(Emails) ->
-    lists:foldl(
-        fun(Email, Acc) ->
-            case Acc of
-                true -> true;
-                _ -> user_logic:exists({email, Email})
-            end
-        end, false, Emails).

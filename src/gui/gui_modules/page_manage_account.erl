@@ -243,7 +243,7 @@ event({action, Fun}) ->
     event({action, Fun, []});
 
 event({action, Fun, Args}) ->
-    gr_gui_utils:apply_or_redirect(?MODULE, Fun, Args, false).
+    gr_gui_utils:apply_or_redirect(?MODULE, Fun, Args).
 
 
 connect_account(Provider) ->
@@ -283,7 +283,7 @@ update_email(AddOrRemove) ->
     {ok, #user{email_list = OldEmailList}} = user_logic:get_user(UserId),
     case AddOrRemove of
         {add, submitted} ->
-            NewEmail = auth_utils:normalize_email(gui_ctx:postback_param("new_email_textbox")),
+            NewEmail = gui_utils:normalize_email(gui_ctx:postback_param("new_email_textbox")),
             case user_logic:get_user({email, NewEmail}) of
                 undefined ->
                     case user_logic:modify(UserId, [{email_list, OldEmailList ++ [NewEmail]}]) of
@@ -350,6 +350,7 @@ show_name_edition(Flag) ->
 
 
 redirect_to_veilcluster() ->
+    ?dump(asd),
     UserID = gui_ctx:get_user_id(),
 %%     RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),\
     try

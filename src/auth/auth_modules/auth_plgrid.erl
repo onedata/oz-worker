@@ -37,7 +37,7 @@
 %% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
-        HostName = auth_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
+        HostName = gui_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
         RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_logic:generate_state_token(?MODULE, ConnectAccount))/binary>>,
 
         ParamsProplist = [
@@ -56,7 +56,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"openid.ext1.type.teams">>, <<"http://openid.plgrid.pl/userTeamsXML">>},
             {<<"openid.ext1.if_available">>, <<"dn1,dn2,dn3,teams">>}
         ],
-        Params = auth_utils:proplist_to_params(ParamsProplist),
+        Params = gui_utils:proplist_to_url_params(ParamsProplist),
 
         {ok, <<(plgrid_endpoint())/binary, "?", Params/binary>>}
     catch
@@ -102,7 +102,7 @@ validate_login(ParamsProplist) ->
             end, SignedArgs),
 
         % Create a POST request body
-        Params = auth_utils:proplist_to_params(NewParamsProplist),
+        Params = gui_utils:proplist_to_url_params(NewParamsProplist),
         RequestBody = <<"openid.mode=check_authentication&", Params/binary>>,
 
         % Send validation request
