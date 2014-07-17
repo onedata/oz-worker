@@ -14,6 +14,7 @@
 
 -behaviour(dao_external_behaviour).
 
+-include_lib("ctool/include/logging.hrl").
 -include_lib("dao/dao_external.hrl").
 -include("registered_names.hrl").
 
@@ -86,6 +87,6 @@ sequential_synch_call(Module,Function,Args) ->
         gen_server:call(?Dao,{get(protocol_version),Module,Function,Args},?synch_call_timeout)
     catch
         _Type:Error  ->
-            lager:error("Sequential synch call ~p:~p(~p) error: ~p",[Module,Function,Args,Error]),
+            ?error("Sequential synch call ~p:~p(~p) error: ~p",[Module,Function,Args,Error]),
             {error,Error}
     end.

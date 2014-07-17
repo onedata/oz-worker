@@ -14,13 +14,13 @@
 -behaviour(application).
 
 %% Includes
+-include_lib("ctool/include/logging.hrl").
 -include("rest_config.hrl").
 -include("gui_config.hrl").
 -include("registered_names.hrl").
 
 %% Application callbacks
--export([start/2,
-	stop/1]).
+-export([start/2, stop/1]).
 
 %%%===================================================================
 %%% Application callbacks
@@ -36,25 +36,25 @@
 %% top supervisor of the tree.
 %% @end
 -spec(start(StartType :: normal | {takeover, node()} | {failover, node()},
-	StartArgs :: term()) ->
-	{ok, pid()} |
-	{ok, pid(), State :: term()} |
-	{error, Reason :: term()}).
+    StartArgs :: term()) ->
+    {ok, pid()} |
+    {ok, pid(), State :: term()} |
+    {error, Reason :: term()}).
 %% ===================================================================
 start(_StartType, _StartArgs) ->
-    {RestAns,_}=start_rest(),
-    {GuiAns,_}=start_n2o(),
-    case {RestAns,GuiAns} of
-        {ok,ok} ->
+    {RestAns, _} = start_rest(),
+    {GuiAns, _} = start_n2o(),
+    case {RestAns, GuiAns} of
+        {ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
                     {ok, Pid};
                 Error ->
                     Error
             end;
-        {error,_} ->
+        {error, _} ->
             {error, cannot_start_rest};
-        {_,error} ->
+        {_, error} ->
             {error, cannot_start_gui}
     end.
 
@@ -68,10 +68,10 @@ start(_StartType, _StartArgs) ->
 -spec(stop(State :: term()) -> term()).
 %% ===================================================================
 stop(_State) ->
-	cowboy:stop_listener(?rest_listener),
-	cowboy:stop_listener(?gui_https_listener),
+    cowboy:stop_listener(?rest_listener),
+    cowboy:stop_listener(?gui_https_listener),
     stop_rest(),
-	ok.
+    ok.
 
 %%%===================================================================
 %%% Internal functions
@@ -80,13 +80,13 @@ stop(_State) ->
 %% start_rest/0
 %% ===================================================================
 %% @doc Starts cowboy with rest api
--spec start_rest() -> {ok,pid()} | {error,any()}.
+-spec start_rest() -> {ok, pid()} | {error, any()}.
 %% ===================================================================
 start_rest() ->
     try
         % Get rest config
-        {ok,RestPort} = application:get_env(?APP_Name,rest_port),
-        {ok,RestHttpsAcceptors} = application:get_env(?APP_Name,rest_https_acceptors),
+        {ok, RestPort} = application:get_env(?APP_Name, rest_port),
+        {ok, RestHttpsAcceptors} = application:get_env(?APP_Name, rest_https_acceptors),
 
         % Get cert paths
         {ok, GRPCADir} = application:get_env(?APP_Name, grpca_dir),
@@ -108,20 +108,20 @@ start_rest() ->
         ]),
 
         cowboy:start_https(?rest_listener, RestHttpsAcceptors,
-        [
-            {port, RestPort},
-            {cacertfile, grpca:cacert_path(GRPCADir)},
-            {certfile, RestCertFile},
-            {keyfile, RestKeyFile},
-            {verify, verify_peer}
-        ],
-        [
-            {env, [{dispatch, Dispatch}]}
-        ])
+            [
+                {port, RestPort},
+                {cacertfile, grpca:cacert_path(GRPCADir)},
+                {certfile, RestCertFile},
+                {keyfile, RestKeyFile},
+                {verify, verify_peer}
+            ],
+            [
+                {env, [{dispatch, Dispatch}]}
+            ])
     catch
-        _Type:Error  ->
-            lager:error("Could not start rest, error: ~p",[Error]),
-            {error,Error}
+        _Type:Error ->
+            ?error("Could not start rest, error: ~p", [Error]),
+            {error, Error}
     end.
 
 stop_rest() ->
@@ -131,40 +131,42 @@ stop_rest() ->
 %% start_n2o/0
 %% ===================================================================
 %% @doc Starts n2o server
--spec start_n2o() -> {ok,pid()} | {error,any()}.
+-spec start_n2o() -> {ok, pid()} | {error, any()}.
 %% ===================================================================
 start_n2o() ->
     try
         % Get gui config
-        {ok,GuiPort} = application:get_env(?APP_Name,gui_port),
-        {ok,GuiHttpsAcceptors} = application:get_env(?APP_Name,gui_https_acceptors),
-        {ok,GuiSocketTimeout} = application:get_env(?APP_Name,gui_socket_timeout),
-        {ok,GuiMaxKeepalive} = application:get_env(?APP_Name,gui_max_keepalive),
+        {ok, GuiPort} = application:get_env(?APP_Name, gui_port),
+        {ok, GuiHttpsAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),
+        {ok, GuiSocketTimeout} = application:get_env(?APP_Name, gui_socket_timeout),
+        {ok, GuiMaxKeepalive} = application:get_env(?APP_Name, gui_max_keepalive),
         % Get cert paths
-        {ok,CaCertFile} = application:get_env(?APP_Name,ca_cert_file),
-        {ok,CertFile} = application:get_env(?APP_Name,cert_file),
-        {ok,KeyFile} = application:get_env(?APP_Name,key_file),
+        {ok, CaCertFile} = application:get_env(?APP_Name, ca_cert_file),
+        {ok, CertFile} = application:get_env(?APP_Name, cert_file),
+        {ok, KeyFile} = application:get_env(?APP_Name, key_file),
 
-        % Set envs needed by n2o
-        % Port - gui port
-        ok = application:set_env(n2o, port, GuiPort),
-        % Transition port - the same as gui port
-        ok = application:set_env(n2o, transition_port, GuiPort),
-        % Custom route handler
-        ok = application:set_env(n2o, route, gui_routes),
+        % Setup GUI dispatch opts for cowboy
+        GUIDispatch = [
+            % Matching requests will be redirected to the same address without leading 'www.'
+            % Cowboy does not have a mechanism to match every hostname starting with 'www.'
+            % This will match hostnames with up to 6 segments
+            % e. g. www.seg2.seg3.seg4.seg5.com
+            {"www.:_[.:_[.:_[.:_[.:_]]]]", [{'_', redirect_handler, []}]},
+            % Proper requests are routed to handler modules
+            {'_', static_dispatches(?gui_static_root, ?static_paths) ++ [
+                {"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
+                {'_', n2o_cowboy, []}
+            ]}
+        ],
 
+        % Create ets tables and set envs needed by n2o
+        gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module),
+
+        % Initilize auth handler
         auth_utils:load_auth_config(),
         auth_utils:init_state_memory(),
 
-        Dispatch = cowboy_router:compile(
-            [{'_',
-                    static_dispatches(?gui_static_root, ?static_paths) ++ [
-                    {"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
-                    {'_', n2o_cowboy, []}
-                ]}
-            ]),
-
-        cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
+        {ok, _} = cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
             [
                 {port, GuiPort},
                 {cacertfile, CaCertFile},
@@ -172,26 +174,21 @@ start_n2o() ->
                 {keyfile, KeyFile}
             ],
             [
-                {env, [{dispatch, Dispatch}]},
+                {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
                 {max_keepalive, GuiMaxKeepalive},
-                {timeout, GuiSocketTimeout}
+                {timeout, GuiSocketTimeout},
+                % On every request, add headers that improve security to the response
+                {onrequest, fun gui_utils:onrequest_adjust_headers/1}
             ])
     catch
-        _Type:Error  ->
-            lager:error("Could not start gui, error: ~p",[Error]),
-            {error,Error}
+        _Type:Error ->
+            ?error("Could not start gui, error: ~p", [Error]),
+            {error, Error}
     end.
 
-%% static_dispatches/2
-%% ===================================================================
-%% @doc Generates static file routing for cowboy.
--spec static_dispatches(DocRoot :: string(),StaticPaths :: list(string())) -> {ok,pid()}.
-%% ===================================================================
+
+%% Generates static file routing for cowboy.
 static_dispatches(DocRoot, StaticPaths) ->
-	_StaticDispatches = lists:map(fun(Dir) ->
-		Opts = [
-			{mimetypes, {fun mimetypes:path_to_mimes/2, default}},
-			{directory, DocRoot ++ Dir}
-		],
-		{Dir ++ "[...]", cowboy_static, Opts}
-	end, StaticPaths).
+    _StaticDispatches = lists:map(fun(Dir) ->
+        {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
+    end, StaticPaths).

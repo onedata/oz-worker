@@ -22,7 +22,7 @@
     provider_exists/1]).
 -export([save/1]).
 -export([space/1, user/1, group/1, token/1, provider/1]).
--export([space_doc/1, user_doc/1, group_doc/1, token_doc/1, provider_doc/1]).
+-export([space_doc/1, user_doc/1, user_doc_from_view/1, group_doc/1, token_doc/1, provider_doc/1]).
 -export([user_remove/1, space_remove/1, group_remove/1, token_remove/1,
     provider_remove/1]).
 
@@ -191,6 +191,17 @@ space_doc(Key) ->
 %% ====================================================================
 user_doc(Key) ->
     #veil_document{record = #user{}} = UserDoc = get_doc(Key, dao_users, get_user),
+    UserDoc.
+
+
+%% user_doc_from_view/1
+%% ====================================================================
+%% @doc Returns a user document from the database, querying a view.
+%% ====================================================================
+-spec user_doc_from_view(Key :: {email, Email :: binary()}) -> user_doc() | no_return().
+%% ====================================================================
+user_doc_from_view(Key) ->
+    {ok, #veil_document{record = #user{}} = UserDoc} = dao_lib:apply(dao_users, get_user, [Key], 1),
     UserDoc.
 
 

@@ -149,11 +149,12 @@ validate_login() ->
                                                 % At least one email is in database, cannot create account
                                                 {error, ?error_auth_new_email_occupied};
                                             false ->
-                                                % All email are available, proceed
+                                                % All emails are available, proceed
                                                 UserInfo = #user{email_list = Emails, name = Name, connected_accounts = [
                                                     OAuthAccount
                                                 ]},
                                                 {ok, UserId} = user_logic:create(UserInfo),
+                                                gui_ctx:create_session(),
                                                 gui_ctx:set_user_id(UserId),
                                                 new_user
                                         end

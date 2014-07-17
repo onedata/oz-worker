@@ -47,9 +47,9 @@ get_user(Key) ->
     try
     case Key of
         Bin when is_binary(Bin) ->
-            logic_helper:user_doc(Key);
+            dao_adapter:user_doc(Key);
         Key ->
-            logic_helper:user_doc_from_view(Key)
+            dao_adapter:user_doc_from_view(Key)
     end
 catch T:M -> ?error_stacktrace("~p:~p", [T, M]) end.
 

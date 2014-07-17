@@ -19,6 +19,10 @@
 
 % n2o API
 -export([main/0, event/1]).
+% Postback functions and other
+-export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
+-export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
+-export([redirect_to_veilcluster/0]).
 
 %% Template points to the template file, which will be filled with content
 main() ->
@@ -45,7 +49,7 @@ body() ->
 
 
 main_table() ->
-    User = get_user_record(gui_ctx:get_user_id()),
+    #veil_document{record = #user{} = User} = user_logic:get_user(gui_ctx:get_user_id()),
     #table{style = <<"border-width: 0px; width: auto;">>, body = [
         #tbody{body = [
             #tr{cells = [
@@ -250,7 +254,7 @@ connect_account(Provider) ->
 
 disconnect_account_prompt(Provider) ->
     % Get user info doc
-    #user{connected_accounts = ConnectedAccounts} = get_user_record(gui_ctx:get_user_id()),
+    #veil_document{record = #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(gui_ctx:get_user_id()),
     % Get provider name
     ProviderName = auth_utils:get_provider_name(Provider),
     case length(ConnectedAccounts) of
@@ -267,7 +271,7 @@ disconnect_account_prompt(Provider) ->
 disconnect_account(Provider) ->
     UserId = gui_ctx:get_user_id(),
     % Find the user, remove provider info from his user info doc and reload the page
-    #user{connected_accounts = ConnectedAccounts} = get_user_record(UserId),
+    #veil_document{record = #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(UserId),
     OAuthAccount = find_connected_account(Provider, ConnectedAccounts),
     user_logic:modify(UserId, [{connected_accounts, ConnectedAccounts -- [OAuthAccount]}]),
     gui_jq:redirect(<<"/manage_account">>).
@@ -276,11 +280,11 @@ disconnect_account(Provider) ->
 % Update email list - add or remove one and save new user doc
 update_email(AddOrRemove) ->
     UserId = gui_ctx:get_user_id(),
-    #user{email_list = OldEmailList} = get_user_record(UserId),
+    #veil_document{record = #user{email_list = OldEmailList}} = user_logic:get_user(UserId),
     case AddOrRemove of
         {add, submitted} ->
             NewEmail = auth_utils:normalize_email(gui_ctx:postback_param ("new_email_textbox")),
-            case get_user_record({email, NewEmail}) of
+            case user_logic:get_user({email, NewEmail}) of
                 undefined ->
                     user_logic:modify(UserId, [{email_list, OldEmailList ++ [NewEmail]}]);
                 _ ->
@@ -347,10 +351,3 @@ redirect_to_veilcluster() ->
     end.
 %%     <<"veilfsdev.com/openid_login?authorization_code=", Rest/binary>> = _RedirectURL,
 %%     gui_jq:redirect(<<"https://onedata.org/auth_endpoint?authorization_code=", Rest/binary>>).
-
-
-get_user_record(Key) ->
-    case user_logic:get_user(Key) of
-        {ok, #veil_document{record = UserRecord}} -> UserRecord;
-        _ -> undefined
-    end.

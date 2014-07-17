@@ -12,6 +12,7 @@
 
 -module(gr_gui_utils).
 -include("gui/common.hrl").
+-include("dao/dao_types.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 % Functions to check for user's session
@@ -23,8 +24,7 @@
 
 %% apply_or_redirect/2
 %% ====================================================================
-%% @doc Checks if the client has right to do the operation (is logged in and possibly 
-%% has a certificate DN defined). If so, it executes the code.
+%% @doc Checks if the client has right to do the operation (is logged in). If so, it executes the code.
 %% @end
 -spec apply_or_redirect(Module :: atom, Fun :: atom) -> boolean().
 %% ====================================================================
@@ -33,8 +33,7 @@ apply_or_redirect(Module, Fun) ->
 
 %% apply_or_redirect/3
 %% ====================================================================
-%% @doc Checks if the client has right to do the operation (is logged in and possibly 
-%% has a certificate DN defined). If so, it executes the code.
+%% @doc Checks if the client has right to do the operation (is logged in). If so, it executes the code.
 %% @end
 -spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: list()) -> boolean() | no_return.
 %% ====================================================================
@@ -97,27 +96,8 @@ top_menu(ActiveTabID) ->
 -spec top_menu(ActiveTabID :: any(), SubMenuBody :: any()) -> list().
 %% ====================================================================
 top_menu(ActiveTabID, SubMenuBody) ->
-    % Tab, that will be displayed optionally
-    PageCaptions =
-        case can_view_monitoring() of
-            false -> [];
-            true -> [{monitoring_tab, #li{body = [
-                #link{style = <<"padding: 18px;">>, url = <<"/monitoring">>, body = <<"Monitoring">>}
-            ]}}]
-        end ++
-        case can_view_logs() of
-            false -> [];
-            true -> [
-                {cluster_logs_tab, #li{body = [
-                    #link{style = <<"padding: 18px;">>, url = <<"/cluster_logs">>, body = <<"Cluster logs">>}
-                ]}},
-                {client_logs_tab, #li{body = [
-                    #link{style = <<"padding: 18px;">>, url = <<"/client_logs">>, body = <<"Client logs">>}
-                ]}}
-            ]
-        end,
     % Define menu items with ids, so that proper tab can be made active via function parameter
-    {ok, #veil_document{record = #user{name = Name}}} = user_logic:get_user(gui_ctx:get_user_id()),
+    #veil_document{record = #user{name = Name}} = user_logic:get_user(gui_ctx:get_user_id()),
 
     MenuCaptions =
         [
@@ -127,7 +107,7 @@ top_menu(ActiveTabID, SubMenuBody) ->
             {shared_files_tab, #li{body = [
                 #link{style = <<"padding: 18px;">>, url = <<"/shared_files">>, body = <<"Shared files">>}
             ]}}
-        ] ++ PageCaptions,
+        ],
 
     MenuIcons =
         [
