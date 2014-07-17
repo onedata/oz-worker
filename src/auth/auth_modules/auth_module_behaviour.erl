@@ -18,7 +18,7 @@
 %% ====================================================================
 %% @doc Returns full URL, where the user will be redirected for authorization.
 %% For the authentication flow to work, the request must include a state
-%% token, which must be generated with auth_utils:generate_state_token/2.
+%% token, which must be generated with auth_logic:generate_state_token/2.
 %% This allows to store some information between the authentication request and
 %% redirect back from the provider. The information is:
 %% - where the user should be redirected after login

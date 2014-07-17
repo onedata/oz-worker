@@ -15,12 +15,15 @@
 -define(AUTH_CODE, aUTH_CODE).
 -define(ACCESS_TOKEN, access_token).
 -define(REFRESH_TOKEN, refresh_token).
--define(TABLES, [?AUTH_CODE, ?ACCESS_TOKEN, ?REFRESH_TOKEN]).
+-define(STATE_TOKEN, state_token).
+
+-define(TABLES, [?AUTH_CODE, ?ACCESS_TOKEN, ?REFRESH_TOKEN, ?STATE_TOKEN]).
 
 %% @todo: config
 -define(AUTH_CODE_EXPIRATION_SECS, 600).
 -define(ACCESS_TOKEN_EXPIRATION_SECS, 36000).
 -define(REFRESH_TOKEN_EXPIRATION_SECS, 36000).
+-define(STATE_TOKEN_EXPIRATION_SECS, 60).
 -define(ISSUER_URL, "https://onedata.org").
 
 -include_lib("ctool/include/logging.hrl").
@@ -28,6 +31,9 @@
 
 %% API
 -export([start/0, stop/0, get_redirection_uri/2, grant_token/2, validate_token/2]).
+
+% Handling state tokens
+-export([generate_state_token/2, lookup_state_token/1, clear_expired_tokens/0]).
 
 
 start() ->
@@ -61,7 +67,7 @@ grant_token(ProviderId, AuthCode) ->
     ets:insert(?ACCESS_TOKEN, {AccessToken, {ProviderId, UserId, AccessTokenExpirationTime}}),
     ets:insert(?REFRESH_TOKEN, {RefreshToken, {ProviderId, UserId, RefreshTokenExpirationTime}}),
 
-    {ok, #veil_document{record = #user{name = Name, email_list = Emails}}} = user_logic:get_user(UserId),
+    {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
     EmailsList = lists:map(fun(Email) -> {struct, [{email, Email}]} end, Emails),
     [
         {access_token, AccessToken},
@@ -118,3 +124,62 @@ random_token() ->
 now_s() ->
     {MegaSecs, Secs, _} = erlang:now(),
     MegaSecs * 1000000 + Secs.
+
+
+%% generate_state_token/2
+%% ====================================================================
+%% @doc Generates a state token and retuns it. In the process, it stores the token
+%% and associates some login info, that can be later retrieved given the token.
+%% For example, where to redirect the user after login.
+%% @end
+-spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> [tuple()] | error.
+%% ====================================================================
+generate_state_token(HandlerModule, ConnectAccount) ->
+    clear_expired_tokens(),
+    Token = random_token(),
+    {M, S, N} = now(),
+    Time = M * 1000000000000 + S * 1000000 + N,
+
+    RedirectAfterLogin = case gui_ctx:url_param(<<"x">>) of
+                             undefined -> <<"/">>;
+                             TargetPage -> TargetPage
+                         end,
+
+    StateInfo = [
+        {module, HandlerModule},
+        {connect_account, ConnectAccount},
+        {redirect_after_login, RedirectAfterLogin}
+    ],
+
+    ets:insert(?STATE_TOKEN, {Token, Time, StateInfo}),
+    Token.
+
+
+%% lookup_state_token/1
+%% ====================================================================
+%% @doc Checks if the given state token exists and returns login info
+%% associated with it or error otherwise.
+%% @end
+-spec lookup_state_token(Token :: binary()) -> [tuple()] | error.
+%% ====================================================================
+lookup_state_token(Token) ->
+    clear_expired_tokens(),
+    case ets:lookup(?STATE_TOKEN, Token) of
+        [{Token, Time, LoginInfo}] ->
+            ets:delete_object(?STATE_TOKEN, {Token, Time, LoginInfo}),
+            LoginInfo;
+        _ ->
+            error
+    end.
+
+
+%% clear_expired_tokens/0
+%% ====================================================================
+%% @doc Removes all state tokens that are no longer valid from ETS.
+%% @end
+-spec clear_expired_tokens() -> ok.
+%% ====================================================================
+clear_expired_tokens() ->
+    {M, S, N} = now(),
+    Time = M * 1000000000000 + S * 1000000 + N,
+    ets:select_delete(?STATE_TOKEN, [{{'$1', '$2', '$3'}, [{'<', '$2', Time - (?STATE_TOKEN_EXPIRATION_SECS * 1000000)}], ['$_']}]).

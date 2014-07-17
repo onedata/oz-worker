@@ -37,8 +37,8 @@
 %% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
-        HostName = auth_utils:fully_qualified_url(gui_utils:get_requested_hostname()),
-        RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_utils:generate_state_token(?MODULE, ConnectAccount))/binary>>,
+        HostName = auth_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
+        RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_logic:generate_state_token(?MODULE, ConnectAccount))/binary>>,
 
         ParamsProplist = [
             {<<"openid.mode">>, <<"checkid_setup">>},
@@ -95,7 +95,7 @@ validate_login(ParamsProplist) ->
         NewParamsProplist = lists:map(
             fun(Key) ->
                 Value = case proplists:get_value(Key, ParamsProplist) of
-                            undefined -> throw("Value for " ++ gui_utils:to_list(Key) ++ " not found");
+                            undefined -> throw("Value for " ++ gui_str:to_list(Key) ++ " not found");
                             Val -> Val
                         end,
                 {Key, Value}
@@ -126,7 +126,7 @@ validate_login(ParamsProplist) ->
             end,
 
         % TODO Unused
-        _Teams = parse_teams(gui_utils:to_list(get_signed_param(<<"openid.ext1.value.teams">>, ParamsProplist, SignedArgs))),
+        _Teams = parse_teams(gui_str:to_list(get_signed_param(<<"openid.ext1.value.teams">>, ParamsProplist, SignedArgs))),
         DN1 = get_signed_param(<<"openid.ext1.value.dn1">>, ParamsProplist, SignedArgs),
         DN2 = get_signed_param(<<"openid.ext1.value.dn2">>, ParamsProplist, SignedArgs),
         DN3 = get_signed_param(<<"openid.ext1.value.dn3">>, ParamsProplist, SignedArgs),

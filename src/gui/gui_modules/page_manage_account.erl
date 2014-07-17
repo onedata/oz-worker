@@ -49,7 +49,7 @@ body() ->
 
 
 main_table() ->
-    #veil_document{record = #user{} = User} = user_logic:get_user(gui_ctx:get_user_id()),
+    {ok, #user{} = User} = user_logic:get_user(gui_ctx:get_user_id()),
     #table{style = <<"border-width: 0px; width: auto;">>, body = [
         #tbody{body = [
             #tr{cells = [
@@ -254,7 +254,7 @@ connect_account(Provider) ->
 
 disconnect_account_prompt(Provider) ->
     % Get user info doc
-    #veil_document{record = #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(gui_ctx:get_user_id()),
+    {ok, #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(gui_ctx:get_user_id()),
     % Get provider name
     ProviderName = auth_utils:get_provider_name(Provider),
     case length(ConnectedAccounts) of
@@ -271,7 +271,7 @@ disconnect_account_prompt(Provider) ->
 disconnect_account(Provider) ->
     UserId = gui_ctx:get_user_id(),
     % Find the user, remove provider info from his user info doc and reload the page
-    #veil_document{record = #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(UserId),
+    {ok, #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(UserId),
     OAuthAccount = find_connected_account(Provider, ConnectedAccounts),
     user_logic:modify(UserId, [{connected_accounts, ConnectedAccounts -- [OAuthAccount]}]),
     gui_jq:redirect(<<"/manage_account">>).
@@ -280,18 +280,24 @@ disconnect_account(Provider) ->
 % Update email list - add or remove one and save new user doc
 update_email(AddOrRemove) ->
     UserId = gui_ctx:get_user_id(),
-    #veil_document{record = #user{email_list = OldEmailList}} = user_logic:get_user(UserId),
+    {ok, #user{email_list = OldEmailList}} = user_logic:get_user(UserId),
     case AddOrRemove of
         {add, submitted} ->
-            NewEmail = auth_utils:normalize_email(gui_ctx:postback_param ("new_email_textbox")),
+            NewEmail = auth_utils:normalize_email(gui_ctx:postback_param("new_email_textbox")),
             case user_logic:get_user({email, NewEmail}) of
                 undefined ->
-                    user_logic:modify(UserId, [{email_list, OldEmailList ++ [NewEmail]}]);
+                    case user_logic:modify(UserId, [{email_list, OldEmailList ++ [NewEmail]}]) of
+                        ok -> ok;
+                        _ -> gui_jq:wire(#alert{text = <<"Error - cannot update email list.">>})
+                    end;
                 _ ->
                     gui_jq:wire(#alert{text = <<"This e-mail address is in use.">>})
             end;
         {remove, Email} ->
-            user_logic:modify(UserId, [{email_list, OldEmailList -- [Email]}])
+            case user_logic:modify(UserId, [{email_list, OldEmailList -- [Email]}]) of
+                ok -> ok;
+                _ -> gui_jq:wire(#alert{text = <<"Error - cannot update email list.">>})
+            end
     end,
     gui_jq:update("main_table", main_table()).
 
@@ -299,8 +305,11 @@ update_email(AddOrRemove) ->
 % Update email list - add or remove one and save new user doc
 update_name() ->
     GlobalID = gui_ctx:get_user_id(),
-    NewName = gui_ctx:postback_param ("new_name_textbox"),
-    user_logic:modify(GlobalID, [{name, NewName}]),
+    NewName = gui_ctx:postback_param("new_name_textbox"),
+    case user_logic:modify(GlobalID, [{name, NewName}]) of
+        ok -> ok;
+        _ -> gui_jq:wire(#alert{text = <<"Error - cannot update name.">>})
+    end,
     gui_jq:update("main_table", main_table()).
 
 

@@ -97,7 +97,7 @@ top_menu(ActiveTabID) ->
 %% ====================================================================
 top_menu(ActiveTabID, SubMenuBody) ->
     % Define menu items with ids, so that proper tab can be made active via function parameter
-    #veil_document{record = #user{name = Name}} = user_logic:get_user(gui_ctx:get_user_id()),
+    {ok, #user{name = Name}} = user_logic:get_user(gui_ctx:get_user_id()),
 
     MenuCaptions =
         [

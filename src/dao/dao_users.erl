@@ -33,7 +33,7 @@
 -spec save_user(User :: user_info() | user_doc()) -> {ok, user_id()} | {error, any()} | no_return().
 %% ====================================================================
 save_user(#user{} = User) ->
-	save_user(#veil_document{record = User});
+    save_user(#veil_document{record = User});
 save_user(#veil_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(UUID) ->
     dao_records:save_record(UserDoc).
 
@@ -43,8 +43,8 @@ save_user(#veil_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(
 %% @doc Removes user from DB
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
--spec remove_user(UserId:: uuid()) ->
-	ok | {error, any()} | no_return().
+-spec remove_user(UserId :: uuid()) ->
+    ok | {error, any()} | no_return().
 %% ====================================================================
 remove_user(UserId) ->
     dao_records:remove_record(UserId).
@@ -66,7 +66,8 @@ exist_user(UserId) ->
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
--spec get_user(UserId :: uuid()) -> {ok, user_doc()} | {error, any()} | no_return().
+-spec get_user(Key) -> {ok, user_doc()} | {error, any()} | no_return() when
+    Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
 %% ====================================================================
 get_user(UUID) when is_list(UUID) ->
     dao_external:set_db(?USERS_DB_NAME),

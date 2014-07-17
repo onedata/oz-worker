@@ -40,7 +40,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"scope">>, <<"user,user:email">>},
-            {<<"state">>, auth_utils:generate_state_token(?MODULE, ConnectAccount)}
+            {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
         Params = auth_utils:proplist_to_params(ParamsProplist),
 

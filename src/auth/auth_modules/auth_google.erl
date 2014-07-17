@@ -41,7 +41,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"response_type">>, <<"code">>},
             {<<"scope">>, <<"openid email profile">>},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
-            {<<"state">>, auth_utils:generate_state_token(?MODULE, ConnectAccount)}
+            {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
         Params = auth_utils:proplist_to_params(ParamsProplist),
 
