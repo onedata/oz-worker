@@ -14,6 +14,7 @@
 %% Includes
 -include("dao/dao_providers.hrl").
 -include("dao/dao_types.hrl").
+-include("dao/dao_external.hrl").
 
 %% API
 -export([save_provider/1, remove_provider/1, exist_provider/1, get_provider/1]).
@@ -31,6 +32,7 @@
 save_provider(#provider{} = Provider) ->
 	save_provider(#veil_document{record = Provider});
 save_provider(#veil_document{record = #provider{}, uuid = UUID} = ProviderDoc) when is_list(UUID) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:save_record(ProviderDoc).
 
 
@@ -43,6 +45,7 @@ save_provider(#veil_document{record = #provider{}, uuid = UUID} = ProviderDoc) w
 	ok | {error, any()} | no_return().
 %% ====================================================================
 remove_provider(ProviderId) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:remove_record(ProviderId).
 
 %% exist_provider/1
@@ -53,6 +56,7 @@ remove_provider(ProviderId) ->
 -spec exist_provider(ProviderId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_provider(ProviderId) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:exist_record(ProviderId).
 
 %% get_provider/1
@@ -65,4 +69,5 @@ exist_provider(ProviderId) ->
 -spec get_provider(ProviderId :: uuid()) -> {ok, provider_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_provider(ProviderId) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     {ok, #veil_document{record = #provider{}}} = dao_records:get_record(ProviderId).

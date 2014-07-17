@@ -14,6 +14,7 @@
 %% Includes
 -include("dao/dao_spaces.hrl").
 -include("dao/dao_types.hrl").
+-include("dao/dao_external.hrl").
 
 %% API
 -export([save_space/1, remove_space/1, exist_space/1, get_space/1]).
@@ -31,6 +32,7 @@
 save_space(#space{} = Space) ->
 	save_space(#veil_document{record = Space});
 save_space(#veil_document{record = #space{}, uuid = UUID} = SpaceDoc) when is_list(UUID) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:save_record(SpaceDoc).
 
 
@@ -43,6 +45,7 @@ save_space(#veil_document{record = #space{}, uuid = UUID} = SpaceDoc) when is_li
 	ok | {error, any()} | no_return().
 %% ====================================================================
 remove_space(SpaceId) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:remove_record(SpaceId).
 
 %% exist_space/1
@@ -53,6 +56,7 @@ remove_space(SpaceId) ->
 -spec exist_space(SpaceId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_space(SpaceId) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:exist_record(SpaceId).
 
 %% get_space/1
@@ -65,4 +69,5 @@ exist_space(SpaceId) ->
 -spec get_space(SpaceId :: uuid()) -> {ok, space_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_space(SpaceId) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     {ok, #veil_document{record = #space{}}} = dao_records:get_record(SpaceId).

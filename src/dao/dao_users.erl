@@ -35,6 +35,7 @@
 save_user(#user{} = User) ->
     save_user(#veil_document{record = User});
 save_user(#veil_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(UUID) ->
+    dao_external:set_db(?USERS_DB_NAME),
     dao_records:save_record(UserDoc).
 
 
@@ -47,6 +48,7 @@ save_user(#veil_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(
     ok | {error, any()} | no_return().
 %% ====================================================================
 remove_user(UserId) ->
+    dao_external:set_db(?USERS_DB_NAME),
     dao_records:remove_record(UserId).
 
 %% exist_user/1
@@ -57,6 +59,7 @@ remove_user(UserId) ->
 -spec exist_user(UserId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_user(UserId) ->
+    dao_external:set_db(?USERS_DB_NAME),
     dao_records:exist_record(UserId).
 
 %% get_user/1

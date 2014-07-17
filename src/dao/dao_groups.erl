@@ -14,6 +14,7 @@
 %% Includes
 -include("dao/dao_groups.hrl").
 -include("dao/dao_types.hrl").
+-include("dao/dao_external.hrl").
 
 %% API
 -export([save_group/1, remove_group/1, exist_group/1, get_group/1]).
@@ -31,6 +32,7 @@
 save_group(#user_group{} = Group) ->
 	save_group(#veil_document{record = Group});
 save_group(#veil_document{record = #user_group{}, uuid = UUID} = GroupDoc) when is_list(UUID) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
 	dao_records:save_record(GroupDoc).
 
 
@@ -43,6 +45,7 @@ save_group(#veil_document{record = #user_group{}, uuid = UUID} = GroupDoc) when 
 	ok | {error, any()} | no_return().
 %% ====================================================================
 remove_group(GroupId) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:remove_record(GroupId).
 
 %% exist_group/1
@@ -53,6 +56,7 @@ remove_group(GroupId) ->
 -spec exist_group(GroupId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_group(GroupId) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:exist_record(GroupId).
 
 %% get_group/1
@@ -65,4 +69,5 @@ exist_group(GroupId) ->
 -spec get_group(GroupId :: uuid()) -> {ok, group_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_group(GroupId) ->
+    dao_external:set_db(?SYSTEM_DB_NAME),
     {ok, #veil_document{record = #user_group{}}} = dao_records:get_record(GroupId).

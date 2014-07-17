@@ -354,7 +354,7 @@ redirect_to_veilcluster() ->
     UserID = gui_ctx:get_user_id(),
 %%     RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),\
     try
-        RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fa9242bcdc9cb0a1bfe72d3df9054d">>),
+        RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fe6b67e13d752d9d8d01312c20df7a">>),
         gui_jq:redirect(RedirectURL)
     catch T:M ->
         ?error_stacktrace("tutut ~p:~p", [T, M])
