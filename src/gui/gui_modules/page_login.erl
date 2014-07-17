@@ -32,10 +32,10 @@ body() ->
         false ->
             Buttons = lists:map(
                 fun(Provider) ->
-                    ButtonText = <<"Sign in with ", (auth_utils:get_provider_name(Provider))/binary>>,
-                    ButtonIcon = auth_utils:get_provider_button_icon(Provider),
-                    ButtonColor = auth_utils:get_provider_button_color(Provider),
-                    HandlerModule = auth_utils:get_provider_module(Provider),
+                    ButtonText = <<"Sign in with ", (auth_config:get_provider_name(Provider))/binary>>,
+                    ButtonIcon = auth_config:get_provider_button_icon(Provider),
+                    ButtonColor = auth_config:get_provider_button_color(Provider),
+                    HandlerModule = auth_config:get_provider_module(Provider),
                     #link{class = <<"btn btn-small">>, postback = {auth, HandlerModule},
                         style = <<"margin: 10px; text-align: left; width: 200px; background-color: ", ButtonColor/binary>>,
                         body = [
@@ -44,7 +44,7 @@ body() ->
                                 ButtonText
                             ]}
                         ]}
-                end, auth_utils:get_auth_providers()),
+                end, auth_config:get_auth_providers()),
 
             ErrorPanelStyle = case gui_ctx:url_param(<<"x">>) of
                                   undefined -> <<"display: none;">>;

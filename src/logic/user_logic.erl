@@ -28,11 +28,11 @@
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec create(Name :: binary()) ->
+-spec create(User :: #user{}) ->
     {ok, UserId :: binary()} | no_return().
 %% ====================================================================
-create(Name) ->
-    UserId = dao_adapter:save(#user{name = Name}),
+create(User) ->
+    UserId = dao_adapter:save(User),
     {ok, UserId}.
 
 

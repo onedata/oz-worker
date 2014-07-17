@@ -23,11 +23,6 @@
 % Convenience functions
 -export([local_auth_endpoint/0, proplist_to_params/1, fully_qualified_url/1, normalize_email/1]).
 
-% Loading and managing auth config
--export([load_auth_config/0, get_auth_config/1, get_auth_providers/0]).
--export([get_provider_module/1, get_provider_app_id/1, get_provider_app_secret/1, get_provider_name/1]).
--export([get_provider_button_icon/1, get_provider_button_color/1]).
-
 -define(STATE_TTL, 60).
 -define(STATE_ETS, auth_state_ets).
 
@@ -97,6 +92,7 @@ validate_login() ->
                                                 UserInfo = #user{email_list = Emails, name = Name, connected_accounts = [
                                                     OAuthAccount
                                                 ]},
+                                                ?dump(UserInfo),
                                                 {ok, UserId} = user_logic:create(UserInfo),
                                                 gui_ctx:create_session(),
                                                 gui_ctx:set_user_id(UserId),
@@ -157,102 +153,6 @@ merge_connected_accounts(OAuthAccount, UserInfo) ->
         {email_list, NewEmails},
         {connected_accounts, ConnectedAccounts ++ [OAuthAccount]}
     ].
-
-
-init_state_memory() ->
-    ets:new(?STATE_ETS, [named_table, public, bag, {read_concurrency, true}]),
-    ok.
-
-
-generate_state_token(HandlerModule, ConnectAccount) ->
-    auth_logic:clear_expired_tokens(),
-    {Token, Time} = generate_uuid(),
-
-    RedirectAfterLogin = case gui_ctx:url_param(<<"x">>) of
-                             undefined -> <<"/">>;
-                             TargetPage -> TargetPage
-                         end,
-
-    StateInfo = [
-        {module, HandlerModule},
-        {connect_account, ConnectAccount},
-        {redirect_after_login, RedirectAfterLogin}
-    ],
-
-    ets:insert(?STATE_ETS, {Token, Time, StateInfo}),
-    Token.
-
-generate_uuid() ->
-    {A_SEED, B_SEED, C_SEED} = now(),
-    L_SEED = atom_to_list(node()),
-    {_, Sum_SEED} = lists:foldl(fun(Elem_SEED, {N_SEED, Acc_SEED}) ->
-        {N_SEED * 137, Acc_SEED + Elem_SEED * N_SEED} end, {1, 0}, L_SEED),
-    random:seed(Sum_SEED * 10000 + A_SEED, B_SEED, C_SEED),
-    {M, S, N} = now(),
-    Time = M * 1000000000000 + S * 1000000 + N,
-    TimeHex = string:right(integer_to_list(Time, 16), 14, $0),
-    Rand = [lists:nth(1, integer_to_list(random:uniform(16) - 1, 16)) || _ <- lists:seq(1, 18)],
-    UUID = list_to_binary(string:to_lower(string:concat(TimeHex, Rand))),
-    {UUID, Time}.
-
-
-lookup_state_token(Token) ->
-    auth_logic:clear_expired_tokens(),
-    case ets:lookup(?STATE_ETS, Token) of
-        [{Token, Time, LoginInfo}] ->
-            ets:delete_object(?STATE_ETS, {Token, Time, LoginInfo}),
-            LoginInfo;
-        _ ->
-            error
-    end.
-
-
-clear_expired_tokens() ->
-    {M, S, N} = now(),
-    Time = M * 1000000000000 + S * 1000000 + N,
-    ets:select_delete(?STATE_ETS, [{{'$1', '$2', '$3'}, [{'<', '$2', Time - (?STATE_TTL * 1000000)}], ['$_']}]).
-
-
-load_auth_config() ->
-    {ok, [Config]} = file:consult("gui_static/auth.config"),
-    application:set_env(veil_cluster_node, auth_config, Config).
-
-
-get_auth_providers() ->
-    {ok, Config} = application:get_env(veil_cluster_node, auth_config),
-    lists:map(
-        fun({Provider, _}) ->
-            Provider
-        end, Config).
-
-
-get_auth_config(Provider) ->
-    {ok, Config} = application:get_env(veil_cluster_node, auth_config),
-    proplists:get_value(Provider, Config).
-
-
-get_provider_module(Provider) ->
-    proplists:get_value(auth_module, get_auth_config(Provider)).
-
-
-get_provider_app_id(Provider) ->
-    proplists:get_value(app_id, get_auth_config(Provider)).
-
-
-get_provider_app_secret(Provider) ->
-    proplists:get_value(app_secret, get_auth_config(Provider)).
-
-
-get_provider_name(Provider) ->
-    proplists:get_value(name, get_auth_config(Provider)).
-
-
-get_provider_button_icon(Provider) ->
-    proplists:get_value(button_icon, get_auth_config(Provider)).
-
-
-get_provider_button_color(Provider) ->
-    proplists:get_value(button_color, get_auth_config(Provider)).
 
 
 %% proplist_to_params/1

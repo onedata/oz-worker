@@ -37,7 +37,7 @@
 get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
-            {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
             {<<"response_type">>, <<"code">>},
             {<<"scope">>, <<"openid email profile">>},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
@@ -69,8 +69,8 @@ validate_login(ParamsProplist) ->
         % Form access token request
         NewParamsProplist = [
             {<<"code">>, <<Code/binary>>},
-            {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
-            {<<"client_secret">>, auth_utils:get_provider_app_secret(?PROVIDER_NAME)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
+            {<<"client_secret">>, auth_config:get_provider_app_secret(?PROVIDER_NAME)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"grant_type">>, <<"authorization_code">>}
         ],
@@ -119,7 +119,7 @@ validate_login(ParamsProplist) ->
 -spec xrds_endpoint() -> binary().
 %% ====================================================================
 xrds_endpoint() ->
-    proplists:get_value(xrds_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
 
 
 %% authorize_endpoint/0

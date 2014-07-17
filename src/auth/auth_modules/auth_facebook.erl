@@ -37,7 +37,7 @@
 get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
-            {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"scope">>, <<"email">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
@@ -67,8 +67,8 @@ validate_login(ParamsProplist) ->
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request
         NewParamsProplist = [
-            {<<"client_id">>, auth_utils:get_provider_app_id(?PROVIDER_NAME)},
-            {<<"client_secret">>, auth_utils:get_provider_app_secret(?PROVIDER_NAME)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
+            {<<"client_secret">>, auth_config:get_provider_app_secret(?PROVIDER_NAME)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"code">>, <<Code/binary>>}
         ],
@@ -113,7 +113,7 @@ validate_login(ParamsProplist) ->
 -spec authorize_endpoint() -> binary().
 %% ====================================================================
 authorize_endpoint() ->
-    proplists:get_value(authorize_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
 
 
 %% access_token_endpoint/0
@@ -124,7 +124,7 @@ authorize_endpoint() ->
 -spec access_token_endpoint() -> binary().
 %% ====================================================================
 access_token_endpoint() ->
-    proplists:get_value(access_token_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
 
 
 %% user_info_endpoint/0
@@ -135,7 +135,7 @@ access_token_endpoint() ->
 -spec user_info_endpoint() -> binary().
 %% ====================================================================
 user_info_endpoint() ->
-    proplists:get_value(user_info_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
 
 
 %% extract_emails/1

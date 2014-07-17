@@ -163,8 +163,7 @@ start_n2o() ->
         gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module),
 
         % Initilize auth handler
-        auth_utils:load_auth_config(),
-        auth_utils:init_state_memory(),
+        auth_config:load_auth_config(),
 
         {ok, _} = cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
             [

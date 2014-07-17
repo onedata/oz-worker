@@ -138,7 +138,7 @@ connected_accounts_section(User) ->
     TableBody = lists:map(
         fun(Provider) ->
             ProviderInfo = find_connected_account(Provider, ConnectedAccounts),
-            ProviderName = auth_utils:get_provider_name(Provider),
+            ProviderName = auth_config:get_provider_name(Provider),
 
             % Checkbox
             {CheckboxIcon, CheckboxTitle, CheckboxStyle, CheckboxPostback} =
@@ -158,8 +158,8 @@ connected_accounts_section(User) ->
             Checkbox = #link{title = CheckboxTitle, style = CheckboxStyle, postback = CheckboxPostback, body = #span{class = CheckboxIcon}},
 
             % Provider label
-            Icon = auth_utils:get_provider_button_icon(Provider),
-            Color = auth_utils:get_provider_button_color(Provider),
+            Icon = auth_config:get_provider_button_icon(Provider),
+            Color = auth_config:get_provider_button_color(Provider),
             BasicStyle = <<"margin: 0; line-height: 32px; cursor: auto; padding: 5px; text-align: left; width: 130px; ",
             "color: white; background-color: ", Color/binary, ";">>,
             Style = case ProviderInfo of
@@ -219,7 +219,7 @@ connected_accounts_section(User) ->
                 #td{style = <<"vertical-align: middle;">>, body = Login},
                 #td{style = <<"vertical-align: middle;">>, body = Name}
             ]}
-        end, auth_utils:get_auth_providers()),
+        end, auth_config:get_auth_providers()),
 
     Table = #table{class = <<"table table-bordered">>, body = [
         #tbody{body = [TableHead | TableBody]}
@@ -247,7 +247,7 @@ event({action, Fun, Args}) ->
 
 
 connect_account(Provider) ->
-    HandlerModule = auth_utils:get_provider_module(Provider),
+    HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
     gui_jq:redirect(URL).
 
@@ -256,7 +256,7 @@ disconnect_account_prompt(Provider) ->
     % Get user info doc
     {ok, #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(gui_ctx:get_user_id()),
     % Get provider name
-    ProviderName = auth_utils:get_provider_name(Provider),
+    ProviderName = auth_config:get_provider_name(Provider),
     case length(ConnectedAccounts) of
         1 ->
             % Prevent from disconnecting last account

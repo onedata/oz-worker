@@ -162,7 +162,7 @@ validate_login(ParamsProplist) ->
 -spec plgrid_endpoint() -> binary().
 %% ====================================================================
 plgrid_endpoint() ->
-    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_utils:get_auth_config(?PROVIDER_NAME)),
+    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)),
     {ok, XRDS} = gui_utils:https_get(XRDSEndpoint, [
         {"Accept", "application/xrds+xml;level=1, */*"},
         {"Connection", "close"}
