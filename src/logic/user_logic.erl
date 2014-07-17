@@ -180,10 +180,9 @@ get_groups(UserId) ->
     Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
 %% ====================================================================
 exists(Key) ->
-    try get_user_doc(Key) of
-        {ok, _} -> true
-    catch
-        _:_ -> false
+    case get_user_doc(Key) of
+        {ok, _} -> true;
+        _ -> false
     end.
 
 

@@ -50,7 +50,7 @@ redirect_with_error(ErrorID) ->
 
 
 get_reason_and_description() ->
-    IDBinary = gui_ctx:url_param(<<"id">>),
+    IDBinary = gui_str:to_binary(gui_ctx:url_param(<<"id">>)),
     id_to_reason_and_message(binary_to_atom(IDBinary, latin1)).
 
 
