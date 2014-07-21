@@ -143,4 +143,3 @@ test_connection([ {ServiceName,Url} | Rest]) ->
             <<"error">>
     end,
     [{Url,ConnStatus} | test_connection(Rest)].
-

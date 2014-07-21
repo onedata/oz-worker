@@ -52,6 +52,7 @@
 
 %% List of all used views :: [#view_info]
 -define(VIEW_LIST, [?USER_BY_EMAIL_VIEW, ?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW]).
+
 %% Default database name
 -define(DEFAULT_DB, lists:nth(1, ?DB_LIST)).
 
