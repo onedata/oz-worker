@@ -24,6 +24,7 @@
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
 %% -export([redirect_to_veilcluster/0]).
 
+
 %% Template points to the template file, which will be filled with content
 main() ->
     case gr_gui_utils:maybe_redirect(true, true) of
@@ -33,8 +34,10 @@ main() ->
             #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}
     end.
 
+
 %% Page title
 title() -> <<"Manage account">>.
+
 
 %% This will be placed in the template instead of [[[page:body()]]] tag
 body() ->

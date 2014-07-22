@@ -39,7 +39,8 @@ body() ->
                     "You will be now redirected to profile management page, where you can fill out some information about yourself ",
                     "and connect another accounts to your profile.">>},
                     #button{class = <<"btn btn-primary btn-block">>, postback = to_manage_account, body = <<"Proceed">>}
-                ]}
+                ]},
+                gui_utils:cookie_policy_popup_body(?privacy_policy_url)
             ] ++ gr_gui_utils:logotype_footer(120)};
         {error, ErrorID} ->
             page_error:redirect_with_error(ErrorID)

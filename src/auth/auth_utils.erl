@@ -53,7 +53,13 @@ local_auth_endpoint() ->
 validate_login() ->
     try
         % Check url params for state parameter
-        ParamsProplist = gui_ctx:get_request_params(),
+        ParamsProplist = case gui_ctx:get_request_params() of
+                             [] ->
+                                 % There are no GET params, try POST params
+                                 gui_ctx:form_params();
+                             Params ->
+                                 Params
+                         end,
         State = proplists:get_value(<<"state">>, ParamsProplist),
         StateInfo = auth_logic:lookup_state_token(State),
         case StateInfo of
@@ -123,7 +129,7 @@ validate_login() ->
                                             false ->
                                                 % Everything ok, get the user and add new provider info
                                                 UserId = gui_ctx:get_user_id(),
-                                                {ok, #veil_document{record = UserRecord}} = user_logic:get_user(UserId),
+                                                {ok, #user{} = UserRecord} = user_logic:get_user(UserId),
                                                 ModificationProplist = merge_connected_accounts(OAuthAccount, UserRecord),
                                                 user_logic:modify(UserId, ModificationProplist),
                                                 {redirect, <<"/manage_account">>}

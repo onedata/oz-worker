@@ -97,16 +97,16 @@ top_menu(ActiveTabID) ->
 %% ====================================================================
 top_menu(ActiveTabID, SubMenuBody) ->
     % Define menu items with ids, so that proper tab can be made active via function parameter
-    {ok, #user{name = Name} = User} = user_logic:get_user(gui_ctx:get_user_id()),
+    {ok, #user{name = Name}} = user_logic:get_user(gui_ctx:get_user_id()),
 
     MenuCaptions =
         [
-            {file_manager_tab, #li{body = [
-                #link{style = <<"padding: 18px;">>, url = <<"/file_manager">>, body = <<"File manager">>}
-            ]}},
-            {shared_files_tab, #li{body = [
-                #link{style = <<"padding: 18px;">>, url = <<"/shared_files">>, body = <<"Shared files">>}
-            ]}}
+%%             {file_manager_tab, #li{body = [
+%%                 #link{style = <<"padding: 18px;">>, url = <<"/file_manager">>, body = <<"File manager">>}
+%%             ]}},
+%%             {shared_files_tab, #li{body = [
+%%                 #link{style = <<"padding: 18px;">>, url = <<"/shared_files">>, body = <<"Shared files">>}
+%%             ]}}
         ],
 
     MenuIcons =

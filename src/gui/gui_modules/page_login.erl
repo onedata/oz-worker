@@ -58,7 +58,8 @@ body() ->
                     #h3{body = <<"Welcome to OneData">>},
                     #p{class = <<"login-info">>, body = <<"You can sign in using one of your existing accounts.">>},
                     #panel{style = <<"">>, body = Buttons}
-                ]}
+                ]},
+                gui_utils:cookie_policy_popup_body(?privacy_policy_url)
             ] ++ gr_gui_utils:logotype_footer(120)}
     end.
 
