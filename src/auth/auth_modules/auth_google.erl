@@ -19,7 +19,7 @@
 -define(PROVIDER_NAME, google).
 
 %% API
--export([get_redirect_url/1, validate_login/1]).
+-export([get_redirect_url/1, validate_login/0]).
 
 
 %% ====================================================================
@@ -59,11 +59,13 @@ get_redirect_url(ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec validate_login([{binary(), binary()}]) ->
+-spec validate_login() ->
     {ok, #oauth_account{}} | {error, term()}.
 %% ====================================================================
-validate_login(ParamsProplist) ->
+validate_login() ->
     try
+        % Retrieve URL params
+        ParamsProplist =  gui_ctx:get_request_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request

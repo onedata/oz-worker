@@ -53,13 +53,7 @@ local_auth_endpoint() ->
 validate_login() ->
     try
         % Check url params for state parameter
-        ParamsProplist = case gui_ctx:get_request_params() of
-                             [] ->
-                                 % There are no GET params, try POST params
-                                 gui_ctx:form_params();
-                             Params ->
-                                 Params
-                         end,
+        ParamsProplist = gui_ctx:get_request_params(),
         State = proplists:get_value(<<"state">>, ParamsProplist),
         StateInfo = auth_logic:lookup_state_token(State),
         case StateInfo of
@@ -73,7 +67,7 @@ validate_login() ->
                 Module = proplists:get_value(module, Props),
                 Redirect = proplists:get_value(redirect_after_login, Props),
                 % Validate the request and gather user info
-                case Module:validate_login(proplists:delete(<<"state">>, ParamsProplist)) of
+                case Module:validate_login() of
                     {error, Reason} ->
                         % The request could not be validated
                         ?alert("Security breach attempt spotted. Reason:~p~nRequest params:~n~p", [Reason, ParamsProplist]),

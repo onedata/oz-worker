@@ -28,16 +28,15 @@
 -callback get_redirect_url(boolean()) -> binary().
 
 
-%% validate_login/1
+%% validate_login/0
 %% ====================================================================
 %% @doc Validates login request that came back from the provider.
 %% Will be called from auth_utils:validate_login/0 when the request
-%% has been pre-validated. The argument is a proplist (pair of Key and Value)
-%% representing the content of URL params. Beside validating the request,
+%% has been pre-validated. Beside validating the request,
 %% the function must retrieve user info from the provider.
 %% Must return oauth_account record upon success,
 %% or error and its desription otherwise.
 %% @end
 %% ====================================================================
--callback validate_login([{binary(), binary()}]) ->
+-callback validate_login() ->
     {ok, #oauth_account{}} | {error, term()}.

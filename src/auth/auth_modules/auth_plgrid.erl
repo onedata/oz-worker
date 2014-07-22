@@ -20,7 +20,7 @@
 -define(PROVIDER_NAME, plgrid).
 
 %% API
--export([get_redirect_url/1, validate_login/1]).
+-export([get_redirect_url/1, validate_login/0]).
 
 
 %% ====================================================================
@@ -72,11 +72,13 @@ get_redirect_url(ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec validate_login([{binary(), binary()}]) ->
+-spec validate_login() ->
     {ok, #oauth_account{}} | {error, term()}.
 %% ====================================================================
-validate_login(ParamsProplist) ->
+validate_login() ->
     try
+        % Retrieve URL params
+        ParamsProplist =  gui_ctx:form_params(),
         % Make sure received endpoint is really the PLGrid endpoint
         ReceivedEndpoint = proplists:get_value(<<"openid.op_endpoint">>, ParamsProplist),
         true = (plgrid_endpoint() =:= ReceivedEndpoint),
@@ -125,7 +127,7 @@ validate_login(ParamsProplist) ->
                 Email -> [Email]
             end,
 
-        % TODO Unused
+        % TODO Teams and DNs unused
         _Teams = parse_teams(gui_str:to_list(get_signed_param(<<"openid.ext1.value.teams">>, ParamsProplist, SignedArgs))),
         DN1 = get_signed_param(<<"openid.ext1.value.dn1">>, ParamsProplist, SignedArgs),
         DN2 = get_signed_param(<<"openid.ext1.value.dn2">>, ParamsProplist, SignedArgs),
