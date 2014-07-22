@@ -127,7 +127,7 @@ validate_login() ->
                 Email -> [Email]
             end,
 
-        % TODO Teams and DNs unused
+        % TODO Teams and DNs are unused
         _Teams = parse_teams(gui_str:to_list(get_signed_param(<<"openid.ext1.value.teams">>, ParamsProplist, SignedArgs))),
         DN1 = get_signed_param(<<"openid.ext1.value.dn1">>, ParamsProplist, SignedArgs),
         DN2 = get_signed_param(<<"openid.ext1.value.dn2">>, ParamsProplist, SignedArgs),

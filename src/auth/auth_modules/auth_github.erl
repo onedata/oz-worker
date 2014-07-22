@@ -43,7 +43,6 @@ get_redirect_url(ConnectAccount) ->
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
         Params = gui_utils:proplist_to_url_params(ParamsProplist),
-
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
