@@ -38,12 +38,12 @@ title() -> <<"About">>.
 %% This will be placed in the template instead of {{body}} tag
 body() ->
     #panel{style = <<"position: relative;">>, body = [
-        vcn_gui_utils:top_menu(about_tab),
+        gr_gui_utils:top_menu(about_tab),
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"About">>},
             #panel{id = <<"about_table">>, body = about_table()}
         ]}
-    ] ++ vcn_gui_utils:logotype_footer(20)}.
+    ] ++ gr_gui_utils:logotype_footer(20)}.
 
 
 about_table() ->

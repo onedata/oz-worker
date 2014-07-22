@@ -37,7 +37,7 @@ body() ->
             #button{postback = to_login, class = <<"btn btn-warning btn-block">>, body = <<"Main page">>}
         ]},
         gui_utils:cookie_policy_popup_body(?privacy_policy_url)
-    ] ++ vcn_gui_utils:logotype_footer(120)}.
+    ] ++ gr_gui_utils:logotype_footer(120)}.
 
 
 event(init) -> ok;
@@ -59,7 +59,7 @@ id_to_reason_and_message(?error_internal_server_error) ->
     {<<"500 - Internal server error">>, <<"Server encountered an unexpected error. Please contact the site administrator if the problem persists.">>};
 
 id_to_reason_and_message(?error_auth_invalid_request) ->
-    {<<"Invalid request state">>, <<"This OpenID or OAuth request could not be validated.">>};
+    {<<"Invalid request">>, <<"This OpenID or OAuth request could not be validated.">>};
 
 id_to_reason_and_message(?error_auth_new_email_occupied) ->
     {<<"Cannot create new account">>, <<"One or more e-mail addresses returned by the OpenID / OAuth provider are occupied.">>};

@@ -30,6 +30,7 @@ body() ->
         true ->
             gui_jq:redirect(<<"/">>);
         false ->
+            LogoutEndpoint = proplists:get_value(logout_endpoint, auth_config:get_auth_config(plgrid)),
             Buttons = lists:map(
                 fun(Provider) ->
                     ButtonText = <<"Sign in with ", (auth_config:get_provider_name(Provider))/binary>>,
@@ -60,7 +61,9 @@ body() ->
                     #panel{style = <<"">>, body = Buttons}
                 ]},
                 gui_utils:cookie_policy_popup_body(?privacy_policy_url)
-            ] ++ gr_gui_utils:logotype_footer(120)}
+            ] ++ gr_gui_utils:logotype_footer(120)
+                ++ [#p{body = <<"<iframe src=\"", LogoutEndpoint/binary, "\" style=\"display:none\"></iframe>">>}]
+            }
     end.
 
 

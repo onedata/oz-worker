@@ -47,5 +47,4 @@ body() ->
     end.
 
 event(init) -> ok;
-
 event(to_manage_account) -> gui_jq:redirect(<<"/manage_account">>).
