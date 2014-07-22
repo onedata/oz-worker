@@ -31,6 +31,7 @@
 apply_or_redirect(Module, Fun) ->
     apply_or_redirect(Module, Fun, []).
 
+
 %% apply_or_redirect/3
 %% ====================================================================
 %% @doc Checks if the client has right to do the operation (is logged in). If so, it executes the code.

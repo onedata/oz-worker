@@ -50,13 +50,6 @@ about_table() ->
     #table{style = <<"border-width: 0px; width: auto">>, body = [
         #tr{cells = [
             #td{style = <<"padding: 15px; vertical-align: top;">>,
-                body = #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Version">>}},
-            #td{style = <<"padding: 15px; vertical-align: top;">>,
-                body = #p{style = <<"margin: -3px 0 0;">>, body = node_manager:check_vsn()}}
-        ]},
-
-        #tr{cells = [
-            #td{style = <<"padding: 15px; vertical-align: top;">>,
                 body = #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Contact">>}},
             #td{style = <<"padding: 15px; vertical-align: top;">>,
                 body = #link{style = <<"font-size: 18px;">>, body = <<?CONTACT_EMAIL>>, url = <<"mailto:", ?CONTACT_EMAIL>>}}
@@ -102,9 +95,8 @@ get_license() ->
 % HTML list with team members
 get_team() ->
     Members = [<<"Łukasz Dutka"/utf8>>, <<"Jacek Kitowski"/utf8>>, <<"Dariusz Król"/utf8>>, <<"Tomasz Lichoń"/utf8>>, <<"Darin Nikolow"/utf8>>,
-        <<"Łukasz Opioła"/utf8>>, <<"Tomasz Pałys"/utf8>>, <<"Bartosz Polnik"/utf8>>, <<"Paweł Salata"/utf8>>, <<"Michał Sitko"/utf8>>,
-        <<"Rafał Słota"/utf8>>, <<"Renata Słota"/utf8>>, <<"Beata Skiba"/utf8>>, <<"Krzysztof Trzepla"/utf8>>, <<"Michał Wrzeszcz"/utf8>>,
-        <<"Konrad Zemek"/utf8>>],
+        <<"Łukasz Opioła"/utf8>>, <<"Tomasz Pałys"/utf8>>, <<"Paweł Salata"/utf8>>, <<"Rafał Słota"/utf8>>, <<"Renata Słota"/utf8>>,
+        <<"Krzysztof Trzepla"/utf8>>, <<"Michał Wrzeszcz"/utf8>>, <<"Konrad Zemek"/utf8>>],
     #list{style = <<"margin-top: -3px;">>, numbered = false, body =
     lists:map(
         fun(Member) ->

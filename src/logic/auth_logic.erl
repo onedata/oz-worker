@@ -181,5 +181,10 @@ lookup_state_token(Token) ->
 %% ====================================================================
 clear_expired_tokens() ->
     {M, S, N} = now(),
-    Time = M * 1000000000000 + S * 1000000 + N,
-    ets:select_delete(?STATE_TOKEN, [{{'$1', '$2', '$3'}, [{'<', '$2', Time - (?STATE_TOKEN_EXPIRATION_SECS * 1000000)}], ['$_']}]).
+    Now = M * 1000000000000 + S * 1000000 + N,
+
+    ExpiredSessions = ets:select(?STATE_TOKEN, [{{'$1', '$2', '$3'}, [{'<', '$2', Now - (?STATE_TOKEN_EXPIRATION_SECS * 1000000)}], ['$_']}]),
+    lists:foreach(
+        fun({Token, Time, LoginInfo}) ->
+            ets:delete_object(?STATE_TOKEN, {Token, Time, LoginInfo})
+        end, ExpiredSessions).

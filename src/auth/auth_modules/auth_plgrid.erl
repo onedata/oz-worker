@@ -54,10 +54,10 @@ get_redirect_url(ConnectAccount) ->
             {<<"openid.ext1.type.dn2">>, <<"http://openid.plgrid.pl/certificate/dn2">>},
             {<<"openid.ext1.type.dn3">>, <<"http://openid.plgrid.pl/certificate/dn3">>},
             {<<"openid.ext1.type.teams">>, <<"http://openid.plgrid.pl/userTeamsXML">>},
-            {<<"openid.ext1.if_available">>, <<"dn1,dn2,dn3,teams">>}
+            {<<"openid.ext1.type.POSTresponse">>, <<"http://openid.plgrid.pl/POSTresponse">>},
+            {<<"openid.ext1.if_available">>, <<"dn1,dn2,dn3,teams,POSTresponse">>}
         ],
         Params = gui_utils:proplist_to_url_params(ParamsProplist),
-
         {ok, <<(plgrid_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->

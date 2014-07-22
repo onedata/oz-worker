@@ -56,27 +56,28 @@ main_table() ->
     #table{style = <<"border-width: 0px; width: auto;">>, body = [
         #tbody{body = [
             #tr{cells = [
-                #td{style = <<"border-width: 0px; padding: 10px 10px; vertical-align: top;">>, body =
+                #td{style = <<"padding: 15px; vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Name">>}},
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = user_name_section(User)}
+                #td{style = <<"padding: 15px; vertical-align: top;">>, body = user_name_section(User)}
             ]},
 
             #tr{cells = [
-                #td{style = <<"border-width: 0px; padding: 10px 10px; vertical-align: top;">>, body =
+                #td{style = <<"padding: 15px; vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"E-mails">>}},
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = user_emails_section(User)}
+                #td{style = <<"padding: 15px; vertical-align: top;">>, body = user_emails_section(User)}
             ]},
 
             #tr{cells = [
-                #td{style = <<"border-width: 0px; padding: 10px 10px;  vertical-align: top;">>, body =
+                #td{style = <<"padding: 15px; vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Connected<br />accounts">>}},
-                #td{style = <<"border-width: 0px; padding: 10px 10px">>, body = connected_accounts_section(User)}
+                #td{style = <<"padding: 15px; vertical-align: top;">>, body = connected_accounts_section(User)}
             ]}
         ]}
     ]}.
 
 
 user_name_section(User) ->
+    gui_jq:bind_enter_to_submit_button(<<"new_name_textbox">>, <<"new_name_submit">>),
     #user{name = Name} = User,
     [
         #span{style = <<"font-size: 18px;">>, id = <<"displayed_name">>, body = Name},
@@ -84,10 +85,9 @@ user_name_section(User) ->
             postback = {action, show_name_edition, [true]}, body =
             #span{class = <<"fui-new">>, style = <<"font-size: 16px;">>}},
         #textbox{id = <<"new_name_textbox">>, class = <<"flat">>, body = <<"">>, style = <<"display: none;">>,
-            placeholder = <<"New name">>, postback = {action, update_name},
-            source = ["new_name_textbox"]},
+            placeholder = <<"New name">>, value = Name},
         #link{id = <<"new_name_submit">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
-            postback = {action, update_name}, source = ["new_name_textbox"], body =
+            actions = gui_jq:form_submit_action(<<"new_name_submit">>, {action, update_name}, <<"new_name_textbox">>), body =
             #span{class = <<"fui-check-inverted">>, style = <<"font-size: 20px;">>}},
         #link{id = <<"new_name_cancel">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
             postback = {action, show_name_edition, [false]}, body =
@@ -116,17 +116,17 @@ user_emails_section(User) ->
                 postback = {action, show_email_adding, [true]}, body =
                 #span{class = <<"fui-plus">>, style = <<"font-size: 16px; position: relative;">>}},
             #textbox{id = <<"new_email_textbox">>, class = <<"flat">>, body = <<"">>, style = <<"display: none;">>,
-                placeholder = <<"New email address">>, postback = {action, update_email, [{add, submitted}]},
-                source = ["new_email_textbox"]},
+                placeholder = <<"New email address">>},
             #link{id = <<"new_email_submit">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
-                postback = {action, update_email, [{add, submitted}]}, source = ["new_email_textbox"], body =
+                actions = gui_jq:form_submit_action(<<"new_email_submit">>, {action, update_email, [{add, submitted}]}, <<"new_email_textbox">>), body =
                 #span{class = <<"fui-check-inverted">>, style = <<"font-size: 20px;">>}},
             #link{id = <<"new_email_cancel">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
                 postback = {action, show_email_adding, [false]}, body =
                 #span{class = <<"fui-cross-inverted">>, style = <<"font-size: 20px;">>}}
         ]}
     ],
-    #list{numbered = true, body = CurrentEmails ++ NewEmail}.
+    gui_jq:bind_enter_to_submit_button(<<"new_email_textbox">>, <<"new_email_submit">>),
+    #list{numbered = true, style = <<"margin-top: -3px;">>, body = CurrentEmails ++ NewEmail}.
 
 
 connected_accounts_section(User) ->
@@ -286,15 +286,20 @@ update_email(AddOrRemove) ->
     {ok, #user{email_list = OldEmailList}} = user_logic:get_user(UserId),
     case AddOrRemove of
         {add, submitted} ->
-            NewEmail = gui_utils:normalize_email(gui_ctx:postback_param("new_email_textbox")),
+            NewEmail = gui_utils:normalize_email(gui_ctx:postback_param(<<"new_email_textbox">>)),
             case user_logic:get_user({email, NewEmail}) of
-                undefined ->
-                    case user_logic:modify(UserId, [{email_list, OldEmailList ++ [NewEmail]}]) of
-                        ok -> ok;
-                        _ -> gui_jq:wire(#alert{text = <<"Error - cannot update email list.">>})
-                    end;
+                {ok, _} ->
+                    gui_jq:wire(#alert{text = <<"This e-mail address is in use.">>});
                 _ ->
-                    gui_jq:wire(#alert{text = <<"This e-mail address is in use.">>})
+                    case gui_utils:validate_email(NewEmail) of
+                        false ->
+                            gui_jq:wire(#alert{text = <<"Please enter a valid email address.">>});
+                        true ->
+                            case user_logic:modify(UserId, [{email_list, OldEmailList ++ [NewEmail]}]) of
+                                ok -> ok;
+                                _ -> gui_jq:wire(#alert{text = <<"Error - cannot update email list.">>})
+                            end
+                    end
             end;
         {remove, Email} ->
             case user_logic:modify(UserId, [{email_list, OldEmailList -- [Email]}]) of
@@ -302,18 +307,18 @@ update_email(AddOrRemove) ->
                 _ -> gui_jq:wire(#alert{text = <<"Error - cannot update email list.">>})
             end
     end,
-    gui_jq:update("main_table", main_table()).
+    gui_jq:update(<<"main_table">>, main_table()).
 
 
 % Update email list - add or remove one and save new user doc
 update_name() ->
     GlobalID = gui_ctx:get_user_id(),
-    NewName = gui_ctx:postback_param("new_name_textbox"),
+    NewName = gui_ctx:postback_param(<<"new_name_textbox">>),
     case user_logic:modify(GlobalID, [{name, NewName}]) of
         ok -> ok;
         _ -> gui_jq:wire(#alert{text = <<"Error - cannot update name.">>})
     end,
-    gui_jq:update("main_table", main_table()).
+    gui_jq:update(<<"main_table">>, main_table()).
 
 
 % Show email adding form
@@ -342,7 +347,8 @@ show_name_edition(Flag) ->
             gui_jq:fade_in(<<"new_name_textbox">>, 300),
             gui_jq:fade_in(<<"new_name_cancel">>, 300),
             gui_jq:fade_in(<<"new_name_submit">>, 300),
-            gui_jq:focus(<<"new_name_textbox">>);
+            gui_jq:focus(<<"new_name_textbox">>),
+            gui_jq:select_text(<<"new_name_textbox">>);
         false ->
             gui_jq:fade_in(<<"displayed_name">>, 300),
             gui_jq:fade_in(<<"change_name_button">>, 300),
