@@ -43,15 +43,15 @@ dao_connection_test(Config) ->
 
 init_per_suite(Config) ->
 	?INIT_CODE_PATH,
-    ?CREATE_DUMMY_AUTH,
-    {CACertsDir,GRPCADir} = ?PREPARE_CERT_FILES(Config),
+  ?CREATE_DUMMY_AUTH,
+  {CACertsDir,GRPCADir} = ?PREPARE_CERT_FILES(Config),
 
 	DbNodesEnv = {db_nodes,[?DB_NODE]},
-    Nodes = test_node_starter:start_test_nodes(1),
+  Nodes = test_node_starter:start_test_nodes(1),
 	test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,
 		[[
 			DbNodesEnv,
-            ?cert_paths(CACertsDir,GRPCADir)
+      ?cert_paths(CACertsDir,GRPCADir)
 		]]
 	),
 	Config ++ [{nodes,Nodes}].
