@@ -93,8 +93,8 @@ providers_crud_test(Config) ->
     [Node] = ?config(nodes,Config),
 
 	% Data
-	Provider = #provider{url = <<"1.1.1.1">>,spaces = [<<"uuid1">>,<<"uuid2">>]},
-	UpdatedProvider = Provider#provider{url = <<"2.2.2.2">>},
+	Provider = #provider{redirection_point = <<"http://redirpoi.nt">>, urls = [<<"1.1.1.1">>],spaces = [<<"uuid1">>,<<"uuid2">>]},
+	UpdatedProvider = Provider#provider{urls = [<<"2.2.2.2">>]},
 
 	% Create
 	{AnsC1,ProviderId} = rpc:call(Node,dao_lib,apply,[dao_providers,save_provider,[Provider],1]),
