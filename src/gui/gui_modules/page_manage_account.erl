@@ -22,7 +22,7 @@
 % Postback functions and other
 -export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
-%% -export([redirect_to_veilcluster/0]).
+-export([redirect_to_veilcluster/0]).
 
 
 %% Template points to the template file, which will be filled with content
@@ -45,8 +45,8 @@ body() ->
         gr_gui_utils:top_menu(manage_account_tab),
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
-            #panel{id = <<"main_table">>, body = main_table()}%,
-            %#button{body = <<"Go to your files - UWAGA TO NIE DZIALA">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
+            #panel{id = <<"main_table">>, body = main_table()},
+            #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
         ]}
     ] ++ gr_gui_utils:logotype_footer(20)}.
 
@@ -358,15 +358,14 @@ show_name_edition(Flag) ->
     end.
 
 
-%% redirect_to_veilcluster() ->
-%%     ?dump(asd),
-%%     UserID = gui_ctx:get_user_id(),
-%% %%     RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),\
-%%     try
-%%         RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fe6b67e13d752d9d8d01312c20df7a">>),
-%%         gui_jq:redirect(RedirectURL)
-%%     catch T:M ->
-%%         ?error_stacktrace("tutut ~p:~p", [T, M])
-%%     end.
-%% %%     <<"veilfsdev.com/openid_login?authorization_code=", Rest/binary>> = _RedirectURL,
-%% %%     gui_jq:redirect(<<"https://onedata.org/auth_endpoint?authorization_code=", Rest/binary>>).
+redirect_to_veilcluster() ->
+    UserID = gui_ctx:get_user_id(),
+%%     RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),\
+    try
+        RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fed9d5cb25286d919f3e35c53fceb7">>),
+        gui_jq:redirect(RedirectURL)
+    catch T:M ->
+        ?error_stacktrace("tutut ~p:~p", [T, M])
+    end.
+%%     <<"veilfsdev.com/openid_login?authorization_code=", Rest/binary>> = _RedirectURL,
+%%     gui_jq:redirect(<<"https://onedata.org/auth_endpoint?authorization_code=", Rest/binary>>).
