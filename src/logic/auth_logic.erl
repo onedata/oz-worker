@@ -12,6 +12,9 @@
 -module(auth_logic).
 -author("Konrad Zemek").
 
+-include("dao/dao_types.hrl").
+-include_lib("ctool/include/logging.hrl").
+
 -define(AUTH_CODE, aUTH_CODE).
 -define(ACCESS_TOKEN, access_token).
 -define(REFRESH_TOKEN, refresh_token).
@@ -26,26 +29,55 @@
 -define(STATE_TOKEN_EXPIRATION_SECS, 60).
 -define(ISSUER_URL, "https://onedata.org").
 
--include_lib("ctool/include/logging.hrl").
--include("dao/dao_types.hrl").
 
+%% ====================================================================
 %% API
+%% ====================================================================
 -export([start/0, stop/0, get_redirection_uri/2, grant_token/2, validate_token/2]).
 
-% Handling state tokens
+%% ====================================================================
+%% Handling state tokens
+%% ====================================================================
 -export([generate_state_token/2, lookup_state_token/1, clear_expired_tokens/0]).
 
 
+%% ====================================================================
+%% API functions
+%% ====================================================================
+
+
+%% start/0
+%% ====================================================================
+%% @doc Initializes temporary storage for OpenID tokens.
+%% ====================================================================
+-spec start() -> ok.
+%% ====================================================================
 start() ->
-    lists:foreach(fun(Table) -> ets:new(Table, [named_table, public]) end, ?TABLES).
+    lists:foreach(fun(Table) -> ets:new(Table, [named_table, public]) end, ?TABLES),
+    ok.
 
 
+%% stop/0
+%% ====================================================================
+%% @doc Deinitializes temporary storage for OpenID tokens.
+%% ====================================================================
+-spec stop() -> ok.
+%% ====================================================================
 stop() ->
-    lists:foreach(fun(Table) -> ets:delete(Table) end, ?TABLES).
+    lists:foreach(fun(Table) -> ets:delete(Table) end, ?TABLES),
+    ok.
 
 
+%% get_redirection_uri/2
+%% ====================================================================
+%% @doc Returns a Provider URI to which the user should be redirected from
+%% the global registry. The redirection is part of the OpenID flow and the URI
+%% contains an Authorization token.
+%% @end
+%% ====================================================================
 -spec get_redirection_uri(UserId :: binary(), ProviderId :: binary()) ->
     RedirectionUri :: binary().
+%% ====================================================================
 get_redirection_uri(UserId, ProviderId) ->
     AuthCode = random_token(),
     ExpirationTime = now_s() + ?AUTH_CODE_EXPIRATION_SECS,
@@ -54,8 +86,16 @@ get_redirection_uri(UserId, ProviderId) ->
     {redirectionPoint, RedirectURL} = lists:keyfind(redirectionPoint, 1, ProviderData),
     <<RedirectURL/binary, "?code=", AuthCode/binary>>.
 
+
+%% grant_token/2
+%% ====================================================================
+%% @doc Grants ID, Access and Refresh tokens to the provider identifying
+%% itself with a valid Authorization token.
+%% @end
+%% ====================================================================
 -spec grant_token(ProviderId :: binary(), AuthCode :: binary()) ->
     [proplists:property()].
+%% ====================================================================
 grant_token(ProviderId, AuthCode) ->
     [{AuthCode, {ProviderId, UserId, _ExpirationTime}}] = ets:lookup(?AUTH_CODE, AuthCode),
     ets:delete(?AUTH_CODE, AuthCode),
@@ -97,33 +137,18 @@ grant_token(ProviderId, AuthCode) ->
 %%     when IntendedProviderId =/= ProviderId -> [{error, invalid_request}]
 
 
+%% validate_token/2
+%% ====================================================================
+%% @doc Validates an access token for a Provider and returns a UserId of the
+%% user who authorized the Provider.
+%% @end
+%% ====================================================================
 -spec validate_token(ProviderId :: binary(), AccessToken :: binary()) ->
-    UserId :: binary().
+    UserId :: binary() | no_return().
+%% ====================================================================
 validate_token(ProviderId, AccessToken) ->
     [{AccessToken, {ProviderId, UserId, _ExpirationTime}}] = ets:lookup(?ACCESS_TOKEN, AccessToken),
     UserId.
-
-
-jwt_encode(Claims) ->
-    Header = mochijson2:encode([{typ, 'JWT'}, {alg, none}]),
-    Payload = mochijson2:encode(Claims),
-    Header64 = mochiweb_base64url:encode(Header),
-    Payload64 = mochiweb_base64url:encode(Payload),
-    <<Header64/binary, ".", Payload64/binary, ".">>.
-
-
--spec random_token() -> string().
-random_token() ->
-    binary:list_to_bin(
-        mochihex:to_hex(
-            crypto:hash(sha,
-                term_to_binary({make_ref(), node(), now()})))).
-
-
--spec now_s() -> integer().
-now_s() ->
-    {MegaSecs, Secs, _} = erlang:now(),
-    MegaSecs * 1000000 + Secs.
 
 
 %% generate_state_token/2
@@ -188,3 +213,49 @@ clear_expired_tokens() ->
         fun({Token, Time, LoginInfo}) ->
             ets:delete_object(?STATE_TOKEN, {Token, Time, LoginInfo})
         end, ExpiredSessions).
+
+
+%% ====================================================================
+%% Internal functions
+%% ====================================================================
+
+
+%% jwt_encode/1
+%% ====================================================================
+%% @doc Encodes OpenID claims as an unsigned, unencrypted
+%% <a href="tools.ietf.org/html/draft-ietf-oauth-json-web-token">JWT</a>
+%% structure.
+%% @end
+%% ====================================================================
+-spec jwt_encode(Claims ::[proplists:property()]) -> JWT :: binary().
+%% ====================================================================
+jwt_encode(Claims) ->
+    Header = mochijson2:encode([{typ, 'JWT'}, {alg, none}]),
+    Payload = mochijson2:encode(Claims),
+    Header64 = mochiweb_base64url:encode(Header),
+    Payload64 = mochiweb_base64url:encode(Payload),
+    <<Header64/binary, ".", Payload64/binary, ".">>.
+
+
+%% random_token/0
+%% ====================================================================
+%% @doc Generates a globally unique random token.
+%% ====================================================================
+-spec random_token() -> binary().
+%% ====================================================================
+random_token() ->
+    binary:list_to_bin(
+        mochihex:to_hex(
+            crypto:hash(sha,
+                term_to_binary({make_ref(), node(), now()})))).
+
+
+%% now_s/0
+%% ====================================================================
+%% @doc Returns the time in seconds since epoch.
+%% ====================================================================
+-spec now_s() -> integer().
+%% ====================================================================
+now_s() ->
+    {MegaSecs, Secs, _} = erlang:now(),
+    MegaSecs * 1000000 + Secs.
