@@ -1,17 +1,18 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc This module tests provider logic
-%%% @end
-%%% Created : 15. May 2014 12:11
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This module tests provider logic
+%% @end
+%% ===================================================================
 -module(provider_logic_tests).
+-author("Tomasz Lichon").
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--endif.
-
--ifdef(TEST).
 
 %% ===================================================================
 %% Tests description

@@ -23,7 +23,7 @@
     ]},
     {mod, {globalregistry_app, []}},
     {env, [
-        {db_nodes, ['db@veildev_56.local']},
+        {db_nodes, ['db@127.0.0.1']},
 
         % rest config
         {rest_port, 8443},
