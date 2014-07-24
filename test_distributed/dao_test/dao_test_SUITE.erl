@@ -197,7 +197,7 @@ init_per_suite(Config) ->
   {CACertsDir,GRPCADir} = ?PREPARE_CERT_FILES(Config),
 
 	DbNodesEnv = {db_nodes,[?DB_NODE]},
-	Nodes = test_node_starter:start_test_nodes(1),
+	Nodes = test_node_starter:start_test_nodes(1,true),
   test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,[[DbNodesEnv,?cert_paths(CACertsDir,GRPCADir)]]),
 	Config ++ [{nodes,Nodes}].
 
