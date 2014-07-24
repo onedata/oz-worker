@@ -18,6 +18,9 @@
 % Functions to check for user's session
 -export([apply_or_redirect/2, apply_or_redirect/3, maybe_redirect/2]).
 
+% Handling redirects to providers
+-export([get_redirection_url_to_provider/0]).
+
 % Functions to generate page elements
 -export([top_menu/1, top_menu/2, logotype_footer/1, empty_page/0]).
 
@@ -58,7 +61,7 @@ apply_or_redirect(Module, Fun, Args) ->
     end.
 
 
-%% maybe_redirect/4
+%% maybe_redirect/2
 %% ====================================================================
 %% @doc Decides if user can view the page, depending on arguments.
 %% Returns false if no redirection is needed.
@@ -75,6 +78,24 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
             true;
         false ->
             false
+    end.
+
+
+%% get_redirection_url_to_provider/0
+%% ====================================================================
+%% @doc Returns an URL that the user should be redirected to - if possible.
+%% Otherwise, error is returned.
+%% @end
+-spec get_redirection_url_to_provider() -> {ok, URL :: binary()} | {error, Desc :: no_provider | term()}.
+%% ====================================================================
+get_redirection_url_to_provider() ->
+    case random:uniform(2) =:= 1 of
+        true ->
+            UserID = gui_ctx:get_user_id(),
+            RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04feec6420fc0cceb509ca569751dc38">>),
+            {ok, RedirectURL};
+        false ->
+            {error, no_provider}
     end.
 
 

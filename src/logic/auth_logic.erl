@@ -28,6 +28,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
+-include("auth_common.hrl").
 
 %% API
 -export([start/0, stop/0, get_redirection_uri/2, grant_token/2, validate_token/2]).
@@ -52,7 +53,7 @@ get_redirection_uri(UserId, ProviderId) ->
     ets:insert(?AUTH_CODE, {AuthCode, {ProviderId, UserId, ExpirationTime}}),
     {ok, ProviderData} = provider_logic:get_data(ProviderId),
     {redirectionPoint, RedirectURL} = lists:keyfind(redirectionPoint, 1, ProviderData),
-    <<RedirectURL/binary, "?code=", AuthCode/binary>>.
+    <<RedirectURL/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>.
 
 -spec grant_token(ProviderId :: binary(), AuthCode :: binary()) ->
     [proplists:property()].

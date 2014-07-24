@@ -22,7 +22,7 @@
 % Postback functions and other
 -export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
--export([redirect_to_veilcluster/0]).
+-export([redirect_to_veilcluster/1]).
 
 
 %% Template points to the template file, which will be filled with content
@@ -46,7 +46,7 @@ body() ->
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
             #panel{id = <<"main_table">>, body = main_table()},
-            #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
+            provider_redirection_panel()
         ]}
     ] ++ gr_gui_utils:logotype_footer(20)}.
 
@@ -243,6 +243,25 @@ find_connected_account(Provider, ProviderInfos) ->
     end, undefined, ProviderInfos).
 
 
+% Panel that will display a button to redirect a user to his provider,
+% or a token for space support if he has no spaces supported.
+provider_redirection_panel() ->
+    gui_jq:select_text(<<"token_textbox">>),
+    case gr_gui_utils:get_redirection_url_to_provider() of
+        {ok, URL} ->
+            #panel{body = [
+                #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster, [URL]}}
+            ]};
+        _ ->
+            #panel{class = <<"dialog dialog-danger">>, body = [
+                #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
+                "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
+                #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
+                    value = <<"dfsgdfsgdfsgdsgfdsfgdsfgdsfgdsgfdsg">>, placeholder = <<"Space support token">>}
+            ]}
+    end.
+
+
 % Postback event handling
 event(init) -> ok;
 
@@ -365,11 +384,5 @@ show_name_edition(Flag) ->
     end.
 
 
-redirect_to_veilcluster() ->
-    UserID = gui_ctx:get_user_id(),
-    try
-        RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fed9d5cb25286d919f3e35c53fceb7">>),
-        gui_jq:redirect(RedirectURL)
-    catch T:M ->
-        ?error_stacktrace("Cannot redirect to provider ~p:~p", [T, M])
-    end.
+redirect_to_veilcluster(URL) ->
+    gui_jq:redirect(URL).

@@ -18,6 +18,9 @@
 % Endpoint for OpenID / OAuth validation
 -define(local_auth_endpoint, "/validate_login").
 
+% Endpoint for redirects toi providers
+-define(provider_auth_endpoint, "/openid/login").
+
 % Error atom indicating that login request is invalid
 -define(error_auth_invalid_request, invalid_request).
 
