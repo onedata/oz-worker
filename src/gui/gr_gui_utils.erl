@@ -86,33 +86,38 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
 %% @doc Returns an URL that the user should be redirected to - if possible.
 %% Otherwise, error is returned.
 %% @end
--spec get_redirection_url_to_provider() -> {ok, URL :: binary()} | {error, Desc :: no_provider | term()}.
+-spec get_redirection_url_to_provider() -> {ok, URL :: binary()} | {error, Desc :: no_provider | internal}.
 %% ====================================================================
 get_redirection_url_to_provider() ->
-    UserID = gui_ctx:get_user_id(),
-    {ok, [{spaces, Spaces}]} = user_logic:get_spaces(UserID),
-    % Select the first provider of the first space that has any
-    ProviderID = lists:foldl(
-        fun(Space, Acc) ->
-            case Acc of
-                undefined ->
-                    {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
-                    case Providers of
-                        [] ->
-                            undefined;
-                        _ ->
-                            lists:nth(1, Providers)
-                    end;
-                _ -> Acc
-            end
-        end, undefined, Spaces),
+    try
+        UserID = gui_ctx:get_user_id(),
+        {ok, [{spaces, Spaces}]} = user_logic:get_spaces(UserID),
+        % Select the first provider of the first space that has any
+        ProviderID = lists:foldl(
+            fun(Space, Acc) ->
+                case Acc of
+                    undefined ->
+                        {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
+                        case Providers of
+                            [] ->
+                                undefined;
+                            _ ->
+                                lists:nth(1, Providers)
+                        end;
+                    _ -> Acc
+                end
+            end, undefined, Spaces),
 
-    case ProviderID of
-        undefined ->
-            {error, no_provider};
-        _ ->
-            RedirectURL = auth_logic:get_redirection_uri(UserID, ProviderID),
-            {ok, RedirectURL}
+        case ProviderID of
+            undefined ->
+                {error, no_provider};
+            _ ->
+                RedirectURL = auth_logic:get_redirection_uri(UserID, ProviderID),
+                {ok, RedirectURL}
+        end
+    catch T:M ->
+        ?error_stacktrace("Cannot resolve redirection URL to provider - ~p:~p", [T, M]),
+        {error, internal}
     end.
 
 

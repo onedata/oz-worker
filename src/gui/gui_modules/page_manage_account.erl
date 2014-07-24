@@ -251,7 +251,7 @@ provider_redirection_panel() ->
             #panel{body = [
                 #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster, [URL]}}
             ]};
-        _ ->
+        {error, no_provider} ->
             {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
             gui_jq:select_text(<<"token_textbox">>),
             #panel{class = <<"dialog dialog-danger">>, body = [
@@ -259,7 +259,9 @@ provider_redirection_panel() ->
                 "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
                 #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
                     value = Token, placeholder = <<"Space support token">>}
-            ]}
+            ]};
+        _ ->
+            page_error:redirect_with_error(?error_internal_server_error)
     end.
 
 
