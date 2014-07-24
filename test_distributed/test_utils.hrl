@@ -10,12 +10,32 @@
 %% ===================================================================
 -author("Tomasz Lichon").
 
+-include_lib("common_test/include/ct.hrl").
 
 -ifndef(TEST_UTILS_HRL).
 -define(TEST_UTILS_HRL, 1).
 
--define(GR_DEPS,[sasl,lager,ssl,erlydtl,mimetypes,ranch,crypto,cowboy,gproc,n2o,ibrowse]).
+-define(GR_DEPS,[sasl,lager,ssl,erlydtl,ranch,cowlib,cowboy,gproc,xmerl,ibrowse]).
 
--define(cert_paths,{ca_cert_file,"../../test_certs/ca.crt"},{cert_file,"../../test_certs/server.crt"},{key_file,"../../test_certs/server.key"}).
+-define(CREATE_DUMMY_AUTH, file:make_dir("gui_static"),file:write_file("gui_static/auth.config",<<"[].">>)).
+
+-define(PREPARE_CERT_FILES(Config),
+    begin
+        GRPCADir = filename:join(?config(priv_dir,Config), "grpca"),
+        CACertsDir = filename:join(?config(priv_dir,Config), "cacerts"),
+        [{project_root, ProjectRoot}] = ets:lookup(suite_state, project_root),
+        os:cmd("cp -r "++filename:join(ProjectRoot,"grpca")++" "++GRPCADir),
+        os:cmd("cp -r "++filename:join(ProjectRoot,"cacerts")++" "++CACertsDir),
+        {CACertsDir,GRPCADir}
+    end).
+
+-define(cert_paths(CACertsDir,GRPCADir),
+    {ca_cert_file,filename:join(CACertsDir,"ca.crt")},
+    {cert_file,filename:join(CACertsDir,"server.crt")},
+    {key_file,filename:join(CACertsDir,"server.key")},
+    {grpca_dir, GRPCADir},
+    {rest_cert_file, filename:join(GRPCADir,"rest.pem")},
+    {rest_key_file, filename:join(GRPCADir,"rest_key.pem")}).
+
 
 -endif.

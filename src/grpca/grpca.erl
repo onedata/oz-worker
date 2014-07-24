@@ -15,7 +15,7 @@
 
 -include("registered_names.hrl").
 -include_lib("public_key/include/public_key.hrl").
-
+-include_lib("ctool/include/logging.hrl").
 
 -define(REQUEST_TIMEOUT, 10000).
 -define(CACERT_FILE, "cacert.pem").
@@ -29,19 +29,36 @@
     emailAddress = "rest@onedata.com"}).
 
 
+%% ====================================================================
 %% API
+%% ====================================================================
 -export([start/4, stop/0, sign_provider_req/2, loop/1, verify_provider/1,
     cacert_path/1]).
 
 
+%% ====================================================================
+%% API functions
+%% ====================================================================
+
+
+%% cacert_path/1
+%% ====================================================================
+%% @doc Returns a path to a CA Certificate based on a given CA directory.
+%% ====================================================================
 -spec cacert_path(CaDir :: string()) -> string().
+%% ====================================================================
 cacert_path(CaDir) ->
     {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
     filename:join(CaDir, ?CACERT_FILE).
 
 
+%% start/4
+%% ====================================================================
+%% @doc Starts a GRPCA process which handles all CA duties.
+%% ====================================================================
 -spec start(CaDir :: string(), CertPath :: string(), KeyPath :: string(),
     Domain :: string()) -> ok.
+%% ====================================================================
 start(CADir, CertPath, KeyPath, Domain) ->
     case filelib:is_regular(CertPath) of
         true -> ok;
@@ -52,52 +69,94 @@ start(CADir, CertPath, KeyPath, Domain) ->
     ok.
 
 
+%% stop/0
+%% ====================================================================
+%% @doc Stops the GRPCA process.
+%% ====================================================================
 -spec stop() -> ok.
+%% ====================================================================
 stop() ->
     ca_loop ! stop,
     ok.
 
 
+%% sign_provider_req/2
+%% ====================================================================
+%% @doc Signs CSR from a provider, returning a new certificate.
+%% The CSR's DN will be overriden by the GRPCA; most importantly the
+%% Common Name will be set to the Provider's ID.
+%% @end
+%% ====================================================================
 -spec sign_provider_req(ProviderId :: binary(), CSRPem :: binary()) ->
     {ok, CertPem :: binary()}.
+%% ====================================================================
 sign_provider_req(ProviderId, CSRPem) ->
     delegate({sign_provider_req, ProviderId, CSRPem}).
 
 
+%% verify_provider/1
+%% ====================================================================
+%% @doc Verifies provider's certificate, returning Provider's ID if the
+%% certificate is valid.
+%% @end
+%% ====================================================================
 -spec verify_provider(PeerCertDer :: public_key:der_encoded()) ->
     {ok, ProviderId :: binary()}.
+%% ====================================================================
 verify_provider(PeerCertDer) -> %% @todo: CRLs
     delegate({verify_provider, PeerCertDer}).
 
 
+%% generate_gr_cert/1
+%% ====================================================================
+%% @doc Generates a certificate for Global Registry's REST interface.
+%% ====================================================================
 -spec generate_gr_cert(CaDir :: string(), CertPath :: string(),
     KeyPath :: string(), Domain :: string()) -> ok.
+%% ====================================================================
 generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
     TmpDir = mochitemp:mkdtemp(),
     CSRFile = random_filename(TmpDir),
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
     CaConfigFile = ca_config_file(TmpDir, CADir),
 
-    io:format("~s~n", [os:cmd(["openssl req",
+    ?info("Creating a CSR for the Global Registry REST interface..."),
+
+    RequestOutput = os:cmd(["openssl req",
         " -config ", ReqConfigFile,
         " -new ",
         " -keyout ", KeyPath,
-        " -out ", CSRFile])]),
+        " -out ", CSRFile]),
 
-    io:format("~s~n", [os:cmd(["openssl ca",
+    ?info("~s", [RequestOutput]),
+    ?info("Signing the Global Resistry REST interface CSR..."),
+
+    SigningOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,
         " -batch",
         " -notext",
         " -extensions user_cert",
         " -in ", CSRFile,
-        " -out ", CertPath])]),
+        " -out ", CertPath]),
+
+    ?info("~s", [SigningOutput]),
 
     mochitemp:rmtempdir(TmpDir),
     ok.
 
 
+%% ====================================================================
+%% Internal functions
+%% ====================================================================
+
+
+%% sign_provider_req_imp/3
+%% ====================================================================
+%% @doc The underlying implementation of {@link grpca:sign_provider_req/2}.
+%% ====================================================================
 -spec sign_provider_req_imp(ProviderId :: binary(), CSRPem :: binary(),
                             CaDir :: string()) -> {ok, Pem :: binary()}.
+%% ====================================================================
 sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
     TmpDir = mochitemp:mkdtemp(),
     CSRFile = random_filename(TmpDir),
@@ -120,8 +179,13 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
     {ok, Pem}.
 
 
+%% verify_provider_imp/2
+%% ====================================================================
+%% @doc The underlying implementation of {@link grpca:verify_provider_imp/1}.
+%% ====================================================================
 -spec verify_provider_imp(PeerCertDer :: public_key:der_encoded(),
                           CaDir :: string()) -> {ok, ProviderId :: binary()}.
+%% ====================================================================
 verify_provider_imp(PeerCertDer, CaDir) -> %% @todo: CRLs
     CaCertFile = cacert_path(CaDir),
     {ok, CaCertPem} = file:read_file(CaCertFile),
@@ -135,21 +199,37 @@ verify_provider_imp(PeerCertDer, CaDir) -> %% @todo: CRLs
     end.
 
 
+%% req_config_file/2
+%% ====================================================================
+%% @doc Creates a temporary config file for creating Global Registry REST
+%% certificate's CSR.
+%% ====================================================================
 -spec req_config_file(TmpDir :: string(), DN :: #dn{}) -> string().
+%% ====================================================================
 req_config_file(TmpDir, #dn{} = DN) ->
     Config = random_filename(TmpDir),
     ok = file:write_file(Config, req_cnf(DN)),
     Config.
 
 
+%% ca_config_file/2
+%% ====================================================================
+%% @doc Creates a temporary config file for signing CSR requests.
+%% ====================================================================
 -spec ca_config_file(TmpDir :: string(), CaDir :: string()) -> string().
+%% ====================================================================
 ca_config_file(TmpDir, CaDir) ->
     Config = random_filename(TmpDir),
     ok = file:write_file(Config, ca_cnf(CaDir)),
     Config.
 
 
+%% delegate/1
+%% ====================================================================
+%% @doc Delegates a request from the API to the GRPCA process.
+%% ====================================================================
 -spec delegate(Request :: atom()) -> Response :: any().
+%% ====================================================================
 delegate(Request) ->
     ca_loop ! {self(), Request},
     receive
@@ -160,9 +240,14 @@ delegate(Request) ->
     end.
 
 
+%% loop/1
+%% ====================================================================
+%% @doc The GRPCA process loop. @see start/4, @see stop/0 .
+%% ====================================================================
 -spec loop(CaDir :: string()) -> ok.
+%% ====================================================================
 loop(CaDir) ->
-    receive %% @todo: deduplication?
+    receive
         {Requester, {sign_provider_req, ProviderId, CSRPem}} ->
             Reply = (catch sign_provider_req_imp(ProviderId, CSRPem, CaDir)),
             Requester ! {ok, Reply},
@@ -179,7 +264,12 @@ loop(CaDir) ->
     end.
 
 
+%% get_provider_id/1
+%% ====================================================================
+%% @doc Extracts Provider's ID out of the certificate's Common Name.
+%% ====================================================================
 -spec get_provider_id(Cert :: #'Certificate'{}) -> ProviderId :: binary().
+%% ====================================================================
 get_provider_id(#'Certificate'{} = Cert) ->
     #'Certificate'{tbsCertificate =
         #'TBSCertificate'{subject = {rdnSequence, Attrs}}} = Cert,
@@ -197,16 +287,30 @@ get_provider_id(#'Certificate'{} = Cert) ->
     ProviderId.
 
 
+%% random_filename/1
+%% ====================================================================
+%% @doc Generates a random file name and returns a path residing under a given
+%% directory.
+%% @end
+%% ====================================================================
 -spec random_filename(TmpDir :: string()) -> string().
+%% ====================================================================
 random_filename(TmpDir) ->
     FileName = mochihex:to_hex(crypto:hash(sha, term_to_binary({make_ref(), now()}))),
     filename:join(TmpDir, FileName).
 
 
-%%
-%% Contents of configuration files
-%%
+%% ====================================================================
+%% Contents of configuration files.
+%% ====================================================================
 
+
+%% req_cnf/1
+%% ====================================================================
+%% @doc Returns a configuration for creating a CSR with given DN by the GRPCA.
+%% ====================================================================
+-spec req_cnf(DN :: #dn{}) -> Config :: iolist().
+%% ====================================================================
 req_cnf(DN) ->
     ["# Purpose: Configuration for requests (end users and CAs)."
     "\n"
@@ -242,6 +346,12 @@ req_cnf(DN) ->
     "subjectAltName         = email:copy\n"].
 
 
+%% ca_cnf/1
+%% ====================================================================
+%% @doc Returns a configuration for the GRPCA.
+%% ====================================================================
+-spec ca_cnf(CaDir :: string) -> Config :: iolist().
+%% ====================================================================
 ca_cnf(CaDir) ->
     ["# Purpose: Configuration for CAs.\n"
     "\n"
