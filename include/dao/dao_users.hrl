@@ -30,7 +30,9 @@
     email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],
     spaces = [] :: [SpaceId :: binary()],
-    groups = [] :: [GroupId :: binary()]
+    groups = [] :: [GroupId :: binary()],
+    % TODO this is a mock
+    first_space_support_token = <<"">> :: binary()
 }).
 
 -endif.

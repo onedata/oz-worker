@@ -22,7 +22,7 @@
 % Postback functions and other
 -export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
-%% -export([redirect_to_veilcluster/0]).
+-export([redirect_to_veilcluster/1]).
 
 
 %% Template points to the template file, which will be filled with content
@@ -45,12 +45,13 @@ body() ->
         gr_gui_utils:top_menu(manage_account_tab),
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
-            #panel{id = <<"main_table">>, body = main_table()}%,
-            %#button{body = <<"Go to your files - UWAGA TO NIE DZIALA">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster}}
+            #panel{id = <<"main_table">>, body = main_table()},
+            provider_redirection_panel()
         ]}
     ] ++ gr_gui_utils:logotype_footer(20)}.
 
 
+%% Main table containing user account info
 main_table() ->
     {ok, #user{} = User} = user_logic:get_user(gui_ctx:get_user_id()),
     #table{style = <<"border-width: 0px; width: auto;">>, body = [
@@ -76,6 +77,7 @@ main_table() ->
     ]}.
 
 
+%% Table row with user name edition
 user_name_section(User) ->
     gui_jq:bind_enter_to_submit_button(<<"new_name_textbox">>, <<"new_name_submit">>),
     #user{name = Name} = User,
@@ -129,6 +131,7 @@ user_emails_section(User) ->
     #list{numbered = true, style = <<"margin-top: -3px;">>, body = CurrentEmails ++ NewEmail}.
 
 
+% Section allowing for edition of connected accounts
 connected_accounts_section(User) ->
     #user{connected_accounts = ConnectedAccounts} = User,
     TableHead = #tr{cells = [
@@ -230,6 +233,7 @@ connected_accounts_section(User) ->
     #panel{style = <<"position: relative;">>, body = Table}.
 
 
+% Finds a connected accounr record in list of records
 find_connected_account(Provider, ProviderInfos) ->
     lists:foldl(fun(ProvUserInfo = #oauth_account{provider_id = ProviderID}, Acc) ->
         case Provider of
@@ -237,6 +241,28 @@ find_connected_account(Provider, ProviderInfos) ->
             _ -> Acc
         end
     end, undefined, ProviderInfos).
+
+
+% Panel that will display a button to redirect a user to his provider,
+% or a token for space support if he has no spaces supported.
+provider_redirection_panel() ->
+    case gr_gui_utils:get_redirection_url_to_provider() of
+        {ok, URL} ->
+            #panel{body = [
+                #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster, [URL]}}
+            ]};
+        {error, no_provider} ->
+            {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
+            gui_jq:select_text(<<"token_textbox">>),
+            #panel{class = <<"dialog dialog-danger">>, body = [
+                #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
+                "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
+                #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
+                    value = Token, placeholder = <<"Space support token">>}
+            ]};
+        _ ->
+            page_error:redirect_with_error(?error_internal_server_error)
+    end.
 
 
 % Postback event handling
@@ -249,12 +275,14 @@ event({action, Fun, Args}) ->
     gr_gui_utils:apply_or_redirect(?MODULE, Fun, Args).
 
 
+% Connects an oauth account to users account
 connect_account(Provider) ->
     HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
     gui_jq:redirect(URL).
 
 
+% Prompt to ask for confirmation to disconnect an account
 disconnect_account_prompt(Provider) ->
     % Get user info doc
     {ok, #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(gui_ctx:get_user_id()),
@@ -271,6 +299,7 @@ disconnect_account_prompt(Provider) ->
     end.
 
 
+% Disconnects an oauth account from user's accounts
 disconnect_account(Provider) ->
     UserId = gui_ctx:get_user_id(),
     % Find the user, remove provider info from his user info doc and reload the page
@@ -358,15 +387,5 @@ show_name_edition(Flag) ->
     end.
 
 
-%% redirect_to_veilcluster() ->
-%%     ?dump(asd),
-%%     UserID = gui_ctx:get_user_id(),
-%% %%     RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),\
-%%     try
-%%         RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fe6b67e13d752d9d8d01312c20df7a">>),
-%%         gui_jq:redirect(RedirectURL)
-%%     catch T:M ->
-%%         ?error_stacktrace("tutut ~p:~p", [T, M])
-%%     end.
-%% %%     <<"veilfsdev.com/openid_login?authorization_code=", Rest/binary>> = _RedirectURL,
-%% %%     gui_jq:redirect(<<"https://onedata.org/auth_endpoint?authorization_code=", Rest/binary>>).
+redirect_to_veilcluster(URL) ->
+    gui_jq:redirect(URL).

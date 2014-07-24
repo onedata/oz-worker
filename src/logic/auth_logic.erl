@@ -13,6 +13,7 @@
 -author("Konrad Zemek").
 
 -include("dao/dao_types.hrl").
+-include("auth_common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(AUTH_CODE, aUTH_CODE).
@@ -84,7 +85,7 @@ get_redirection_uri(UserId, ProviderId) ->
     ets:insert(?AUTH_CODE, {AuthCode, {ProviderId, UserId, ExpirationTime}}),
     {ok, ProviderData} = provider_logic:get_data(ProviderId),
     {redirectionPoint, RedirectURL} = lists:keyfind(redirectionPoint, 1, ProviderData),
-    <<RedirectURL/binary, "?code=", AuthCode/binary>>.
+    <<RedirectURL/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>.
 
 
 %% grant_token/2

@@ -37,7 +37,8 @@ body() ->
                     #h3{body = <<"First login">>},
                     #p{class = <<"login-info">>, body = <<"You have successfully logged in and an account for you has been created. ",
                     "You will be now redirected to profile management page, where you can fill out some information about yourself ",
-                    "and connect another accounts to your profile.">>},
+                    "and connect another accounts to your profile.<br /><br />",
+                    "We have created a default space for you. You will need to find a provider to support it before you can store any files.">>},
                     #button{class = <<"btn btn-primary btn-block">>, postback = to_manage_account, body = <<"Proceed">>}
                 ]},
                 gui_utils:cookie_policy_popup_body(?privacy_policy_url)
