@@ -89,13 +89,30 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
 -spec get_redirection_url_to_provider() -> {ok, URL :: binary()} | {error, Desc :: no_provider | term()}.
 %% ====================================================================
 get_redirection_url_to_provider() ->
-    case random:uniform(2) =:= 1 of
-        true ->
-            UserID = gui_ctx:get_user_id(),
-            RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04feec6420fc0cceb509ca569751dc38">>),
-            {ok, RedirectURL};
-        false ->
-            {error, no_provider}
+    UserID = gui_ctx:get_user_id(),
+    {ok, [{spaces, Spaces}]} = user_logic:get_spaces(UserID),
+    % Select the first provider of the first space that has any
+    ProviderID = lists:foldl(
+        fun(Space, Acc) ->
+            case Acc of
+                undefined ->
+                    {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
+                    case Providers of
+                        [] ->
+                            undefined;
+                        _ ->
+                            lists:nth(1, Providers)
+                    end;
+                _ -> Acc
+            end
+        end, undefined, Spaces),
+
+    case ProviderID of
+        undefined ->
+            {error, no_provider};
+        _ ->
+            RedirectURL = auth_logic:get_redirection_uri(UserID, ProviderID),
+            {ok, RedirectURL}
     end.
 
 
