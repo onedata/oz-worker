@@ -86,7 +86,7 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
 %% @doc Returns an URL that the user should be redirected to - if possible.
 %% Otherwise, error is returned.
 %% @end
--spec get_redirection_url_to_provider() -> {ok, URL :: binary()} | {error, Desc :: no_provider | internal}.
+-spec get_redirection_url_to_provider() -> {ok, URL :: binary()} | {error, Desc :: no_provider | term()}.
 %% ====================================================================
 get_redirection_url_to_provider() ->
     try
@@ -117,7 +117,7 @@ get_redirection_url_to_provider() ->
         end
     catch T:M ->
         ?error_stacktrace("Cannot resolve redirection URL to provider - ~p:~p", [T, M]),
-        {error, internal}
+        {error, {T, M}}
     end.
 
 
