@@ -15,7 +15,8 @@
 
 %% This record defines a provider who support spaces and can be reached via url
 -record(provider, {
-    url :: binary(),
+    redirection_point :: binary(),
+    urls :: [binary()],
     spaces = [] :: [SpaceId :: binary()]
 }).
 

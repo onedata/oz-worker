@@ -14,7 +14,6 @@
 %% Includes
 -include("registered_names.hrl").
 -include("test_utils.hrl").
--include_lib("common_test/include/ct.hrl").
 -include_lib("ctool/include/test/test_node_starter.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 
@@ -29,7 +28,7 @@ rest_api_connection_test(Config) ->
 	ssl:start(),
     [Node]=?config(nodes,Config),
     {ok,RestPort} = rpc:call(Node,application,get_env,[?APP_Name,rest_port]),
-	Ans = ibrowse:send_req("https://127.0.0.1:"++integer_to_list(RestPort)++"/provider/test/check_my_ip",[],get),
+	Ans = ibrowse:send_req("https://127.0.0.1:"++integer_to_list(RestPort)++"/provider/test/check_my_ip",[],get,[],[{ssl_options, [ {verify, verify_none} ] } ]),
 	?assertMatch({ok,_,_,_}, Ans),
 	ssl:stop(),
 	ibrowse:stop().
@@ -44,12 +43,15 @@ dao_connection_test(Config) ->
 
 init_per_suite(Config) ->
 	?INIT_CODE_PATH,
+  ?CREATE_DUMMY_AUTH,
+  {CACertsDir,GRPCADir} = ?PREPARE_CERT_FILES(Config),
+
 	DbNodesEnv = {db_nodes,[?DB_NODE]},
-    Nodes = test_node_starter:start_test_nodes(1),
+  Nodes = test_node_starter:start_test_nodes(1),
 	test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,
 		[[
 			DbNodesEnv,
-			?cert_paths
+      ?cert_paths(CACertsDir,GRPCADir)
 		]]
 	),
 	Config ++ [{nodes,Nodes}].

@@ -12,22 +12,32 @@
 -author("Krzysztof Trzepla").
 -compile(export_all).
 
-% Includes
--include_lib("n2o/include/wf.hrl").
--include("registered_names.hrl").
+-include("gui/common.hrl").
+
+% n2o API
+-export([main/0, event/1]).
+
 
 %% Template points to the template file, which will be filled with content
-main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}]}.
+main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}.
+
 
 %% Page title
 title() -> <<"Error 404">>.
 
+
 %% This will be placed in the template instead of {{body}} tag
 body() ->
-	#panel{style = <<"position: relative;">>, body = [
-		#panel{class = <<"alert alert-danger login-page">>, body = [
-			#h3{body = <<"Error 404">>}
-		]}
-	] ++ gui_utils:logotype_footer(120)}.
+    #panel{style = <<"position: relative;">>, body = [
+        #panel{class = <<"alert alert-danger login-page">>, body = [
+            #h3{body = <<"Error 404">>},
+            #p{class = <<"login-info">>, body = <<"Requested page could not be found on the server.">>},
+            #button{postback = to_login, class = <<"btn btn-warning btn-block">>, body = <<"Main page">>}
+        ]},
+        gui_utils:cookie_policy_popup_body(?privacy_policy_url)
+    ] ++ gr_gui_utils:logotype_footer(120)}.
 
-event(init) -> ok.
+
+event(init) -> ok;
+event(to_login) -> gui_jq:redirect_to_login(false);
+event(terminate) -> ok.

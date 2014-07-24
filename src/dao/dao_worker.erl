@@ -17,6 +17,7 @@
 -behaviour(gen_server).
 -author("Rafal Slota").
 
+-include_lib("ctool/include/logging.hrl").
 -include_lib("dao/include/common.hrl").
 -include_lib("dao/include/couch_db.hrl").
 -include("dao/dao_external.hrl").
@@ -79,7 +80,7 @@ init({_Args, {init_status, table_initialized}}) -> %% Final stage of initializat
 			[dao_hosts:insert(Node) || Node <- Nodes, is_atom(Node)],
 			catch dao_setup:setup_views(?DATABASE_DESIGN_STRUCTURE);
 		_ ->
-			lager:warning("There are no DB hosts given in application env variable.")
+			?warning("There are no DB hosts given in application env variable.")
 	end,
 	{ok,#state{}};
 init({Args, {init_status, _TableInfo}}) ->
@@ -110,12 +111,12 @@ handle_call({ProtocolVersion,Target, Method, Args},_From,State) when is_atom(Tar
 		end,
 	try apply(Module, Method, Args) of
 		{error, Err} ->
-			lager:error("Handling ~p:~p with args ~p returned error: ~p", [Module, Method, Args, Err]),
+			?error("Handling ~p:~p with args ~p returned error: ~p", [Module, Method, Args, Err]),
 			{reply, {error, Err}, State};
 		{ok, Response} -> {reply, {ok, Response}, State};
 		ok -> {reply, ok, State};
 		Other ->
-			lager:error("Handling ~p:~p with args ~p returned unknown response: ~p", [Module, Method, Args, Other]),
+			?error("Handling ~p:~p with args ~p returned unknown response: ~p", [Module, Method, Args, Other]),
 			{reply, {error, Other}, State}
 	catch
         error:{badmatch, {ok, Record}} ->
@@ -125,13 +126,13 @@ handle_call({ProtocolVersion,Target, Method, Args},_From,State) when is_atom(Tar
         error:{badmatch, Reason} ->
             {reply, {error, Reason},State};
 		Type:Error ->
-            lager:error("Handling ~p:~p with args ~p interrupted by exception: ~p:~p ~n ~p", [Module, Method, Args, Type, Error, erlang:get_stacktrace()]),
+            ?error("Handling ~p:~p with args ~p interrupted by exception: ~p:~p ~n ~p", [Module, Method, Args, Type, Error, erlang:get_stacktrace()]),
 			{reply, {error, Error}, State}
 	end;
 handle_call({ProtocolVersion, Method, Args},_From,State) when is_atom(Method), is_list(Args) ->
 	{reply,gen_server:call(?Dao,{ProtocolVersion, cluster, Method, Args}),State};
 handle_call(_Request,_From,State) ->
-	lager:error("Unknown call request ~p ", [_Request]),
+	?error("Unknown call request ~p ", [_Request]),
 	{reply,{error, wrong_args},State}.
 
 %% handle_cast/2
@@ -144,7 +145,7 @@ handle_call(_Request,_From,State) ->
 	{stop, Reason :: term(), NewState :: #state{}}).
 %% ====================================================================
 handle_cast(_Request, State) ->
-	lager:error("Unknown cast request ~p ", [_Request]),
+	?error("Unknown cast request ~p ", [_Request]),
 	{noreply, State}.
 
 %% handle_info/2
@@ -157,7 +158,7 @@ handle_cast(_Request, State) ->
 	{stop, Reason :: term(), NewState :: #state{}}).
 %% ====================================================================
 handle_info(_Info, State) ->
-	lager:error("Unknown info request ~p ", [_Info]),
+	?error("Unknown info request ~p ", [_Info]),
 	{noreply, State}.
 
 %% terminate/2

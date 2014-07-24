@@ -12,13 +12,14 @@
 -module(user_logic).
 -author("Konrad Zemek").
 
+-include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
 
 
 %% API
--export([create/1, modify/2, merge/2]).
+-export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
 -export([get_data/1, get_spaces/1, get_groups/1]).
--export([remove/1]).
+-export([exists/1, remove/1]).
 
 
 %% create/1
@@ -27,28 +28,86 @@
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec create(Name :: binary()) ->
+-spec create(User :: #user{}) ->
     {ok, UserId :: binary()} | no_return().
 %% ====================================================================
-create(Name) ->
-    UserId = dao_adapter:save(#user{name = Name}),
+create(User) ->
+    UserId = dao_adapter:save(User),
     {ok, UserId}.
+
+
+%% get_user/1
+%% ====================================================================
+%% @doc Retrieves user from the database.
+%% ====================================================================
+-spec get_user(Key) -> {ok, #user{}} | {error, term()} when
+    Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
+%% ====================================================================
+get_user(Key) ->
+    try
+        {ok, #veil_document{record = #user{} = User}} = get_user_doc(Key),
+        {ok, User}
+    catch
+        T:M ->
+            {error, {T, M}}
+    end.
+
+
+%% get_user_doc/1
+%% ====================================================================
+%% @doc Retrieves user doc from the database.
+%% ====================================================================
+-spec get_user_doc(Key) -> {ok, #veil_document{}} | {error, term()} when
+    Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
+%% ====================================================================
+get_user_doc(Key) ->
+    try
+        #veil_document{record = #user{}} = UserDoc =
+            case Key of
+                Bin when is_binary(Bin) ->
+                    dao_adapter:user_doc(Key);
+                Key ->
+                    dao_adapter:user_doc_from_view(Key)
+            end,
+        {ok, UserDoc}
+    catch
+        T:M ->
+            {error, {T, M}}
+    end.
 
 
 %% modify/2
 %% ====================================================================
-%% @doc Modifies user details.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% @doc Modifies user details. Second argument is proplist with keys
+%% corresponding to record field names. The proplist may contain any
+%% subset of fields to change.
 %% @end
 %% ====================================================================
--spec modify(UserId :: binary(), Name :: binary()) ->
-    ok | no_return().
+-spec modify(UserId :: binary(), Proplist :: [{atom(), binary()}]) ->
+    ok | {error, term()}.
 %% ====================================================================
-modify(UserId, Name) ->
-    #veil_document{record = User} = Doc = dao_adapter:user_doc(UserId),
-    DocNew = Doc#veil_document{record = User#user{name = Name}},
-    dao_adapter:save(DocNew),
-    ok.
+modify(UserId, Proplist) ->
+    try
+        #veil_document{record = User} = Doc = dao_adapter:user_doc(UserId),
+        #user{
+            name = Name,
+            email_list = Emails,
+            connected_accounts = ConnectedAccounts,
+            spaces = Spaces,
+            groups = Groups} = User,
+        NewUser = #user{
+            name = proplists:get_value(name, Proplist, Name),
+            email_list = proplists:get_value(email_list, Proplist, Emails),
+            connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
+            spaces = proplists:get_value(spaces, Proplist, Spaces),
+            groups = proplists:get_value(groups, Proplist, Groups)},
+        DocNew = Doc#veil_document{record = NewUser},
+        dao_adapter:save(DocNew),
+        ok
+    catch
+        T:M ->
+            {error, {T, M}}
+    end.
 
 
 %% merge/2
@@ -110,6 +169,21 @@ get_groups(UserId) ->
     Doc = dao_adapter:user_doc(UserId),
     #veil_document{record = #user{groups = Groups}} = Doc,
     {ok, [{groups, Groups}]}.
+
+
+%% exists/1
+%% ====================================================================
+%% @doc Rreturns true if a user by given key was found.
+%% @end
+%% ====================================================================
+-spec exists(Key) -> true | false when
+    Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
+%% ====================================================================
+exists(Key) ->
+    case get_user_doc(Key) of
+        {ok, _} -> true;
+        _ -> false
+    end.
 
 
 %% remove/1

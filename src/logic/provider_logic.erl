@@ -13,13 +13,17 @@
 -author("Konrad Zemek").
 
 -include("dao/dao_types.hrl").
--include_lib("dao/include/common.hrl").
+-include("registered_names.hrl").
 
+-include_lib("dao/include/common.hrl").
+-include_lib("public_key/include/public_key.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, modify/2]).
+-export([create/3, modify/2]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
+-export([test_connection/1]).
 
 
 %% create/1
@@ -28,12 +32,13 @@
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec create(URL :: binary()) ->
-    {ok, ProviderId :: binary()} | no_return().
+-spec create(URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+    {ok, ProviderId :: binary(), ProviderCertPem :: binary()} | no_return().
 %% ====================================================================
-create(URL) ->
-    ProviderId = dao_adapter:save(#provider{url = URL}),
-    {ok, ProviderId}.
+create(URLs, RedirectionPoint, CSRBin) ->
+    ProviderId = dao_adapter:save(#provider{urls = URLs, redirection_point = RedirectionPoint}),
+    {ok, ProviderCertPem} = grpca:sign_provider_req(ProviderId, CSRBin),
+    {ok, ProviderId, ProviderCertPem}.
 
 
 %% modify/2
@@ -42,13 +47,17 @@ create(URL) ->
 %% Throws exception when call to dao fails, or provider doesn't exist.
 %% @end
 %% ====================================================================
--spec modify(ProviderId :: binary(), URL :: binary()) ->
+-spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
     ok | no_return().
 %% ====================================================================
-modify(ProviderId, URL) ->
+modify(ProviderId, Data) ->
     Doc = dao_adapter:provider_doc(ProviderId),
     #veil_document{record = Provider} = Doc,
-    ProviderNew = Provider#provider{url = URL},
+
+    URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
+    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
+
+    ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint},
     dao_adapter:save(Doc#veil_document{record = ProviderNew}),
     ok.
 
@@ -63,10 +72,11 @@ modify(ProviderId, URL) ->
     {ok, Data :: [proplists:property()]} | no_return().
 %% ====================================================================
 get_data(ProviderId) ->
-    #provider{url = URL} = dao_adapter:provider(ProviderId),
+    #provider{urls = URLs, redirection_point = RedirectionPoint} = dao_adapter:provider(ProviderId),
     {ok, [
         {providerId, ProviderId},
-        {url, URL}
+        {urls, URLs},
+        {redirectionPoint, RedirectionPoint}
     ]}.
 
 
@@ -103,3 +113,33 @@ remove(ProviderId) ->
     end, Spaces),
 
     dao_adapter:provider_remove(ProviderId).
+
+%% test_connection/1
+%% ====================================================================
+%% @doc Tests connection to given url, returns <<"ok">> or <<"error">> status for each element
+%% ====================================================================
+-spec test_connection(ToCheck :: list({ServiceName :: binary(),Url :: binary()})) -> list(ConnStatus) when
+    ConnStatus :: {ServiceName :: binary(), Status :: binary()}.
+%% ====================================================================
+test_connection([]) ->
+    [];
+test_connection([ {<<"undefined">>,Url} | Rest]) ->
+    UrlString = binary_to_list(Url),
+    ConnStatus = case ibrowse:send_req(UrlString,[],get) of
+                     {ok, "200", _, _} ->
+                         <<"ok">>;
+                     _ ->
+                         <<"error">>
+                 end,
+    [{Url,ConnStatus} | test_connection(Rest)];
+test_connection([ {ServiceName,Url} | Rest]) ->
+    UrlString = binary_to_list(Url),
+    ServiceNameString = binary_to_list(ServiceName),
+    ConnStatus = case ibrowse:send_req(UrlString,[],get) of
+        {ok, "200", _, ServiceNameString} ->
+            <<"ok">>;
+        Error ->
+            ?debug("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
+            <<"error">>
+    end,
+    [{Url,ConnStatus} | test_connection(Rest)].

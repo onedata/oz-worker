@@ -1,43 +1,49 @@
-
 {application, globalregistry, [
-	{description, "Global registry of data."},
-	{vsn, "1"},
-	{registered, [globalregistry_sup]},
-	{applications, [
-		kernel,
-		stdlib,
-		sasl,
-		lager,
-		public_key,
-		crypto,
-		ssl,
-		erlydtl,
-		n2o,
-		cowboy,
-		mimetypes,
-		ibrowse
-	]},
-	{modules, [
-		globalregistry_sup,
-		globalregistry_app
-	]},
-	{mod, {globalregistry_app, []}},
-	{env, [
-		{db_nodes,['db@127.0.0.1']},
+    {description, "Global registry of data."},
+    {vsn, "1"},
+    {registered, [globalregistry_sup]},
+    {applications, [
+        kernel,
+        stdlib,
+        sasl,
+        public_key,
+        crypto,
+        ssl,
+        xmerl,
+        % ctool already requires those apps below, but they are here
+        % for awareness of them being used in the project and
+        % to make sure they are started before the application.
+        lager,
+        ibrowse,
+        cowboy
+    ]},
+    {modules, [
+        globalregistry_sup,
+        globalregistry_app
+    ]},
+    {mod, {globalregistry_app, []}},
+    {env, [
+        {db_nodes, ['db@127.0.0.1']},
 
         % rest config
-        {rest_port,8080},
-        {rest_https_acceptors,50},
+        {rest_port, 8443},
+        {rest_https_acceptors, 50},
+        {grpca_dir, "./grpca"},
+        {rest_cert_file, "./grpca/rest.pem"},
+        {rest_key_file, "./grpca/rest_key.pem"},
+        {rest_cert_domain, "127.0.0.1"},
+        {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'},
 
         % gui config
-        {gui_port,443},
-        {gui_https_acceptors,100},
-        {gui_socket_timeout,60000},
-        {gui_max_keepalive,30},
+        {gui_port, 443},
+        {gui_https_acceptors, 100},
+        {gui_socket_timeout, 60000},
+        {gui_max_keepalive, 30},
+        {gui_sessions_cookie_ttl, 2592000}, % 30 days in seconds
 
-		% certs todo generate dedicated certs (this are example ones)
-		{ca_cert_file,"./cacerts/ca.crt"},
-		{cert_file,"./cacerts/server.crt"},
-		{key_file,"./cacerts/server.key"}
-	]}
+        % certs todo generate dedicated certs (this are example ones)
+        {ca_cert_file, "./cacerts/ca.crt"},
+        {cert_file, "./cacerts/server.crt"},
+        {key_file, "./cacerts/server.key"}
+    ]}
 ]}.

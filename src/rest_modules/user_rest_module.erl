@@ -10,6 +10,7 @@
 -module(user_rest_module).
 -author("Konrad Zemek").
 
+-include("dao/dao_users.hrl").
 -include("handlers/rest_handler.hrl").
 
 -behavior(rest_module_behavior).
@@ -72,12 +73,14 @@ is_authorized(_, _, _, _) ->
 %% @end
 %% ====================================================================
 -spec resource_exists(Resource :: atom(), UserId :: binary() | undefined,
-                      Bindings :: [{atom(), any()}]) -> boolean().
+                      Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-resource_exists(space, UserId, Bindings) ->
+resource_exists(space, UserId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     space_logic:has_user(SID, UserId);
-resource_exists(group, UserId, Bindings) ->
+resource_exists(group, UserId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     GID = proplists:get_value(gid, Bindings),
     group_logic:has_user(GID, UserId);
 resource_exists(_, _, _) ->
@@ -94,46 +97,47 @@ resource_exists(_, _, _) ->
 -spec accept_resource(Resource :: atom(), Method :: method(),
                       UserId :: binary() | undefined,
                       Data :: [proplists:property()], Client :: client(),
-                      Bindings :: [{atom(), any()}]) ->
-    {true, URL :: binary()} | boolean().
+                      Req :: cowboy_req:req()) ->
+    {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
+        boolean().
 %% ====================================================================
-accept_resource(user, post, _UserId, Data, _Client, _Bindings) ->
+accept_resource(user, post, _UserId, Data, _Client, _Req) ->
     Name = proplists:get_value(<<"name">>, Data),
     if
         Name =:= undefined -> false;
         true ->
-            {ok, _} = user_logic:create(Name),
-            {true, <<"/user">>}
-    end;
-accept_resource(user, patch, UserId, Data, _Client, _Bindings) ->
-    Name = proplists:get_value(<<"name">>, Data),
-    if
-        Name =:= undefined -> false;
-        true ->
-            ok = user_logic:modify(UserId, Name),
+            {ok, _} = user_logic:create(#user{name = Name}),
             true
     end;
-accept_resource(spaces, post, _UserId, Data, Client, Bindings) ->
-    spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Bindings);
-accept_resource(sjoin, post, UserId, Data, _Client, _Bindings) ->
+accept_resource(user, patch, UserId, Data, _Client, _Req) ->
+    Name = proplists:get_value(<<"name">>, Data),
+    if
+        Name =:= undefined -> false;
+        true ->
+            ok = user_logic:modify(UserId, {name, Name}),
+            true
+    end;
+accept_resource(spaces, post, _UserId, Data, Client, Req) ->
+    spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
+accept_resource(sjoin, post, UserId, Data, _Client, _Req) ->
     Token = proplists:get_value(<<"token">>, Data),
     case token_logic:is_valid(Token, space_invite_user_token) of
         false -> false;
         true ->
             {ok, SpaceId} = space_logic:join({user, UserId}, Token),
-            {true, <<"/user/spaces/", SpaceId/binary>>}
+            {true, {url, <<"/user/spaces/", SpaceId/binary>>}}
     end;
-accept_resource(groups, post, _UserId, Data, Client, Bindings) ->
-    groups_rest_module:accept_resource(groups, post, undefined, Data, Client, Bindings);
-accept_resource(gjoin, post, UserId, Data, _Client, _Bindings) ->
+accept_resource(groups, post, _UserId, Data, Client, Req) ->
+    groups_rest_module:accept_resource(groups, post, undefined, Data, Client, Req);
+accept_resource(gjoin, post, UserId, Data, _Client, _Req) ->
     Token = proplists:get_value(<<"token">>, Data),
     case token_logic:is_valid(Token, group_invite_token) of
         false -> false;
         true ->
             {ok, GroupId} = group_logic:join(UserId, Token),
-            {true, <<"/user/groups/", GroupId/binary>>}
+            {true, {url, <<"/user/groups/", GroupId/binary>>}}
     end;
-accept_resource(merge, post, UserId, Data, _Client, _Bindings) ->
+accept_resource(merge, post, UserId, Data, _Client, _Req) ->
     Token = proplists:get_value(<<"token">>, Data),
     case token_logic:is_valid(Token, accounts_merge_token) of
         false -> false;
@@ -143,7 +147,6 @@ accept_resource(merge, post, UserId, Data, _Client, _Bindings) ->
     end.
 
 
-
 %% provide_resource/4
 %% ====================================================================
 %% @doc Returns data requested by a client through GET on a REST resource.
@@ -151,30 +154,32 @@ accept_resource(merge, post, UserId, Data, _Client, _Bindings) ->
 %% @end
 %% ====================================================================
 -spec provide_resource(Resource :: atom(), UserId :: binary() | undefined,
-                       Client :: client(), Bindings :: [{atom(), any()}]) ->
+                       Client :: client(), Req :: cowboy_req:req()) ->
     Data :: [proplists:property()].
 %% ====================================================================
-provide_resource(user, UserId, _Client, _Bindings) ->
+provide_resource(user, UserId, _Client, _Req) ->
     {ok, User} = user_logic:get_data(UserId),
     User;
-provide_resource(spaces, UserId, _Client, _Bindings) ->
+provide_resource(spaces, UserId, _Client, _Req) ->
     {ok, Spaces} = user_logic:get_spaces(UserId),
     Spaces;
-provide_resource(screate, UserId, _Client, _Bindings) ->
+provide_resource(screate, UserId, _Client, _Req) ->
     {ok, Token} = token_logic:create(space_create_token, {user, UserId}),
     [{token, Token}];
-provide_resource(space, _UserId, _Client, Bindings) ->
+provide_resource(space, _UserId, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     {ok, Space} = space_logic:get_data(SID, user),
     Space;
-provide_resource(groups, UserId, _Client, _Bindings) ->
+provide_resource(groups, UserId, _Client, _Req) ->
     {ok, Groups} = user_logic:get_groups(UserId),
     Groups;
-provide_resource(group, _UserId, _Client, Bindings) ->
+provide_resource(group, _UserId, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     {ok, Group} = group_logic:get_data(SID),
     Group;
-provide_resource(mtoken, UserId, _Client, _Bindings) ->
+provide_resource(mtoken, UserId, _Client, _Req) ->
     {ok, Token} = token_logic:create(accounts_merge_token, {user, UserId}),
     [{token, Token}].
 
@@ -186,13 +191,15 @@ provide_resource(mtoken, UserId, _Client, _Bindings) ->
 %% @end
 %% ====================================================================
 -spec delete_resource(Resource :: atom(), UserId :: binary() | undefined,
-                      Bindings :: [{atom(), any()}]) -> boolean().
+                      Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-delete_resource(user, UserId, _Bindings) ->
+delete_resource(user, UserId, _Req) ->
     user_logic:remove(UserId);
-delete_resource(space, UserId, Bindings) ->
+delete_resource(space, UserId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     space_logic:remove_user(SID, UserId);
-delete_resource(group, UserId, Bindings) ->
+delete_resource(group, UserId, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
     GID = proplists:get_value(gid, Bindings),
     group_logic:remove_user(GID, UserId).

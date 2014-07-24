@@ -33,11 +33,13 @@
 %% `resource` is the name of the requested resource.
 %% `methods` is an array of REST methods the resource accepts.
 %% `client` is the authenticated client's data.
+%% `noauth` is the list of methods not requiring a proper TLS authentication.
 -record(rstate, {
     module :: module(),
     resource :: atom(),
     methods :: [method()],
-    client :: client()
+    client :: client(),
+    noauth = [] :: [atom()]
 }).
 -type rstate() :: #rstate{}.
 

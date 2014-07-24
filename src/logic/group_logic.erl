@@ -149,7 +149,7 @@ join(UserId, Token) ->
 %% @end
 %% ====================================================================
 -spec set_privileges(GroupId :: binary(), UserId :: binary(),
-                     Privileges :: [privileges:group_privileges()]) ->
+                     Privileges :: [privileges:group_privilege()]) ->
     ok | no_return().
 %% ====================================================================
 set_privileges(GroupId, UserId, Privileges) ->
