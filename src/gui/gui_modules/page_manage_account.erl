@@ -51,6 +51,7 @@ body() ->
     ] ++ gr_gui_utils:logotype_footer(20)}.
 
 
+%% Main table containing user account info
 main_table() ->
     {ok, #user{} = User} = user_logic:get_user(gui_ctx:get_user_id()),
     #table{style = <<"border-width: 0px; width: auto;">>, body = [
@@ -76,6 +77,7 @@ main_table() ->
     ]}.
 
 
+%% Table row with user name edition
 user_name_section(User) ->
     gui_jq:bind_enter_to_submit_button(<<"new_name_textbox">>, <<"new_name_submit">>),
     #user{name = Name} = User,
@@ -129,6 +131,7 @@ user_emails_section(User) ->
     #list{numbered = true, style = <<"margin-top: -3px;">>, body = CurrentEmails ++ NewEmail}.
 
 
+% Section allowing for edition of connected accounts
 connected_accounts_section(User) ->
     #user{connected_accounts = ConnectedAccounts} = User,
     TableHead = #tr{cells = [
@@ -230,6 +233,7 @@ connected_accounts_section(User) ->
     #panel{style = <<"position: relative;">>, body = Table}.
 
 
+% Finds a connected accounr record in list of records
 find_connected_account(Provider, ProviderInfos) ->
     lists:foldl(fun(ProvUserInfo = #oauth_account{provider_id = ProviderID}, Acc) ->
         case Provider of
@@ -249,12 +253,14 @@ event({action, Fun, Args}) ->
     gr_gui_utils:apply_or_redirect(?MODULE, Fun, Args).
 
 
+% Connects an oauth account to users account
 connect_account(Provider) ->
     HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
     gui_jq:redirect(URL).
 
 
+% Prompt to ask for confirmation to disconnect an account
 disconnect_account_prompt(Provider) ->
     % Get user info doc
     {ok, #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(gui_ctx:get_user_id()),
@@ -271,6 +277,7 @@ disconnect_account_prompt(Provider) ->
     end.
 
 
+% Disconnects an oauth account from user's accounts
 disconnect_account(Provider) ->
     UserId = gui_ctx:get_user_id(),
     % Find the user, remove provider info from his user info doc and reload the page
@@ -360,12 +367,9 @@ show_name_edition(Flag) ->
 
 redirect_to_veilcluster() ->
     UserID = gui_ctx:get_user_id(),
-%%     RedirectURL = onedata_auth:get_redirect_to_provider_url(<<"https://veilfsdev.com">>, UserID),\
     try
         RedirectURL = auth_logic:get_redirection_uri(UserID, <<"04fed9d5cb25286d919f3e35c53fceb7">>),
         gui_jq:redirect(RedirectURL)
     catch T:M ->
-        ?error_stacktrace("tutut ~p:~p", [T, M])
+        ?error_stacktrace("Cannot redirect to provider ~p:~p", [T, M])
     end.
-%%     <<"veilfsdev.com/openid_login?authorization_code=", Rest/binary>> = _RedirectURL,
-%%     gui_jq:redirect(<<"https://onedata.org/auth_endpoint?authorization_code=", Rest/binary>>).

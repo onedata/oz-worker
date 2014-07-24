@@ -68,9 +68,10 @@ body() ->
 
 
 
+% Events handling
 event(init) -> ok;
-% Login event handling
 
+% Login event handling
 event({auth, HandlerModule}) ->
     {ok, URL} = HandlerModule:get_redirect_url(false),
     gui_jq:redirect(URL);

@@ -46,6 +46,7 @@ body() ->
     ] ++ gr_gui_utils:logotype_footer(20)}.
 
 
+%% Main table containing couple of sections
 about_table() ->
     #table{style = <<"border-width: 0px; width: auto">>, body = [
         #tr{cells = [
