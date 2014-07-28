@@ -186,7 +186,7 @@ insert_expirable(Tab, Key, SecondsToExpire, Data) ->
     {ok, Data :: term()} | {error, missing} | no_return().
 %% ====================================================================
 retrieve_expirable(Tab, Key) ->
-    clear_expired(Tab),
+    %% clear_expired(Tab),
     case ets:lookup(Tab, Key) of
         [] -> {error, missing};
         [{_, {_, Data}}] -> {ok, Data}
@@ -220,7 +220,7 @@ clear_expired(Tab) ->
     AuthCode :: binary()) -> [proplists:property()].
 %% ====================================================================
 grant_tokens(Client, AuthCode) ->
-    {ok, {UserId, ProviderId}} = retrieve_expirable(?AUTH_CODE, AuthCode), %% @todo: missing
+    {ok, {UserId, ProviderId}} = retrieve_expirablenvm(?AUTH_CODE, AuthCode), %% @todo: missing
     ets:delete(?AUTH_CODE, AuthCode),
 
     Audience = case ProviderId of undefined -> UserId; _ -> ProviderId end,
