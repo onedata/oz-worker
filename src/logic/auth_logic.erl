@@ -203,11 +203,11 @@ retrieve_expirable(Tab, Key) ->
 %% ====================================================================
 clear_expired(?ACCESS = Tab) ->
     Now = now_s(),
-    Expired = ets:select(Tab, [{{'$1', {'$2', {'_'}}}, [{'<', Now, '$2'}], ['$1']}]),
+    Expired = ets:select(Tab, [{{'$1', {'$2', {'_'}}}, [{'<', '$2', Now}], ['$1']}]),
     lists:foreach(fun delete_access/1, Expired);
 clear_expired(Tab) ->
     Now = now_s(),
-    ets:select_delete(Tab, [{{'$1', {'$2', '$3'}}, [{'<', Now, '$2'}], [true]}]).
+    ets:select_delete(Tab, [{{'$1', {'$2', '$3'}}, [{'<', '$2', Now}], [true]}]).
 
 
 %% grant_tokens/2
