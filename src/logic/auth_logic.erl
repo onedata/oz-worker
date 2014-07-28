@@ -16,6 +16,9 @@
 -include("auth_common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
+%% @todo: openid tokens need to be persisted in the database. refresh token
+%% shouldn't expire. the whole chain of authorization and refresh tokens should
+%% be known as session, identifiable by session id.
 -define(AUTH_CODE, auth_code). %% {AuthCode, {ExpirationTime, {UserId, ProviderId}}} [1:1]
 -define(ACCESS_TOKEN, access_token). %% {AccessToken, AccessId} [1:1]
 -define(REFRESH_TOKEN, refresh_token). %% {RefreshToken, AccessId} [1:1]
