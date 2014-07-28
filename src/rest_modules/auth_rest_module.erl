@@ -36,7 +36,7 @@ routes() ->
         {<<"/openid/client/access_code">>, M, S#rstate{resource = acscode, methods = [get]}},
         {<<"/openid/client/tokens">>, M, S#rstate{resource = ctokens, methods = [post, get], noauth = [post]}},
         {<<"/openid/client/tokens/:accessId">>, M, S#rstate{resource = ctoken, methods = [delete]}},
-        {<<"/">>, M, S#rstate{resource = verify, methods = [post]}},
+        {<<"/openid/client/verify">>, M, S#rstate{resource = verify, methods = [post]}},
         {<<"/openid/provider/tokens">>, M, S#rstate{resource = ptokens, methods = [post]}}
     ].
 
