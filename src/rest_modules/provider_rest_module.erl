@@ -34,6 +34,7 @@ routes() ->
     M = rest_handler,
     [
         {<<"/provider">>,                               M, S#rstate{resource = provider,    methods = [get, post, patch, delete], noauth = [post]}},
+        {<<"/provider/:pid">>,                          M, S#rstate{resource = nprovider,   methods = [get]                 }},
         {<<"/provider/spaces/">>,                       M, S#rstate{resource = spaces,      methods = [get, post]           }},
         {<<"/provider/spaces/support">>,                M, S#rstate{resource = ssupport,    methods = [post]                }},
         {<<"/provider/spaces/:sid">>,                   M, S#rstate{resource = space,       methods = [get, delete]         }},
@@ -78,6 +79,10 @@ resource_exists(space, ProviderId, Req) ->
     {Bindings, _Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     space_logic:has_provider(SID, ProviderId);
+resource_exists(nprovider, _, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
+    PID = proplists:get_value(pid, Bindings),
+    provider_logic:exists(PID);
 resource_exists(_, _, _) ->
     true.
 
@@ -135,6 +140,11 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, _Req) ->
 %% ====================================================================
 provide_resource(provider, ProviderId, _Client, _Req) ->
     {ok, Provider} = provider_logic:get_data(ProviderId),
+    Provider;
+provide_resource(nprovider, _ProviderId, _Client, Req) ->
+    {Bindings, _Req2} = cowboy_req:bindings(Req),
+    PID = proplists:get_value(pid, Bindings),
+    {ok, Provider} = provider_logic:get_data(PID),
     Provider;
 provide_resource(spaces, ProviderId, _Client, _Req) ->
     {ok, Spaces} = provider_logic:get_spaces(ProviderId),
