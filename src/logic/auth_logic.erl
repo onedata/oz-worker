@@ -240,7 +240,7 @@ grant_tokens(Client, AuthCode) ->
     ets:insert(?ACCESS_TOKEN, {AccessToken, AccessId}),
     ets:insert(?REFRESH_TOKEN, {RefreshToken, AccessId}),
     ets:insert(?USER_ID, {UserId, AccessId}),
-    insert_expirable(?ACCESS, AccessToken, ?ACCESS_EXPIRATION_SECS,
+    insert_expirable(?ACCESS, AccessId, ?ACCESS_EXPIRATION_SECS,
         {AccessToken, RefreshToken, UserId, ProviderId, client_name_placeholder}),
 
     {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
