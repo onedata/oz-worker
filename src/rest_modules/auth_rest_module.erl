@@ -108,7 +108,7 @@ accept_resource(Resource, post, Id, Data, _Client, _Req)
     end;
 accept_resource(verify, post, ProviderId, Data, _Client, _Req) ->
     %% @todo: should take global registry's signed ID token + authorization code hash
-    true. %% @todo
+    {true, {data, [{verified, true}]}}.
 
 
 %% provide_resource/4
