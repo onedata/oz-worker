@@ -33,7 +33,7 @@
 -define(AUTH_CODE_EXPIRATION_SECS, 600).
 -define(ACCESS_EXPIRATION_SECS, 36000).
 -define(STATE_TOKEN_EXPIRATION_SECS, 60).
--define(ISSUER_URL, "https://onedata.org").
+-define(ISSUER_URL, <<"https://onedata.org">>).
 
 
 %% ====================================================================
