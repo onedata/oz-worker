@@ -60,7 +60,7 @@ body() ->
                     #p{class = <<"login-info">>, body = <<"You can sign in using one of your existing accounts.">>},
                     #panel{style = <<"">>, body = Buttons}
                 ]},
-                gui_utils:cookie_policy_popup_body(?privacy_policy_url)
+                gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
             ] ++ gr_gui_utils:logotype_footer(120)
                 ++ [#p{body = <<"<iframe src=\"", LogoutEndpoint/binary, "\" style=\"display:none\"></iframe>">>}]
             }

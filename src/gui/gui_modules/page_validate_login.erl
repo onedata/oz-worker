@@ -41,7 +41,7 @@ body() ->
                     "We have created a default space for you. You will need to find a provider to support it before you can store any files.">>},
                     #button{class = <<"btn btn-primary btn-block">>, postback = to_manage_account, body = <<"Proceed">>}
                 ]},
-                gui_utils:cookie_policy_popup_body(?privacy_policy_url)
+                gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
             ] ++ gr_gui_utils:logotype_footer(120)};
         {error, ErrorID} ->
             page_error:redirect_with_error(ErrorID)

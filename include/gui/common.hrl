@@ -16,7 +16,10 @@
 -include("registered_names.hrl").
 
 % Relative suffix of GUI address, leading to privacy policy page
--define(privacy_policy_url, <<"/privacy_policy">>).
+-define(privacy_policy_url, "/privacy_policy").
+
+% Endpoint at veil cluster to check connectivity
+-define(veilcluster_connection_check_endpoint, "/rest/latest/connection_check").
 
 % Macros used as ids of errors that can appear on GUI pages
 -define(error_internal_server_error, internal_server_error).

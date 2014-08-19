@@ -22,7 +22,7 @@
 % Postback functions and other
 -export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
--export([redirect_to_veilcluster/1]).
+-export([redirect_to_veilcluster/2]).
 
 
 %% Template points to the template file, which will be filled with content
@@ -247,9 +247,10 @@ find_connected_account(Provider, ProviderInfos) ->
 % or a token for space support if he has no spaces supported.
 provider_redirection_panel() ->
     case gr_gui_utils:get_redirection_url_to_provider() of
-        {ok, URL} ->
+        {ok, ProviderHostname, URL} ->
             #panel{body = [
-                #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>, postback = {action, redirect_to_veilcluster, [URL]}}
+                #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
+                    postback = {action, redirect_to_veilcluster, [ProviderHostname, URL]}}
             ]};
         {error, no_provider} ->
             {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
@@ -387,5 +388,8 @@ show_name_edition(Flag) ->
     end.
 
 
-redirect_to_veilcluster(URL) ->
-    gui_jq:redirect(URL).
+redirect_to_veilcluster(ProviderHostname, URL) ->
+    case gui_utils:https_get(<<ProviderHostname/binary, ?veilcluster_connection_check_endpoint>>, []) of
+        {ok, _} -> gui_jq:redirect(URL);
+        _ -> gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable.">>})
+    end.
