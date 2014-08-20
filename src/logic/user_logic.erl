@@ -19,6 +19,7 @@
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
 -export([get_data/1, get_spaces/1, get_groups/1]).
+-export([get_default_space/1, set_default_space/2]).
 -export([exists/1, remove/1]).
 
 
@@ -219,3 +220,89 @@ remove(UserId) ->
     end, Spaces),
 
     dao_adapter:user_remove(UserId).
+
+
+%% get_default_space/1
+%% ====================================================================
+%% @doc Retrieve user's default space ID.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
+%% ====================================================================
+-spec get_default_space(UserId :: binary()) ->
+    {ok, SpaceId :: binary() | undefined} | no_return().
+%% ====================================================================
+get_default_space(UserId) ->
+    Doc = dao_adapter:user_doc(UserId),
+    #veil_document{record = #user{default_space = DefaultSpaceId} = User} = Doc,
+
+    EffectiveDefaultSpaceId = case DefaultSpaceId of
+        undefined -> undefined;
+        _ ->
+            case is_a_member(UserId, DefaultSpaceId) of
+                true -> DefaultSpaceId;
+                false ->
+                    UserNew = User#user{default_space = undefined},
+                    dao_adapter:save(Doc#veil_document{record = UserNew}),
+                    undefined
+            end
+    end,
+
+    {ok, EffectiveDefaultSpaceId}.
+
+
+%% set_default_space/2
+%% ====================================================================
+%% @doc Set user's default space ID.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
+%% ====================================================================
+-spec set_default_space(UserId :: binary(), SpaceId :: binary()) ->
+    true.
+%% ====================================================================
+set_default_space(UserId, SpaceId) ->
+    Doc = dao_adapter:user_doc(UserId),
+    #veil_document{record = User} = Doc,
+
+    true = is_a_member(UserId, SpaceId), %% @TODO: error handling
+
+    UpdatedUser = User#user{default_space = SpaceId},
+    dao_adapter:save(Doc#veil_document{record = UpdatedUser}),
+
+    true.
+
+
+%% is_a_member/2
+%% ====================================================================
+%% @doc Determines if a user is a direct or indirect member of a space.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
+%% ====================================================================
+-spec is_a_member(UserId :: binary(), SpaceId :: binary()) ->
+    boolean().
+%% ====================================================================
+is_a_member(UserId, SpaceId) ->
+    Doc = dao_adapter:user_doc(UserId),
+    #veil_document{record = #user{spaces = Spaces, groups = Groups}} = Doc,
+
+    case lists:member(SpaceId, Spaces) of
+        true -> true;
+        false ->
+            case space_logic:exists(SpaceId) of
+                false -> false;
+                true -> is_a_member_by_proxy(SpaceId, Groups)
+            end
+    end.
+
+%% is_a_member_by_proxy/2
+%% ====================================================================
+%% @doc Determines if a user is an indirect member of a space.
+%% ====================================================================
+-spec is_a_member_by_proxy(SpaceId :: binary(), Groupd :: [binary()]) ->
+    boolean().
+%% ====================================================================
+is_a_member_by_proxy(_SpaceId, []) -> false;
+is_a_member_by_proxy(SpaceId, [Group | Groups]) ->
+    case space_logic:has_group(SpaceId, Group) of
+        true -> true;
+        false -> is_a_member_by_proxy(SpaceId, Groups)
+    end.
