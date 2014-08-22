@@ -39,7 +39,7 @@
         {gui_https_acceptors, 100},
         {gui_socket_timeout, 60000},
         {gui_max_keepalive, 30},
-        {gui_sessions_cookie_ttl, 2592000}, % 30 days in seconds
+        {gui_sessions_cookie_ttl, 3600}, % one hour
 
         % certs todo generate dedicated certs (this are example ones)
         {ca_cert_file, "./cacerts/ca.crt"},

@@ -86,7 +86,7 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
 %% @doc Returns an URL that the user should be redirected to - if possible.
 %% Otherwise, error is returned.
 %% @end
--spec get_redirection_url_to_provider() -> {ok, URL :: binary()} | {error, Desc :: no_provider | term()}.
+-spec get_redirection_url_to_provider() -> {ok, ProvderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
 %% ====================================================================
 get_redirection_url_to_provider() ->
     try
@@ -112,8 +112,8 @@ get_redirection_url_to_provider() ->
             undefined ->
                 {error, no_provider};
             _ ->
-                RedirectURL = auth_logic:get_redirection_uri(UserID, ProviderID),
-                {ok, RedirectURL}
+                {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(UserID, ProviderID),
+                {ok, ProviderHostname, RedirectURL}
         end
     catch T:M ->
         ?error_stacktrace("Cannot resolve redirection URL to provider - ~p:~p", [T, M]),
@@ -183,7 +183,7 @@ top_menu(ActiveTabID, SubMenuBody) ->
                 ]}
             ]}
         ] ++ SubMenuBody}
-    ] ++ gui_utils:cookie_policy_popup_body(?privacy_policy_url).
+    ] ++ gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>).
 
 
 %% logotype_footer/1
