@@ -44,6 +44,9 @@
         % certs todo generate dedicated certs (this are example ones)
         {ca_cert_file, "./lib/data/cacerts/ca.crt"},
         {cert_file, "./lib/data/cacerts/server.crt"},
-        {key_file, "./lib/data/cacerts/server.key"}
+        {key_file, "./lib/data/cacerts/server.key"},
+
+        % dao
+        {view_def_location, "./lib/data/views/"}
     ]}
 ]}.
