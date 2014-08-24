@@ -17,7 +17,7 @@
 % n2o API
 -export([main/0, event/1]).
 
--define(LICENSE_FILE, "LICENSE.txt").
+-define(LICENSE_FILE, "lib/data/LICENSE.txt").
 -define(CONTACT_EMAIL, "support@onedata.org").
 
 

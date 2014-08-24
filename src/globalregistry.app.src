@@ -28,9 +28,9 @@
         % rest config
         {rest_port, 8443},
         {rest_https_acceptors, 50},
-        {grpca_dir, "./grpca"},
-        {rest_cert_file, "./grpca/rest.pem"},
-        {rest_key_file, "./grpca/rest_key.pem"},
+        {grpca_dir, "./lib/data/grpca"},
+        {rest_cert_file, "./lib/data/grpca/rest.pem"},
+        {rest_key_file, "./lib/data/grpca/rest_key.pem"},
         {rest_cert_domain, "127.0.0.1"},
         {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'},
 
@@ -42,8 +42,8 @@
         {gui_sessions_cookie_ttl, 3600}, % one hour
 
         % certs todo generate dedicated certs (this are example ones)
-        {ca_cert_file, "./cacerts/ca.crt"},
-        {cert_file, "./cacerts/server.crt"},
-        {key_file, "./cacerts/server.key"}
+        {ca_cert_file, "./lib/data/cacerts/ca.crt"},
+        {cert_file, "./lib/data/cacerts/server.crt"},
+        {key_file, "./lib/data/cacerts/server.key"}
     ]}
 ]}.
