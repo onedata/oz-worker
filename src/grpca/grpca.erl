@@ -115,15 +115,10 @@ verify_provider(PeerCertDer) -> %% @todo: CRLs
     KeyPath :: string(), Domain :: string()) -> ok.
 %% ====================================================================
 generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
-    ?info("=====> CWD: ~p", [file:get_cwd()]),
     TmpDir = mochitemp:mkdtemp(),
-    ?dump(TmpDir),
     CSRFile = random_filename(TmpDir),
-    ?dump(CSRFile),
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
-    ?dump(ReqConfigFile),
     CaConfigFile = ca_config_file(TmpDir, CADir),
-    ?dump(CaConfigFile),
 
     ?info("Creating a CSR for the Global Registry REST interface..."),
 
