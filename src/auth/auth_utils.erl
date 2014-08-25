@@ -104,6 +104,7 @@ validate_login() ->
                                                 {ok, UserId} = user_logic:create(UserInfo),
                                                 % Create a default space for the user and generate a token to support it
                                                 {ok, SpaceID} = space_logic:create({user, UserId}, <<Name/binary, "'s space">>),
+                                                true = user_logic:set_default_space(UserId, SpaceID),
                                                 {ok, Token} = token_logic:create(space_support_token, {space, SpaceID}),
                                                 user_logic:modify(UserId, [{first_space_support_token, Token}]),
                                                 gui_ctx:create_session(),
