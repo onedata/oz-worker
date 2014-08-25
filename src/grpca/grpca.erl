@@ -120,7 +120,16 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
     CaConfigFile = ca_config_file(TmpDir, CADir),
 
+    ?dump(TmpDir),
+    ?dump(CSRFile),
+    ?dump(ReqConfigFile),
+    ?dump(CaConfigFile),
+
     ?info("Creating a CSR for the Global Registry REST interface..."),
+
+    ?dump(ReqConfigFile),
+    ?dump(KeyPath),
+    ?dump(CSRFile),
 
     RequestOutput = os:cmd(["openssl req",
         " -config ", ReqConfigFile,
@@ -130,6 +139,10 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
 
     ?info("~s", [RequestOutput]),
     ?info("Signing the Global Resistry REST interface CSR..."),
+
+    ?dump(CaConfigFile),
+    ?dump(CSRFile),
+    ?dump(CertPath),
 
     SigningOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,
@@ -155,7 +168,7 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
 %% @doc The underlying implementation of {@link grpca:sign_provider_req/2}.
 %% ====================================================================
 -spec sign_provider_req_imp(ProviderId :: binary(), CSRPem :: binary(),
-                            CaDir :: string()) -> {ok, Pem :: binary()}.
+    CaDir :: string()) -> {ok, Pem :: binary()}.
 %% ====================================================================
 sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
     TmpDir = mochitemp:mkdtemp(),
@@ -184,7 +197,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
 %% @doc The underlying implementation of {@link grpca:verify_provider_imp/1}.
 %% ====================================================================
 -spec verify_provider_imp(PeerCertDer :: public_key:der_encoded(),
-                          CaDir :: string()) -> {ok, ProviderId :: binary()}.
+    CaDir :: string()) -> {ok, ProviderId :: binary()}.
 %% ====================================================================
 verify_provider_imp(PeerCertDer, CaDir) -> %% @todo: CRLs
     CaCertFile = cacert_path(CaDir),
@@ -272,7 +285,7 @@ loop(CaDir) ->
 %% ====================================================================
 get_provider_id(#'Certificate'{} = Cert) ->
     #'Certificate'{tbsCertificate =
-        #'TBSCertificate'{subject = {rdnSequence, Attrs}}} = Cert,
+    #'TBSCertificate'{subject = {rdnSequence, Attrs}}} = Cert,
 
     [ProviderId] = lists:filtermap(fun([Attribute]) ->
         case Attribute#'AttributeTypeAndValue'.type of
