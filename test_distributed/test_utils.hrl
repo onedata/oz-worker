@@ -21,11 +21,11 @@
 
 -define(PREPARE_CERT_FILES(Config),
     begin
-        GRPCADir = filename:join(?config(priv_dir,Config), "lib/data/grpca"),
-        CACertsDir = filename:join(?config(priv_dir,Config), "lib/data/cacerts"),
+        GRPCADir = filename:join(?config(priv_dir,Config), "releases/data/grpca"),
+        CACertsDir = filename:join(?config(priv_dir,Config), "releases/data/cacerts"),
         [{project_root, ProjectRoot}] = ets:lookup(suite_state, project_root),
-        os:cmd("cp -r "++filename:join(ProjectRoot,"lib/data/grpca")++" "++GRPCADir),
-        os:cmd("cp -r "++filename:join(ProjectRoot,"lib/data/cacerts")++" "++CACertsDir),
+        os:cmd("cp -r "++filename:join(ProjectRoot,"releases/data/grpca")++" "++GRPCADir),
+        os:cmd("cp -r "++filename:join(ProjectRoot,"releases/data/cacerts")++" "++CACertsDir),
         {CACertsDir,GRPCADir}
     end).
 
