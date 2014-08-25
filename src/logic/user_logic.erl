@@ -23,6 +23,11 @@
 -export([exists/1, remove/1]).
 
 
+%% ====================================================================
+%% API functions
+%% ====================================================================
+
+
 %% create/1
 %% ====================================================================
 %% @doc Creates a user account.
@@ -149,7 +154,8 @@ get_data(UserId) ->
 %% get_spaces/1
 %% ====================================================================
 %% @doc Returns user's spaces.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to dao fails, or user doesn't exist, or his groups
+%% don't exist.
 %% @end
 %% ====================================================================
 -spec get_spaces(UserId :: binary()) ->
@@ -157,8 +163,12 @@ get_data(UserId) ->
 %% ====================================================================
 get_spaces(UserId) ->
     Doc = dao_adapter:user_doc(UserId),
-    #veil_document{record = #user{spaces = Spaces}} = Doc,
-    {ok, [{spaces, Spaces}]}.
+    AllUserSpaces = get_all_spaces(Doc),
+    EffectiveDefaultSpace = effective_default_space(AllUserSpaces, Doc),
+    {ok, [
+        {spaces, AllUserSpaces},
+        {default, EffectiveDefaultSpace}
+    ]}.
 
 
 %% get_groups/1
@@ -225,7 +235,8 @@ remove(UserId) ->
 %% get_default_space/1
 %% ====================================================================
 %% @doc Retrieve user's default space ID.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to dao fails, or user doesn't exist, or his groups
+%% don't exist.
 %% @end
 %% ====================================================================
 -spec get_default_space(UserId :: binary()) ->
@@ -233,76 +244,94 @@ remove(UserId) ->
 %% ====================================================================
 get_default_space(UserId) ->
     Doc = dao_adapter:user_doc(UserId),
-    #veil_document{record = #user{default_space = DefaultSpaceId} = User} = Doc,
-
-    EffectiveDefaultSpaceId = case DefaultSpaceId of
-        undefined -> undefined;
-        _ ->
-            case is_a_member(UserId, DefaultSpaceId) of
-                true -> DefaultSpaceId;
-                false ->
-                    UserNew = User#user{default_space = undefined},
-                    dao_adapter:save(Doc#veil_document{record = UserNew}),
-                    undefined
-            end
-    end,
-
-    {ok, EffectiveDefaultSpaceId}.
+    {ok, effective_default_space(Doc)}.
 
 
 %% set_default_space/2
 %% ====================================================================
 %% @doc Set user's default space ID.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to dao fails, or user doesn't exist, or his groups
+%% don't exist.
 %% @end
 %% ====================================================================
 -spec set_default_space(UserId :: binary(), SpaceId :: binary()) ->
-    true.
+    true | no_return().
 %% ====================================================================
 set_default_space(UserId, SpaceId) ->
     Doc = dao_adapter:user_doc(UserId),
     #veil_document{record = User} = Doc,
 
-    true = is_a_member(UserId, SpaceId), %% @TODO: error handling
-
-    UpdatedUser = User#user{default_space = SpaceId},
-    dao_adapter:save(Doc#veil_document{record = UpdatedUser}),
-
-    true.
-
-
-%% is_a_member/2
-%% ====================================================================
-%% @doc Determines if a user is a direct or indirect member of a space.
-%% Throws exception when call to dao fails, or user doesn't exist.
-%% @end
-%% ====================================================================
--spec is_a_member(UserId :: binary(), SpaceId :: binary()) ->
-    boolean().
-%% ====================================================================
-is_a_member(UserId, SpaceId) ->
-    Doc = dao_adapter:user_doc(UserId),
-    #veil_document{record = #user{spaces = Spaces, groups = Groups}} = Doc,
-
-    case lists:member(SpaceId, Spaces) of
-        true -> true;
-        false ->
-            case space_logic:exists(SpaceId) of
-                false -> false;
-                true -> is_a_member_by_proxy(SpaceId, Groups)
-            end
+    AllUserSpaces = get_all_spaces(Doc),
+    case ordsets:is_element(SpaceId, AllUserSpaces) of
+        false -> false;
+        true ->
+            UpdatedUser = User#user{default_space = SpaceId},
+            dao_adapter:save(Doc#veil_document{record = UpdatedUser}),
+            true
     end.
 
-%% is_a_member_by_proxy/2
+
 %% ====================================================================
-%% @doc Determines if a user is an indirect member of a space.
+%% Internal functions
 %% ====================================================================
--spec is_a_member_by_proxy(SpaceId :: binary(), Groupd :: [binary()]) ->
-    boolean().
+
+
+%% get_all_spaces/1
 %% ====================================================================
-is_a_member_by_proxy(_SpaceId, []) -> false;
-is_a_member_by_proxy(SpaceId, [Group | Groups]) ->
-    case space_logic:has_group(SpaceId, Group) of
-        true -> true;
-        false -> is_a_member_by_proxy(SpaceId, Groups)
+%% @doc Returns a list of all spaces that a user belongs to, directly or through
+%% a group.
+%% Throws exception when call to dao fails, or user's groups don't exist.
+%% @end
+%% ====================================================================
+-spec get_all_spaces(Doc :: veil_doc()) ->
+    ordsets:ordset(SpaceId :: binary()) | no_return().
+%% ====================================================================
+get_all_spaces(#veil_document{record = #user{} = User}) ->
+    #user{spaces = UserSpaces, groups = Groups} = User,
+
+    UserSpacesSet = ordsets:from_list(UserSpaces),
+    GroupSpacesSets = lists:map(
+        fun(GroupId) ->
+            GroupDoc = dao_adapter:group_doc(GroupId),
+            #veil_document{record = #user_group{spaces = GroupSpaces}} = GroupDoc,
+            ordsets:from_list(GroupSpaces)
+        end, Groups),
+
+    ordsets:union([UserSpacesSet | GroupSpacesSets]).
+
+
+%% effective_default_space/1
+%% ====================================================================
+%% @doc Returns an effective default space id; i.e. validates and changes
+%% (if needed) the default space id set in the user doc. Returns the new, valid
+%% space id.
+%% Throws exception when call to dao fails, or user's groups don't exist.
+%% @end
+%% ====================================================================
+-spec effective_default_space(UserDoc :: veil_doc()) ->
+    EffectiveDefaultSpaceId :: binary() | undefined | no_return().
+%% ====================================================================
+effective_default_space(#veil_document{record = #user{default_space = undefined}}) ->
+    undefined;
+effective_default_space(#veil_document{record = #user{}} = UserDoc) ->
+    AllUserSpaces = get_all_spaces(UserDoc),
+    effective_default_space(AllUserSpaces, UserDoc).
+
+
+%% effective_default_space/2
+%% ====================================================================
+%% @equiv effective_default_space(UserDoc)
+%% ====================================================================
+-spec effective_default_space(AllUserSpaces :: ordsets:ordset(),
+                              UserDoc :: veil_doc()) ->
+    EffectiveDefaultSpaceId :: binary() | undefined | no_return().
+%% ====================================================================
+effective_default_space(AllUserSpaces, #veil_document{} = UserDoc) ->
+    #veil_document{record = #user{default_space = DefaultSpaceId} = User} = UserDoc,
+    case ordsets:is_element(DefaultSpaceId, AllUserSpaces) of
+        true -> DefaultSpaceId;
+        false ->
+            UserNew = User#user{default_space = undefined},
+            dao_adapter:save(UserDoc#veil_document{record = UserNew}),
+            undefined
     end.

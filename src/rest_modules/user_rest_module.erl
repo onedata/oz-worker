@@ -122,17 +122,12 @@ accept_resource(user, patch, UserId, Data, _Client, _Req) ->
     end;
 accept_resource(spaces, post, _UserId, Data, Client, Req) ->
     spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
-accept_resource(defspace, put, UserId, Data, _Client, Req) ->
+accept_resource(defspace, put, UserId, Data, _Client, _Req) ->
     SpaceId = proplists:get_value(<<"spaceId">>, Data),
     if
         SpaceId =:= undefined -> false;
         true ->
-            case catch user_logic:set_default_space(UserId, SpaceId) of
-                true -> true;
-                Other ->
-                    ?warning("Setting default space ~p for user ~p failed with ~p", [SpaceId, UserId, Other]),
-                    false
-            end
+            user_logic:set_default_space(UserId, SpaceId)
     end;
 accept_resource(sjoin, post, UserId, Data, _Client, _Req) ->
     Token = proplists:get_value(<<"token">>, Data),
