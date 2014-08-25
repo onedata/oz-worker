@@ -120,16 +120,7 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
     CaConfigFile = ca_config_file(TmpDir, CADir),
 
-    ?dump(TmpDir),
-    ?dump(CSRFile),
-    ?dump(ReqConfigFile),
-    ?dump(CaConfigFile),
-
     ?info("Creating a CSR for the Global Registry REST interface..."),
-
-    ?dump(ReqConfigFile),
-    ?dump(KeyPath),
-    ?dump(CSRFile),
 
     RequestOutput = os:cmd(["openssl req",
         " -config ", ReqConfigFile,
@@ -139,10 +130,6 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
 
     ?info("~s", [RequestOutput]),
     ?info("Signing the Global Resistry REST interface CSR..."),
-
-    ?dump(CaConfigFile),
-    ?dump(CSRFile),
-    ?dump(CertPath),
 
     SigningOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,
