@@ -244,7 +244,8 @@ remove(UserId) ->
 %% ====================================================================
 get_default_space(UserId) ->
     Doc = dao_adapter:user_doc(UserId),
-    {ok, effective_default_space(Doc)}.
+    AllUserSpaces = get_all_spaces(Doc),
+    {ok, effective_default_space(AllUserSpaces, Doc)}.
 
 
 %% set_default_space/2
@@ -300,7 +301,7 @@ get_all_spaces(#veil_document{record = #user{} = User}) ->
     ordsets:union([UserSpacesSet | GroupSpacesSets]).
 
 
-%% effective_default_space/1
+%% effective_default_space/2
 %% ====================================================================
 %% @doc Returns an effective default space id; i.e. validates and changes
 %% (if needed) the default space id set in the user doc. Returns the new, valid
@@ -308,24 +309,12 @@ get_all_spaces(#veil_document{record = #user{} = User}) ->
 %% Throws exception when call to dao fails, or user's groups don't exist.
 %% @end
 %% ====================================================================
--spec effective_default_space(UserDoc :: veil_doc()) ->
-    EffectiveDefaultSpaceId :: binary() | undefined | no_return().
-%% ====================================================================
-effective_default_space(#veil_document{record = #user{default_space = undefined}}) ->
-    undefined;
-effective_default_space(#veil_document{record = #user{}} = UserDoc) ->
-    AllUserSpaces = get_all_spaces(UserDoc),
-    effective_default_space(AllUserSpaces, UserDoc).
-
-
-%% effective_default_space/2
-%% ====================================================================
-%% @equiv effective_default_space(UserDoc)
-%% ====================================================================
 -spec effective_default_space(AllUserSpaces :: ordsets:ordset(),
                               UserDoc :: veil_doc()) ->
     EffectiveDefaultSpaceId :: binary() | undefined | no_return().
 %% ====================================================================
+effective_default_space(_, #veil_document{record = #user{default_space = undefined}}) ->
+    undefined;
 effective_default_space(AllUserSpaces, #veil_document{} = UserDoc) ->
     #veil_document{record = #user{default_space = DefaultSpaceId} = User} = UserDoc,
     case ordsets:is_element(DefaultSpaceId, AllUserSpaces) of
