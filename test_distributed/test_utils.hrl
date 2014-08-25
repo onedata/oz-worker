@@ -21,7 +21,7 @@
     begin
         lists:foldl(fun(Leaf, Path) ->
             NewPath = filename:join(Path, Leaf),
-            file:make_dir(NewPath),
+            catch file:make_dir(NewPath),
             NewPath
         end, Root, filename:split(Dir))
     end).
@@ -34,13 +34,9 @@
 
 -define(PREPARE_CERT_FILES(Config),
     begin
-        PrivDir = ?config(priv_dir, Config),
-        ?MAKE_DIR(PrivDir, "releases/data"),
-        GRPCADir = filename:join(PrivDir, "releases/data/grpca"),
-        CACertsDir = filename:join(PrivDir, "releases/data/cacerts"),
         [{project_root, ProjectRoot}] = ets:lookup(suite_state, project_root),
-        os:cmd("cp -r " ++ filename:join(ProjectRoot, "grpca") ++ " " ++ GRPCADir),
-        os:cmd("cp -r " ++ filename:join(ProjectRoot, "cacerts") ++ " " ++ CACertsDir),
+        GRPCADir = filename:join(ProjectRoot, "grpca"),
+        CACertsDir = filename:join(ProjectRoot, "cacerts"),
         {CACertsDir, GRPCADir}
     end).
 
