@@ -106,9 +106,11 @@ accept_resource(Resource, post, Id, Data, _Client, _Req)
             TokenClient = case Resource of ptokens -> {provider, Id}; ctokens -> native end,
             {true, {data, auth_logic:grant_tokens(TokenClient, Code)}}
     end;
-accept_resource(verify, post, ProviderId, Data, _Client, _Req) ->
-    %% @todo: should take global registry's signed ID token + authorization code hash
-    {true, {data, [{verified, true}]}}.
+accept_resource(verify, post, _ProviderId, Data, _Client, _Req) ->
+    UserId = proplists:get_value(<<"userId">>, Data),
+    Secret = proplists:get_value(<<"secret">>, Data),
+    Verified = auth_logic:verify(UserId, Secret),
+    {true, {data, [{verified, Verified}]}}.
 
 
 %% provide_resource/4

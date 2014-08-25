@@ -21,6 +21,7 @@
 %% be known as session, identifiable by session id.
 -define(AUTH_CODE, auth_code). %% {AuthCode, {ExpirationTime, {UserId, ProviderId}}} [1:1]
 -define(ACCESS_TOKEN, access_token). %% {AccessToken, AccessId} [1:1]
+-define(ACCESS_TOKEN_HASH, access_token_hash). %% {base64(sha512(AccessToken)), AccessId} [1:1]
 -define(REFRESH_TOKEN, refresh_token). %% {RefreshToken, AccessId} [1:1]
 -define(USER_ID, user_id). %% {UserId, AccessId} [1:n]
 -define(ACCESS, access). %% {AccessId, {ExpirationTime, {AccessToken, RefreshToken, UserId, ProviderId, ClientName}}} [1:1]
@@ -41,7 +42,7 @@
 %% ====================================================================
 -export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
     has_access/2, delete_access/1,  get_user_tokens/1,  grant_tokens/2,
-    validate_token/2]).
+    validate_token/2, verify/2]).
 
 %% ====================================================================
 %% Handling state tokens
@@ -142,6 +143,7 @@ has_access(UserId, AccessId) ->
 delete_access(AccessId) ->
     {ok, {AccessToken, RefreshToken, UserId, _, _}} = retrieve_expirable(?ACCESS, AccessId),
     ets:delete(?REFRESH_TOKEN, RefreshToken),
+    ets:delete(?ACCESS_TOKEN_HASH, access_token_hash(AccessToken)),
     ets:delete(?ACCESS_TOKEN, AccessToken),
     ets:delete(?USER_ID, UserId),
     ets:delete(?ACCESS, AccessId),
@@ -162,55 +164,6 @@ get_user_tokens(UserId) ->
             [{_, {_, {_, _, _, _, ClientName}}}] = ets:lookup(?ACCESS, AccessId),
             [{accessId, AccessId}, {clientName, ClientName}]
         end, AccessIDs).
-
-
-%% insert_expirable/4
-%% ====================================================================
-%% @doc Inserts a {Key, Data} pair into internal storage with additional
-%% expiration time management.
-%% @end
-%% ====================================================================
--spec insert_expirable(Tab :: atom(), Key :: term(),
-                       SecondsToExpire :: integer(), Data :: term()) -> ok.
-%% ====================================================================
-insert_expirable(Tab, Key, SecondsToExpire, Data) ->
-    ExpirationTime = now_s() + SecondsToExpire,
-    ets:insert(Tab, {Key, {ExpirationTime, Data}}),
-    ok.
-
-
-%% retrieve_expirable/2
-%% ====================================================================
-%% @doc Retrieves data from the internal storage with additional expiration
-%% time management.
-%% @end
-%% ====================================================================
--spec retrieve_expirable(Tab :: atom(), Key :: term()) ->
-    {ok, Data :: term()} | {error, missing} | no_return().
-%% ====================================================================
-retrieve_expirable(Tab, Key) ->
-    clear_expired(Tab),
-    case ets:lookup(Tab, Key) of
-        [] -> {error, missing};
-        [{_, {_, Data}}] -> {ok, Data}
-    end.
-
-
-%% clear_expired/1
-%% ====================================================================
-%% @doc Clears all expired entries from an internal storage with additional
-%% expiration time management.
-%% @end
-%% ====================================================================
--spec clear_expired(Tab :: atom()) -> DeletedRecords :: integer().
-%% ====================================================================
-clear_expired(?ACCESS = Tab) ->
-    Now = now_s(),
-    Expired = ets:select(Tab, [{{'$1', {'$2', {'_'}}}, [{'<', '$2', Now}], ['$1']}]),
-    lists:foreach(fun delete_access/1, Expired);
-clear_expired(Tab) ->
-    Now = now_s(),
-    ets:select_delete(Tab, [{{'$1', {'$2', '$3'}}, [{'<', '$2', Now}], [true]}]).
 
 
 %% grant_tokens/2
@@ -238,6 +191,7 @@ grant_tokens(Client, AuthCode) ->
     AccessId = random_token(),
 
     ets:insert(?ACCESS_TOKEN, {AccessToken, AccessId}),
+    ets:insert(?ACCESS_TOKEN_HASH, {access_token_hash(AccessToken), AccessId}),
     ets:insert(?REFRESH_TOKEN, {RefreshToken, AccessId}),
     ets:insert(?USER_ID, {UserId, AccessId}),
     insert_expirable(?ACCESS, AccessId, ?ACCESS_EXPIRATION_SECS,
@@ -331,7 +285,7 @@ lookup_state_token(Token) ->
 %% clear_expired_state_tokens/0
 %% ====================================================================
 %% @doc Removes all state tokens that are no longer valid from ETS.
-%% @end
+%% ====================================================================
 -spec clear_expired_state_tokens() -> ok.
 %% ====================================================================
 clear_expired_state_tokens() ->
@@ -345,9 +299,88 @@ clear_expired_state_tokens() ->
         end, ExpiredSessions).
 
 
+%% verify/3
+%% ====================================================================
+%% @doc Verifies if a given secret belongs to a given user.
+%% ====================================================================
+-spec verify(UserId :: binary(), Secret :: binary()) ->
+    boolean().
+%% ====================================================================
+verify(UserId, Secret) ->
+    case ets:lookup(?ACCESS_TOKEN_HASH, Secret) of
+        [{_, AccessId}] ->
+            case retrieve_expirable(?ACCESS, AccessId) of
+                {error, missing} -> false;
+                {ok, {_, _, UserId, _, _}} -> true;
+                _ -> false
+            end;
+        _ -> false
+    end.
+
+
+
 %% ====================================================================
 %% Internal functions
 %% ====================================================================
+
+%% access_token_hash/3
+%% ====================================================================
+%% @doc Hashes a token with SHA512 and encodes it with base64.
+%% ====================================================================
+-spec access_token_hash(AccessToken :: binary()) -> Hash :: binary().
+%% ====================================================================
+access_token_hash(AccessToken) ->
+    Hash = crypto:hash(sha512, AccessToken),
+    base64:encode(Hash).
+
+
+%% insert_expirable/4
+%% ====================================================================
+%% @doc Inserts a {Key, Data} pair into internal storage with additional
+%% expiration time management.
+%% @end
+%% ====================================================================
+-spec insert_expirable(Tab :: atom(), Key :: term(),
+SecondsToExpire :: integer(), Data :: term()) -> ok.
+%% ====================================================================
+insert_expirable(Tab, Key, SecondsToExpire, Data) ->
+    ExpirationTime = now_s() + SecondsToExpire,
+    ets:insert(Tab, {Key, {ExpirationTime, Data}}),
+    ok.
+
+
+%% retrieve_expirable/2
+%% ====================================================================
+%% @doc Retrieves data from the internal storage with additional expiration
+%% time management.
+%% @end
+%% ====================================================================
+-spec retrieve_expirable(Tab :: atom(), Key :: term()) ->
+    {ok, Data :: term()} | {error, missing} | no_return().
+%% ====================================================================
+retrieve_expirable(Tab, Key) ->
+    clear_expired(Tab),
+    case ets:lookup(Tab, Key) of
+        [] -> {error, missing};
+        [{_, {_, Data}}] -> {ok, Data}
+    end.
+
+
+%% clear_expired/1
+%% ====================================================================
+%% @doc Clears all expired entries from an internal storage with additional
+%% expiration time management.
+%% @end
+%% ====================================================================
+-spec clear_expired(Tab :: atom()) -> DeletedRecords :: integer().
+%% ====================================================================
+clear_expired(?ACCESS = Tab) ->
+    Now = now_s(),
+    Expired = ets:select(Tab, [{{'$1', {'$2', {'_'}}}, [{'<', '$2', Now}], ['$1']}]),
+    lists:foreach(fun delete_access/1, Expired);
+clear_expired(Tab) ->
+    Now = now_s(),
+    ets:select_delete(Tab, [{{'$1', {'$2', '$3'}}, [{'<', '$2', Now}], [true]}]).
 
 
 %% jwt_encode/1
