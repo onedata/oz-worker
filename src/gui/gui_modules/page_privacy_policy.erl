@@ -17,7 +17,7 @@
 % n2o API
 -export([main/0, event/1]).
 
--define(PRIVACY_POLICY_FILE, "releases/data/PRIVACY_POLICY.html").
+-define(PRIVACY_POLICY_FILE, "resources/PRIVACY_POLICY.html").
 
 %% Template points to the template file, which will be filled with content
 main() ->

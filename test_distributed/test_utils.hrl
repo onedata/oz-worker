@@ -28,8 +28,8 @@
 
 -define(CREATE_DUMMY_AUTH,
     begin
-        ?MAKE_DIR(".", "releases/data/gui_static"),
-        file:write_file("releases/data/gui_static/auth.config", <<"[].">>)
+        ?MAKE_DIR(".", "resources/gui_static"),
+        file:write_file("resources/gui_static/auth.config", <<"[].">>)
     end).
 
 -define(PREPARE_CERT_FILES(Config),
