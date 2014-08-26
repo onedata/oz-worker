@@ -91,7 +91,7 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
 get_redirection_url_to_provider() ->
     try
         UserID = gui_ctx:get_user_id(),
-        {ok, [{spaces, Spaces}]} = user_logic:get_spaces(UserID),
+        {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
         % Select the first provider of the first space that has any
         ProviderID = lists:foldl(
             fun(Space, Acc) ->
