@@ -27,7 +27,7 @@
 -define(ACCESS, access). %% {AccessId, {ExpirationTime, {AccessToken, RefreshToken, UserId, ProviderId, ClientName}}} [1:1]
 -define(STATE_TOKEN, state_token).
 
--define(TABLES_SET, [?AUTH_CODE, ?ACCESS_TOKEN, ?REFRESH_TOKEN, ?ACCESS, ?STATE_TOKEN]).
+-define(TABLES_SET, [?AUTH_CODE, ?ACCESS_TOKEN, ?ACCESS_TOKEN_HASH, ?REFRESH_TOKEN, ?ACCESS, ?STATE_TOKEN]).
 -define(TABLES_BAG, [?USER_ID]).
 
 %% @todo: config
