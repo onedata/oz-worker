@@ -18,7 +18,7 @@
 -define(gui_https_listener, https).
 
 % Path to directory that contains gui static files
--define(gui_static_root, "./gui_static").
+-define(gui_static_root, "resources/gui_static").
 % Paths in gui static directory
 -define(static_paths, ["/css/", "/fonts/", "/images/", "/js/", "/n2o/"]).
 

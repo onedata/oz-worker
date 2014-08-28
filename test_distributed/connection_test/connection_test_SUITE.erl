@@ -18,45 +18,45 @@
 -include_lib("ctool/include/test/assertions.hrl").
 
 %% API
--export([all/0,init_per_suite/1,end_per_suite/1]).
--export([rest_api_connection_test/1,dao_connection_test/1]).
+-export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([rest_api_connection_test/1, dao_connection_test/1]).
 
-all() -> [rest_api_connection_test,dao_connection_test].
+all() -> [rest_api_connection_test, dao_connection_test].
 
 rest_api_connection_test(Config) ->
-	ibrowse:start(),
-	ssl:start(),
-    [Node]=?config(nodes,Config),
-    {ok,RestPort} = rpc:call(Node,application,get_env,[?APP_Name,rest_port]),
-	Ans = ibrowse:send_req("https://127.0.0.1:"++integer_to_list(RestPort)++"/provider/test/check_my_ip",[],get,[],[{ssl_options, [ {verify, verify_none} ] } ]),
-	?assertMatch({ok,_,_,_}, Ans),
-	ssl:stop(),
-	ibrowse:stop().
+    ibrowse:start(),
+    ssl:start(),
+    [Node] = ?config(nodes, Config),
+    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
+    Ans = ibrowse:send_req("https://127.0.0.1:" ++ integer_to_list(RestPort) ++ "/provider/test/check_my_ip", [], get, [], [{ssl_options, [{verify, verify_none}]}]),
+    ?assertMatch({ok, _, _, _}, Ans),
+    ssl:stop(),
+    ibrowse:stop().
 
 dao_connection_test(Config) ->
-	[Node] = ?config(nodes,Config),
-	?assertMatch({ok,_},rpc:call(Node,dao_lib,apply,[dao_helper,list_dbs,[],1])).
+    [Node] = ?config(nodes, Config),
+    ?assertMatch({ok, _}, rpc:call(Node, dao_lib, apply, [dao_helper, list_dbs, [], 1])).
 
 %% ====================================================================
 %% SetUp and TearDown functions
 %% ====================================================================
 
 init_per_suite(Config) ->
-	?INIT_CODE_PATH,
-  ?CREATE_DUMMY_AUTH,
-  {CACertsDir,GRPCADir} = ?PREPARE_CERT_FILES(Config),
+    ?INIT_CODE_PATH,
+    ?CREATE_DUMMY_AUTH,
+    {CACertsDir, GRPCADir} = ?PREPARE_CERT_FILES(Config),
 
-	DbNodesEnv = {db_nodes,[?DB_NODE]},
-  Nodes = test_node_starter:start_test_nodes(1),
-	test_node_starter:start_app_on_nodes(?APP_Name,?GR_DEPS,Nodes,
-		[[
-			DbNodesEnv,
-      ?cert_paths(CACertsDir,GRPCADir)
-		]]
-	),
-	Config ++ [{nodes,Nodes}].
+    DbNodesEnv = {db_nodes, [?DB_NODE]},
+    Nodes = test_node_starter:start_test_nodes(1),
+    test_node_starter:start_app_on_nodes(?APP_Name, ?GR_DEPS, Nodes,
+        [[
+            DbNodesEnv,
+            ?cert_paths(CACertsDir, GRPCADir)
+        ]]
+    ),
+    Config ++ [{nodes, Nodes}].
 
 end_per_suite(Config) ->
-	Nodes = ?config(nodes,Config),
-	test_node_starter:stop_app_on_nodes(?APP_Name,?GR_DEPS,Nodes),
-	test_node_starter:stop_test_nodes(Nodes).
+    Nodes = ?config(nodes, Config),
+    test_node_starter:stop_app_on_nodes(?APP_Name, ?GR_DEPS, Nodes),
+    test_node_starter:stop_test_nodes(Nodes).

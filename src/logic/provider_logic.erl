@@ -20,7 +20,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/3, modify/2]).
+-export([create/3, modify/2, exists/1]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
 -export([test_connection/1]).
@@ -60,6 +60,18 @@ modify(ProviderId, Data) ->
     ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint},
     dao_adapter:save(Doc#veil_document{record = ProviderNew}),
     ok.
+
+
+%% exists/1
+%% ====================================================================
+%% @doc Returns whether a Provider exists.
+%% Throws exception when call to dao fails.
+%% @end
+%% ====================================================================
+-spec exists(ProviderId :: binary()) -> boolean().
+%% ====================================================================
+exists(ProviderId) ->
+    dao_adapter:provider_exists(ProviderId).
 
 
 %% get_data/1

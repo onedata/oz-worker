@@ -13,6 +13,8 @@
 -include("dao/dao_users.hrl").
 -include("handlers/rest_handler.hrl").
 
+-include_lib("ctool/include/logging.hrl").
+
 -behavior(rest_module_behavior).
 
 
@@ -36,6 +38,7 @@ routes() ->
     [
         {<<"/user">>,               M, S#rstate{resource = user,    methods = [get, post, patch, delete]}},
         {<<"/user/spaces">>,        M, S#rstate{resource = spaces,  methods = [get, post]   }},
+        {<<"/user/spaces/default">>,M, S#rstate{resource = defspace,methods = [get, put]    }},
         {<<"/user/spaces/join">>,   M, S#rstate{resource = sjoin,   methods = [post]        }},
         {<<"/user/spaces/token">>,  M, S#rstate{resource = screate, methods = [get]         }},
         {<<"/user/spaces/:sid">>,   M, S#rstate{resource = space,   methods = [get, delete] }},
@@ -119,6 +122,13 @@ accept_resource(user, patch, UserId, Data, _Client, _Req) ->
     end;
 accept_resource(spaces, post, _UserId, Data, Client, Req) ->
     spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
+accept_resource(defspace, put, UserId, Data, _Client, _Req) ->
+    SpaceId = proplists:get_value(<<"spaceId">>, Data),
+    if
+        SpaceId =:= undefined -> false;
+        true ->
+            user_logic:set_default_space(UserId, SpaceId)
+    end;
 accept_resource(sjoin, post, UserId, Data, _Client, _Req) ->
     Token = proplists:get_value(<<"token">>, Data),
     case token_logic:is_valid(Token, space_invite_user_token) of
@@ -163,6 +173,9 @@ provide_resource(user, UserId, _Client, _Req) ->
 provide_resource(spaces, UserId, _Client, _Req) ->
     {ok, Spaces} = user_logic:get_spaces(UserId),
     Spaces;
+provide_resource(defspace, UserId, _Client, _Req) ->
+    {ok, DefaultSpaceId} = user_logic:get_default_space(UserId),
+    [{spaceId, DefaultSpaceId}];
 provide_resource(screate, UserId, _Client, _Req) ->
     {ok, Token} = token_logic:create(space_create_token, {user, UserId}),
     [{token, Token}];
