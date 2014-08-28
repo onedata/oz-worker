@@ -18,10 +18,10 @@
 -include_lib("dao/dao_external.hrl").
 -include("registered_names.hrl").
 
--define(synch_call_timeout,1000).
+-define(synch_call_timeout, 1000).
 
 %% API
--export([set_db/1, get_db/0, record_info/1, is_valid_record/1, sequential_synch_call/3]).
+-export([set_db/1, get_db/0, record_info/1, is_valid_record/1, sequential_synch_call/3, view_def_location/0]).
 
 %% set_db/1
 %% ====================================================================
@@ -80,13 +80,22 @@ record_info(Record) ->
 %% sequential_synch_call/3
 %% ====================================================================
 %% @doc Synchronizes sequentially multiple calls to given dao function.
--spec sequential_synch_call(Module :: atom(), Function ::atom(), Args :: list()) -> Result :: term().
+-spec sequential_synch_call(Module :: atom(), Function :: atom(), Args :: list()) -> Result :: term().
 %% ====================================================================
-sequential_synch_call(Module,Function,Args) ->
+sequential_synch_call(Module, Function, Args) ->
     try
-        gen_server:call(?Dao,{get(protocol_version),Module,Function,Args},?synch_call_timeout)
+        gen_server:call(?Dao, {get(protocol_version), Module, Function, Args}, ?synch_call_timeout)
     catch
-        _Type:Error  ->
-            ?error("Sequential synch call ~p:~p(~p) error: ~p",[Module,Function,Args,Error]),
-            {error,Error}
+        _Type:Error ->
+            ?error("Sequential synch call ~p:~p(~p) error: ~p", [Module, Function, Args, Error]),
+            {error, Error}
     end.
+
+%% view_def_location/0
+%% ====================================================================
+%% @doc Returns location of database views definitions
+-spec view_def_location() -> Location :: string().
+%% ====================================================================
+view_def_location() ->
+    {ok, Location} = application:get_env(?APP_Name, view_def_location),
+    Location.

@@ -80,19 +80,20 @@ stop() ->
 
 %% get_redirection_uri/2
 %% ====================================================================
-%% @doc Returns a Provider URI to which the user should be redirected from
+%% @doc Returns provider hostname and a full URI to which the user should be redirected from
 %% the global registry. The redirection is part of the OpenID flow and the URI
-%% contains an Authorization token.
+%% contains an Authorization token. The provider hostname is useful to check connectivity
+%% before redirecting.
 %% @end
 %% ====================================================================
 -spec get_redirection_uri(UserId :: binary(), ProviderId :: binary()) ->
-    RedirectionUri :: binary().
+    {ProviderHostname :: binary(), RedirectionUri :: binary()}.
 %% ====================================================================
 get_redirection_uri(UserId, ProviderId) ->
     AuthCode = gen_auth_code(UserId, ProviderId),
     {ok, ProviderData} = provider_logic:get_data(ProviderId),
     {redirectionPoint, RedirectURL} = lists:keyfind(redirectionPoint, 1, ProviderData),
-    <<RedirectURL/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>.
+    {RedirectURL, <<RedirectURL/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
 
 
 %% gen_auth_code/1
@@ -357,7 +358,7 @@ clear_expired_state_tokens() ->
 %% structure.
 %% @end
 %% ====================================================================
--spec jwt_encode(Claims ::[proplists:property()]) -> JWT :: binary().
+-spec jwt_encode(Claims :: [proplists:property()]) -> JWT :: binary().
 %% ====================================================================
 jwt_encode(Claims) ->
     Header = mochijson2:encode([{typ, 'JWT'}, {alg, none}]),

@@ -13,6 +13,7 @@
 -author("Tomasz Lichon").
 
 %% Includes
+-include("gui/common.hrl").
 -include_lib("n2o/include/wf.hrl").
 
 %% API
@@ -34,7 +35,7 @@ route(<<"/logout">>) -> page_logout;
 route(<<"/validate_login">>) -> page_validate_login;
 route(<<"/manage_account">>) -> page_manage_account;
 route(<<"/about">>) -> page_about;
-route(<<"/privacy_policy">>) -> page_privacy_policy;
+route(<<?privacy_policy_url>>) -> page_privacy_policy;
 route(<<"/error">>) -> page_error;
 route(<<"/auth_endpoint">>) -> page_auth_endpoint;
 route(_) -> page_404.

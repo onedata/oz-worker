@@ -17,7 +17,7 @@
 % n2o API
 -export([main/0, event/1]).
 
--define(LICENSE_FILE, "LICENSE.txt").
+-define(LICENSE_FILE, "resources/LICENSE.txt").
 -define(CONTACT_EMAIL, "support@onedata.org").
 
 
@@ -60,7 +60,7 @@ about_table() ->
             #td{style = <<"padding: 15px; vertical-align: top;">>,
                 body = #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Privacy policy">>}},
             #td{style = <<"padding: 15px; vertical-align: top;">>,
-                body = #link{style = <<"font-size: 18px; padding: 5px 0;">>, body = <<"Learn about privacy policy">>, url = <<"/privacy_policy">>}}
+                body = #link{style = <<"font-size: 18px; padding: 5px 0;">>, body = <<"Learn about privacy policy">>, url = <<?privacy_policy_url>>}}
         ]},
 
         #tr{cells = [
