@@ -103,8 +103,8 @@ get_redirection_url_to_provider() ->
             [] ->
                 {error, no_provider};
             _ ->
-                RedirectURL = auth_logic:get_redirection_uri(UserID, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)),
-                {ok, RedirectURL}
+                {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(UserID, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)),
+                {ok, ProviderHostname, RedirectURL}
         end
     catch T:M ->
         ?error_stacktrace("Cannot resolve redirection URL to provider - ~p:~p", [T, M]),
