@@ -25,10 +25,11 @@
 -export([space_exists/1, user_exists/1, group_exists/1, token_exists/1,
     provider_exists/1]).
 -export([save/1]).
--export([space/1, user/1, group/1, token/1, provider/1]).
--export([space_doc/1, user_doc/1, group_doc/1, token_doc/1, provider_doc/1]).
+-export([space/1, user/1, group/1, token/1, provider/1, authorization/1, access/1]).
+-export([space_doc/1, user_doc/1, group_doc/1, token_doc/1, provider_doc/1,
+    authorization_docs/1, access_docs/1]).
 -export([user_remove/1, space_remove/1, group_remove/1, token_remove/1,
-    provider_remove/1]).
+    provider_remove/1, authorization_remove/1, access_remove/1]).
 
 
 %% space_exists/1
@@ -171,6 +172,30 @@ provider(Key) ->
     Provider.
 
 
+%% authorization/1
+%% ====================================================================
+%% @doc Returns a list of authorization objects from the database.
+%% Throws exception when call to dao fails.
+%% @end
+%% ====================================================================
+-spec authorization(Key :: term()) -> [authorization_info()] | no_return().
+%% ====================================================================
+authorization(Key) ->
+    lists:map(fun(Doc) -> #authorization{} = Doc#veil_document.record end, authorization_docs(Key)).
+
+
+%% access/1
+%% ====================================================================
+%% @doc Returns a list of access objects from the database.
+%% Throws exception when call to dao fails.
+%% @end
+%% ====================================================================
+-spec access(Key :: term()) -> [access_info()] | no_return().
+%% ====================================================================
+access(Key) ->
+    lists:map(fun(Doc) -> #access{} = Doc#veil_document.record end, access_docs(Key)).
+
+
 %% space_doc/1
 %% ====================================================================
 %% @doc Returns a space document from the database.
@@ -180,7 +205,7 @@ provider(Key) ->
 -spec space_doc(Key :: term()) -> space_doc() | no_return().
 %% ====================================================================
 space_doc(Key) ->
-    #veil_document{record = #space{}} = SpaceDoc = get_doc(Key, dao_spaces, get_space),
+    [#veil_document{record = #space{}} = SpaceDoc] = get_docs(Key, dao_spaces, get_space),
     SpaceDoc.
 
 
@@ -193,7 +218,7 @@ space_doc(Key) ->
 -spec user_doc(Key :: term()) -> user_doc() | no_return().
 %% ====================================================================
 user_doc(Key) ->
-    #veil_document{record = #user{}} = UserDoc = get_doc(Key, dao_users, get_user),
+    [#veil_document{record = #user{}} = UserDoc] = get_docs(Key, dao_users, get_user),
     UserDoc.
 
 
@@ -206,7 +231,7 @@ user_doc(Key) ->
 -spec group_doc(Key :: term()) -> group_doc() | no_return().
 %% ====================================================================
 group_doc(Key) ->
-    #veil_document{record = #user_group{}} = GroupDoc = get_doc(Key, dao_groups, get_group),
+    [#veil_document{record = #user_group{}} = GroupDoc] = get_docs(Key, dao_groups, get_group),
     GroupDoc.
 
 
@@ -219,7 +244,7 @@ group_doc(Key) ->
 -spec token_doc(Key :: term()) -> token_doc() | no_return().
 %% ====================================================================
 token_doc(Key) ->
-    #veil_document{record = #token{}} = TokenDoc = get_doc(Key, dao_tokens, get_token),
+    [#veil_document{record = #token{}} = TokenDoc] = get_docs(Key, dao_tokens, get_token),
     TokenDoc.
 
 
@@ -232,8 +257,32 @@ token_doc(Key) ->
 -spec provider_doc(Key :: term()) -> provider_doc() | no_return().
 %% ====================================================================
 provider_doc(Key) ->
-    #veil_document{record = #provider{}} = ProviderDoc = get_doc(Key, dao_providers, get_provider),
+    [#veil_document{record = #provider{}} = ProviderDoc] = get_docs(Key, dao_providers, get_provider),
     ProviderDoc.
+
+
+%% authorization_docs/1
+%% ====================================================================
+%% @doc Returns a list of authorization documents from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
+%% ====================================================================
+-spec authorization_docs(Key :: term()) -> [authorization_doc()] | no_return().
+%% ====================================================================
+authorization_docs(Key) ->
+    get_docs(Key, dao_auth, get_authorization).
+
+
+%% access_docs/1
+%% ====================================================================
+%% @doc Returns a list of access documents from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
+%% ====================================================================
+-spec access_docs(Key :: term()) -> [authorization_doc()] | no_return().
+%% ====================================================================
+access_docs(Key) ->
+    get_docs(Key, dao_auth, get_access).
 
 
 %% user_remove/1
@@ -296,9 +345,34 @@ provider_remove(Key) ->
     remove(Key, dao_providers, remove_provider).
 
 
+%% authorization_remove/1
+%% ====================================================================
+%% @doc Removes a authorization document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
+%% ====================================================================
+-spec authorization_remove(Key :: term()) -> true | no_return().
+%% ====================================================================
+authorization_remove(Key) ->
+    remove(Key, dao_auth, remove_authorization).
+
+
+%% access_remove/1
+%% ====================================================================
+%% @doc Removes a access document from the database.
+%% Throws exception when call to dao fails, or document doesn't exist.
+%% @end
+%% ====================================================================
+-spec access_remove(Key :: term()) -> true | no_return().
+%% ====================================================================
+access_remove(Key) ->
+    remove(Key, dao_auth, remove_access).
+
+
 %% ====================================================================
 %% Internal Functions
 %% ====================================================================
+
 
 %% exists/3
 %% ====================================================================
@@ -332,23 +406,29 @@ save_doc(#veil_document{record = #user_group{}} = Doc) ->
 save_doc(#veil_document{record = #token{}} = Doc) ->
     dao_lib:apply(dao_tokens, save_token, [Doc], 1);
 save_doc(#veil_document{record = #provider{}} = Doc) ->
-    dao_lib:apply(dao_providers, save_provider, [Doc], 1).
+    dao_lib:apply(dao_providers, save_provider, [Doc], 1);
+save_doc(#veil_document{record = #authorization{}} = Doc) ->
+    dao_lib:apply(dao_auth, save_authorization, [Doc], 1);
+save_doc(#veil_document{record = #access{}} = Doc) ->
+    dao_lib:apply(dao_auth, save_access, [Doc], 1).
 
 
-%% get_doc/3
+%% get_docs/3
 %% ====================================================================
-%% @doc Returns a document from the database. Internal function.
-%% Throws exception when call to dao fails, or document doesn't exist.
+%% @doc Returns a list of documents from the database. Internal function.
+%% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec get_doc(Key :: term(), Module :: dao_module(), Method :: atom()) ->
-    veil_doc() | no_return().
+-spec get_docs(Key :: term(), Module :: dao_module(), Method :: atom()) ->
+    [veil_doc()] | no_return().
 %% ====================================================================
-get_doc(Key, Module, Method) when is_binary(Key) ->
-    get_doc(binary_to_list(Key),Module,Method);
-get_doc(Key, Module, Method)  ->
-    {ok, #veil_document{} = Doc} = dao_lib:apply(Module, Method, [Key], 1),
-    Doc.
+get_docs(Key, Module, Method) when is_binary(Key) ->
+    get_docs(binary_to_list(Key),Module,Method);
+get_docs(Key, Module, Method)  ->
+    case dao_lib:apply(Module, Method, [Key], 1) of
+        {ok, #veil_document{} = Doc} -> [Doc];
+        {ok, Docs} when is_list(Docs) -> Docs
+    end.
 
 
 %% remove/3
