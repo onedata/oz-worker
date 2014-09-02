@@ -68,13 +68,7 @@ get_user(Key) ->
 %% ====================================================================
 get_user_doc(Key) ->
     try
-        #veil_document{record = #user{}} = UserDoc =
-            case Key of
-                Bin when is_binary(Bin) ->
-                    dao_adapter:user_doc(Key);
-                Key ->
-                    dao_adapter:user_doc_from_view(Key)
-            end,
+        #veil_document{record = #user{}} = UserDoc = dao_adapter:user_doc(Key),
         {ok, UserDoc}
     catch
         T:M ->
