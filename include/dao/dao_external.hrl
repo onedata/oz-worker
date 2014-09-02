@@ -42,9 +42,10 @@
 %% DB Names
 -define(SYSTEM_DB_NAME, "system_data").
 -define(USERS_DB_NAME, "user_data").
+-define(AUTH_DB_NAME, "authorization_data").
 
 %% List of all used databases :: [string()]
--define(DB_LIST, [?SYSTEM_DB_NAME, ?USERS_DB_NAME]).
+-define(DB_LIST, [?SYSTEM_DB_NAME, ?USERS_DB_NAME, ?AUTH_DB_NAME]).
 
 %% Views
 -define(USER_BY_EMAIL_VIEW, #view_info{name = "user_by_email", db_name = ?USERS_DB_NAME, version = 1}).
