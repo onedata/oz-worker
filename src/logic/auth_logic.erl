@@ -170,7 +170,9 @@ get_user_tokens(UserId) ->
 %% ====================================================================
 grant_tokens(Client, AuthCode) ->
     {ok, AuthDoc} = ?DB(get_authorization_by_code, AuthCode), %% @todo: missing
-    #veil_document{uuid = AuthId, record = #authorization{provider_id = ProviderId, user_id = UserId}} = AuthDoc,
+    #veil_document{uuid = AuthId, record = Auth} = AuthDoc,
+    #authorization{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Auth,
+    true = vcn_utils:time() < Expiration, %% @todo: expired
     ok = ?DB(remove_authorization, AuthId),
 
     Audience = case ProviderId of undefined -> UserId; _ -> ProviderId end,
@@ -224,7 +226,8 @@ grant_tokens(Client, AuthCode) ->
 validate_token(Client, AccessToken) ->
     ProviderId = case Client of {provider, Id} -> Id; native -> undefined end,
     {ok, #veil_document{record = Access}} = ?DB(get_access_by_key, token, AccessToken), %% @todo: missing
-    #access{provider_id = ProviderId, user_id = UserId} = Access, %% @todo: someone else's token
+    #access{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Access, %% @todo: someone else's token
+    true = vcn_utils:time() < Expiration, %% @todo: expired
     UserId.
 
 
