@@ -25,11 +25,14 @@
 -define(STATE_TOKEN_EXPIRATION_SECS, 60).
 -define(ISSUER_URL, <<"https://onedata.org">>).
 
+-define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
+-define(DB(Function, Arg1, Arg2), dao_lib:apply(dao_auth, Function, [Arg1, Arg2], 1)).
+
 
 %% ====================================================================
 %% API
 %% ====================================================================
--export([start/0, stop/1, get_redirection_uri/2, gen_auth_code/1,
+-export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
     has_access/2, delete_access/1,  get_user_tokens/1,  grant_tokens/2,
     validate_token/2, verify/2, clear_expired_authorizations/0]).
 
@@ -49,24 +52,23 @@
 %% ====================================================================
 %% @doc Initializes temporary storage for OpenID tokens.
 %% ====================================================================
--spec start() -> {ok, State :: term()}.
+-spec start() -> ok.
 %% ====================================================================
 start() ->
-    {ok, TRef} = timer:apply_interval(
-        ?AUTH_CODE_EXPIRATION_SECS, ?MODULE, clear_expired_authorizations, []),
+    Pid = spawn(fun clear_expired_authorizations/0),
+    register(clear_auth_process, Pid),
     ets:new(?STATE_TOKEN, [set, named_table, public]),
-    {ok, [{clear_expired_authorizations_timer, TRef}]}.
+    ok.
 
 
-%% stop/1
+%% stop/0
 %% ====================================================================
 %% @doc Deinitializes temporary storage for OpenID tokens.
 %% ====================================================================
--spec stop(State :: term()) -> ok.
+-spec stop() -> ok.
 %% ====================================================================
-stop(State) ->
-    {_, TRef} = lists:keyfind(clear_expired_authorizations_timer, 1, State),
-    timer:cancel(TRef),
+stop() ->
+    clear_auth_process ! stop,
     ets:delete(?STATE_TOKEN),
     ok.
 
@@ -112,7 +114,7 @@ gen_auth_code(UserId, ProviderId) ->
     Auth = #authorization{code = Token, expiration_time = ExpirationPoint,
                           user_id = UserId, provider_id = ProviderId},
 
-    dao_adapter:save(Auth),
+    {ok, _} = ?DB(save_authorization, Auth),
     Token.
 
 
@@ -125,8 +127,8 @@ gen_auth_code(UserId, ProviderId) ->
 -spec has_access(UserId :: binary(), AccessId :: binary()) -> boolean().
 %% ====================================================================
 has_access(UserId, AccessId) ->
-    case dao_adapter:accesses(AccessId) of
-        [#access{user_id = UserId}] -> true;
+    case ?DB(get_access, AccessId) of
+        {ok, #veil_document{record = #access{user_id = UserId}}} -> true;
         _ -> false
     end.
 
@@ -135,11 +137,10 @@ has_access(UserId, AccessId) ->
 %% ====================================================================
 %% @doc Deletes access-related data identified by an access id.
 %% ====================================================================
--spec delete_access(AccessId :: binary()) -> ok.
+-spec delete_access(AccessId :: binary()) -> ok | no_return().
 %% ====================================================================
 delete_access(AccessId) ->
-    dao_adapter:access_remove(AccessId),
-    ok.
+    ok = ?DB(remove_access, AccessId).
 
 
 %% get_user_tokens/1
@@ -150,7 +151,7 @@ delete_access(AccessId) ->
 -spec get_user_tokens(UserId :: binary()) -> [[proplists:property()]].
 %% ====================================================================
 get_user_tokens(UserId) ->
-    AccessDocs = dao_adapter:access_docs({user_id, UserId}),
+    {ok, AccessDocs} = ?DB(get_accesses_by_user, UserId),
     lists:map(
         fun(AccessDoc) ->
             #veil_document{uuid = AccessId, record = #access{client_name = ClientName}} = AccessDoc,
@@ -168,9 +169,9 @@ get_user_tokens(UserId) ->
     AuthCode :: binary()) -> [proplists:property()].
 %% ====================================================================
 grant_tokens(Client, AuthCode) ->
-    AuthDoc = dao_adapter:authorization_docs({code, AuthCode}), %% @todo: missing
-    [#veil_document{uuid = AuthId, record = #authorization{provider_id = ProviderId, user_id = UserId}}] = AuthDoc,
-    dao_adapter:authorization_remove(AuthId),
+    {ok, AuthDoc} = ?DB(get_authorization_by_code, AuthCode), %% @todo: missing
+    #veil_document{uuid = AuthId, record = #authorization{provider_id = ProviderId, user_id = UserId}} = AuthDoc,
+    ok = ?DB(remove_authorization, AuthId),
 
     Audience = case ProviderId of undefined -> UserId; _ -> ProviderId end,
 
@@ -189,7 +190,7 @@ grant_tokens(Client, AuthCode) ->
         refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
         expiration_time = Expiration, client_name = client_name_placeholder},
 
-    dao_adapter:save(Access),
+    {ok, _} = ?DB(save_access, Access),
 
     {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
     EmailsList = lists:map(fun(Email) -> [{email, Email}] end, Emails),
@@ -222,9 +223,25 @@ grant_tokens(Client, AuthCode) ->
 %% ====================================================================
 validate_token(Client, AccessToken) ->
     ProviderId = case Client of {provider, Id} -> Id; native -> undefined end,
-    [#access{} = Auth] = dao_adapter:accesses({token, AccessToken}), %% @todo: missing
-    #access{provider_id = ProviderId, user_id = UserId} = Auth, %% @todo: someone else's token
+    {ok, #veil_document{record = Access}} = ?DB(get_access_by_key, token, AccessToken), %% @todo: missing
+    #access{provider_id = ProviderId, user_id = UserId} = Access, %% @todo: someone else's token
     UserId.
+
+
+%% remove_expired_authorizations_in_chunks/1
+%% ====================================================================
+%% @doc Removes expired authorizations in chunks of given size.
+%% ====================================================================
+-spec remove_expired_authorizations_in_chunks(ChunkSize :: non_neg_integer()) ->
+    ok.
+%% ====================================================================
+remove_expired_authorizations_in_chunks(ChunkSize) ->
+    {ok, ExpiredIds} = ?DB(get_expired_authorizations_ids, ChunkSize),
+    lists:foreach(fun(AuthId) -> ?DB(remove_authorization, AuthId) end, ExpiredIds),
+    case length(ExpiredIds) of
+        ChunkSize -> remove_expired_authorizations_in_chunks(ChunkSize);
+        _ -> ok
+    end.
 
 
 %% clear_expired_authorizations/0
@@ -235,13 +252,14 @@ validate_token(Client, AccessToken) ->
 -spec clear_expired_authorizations() -> ok.
 %% ====================================================================
 clear_expired_authorizations() ->
-    try
-        Now = vcn_utils:time(),
-        {ok, ExpiredIds} = dao_lib:apply(dao_auth, get_authorization, [{expiration_up_to, Now}], 1),
-        lists:foreach(fun(authorizationId) -> dao_adapter:authorization_remove(authorizationId) end, ExpiredIds)
-    catch
-        Error:Reason -> ?warning("error while clearing expired authorizations: ~p ~p", [Error, Reason])
+    try remove_expired_authorizations_in_chunks(50)
+    catch Error:Reason -> ?warning("error while clearing expired authorizations: ~p ~p", [Error, Reason])
     end,
+
+    receive stop -> ok
+    after ?AUTH_CODE_EXPIRATION_SECS -> ?MODULE:clear_expired_authorizations()
+    end,
+
     ok.
 
 
@@ -317,8 +335,8 @@ clear_expired_state_tokens() ->
     boolean().
 %% ====================================================================
 verify(UserId, Secret) ->
-    case dao_adapter:accesses({token_hash, Secret}) of
-        [#access{user_id = UserId}] -> true;
+    case ?DB(get_access_by_key, token_hash, Secret) of
+        {ok, #veil_document{record = #access{user_id = UserId}}} -> true;
         _ -> false
     end.
 
