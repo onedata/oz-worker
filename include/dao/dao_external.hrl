@@ -13,6 +13,7 @@
 -ifndef(DAO_DRIVER).
 -define(DAO_DRIVER, 1).
 
+-include("dao/dao_auth.hrl").
 -include("dao/dao_groups.hrl").
 -include("dao/dao_providers.hrl").
 -include("dao/dao_spaces.hrl").
@@ -33,6 +34,8 @@
         space               -> ?record_info_gen(space);
         token               -> ?record_info_gen(token);
         user_group          -> ?record_info_gen(user_group);
+        authorization       -> ?record_info_gen(authorization);
+        access              -> ?record_info_gen(access);
         _ -> {error, unsupported_record}
     end).
 
