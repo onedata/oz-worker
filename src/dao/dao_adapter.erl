@@ -25,7 +25,7 @@
 -export([space_exists/1, user_exists/1, group_exists/1, token_exists/1,
     provider_exists/1]).
 -export([save/1]).
--export([space/1, user/1, group/1, token/1, provider/1, authorization/1, access/1]).
+-export([space/1, user/1, group/1, token/1, provider/1, authorizations/1, accesses/1]).
 -export([space_doc/1, user_doc/1, group_doc/1, token_doc/1, provider_doc/1,
     authorization_docs/1, access_docs/1]).
 -export([user_remove/1, space_remove/1, group_remove/1, token_remove/1,
@@ -172,27 +172,27 @@ provider(Key) ->
     Provider.
 
 
-%% authorization/1
+%% authorizations/1
 %% ====================================================================
 %% @doc Returns a list of authorization objects from the database.
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec authorization(Key :: term()) -> [authorization_info()] | no_return().
+-spec authorizations(Key :: term()) -> [authorization_info()] | no_return().
 %% ====================================================================
-authorization(Key) ->
+authorizations(Key) ->
     lists:map(fun(Doc) -> #authorization{} = Doc#veil_document.record end, authorization_docs(Key)).
 
 
-%% access/1
+%% accesses/1
 %% ====================================================================
 %% @doc Returns a list of access objects from the database.
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec access(Key :: term()) -> [access_info()] | no_return().
+-spec accesses(Key :: term()) -> [access_info()] | no_return().
 %% ====================================================================
-access(Key) ->
+accesses(Key) ->
     lists:map(fun(Doc) -> #access{} = Doc#veil_document.record end, access_docs(Key)).
 
 
@@ -270,6 +270,9 @@ provider_doc(Key) ->
 -spec authorization_docs(Key :: term()) -> [authorization_doc()] | no_return().
 %% ====================================================================
 authorization_docs(Key) ->
+    Now = vcn_utils:time(),
+    {ok, ExpiredIds} = dao_lib:apply(dao_auth, get_authorization, [{expiration_up_to, Now}], 1),
+    lists:foreach(fun(AccessId) -> authorization_remove(AccessId) end, ExpiredIds), %% @todo: is this the best way to filter and remove expired codes?
     get_docs(Key, dao_auth, get_authorization).
 
 
