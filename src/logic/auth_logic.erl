@@ -29,9 +29,9 @@
 %% ====================================================================
 %% API
 %% ====================================================================
--export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
+-export([start/0, stop/1, get_redirection_uri/2, gen_auth_code/1,
     has_access/2, delete_access/1,  get_user_tokens/1,  grant_tokens/2,
-    validate_token/2, verify/2]).
+    validate_token/2, verify/2, clear_expired_authorizations/0]).
 
 %% ====================================================================
 %% Handling state tokens
@@ -49,20 +49,24 @@
 %% ====================================================================
 %% @doc Initializes temporary storage for OpenID tokens.
 %% ====================================================================
--spec start() -> ok.
+-spec start() -> {ok, State :: term()}.
 %% ====================================================================
 start() ->
+    {ok, TRef} = timer:apply_interval(
+        ?AUTH_CODE_EXPIRATION_SECS, ?MODULE, clear_expired_authorizations, []),
     ets:new(?STATE_TOKEN, [set, named_table, public]),
-    ok.
+    {ok, [{clear_expired_authorizations_timer, TRef}]}.
 
 
-%% stop/0
+%% stop/1
 %% ====================================================================
 %% @doc Deinitializes temporary storage for OpenID tokens.
 %% ====================================================================
--spec stop() -> ok.
+-spec stop(State :: term()) -> ok.
 %% ====================================================================
-stop() ->
+stop(State) ->
+    {_, TRef} = lists:keyfind(clear_expired_authorizations_timer, 1, State),
+    timer:cancel(TRef),
     ets:delete(?STATE_TOKEN),
     ok.
 
@@ -165,7 +169,7 @@ get_user_tokens(UserId) ->
 %% ====================================================================
 grant_tokens(Client, AuthCode) ->
     AuthDoc = dao_adapter:authorization_docs({code, AuthCode}), %% @todo: missing
-    #veil_document{uuid = AuthId, record = #authorization{provider_id = ProviderId, user_id = UserId}} = AuthDoc,
+    [#veil_document{uuid = AuthId, record = #authorization{provider_id = ProviderId, user_id = UserId}}] = AuthDoc,
     dao_adapter:authorization_remove(AuthId),
 
     Audience = case ProviderId of undefined -> UserId; _ -> ProviderId end,
@@ -221,6 +225,24 @@ validate_token(Client, AccessToken) ->
     [#access{} = Auth] = dao_adapter:accesses({token, AccessToken}), %% @todo: missing
     #access{provider_id = ProviderId, user_id = UserId} = Auth, %% @todo: someone else's token
     UserId.
+
+
+%% clear_expired_authorizations/0
+%% ====================================================================
+%% @doc Clears any and all expired authorization tokens and associated data. Intended
+%% for use as a periodic job. Does not throw.
+%% ====================================================================
+-spec clear_expired_authorizations() -> ok.
+%% ====================================================================
+clear_expired_authorizations() ->
+    try
+        Now = vcn_utils:time(),
+        {ok, ExpiredIds} = dao_lib:apply(dao_auth, get_authorization, [{expiration_up_to, Now}], 1),
+        lists:foreach(fun(authorizationId) -> dao_adapter:authorization_remove(authorizationId) end, ExpiredIds)
+    catch
+        Error:Reason -> ?warning("error while clearing expired authorizations: ~p ~p", [Error, Reason])
+    end,
+    ok.
 
 
 %% generate_state_token/2
