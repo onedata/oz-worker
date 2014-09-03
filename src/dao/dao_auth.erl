@@ -37,7 +37,7 @@
 save_authorization(#authorization{} = Authorization) ->
     save_authorization(#veil_document{record = Authorization});
 save_authorization(#veil_document{record = #authorization{}, uuid = UUID} = AuthorizationDoc) when is_list(UUID) ->
-    dao_external:set_db(?SYSTEM_DB_NAME),
+    dao_external:set_db(?AUTHORIZATION_DB_NAME),
     dao_records:save_record(AuthorizationDoc).
 
 
@@ -50,7 +50,7 @@ save_authorization(#veil_document{record = #authorization{}, uuid = UUID} = Auth
     ok | {error, any()} | no_return().
 %% ====================================================================
 remove_authorization(AuthorizationId) ->
-    dao_external:set_db(?SYSTEM_DB_NAME),
+    dao_external:set_db(?AUTHORIZATION_DB_NAME),
     dao_records:remove_record(AuthorizationId).
 
 
@@ -62,7 +62,7 @@ remove_authorization(AuthorizationId) ->
 -spec exist_authorization(AuthorizationId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_authorization(AuthorizationId) ->
-    dao_external:set_db(?SYSTEM_DB_NAME),
+    dao_external:set_db(?AUTHORIZATION_DB_NAME),
     dao_records:exist_record(AuthorizationId).
 
 
@@ -77,7 +77,7 @@ exist_authorization(AuthorizationId) ->
     {ok, authorization_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_authorization(AuthorizationId) when is_list(AuthorizationId) ->
-    dao_external:set_db(?SYSTEM_DB_NAME),
+    dao_external:set_db(?AUTHORIZATION_DB_NAME),
     {ok, #veil_document{record = #authorization{}}} = dao_records:get_record(AuthorizationId);
 get_authorization({Key, Value}) ->
     {View, QueryArgs} = case Key of
@@ -112,7 +112,7 @@ get_authorization({Key, Value}) ->
 save_access(#access{} = Access) ->
     save_access(#veil_document{record = Access});
 save_access(#veil_document{record = #access{}, uuid = UUID} = AccessDoc) when is_list(UUID) ->
-    dao_external:set_db(?SYSTEM_DB_NAME),
+    dao_external:set_db(?AUTHORIZATION_DB_NAME),
     dao_records:save_record(AccessDoc).
 
 
@@ -125,7 +125,7 @@ save_access(#veil_document{record = #access{}, uuid = UUID} = AccessDoc) when is
     ok | {error, any()} | no_return().
 %% ====================================================================
 remove_access(AccessId) ->
-    dao_external:set_db(?SYSTEM_DB_NAME),
+    dao_external:set_db(?AUTHORIZATION_DB_NAME),
     dao_records:remove_record(AccessId).
 
 
@@ -137,7 +137,7 @@ remove_access(AccessId) ->
 -spec exist_access(AccessId :: uuid()) -> {ok, true | false} | {error, any()}.
 %% ====================================================================
 exist_access(AccessId) ->
-    dao_external:set_db(?SYSTEM_DB_NAME),
+    dao_external:set_db(?AUTHORIZATION_DB_NAME),
     dao_records:exist_record(AccessId).
 
 
@@ -152,7 +152,7 @@ exist_access(AccessId) ->
     {ok, access_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_access(AccessId) when is_list(AccessId) ->
-    dao_external:set_db(?SYSTEM_DB_NAME),
+    dao_external:set_db(?AUTHORIZATION_DB_NAME),
     {ok, #veil_document{record = #access{}}} = dao_records:get_record(AccessId);
 get_access({Key, Value}) ->
     View = case Key of
