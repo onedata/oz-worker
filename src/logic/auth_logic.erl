@@ -16,30 +16,39 @@
 -include("auth_common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(AUTH_CODE, aUTH_CODE).
--define(ACCESS_TOKEN, access_token).
--define(REFRESH_TOKEN, refresh_token).
+%% @todo: openid tokens need to be persisted in the database. refresh token
+%% shouldn't expire. the whole chain of authorization and refresh tokens should
+%% be known as session, identifiable by session id.
+-define(AUTH_CODE, auth_code). %% {AuthCode, {ExpirationTime, {UserId, ProviderId}}} [1:1]
+-define(ACCESS_TOKEN, access_token). %% {AccessToken, AccessId} [1:1]
+-define(ACCESS_TOKEN_HASH, access_token_hash). %% {base64(sha512(AccessToken)), AccessId} [1:1]
+-define(REFRESH_TOKEN, refresh_token). %% {RefreshToken, AccessId} [1:1]
+-define(USER_ID, user_id). %% {UserId, AccessId} [1:n]
+-define(ACCESS, access). %% {AccessId, {ExpirationTime, {AccessToken, RefreshToken, UserId, ProviderId, ClientName}}} [1:1]
 -define(STATE_TOKEN, state_token).
 
--define(TABLES, [?AUTH_CODE, ?ACCESS_TOKEN, ?REFRESH_TOKEN, ?STATE_TOKEN]).
+-define(TABLES_SET, [?AUTH_CODE, ?ACCESS_TOKEN, ?ACCESS_TOKEN_HASH, ?REFRESH_TOKEN, ?ACCESS, ?STATE_TOKEN]).
+-define(TABLES_BAG, [?USER_ID]).
 
 %% @todo: config
 -define(AUTH_CODE_EXPIRATION_SECS, 600).
--define(ACCESS_TOKEN_EXPIRATION_SECS, 36000).
--define(REFRESH_TOKEN_EXPIRATION_SECS, 36000).
+-define(ACCESS_EXPIRATION_SECS, 36000).
 -define(STATE_TOKEN_EXPIRATION_SECS, 60).
--define(ISSUER_URL, "https://onedata.org").
+-define(ISSUER_URL, <<"https://onedata.org">>).
 
 
 %% ====================================================================
 %% API
 %% ====================================================================
--export([start/0, stop/0, get_redirection_uri/2, grant_token/2, validate_token/2]).
+-export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
+    has_access/2, delete_access/1,  get_user_tokens/1,  grant_tokens/2,
+    validate_token/2, verify/2]).
 
 %% ====================================================================
 %% Handling state tokens
 %% ====================================================================
--export([generate_state_token/2, lookup_state_token/1, clear_expired_tokens/0]).
+-export([generate_state_token/2, lookup_state_token/1,
+    clear_expired_state_tokens/0]).
 
 
 %% ====================================================================
@@ -54,7 +63,8 @@
 -spec start() -> ok.
 %% ====================================================================
 start() ->
-    lists:foreach(fun(Table) -> ets:new(Table, [named_table, public]) end, ?TABLES),
+    lists:foreach(fun(Table) -> ets:new(Table, [set, named_table, public]) end, ?TABLES_SET),
+    lists:foreach(fun(Table) -> ets:new(Table, [bag, named_table, public]) end, ?TABLES_BAG),
     ok.
 
 
@@ -65,7 +75,7 @@ start() ->
 -spec stop() -> ok.
 %% ====================================================================
 stop() ->
-    lists:foreach(fun(Table) -> ets:delete(Table) end, ?TABLES),
+    lists:foreach(fun(Table) -> ets:delete(Table) end, ?TABLES_SET ++ ?TABLES_BAG),
     ok.
 
 
@@ -81,46 +91,125 @@ stop() ->
     {ProviderHostname :: binary(), RedirectionUri :: binary()}.
 %% ====================================================================
 get_redirection_uri(UserId, ProviderId) ->
-    AuthCode = random_token(),
-    ExpirationTime = now_s() + ?AUTH_CODE_EXPIRATION_SECS,
-    ets:insert(?AUTH_CODE, {AuthCode, {ProviderId, UserId, ExpirationTime}}),
+    AuthCode = gen_auth_code(UserId, ProviderId),
     {ok, ProviderData} = provider_logic:get_data(ProviderId),
     {redirectionPoint, RedirectURL} = lists:keyfind(redirectionPoint, 1, ProviderData),
     {RedirectURL, <<RedirectURL/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
 
 
-%% grant_token/2
+%% gen_auth_code/1
 %% ====================================================================
-%% @doc Grants ID, Access and Refresh tokens to the provider identifying
-%% itself with a valid Authorization token.
+%% @doc Creates an authorization code for a native client.
+%% ====================================================================
+-spec gen_auth_code(UserId :: binary()) -> Token :: binary().
+%% ====================================================================
+gen_auth_code(UserId) ->
+    gen_auth_code(UserId, undefined).
+
+
+%% gen_auth_code/2
+%% ====================================================================
+%% @doc Creates an authorization code for a Provider.
+%% ====================================================================
+-spec gen_auth_code(UserId :: binary(), ProviderId :: binary() | undefined) ->
+    Token :: binary().
+%% ====================================================================
+gen_auth_code(UserId, ProviderId) ->
+    Token = random_token(),
+    insert_expirable(?AUTH_CODE, Token, ?AUTH_CODE_EXPIRATION_SECS, {UserId, ProviderId}),
+    Token.
+
+
+%% has_access/1
+%% ====================================================================
+%% @doc Checks if a given user authorized a given access id and it exists
+%% within the system.
 %% @end
 %% ====================================================================
--spec grant_token(ProviderId :: binary(), AuthCode :: binary()) ->
-    [proplists:property()].
+-spec has_access(UserId :: binary(), AccessId :: binary()) -> boolean().
 %% ====================================================================
-grant_token(ProviderId, AuthCode) ->
-    [{AuthCode, {ProviderId, UserId, _ExpirationTime}}] = ets:lookup(?AUTH_CODE, AuthCode),
+has_access(UserId, AccessId) ->
+    case retrieve_expirable(?ACCESS, AccessId) of
+        {ok, {_, _, UserId, _, _}} -> true;
+        _ -> false
+    end.
+
+
+%% delete_access/1
+%% ====================================================================
+%% @doc Deletes access-related data identified by an access id.
+%% ====================================================================
+-spec delete_access(AccessId :: binary()) -> ok.
+%% ====================================================================
+delete_access(AccessId) ->
+    {ok, {AccessToken, RefreshToken, UserId, _, _}} = retrieve_expirable(?ACCESS, AccessId),
+    ets:delete(?REFRESH_TOKEN, RefreshToken),
+    ets:delete(?ACCESS_TOKEN_HASH, access_token_hash(AccessToken)),
+    ets:delete(?ACCESS_TOKEN, AccessToken),
+    ets:delete(?USER_ID, UserId),
+    ets:delete(?ACCESS, AccessId),
+    ok.
+
+
+%% get_user_tokens/1
+%% ====================================================================
+%% @doc Returns all pseudo-tokens identifying access and refresh tokens in the
+%% system.
+%% ====================================================================
+-spec get_user_tokens(UserId :: binary()) -> [[proplists:property()]].
+%% ====================================================================
+get_user_tokens(UserId) ->
+    AccessIDs = ets:match(?USER_ID, {UserId, '$1'}),
+    lists:map(
+        fun([AccessId]) ->
+            [{_, {_, {_, _, _, _, ClientName}}}] = ets:lookup(?ACCESS, AccessId),
+            [{accessId, AccessId}, {clientName, ClientName}]
+        end, AccessIDs).
+
+
+%% grant_tokens/2
+%% ====================================================================
+%% @doc Grants ID, Access and Refresh tokens to the provider or native client
+%% identifying itself with a valid Authorization token.
+%% @end
+%% ====================================================================
+-spec grant_tokens(Client :: {provider, ProviderId :: binary()} | native,
+    AuthCode :: binary()) -> [proplists:property()].
+%% ====================================================================
+grant_tokens(Client, AuthCode) ->
+    {ok, {UserId, ProviderId}} = retrieve_expirable(?AUTH_CODE, AuthCode), %% @todo: missing
     ets:delete(?AUTH_CODE, AuthCode),
+
+    Audience = case ProviderId of undefined -> UserId; _ -> ProviderId end,
+
+    case Client of %% poor man's validation
+        {provider, ProviderId} -> ok; %% @todo: wrong provider
+        native when ProviderId =:= undefined -> ok %% @todo: client using provider's token
+    end,
 
     AccessToken = random_token(),
     RefreshToken = random_token(),
-    AccessTokenExpirationTime = now_s() + ?ACCESS_TOKEN_EXPIRATION_SECS,
-    RefreshTokenExpirationTime = now_s() + ?REFRESH_TOKEN_EXPIRATION_SECS,
-    ets:insert(?ACCESS_TOKEN, {AccessToken, {ProviderId, UserId, AccessTokenExpirationTime}}),
-    ets:insert(?REFRESH_TOKEN, {RefreshToken, {ProviderId, UserId, RefreshTokenExpirationTime}}),
+    AccessId = random_token(),
+
+    ets:insert(?ACCESS_TOKEN, {AccessToken, AccessId}),
+    ets:insert(?ACCESS_TOKEN_HASH, {access_token_hash(AccessToken), AccessId}),
+    ets:insert(?REFRESH_TOKEN, {RefreshToken, AccessId}),
+    ets:insert(?USER_ID, {UserId, AccessId}),
+    insert_expirable(?ACCESS, AccessId, ?ACCESS_EXPIRATION_SECS,
+        {AccessToken, RefreshToken, UserId, ProviderId, client_name_placeholder}),
 
     {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
     EmailsList = lists:map(fun(Email) -> {struct, [{email, Email}]} end, Emails),
     [
         {access_token, AccessToken},
         {token_type, bearer},
-        {expires_in, ?ACCESS_TOKEN_EXPIRATION_SECS},
+        {expires_in, ?ACCESS_EXPIRATION_SECS},
         {refresh_token, RefreshToken},
         {scope, openid},
         {id_token, jwt_encode([
             {iss, ?ISSUER_URL},
             {sub, UserId},
-            {aud, ProviderId},
+            {aud, Audience},
             {name, Name},
             {email, EmailsList},
             {exp, wut}, %% @todo: expiration time
@@ -129,27 +218,21 @@ grant_token(ProviderId, AuthCode) ->
     ].
 
 
-%% @todo:
-%% validate_authorization_request(ProviderId, AuthCode) ->
-%%     SavedData = ets:lookup(?AUTH_CODE, AuthCode),
-%%     validate_authorization_request(ProviderId, AuthCode, SavedData).
-%%
-%% validate_authorization_request(ProviderId, AuthCode, []) -> [{error, invalid_grant}];
-%% validate_authorization_request(ProviderId, AuthCode, [{IntendedProviderId, UserId}])
-%%     when IntendedProviderId =/= ProviderId -> [{error, invalid_request}]
-
-
 %% validate_token/2
 %% ====================================================================
-%% @doc Validates an access token for a Provider and returns a UserId of the
-%% user who authorized the Provider.
+%% @doc Validates an access token for an OpenID client and returns a UserId of
+%% the user that gave the authorization.
 %% @end
 %% ====================================================================
--spec validate_token(ProviderId :: binary(), AccessToken :: binary()) ->
-    UserId :: binary() | no_return().
+-spec validate_token(Client :: {provider, ProviderId :: binary()} | native,
+    AccessToken :: binary()) -> UserId :: binary() | no_return().
 %% ====================================================================
-validate_token(ProviderId, AccessToken) ->
-    [{AccessToken, {ProviderId, UserId, _ExpirationTime}}] = ets:lookup(?ACCESS_TOKEN, AccessToken),
+validate_token(Client, AccessToken) ->
+    [{_, AccessId}] = ets:lookup(?ACCESS_TOKEN, AccessToken), %% @todo: missing
+    {ok, Data} = retrieve_expirable(?ACCESS, AccessId),
+
+    ProviderId = case Client of {provider, Id} -> Id; native -> undefined end,
+    {_, _, UserId, ProviderId, _} = Data, %% @todo: someone else's token
     UserId.
 
 
@@ -162,7 +245,7 @@ validate_token(ProviderId, AccessToken) ->
 -spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> [tuple()] | error.
 %% ====================================================================
 generate_state_token(HandlerModule, ConnectAccount) ->
-    clear_expired_tokens(),
+    clear_expired_state_tokens(),
     Token = random_token(),
     {M, S, N} = now(),
     Time = M * 1000000000000 + S * 1000000 + N,
@@ -194,7 +277,7 @@ generate_state_token(HandlerModule, ConnectAccount) ->
 -spec lookup_state_token(Token :: binary()) -> [tuple()] | error.
 %% ====================================================================
 lookup_state_token(Token) ->
-    clear_expired_tokens(),
+    clear_expired_state_tokens(),
     case ets:lookup(?STATE_TOKEN, Token) of
         [{Token, Time, LoginInfo}] ->
             ets:delete_object(?STATE_TOKEN, {Token, Time, LoginInfo}),
@@ -204,13 +287,13 @@ lookup_state_token(Token) ->
     end.
 
 
-%% clear_expired_tokens/0
+%% clear_expired_state_tokens/0
 %% ====================================================================
 %% @doc Removes all state tokens that are no longer valid from ETS.
-%% @end
--spec clear_expired_tokens() -> ok.
 %% ====================================================================
-clear_expired_tokens() ->
+-spec clear_expired_state_tokens() -> ok.
+%% ====================================================================
+clear_expired_state_tokens() ->
     {M, S, N} = now(),
     Now = M * 1000000000000 + S * 1000000 + N,
 
@@ -221,9 +304,88 @@ clear_expired_tokens() ->
         end, ExpiredSessions).
 
 
+%% verify/3
+%% ====================================================================
+%% @doc Verifies if a given secret belongs to a given user.
+%% ====================================================================
+-spec verify(UserId :: binary(), Secret :: binary()) ->
+    boolean().
+%% ====================================================================
+verify(UserId, Secret) ->
+    case ets:lookup(?ACCESS_TOKEN_HASH, Secret) of
+        [{_, AccessId}] ->
+            case retrieve_expirable(?ACCESS, AccessId) of
+                {error, missing} -> false;
+                {ok, {_, _, UserId, _, _}} -> true;
+                _ -> false
+            end;
+        _ -> false
+    end.
+
+
 %% ====================================================================
 %% Internal functions
 %% ====================================================================
+
+
+%% access_token_hash/3
+%% ====================================================================
+%% @doc Hashes a token with SHA512 and encodes it with base64.
+%% ====================================================================
+-spec access_token_hash(AccessToken :: binary()) -> Hash :: binary().
+%% ====================================================================
+access_token_hash(AccessToken) ->
+    Hash = crypto:hash(sha512, AccessToken),
+    base64:encode(Hash).
+
+
+%% insert_expirable/4
+%% ====================================================================
+%% @doc Inserts a {Key, Data} pair into internal storage with additional
+%% expiration time management.
+%% @end
+%% ====================================================================
+-spec insert_expirable(Tab :: atom(), Key :: term(),
+SecondsToExpire :: integer(), Data :: term()) -> ok.
+%% ====================================================================
+insert_expirable(Tab, Key, SecondsToExpire, Data) ->
+    ExpirationTime = now_s() + SecondsToExpire,
+    ets:insert(Tab, {Key, {ExpirationTime, Data}}),
+    ok.
+
+
+%% retrieve_expirable/2
+%% ====================================================================
+%% @doc Retrieves data from the internal storage with additional expiration
+%% time management.
+%% @end
+%% ====================================================================
+-spec retrieve_expirable(Tab :: atom(), Key :: term()) ->
+    {ok, Data :: term()} | {error, missing} | no_return().
+%% ====================================================================
+retrieve_expirable(Tab, Key) ->
+    clear_expired(Tab),
+    case ets:lookup(Tab, Key) of
+        [] -> {error, missing};
+        [{_, {_, Data}}] -> {ok, Data}
+    end.
+
+
+%% clear_expired/1
+%% ====================================================================
+%% @doc Clears all expired entries from an internal storage with additional
+%% expiration time management.
+%% @end
+%% ====================================================================
+-spec clear_expired(Tab :: atom()) -> DeletedRecords :: integer().
+%% ====================================================================
+clear_expired(?ACCESS = Tab) ->
+    Now = now_s(),
+    Expired = ets:select(Tab, [{{'$1', {'$2', {'_'}}}, [{'<', '$2', Now}], ['$1']}]),
+    lists:foreach(fun delete_access/1, Expired);
+clear_expired(Tab) ->
+    Now = now_s(),
+    ets:select_delete(Tab, [{{'$1', {'$2', '$3'}}, [{'<', '$2', Now}], [true]}]).
 
 
 %% jwt_encode/1
