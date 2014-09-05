@@ -67,6 +67,12 @@ validate_login() ->
                 % State token ok, get handler module and redirect address connected with this request
                 Module = proplists:get_value(module, Props),
                 Redirect = proplists:get_value(redirect_after_login, Props),
+
+                % PROBABLY DEVELOPER-ONLY FUNCTIONALITY
+                % Save the referer URL in user session. If it was specified, this will cause the user
+                % to be redirected to given provider when he clicks "go to your files"
+                gui_ctx:put(referer, proplists:get_value(referer, Props)),
+
                 % Validate the request and gather user info
                 case Module:validate_login() of
                     {error, Reason} ->

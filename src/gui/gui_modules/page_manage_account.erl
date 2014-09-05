@@ -22,7 +22,7 @@
 % Postback functions and other
 -export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
--export([redirect_to_veilcluster/2]).
+-export([redirect_to_veilcluster/3]).
 
 
 %% Template points to the template file, which will be filled with content
@@ -250,20 +250,28 @@ provider_redirection_panel() ->
         {ok, ProviderHostname, URL} ->
             #panel{body = [
                 #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
-                    postback = {action, redirect_to_veilcluster, [ProviderHostname, URL]}}
+                    postback = {action, redirect_to_veilcluster, [ProviderHostname, URL, true]}}
             ]};
         {error, no_provider} ->
-            {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
-            gui_jq:select_text(<<"token_textbox">>),
-            #panel{class = <<"dialog dialog-danger">>, body = [
-                #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
-                "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
-                #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
-                    value = Token, placeholder = <<"Space support token">>}
-            ]};
+            case gui_ctx:get(referer) of
+                undefined ->
+                    {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
+                    gui_jq:select_text(<<"token_textbox">>),
+                    #panel{class = <<"dialog dialog-danger">>, body = [
+                        #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
+                        "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
+                        #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
+                            value = Token, placeholder = <<"Space support token">>}
+                    ]};
+                Referer ->
+                    #panel{body = [
+                        #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
+                            postback = {action, redirect_to_veilcluster, [Referer, Referer, true]}}
+                    ]};
+            end;
         _ ->
             page_error:redirect_with_error(?error_internal_server_error)
-    end.
+end.
 
 
 % Postback event handling
@@ -388,8 +396,10 @@ show_name_edition(Flag) ->
     end.
 
 
-redirect_to_veilcluster(ProviderHostname, URL) ->
-    case gui_utils:https_get(<<ProviderHostname/binary, ?veilcluster_connection_check_endpoint>>, []) of
-        {ok, _} -> gui_jq:redirect(URL);
-        _ -> gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable.">>})
+redirect_to_veilcluster(ProviderHostname, URL, CheckConnectivity) ->
+    case {CheckConnectivity, gui_utils:https_get(<<ProviderHostname/binary, ?veilcluster_connection_check_endpoint>>, [])} of
+        {true, {ok, _}} ->
+            gui_jq:redirect(URL);
+        _ ->
+            gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable.">>})
     end.

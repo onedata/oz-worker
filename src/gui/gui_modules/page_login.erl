@@ -30,6 +30,14 @@ body() ->
         true ->
             gui_jq:redirect(<<"/">>);
         false ->
+            Referer = gui_ctx:url_param(<<"referer">>),
+            ?dump(Referer),
+            case Referer of
+                undefined ->
+                    ok;
+                _ ->
+                    gui_ctx:put(referer, Referer)
+            end,
             LogoutEndpoint = proplists:get_value(logout_endpoint, auth_config:get_auth_config(plgrid)),
             Buttons = lists:map(
                 fun(Provider) ->

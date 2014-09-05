@@ -44,18 +44,21 @@
 start(_StartType, _StartArgs) ->
     {RestAns, _} = start_rest(),
     {GuiAns, _} = start_n2o(),
-    case {RestAns, GuiAns} of
-        {ok, ok} ->
+    {RedirectorAns, _} = start_redirector(),
+    case {RestAns, GuiAns, RedirectorAns} of
+        {ok, ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
                     {ok, Pid};
                 Error ->
                     Error
             end;
-        {error, _} ->
+        {error, _, _} ->
             {error, cannot_start_rest};
-        {_, error} ->
-            {error, cannot_start_gui}
+        {_, error, _} ->
+            {error, cannot_start_gui};
+        {_, _, error} ->
+            {error, cannot_start_redirector}
     end.
 
 %% stop/1
@@ -70,6 +73,7 @@ start(_StartType, _StartArgs) ->
 stop(_State) ->
     cowboy:stop_listener(?rest_listener),
     cowboy:stop_listener(?gui_https_listener),
+    cowboy:stop_listener(?gui_redirector_listener),
     stop_rest(),
     ok.
 
@@ -120,13 +124,14 @@ start_rest() ->
             ])
     catch
         _Type:Error ->
-            ?error("Could not start rest, error: ~p", [Error]),
+            ?error_stacktrace("Could not start rest, error: ~p", [Error]),
             {error, Error}
     end.
 
 stop_rest() ->
     auth_logic:stop(),
     grpca:stop().
+
 
 %% start_n2o/0
 %% ===================================================================
@@ -160,7 +165,7 @@ start_n2o() ->
         ],
 
         % Create ets tables and set envs needed by n2o
-        gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module),
+        gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module, n2o_cowboy),
 
         % Initilize auth handler
         auth_config:load_auth_config(),
@@ -181,7 +186,7 @@ start_n2o() ->
             ])
     catch
         _Type:Error ->
-            ?error("Could not start gui, error: ~p", [Error]),
+            ?error_stacktrace("Could not start gui, error: ~p", [Error]),
             {error, Error}
     end.
 
@@ -191,3 +196,37 @@ static_dispatches(DocRoot, StaticPaths) ->
     _StaticDispatches = lists:map(fun(Dir) ->
         {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
     end, StaticPaths).
+
+
+%% start_redirector_listener/0
+%% ====================================================================
+%% @doc Starts a cowboy listener that will redirect all requests of http to https.
+%% @end
+-spec start_redirector() -> ok | no_return().
+%% ====================================================================
+start_redirector() ->
+    try
+        {ok, RedirectPort} = application:get_env(?APP_Name, gui_redirect_port),
+        {ok, RedirectNbAcceptors} = application:get_env(?APP_Name, gui_redirect_acceptors),
+        {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
+
+        RedirectDispatch = [
+            {'_', [
+                {'_', redirect_handler, []}
+            ]}
+        ],
+
+        {ok, _} = cowboy:start_http(?gui_redirector_listener, RedirectNbAcceptors,
+            [
+                {port, RedirectPort}
+            ],
+            [
+                {env, [{dispatch, cowboy_router:compile(RedirectDispatch)}]},
+                {max_keepalive, 1},
+                {timeout, Timeout}
+            ])
+    catch
+        _Type:Error ->
+            ?error_stacktrace("Could not start redirector listener, error: ~p", [Error]),
+            {error, Error}
+    end.

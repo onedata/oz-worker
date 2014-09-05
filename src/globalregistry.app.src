@@ -42,6 +42,10 @@
         {gui_max_keepalive, 30},
         {gui_sessions_cookie_ttl, 3600}, % one hour
 
+        % HTTP redirector config
+        {gui_redirect_port, 80},
+        {gui_redirect_acceptors, 10},
+
         % certs todo generate dedicated certs (this are example ones)
         {ca_cert_file, "resources/cacerts/ca.crt"},
         {cert_file, "resources/cacerts/server.crt"},
