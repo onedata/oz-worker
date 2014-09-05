@@ -186,11 +186,11 @@ grant_tokens(Client, AuthCode) ->
     AccessTokenHash = access_token_hash(AccessToken),
     RefreshToken = random_token(),
     Now = vcn_utils:time(),
-    Expiration = Now + ?ACCESS_EXPIRATION_SECS,
+    ExpirationTime = Now + ?ACCESS_EXPIRATION_SECS,
 
     Access = #access{token = AccessToken, token_hash = AccessTokenHash,
         refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
-        expiration_time = Expiration, client_name = client_name_placeholder},
+        expiration_time = ExpirationTime, client_name = client_name_placeholder},
 
     {ok, _} = ?DB(save_access, Access),
 
@@ -208,7 +208,7 @@ grant_tokens(Client, AuthCode) ->
             {aud, Audience},
             {name, Name},
             {email, EmailsList},
-            {exp, Expiration},
+            {exp, ExpirationTime},
             {iat, Now}
         ])}
     ].
