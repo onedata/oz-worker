@@ -16,25 +16,17 @@
 -include("auth_common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-%% @todo: openid tokens need to be persisted in the database. refresh token
-%% shouldn't expire. the whole chain of authorization and refresh tokens should
-%% be known as session, identifiable by session id.
--define(AUTH_CODE, auth_code). %% {AuthCode, {ExpirationTime, {UserId, ProviderId}}} [1:1]
--define(ACCESS_TOKEN, access_token). %% {AccessToken, AccessId} [1:1]
--define(ACCESS_TOKEN_HASH, access_token_hash). %% {base64(sha512(AccessToken)), AccessId} [1:1]
--define(REFRESH_TOKEN, refresh_token). %% {RefreshToken, AccessId} [1:1]
--define(USER_ID, user_id). %% {UserId, AccessId} [1:n]
--define(ACCESS, access). %% {AccessId, {ExpirationTime, {AccessToken, RefreshToken, UserId, ProviderId, ClientName}}} [1:1]
 -define(STATE_TOKEN, state_token).
 
--define(TABLES_SET, [?AUTH_CODE, ?ACCESS_TOKEN, ?ACCESS_TOKEN_HASH, ?REFRESH_TOKEN, ?ACCESS, ?STATE_TOKEN]).
--define(TABLES_BAG, [?USER_ID]).
-
 %% @todo: config
+-define(TOKEN_LENGTH, 30).
 -define(AUTH_CODE_EXPIRATION_SECS, 600).
 -define(ACCESS_EXPIRATION_SECS, 36000).
 -define(STATE_TOKEN_EXPIRATION_SECS, 60).
 -define(ISSUER_URL, <<"https://onedata.org">>).
+
+-define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
+-define(DB(Function, Arg1, Arg2), dao_lib:apply(dao_auth, Function, [Arg1, Arg2], 1)).
 
 
 %% ====================================================================
@@ -42,7 +34,7 @@
 %% ====================================================================
 -export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
     has_access/2, delete_access/1,  get_user_tokens/1,  grant_tokens/2,
-    validate_token/2, verify/2]).
+    validate_token/2, verify/2, clear_expired_authorizations/0]).
 
 %% ====================================================================
 %% Handling state tokens
@@ -63,8 +55,9 @@
 -spec start() -> ok.
 %% ====================================================================
 start() ->
-    lists:foreach(fun(Table) -> ets:new(Table, [set, named_table, public]) end, ?TABLES_SET),
-    lists:foreach(fun(Table) -> ets:new(Table, [bag, named_table, public]) end, ?TABLES_BAG),
+    Pid = spawn(fun clear_expired_authorizations/0),
+    register(clear_auth_process, Pid),
+    ets:new(?STATE_TOKEN, [set, named_table, public]),
     ok.
 
 
@@ -75,7 +68,8 @@ start() ->
 -spec stop() -> ok.
 %% ====================================================================
 stop() ->
-    lists:foreach(fun(Table) -> ets:delete(Table) end, ?TABLES_SET ++ ?TABLES_BAG),
+    clear_auth_process ! stop,
+    ets:delete(?STATE_TOKEN),
     ok.
 
 
@@ -116,7 +110,11 @@ gen_auth_code(UserId) ->
 %% ====================================================================
 gen_auth_code(UserId, ProviderId) ->
     Token = random_token(),
-    insert_expirable(?AUTH_CODE, Token, ?AUTH_CODE_EXPIRATION_SECS, {UserId, ProviderId}),
+    ExpirationPoint = vcn_utils:time() + ?AUTH_CODE_EXPIRATION_SECS,
+    Auth = #authorization{code = Token, expiration_time = ExpirationPoint,
+                          user_id = UserId, provider_id = ProviderId},
+
+    {ok, _} = ?DB(save_authorization, Auth),
     Token.
 
 
@@ -129,8 +127,8 @@ gen_auth_code(UserId, ProviderId) ->
 -spec has_access(UserId :: binary(), AccessId :: binary()) -> boolean().
 %% ====================================================================
 has_access(UserId, AccessId) ->
-    case retrieve_expirable(?ACCESS, AccessId) of
-        {ok, {_, _, UserId, _, _}} -> true;
+    case ?DB(get_access, AccessId) of
+        {ok, #veil_document{record = #access{user_id = UserId}}} -> true;
         _ -> false
     end.
 
@@ -139,16 +137,10 @@ has_access(UserId, AccessId) ->
 %% ====================================================================
 %% @doc Deletes access-related data identified by an access id.
 %% ====================================================================
--spec delete_access(AccessId :: binary()) -> ok.
+-spec delete_access(AccessId :: binary()) -> ok | no_return().
 %% ====================================================================
 delete_access(AccessId) ->
-    {ok, {AccessToken, RefreshToken, UserId, _, _}} = retrieve_expirable(?ACCESS, AccessId),
-    ets:delete(?REFRESH_TOKEN, RefreshToken),
-    ets:delete(?ACCESS_TOKEN_HASH, access_token_hash(AccessToken)),
-    ets:delete(?ACCESS_TOKEN, AccessToken),
-    ets:delete(?USER_ID, UserId),
-    ets:delete(?ACCESS, AccessId),
-    ok.
+    ok = ?DB(remove_access, AccessId).
 
 
 %% get_user_tokens/1
@@ -159,12 +151,12 @@ delete_access(AccessId) ->
 -spec get_user_tokens(UserId :: binary()) -> [[proplists:property()]].
 %% ====================================================================
 get_user_tokens(UserId) ->
-    AccessIDs = ets:match(?USER_ID, {UserId, '$1'}),
+    {ok, AccessDocs} = ?DB(get_accesses_by_user, UserId),
     lists:map(
-        fun([AccessId]) ->
-            [{_, {_, {_, _, _, _, ClientName}}}] = ets:lookup(?ACCESS, AccessId),
+        fun(AccessDoc) ->
+            #veil_document{uuid = AccessId, record = #access{client_name = ClientName}} = AccessDoc,
             [{accessId, AccessId}, {clientName, ClientName}]
-        end, AccessIDs).
+        end, AccessDocs).
 
 
 %% grant_tokens/2
@@ -177,8 +169,11 @@ get_user_tokens(UserId) ->
     AuthCode :: binary()) -> [proplists:property()].
 %% ====================================================================
 grant_tokens(Client, AuthCode) ->
-    {ok, {UserId, ProviderId}} = retrieve_expirable(?AUTH_CODE, AuthCode), %% @todo: missing
-    ets:delete(?AUTH_CODE, AuthCode),
+    {ok, AuthDoc} = ?DB(get_authorization_by_code, AuthCode), %% @todo: missing
+    #veil_document{uuid = AuthId, record = Auth} = AuthDoc,
+    #authorization{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Auth,
+    true = vcn_utils:time() < Expiration, %% @todo: expired
+    ok = ?DB(remove_authorization, AuthId),
 
     Audience = case ProviderId of undefined -> UserId; _ -> ProviderId end,
 
@@ -188,18 +183,19 @@ grant_tokens(Client, AuthCode) ->
     end,
 
     AccessToken = random_token(),
+    AccessTokenHash = access_token_hash(AccessToken),
     RefreshToken = random_token(),
-    AccessId = random_token(),
+    Now = vcn_utils:time(),
+    ExpirationTime = Now + ?ACCESS_EXPIRATION_SECS,
 
-    ets:insert(?ACCESS_TOKEN, {AccessToken, AccessId}),
-    ets:insert(?ACCESS_TOKEN_HASH, {access_token_hash(AccessToken), AccessId}),
-    ets:insert(?REFRESH_TOKEN, {RefreshToken, AccessId}),
-    ets:insert(?USER_ID, {UserId, AccessId}),
-    insert_expirable(?ACCESS, AccessId, ?ACCESS_EXPIRATION_SECS,
-        {AccessToken, RefreshToken, UserId, ProviderId, client_name_placeholder}),
+    Access = #access{token = AccessToken, token_hash = AccessTokenHash,
+        refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
+        expiration_time = ExpirationTime, client_name = client_name_placeholder},
+
+    {ok, _} = ?DB(save_access, Access),
 
     {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
-    EmailsList = lists:map(fun(Email) -> {struct, [{email, Email}]} end, Emails),
+    EmailsList = lists:map(fun(Email) -> [{email, Email}] end, Emails),
     [
         {access_token, AccessToken},
         {token_type, bearer},
@@ -212,8 +208,8 @@ grant_tokens(Client, AuthCode) ->
             {aud, Audience},
             {name, Name},
             {email, EmailsList},
-            {exp, wut}, %% @todo: expiration time
-            {iat, now} %% @todo: now
+            {exp, ExpirationTime},
+            {iat, Now}
         ])}
     ].
 
@@ -228,12 +224,46 @@ grant_tokens(Client, AuthCode) ->
     AccessToken :: binary()) -> UserId :: binary() | no_return().
 %% ====================================================================
 validate_token(Client, AccessToken) ->
-    [{_, AccessId}] = ets:lookup(?ACCESS_TOKEN, AccessToken), %% @todo: missing
-    {ok, Data} = retrieve_expirable(?ACCESS, AccessId),
-
     ProviderId = case Client of {provider, Id} -> Id; native -> undefined end,
-    {_, _, UserId, ProviderId, _} = Data, %% @todo: someone else's token
+    {ok, #veil_document{record = Access}} = ?DB(get_access_by_key, token, AccessToken), %% @todo: missing
+    #access{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Access, %% @todo: someone else's token
+    true = vcn_utils:time() < Expiration, %% @todo: expired
     UserId.
+
+
+%% remove_expired_authorizations_in_chunks/1
+%% ====================================================================
+%% @doc Removes expired authorizations in chunks of given size.
+%% ====================================================================
+-spec remove_expired_authorizations_in_chunks(ChunkSize :: non_neg_integer()) ->
+    ok.
+%% ====================================================================
+remove_expired_authorizations_in_chunks(ChunkSize) ->
+    {ok, ExpiredIds} = ?DB(get_expired_authorizations_ids, ChunkSize),
+    lists:foreach(fun(AuthId) -> ?DB(remove_authorization, AuthId) end, ExpiredIds),
+    case length(ExpiredIds) of
+        ChunkSize -> remove_expired_authorizations_in_chunks(ChunkSize);
+        _ -> ok
+    end.
+
+
+%% clear_expired_authorizations/0
+%% ====================================================================
+%% @doc Clears any and all expired authorization tokens and associated data. Intended
+%% for use as a periodic job. Does not throw.
+%% ====================================================================
+-spec clear_expired_authorizations() -> ok.
+%% ====================================================================
+clear_expired_authorizations() ->
+    try remove_expired_authorizations_in_chunks(50)
+    catch Error:Reason -> ?warning("error while clearing expired authorizations: ~p ~p", [Error, Reason])
+    end,
+
+    receive stop -> ok
+    after timer:seconds(?AUTH_CODE_EXPIRATION_SECS) -> ?MODULE:clear_expired_authorizations()
+    end,
+
+    ok.
 
 
 %% generate_state_token/2
@@ -312,13 +342,8 @@ clear_expired_state_tokens() ->
     boolean().
 %% ====================================================================
 verify(UserId, Secret) ->
-    case ets:lookup(?ACCESS_TOKEN_HASH, Secret) of
-        [{_, AccessId}] ->
-            case retrieve_expirable(?ACCESS, AccessId) of
-                {error, missing} -> false;
-                {ok, {_, _, UserId, _, _}} -> true;
-                _ -> false
-            end;
+    case ?DB(get_access_by_key, token_hash, Secret) of
+        {ok, #veil_document{record = #access{user_id = UserId}}} -> true;
         _ -> false
     end.
 
@@ -337,55 +362,6 @@ verify(UserId, Secret) ->
 access_token_hash(AccessToken) ->
     Hash = crypto:hash(sha512, AccessToken),
     base64:encode(Hash).
-
-
-%% insert_expirable/4
-%% ====================================================================
-%% @doc Inserts a {Key, Data} pair into internal storage with additional
-%% expiration time management.
-%% @end
-%% ====================================================================
--spec insert_expirable(Tab :: atom(), Key :: term(),
-SecondsToExpire :: integer(), Data :: term()) -> ok.
-%% ====================================================================
-insert_expirable(Tab, Key, SecondsToExpire, Data) ->
-    ExpirationTime = now_s() + SecondsToExpire,
-    ets:insert(Tab, {Key, {ExpirationTime, Data}}),
-    ok.
-
-
-%% retrieve_expirable/2
-%% ====================================================================
-%% @doc Retrieves data from the internal storage with additional expiration
-%% time management.
-%% @end
-%% ====================================================================
--spec retrieve_expirable(Tab :: atom(), Key :: term()) ->
-    {ok, Data :: term()} | {error, missing} | no_return().
-%% ====================================================================
-retrieve_expirable(Tab, Key) ->
-    clear_expired(Tab),
-    case ets:lookup(Tab, Key) of
-        [] -> {error, missing};
-        [{_, {_, Data}}] -> {ok, Data}
-    end.
-
-
-%% clear_expired/1
-%% ====================================================================
-%% @doc Clears all expired entries from an internal storage with additional
-%% expiration time management.
-%% @end
-%% ====================================================================
--spec clear_expired(Tab :: atom()) -> DeletedRecords :: integer().
-%% ====================================================================
-clear_expired(?ACCESS = Tab) ->
-    Now = now_s(),
-    Expired = ets:select(Tab, [{{'$1', {'$2', {'_'}}}, [{'<', '$2', Now}], ['$1']}]),
-    lists:foreach(fun delete_access/1, Expired);
-clear_expired(Tab) ->
-    Now = now_s(),
-    ets:select_delete(Tab, [{{'$1', {'$2', '$3'}}, [{'<', '$2', Now}], [true]}]).
 
 
 %% jwt_encode/1
@@ -414,16 +390,4 @@ jwt_encode(Claims) ->
 random_token() ->
     binary:list_to_bin(
         mochihex:to_hex(
-            crypto:hash(sha,
-                term_to_binary({make_ref(), node(), now()})))).
-
-
-%% now_s/0
-%% ====================================================================
-%% @doc Returns the time in seconds since epoch.
-%% ====================================================================
--spec now_s() -> integer().
-%% ====================================================================
-now_s() ->
-    {MegaSecs, Secs, _} = erlang:now(),
-    MegaSecs * 1000000 + Secs.
+            crypto:rand_bytes(?TOKEN_LENGTH))).
