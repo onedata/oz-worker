@@ -42,13 +42,13 @@
     {error, Reason :: term()}).
 %% ===================================================================
 start(_StartType, _StartArgs) ->
-    {RestAns, _, State} = start_rest(),
+    {RestAns, _} = start_rest(),
     {GuiAns, _} = start_n2o(),
     case {RestAns, GuiAns} of
         {ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
-                    {ok, Pid, State};
+                    {ok, Pid};
                 Error ->
                     Error
             end;
@@ -67,10 +67,10 @@ start(_StartType, _StartArgs) ->
 %% @end
 -spec(stop(State :: term()) -> term()).
 %% ===================================================================
-stop(State) ->
+stop(_State) ->
     cowboy:stop_listener(?rest_listener),
     cowboy:stop_listener(?gui_https_listener),
-    stop_rest(State),
+    stop_rest(),
     ok.
 
 %%%===================================================================
@@ -80,7 +80,7 @@ stop(State) ->
 %% start_rest/0
 %% ===================================================================
 %% @doc Starts cowboy with rest api
--spec start_rest() -> {ok, pid(), State :: term()} | {error, any()}.
+-spec start_rest() -> {ok, pid()} | {error, any()}.
 %% ===================================================================
 start_rest() ->
     try
@@ -95,7 +95,7 @@ start_rest() ->
         {ok, RestCertDomain} = application:get_env(?APP_Name, rest_cert_domain),
 
         grpca:start(GRPCADir, RestCertFile, RestKeyFile, RestCertDomain),
-        State = auth_logic:start(),
+        auth_logic:start(),
 
         Dispatch = cowboy_router:compile([
             {'_', lists:append([
@@ -107,7 +107,7 @@ start_rest() ->
             ])}
         ]),
 
-        {ok, Pid} = cowboy:start_https(?rest_listener, RestHttpsAcceptors,
+        cowboy:start_https(?rest_listener, RestHttpsAcceptors,
             [
                 {port, RestPort},
                 {cacertfile, grpca:cacert_path(GRPCADir)},
@@ -117,17 +117,15 @@ start_rest() ->
             ],
             [
                 {env, [{dispatch, Dispatch}]}
-            ]),
-
-        {ok, Pid, State}
+            ])
     catch
         _Type:Error ->
             ?error("Could not start rest, error: ~p", [Error]),
             {error, Error}
     end.
 
-stop_rest(State) ->
-    auth_logic:stop(State),
+stop_rest() ->
+    auth_logic:stop(),
     grpca:stop().
 
 %% start_n2o/0
