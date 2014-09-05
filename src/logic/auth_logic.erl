@@ -260,7 +260,7 @@ clear_expired_authorizations() ->
     end,
 
     receive stop -> ok
-    after ?AUTH_CODE_EXPIRATION_SECS -> ?MODULE:clear_expired_authorizations()
+    after timer:seconds(?AUTH_CODE_EXPIRATION_SECS) -> ?MODULE:clear_expired_authorizations()
     end,
 
     ok.
