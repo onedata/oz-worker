@@ -237,7 +237,7 @@ get_access_by_key(Key, Value) ->
     case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
             {ok, Doc};
-        {ok, []} ->
+        {ok, #view_result{rows = []}} ->
             ?warning("Couldn't find access by ~p with value ~p", [Key, Value]),
             {error, not_found}
     end.
