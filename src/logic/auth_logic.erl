@@ -221,14 +221,17 @@ grant_tokens(Client, AuthCode) ->
 %% @end
 %% ====================================================================
 -spec validate_token(Client :: {provider, ProviderId :: binary()} | native,
-    AccessToken :: binary()) -> UserId :: binary() | no_return().
+    AccessToken :: binary()) -> {ok, UserId :: binary()} | {error, Reason :: any()} | no_return().
 %% ====================================================================
 validate_token(Client, AccessToken) ->
     ProviderId = case Client of {provider, Id} -> Id; native -> undefined end,
-    {ok, #veil_document{record = Access}} = ?DB(get_access_by_key, token, AccessToken), %% @todo: missing
-    #access{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Access, %% @todo: someone else's token
-    true = vcn_utils:time() < Expiration, %% @todo: expired
-    UserId.
+    case ?DB(get_access_by_key, token, AccessToken) of
+        {error, not_found} = Error -> Error;
+        {ok, #veil_document{record = Access}} ->
+            #access{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Access, %% @todo: someone else's token
+            true = vcn_utils:time() < Expiration, %% @todo: expired
+            {ok, UserId}
+    end.
 
 
 %% remove_expired_authorizations_in_chunks/1

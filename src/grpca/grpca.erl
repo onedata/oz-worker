@@ -101,7 +101,7 @@ sign_provider_req(ProviderId, CSRPem) ->
 %% @end
 %% ====================================================================
 -spec verify_provider(PeerCertDer :: public_key:der_encoded()) ->
-    {ok, ProviderId :: binary()}.
+    {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: atom()}}.
 %% ====================================================================
 verify_provider(PeerCertDer) -> %% @todo: CRLs
     delegate({verify_provider, PeerCertDer}).

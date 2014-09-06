@@ -155,20 +155,45 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
     case lists:member(Method, NoAuth) of
         true -> {true, Req, State#rstate{client = #client{}}};
         false ->
-            {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req2)),
-            {ok, ProviderId} = grpca:verify_provider(PeerCert),
+            case ssl:peercert(cowboy_req:get(socket, Req2)) of
+                {error, no_peercert} ->
+                    Body = mochijson2:encode([{error, <<"no peer certificate">>}]),
+                    Req3 = cowboy_req:set_resp_body(Body, Req2),
+                    {{false, <<"error=no_peer_certificate">>}, Req3, State};
 
-            {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
-            Client = case Authorization of
-                <<"Bearer ", Token/binary>> ->
-                    UserId = auth_logic:validate_token({provider, ProviderId}, Token),
-                    #client{type = user, id = UserId};
+                {ok, PeerCert} ->
+                    case grpca:verify_provider(PeerCert) of
+                        {error, {bad_cert, Reason}} ->
+                            Body = mochijson2:encode([{error, <<"bad peer certificate: ", (vcn_utils:ensure_binary(Reason))/binary>>}]),
+                            Req3 = cowboy_req:set_resp_body(Body, Req2),
+                            {{false, <<"error=bad_peer_certificate">>, Req3, State}};
 
-                undefined ->
-                    #client{type = provider, id = ProviderId} %% @todo: else?
-            end,
+                        {ok, ProviderId} ->
+                            {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
+                            case Authorization of
+                                undefined ->
+                                    Client = #client{type = provider, id = ProviderId},
+                                    {true, Req3, State#rstate{client = Client}};
 
-            {true, Req3, State#rstate{client = Client}}
+                                <<"Bearer ", Token/binary>> ->
+                                    case auth_logic:validate_token({provider, ProviderId}, Token) of
+                                        {ok, UserId} ->
+                                            Client = #client{type = user, id = UserId},
+                                            {true, Req3, State#rstate{client = Client}};
+
+                                        {error, _} ->
+                                            Body = mochijson2:encode([{error, <<"invalid token: ", Token/binary>>}]),
+                                            Req4 = cowboy_req:set_resp_body(Body, Req3),
+                                            {{false, <<"error=invalid_token">>}, Req4, State}
+                                    end;
+
+                                _ ->
+                                    Body = mochijson2:encode([{error, <<"unknown authorization type: ", Authorization/binary>>}]),
+                                    Req4 = cowboy_req:set_resp_body(Body, Req3),
+                                    {{false, <<"error=invalid_request">>}, Req4, State}
+                            end
+                    end
+            end
     end.
 
 
