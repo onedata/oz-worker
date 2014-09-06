@@ -73,18 +73,19 @@ is_authorized(_, _, _, _) ->
 %% @end
 %% ====================================================================
 -spec resource_exists(Resource :: atom(), ProviderId :: binary() | undefined,
-                      Req :: cowboy_req:req()) -> boolean().
+                      Req :: cowboy_req:req()) ->
+    {boolean(), cowboy_req:req()}.
 %% ====================================================================
 resource_exists(space, ProviderId, Req) ->
-    {Bindings, _Req2} = cowboy_req:bindings(Req),
+    {Bindings, Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
-    space_logic:has_provider(SID, ProviderId);
+    {space_logic:has_provider(SID, ProviderId), Req2};
 resource_exists(nprovider, _, Req) ->
-    {Bindings, _Req2} = cowboy_req:bindings(Req),
+    {Bindings, Req2} = cowboy_req:bindings(Req),
     PID = proplists:get_value(pid, Bindings),
-    provider_logic:exists(PID);
-resource_exists(_, _, _) ->
-    true.
+    {provider_logic:exists(PID), Req2};
+resource_exists(_, _, Req) ->
+    {true, Req}.
 
 
 %% accept_resource/6
@@ -98,34 +99,36 @@ resource_exists(_, _, _) ->
                       ProviderId :: binary() | undefined,
                       Data :: [proplists:property()], Client :: client(),
                       Req :: cowboy_req:req()) ->
-    {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean().
+    {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
+        boolean(), cowboy_req:req()}.
 %% ====================================================================
-accept_resource(provider, post, _ProviderId, Data, _Client, _Req) ->
+accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
     URLs = proplists:get_value(<<"urls">>, Data),
     CSR = proplists:get_value(<<"csr">>, Data),
     RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data),
-    if
+    Result = if
         URLs =:= undefined -> false;
         CSR =:= undefined -> false;
         RedirectionPoint =:= undefined -> false;
         true ->
             {ok, ProviderId, SignedPem} = provider_logic:create(URLs, RedirectionPoint, CSR),
             {true, {data, [{providerId, ProviderId}, {certificate, SignedPem}]}}
-    end;
-accept_resource(provider, patch, ProviderId, Data, _Client, _Req) ->
+    end,
+    {Result, Req};
+accept_resource(provider, patch, ProviderId, Data, _Client, Req) ->
     ok = provider_logic:modify(ProviderId, Data),
-    true;
+    {true, Req};
 accept_resource(spaces, post, _ProviderId, Data, Client, Req) ->
     spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
-accept_resource(ssupport, post, ProviderId, Data, _Client, _Req) ->
+accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
     Token = proplists:get_value(<<"token">>, Data),
-    case token_logic:is_valid(Token, space_support_token) of
+    Result = case token_logic:is_valid(Token, space_support_token) of
         false -> false;
         true ->
             {ok, SpaceId} = space_logic:support(ProviderId, Token),
             {true, {url, <<"/provider/spaces/", SpaceId/binary>>}}
-    end.
+    end,
+    {Result, Req}.
 
 
 %% provide_resource/4
@@ -136,32 +139,32 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, _Req) ->
 %% ====================================================================
 -spec provide_resource(Resource :: atom(), ProviderId :: binary() | undefined,
                        Client :: client(), Req :: cowboy_req:req()) ->
-    Data :: [proplists:property()].
+    {Data :: [proplists:property()], cowboy_req:req()}.
 %% ====================================================================
-provide_resource(provider, ProviderId, _Client, _Req) ->
+provide_resource(provider, ProviderId, _Client, Req) ->
     {ok, Provider} = provider_logic:get_data(ProviderId),
-    Provider;
+    {Provider, Req};
 provide_resource(nprovider, _ProviderId, _Client, Req) ->
     {Bindings, _Req2} = cowboy_req:bindings(Req),
     PID = proplists:get_value(pid, Bindings),
     {ok, Provider} = provider_logic:get_data(PID),
-    Provider;
-provide_resource(spaces, ProviderId, _Client, _Req) ->
+    {Provider, Req};
+provide_resource(spaces, ProviderId, _Client, Req) ->
     {ok, Spaces} = provider_logic:get_spaces(ProviderId),
-    Spaces;
+    {Spaces, Req};
 provide_resource(space, _ProviderId, _Client, Req) ->
-    {Bindings, _Req2} = cowboy_req:bindings(Req),
+    {Bindings, Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
     {ok, Space} = space_logic:get_data(SID, provider),
-    Space;
+    {Space, Req2};
 provide_resource(ip, _ProviderId, _Client, Req) ->
-    {{Ip,_Port},_Req2} = cowboy_req:peer(Req),
-    list_to_binary(inet_parse:ntoa(Ip));
+    {{Ip, _Port}, Req2} = cowboy_req:peer(Req),
+    {list_to_binary(inet_parse:ntoa(Ip)), Req2};
 provide_resource(ports, _ProviderId, _Client, Req) ->
-    {ok, Body, _Req2} = cowboy_req:body(Req),
+    {ok, Body, Req2} = cowboy_req:body(Req),
     Data = mochijson2:decode(Body, [{format, proplist}]),
-    Ret = provider_logic:test_connection(Data),
-    Ret.
+    {provider_logic:test_connection(Data), Req2}.
+
 
 %% delete_resource/3
 %% ====================================================================
@@ -170,11 +173,12 @@ provide_resource(ports, _ProviderId, _Client, Req) ->
 %% @end
 %% ====================================================================
 -spec delete_resource(Resource :: atom(), ProviderId :: binary() | undefined,
-                      Req :: cowboy_req:req()) -> boolean().
+                      Req :: cowboy_req:req()) ->
+    {boolean(), cowboy_req:req()}.
 %% ====================================================================
-delete_resource(provider, ProviderId, _Req) ->
-    provider_logic:remove(ProviderId);
+delete_resource(provider, ProviderId, Req) ->
+    {provider_logic:remove(ProviderId), Req};
 delete_resource(space, ProviderId, Req) ->
-    {Bindings, _Req2} = cowboy_req:bindings(Req),
+    {Bindings, Req2} = cowboy_req:bindings(Req),
     SID = proplists:get_value(sid, Bindings),
-    space_logic:remove_provider(SID, ProviderId).
+    {space_logic:remove_provider(SID, ProviderId), Req2}.

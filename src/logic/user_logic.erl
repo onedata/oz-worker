@@ -303,7 +303,7 @@ get_all_spaces(#veil_document{record = #user{} = User}) ->
 %% Throws exception when call to dao fails, or user's groups don't exist.
 %% @end
 %% ====================================================================
--spec effective_default_space(AllUserSpaces :: ordsets:ordset(),
+-spec effective_default_space(AllUserSpaces :: ordsets:ordset(binary()),
                               UserDoc :: veil_doc()) ->
     EffectiveDefaultSpaceId :: binary() | undefined | no_return().
 %% ====================================================================

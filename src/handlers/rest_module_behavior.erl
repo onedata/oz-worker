@@ -47,7 +47,8 @@
 %% @end
 %% ====================================================================
 -callback resource_exists(Resource :: atom(), ResId :: binary() | undefined,
-                          Req :: cowboy_req:req()) -> boolean().
+                          Req :: cowboy_req:req()) ->
+    {boolean(), cowboy_req:req()}.
 
 
 %% accept_resource/6
@@ -63,8 +64,8 @@
                           ResId :: binary() | undefined,
                           Data :: [proplists:property()], Client :: client(),
                           Req :: cowboy_req:req()) ->
-    {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean().
+    {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
+        boolean(), cowboy_req:req()}.
 
 
 %% provide_resource/4
@@ -76,7 +77,7 @@
 %% ====================================================================
 -callback provide_resource(Resource :: atom(), ResId :: binary() | undefined,
                            Client :: client(), Req :: cowboy_req:req()) ->
-    Data :: [proplists:property()].
+    {Data :: [proplists:property()], cowboy_req:req()}.
 
 
 %% delete_resource/3
@@ -87,4 +88,5 @@
 %% @end
 %% ====================================================================
 -callback delete_resource(Resource :: atom(), ResId :: binary() | undefined,
-                          Req :: cowboy_req:req()) -> boolean().
+                          Req :: cowboy_req:req()) ->
+    {boolean(), cowboy_req:req()}.

@@ -71,14 +71,15 @@ is_authorized(_, _, _, _) ->
 %% @end
 %% ====================================================================
 -spec resource_exists(Resource :: atom(), Id :: binary() | undefined,
-                      Req :: cowboy_req:req()) -> boolean().
+                      Req :: cowboy_req:req()) ->
+    {boolean(), cowboy_req:req()}.
 %% ====================================================================
 resource_exists(ctoken, UserId, Req) ->
-    {Bindings, _} = cowboy_req:bindings(Req),
+    {Bindings, Req2} = cowboy_req:bindings(Req),
     AccessId = proplists:get_value(accessId, Bindings),
-    auth_logic:has_access(UserId, AccessId);
-resource_exists(_, _Id, _Req) ->
-    true.
+    {auth_logic:has_access(UserId, AccessId), Req2};
+resource_exists(_, _Id, Req) ->
+    {true, Req}.
 
 
 %% accept_resource/6
@@ -92,25 +93,26 @@ resource_exists(_, _Id, _Req) ->
                       ProviderId :: binary() | undefined,
                       Data :: [proplists:property()], Client :: client(),
                       Req :: cowboy_req:req()) ->
-    {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean().
+    {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
+        boolean(), cowboy_req:req()}.
 %% ====================================================================
-accept_resource(Resource, post, Id, Data, _Client, _Req)
+accept_resource(Resource, post, Id, Data, _Client, Req)
         when Resource =:= ptokens orelse Resource =:= ctokens ->
     GrantType = proplists:get_value(<<"grant_type">>, Data),
     Code = proplists:get_value(<<"code">>, Data),
-    if
+    Result = if
         GrantType =/= <<"authorization_code">> -> false; %% @todo: refresh
         Code =:= undefined -> false;
         true ->
             TokenClient = case Resource of ptokens -> {provider, Id}; ctokens -> native end,
             {true, {data, auth_logic:grant_tokens(TokenClient, Code)}}
-    end;
-accept_resource(verify, post, _ProviderId, Data, _Client, _Req) ->
+    end,
+    {Result, Req};
+accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
     UserId = proplists:get_value(<<"userId">>, Data),
     Secret = proplists:get_value(<<"secret">>, Data),
     Verified = auth_logic:verify(UserId, Secret),
-    {true, {data, [{verified, Verified}]}}.
+    {{true, {data, [{verified, Verified}]}}, Req}.
 
 
 %% provide_resource/4
@@ -121,12 +123,12 @@ accept_resource(verify, post, _ProviderId, Data, _Client, _Req) ->
 %% ====================================================================
 -spec provide_resource(Resource :: atom(), Id :: binary() | undefined,
                        Client :: client(), Req :: cowboy_req:req()) ->
-    Data :: [proplists:property()].
+    {Data :: [proplists:property()], cowboy_req:req()}.
 %% ====================================================================
-provide_resource(ascode, UserId, _Client, _Req) ->
-    [{accessCode, auth_logic:gen_auth_code(UserId)}];
-provide_resource(ctokens, UserId, _Client, _Req) ->
-    [{tokenInfo, auth_logic:get_user_tokens(UserId)}].
+provide_resource(ascode, UserId, _Client, Req) ->
+    {[{accessCode, auth_logic:gen_auth_code(UserId)}], Req};
+provide_resource(ctokens, UserId, _Client, Req) ->
+    {[{tokenInfo, auth_logic:get_user_tokens(UserId)}], Req}.
 
 
 %% delete_resource/3
@@ -136,10 +138,11 @@ provide_resource(ctokens, UserId, _Client, _Req) ->
 %% @end
 %% ====================================================================
 -spec delete_resource(Resource :: atom(), ResId :: binary() | undefined,
-                      Req :: cowboy_req:req()) -> boolean().
+                      Req :: cowboy_req:req()) ->
+    {boolean(), cowboy_req:req()}.
 %% ====================================================================
 delete_resource(ctoken, _UserId, Req) ->
-    {Bindings, _} = cowboy_req:bindings(Req),
+    {Bindings, Req2} = cowboy_req:bindings(Req),
     AccessId = proplists:get_value(accessId, Bindings),
     ok = auth_logic:delete_access(AccessId),
-    true.
+    {true, Req2}.

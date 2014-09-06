@@ -113,8 +113,8 @@ content_types_provided(Req, #rstate{} = State) ->
 %% ====================================================================
 delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {ResId, Req2} = get_res_id(Req, State),
-    Result = Mod:delete_resource(Resource, ResId, Req2),
-    {Result, Req2, State}.
+    {Result, Req3} = Mod:delete_resource(Resource, ResId, Req2),
+    {Result, Req3, State}.
 
 
 %% forbidden/2
@@ -213,8 +213,8 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
         <<"POST">> -> {false, Req2, State};
         _ ->
             {ResId, Req3} = get_res_id(Req2, State),
-            Exists = Mod:resource_exists(Resource, ResId, Req3),
-            {Exists, Req3, State}
+            {Exists, Req4} = Mod:resource_exists(Resource, ResId, Req3),
+            {Exists, Req4, State}
     end.
 
 
@@ -262,13 +262,14 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
     {BinMethod, Req3} = cowboy_req:method(Req2),
     Method = binary_to_method(BinMethod),
 
-    case Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3) of % @todo: should return req
-        {true, {url, URL}} -> {{true, URL}, Req3, State};
+    {Result, Req4} = Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3),
+    case Result of
+        {true, {url, URL}} -> {{true, URL}, Req4, State};
         {true, {data, Response}} ->
             JSON = mochijson2:encode(Response),
-            Req4 = cowboy_req:set_resp_body(JSON, Req3),
-            {true, Req4, State};
-        B -> {B, Req3, State}
+            Req5 = cowboy_req:set_resp_body(JSON, Req4),
+            {true, Req5, State};
+        B -> {B, Req4, State}
     end.
 
 
@@ -283,9 +284,9 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
 %% ====================================================================
 provide_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
     {ResId, Req2} = get_res_id(Req, State),
-    Data = Mod:provide_resource(Resource, ResId, Client, Req2),
+    {Data, Req3} = Mod:provide_resource(Resource, ResId, Client, Req2),
     JSON = mochijson2:encode(Data),
-    {JSON, Req2, State}.
+    {JSON, Req3, State}.
 
 
 %% method_to_binary/1
