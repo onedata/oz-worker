@@ -33,7 +33,11 @@ routes() ->
     S = #rstate{module = ?MODULE},
     M = rest_handler,
     [
-        {<<"/openid/token">>, M, S#rstate{resource = token, methods = [post]}}
+        {<<"/openid/client/access_code">>, M, S#rstate{resource = ascode, methods = [get]}},
+        {<<"/openid/client/tokens">>, M, S#rstate{resource = ctokens, methods = [post, get], noauth = [post]}},
+        {<<"/openid/client/tokens/:accessId">>, M, S#rstate{resource = ctoken, methods = [delete]}},
+        {<<"/openid/client/verify">>, M, S#rstate{resource = verify, methods = [post]}},
+        {<<"/openid/provider/tokens">>, M, S#rstate{resource = ptokens, methods = [post]}}
     ].
 
 
@@ -45,11 +49,19 @@ routes() ->
 %% @end
 %% ====================================================================
 -spec is_authorized(Resource :: atom(), Method :: method(),
-                    ProviderId :: binary() | undefined, Client :: client()) ->
+                    Id :: binary() | undefined, Client :: client()) ->
     boolean().
 %% ====================================================================
-is_authorized(_, _, _ProviderId, #client{type = provider}) ->
-    true.
+is_authorized(Resource, _Method, _Id, #client{type = user})
+        when Resource =:= ascode orelse Resource =:= ctokens orelse Resource =:= ctoken ->
+    true;
+is_authorized(Resource, post, _Id, #client{type = provider})
+        when Resource =:= verify orelse Resource =:= ptokens ->
+    true;
+is_authorized(ctokens, post, _, _) ->
+    true;
+is_authorized(_, _, _, _) ->
+    false.
 
 
 %% resource_exists/3
@@ -58,10 +70,14 @@ is_authorized(_, _, _ProviderId, #client{type = provider}) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec resource_exists(Resource :: atom(), ProviderId :: binary() | undefined,
+-spec resource_exists(Resource :: atom(), Id :: binary() | undefined,
                       Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-resource_exists(_, _ProviderId, _Req) ->
+resource_exists(ctoken, UserId, Req) ->
+    {Bindings, _} = cowboy_req:bindings(Req),
+    AccessId = proplists:get_value(accessId, Bindings),
+    auth_logic:has_access(UserId, AccessId);
+resource_exists(_, _Id, _Req) ->
     true.
 
 
@@ -79,17 +95,22 @@ resource_exists(_, _ProviderId, _Req) ->
     {true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
         boolean().
 %% ====================================================================
-accept_resource(token, post, ProviderId, Data, _Client, _Req) ->
-%%     {ok, {<<"application">>, <<"x-www-form-urlencoded">>}, _Req2} =
-%%         cowboy_req:parse_header(<<"content-type">>, Req), %%@todo: req2, return instead of breaking
+accept_resource(Resource, post, Id, Data, _Client, _Req)
+        when Resource =:= ptokens orelse Resource =:= ctokens ->
     GrantType = proplists:get_value(<<"grant_type">>, Data),
     Code = proplists:get_value(<<"code">>, Data),
     if
         GrantType =/= <<"authorization_code">> -> false; %% @todo: refresh
         Code =:= undefined -> false;
         true ->
-            {true, {data, auth_logic:grant_token(ProviderId, Code)}}
-    end.
+            TokenClient = case Resource of ptokens -> {provider, Id}; ctokens -> native end,
+            {true, {data, auth_logic:grant_tokens(TokenClient, Code)}}
+    end;
+accept_resource(verify, post, _ProviderId, Data, _Client, _Req) ->
+    UserId = proplists:get_value(<<"userId">>, Data),
+    Secret = proplists:get_value(<<"secret">>, Data),
+    Verified = auth_logic:verify(UserId, Secret),
+    {true, {data, [{verified, Verified}]}}.
 
 
 %% provide_resource/4
@@ -98,12 +119,14 @@ accept_resource(token, post, ProviderId, Data, _Client, _Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(Resource :: atom(), ProviderId :: binary() | undefined,
+-spec provide_resource(Resource :: atom(), Id :: binary() | undefined,
                        Client :: client(), Req :: cowboy_req:req()) ->
     Data :: [proplists:property()].
 %% ====================================================================
-provide_resource(auth, _ProviderId, _Client, _Req) ->
-    []. %% @todo: reply with not-implemented
+provide_resource(ascode, UserId, _Client, _Req) ->
+    [{accessCode, auth_logic:gen_auth_code(UserId)}];
+provide_resource(ctokens, UserId, _Client, _Req) ->
+    [{tokenInfo, auth_logic:get_user_tokens(UserId)}].
 
 
 %% delete_resource/3
@@ -112,8 +135,11 @@ provide_resource(auth, _ProviderId, _Client, _Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(Resource :: atom(), ProviderId :: binary() | undefined,
+-spec delete_resource(Resource :: atom(), ResId :: binary() | undefined,
                       Req :: cowboy_req:req()) -> boolean().
 %% ====================================================================
-delete_resource(_, _ProviderId, _Req) ->
+delete_resource(ctoken, _UserId, Req) ->
+    {Bindings, _} = cowboy_req:bindings(Req),
+    AccessId = proplists:get_value(accessId, Bindings),
+    ok = auth_logic:delete_access(AccessId),
     true.

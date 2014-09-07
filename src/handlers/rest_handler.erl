@@ -161,7 +161,7 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
             {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
             Client = case Authorization of
                 <<"Bearer ", Token/binary>> ->
-                    UserId = auth_logic:validate_token(ProviderId, Token),
+                    UserId = auth_logic:validate_token({provider, ProviderId}, Token),
                     #client{type = user, id = UserId};
 
                 undefined ->
