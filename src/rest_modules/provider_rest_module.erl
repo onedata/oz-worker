@@ -103,9 +103,9 @@ resource_exists(_, _, Req) ->
         boolean(), cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
-    URLs = rest_module_helper:assert_key(<<"urls">>, Data),
-    CSR = rest_module_helper:assert_key(<<"csr">>, Data),
-    RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data),
+    URLs = rest_module_helper:assert_key(<<"urls">>, Data, list_of_bin),
+    CSR = rest_module_helper:assert_key(<<"csr">>, Data, binary),
+    RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary),
 
     {ok, ProviderId, SignedPem} = provider_logic:create(URLs, RedirectionPoint, CSR),
     {{true, {data, [{providerId, ProviderId}, {certificate, SignedPem}]}}, Req};
@@ -115,7 +115,7 @@ accept_resource(provider, patch, ProviderId, Data, _Client, Req) ->
 accept_resource(spaces, post, _ProviderId, Data, Client, Req) ->
     spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
 accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
-    Token = rest_module_helper:assert_key(<<"token">>, Data),
+    Token = rest_module_helper:assert_key(<<"token">>, Data, binary),
     case token_logic:is_valid(Token, space_support_token) of
         false -> rest_module_helper:report_invalid_value(<<"token">>, Token);
         true ->

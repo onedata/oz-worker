@@ -125,11 +125,11 @@ resource_exists(_, GroupId, Req) ->
         boolean(), cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data),
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
     {ok, GroupId} = group_logic:create(UserId, Name),
     {{true, {url, <<"/groups/", GroupId/binary>>}}, Req};
 accept_resource(group, patch, GroupId, Data, _Client, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data),
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
     ok = group_logic:modify(GroupId, Name),
     {true, Req};
 accept_resource(upriv, put, GroupId, Data, _Client, Req) ->
@@ -137,17 +137,18 @@ accept_resource(upriv, put, GroupId, Data, _Client, Req) ->
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
 
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
-        [atom_to_binary(P, latin1) || P <- privileges:group_privileges()], Data),
+        [atom_to_binary(P, latin1) || P <- privileges:group_privileges()], Data,
+        list_of_bin),
 
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
     ok = group_logic:set_privileges(GroupId, UID, Privileges),
     {true, Req2};
 accept_resource(spaces, post, GroupId, Data, _Client, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data),
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
     {ok, SpaceId} = space_logic:create({group, GroupId}, Name),
     {{true, {url, <<"/spaces/", SpaceId/binary>>}}, Req};
 accept_resource(sjoin, post, GroupId, Data, _Client, Req) ->
-    Token = rest_module_helper:assert_key(<<"token">>, Data),
+    Token = rest_module_helper:assert_key(<<"token">>, Data, binary),
     case token_logic:is_valid(Token, space_invite_group_token) of
         false ->
             rest_module_helper:report_invalid_value(<<"token">>, Token);

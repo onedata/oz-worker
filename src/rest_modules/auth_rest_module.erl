@@ -100,10 +100,10 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
         when Resource =:= ptokens orelse Resource =:= ctokens ->
     TokenClient = case Resource of ptokens -> {provider, Id}; ctokens -> native end,
 
-    GrantType = rest_module_helper:assert_key(<<"grant_type">>, Data),
+    GrantType = rest_module_helper:assert_key(<<"grant_type">>, Data, binary),
     case GrantType of
         <<"authorization_code">> ->
-            Code = rest_module_helper:assert_key(<<"code">>, Data),
+            Code = rest_module_helper:assert_key(<<"code">>, Data, binary),
             {{true, {data, auth_logic:grant_tokens(TokenClient, Code)}}, Req};
 
         <<"refresh_token">> ->
@@ -113,8 +113,8 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
             rest_module_helper:report_invalid_value(<<"grant_type">>, GrantType)
     end;
 accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
-    UserId = rest_module_helper:assert_key(<<"userId">>, Data),
-    Secret = rest_module_helper:assert_key(<<"secret">>, Data),
+    UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary),
+    Secret = rest_module_helper:assert_key(<<"secret">>, Data, binary),
     Verified = auth_logic:verify(UserId, Secret),
     {{true, {data, [{verified, Verified}]}}, Req}.
 
