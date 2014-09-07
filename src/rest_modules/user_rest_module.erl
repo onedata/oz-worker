@@ -119,7 +119,7 @@ accept_resource(user, patch, UserId, Data, _Client, Req) ->
     Result = if
         Name =:= undefined -> false;
         true ->
-            ok = user_logic:modify(UserId, {name, Name}),
+            ok = user_logic:modify(UserId, [{name, Name}]),
             true
     end,
     {Result, Req};

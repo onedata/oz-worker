@@ -91,7 +91,9 @@ stop() ->
     {ok, CertPem :: binary()}.
 %% ====================================================================
 sign_provider_req(ProviderId, CSRPem) ->
-    delegate({sign_provider_req, ProviderId, CSRPem}).
+    case delegate(sign_provider_req, {ProviderId, CSRPem}) of
+        {ok, CertPem} = Result when is_binary(CertPem) -> Result
+    end.
 
 
 %% verify_provider/1
@@ -104,7 +106,10 @@ sign_provider_req(ProviderId, CSRPem) ->
     {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: atom()}}.
 %% ====================================================================
 verify_provider(PeerCertDer) -> %% @todo: CRLs
-    delegate({verify_provider, PeerCertDer}).
+    case delegate(verify_provider, {PeerCertDer}) of
+        {ok, ProviderId} = Result when is_binary(ProviderId) -> Result;
+        {error, {bad_cert, Reason}} = Result when is_atom(Reason) -> Result
+    end.
 
 
 %% generate_gr_cert/1
@@ -224,14 +229,14 @@ ca_config_file(TmpDir, CaDir) ->
     Config.
 
 
-%% delegate/1
+%% delegate/2
 %% ====================================================================
 %% @doc Delegates a request from the API to the GRPCA process.
 %% ====================================================================
--spec delegate(Request :: atom()) -> Response :: any().
+-spec delegate(Request :: atom(), Args :: tuple()) -> Response :: any().
 %% ====================================================================
-delegate(Request) ->
-    ca_loop ! {self(), Request},
+delegate(Request, Args) ->
+    ca_loop ! {self(), {Request, Args}},
     receive
         {ok, Response} -> Response;
         Whatever -> error({unexpected_message, Whatever})
@@ -248,12 +253,12 @@ delegate(Request) ->
 %% ====================================================================
 loop(CaDir) ->
     receive
-        {Requester, {sign_provider_req, ProviderId, CSRPem}} ->
+        {Requester, {sign_provider_req, {ProviderId, CSRPem}}} ->
             Reply = (catch sign_provider_req_imp(ProviderId, CSRPem, CaDir)),
             Requester ! {ok, Reply},
             loop(CaDir);
 
-        {Requester, {verify_provider, ProviderId}} ->
+        {Requester, {verify_provider, {ProviderId}}} ->
             Reply = (catch verify_provider_imp(ProviderId, CaDir)),
             Requester ! {ok, Reply},
             loop(CaDir);
@@ -350,7 +355,7 @@ req_cnf(DN) ->
 %% ====================================================================
 %% @doc Returns a configuration for the GRPCA.
 %% ====================================================================
--spec ca_cnf(CaDir :: string) -> Config :: iolist().
+-spec ca_cnf(CaDir :: string()) -> Config :: iolist().
 %% ====================================================================
 ca_cnf(CaDir) ->
     ["# Purpose: Configuration for CAs.\n"

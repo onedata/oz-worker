@@ -99,7 +99,8 @@ is_authorized(_, _, _, _) ->
 %% @end
 %% ====================================================================
 -spec resource_exists(Resource :: atom(), SpaceId :: binary() | undefined,
-                      Req :: cowboy_req:req()) -> boolean().
+                      Req :: cowboy_req:req()) ->
+    {boolean(), cowboy_req:req()}.
 %% ====================================================================
 resource_exists(spaces, _SpaceId, Req) ->
     {true, Req};
