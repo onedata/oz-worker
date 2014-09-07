@@ -65,7 +65,7 @@
                           Data :: [proplists:property()], Client :: client(),
                           Req :: cowboy_req:req()) ->
     {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean(), cowboy_req:req()}.
+        boolean(), cowboy_req:req()} | no_return().
 
 
 %% provide_resource/4

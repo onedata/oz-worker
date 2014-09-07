@@ -23,7 +23,7 @@
 %% `id` is the client's ID in the database.
 -record(client, {
     type :: user | provider,
-    id :: binary()
+    id = <<"">> :: binary()
 }).
 -type client() :: #client{}.
 

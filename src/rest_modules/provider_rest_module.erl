@@ -78,11 +78,11 @@ is_authorized(_, _, _, _) ->
 %% ====================================================================
 resource_exists(space, ProviderId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
-    SID = proplists:get_value(sid, Bindings),
+    {sid, SID} = lists:keyfind(sid, 1, Bindings),
     {space_logic:has_provider(SID, ProviderId), Req2};
 resource_exists(nprovider, _, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
-    PID = proplists:get_value(pid, Bindings),
+    {pid, PID} = lists:keyfind(pid, 1, Bindings),
     {provider_logic:exists(PID), Req2};
 resource_exists(_, _, Req) ->
     {true, Req}.
@@ -90,7 +90,7 @@ resource_exists(_, _, Req) ->
 
 %% accept_resource/6
 %% ====================================================================
-%% @doc Processes data submitted by a client through POST, PATCH on a REST
+%% @doc Processes data submitted by a client through POST, PATCH, PUT on a REST
 %% resource.
 %% @see rest_module_behavior
 %% @end
@@ -100,35 +100,28 @@ resource_exists(_, _, Req) ->
                       Data :: [proplists:property()], Client :: client(),
                       Req :: cowboy_req:req()) ->
     {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean(), cowboy_req:req()}.
+        boolean(), cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
-    URLs = proplists:get_value(<<"urls">>, Data),
-    CSR = proplists:get_value(<<"csr">>, Data),
-    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data),
-    Result = if
-        URLs =:= undefined -> false;
-        CSR =:= undefined -> false;
-        RedirectionPoint =:= undefined -> false;
-        true ->
-            {ok, ProviderId, SignedPem} = provider_logic:create(URLs, RedirectionPoint, CSR),
-            {true, {data, [{providerId, ProviderId}, {certificate, SignedPem}]}}
-    end,
-    {Result, Req};
+    URLs = rest_module_helper:assert_key(<<"urls">>, Data),
+    CSR = rest_module_helper:assert_key(<<"csr">>, Data),
+    RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data),
+
+    {ok, ProviderId, SignedPem} = provider_logic:create(URLs, RedirectionPoint, CSR),
+    {{true, {data, [{providerId, ProviderId}, {certificate, SignedPem}]}}, Req};
 accept_resource(provider, patch, ProviderId, Data, _Client, Req) ->
     ok = provider_logic:modify(ProviderId, Data),
     {true, Req};
 accept_resource(spaces, post, _ProviderId, Data, Client, Req) ->
     spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
 accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
-    Token = proplists:get_value(<<"token">>, Data),
-    Result = case token_logic:is_valid(Token, space_support_token) of
-        false -> false;
+    Token = rest_module_helper:assert_key(<<"token">>, Data),
+    case token_logic:is_valid(Token, space_support_token) of
+        false -> rest_module_helper:report_invalid_value(<<"token">>, Token);
         true ->
             {ok, SpaceId} = space_logic:support(ProviderId, Token),
-            {true, {url, <<"/provider/spaces/", SpaceId/binary>>}}
-    end,
-    {Result, Req}.
+            {{true, {url, <<"/provider/spaces/", SpaceId/binary>>}}, Req}
+    end.
 
 
 %% provide_resource/4
@@ -146,7 +139,7 @@ provide_resource(provider, ProviderId, _Client, Req) ->
     {Provider, Req};
 provide_resource(nprovider, _ProviderId, _Client, Req) ->
     {Bindings, _Req2} = cowboy_req:bindings(Req),
-    PID = proplists:get_value(pid, Bindings),
+    {pid, PID} = lists:keyfind(pid, 1, Bindings),
     {ok, Provider} = provider_logic:get_data(PID),
     {Provider, Req};
 provide_resource(spaces, ProviderId, _Client, Req) ->
@@ -154,7 +147,7 @@ provide_resource(spaces, ProviderId, _Client, Req) ->
     {Spaces, Req};
 provide_resource(space, _ProviderId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
-    SID = proplists:get_value(sid, Bindings),
+    {sid, SID} = lists:keyfind(sid, 1, Bindings),
     {ok, Space} = space_logic:get_data(SID, provider),
     {Space, Req2};
 provide_resource(ip, _ProviderId, _Client, Req) ->
@@ -180,5 +173,5 @@ delete_resource(provider, ProviderId, Req) ->
     {provider_logic:remove(ProviderId), Req};
 delete_resource(space, ProviderId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
-    SID = proplists:get_value(sid, Bindings),
+    {sid, SID} = lists:keyfind(sid, 1, Bindings),
     {space_logic:remove_provider(SID, ProviderId), Req2}.

@@ -262,14 +262,30 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
     {BinMethod, Req3} = cowboy_req:method(Req2),
     Method = binary_to_method(BinMethod),
 
-    {Result, Req4} = Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3),
-    case Result of
-        {true, {url, URL}} -> {{true, URL}, Req4, State};
-        {true, {data, Response}} ->
-            JSON = mochijson2:encode(Response),
-            Req5 = cowboy_req:set_resp_body(JSON, Req4),
-            {true, Req5, State};
-        B -> {B, Req4, State}
+    try
+        {Result, Req4} = Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3),
+        case Result of
+            {true, {url, URL}} -> {{true, URL}, Req4, State};
+            {true, {data, Response}} ->
+                JSON = mochijson2:encode(Response),
+                Req5 = cowboy_req:set_resp_body(JSON, Req4),
+                {true, Req5, State};
+            _ when is_binary(Result) -> {Result, Req4, State}
+        end
+    catch
+        {missing_key, Key} ->
+            Body = mochijson2:encode([{error,
+                <<"missing required key: '",
+                  (vcn_utils:ensure_binary(Key))/binary, "'">>}]),
+            Req6 = cowboy_req:set_resp_body(Body, Req3),
+            {false, Req6, State};
+
+        {invalid_value, {Key, Value}} ->
+            Body = mochijson2:encode([{error,
+                <<"invalid '", (vcn_utils:ensure_binary(Key))/binary,
+                  "' value: '", (vcn_utils:ensure_binary(Value))/binary, "'">>}]),
+            Req6 = cowboy_req:set_resp_body(Body, Req3),
+            {false, Req6, State}
     end.
 
 

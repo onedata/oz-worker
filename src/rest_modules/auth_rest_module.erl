@@ -76,7 +76,7 @@ is_authorized(_, _, _, _) ->
 %% ====================================================================
 resource_exists(ctoken, UserId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
-    AccessId = proplists:get_value(accessId, Bindings),
+    {accessId, AccessId} = lists:keyfind(accessId, 1, Bindings),
     {auth_logic:has_access(UserId, AccessId), Req2};
 resource_exists(_, _Id, Req) ->
     {true, Req}.
@@ -84,7 +84,7 @@ resource_exists(_, _Id, Req) ->
 
 %% accept_resource/6
 %% ====================================================================
-%% @doc Processes data submitted by a client through POST, PATCH on a REST
+%% @doc Processes data submitted by a client through POST, PATCH, PUT on a REST
 %% resource.
 %% @see rest_module_behavior
 %% @end
@@ -94,23 +94,27 @@ resource_exists(_, _Id, Req) ->
                       Data :: [proplists:property()], Client :: client(),
                       Req :: cowboy_req:req()) ->
     {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean(), cowboy_req:req()}.
+        boolean(), cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(Resource, post, Id, Data, _Client, Req)
         when Resource =:= ptokens orelse Resource =:= ctokens ->
-    GrantType = proplists:get_value(<<"grant_type">>, Data),
-    Code = proplists:get_value(<<"code">>, Data),
-    Result = if
-        GrantType =/= <<"authorization_code">> -> false; %% @todo: refresh
-        Code =:= undefined -> false;
-        true ->
-            TokenClient = case Resource of ptokens -> {provider, Id}; ctokens -> native end,
-            {true, {data, auth_logic:grant_tokens(TokenClient, Code)}}
-    end,
-    {Result, Req};
+    TokenClient = case Resource of ptokens -> {provider, Id}; ctokens -> native end,
+
+    GrantType = rest_module_helper:assert_key(<<"grant_type">>, Data),
+    case GrantType of
+        <<"authorization_code">> ->
+            Code = rest_module_helper:assert_key(<<"code">>, Data),
+            {{true, {data, auth_logic:grant_tokens(TokenClient, Code)}}, Req};
+
+        <<"refresh_token">> ->
+            error(not_implemented);
+
+        _ ->
+            rest_module_helper:report_invalid_value(<<"grant_type">>, GrantType)
+    end;
 accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
-    UserId = proplists:get_value(<<"userId">>, Data),
-    Secret = proplists:get_value(<<"secret">>, Data),
+    UserId = rest_module_helper:assert_key(<<"userId">>, Data),
+    Secret = rest_module_helper:assert_key(<<"secret">>, Data),
     Verified = auth_logic:verify(UserId, Secret),
     {{true, {data, [{verified, Verified}]}}, Req}.
 
@@ -133,7 +137,7 @@ provide_resource(ctokens, UserId, _Client, Req) ->
 
 %% delete_resource/3
 %% ====================================================================
-%% @doc Deletes the resource identified by the SpaceId parameter.
+%% @doc Deletes the resource.
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
@@ -143,6 +147,6 @@ provide_resource(ctokens, UserId, _Client, Req) ->
 %% ====================================================================
 delete_resource(ctoken, _UserId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
-    AccessId = proplists:get_value(accessId, Bindings),
+    {_, AccessId} = lists:keyfind(accessId, 1, Bindings),
     ok = auth_logic:delete_access(AccessId),
     {true, Req2}.
