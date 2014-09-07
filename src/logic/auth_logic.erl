@@ -300,7 +300,7 @@ clear_expired_state_tokens() ->
         end, ExpiredSessions).
 
 
-%% verify/3
+%% verify/2
 %% ====================================================================
 %% @doc Verifies if a given secret belongs to a given user.
 %% ====================================================================
@@ -324,7 +324,7 @@ verify(UserId, Secret) ->
 %% ====================================================================
 
 
-%% access_token_hash/3
+%% access_token_hash/1
 %% ====================================================================
 %% @doc Hashes a token with SHA512 and encodes it with base64.
 %% ====================================================================
