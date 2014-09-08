@@ -31,7 +31,11 @@
 -spec load_auth_config() -> ok.
 %% ====================================================================
 load_auth_config() ->
-    {ok, [Config]} = file:consult(?auth_config_file_path),
+    Config = case file:consult(?auth_config_file_path) of
+                 {ok, []} -> [];
+                 {ok, [Cfg]} when is_list(Cfg) -> Cfg;
+                 _ -> []
+             end,
     application:set_env(veil_cluster_node, auth_config, Config).
 
 

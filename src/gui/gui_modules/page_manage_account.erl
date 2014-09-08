@@ -246,32 +246,25 @@ find_connected_account(Provider, ProviderInfos) ->
 % Panel that will display a button to redirect a user to his provider,
 % or a token for space support if he has no spaces supported.
 provider_redirection_panel() ->
-    case gr_gui_utils:get_redirection_url_to_provider() of
+    ProviderId = gui_ctx:url_param(<<"referer">>),
+    case gr_gui_utils:get_redirection_url_to_provider(ProviderId) of
         {ok, ProviderHostname, URL} ->
             #panel{body = [
                 #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
                     postback = {action, redirect_to_veilcluster, [ProviderHostname, URL, true]}}
             ]};
         {error, no_provider} ->
-            case gui_ctx:get(referer) of
-                undefined ->
-                    {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
-                    gui_jq:select_text(<<"token_textbox">>),
-                    #panel{class = <<"dialog dialog-danger">>, body = [
-                        #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
-                        "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
-                        #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
-                            value = Token, placeholder = <<"Space support token">>}
-                    ]};
-                Referer ->
-                    #panel{body = [
-                        #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
-                            postback = {action, redirect_to_veilcluster, [Referer, Referer, true]}}
-                    ]};
-            end;
+            {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
+            gui_jq:select_text(<<"token_textbox">>),
+            #panel{class = <<"dialog dialog-danger">>, body = [
+                #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
+                "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
+                #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
+                    value = Token, placeholder = <<"Space support token">>}
+            ]};
         _ ->
             page_error:redirect_with_error(?error_internal_server_error)
-end.
+    end.
 
 
 % Postback event handling

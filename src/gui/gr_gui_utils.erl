@@ -19,7 +19,7 @@
 -export([apply_or_redirect/2, apply_or_redirect/3, maybe_redirect/2]).
 
 % Handling redirects to providers
--export([get_redirection_url_to_provider/0]).
+-export([get_redirection_url_to_provider/1]).
 
 % Functions to generate page elements
 -export([top_menu/1, top_menu/2, logotype_footer/1, empty_page/0]).
@@ -86,29 +86,60 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
 %% @doc Returns an URL that the user should be redirected to - if possible.
 %% Otherwise, error is returned.
 %% @end
--spec get_redirection_url_to_provider() -> {ok, ProvderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
+-spec get_redirection_url_to_provider(DefaultProviderID :: binary() | undefined) ->
+    {ok, ProvderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
 %% ====================================================================
-get_redirection_url_to_provider() ->
+get_redirection_url_to_provider(DefaultProviderID) ->
     try
         UserID = gui_ctx:get_user_id(),
-        {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
-        % Select the first provider of the first space that has any
-        ProviderIDs = lists:foldl(
-            fun(Space, Acc) ->
-                {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
-                Providers ++ Acc
-            end, [], Spaces),
 
-        case ProviderIDs of
-            [] ->
-                {error, no_provider};
-            _ ->
-                {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(UserID, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)),
-                {ok, ProviderHostname, RedirectURL}
+        % Default provider is the provider that redirected the user for login.
+        % Check if the provider is recognisable
+        DefaultProviderInfo =
+            try
+                {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, DefaultProviderID),
+                {ok, ProvHostname, RedURL}
+            catch _:_ ->
+                error
+            end,
+
+        case DefaultProviderInfo of
+            {ok, _, _} ->
+                % Default provider is OK
+                DefaultProviderInfo;
+            error ->
+                % No default provider, check if default space has any providers
+                {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
+                {ok, [{providers, DSProviders}]} = try space_logic:get_providers(DefaultSpace, user) catch _:_ -> {ok, [{providers, []}]} end,
+                case DSProviders of
+                    List when length(List) > 0 ->
+                        % Default space has got some providers, random one
+                        {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(
+                            UserID, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)),
+                        {ok, ProviderHostname, RedirectURL};
+                    _ ->
+                        % Default space does not have a provider, look in other spaces
+                        ProviderIDs = lists:foldl(
+                            fun(Space, Acc) ->
+                                {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
+                                Providers ++ Acc
+                            end, [], Spaces),
+
+                        case ProviderIDs of
+                            [] ->
+                                % No provider for other spaces = nowhere to redirect
+                                {error, no_provider};
+                            _ ->
+                                % There are some providers for other spaces, redirect to a random provider
+                                {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(
+                                    UserID, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)),
+                                {ok, ProviderHostname, RedirectURL}
+                        end
+                end
         end
     catch T:M ->
         ?error_stacktrace("Cannot resolve redirection URL to provider - ~p:~p", [T, M]),
-        {error, {T, M}}
+        {error, no_provider}
     end.
 
 

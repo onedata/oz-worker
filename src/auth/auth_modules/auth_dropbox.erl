@@ -6,17 +6,17 @@
 %% @end
 %% ===================================================================
 %% @doc: This module implements auth_module_behaviour and handles singning in
-%% via Github.
+%% via Dropbox.
 %% @end
 %% ===================================================================
--module(auth_google).
+-module(auth_dropbox).
 -behaviour(auth_module_behaviour).
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
 -include("dao/dao_types.hrl").
 
--define(PROVIDER_NAME, google).
+-define(PROVIDER_NAME, dropbox).
 
 %% API
 -export([get_redirect_url/1, validate_login/0]).
@@ -38,9 +38,8 @@ get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
             {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
-            {<<"response_type">>, <<"code">>},
-            {<<"scope">>, <<"openid email profile">>},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
+            {<<"response_type">>, <<"code">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
         Params = gui_utils:proplist_to_url_params(ParamsProplist),
@@ -64,42 +63,43 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist =  gui_ctx:get_request_params(),
+        ParamsProplist = gui_ctx:get_request_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
+        % Prepare basic auth code
+        AuthEncoded = base64:encode(<<(auth_config:get_provider_app_id(?PROVIDER_NAME))/binary, ":",
+        (auth_config:get_provider_app_secret(?PROVIDER_NAME))/binary>>),
         % Form access token request
         NewParamsProplist = [
             {<<"code">>, <<Code/binary>>},
-            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
-            {<<"client_secret">>, auth_config:get_provider_app_secret(?PROVIDER_NAME)},
-            {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
-            {<<"grant_type">>, <<"authorization_code">>}
+            {<<"grant_type">>, <<"authorization_code">>},
+            {<<"redirect_uri">>, auth_utils:local_auth_endpoint()}
         ],
         % Convert proplist to params string
         Params = gui_utils:proplist_to_url_params(NewParamsProplist),
-        % Send request to Google endpoint
-        {ok, "200", _, Response} = ibrowse:send_req(
-            binary_to_list(access_token_endpoint()),
-            [{content_type, "application/x-www-form-urlencoded"}],
-            post, Params, [{response_format, binary}]),
+        % Send request to Dropbox endpoint
+        {ok, Response} = gui_utils:https_post(access_token_endpoint(),
+            [
+                {"Content-Type", "application/x-www-form-urlencoded"},
+                {"Authorization", "Basic " ++ gui_str:to_list(AuthEncoded)}
+            ], Params),
 
-        % Parse out received access token and form a user info request
-        AccessToken = parse_json(Response, <<"access_token">>),
-        URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
+        {struct, JSONProplist} = n2o_json:decode(Response),
+        AccessToken = proplists:get_value(<<"access_token">>, JSONProplist),
+        UserID = proplists:get_value(<<"uid">>, JSONProplist),
 
-        % Send request to Google endpoint
-        {ok, "200", _, Response2} = ibrowse:send_req(
-            binary_to_list(URL),
-            [{content_type, "application/x-www-form-urlencoded"}],
-            get, [], [{response_format, binary}]),
+        % Send request to Dropbox endpoint
+        {ok, JSON} = gui_utils:https_get(user_info_endpoint(), [{"Authorization", "Bearer " ++ gui_str:to_list(AccessToken)}]),
 
-        % Parse JSON with user info
-        {struct, JSONProplist} = n2o_json:decode(Response2),
+        % Parse received JSON
+        {struct, UserInfoProplist} = n2o_json:decode(JSON),
+        ?dump(UserInfoProplist),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = proplists:get_value(<<"sub">>, JSONProplist, <<"">>),
-            email_list = extract_emails(JSONProplist),
-            name = proplists:get_value(<<"name">>, JSONProplist, <<"">>)
+            user_id = UserID,
+            email_list = lists:flatten([proplists:get_value(<<"email">>, UserInfoProplist, [])]),
+            name = proplists:get_value(<<"display_name">>, UserInfoProplist, <<"">>),
+            login = proplists:get_value(<<"login">>, UserInfoProplist, <<"">>)
         },
         {ok, ProvUserInfo}
     catch
@@ -113,17 +113,6 @@ validate_login() ->
 %% Internal functions
 %% ====================================================================
 
-%% xrds_endpoint/0
-%% ====================================================================
-%% @doc Provider endpoint for XRDS file, which contains entries about other endpoints.
-%% @end
-%% ====================================================================
--spec xrds_endpoint() -> binary().
-%% ====================================================================
-xrds_endpoint() ->
-    proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
-
-
 %% authorize_endpoint/0
 %% ====================================================================
 %% @doc Provider endpoint, where users are redirected for authorization.
@@ -132,8 +121,7 @@ xrds_endpoint() ->
 -spec authorize_endpoint() -> binary().
 %% ====================================================================
 authorize_endpoint() ->
-    {ok, XRDS} = gui_utils:https_get(xrds_endpoint(), []),
-    parse_json(XRDS, <<"authorization_endpoint">>).
+    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
 
 
 %% access_token_endpoint/0
@@ -144,8 +132,7 @@ authorize_endpoint() ->
 -spec access_token_endpoint() -> binary().
 %% ====================================================================
 access_token_endpoint() ->
-    {ok, XRDS} = gui_utils:https_get(xrds_endpoint(), []),
-    parse_json(XRDS, <<"token_endpoint">>).
+    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
 
 
 %% user_info_endpoint/0
@@ -156,31 +143,4 @@ access_token_endpoint() ->
 -spec user_info_endpoint() -> binary().
 %% ====================================================================
 user_info_endpoint() ->
-    {ok, XRDS} = gui_utils:https_get(xrds_endpoint(), []),
-    parse_json(XRDS, <<"userinfo_endpoint">>).
-
-
-%% extract_emails/1
-%% ====================================================================
-%% @doc Extracts email list from JSON in erlang format (after decoding).
-%% @end
-%% ====================================================================
--spec extract_emails([{term(), term()}]) -> [binary()].
-%% ====================================================================
-extract_emails(JSONProplist) ->
-    case proplists:get_value(<<"email">>, JSONProplist, <<"">>) of
-        <<"">> -> [];
-        Email -> [Email]
-    end.
-
-
-%% parse_json/2
-%% ====================================================================
-%% @doc Extracts a given key from flat JSON (nested one level).
-%% @end
-%% ====================================================================
--spec parse_json(binary(), binary()) -> binary().
-%% ====================================================================
-parse_json(JSON, Key) ->
-    {struct, Proplist} = n2o_json:decode(JSON),
-    proplists:get_value(Key, Proplist).
+    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).

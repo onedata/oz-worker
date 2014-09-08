@@ -12,8 +12,9 @@
 
 -module(page_login).
 
--include_lib("ctool/include/logging.hrl").
 -include("gui/common.hrl").
+-include("auth_common.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 % n2o API
 -export([main/0, event/1]).
@@ -39,41 +40,51 @@ body() ->
                     gui_ctx:put(referer, Referer)
             end,
             LogoutEndpoint = proplists:get_value(logout_endpoint, auth_config:get_auth_config(plgrid)),
-            Buttons = lists:map(
-                fun(Provider) ->
-                    ButtonText = <<"Sign in with ", (auth_config:get_provider_name(Provider))/binary>>,
-                    ButtonIcon = auth_config:get_provider_button_icon(Provider),
-                    ButtonColor = auth_config:get_provider_button_color(Provider),
-                    HandlerModule = auth_config:get_provider_module(Provider),
-                    #link{class = <<"btn btn-small">>, postback = {auth, HandlerModule},
-                        style = <<"margin: 10px; text-align: left; width: 200px; background-color: ", ButtonColor/binary>>,
-                        body = [
-                            #span{style = <<"display: inline-block; line-height: 32px;">>, body = [
-                                #image{image = ButtonIcon, style = <<"margin-right: 10px;">>},
-                                ButtonText
-                            ]}
-                        ]}
-                end, auth_config:get_auth_providers()),
 
-            ErrorPanelStyle = case gui_ctx:url_param(<<"x">>) of
-                                  undefined -> <<"display: none;">>;
-                                  _ -> <<"">>
-                              end,
+            case auth_config:get_auth_providers() of
+                [] ->
+                    % Render error message that no auth providers were specified
+                    #panel{style = <<"position: relative;">>, body = [
+                        #panel{id = <<"error_message">>, style = <<"margin-top: 200px;">>, class = <<"dialog dialog-danger">>, body = #p{
+                            body = <<"Authentication config could not be loaded. Please make sure that file <b>",
+                            ?auth_config_file_path, "</b> contains correct config for at least one OAuth/OpenID provider.">>}}
+                    ]};
+                ProviderList ->
+                    Buttons = lists:map(
+                        fun(Provider) ->
+                            ButtonText = <<"Sign in with ", (auth_config:get_provider_name(Provider))/binary>>,
+                            ButtonIcon = auth_config:get_provider_button_icon(Provider),
+                            ButtonColor = auth_config:get_provider_button_color(Provider),
+                            HandlerModule = auth_config:get_provider_module(Provider),
+                            #link{class = <<"btn btn-small">>, postback = {auth, HandlerModule},
+                                style = <<"margin: 10px; text-align: left; width: 200px; background-color: ", ButtonColor/binary>>,
+                                body = [
+                                    #span{style = <<"display: inline-block; line-height: 32px;">>, body = [
+                                        #image{image = ButtonIcon, style = <<"margin-right: 10px;">>},
+                                        ButtonText
+                                    ]}
+                                ]}
+                        end, ProviderList),
 
-            #panel{style = <<"position: relative;">>, body = [
-                #panel{id = <<"error_message">>, style = ErrorPanelStyle, class = <<"dialog dialog-danger">>, body = #p{
-                    body = <<"Session error or session expired. Please log in again.">>}},
-                #panel{class = <<"alert alert-success login-page">>, body = [
-                    #h3{body = <<"Welcome to OneData">>},
-                    #p{class = <<"login-info">>, body = <<"You can sign in using one of your existing accounts.">>},
-                    #panel{style = <<"">>, body = Buttons}
-                ]},
-                gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
-            ] ++ gr_gui_utils:logotype_footer(120)
-                ++ [#p{body = <<"<iframe src=\"", LogoutEndpoint/binary, "\" style=\"display:none\"></iframe>">>}]
-            }
+                    ErrorPanelStyle = case gui_ctx:url_param(<<"x">>) of
+                                          undefined -> <<"display: none;">>;
+                                          _ -> <<"">>
+                                      end,
+
+                    #panel{style = <<"position: relative;">>, body = [
+                        #panel{id = <<"error_message">>, style = ErrorPanelStyle, class = <<"dialog dialog-danger">>, body = #p{
+                            body = <<"Session error or session expired. Please log in again.">>}},
+                        #panel{class = <<"alert alert-success login-page">>, body = [
+                            #h3{body = <<"Welcome to OneData">>},
+                            #p{class = <<"login-info">>, body = <<"You can sign in using one of your existing accounts.">>},
+                            #panel{style = <<"">>, body = Buttons}
+                        ]},
+                        gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
+                    ] ++ gr_gui_utils:logotype_footer(120)
+                        ++ [#p{body = <<"<iframe src=\"", LogoutEndpoint/binary, "\" style=\"display:none\"></iframe>">>}]
+                    }
+            end
     end.
-
 
 
 % Events handling

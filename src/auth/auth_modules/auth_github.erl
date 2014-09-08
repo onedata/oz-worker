@@ -63,7 +63,7 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist =  gui_ctx:get_request_params(),
+        ParamsProplist = gui_ctx:get_request_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request
@@ -76,7 +76,8 @@ validate_login() ->
         % Convert proplist to params string
         Params = gui_utils:proplist_to_url_params(NewParamsProplist),
         % Send request to GitHub endpoint
-        {ok, Response} = gui_utils:https_post(access_token_endpoint(), [{content_type, "application/x-www-form-urlencoded"}], Params),
+        {ok, Response} = gui_utils:https_post(access_token_endpoint(),
+            [{"Content-Type", "application/x-www-form-urlencoded"}], Params),
 
 
         % Parse out received access token
@@ -85,12 +86,12 @@ validate_login() ->
         % Form user info request
         URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, JSON} = gui_utils:https_get(URL, [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}]),
+        {ok, JSON} = gui_utils:https_get(URL, [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "One Data"}]),
 
         % Form user email request
         URLEmail = <<(user_emails_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, JSONEmails} = gui_utils:https_get(URLEmail, [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "od_test_app"}]),
+        {ok, JSONEmails} = gui_utils:https_get(URLEmail, [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "One Data"}]),
 
         % Parse received JSON
         {struct, JSONProplist} = n2o_json:decode(JSON),
@@ -104,6 +105,7 @@ validate_login() ->
         {ok, ProvUserInfo}
     catch
         Type:Message ->
+            ?debug_stacktrace("Error in ~p:validate_login - ~p:~p", [?MODULE, Type, Message]),
             {error, {Type, Message}}
     end.
 

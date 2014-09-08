@@ -255,15 +255,18 @@ remove_expired_authorizations_in_chunks(ChunkSize) ->
 -spec clear_expired_authorizations() -> ok.
 %% ====================================================================
 clear_expired_authorizations() ->
-    try remove_expired_authorizations_in_chunks(50)
-    catch Error:Reason -> ?warning("error while clearing expired authorizations: ~p ~p", [Error, Reason])
-    end,
-
-    receive stop -> ok
-    after timer:seconds(?AUTH_CODE_EXPIRATION_SECS) -> ?MODULE:clear_expired_authorizations()
-    end,
-
-    ok.
+    receive
+        stop -> ok
+    after
+        timer:seconds(?AUTH_CODE_EXPIRATION_SECS) ->
+            try
+                remove_expired_authorizations_in_chunks(50)
+            catch
+                Error:Reason ->
+                    ?warning("error while clearing expired authorizations: ~p ~p", [Error, Reason])
+            end,
+            ?MODULE:clear_expired_authorizations()
+    end.
 
 
 %% generate_state_token/2

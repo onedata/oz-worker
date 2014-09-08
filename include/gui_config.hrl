@@ -31,4 +31,7 @@
 % GUI routing module
 -define(gui_routing_module, gui_routes).
 
+% Cowboy brdige module used by n2o
+-define(cowboy_bridge_module, n2o_cowboy).
+
 -endif.

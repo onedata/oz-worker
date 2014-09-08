@@ -148,6 +148,7 @@ validate_login() ->
 
     catch
         Type:Message ->
+            ?debug_stacktrace("Error in ~p:validate_login - ~p:~p", [?MODULE, Type, Message]),
             {error, {Type, Message}}
     end.
 
