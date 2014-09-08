@@ -15,10 +15,13 @@
 
 
 %% API
--export([report_invalid_value/2, report_missing_key/1]).
+-export([report_error/1, report_error/2, report_invalid_value/2, report_missing_key/1]).
 -export([assert_key/3, assert_key_value/4]).
 
 -type json_string() :: atom() | binary().
+-type error() :: invalid_request | invalid_client | invalid_grant |
+    unauthorized_client | unsupported_grant_type | invalid_scope.
+-export_type([error/0]).
 
 
 %% assert_key/3
@@ -90,7 +93,9 @@ assert_key_value(Key, AcceptedValues, List, binary) ->
     no_return().
 %% ====================================================================
 report_invalid_value(Key, Value) ->
-    throw({invalid_value, {Key, Value}}).
+    Description = <<"invalid '", (vcn_utils:ensure_binary(Key))/binary,
+                    "' value: '", (vcn_utils:ensure_binary(Value))/binary, "'">>,
+    report_error(invalid_request, Description).
 
 
 %% report_missing_key/1
@@ -101,4 +106,28 @@ report_invalid_value(Key, Value) ->
     no_return().
 %% ====================================================================
 report_missing_key(Key) ->
-    throw({missing_key, Key}).
+    Description = <<"missing required key: '",
+                    (vcn_utils:ensure_binary(Key))/binary, "'">>,
+    report_error(invalid_request, Description).
+
+
+%% report_error/2
+%% ====================================================================
+%% @doc Throws an exception to report a generic REST error with a description.
+%% ====================================================================
+-spec report_error(Type :: error(), Description :: binary()) ->
+    no_return().
+%% ====================================================================
+report_error(Type, Description) when is_atom(Type), is_binary(Description) ->
+    throw({rest_error, Type, Description}).
+
+
+%% report_error/1
+%% ====================================================================
+%% @doc Throws an exception to report a generic REST error.
+%% ====================================================================
+-spec report_error(Type :: error()) ->
+    no_return().
+%% ====================================================================
+report_error(Type) when is_atom(Type) ->
+    throw({rest_error, Type}).

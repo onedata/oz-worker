@@ -104,13 +104,25 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
     case GrantType of
         <<"authorization_code">> ->
             Code = rest_module_helper:assert_key(<<"code">>, Data, binary),
-            {{true, {data, auth_logic:grant_tokens(TokenClient, Code)}}, Req};
+            case auth_logic:grant_tokens(TokenClient, Code) of
+                {ok, Data} ->
+                    {{true, {data, Data}}, Req};
+                {error, Reason} ->
+                    Description = case Reason of
+                        invalid_or_expired -> <<"authorization code invalid or expired">>;
+                        expired            -> <<"authorization code expired">>;
+                        wrong_client       -> <<"authorization code issued to another client">>
+                    end,
+                    rest_module_helper:report_error(invalid_grant, Description)
+            end;
 
         <<"refresh_token">> ->
-            error(not_implemented);
+            error(not_implemented); %% @TODO: VFS-679
 
         _ ->
-            rest_module_helper:report_invalid_value(<<"grant_type">>, GrantType)
+            Description = <<"the authorization grant type '", GrantType,
+                            "' is not supported by the authorization server">>,
+            rest_module_helper:report_error(unsupported_grant_type, Description)
     end;
 accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
     UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary),

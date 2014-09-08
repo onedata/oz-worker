@@ -13,6 +13,7 @@
 -author("Konrad Zemek").
 
 -include("handlers/rest_handler.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 
 %% API
@@ -152,48 +153,57 @@ forbidden(Req, #rstate{module = Mod, resource = Resource, client = Client} = Sta
 is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
     {BinMethod, Req2} = cowboy_req:method(Req),
     Method = binary_to_method(BinMethod),
-    case lists:member(Method, NoAuth) of
-        true -> {true, Req, State#rstate{client = #client{}}};
-        false ->
-            case ssl:peercert(cowboy_req:get(socket, Req2)) of
-                {error, no_peercert} ->
-                    Body = mochijson2:encode([{error, <<"no peer certificate">>}]),
-                    Req3 = cowboy_req:set_resp_body(Body, Req2),
-                    {{false, <<"error=no_peer_certificate">>}, Req3, State};
 
-                {ok, PeerCert} ->
-                    case grpca:verify_provider(PeerCert) of
-                        {error, {bad_cert, Reason}} ->
-                            Body = mochijson2:encode([{error, <<"bad peer certificate: ", (vcn_utils:ensure_binary(Reason))/binary>>}]),
-                            Req3 = cowboy_req:set_resp_body(Body, Req2),
-                            {{false, <<"error=bad_peer_certificate">>, Req3, State}};
+    try
+        case lists:member(Method, NoAuth) of
+            true -> {true, Req, State#rstate{client = #client{}}};
+            false ->
+                PeerCert = case ssl:peercert(cowboy_req:get(socket, Req2)) of
+                    {ok, PeerCert1} -> PeerCert1;
+                    {error, no_peercert} -> throw(silent_error)
+                end,
 
-                        {ok, ProviderId} ->
-                            {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
-                            case Authorization of
-                                undefined ->
-                                    Client = #client{type = provider, id = ProviderId},
-                                    {true, Req3, State#rstate{client = Client}};
+                ProviderId = case grpca:verify_provider(PeerCert) of
+                    {ok, ProviderId1} -> ProviderId1;
+                    {error, {bad_cert, Reason}} when is_atom(Reason) ->
+                        ?warning("Attempted authentication with bad peer certificate: ~p", [Reason]),
+                        throw(silent_error)
+                end,
 
-                                <<"Bearer ", Token/binary>> ->
-                                    case auth_logic:validate_token({provider, ProviderId}, Token) of
-                                        {ok, UserId} ->
-                                            Client = #client{type = user, id = UserId},
-                                            {true, Req3, State#rstate{client = Client}};
+                {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
+                case Authorization of
+                    undefined ->
+                        Client = #client{type = provider, id = ProviderId},
+                        {true, Req3, State#rstate{client = Client}};
 
-                                        {error, _} ->
-                                            Body = mochijson2:encode([{error, <<"invalid token: ", Token/binary>>}]),
-                                            Req4 = cowboy_req:set_resp_body(Body, Req3),
-                                            {{false, <<"error=invalid_token">>}, Req4, State}
-                                    end;
+                    <<"Bearer ", Token/binary>> ->
+                        case auth_logic:validate_token({provider, ProviderId}, Token) of
+                            {ok, UserId} ->
+                                Client = #client{type = user, id = UserId},
+                                {true, Req3, State#rstate{client = Client}};
 
-                                _ ->
-                                    Body = mochijson2:encode([{error, <<"unknown authorization type: ", Authorization/binary>>}]),
-                                    Req4 = cowboy_req:set_resp_body(Body, Req3),
-                                    {{false, <<"error=invalid_request">>}, Req4, State}
-                            end
-                    end
-            end
+                            false ->
+                                Description = <<"invalid token: ", Token/binary>>,
+                                throw({invalid_token, Description})
+                        end;
+
+                    _ ->
+                        Description = <<"unknown authorization type: ", Authorization/binary>>,
+                        throw({invalid_request, Description})
+                end
+        end
+    catch
+        silent_error -> %% As per RFC 6750 section 3.1
+            {{false, <<"">>}, Req2, State};
+
+        {Error, Description} when is_atom(Error), is_binary(Description) ->
+            Body = mochijson2:encode([
+                {error, Error},
+                {error_description, Description}
+            ]),
+            WWWAuthenticate = <<"error=", (atom_to_binary(Error, latin1))/binary>>,
+            ReqX = cowboy_req:set_resp_body(Body, Req2),
+            {{false, WWWAuthenticate}, ReqX, State}
     end.
 
 
@@ -270,22 +280,21 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
                 JSON = mochijson2:encode(Response),
                 Req5 = cowboy_req:set_resp_body(JSON, Req4),
                 {true, Req5, State};
-            _ when is_binary(Result) -> {Result, Req4, State}
+            _ when is_boolean(Result) -> {Result, Req4, State}
         end
     catch
-        {missing_key, Key} ->
-            Body = mochijson2:encode([{error,
-                <<"missing required key: '",
-                  (vcn_utils:ensure_binary(Key))/binary, "'">>}]),
-            Req6 = cowboy_req:set_resp_body(Body, Req3),
-            {false, Req6, State};
+        {rest_error, Error} when is_atom(Error) ->
+            Body = mochijson2:encode([{error, Error}]),
+            ReqX = cowboy_req:set_resp_body(Body, Req3),
+            {false, ReqX, State};
 
-        {invalid_value, {Key, Value}} ->
-            Body = mochijson2:encode([{error,
-                <<"invalid '", (vcn_utils:ensure_binary(Key))/binary,
-                  "' value: '", (vcn_utils:ensure_binary(Value))/binary, "'">>}]),
-            Req6 = cowboy_req:set_resp_body(Body, Req3),
-            {false, Req6, State}
+        {rest_error, Error, Description} when is_atom(Error), is_binary(Description) ->
+            Body = mochijson2:encode([
+                {error, Error},
+                {error_description, Description}
+            ]),
+            ReqX = cowboy_req:set_resp_body(Body, Req3),
+            {false, ReqX, State}
     end.
 
 
