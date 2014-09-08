@@ -33,7 +33,7 @@
 %% @end
 %% ====================================================================
 -spec create(URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
-    {ok, ProviderId :: binary(), ProviderCertPem :: binary()} | no_return().
+    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 %% ====================================================================
 create(URLs, RedirectionPoint, CSRBin) ->
     ProviderId = dao_adapter:save(#provider{urls = URLs, redirection_point = RedirectionPoint}),
@@ -48,14 +48,15 @@ create(URLs, RedirectionPoint, CSRBin) ->
 %% @end
 %% ====================================================================
 -spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
-    ok | no_return().
+    ok.
 %% ====================================================================
 modify(ProviderId, Data) ->
     Doc = dao_adapter:provider_doc(ProviderId),
     #veil_document{record = Provider} = Doc,
 
     URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
-    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
+    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data,
+                                           Provider#provider.redirection_point),
 
     ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint},
     dao_adapter:save(Doc#veil_document{record = ProviderNew}),
@@ -68,7 +69,8 @@ modify(ProviderId, Data) ->
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec exists(ProviderId :: binary()) -> boolean().
+-spec exists(ProviderId :: binary()) ->
+    boolean().
 %% ====================================================================
 exists(ProviderId) ->
     dao_adapter:provider_exists(ProviderId).
@@ -81,7 +83,7 @@ exists(ProviderId) ->
 %% @end
 %% ====================================================================
 -spec get_data(ProviderId :: binary()) ->
-    {ok, Data :: [proplists:property()]} | no_return().
+    {ok, Data :: [proplists:property()]}.
 %% ====================================================================
 get_data(ProviderId) ->
     #provider{urls = URLs, redirection_point = RedirectionPoint} = dao_adapter:provider(ProviderId),
@@ -99,7 +101,7 @@ get_data(ProviderId) ->
 %% @end
 %% ====================================================================
 -spec get_spaces(ProviderId :: binary()) ->
-    {ok, Data :: [proplists:property()]} | no_return().
+    {ok, Data :: [proplists:property()]}.
 %% ====================================================================
 get_spaces(ProviderId) ->
     #provider{spaces = Spaces} = dao_adapter:provider(ProviderId),
@@ -112,7 +114,8 @@ get_spaces(ProviderId) ->
 %% Throws exception when call to dao fails, or provider is already removed.
 %% @end
 %% ====================================================================
--spec remove(ProviderId :: binary()) -> true | no_return().
+-spec remove(ProviderId :: binary()) ->
+    true.
 %% ====================================================================
 remove(ProviderId) ->
     #provider{spaces = Spaces} = dao_adapter:provider(ProviderId),
@@ -126,32 +129,31 @@ remove(ProviderId) ->
 
     dao_adapter:provider_remove(ProviderId).
 
+
 %% test_connection/1
 %% ====================================================================
-%% @doc Tests connection to given url, returns <<"ok">> or <<"error">> status for each element
+%% @doc Tests connection to given url.
 %% ====================================================================
--spec test_connection(ToCheck :: list({ServiceName :: binary(),Url :: binary()})) -> list(ConnStatus) when
-    ConnStatus :: {ServiceName :: binary(), Status :: binary()}.
+-spec test_connection(ToCheck :: [{ServiceName :: binary(), Url :: binary()}]) ->
+    [{ServiceName :: binary(), Status :: ok | error}].
 %% ====================================================================
 test_connection([]) ->
     [];
-test_connection([ {<<"undefined">>,Url} | Rest]) ->
+test_connection([{<<"undefined">>, Url} | Rest]) ->
     UrlString = binary_to_list(Url),
-    ConnStatus = case ibrowse:send_req(UrlString,[],get) of
-                     {ok, "200", _, _} ->
-                         <<"ok">>;
-                     _ ->
-                         <<"error">>
-                 end,
-    [{Url,ConnStatus} | test_connection(Rest)];
-test_connection([ {ServiceName,Url} | Rest]) ->
+    ConnStatus = case ibrowse:send_req(UrlString, [], get) of
+        {ok, "200", _, _} -> ok;
+        _ -> error
+    end,
+    [{Url, ConnStatus} | test_connection(Rest)];
+test_connection([{ServiceName, Url} | Rest]) ->
     UrlString = binary_to_list(Url),
     ServiceNameString = binary_to_list(ServiceName),
-    ConnStatus = case ibrowse:send_req(UrlString,[],get) of
+    ConnStatus = case ibrowse:send_req(UrlString, [], get) of
         {ok, "200", _, ServiceNameString} ->
-            <<"ok">>;
+            ok;
         Error ->
-            ?debug("Checking connection to ~p failed with error: ~n~p",[Url,Error]),
-            <<"error">>
+            ?debug("Checking connection to ~p failed with error: ~n~p", [Url, Error]),
+            error
     end,
-    [{Url,ConnStatus} | test_connection(Rest)].
+    [{Url, ConnStatus} | test_connection(Rest)].

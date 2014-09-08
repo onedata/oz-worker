@@ -37,7 +37,7 @@
 %% @end
 %% ====================================================================
 -spec is_valid(Token :: binary(), TokenType :: token_type()) ->
-    boolean() | no_return().
+    boolean().
 %% ====================================================================
 is_valid(Token, TokenType) ->
     case decrypt(Token) of
@@ -59,7 +59,7 @@ is_valid(Token, TokenType) ->
 %% @end
 %% ====================================================================
 -spec create(TokenType :: token_type(), Resource :: {resource_type(), binary()}) ->
-    {ok, Token :: binary()} | no_return().
+    {ok, Token :: binary()}.
 %% ====================================================================
 create(TokenType, Resource) ->
     TokenRec = #token{type = TokenType, resource = Resource}, %% @todo: expiration time
@@ -74,7 +74,7 @@ create(TokenType, Resource) ->
 %% @end
 %% ====================================================================
 -spec consume(Token :: binary(), TokenType :: token_type()) ->
-    {ok, {resource_type(), binary()}} | no_return().
+    {ok, {resource_type(), binary()}}.
 %% ====================================================================
 consume(Token, TokenType) ->
     {true, TokenId} = decrypt(Token),
@@ -88,7 +88,7 @@ consume(Token, TokenType) ->
 %% @doc Encrypts a token with registry's public key.
 %% ====================================================================
 -spec encrypt(Token :: binary()) ->
-    {ok, EncryptedToken :: binary()} | no_return().
+    {ok, EncryptedToken :: binary()}.
 %% ====================================================================
 encrypt(Token) -> %% @todo: encryption
     {ok, Token}.

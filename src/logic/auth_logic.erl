@@ -75,10 +75,10 @@ stop() ->
 
 %% get_redirection_uri/2
 %% ====================================================================
-%% @doc Returns provider hostname and a full URI to which the user should be redirected from
-%% the global registry. The redirection is part of the OpenID flow and the URI
-%% contains an Authorization token. The provider hostname is useful to check connectivity
-%% before redirecting.
+%% @doc Returns provider hostname and a full URI to which the user should be
+%% redirected from the global registry. The redirection is part of the OpenID
+%% flow and the URI contains an Authorization token. The provider hostname
+%% is useful to check connectivity before redirecting.
 %% @end
 %% ====================================================================
 -spec get_redirection_uri(UserId :: binary(), ProviderId :: binary()) ->
@@ -163,7 +163,6 @@ get_user_tokens(UserId) ->
 %% ====================================================================
 %% @doc Grants ID, Access and Refresh tokens to the provider or native client
 %% identifying itself with a valid Authorization token.
-%% In case of failure, errors a
 %% @end
 %% ====================================================================
 -spec grant_tokens(Client :: {provider, ProviderId :: binary()} | native,

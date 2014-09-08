@@ -35,7 +35,7 @@
 %% @end
 %% ====================================================================
 -spec create(User :: #user{}) ->
-    {ok, UserId :: binary()} | no_return().
+    {ok, UserId :: binary()}.
 %% ====================================================================
 create(User) ->
     UserId = dao_adapter:save(User),
@@ -46,8 +46,9 @@ create(User) ->
 %% ====================================================================
 %% @doc Retrieves user from the database.
 %% ====================================================================
--spec get_user(Key) -> {ok, #user{}} | {error, term()} when
-    Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
+-spec get_user(Key :: binary() | {connected_account_user_id, binary()} |
+              {email, binary()}) ->
+    {ok, #user{}} | {error, any()}.
 %% ====================================================================
 get_user(Key) ->
     try
@@ -63,8 +64,9 @@ get_user(Key) ->
 %% ====================================================================
 %% @doc Retrieves user doc from the database.
 %% ====================================================================
--spec get_user_doc(Key) -> {ok, #veil_document{}} | {error, term()} when
-    Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
+-spec get_user_doc(Key :: binary() | {connected_account_user_id, binary()} |
+                   {email, binary()}) ->
+    {ok, #veil_document{}} | {error, any()}.
 %% ====================================================================
 get_user_doc(Key) ->
     try
@@ -84,7 +86,7 @@ get_user_doc(Key) ->
 %% @end
 %% ====================================================================
 -spec modify(UserId :: binary(), Proplist :: [{atom(), binary()}]) ->
-    ok | {error, term()}.
+    ok | {error, any()}.
 %% ====================================================================
 modify(UserId, Proplist) ->
     try
@@ -119,11 +121,10 @@ modify(UserId, Proplist) ->
 %% @doc Merges an account identified by token into current user's account.
 %% ====================================================================
 -spec merge(UserId :: binary(), Token :: binary()) ->
-    ok | no_return().
+    ok.
 %% ====================================================================
 merge(_UserId, _Token) ->
-    %% @todo: a proper authentication must come first, so that a certificate
-    %% or whatever is redirected to new user id
+    %% @todo: a functional merge
     ok.
 
 
@@ -134,11 +135,10 @@ merge(_UserId, _Token) ->
 %% @end
 %% ====================================================================
 -spec get_data(UserId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_data(UserId) ->
-    #veil_document{record = User} = dao_adapter:user_doc(UserId),
-    #user{name = Name} = User,
+    #user{name = Name} = dao_adapter:user(UserId),
     {ok, [
         {userId, UserId},
         {name, Name}
@@ -153,7 +153,7 @@ get_data(UserId) ->
 %% @end
 %% ====================================================================
 -spec get_spaces(UserId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_spaces(UserId) ->
     Doc = dao_adapter:user_doc(UserId),
@@ -172,21 +172,20 @@ get_spaces(UserId) ->
 %% @end
 %% ====================================================================
 -spec get_groups(UserId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_groups(UserId) ->
-    Doc = dao_adapter:user_doc(UserId),
-    #veil_document{record = #user{groups = Groups}} = Doc,
+    #user{groups = Groups} = dao_adapter:user(UserId),
     {ok, [{groups, Groups}]}.
 
 
 %% exists/1
 %% ====================================================================
-%% @doc Rreturns true if a user by given key was found.
-%% @end
+%% @doc Rreturns true if user was found by a given key.
 %% ====================================================================
--spec exists(Key) -> true | false when
-    Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
+-spec exists(Key :: binary() | {connected_account_user_id, binary()} |
+             {email, binary()}) ->
+    boolean().
 %% ====================================================================
 exists(Key) ->
     case get_user_doc(Key) of
@@ -201,11 +200,11 @@ exists(Key) ->
 %% Throws exception when call to dao fails, or user is already deleted.
 %% @end
 %% ====================================================================
--spec remove(UserId :: binary()) -> true | no_return().
+-spec remove(UserId :: binary()) ->
+    true.
 %% ====================================================================
 remove(UserId) ->
-    Doc = dao_adapter:user_doc(UserId),
-    #veil_document{record = #user{groups = Groups, spaces = Spaces}} = Doc,
+    #user{groups = Groups, spaces = Spaces} = dao_adapter:user(UserId),
 
     lists:foreach(fun(GroupId) ->
         GroupDoc = dao_adapter:group_doc(GroupId),
@@ -234,7 +233,7 @@ remove(UserId) ->
 %% @end
 %% ====================================================================
 -spec get_default_space(UserId :: binary()) ->
-    {ok, SpaceId :: binary() | undefined} | no_return().
+    {ok, SpaceId :: binary() | undefined}.
 %% ====================================================================
 get_default_space(UserId) ->
     Doc = dao_adapter:user_doc(UserId),
@@ -250,7 +249,7 @@ get_default_space(UserId) ->
 %% @end
 %% ====================================================================
 -spec set_default_space(UserId :: binary(), SpaceId :: binary()) ->
-    true | no_return().
+    true.
 %% ====================================================================
 set_default_space(UserId, SpaceId) ->
     Doc = dao_adapter:user_doc(UserId),
@@ -279,7 +278,7 @@ set_default_space(UserId, SpaceId) ->
 %% @end
 %% ====================================================================
 -spec get_all_spaces(Doc :: veil_doc()) ->
-    ordsets:ordset(SpaceId :: binary()) | no_return().
+    ordsets:ordset(SpaceId :: binary()).
 %% ====================================================================
 get_all_spaces(#veil_document{record = #user{} = User}) ->
     #user{spaces = UserSpaces, groups = Groups} = User,
@@ -305,7 +304,7 @@ get_all_spaces(#veil_document{record = #user{} = User}) ->
 %% ====================================================================
 -spec effective_default_space(AllUserSpaces :: ordsets:ordset(binary()),
                               UserDoc :: veil_doc()) ->
-    EffectiveDefaultSpaceId :: binary() | undefined | no_return().
+    EffectiveDefaultSpaceId :: binary() | undefined.
 %% ====================================================================
 effective_default_space(_, #veil_document{record = #user{default_space = undefined}}) ->
     undefined;

@@ -196,10 +196,10 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
         silent_error -> %% As per RFC 6750 section 3.1
             {{false, <<"">>}, Req2, State};
 
-        {Error, Description} when is_atom(Error), is_binary(Description) ->
+        {Error, Description1} when is_atom(Error), is_binary(Description1) ->
             Body = mochijson2:encode([
                 {error, Error},
-                {error_description, Description}
+                {error_description, Description1}
             ]),
             WWWAuthenticate = <<"error=", (atom_to_binary(Error, latin1))/binary>>,
             ReqX = cowboy_req:set_resp_body(Body, Req2),
