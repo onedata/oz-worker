@@ -86,12 +86,12 @@ validate_login() ->
         % Form user info request
         URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, JSON} = gui_utils:https_get(URL, [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "One Data"}]),
+        {ok, JSON} = gui_utils:https_get(URL, [{"Content-Type", "application/x-www-form-urlencoded"}, {"User-Agent", "One Data"}]),
 
         % Form user email request
         URLEmail = <<(user_emails_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, JSONEmails} = gui_utils:https_get(URLEmail, [{content_type, "application/x-www-form-urlencoded"}, {"User-Agent", "One Data"}]),
+        {ok, JSONEmails} = gui_utils:https_get(URLEmail, [{"Content-Type", "application/x-www-form-urlencoded"}, {"User-Agent", "One Data"}]),
 
         % Parse received JSON
         {struct, JSONProplist} = n2o_json:decode(JSON),
