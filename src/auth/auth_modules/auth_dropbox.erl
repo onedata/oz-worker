@@ -93,7 +93,6 @@ validate_login() ->
 
         % Parse received JSON
         {struct, UserInfoProplist} = n2o_json:decode(JSON),
-        ?dump(UserInfoProplist),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = UserID,

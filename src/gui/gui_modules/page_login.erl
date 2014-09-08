@@ -39,13 +39,12 @@ body() ->
                 _ ->
                     gui_ctx:put(referer, Referer)
             end,
-            LogoutEndpoint = proplists:get_value(logout_endpoint, auth_config:get_auth_config(plgrid)),
 
             case auth_config:get_auth_providers() of
                 [] ->
                     % Render error message that no auth providers were specified
                     #panel{style = <<"position: relative;">>, body = [
-                        #panel{id = <<"error_message">>, style = <<"margin-top: 200px;">>, class = <<"dialog dialog-danger">>, body = #p{
+                        #panel{id = <<"error_message">>, style = <<"margin: 20px 10px;">>, class = <<"dialog dialog-danger">>, body = #p{
                             body = <<"Authentication config could not be loaded. Please make sure that file <b>",
                             ?auth_config_file_path, "</b> contains correct config for at least one OAuth/OpenID provider.">>}}
                     ]};
@@ -70,6 +69,8 @@ body() ->
                                           undefined -> <<"display: none;">>;
                                           _ -> <<"">>
                                       end,
+
+                    LogoutEndpoint = proplists:get_value(logout_endpoint, auth_config:get_auth_config(plgrid)),
 
                     #panel{style = <<"position: relative;">>, body = [
                         #panel{id = <<"error_message">>, style = ErrorPanelStyle, class = <<"dialog dialog-danger">>, body = #p{
