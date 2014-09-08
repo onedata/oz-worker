@@ -33,7 +33,7 @@ routes() ->
     S = #rstate{module = ?MODULE},
     M = rest_handler,
     [
-        {<<"/openid/client/access_code">>, M, S#rstate{resource = ascode, methods = [get]}},
+        {<<"/openid/client/authorization_code">>, M, S#rstate{resource = authcode, methods = [get]}},
         {<<"/openid/client/tokens">>, M, S#rstate{resource = ctokens, methods = [post, get], noauth = [post]}},
         {<<"/openid/client/tokens/:accessId">>, M, S#rstate{resource = ctoken, methods = [delete]}},
         {<<"/openid/client/verify">>, M, S#rstate{resource = verify, methods = [post]}},
@@ -53,7 +53,7 @@ routes() ->
     boolean().
 %% ====================================================================
 is_authorized(Resource, _Method, _Id, #client{type = user})
-        when Resource =:= ascode orelse Resource =:= ctokens orelse Resource =:= ctoken ->
+        when Resource =:= authcode orelse Resource =:= ctokens orelse Resource =:= ctoken ->
     true;
 is_authorized(Resource, post, _Id, #client{type = provider})
         when Resource =:= verify orelse Resource =:= ptokens ->
@@ -129,7 +129,7 @@ accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
                        Client :: client(), Req :: cowboy_req:req()) ->
     {Data :: [proplists:property()], cowboy_req:req()}.
 %% ====================================================================
-provide_resource(ascode, UserId, _Client, Req) ->
+provide_resource(authcode, UserId, _Client, Req) ->
     {[{accessCode, auth_logic:gen_auth_code(UserId)}], Req};
 provide_resource(ctokens, UserId, _Client, Req) ->
     {[{tokenInfo, auth_logic:get_user_tokens(UserId)}], Req}.
