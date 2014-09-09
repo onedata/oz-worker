@@ -19,6 +19,7 @@ RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
 cd $RUNNER_SCRIPT_DIR
 
 echo "Trying to clone/update Onedev repository..."
+mkdir -p deps
 cd deps
 
 # Check if repo exists

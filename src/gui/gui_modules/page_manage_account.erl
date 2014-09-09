@@ -390,9 +390,9 @@ show_name_edition(Flag) ->
 
 
 redirect_to_veilcluster(ProviderHostname, URL) ->
-    case gui_utils:https_get(<<ProviderHostname/binary, ?veilcluster_connection_check_endpoint>>, []) of
-        {ok, _} ->
-            gui_jq:redirect(URL);
-        _ ->
-            gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable.">>})
-    end.
+%%     case gui_utils:https_get(<<ProviderHostname/binary, ?veilcluster_connection_check_endpoint>>, []) of
+%%         {ok, _} ->
+            gui_jq:redirect(URL).%;
+%%         _ ->
+%%             gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable.">>})
+%%     end.

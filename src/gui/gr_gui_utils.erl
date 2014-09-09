@@ -98,6 +98,7 @@ get_redirection_url_to_provider(DefaultProviderID) ->
         DefaultProviderInfo =
             try
                 {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, DefaultProviderID),
+                ?dump(dyczempions),
                 {ok, ProvHostname, RedURL}
             catch _:_ ->
                 error
