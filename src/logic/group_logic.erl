@@ -28,7 +28,8 @@
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec exists(GroupId :: binary()) -> boolean() | no_return().
+-spec exists(GroupId :: binary()) ->
+    boolean().
 %% ====================================================================
 exists(GroupId) ->
     dao_adapter:group_exists(GroupId).
@@ -41,7 +42,8 @@ exists(GroupId) ->
 %% Throws exception when call to dao fails, or group doesn't exist.
 %% @end
 %% ====================================================================
--spec has_user(GroupId :: binary(), UserId :: binary()) -> boolean() | no_return().
+-spec has_user(GroupId :: binary(), UserId :: binary()) ->
+    boolean().
 %% ====================================================================
 has_user(GroupId, UserId) ->
     case exists(GroupId) of
@@ -61,7 +63,8 @@ has_user(GroupId, UserId) ->
 %% @end
 %% ====================================================================
 -spec has_privilege(GroupId :: binary(), UserId :: binary(),
-                    Privilege :: privileges:group_privilege()) -> boolean() | no_return().
+                    Privilege :: privileges:group_privilege()) ->
+    boolean().
 %% ====================================================================
 has_privilege(GroupId, UserId, Privilege) ->
     case has_user(GroupId, UserId) of
@@ -80,7 +83,7 @@ has_privilege(GroupId, UserId, Privilege) ->
 %% @end
 %% ====================================================================
 -spec create(UserId :: binary(), Name :: binary()) ->
-    {ok, GroupId :: binary()} | no_return().
+    {ok, GroupId :: binary()}.
 %% ====================================================================
 create(UserId, Name) ->
     UserDoc = dao_adapter:user_doc(UserId),
@@ -103,7 +106,7 @@ create(UserId, Name) ->
 %% @end
 %% ====================================================================
 -spec modify(GroupId :: binary(), Name :: binary()) ->
-    ok | no_return().
+    ok.
 %% ====================================================================
 modify(GroupId, Name) ->
     Doc = dao_adapter:group_doc(GroupId),
@@ -116,11 +119,12 @@ modify(GroupId, Name) ->
 %% join/2
 %% ====================================================================
 %% @doc Adds user to a group identified by a token.
-%% Throws exception when call to dao fails, or token/user/group_from_token doesn't exist in db.
+%% Throws exception when call to dao fails, or token/user/group_from_token
+%% doesn't exist in db.
 %% @end
 %% ====================================================================
 -spec join(UserId :: binary(), Token :: binary()) ->
-    {ok, GroupId :: binary()} | no_return().
+    {ok, GroupId :: binary()}.
 %% ====================================================================
 join(UserId, Token) ->
     {ok, {group, GroupId}} = token_logic:consume(Token, group_invite_token),
@@ -150,7 +154,7 @@ join(UserId, Token) ->
 %% ====================================================================
 -spec set_privileges(GroupId :: binary(), UserId :: binary(),
                      Privileges :: [privileges:group_privilege()]) ->
-    ok | no_return().
+    ok.
 %% ====================================================================
 set_privileges(GroupId, UserId, Privileges) ->
     Doc = dao_adapter:group_doc(GroupId),
@@ -168,7 +172,7 @@ set_privileges(GroupId, UserId, Privileges) ->
 %% @end
 %% ====================================================================
 -spec get_data(GroupId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_data(GroupId) ->
     #user_group{name = Name} = dao_adapter:group(GroupId),
@@ -185,7 +189,7 @@ get_data(GroupId) ->
 %% @end
 %% ====================================================================
 -spec get_users(GroupId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_users(GroupId) ->
     #user_group{users = UserTuples} = dao_adapter:group(GroupId),
@@ -200,7 +204,7 @@ get_users(GroupId) ->
 %% @end
 %% ====================================================================
 -spec get_spaces(GroupId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_spaces(GroupId) ->
     #user_group{spaces = Spaces} = dao_adapter:group(GroupId),
@@ -214,7 +218,7 @@ get_spaces(GroupId) ->
 %% @end
 %% ====================================================================
 -spec get_user(GroupId :: binary(), UserId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_user(_GroupId, UserId) ->
     %% @todo: we don't want to give out every bit of data once clients have more data stored
@@ -228,7 +232,7 @@ get_user(_GroupId, UserId) ->
 %% @end
 %% ====================================================================
 -spec get_privileges(GroupId :: binary(), UserId :: binary()) ->
-    {ok, [privileges:group_privilege()]} | no_return().
+    {ok, [privileges:group_privilege()]}.
 %% ====================================================================
 get_privileges(GroupId, UserId) ->
     #user_group{users = UserTuples} = dao_adapter:group(GroupId),
@@ -242,7 +246,8 @@ get_privileges(GroupId, UserId) ->
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec remove(GroupId :: binary()) -> true | no_return().
+-spec remove(GroupId :: binary()) ->
+    true.
 %% ====================================================================
 remove(GroupId) ->
     Group = dao_adapter:group(GroupId),
@@ -272,7 +277,8 @@ remove(GroupId) ->
 %% Throws exception when call to dao fails, or group/user doesn't exist.
 %% @end
 %% ====================================================================
--spec remove_user(GroupId :: binary(), UserId :: binary()) -> true | no_return().
+-spec remove_user(GroupId :: binary(), UserId :: binary()) ->
+    true.
 %% ====================================================================
 remove_user(GroupId, UserId) ->
     UserDoc = dao_adapter:user_doc(UserId),
@@ -295,12 +301,12 @@ remove_user(GroupId, UserId) ->
 %% Throws exception when call to dao fails, or group is already removed.
 %% @end
 %% ====================================================================
--spec cleanup(GroupId :: binary()) -> ok.
+-spec cleanup(GroupId :: binary()) ->
+    ok.
 %% ====================================================================
 cleanup(GroupId) ->
-    #user_group{users = Users} = dao_adapter:group(GroupId),
-    case Users of
-        [] -> remove(GroupId);
+    case dao_adapter:group(GroupId) of
+        #user_group{users = []} -> remove(GroupId);
         _ -> ok
     end,
     ok.

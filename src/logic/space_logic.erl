@@ -29,7 +29,8 @@
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec exists(SpaceId :: binary()) -> boolean().
+-spec exists(SpaceId :: binary()) ->
+    boolean().
 %% ====================================================================
 exists(SpaceId) ->
     dao_adapter:space_exists(SpaceId).
@@ -42,7 +43,8 @@ exists(SpaceId) ->
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec has_provider(SpaceId :: binary(), ProviderId :: binary()) -> boolean() | no_return().
+-spec has_provider(SpaceId :: binary(), ProviderId :: binary()) ->
+    boolean().
 %% ====================================================================
 has_provider(SpaceId, ProviderId) ->
     case exists(SpaceId) of
@@ -60,7 +62,8 @@ has_provider(SpaceId, ProviderId) ->
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec has_user(SpaceId :: binary(), UserId :: binary()) -> boolean() | no_return().
+-spec has_user(SpaceId :: binary(), UserId :: binary()) ->
+    boolean().
 %% ====================================================================
 has_user(SpaceId, UserId) ->
     case exists(SpaceId) of
@@ -78,7 +81,8 @@ has_user(SpaceId, UserId) ->
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec has_group(SpaceId :: binary(), GroupId :: binary()) -> boolean() | no_return().
+-spec has_group(SpaceId :: binary(), GroupId :: binary()) ->
+    boolean().
 %% ====================================================================
 has_group(SpaceId, GroupId) ->
     case exists(SpaceId) of
@@ -98,7 +102,8 @@ has_group(SpaceId, GroupId) ->
 %% @end
 %% ====================================================================
 -spec has_privilege(SpaceId :: binary(), UserId :: binary(),
-    Privilege :: privileges:space_privilege()) -> boolean() | no_return().
+                    Privilege :: privileges:space_privilege()) ->
+    boolean().
 %% ====================================================================
 has_privilege(SpaceId, UserId, Privilege) ->
     case has_user(SpaceId, UserId) of
@@ -130,7 +135,7 @@ create(Member, Name) ->
 %% ====================================================================
 -spec create({provider, ProviderId :: binary()}, Name :: binary(),
              Token :: binary()) ->
-    {ok, SpaceId :: binary()} | no_return().
+    {ok, SpaceId :: binary()}.
 %% ====================================================================
 create({provider, ProviderId}, Name, Token) ->
     {ok, Member} = token_logic:consume(Token, space_create_token),
@@ -144,7 +149,7 @@ create({provider, ProviderId}, Name, Token) ->
 %% @end
 %% ====================================================================
 -spec modify(SpaceId :: binary(), Name :: binary()) ->
-    ok | no_return().
+    ok.
 %% ====================================================================
 modify(SpaceId, Name) ->
     #veil_document{record = Space} = Doc = dao_adapter:space_doc(SpaceId),
@@ -161,7 +166,7 @@ modify(SpaceId, Name) ->
 %% ====================================================================
 -spec set_privileges(SpaceId :: binary(), {user | group, Id :: binary()},
                      Privileges :: [privileges:space_privilege()]) ->
-    ok | no_return().
+    ok.
 %% ====================================================================
 set_privileges(SpaceId, Member, Privileges) ->
     #veil_document{record = Space} = Doc = dao_adapter:space_doc(SpaceId),
@@ -178,7 +183,7 @@ set_privileges(SpaceId, Member, Privileges) ->
 %% @end
 %% ====================================================================
 -spec join({group | user, Id :: binary()}, Token :: binary()) ->
-    {ok, SpaceId :: binary()} | no_return().
+    {ok, SpaceId :: binary()}.
 %% ====================================================================
 join({user, UserId}, Token) ->
     {ok, {space, SpaceId}} = token_logic:consume(Token, space_invite_user_token),
@@ -225,7 +230,7 @@ join({group, GroupId}, Token) ->
 %% @end
 %% ====================================================================
 -spec support(ProviderId :: binary(), Token :: binary()) ->
-    {ok, SpaceId :: binary()} | no_return().
+    {ok, SpaceId :: binary()}.
 %% ====================================================================
 support(ProviderId, Token) ->
     {ok, {space, SpaceId}} = token_logic:consume(Token, space_support_token),
@@ -253,7 +258,7 @@ support(ProviderId, Token) ->
 %% @end
 %% ====================================================================
 -spec get_data(SpaceId :: binary(), Client :: user | provider) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_data(SpaceId, _Client) ->
     #space{name = Name} = dao_adapter:space(SpaceId),
@@ -270,7 +275,7 @@ get_data(SpaceId, _Client) ->
 %% @end
 %% ====================================================================
 -spec get_users(SpaceId :: binary(), Client :: user | provider) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_users(SpaceId, user) ->
     #space{users = Users} = dao_adapter:space(SpaceId),
@@ -299,7 +304,7 @@ get_users(SpaceId, provider) ->
 %% @end
 %% ====================================================================
 -spec get_groups(SpaceId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_groups(SpaceId) ->
     #space{groups = GroupTuples} = dao_adapter:space(SpaceId),
@@ -314,7 +319,7 @@ get_groups(SpaceId) ->
 %% @end
 %% ====================================================================
 -spec get_providers(SpaceId :: binary(), Client :: user | provider) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_providers(SpaceId, _Client) ->
     #space{providers = Providers} = dao_adapter:space(SpaceId),
@@ -329,7 +334,7 @@ get_providers(SpaceId, _Client) ->
 %% ====================================================================
 -spec get_user(SpaceId :: binary(), Client :: user | provider,
                UserId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_user(_SpaceId, _Client, UserId) ->
     %% @todo: we don't want to give out every bit of data once clients have more data stored
@@ -343,7 +348,7 @@ get_user(_SpaceId, _Client, UserId) ->
 %% @end
 %% ====================================================================
 -spec get_group(SpaceId :: binary(), GroupId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_group(_SpaceId, GroupId) ->
     %% @todo: we don't want to give out every bit of data once groups have more data stored
@@ -358,7 +363,7 @@ get_group(_SpaceId, GroupId) ->
 %% ====================================================================
 -spec get_provider(SpaceId :: binary(), Client :: user | provider,
                    UserId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_provider(_SpaceId, _Client, ProviderId) ->
     %% @todo: we don't want to give out every bit of data once providers have more data stored
@@ -372,7 +377,7 @@ get_provider(_SpaceId, _Client, ProviderId) ->
 %% @end
 %% ====================================================================
 -spec get_privileges(SpaceId :: binary(), {user | group, Id :: binary()}) ->
-    {ok, [privileges:space_privilege()]} | no_return().
+    {ok, [privileges:space_privilege()]}.
 %% ====================================================================
 get_privileges(SpaceId, {user, UserId}) ->
     #space{users = Users} = dao_adapter:space(SpaceId),
@@ -390,7 +395,8 @@ get_privileges(SpaceId, {group, GroupId}) ->
 %% Throws exception when call to dao fails, or space is already removed.
 %% @end
 %% ====================================================================
--spec remove(SpaceId :: binary()) -> true | no_return().
+-spec remove(SpaceId :: binary()) ->
+    true.
 %% ====================================================================
 remove(SpaceId) ->
     Space = dao_adapter:space(SpaceId),
@@ -426,7 +432,8 @@ remove(SpaceId) ->
 %% Throws exception when call to dao fails, or space/user doesn't exist.
 %% @end
 %% ====================================================================
--spec remove_user(SpaceId :: binary(), UserId :: binary()) -> true | no_return().
+-spec remove_user(SpaceId :: binary(), UserId :: binary()) ->
+    true.
 %% ====================================================================
 remove_user(SpaceId, UserId) ->
     UserDoc = dao_adapter:user_doc(UserId),
@@ -449,7 +456,8 @@ remove_user(SpaceId, UserId) ->
 %% Throws exception when call to dao fails, or space/group doesn't exist.
 %% @end
 %% ====================================================================
--spec remove_group(SpaceId :: binary(), GroupId :: binary()) -> true | no_return().
+-spec remove_group(SpaceId :: binary(), GroupId :: binary()) ->
+    true.
 %% ====================================================================
 remove_group(SpaceId, GroupId) ->
     GroupDoc = dao_adapter:group_doc(GroupId),
@@ -472,7 +480,8 @@ remove_group(SpaceId, GroupId) ->
 %% Throws exception when call to dao fails, or space/provider doesn't exist.
 %% @end
 %% ====================================================================
--spec remove_provider(SpaceId :: binary(), ProviderId :: binary()) -> true | no_return().
+-spec remove_provider(SpaceId :: binary(), ProviderId :: binary()) ->
+    true.
 %% ====================================================================
 remove_provider(SpaceId, ProviderId) ->
     ProviderDoc = dao_adapter:provider_doc(ProviderId),
@@ -496,7 +505,7 @@ remove_provider(SpaceId, ProviderId) ->
 %% ====================================================================
 -spec create_with_provider({user | group, Id :: binary()}, Name :: binary(),
                            Providers :: [binary()]) ->
-    {ok, SpaceId :: binary()} | no_return().
+    {ok, SpaceId :: binary()}.
 %% ====================================================================
 create_with_provider({user, UserId}, Name, Providers) ->
     UserDoc = dao_adapter:user_doc(UserId),
@@ -549,7 +558,7 @@ cleanup(SpaceId) ->
 %% @end
 %% ====================================================================
 -spec get_effective_privileges(SpaceId :: binary(), UserId :: binary()) ->
-    ordsets:ordset(privileges:space_privilege()) | no_return().
+    ordsets:ordset(privileges:space_privilege()).
 %% ====================================================================
 get_effective_privileges(SpaceId, UserId) ->
     #user{groups = UGroups} = dao_adapter:user(UserId),
