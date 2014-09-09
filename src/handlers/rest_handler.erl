@@ -18,9 +18,9 @@
 
 %% API
 -export([init/3, allowed_methods/2, content_types_accepted/2, is_authorized/2,
-    content_types_provided/2, delete_resource/2, accept_resource_json/2,
-    accept_resource_form/2, provide_resource/2, rest_init/2, forbidden/2,
-    resource_exists/2]).
+    content_types_provided/2, delete_resource/2, delete_completed/2,
+    accept_resource_json/2, accept_resource_form/2, provide_resource/2,
+    rest_init/2, forbidden/2, resource_exists/2]).
 
 
 %% init/3
@@ -116,6 +116,20 @@ delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {ResId, Req2} = get_res_id(Req, State),
     {Result, Req3} = Mod:delete_resource(Resource, ResId, Req2),
     {Result, Req3, State}.
+
+
+%% delete_completed/2
+%% ====================================================================
+%% @doc Cowboy callback function.
+%% Returns if there is a guarantee that the resource gets deleted immediately
+%% from the system.
+%% @end
+%% ====================================================================
+-spec delete_completed(Req :: cowboy_req:req(), State :: rstate()) ->
+    {boolean(), cowboy_req:req(), rstate()}.
+%% ====================================================================
+delete_completed(Req, State) ->
+    {false, Req, State}.
 
 
 %% forbidden/2
