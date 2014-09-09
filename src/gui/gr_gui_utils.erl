@@ -39,7 +39,7 @@ apply_or_redirect(Module, Fun) ->
 %% ====================================================================
 %% @doc Checks if the client has right to do the operation (is logged in). If so, it executes the code.
 %% @end
--spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: [term()]) -> boolean() | no_return.
+-spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: [term()]) -> term() | no_return.
 %% ====================================================================
 apply_or_redirect(Module, Fun, Args) ->
     try

@@ -85,10 +85,10 @@ get_user({Key, Value}) ->
                                 {?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_query_args{keys =
                                 [
                                     <<?RECORD_FIELD_ATOM_PREFIX,
-                                    (dao_helper:name(ProviderID))/binary,
+                                    ProviderID/binary,
                                     "_",
                                     ?RECORD_FIELD_BINARY_PREFIX,
-                                    (dao_helper:name(UserID))/binary>>
+                                    UserID/binary>>
                                 ], include_docs = true}};
                             email ->
                                 {?USER_BY_EMAIL_VIEW, #view_query_args{keys =

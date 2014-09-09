@@ -264,7 +264,12 @@ provider_redirection_panel() ->
     end.
 
 
-% Postback event handling
+%% event/1
+%% ====================================================================
+%% @doc Postback event handling
+%% @end
+-spec event(init | {action, Fun :: atom()} | {action, Fun :: atom(), Args :: [term()]}) -> term().
+%% ====================================================================
 event(init) ->
     ok;
 
