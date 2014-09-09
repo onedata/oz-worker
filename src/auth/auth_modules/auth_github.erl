@@ -16,6 +16,9 @@
 -include("auth_common.hrl").
 -include("dao/dao_types.hrl").
 
+%% Used in header required by GitHub (probably for statistical purposes)
+-define(user_agent_name, "One Data").
+
 -define(PROVIDER_NAME, github).
 
 %% API
@@ -86,12 +89,12 @@ validate_login() ->
         % Form user info request
         URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, JSON} = gui_utils:https_get(URL, [{"Content-Type", "application/x-www-form-urlencoded"}, {"User-Agent", "One Data"}]),
+        {ok, JSON} = gui_utils:https_get(URL, [{"Content-Type", "application/x-www-form-urlencoded"}, {"User-Agent", ?user_agent_name}]),
 
         % Form user email request
         URLEmail = <<(user_emails_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, JSONEmails} = gui_utils:https_get(URLEmail, [{"Content-Type", "application/x-www-form-urlencoded"}, {"User-Agent", "One Data"}]),
+        {ok, JSONEmails} = gui_utils:https_get(URLEmail, [{"Content-Type", "application/x-www-form-urlencoded"}, {"User-Agent", ?user_agent_name}]),
 
         % Parse received JSON
         {struct, JSONProplist} = n2o_json:decode(JSON),
