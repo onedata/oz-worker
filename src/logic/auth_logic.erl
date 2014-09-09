@@ -174,7 +174,7 @@ grant_tokens(Client, AuthCode) ->
     try
         AuthDoc = case ?DB(get_authorization_by_code, AuthCode) of
             {ok, AuthDoc1} -> AuthDoc1;
-            {error, missing} -> throw(invalid_or_expired)
+            {error, not_found} -> throw(invalid_or_expired)
         end,
 
         #veil_document{uuid = AuthId, record = Auth} = AuthDoc,
