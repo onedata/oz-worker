@@ -110,23 +110,23 @@ resource_exists(_, _, Req) ->
     {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(user, post, _UserId, Data, _Client, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, _} = user_logic:create(#user{name = Name}),
     {true, Req};
 accept_resource(user, patch, UserId, Data, _Client, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ok = user_logic:modify(UserId, [{name, Name}]),
     {true, Req};
 accept_resource(spaces, post, _UserId, Data, Client, Req) ->
     spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
 accept_resource(defspace, put, UserId, Data, _Client, Req) ->
-    SpaceId = rest_module_helper:assert_key(<<"spaceId">>, Data, binary),
+    SpaceId = rest_module_helper:assert_key(<<"spaceId">>, Data, binary, Req),
     Result = user_logic:set_default_space(UserId, SpaceId),
     {Result, Req};
 accept_resource(sjoin, post, UserId, Data, _Client, Req) ->
-    Token = rest_module_helper:assert_key(<<"token">>, Data, binary),
+    Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
     case token_logic:is_valid(Token, space_invite_user_token) of
-        false -> rest_module_helper:report_invalid_value(<<"token">>, Token);
+        false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             {ok, SpaceId} = space_logic:join({user, UserId}, Token),
             {{true, {url, <<"/user/spaces/", SpaceId/binary>>}}, Req}
@@ -134,17 +134,17 @@ accept_resource(sjoin, post, UserId, Data, _Client, Req) ->
 accept_resource(groups, post, _UserId, Data, Client, Req) ->
     groups_rest_module:accept_resource(groups, post, undefined, Data, Client, Req);
 accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
-    Token = rest_module_helper:assert_key(<<"token">>, Data, binary),
+    Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
     case token_logic:is_valid(Token, group_invite_token) of
-        false -> rest_module_helper:report_invalid_value(<<"token">>, Token);
+        false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             {ok, GroupId} = group_logic:join(UserId, Token),
             {{true, {url, <<"/user/groups/", GroupId/binary>>}}, Req}
     end;
 accept_resource(merge, post, UserId, Data, _Client, Req) ->
-    Token = rest_module_helper:assert_key(<<"token">>, Data, binary),
+    Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
     case token_logic:is_valid(Token, accounts_merge_token) of
-        false -> rest_module_helper:report_invalid_value(<<"token">>, Token);
+        false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             ok = user_logic:merge(UserId, Token),
             {true, Req}

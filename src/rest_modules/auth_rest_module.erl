@@ -104,10 +104,10 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
         when Resource =:= ptokens orelse Resource =:= ctokens ->
     TokenClient = case Resource of ptokens -> {provider, Id}; ctokens -> native end,
 
-    GrantType = rest_module_helper:assert_key(<<"grant_type">>, Data, binary),
+    GrantType = rest_module_helper:assert_key(<<"grant_type">>, Data, binary, Req),
     case GrantType of
         <<"authorization_code">> ->
-            Code = rest_module_helper:assert_key(<<"code">>, Data, binary),
+            Code = rest_module_helper:assert_key(<<"code">>, Data, binary, Req),
             case auth_logic:grant_tokens(TokenClient, Code) of
                 {ok, Data} ->
                     Body = mochijson2:encode(Data),
@@ -119,7 +119,7 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
                         expired            -> <<"authorization code expired">>;
                         wrong_client       -> <<"authorization code issued to another client">>
                     end,
-                    rest_module_helper:report_error(invalid_grant, Description)
+                    rest_module_helper:report_error(invalid_grant, Description, Req)
             end;
 
         <<"refresh_token">> ->
@@ -128,11 +128,11 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
         _ ->
             Description = <<"the authorization grant type '", GrantType/binary,
                             "' is not supported by the authorization server">>,
-            rest_module_helper:report_error(unsupported_grant_type, Description)
+            rest_module_helper:report_error(unsupported_grant_type, Description, Req)
     end;
 accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
-    UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary),
-    Secret = rest_module_helper:assert_key(<<"secret">>, Data, binary),
+    UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary, Req),
+    Secret = rest_module_helper:assert_key(<<"secret">>, Data, binary, Req),
     Verified = auth_logic:verify(UserId, Secret),
     Body = mochijson2:encode([{verified, Verified}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),

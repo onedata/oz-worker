@@ -140,20 +140,20 @@ resource_exists(_, SpaceId, Req) ->
     {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, SpaceId} = space_logic:create({user, UserId}, Name),
     {{true, {url, <<"/spaces/", SpaceId/binary>>}}, Req};
 accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
-    Token = rest_module_helper:assert_key(<<"token">>, Data, binary),
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
+    Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
     case token_logic:is_valid(Token, space_create_token) of
-        false -> rest_module_helper:report_invalid_value(<<"token">>, Token);
+        false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             {ok, SpaceId} = space_logic:create({provider, ProviderId}, Name, Token),
             {{true, {url, <<"/spaces/", SpaceId/binary>>}}, Req}
     end;
 accept_resource(space, patch, SpaceId, Data, _Client, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ok = space_logic:modify(SpaceId, Name),
     {true, Req};
 accept_resource(upriv, put, SpaceId, Data, _Client, Req) ->
@@ -162,7 +162,7 @@ accept_resource(upriv, put, SpaceId, Data, _Client, Req) ->
 
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
         [atom_to_binary(P, latin1) || P <- privileges:space_privileges()], Data,
-        list_of_bin),
+        list_of_bin, Req2),
 
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
     ok = space_logic:set_privileges(SpaceId, {user, UID}, Privileges),
@@ -173,7 +173,7 @@ accept_resource(gpriv, put, SpaceId, Data, _Client, Req) ->
 
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
         [atom_to_binary(P, latin1) || P <- privileges:space_privileges()], Data,
-        list_of_bin),
+        list_of_bin, Req2),
 
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
     ok = space_logic:set_privileges(SpaceId, {group, GID}, Privileges),

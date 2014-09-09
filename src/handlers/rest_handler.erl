@@ -174,14 +174,14 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
             false ->
                 PeerCert = case ssl:peercert(cowboy_req:get(socket, Req2)) of
                     {ok, PeerCert1} -> PeerCert1;
-                    {error, no_peercert} -> throw(silent_error)
+                    {error, no_peercert} -> throw({silent_error, Req2})
                 end,
 
                 ProviderId = case grpca:verify_provider(PeerCert) of
                     {ok, ProviderId1} -> ProviderId1;
                     {error, {bad_cert, Reason}} when is_atom(Reason) ->
                         ?warning("Attempted authentication with bad peer certificate: ~p", [Reason]),
-                        throw(silent_error)
+                        throw({silent_error, Req2})
                 end,
 
                 {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
@@ -202,26 +202,26 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
                                     expired -> <<"access token expired">>;
                                     bad_audience -> <<"token issued to a different audience">>
                                 end,
-                                throw({invalid_token, Description})
+                                throw({invalid_token, Description, Req3})
                         end;
 
                     _ ->
                         Description = <<"unknown authorization type: ", Authorization/binary>>,
-                        throw({invalid_request, Description})
+                        throw({invalid_request, Description, Req3})
                 end
         end
     catch
-        silent_error -> %% As per RFC 6750 section 3.1
-            {{false, <<"">>}, Req2, State};
+        {silent_error, ReqX} -> %% As per RFC 6750 section 3.1
+            {{false, <<"">>}, ReqX, State};
 
-        {Error, Description1} when is_atom(Error), is_binary(Description1) ->
+        {Error, Description1, ReqX} when is_atom(Error), is_binary(Description1) ->
             Body = mochijson2:encode([
                 {error, Error},
                 {error_description, Description1}
             ]),
             WWWAuthenticate = <<"error=", (atom_to_binary(Error, latin1))/binary>>,
-            ReqX = cowboy_req:set_resp_body(Body, Req2),
-            {{false, WWWAuthenticate}, ReqX, State}
+            ReqY = cowboy_req:set_resp_body(Body, ReqX),
+            {{false, WWWAuthenticate}, ReqY, State}
     end.
 
 
@@ -297,18 +297,18 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
             _ when is_boolean(Result) -> {Result, Req4, State}
         end
     catch
-        {rest_error, Error} when is_atom(Error) ->
+        {rest_error, Error, ReqX} when is_atom(Error) ->
             Body = mochijson2:encode([{error, Error}]),
-            ReqX = cowboy_req:set_resp_body(Body, Req3),
-            {false, ReqX, State};
+            ReqY = cowboy_req:set_resp_body(Body, ReqX),
+            {false, ReqY, State};
 
-        {rest_error, Error, Description} when is_atom(Error), is_binary(Description) ->
+        {rest_error, Error, Description, ReqX} when is_atom(Error), is_binary(Description) ->
             Body = mochijson2:encode([
                 {error, Error},
                 {error_description, Description}
             ]),
-            ReqX = cowboy_req:set_resp_body(Body, Req3),
-            {false, ReqX, State}
+            ReqY = cowboy_req:set_resp_body(Body, ReqX),
+            {false, ReqY, State}
     end.
 
 
