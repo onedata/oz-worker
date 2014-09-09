@@ -257,7 +257,11 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
 %% ====================================================================
 accept_resource_json(Req, #rstate{} = State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
-    Data = mochijson2:decode(Body, [{format, proplist}]),
+    Data = try
+        mochijson2:decode(Body, [{format, proplist}])
+    catch
+        _:_ -> []
+    end,
     accept_resource(Data, Req2, State).
 
 
