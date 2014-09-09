@@ -24,12 +24,12 @@ cd deps
 # Check if repo exists
 if [ ! -d "onedev/.git" ]; then
     # Try to clone the repo
-    git clone ssh://git@git.plgrid.pl:7999/vfs/onedev.git 2>/dev/null
+    git clone ssh://git@git.plgrid.pl:7999/vfs/onedev.git
     if [ $? -eq 0 ]; then
         # The repo was cloned, update to the newest version.
         echo "OK"
         cd onedev
-        git checkout c31f59d #develop
+        git checkout develop
         git pull
     else
         # The repo was not cloned, skip
@@ -39,7 +39,7 @@ if [ ! -d "onedev/.git" ]; then
 else
     # The repo was not cloned, but it already exists. Update to the newest version.
     cd onedev
-    git checkout c31f59d #develop
+    git checkout develop
     git pull
 fi
 
