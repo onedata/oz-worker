@@ -307,6 +307,6 @@ remove_user(GroupId, UserId) ->
 cleanup(GroupId) ->
     case dao_adapter:group(GroupId) of
         #user_group{users = []} -> remove(GroupId);
-        ok -> ok
+        _ -> ok
     end,
     ok.

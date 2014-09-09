@@ -182,8 +182,12 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
                                 Client = #client{type = user, id = UserId},
                                 {true, Req3, State#rstate{client = Client}};
 
-                            false ->
-                                Description = <<"invalid token: ", Token/binary>>,
+                            {error, Reason1} ->
+                                Description = case Reason1 of
+                                    not_found -> <<"access token not found">>;
+                                    expired -> <<"access token expired">>;
+                                    bad_audience -> <<"token issued to a different audience">>
+                                end,
                                 throw({invalid_token, Description})
                         end;
 
