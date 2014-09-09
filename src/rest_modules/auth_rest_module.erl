@@ -109,8 +109,8 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
         <<"authorization_code">> ->
             Code = rest_module_helper:assert_key(<<"code">>, Data, binary, Req),
             case auth_logic:grant_tokens(TokenClient, Code) of
-                {ok, Data} ->
-                    Body = mochijson2:encode(Data),
+                {ok, Data1} ->
+                    Body = mochijson2:encode(Data1),
                     Req2 = cowboy_req:set_resp_body(Body, Req),
                     {true, Req2};
                 {error, Reason} ->
