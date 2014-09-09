@@ -15,6 +15,12 @@
 -behavior(rest_module_behavior).
 
 
+-type provided_resource()  :: provider | spaces | nprovider | space | ip | ports.
+-type accepted_resource()  :: provider | spaces | ssupport.
+-type removable_resource() :: provider | space.
+-type resource() :: provided_resource() | accepted_resource() | removable_resource().
+
+
 %% API
 -export([routes/0, is_authorized/4, accept_resource/6, provide_resource/4,
     delete_resource/3, resource_exists/3]).
@@ -50,7 +56,7 @@ routes() ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Resource :: atom(), Method :: method(),
+-spec is_authorized(Resource :: resource(), Method :: method(),
                     ProviderId :: binary() | undefined, Client :: client()) ->
     boolean().
 %% ====================================================================
@@ -72,7 +78,7 @@ is_authorized(_, _, _, _) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec resource_exists(Resource :: atom(), ProviderId :: binary() | undefined,
+-spec resource_exists(Resource :: resource(), ProviderId :: binary() | undefined,
                       Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
@@ -95,12 +101,10 @@ resource_exists(_, _, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec accept_resource(Resource :: atom(), Method :: method(),
-                      ProviderId :: binary() | undefined,
-                      Data :: [proplists:property()], Client :: client(),
-                      Req :: cowboy_req:req()) ->
-    {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean(), cowboy_req:req()} | no_return().
+-spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
+                      ProviderId :: binary() | undefined, Data :: data(),
+                      Client :: client(), Req :: cowboy_req:req()) ->
+    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
     URLs = rest_module_helper:assert_key(<<"urls">>, Data, list_of_bin),
@@ -108,7 +112,9 @@ accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
     RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary),
 
     {ok, ProviderId, SignedPem} = provider_logic:create(URLs, RedirectionPoint, CSR),
-    {{true, {data, [{providerId, ProviderId}, {certificate, SignedPem}]}}, Req};
+    Body = mochijson2:encode([{providerId, ProviderId}, {certificate, SignedPem}]),
+    Req2 = cowboy_req:set_resp_body(Body, Req),
+    {true, Req2};
 accept_resource(provider, patch, ProviderId, Data, _Client, Req) ->
     ok = provider_logic:modify(ProviderId, Data),
     {true, Req};
@@ -130,9 +136,9 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(Resource :: atom(), ProviderId :: binary() | undefined,
+-spec provide_resource(Resource :: provided_resource(), ProviderId :: binary() | undefined,
                        Client :: client(), Req :: cowboy_req:req()) ->
-    {Data :: [proplists:property()], cowboy_req:req()}.
+    {Data :: json_object(), cowboy_req:req()}.
 %% ====================================================================
 provide_resource(provider, ProviderId, _Client, Req) ->
     {ok, Provider} = provider_logic:get_data(ProviderId),
@@ -165,8 +171,8 @@ provide_resource(ports, _ProviderId, _Client, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(Resource :: atom(), ProviderId :: binary() | undefined,
-                      Req :: cowboy_req:req()) ->
+-spec delete_resource(Resource :: removable_resource(),
+                      ProviderId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
 delete_resource(provider, ProviderId, Req) ->

@@ -60,12 +60,10 @@
 %% :id binding or client's Id if there's no binding defined.
 %% @end
 %% ====================================================================
--callback accept_resource(Resource :: atom(), Method :: method(),
-                          ResId :: binary() | undefined,
-                          Data :: [proplists:property()], Client :: client(),
-                          Req :: cowboy_req:req()) ->
-    {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean(), cowboy_req:req()} | no_return().
+-callback accept_resource(Resource :: atom(), Method :: accept_method(),
+                          ResId :: binary() | undefined, Data :: data(),
+                          Client :: client(), Req :: cowboy_req:req()) ->
+    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
 
 
 %% provide_resource/4
@@ -77,7 +75,7 @@
 %% ====================================================================
 -callback provide_resource(Resource :: atom(), ResId :: binary() | undefined,
                            Client :: client(), Req :: cowboy_req:req()) ->
-    {Data :: [proplists:property()], cowboy_req:req()}.
+    {Data :: json_object(), cowboy_req:req()}.
 
 
 %% delete_resource/3

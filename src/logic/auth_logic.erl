@@ -212,7 +212,7 @@ grant_tokens(Client, AuthCode) ->
 
         {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
         EmailsList = [[{email, Email}] || Email <- Emails],
-        [
+        {ok, [
             {access_token, AccessToken},
             {token_type, bearer},
             {expires_in, ?ACCESS_EXPIRATION_SECS},
@@ -227,7 +227,7 @@ grant_tokens(Client, AuthCode) ->
                 {exp, ExpirationTime},
                 {iat, Now}
             ])}
-        ]
+        ]}
     catch
         Error -> {error, Error}
     end.

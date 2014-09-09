@@ -15,6 +15,12 @@
 -behavior(rest_module_behavior).
 
 
+-type provided_resource()  :: authcode | ctokens.
+-type accepted_resource()  :: ctokens | verify | ptokens.
+-type removable_resource() :: ctoken.
+-type resource() :: provided_resource() | accepted_resource() | removable_resource().
+
+
 %% API
 -export([routes/0, is_authorized/4, accept_resource/6, provide_resource/4,
     delete_resource/3, resource_exists/3]).
@@ -34,10 +40,10 @@ routes() ->
     M = rest_handler,
     [
         {<<"/openid/client/authorization_code">>, M, S#rstate{resource = authcode, methods = [get]}},
-        {<<"/openid/client/tokens">>,             M, S#rstate{resource = ctokens, methods = [post, get], noauth = [post]}},
-        {<<"/openid/client/tokens/:accessId">>,   M, S#rstate{resource = ctoken, methods = [delete]}},
-        {<<"/openid/client/verify">>,             M, S#rstate{resource = verify, methods = [post]}},
-        {<<"/openid/provider/tokens">>,           M, S#rstate{resource = ptokens, methods = [post]}}
+        {<<"/openid/client/tokens">>,             M, S#rstate{resource = ctokens,  methods = [post, get], noauth = [post]}},
+        {<<"/openid/client/tokens/:accessId">>,   M, S#rstate{resource = ctoken,   methods = [delete]}},
+        {<<"/openid/client/verify">>,             M, S#rstate{resource = verify,   methods = [post]}},
+        {<<"/openid/provider/tokens">>,           M, S#rstate{resource = ptokens,  methods = [post]}}
     ].
 
 
@@ -48,7 +54,7 @@ routes() ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Resource :: atom(), Method :: method(),
+-spec is_authorized(Resource :: resource(), Method :: method(),
                     Id :: binary() | undefined, Client :: client()) ->
     boolean().
 %% ====================================================================
@@ -70,7 +76,7 @@ is_authorized(_, _, _, _) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec resource_exists(Resource :: atom(), Id :: binary() | undefined,
+-spec resource_exists(Resource :: resource(), Id :: binary() | undefined,
                       Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
@@ -89,12 +95,10 @@ resource_exists(_, _Id, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec accept_resource(Resource :: atom(), Method :: method(),
-                      ProviderId :: binary() | undefined,
-                      Data :: [proplists:property()], Client :: client(),
-                      Req :: cowboy_req:req()) ->
-    {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean(), cowboy_req:req()} | no_return().
+-spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
+                      ProviderId :: binary() | undefined, Data :: data(),
+                      Client :: client(), Req :: cowboy_req:req()) ->
+    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(Resource, post, Id, Data, _Client, Req)
         when Resource =:= ptokens orelse Resource =:= ctokens ->
@@ -106,7 +110,9 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
             Code = rest_module_helper:assert_key(<<"code">>, Data, binary),
             case auth_logic:grant_tokens(TokenClient, Code) of
                 {ok, Data} ->
-                    {{true, {data, Data}}, Req};
+                    Body = mochijson2:encode(Data),
+                    Req2 = cowboy_req:set_resp_body(Body, Req),
+                    {true, Req2};
                 {error, Reason} ->
                     Description = case Reason of
                         invalid_or_expired -> <<"authorization code invalid or expired">>;
@@ -120,7 +126,7 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
             error(not_implemented); %% @TODO: VFS-679
 
         _ ->
-            Description = <<"the authorization grant type '", GrantType,
+            Description = <<"the authorization grant type '", GrantType/binary,
                             "' is not supported by the authorization server">>,
             rest_module_helper:report_error(unsupported_grant_type, Description)
     end;
@@ -128,7 +134,9 @@ accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
     UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary),
     Secret = rest_module_helper:assert_key(<<"secret">>, Data, binary),
     Verified = auth_logic:verify(UserId, Secret),
-    {{true, {data, [{verified, Verified}]}}, Req}.
+    Body = mochijson2:encode([{verified, Verified}]),
+    Req2 = cowboy_req:set_resp_body(Body, Req),
+    {true, Req2}.
 
 
 %% provide_resource/4
@@ -137,9 +145,9 @@ accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(Resource :: atom(), Id :: binary() | undefined,
+-spec provide_resource(Resource :: provided_resource(), Id :: binary() | undefined,
                        Client :: client(), Req :: cowboy_req:req()) ->
-    {Data :: [proplists:property()], cowboy_req:req()}.
+    {Data :: json_object(), cowboy_req:req()}.
 %% ====================================================================
 provide_resource(authcode, UserId, _Client, Req) ->
     {[{accessCode, auth_logic:gen_auth_code(UserId)}], Req};
@@ -153,8 +161,8 @@ provide_resource(ctokens, UserId, _Client, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(Resource :: atom(), ResId :: binary() | undefined,
-                      Req :: cowboy_req:req()) ->
+-spec delete_resource(Resource :: removable_resource(),
+                      ResId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
 delete_resource(ctoken, _UserId, Req) ->

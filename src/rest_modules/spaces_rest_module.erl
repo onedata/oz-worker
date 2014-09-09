@@ -15,6 +15,13 @@
 -behavior(rest_module_behavior).
 
 
+-type provided_resource()  :: space | users | uinvite | user | upriv | groups |
+                              ginvite | group | gpriv | providers | pinvite | provider.
+-type accepted_resource()  :: spaces | space | upriv | gpriv.
+-type removable_resource() :: space | user | group | provider.
+-type resource() :: provided_resource() | accepted_resource() | removable_resource().
+
+
 %% API
 -export([routes/0, is_authorized/4, accept_resource/6, provide_resource/4,
     delete_resource/3, resource_exists/3]).
@@ -56,7 +63,7 @@ routes() ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Resource :: atom(), Method :: method(),
+-spec is_authorized(Resource :: resource(), Method :: method(),
                     SpaceId :: binary() | undefined, Client :: client()) ->
     boolean().
 %% ====================================================================
@@ -98,7 +105,7 @@ is_authorized(_, _, _, _) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec resource_exists(Resource :: atom(), SpaceId :: binary() | undefined,
+-spec resource_exists(Resource :: resource(), SpaceId :: binary() | undefined,
                       Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
@@ -127,12 +134,10 @@ resource_exists(_, SpaceId, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec accept_resource(Resource :: atom(), Method :: method(),
-                      SpaceId :: binary() | undefined,
-                      Data :: [proplists:property()], Client :: client(),
-                      Req :: cowboy_req:req()) ->
-    {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean(), cowboy_req:req()} | no_return().
+-spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
+                      SpaceId :: binary() | undefined, Data :: data(),
+                      Client :: client(), Req :: cowboy_req:req()) ->
+    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
@@ -181,9 +186,9 @@ accept_resource(gpriv, put, SpaceId, Data, _Client, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(Resource :: atom(), SpaceId :: binary() | undefined,
+-spec provide_resource(Resource :: provided_resource(), SpaceId :: binary() | undefined,
                        Client :: client(), Req :: cowboy_req:req()) ->
-    {Data :: [proplists:property()], cowboy_req:req()}.
+    {Data :: json_object(), cowboy_req:req()}.
 %% ====================================================================
 provide_resource(space, SpaceId, #client{type = ClientType}, Req) ->
     {ok, Data} = space_logic:get_data(SpaceId, ClientType),
@@ -239,8 +244,8 @@ provide_resource(provider, SpaceId, #client{type = ClientType}, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(Resource :: atom(), SpaceId :: binary() | undefined,
-                      Req :: cowboy_req:req()) ->
+-spec delete_resource(Resource :: removable_resource(),
+                      SpaceId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
 delete_resource(space, SpaceId, Req) ->

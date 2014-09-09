@@ -280,10 +280,6 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
         {Result, Req4} = Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3),
         case Result of
             {true, {url, URL}} -> {{true, URL}, Req4, State};
-            {true, {data, Response}} ->
-                JSON = mochijson2:encode(Response),
-                Req5 = cowboy_req:set_resp_body(JSON, Req4),
-                {true, Req5, State};
             _ when is_boolean(Result) -> {Result, Req4, State}
         end
     catch

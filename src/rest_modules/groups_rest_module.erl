@@ -14,6 +14,10 @@
 
 -behavior(rest_module_behavior).
 
+-type provided_resource()  :: group | users | uinvite | user | upriv | spaces | screate | space.
+-type accepted_resource()  :: groups | group | upriv | spaces | sjoin.
+-type removable_resource() :: group | user | space.
+-type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
 %% API
 -export([routes/0, is_authorized/4, accept_resource/6, provide_resource/4,
@@ -54,7 +58,7 @@ routes() ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec is_authorized(Resource :: atom(), Method :: method(),
+-spec is_authorized(Resource :: resource(), Method :: method(),
                     GroupId :: binary() | undefined, Client :: client()) ->
     boolean().
 %% ====================================================================
@@ -92,7 +96,7 @@ is_authorized(_, _, _, _) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec resource_exists(Resource :: atom(), GroupId :: binary() | undefined,
+-spec resource_exists(Resource :: resource(), GroupId :: binary() | undefined,
                       Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
@@ -117,12 +121,10 @@ resource_exists(_, GroupId, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec accept_resource(Resource :: atom(), Method :: method(),
-                      GroupId :: binary() | undefined,
-                      Data :: [proplists:property()], Client :: client(),
-                      Req :: cowboy_req:req()) ->
-    {{true, {url, URL :: binary()} | {data, Data :: [proplists:property()]}} |
-        boolean(), cowboy_req:req()} | no_return().
+-spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
+                      GroupId :: binary() | undefined, Data :: data(),
+                      Client :: client(), Req :: cowboy_req:req()) ->
+    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary),
@@ -164,9 +166,9 @@ accept_resource(sjoin, post, GroupId, Data, _Client, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec provide_resource(Resource :: atom(), GroupId :: binary() | undefined,
+-spec provide_resource(Resource :: provided_resource(), GroupId :: binary() | undefined,
                        Client :: client(), Req :: cowboy_req:req()) ->
-    {Data :: [proplists:property()], cowboy_req:req()}.
+    {Data :: json_object(), cowboy_req:req()}.
 %% ====================================================================
 provide_resource(group, GroupId, _Client, Req) ->
     {ok, Data} = group_logic:get_data(GroupId),
@@ -206,8 +208,8 @@ provide_resource(space, _GroupId, _Client, Req) ->
 %% @see rest_module_behavior
 %% @end
 %% ====================================================================
--spec delete_resource(Resource :: atom(), GroupId :: binary() | undefined,
-                      Req :: cowboy_req:req()) ->
+-spec delete_resource(Resource :: removable_resource(),
+                      GroupId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
 delete_resource(group, GroupId, Req) ->
