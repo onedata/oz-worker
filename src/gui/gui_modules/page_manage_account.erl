@@ -246,8 +246,8 @@ find_connected_account(Provider, ProviderInfos) ->
 % Panel that will display a button to redirect a user to his provider,
 % or a token for space support if he has no spaces supported.
 provider_redirection_panel() ->
-    ProviderId = gui_ctx:url_param(<<"referer">>),
-    case gr_gui_utils:get_redirection_url_to_provider(ProviderId) of
+    Referer = gui_ctx:get(referer),
+    case gr_gui_utils:get_redirection_url_to_provider(Referer) of
         {ok, ProviderHostname, URL} ->
             #panel{body = [
                 #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
@@ -390,9 +390,9 @@ show_name_edition(Flag) ->
 
 
 redirect_to_veilcluster(ProviderHostname, URL) ->
-%%     case gui_utils:https_get(<<ProviderHostname/binary, ?veilcluster_connection_check_endpoint>>, []) of
-%%         {ok, _} ->
-            gui_jq:redirect(URL).%;
-%%         _ ->
-%%             gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable.">>})
-%%     end.
+    case gui_utils:https_get(<<ProviderHostname/binary, ?veilcluster_connection_check_endpoint>>, []) of
+        {ok, _} ->
+            gui_jq:redirect(URL);
+        _ ->
+            gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable. Try again later.">>})
+    end.

@@ -85,29 +85,30 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
 %% ====================================================================
 %% @doc Returns an URL that the user should be redirected to - if possible.
 %% Otherwise, error is returned.
+%% If the referer is known (the provider who redirected the user for login),
+%% then he will be chosen with highest priority.
 %% @end
--spec get_redirection_url_to_provider(DefaultProviderID :: binary() | undefined) ->
+-spec get_redirection_url_to_provider(Referer :: binary() | undefined) ->
     {ok, ProvderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
 %% ====================================================================
-get_redirection_url_to_provider(DefaultProviderID) ->
+get_redirection_url_to_provider(Referer) ->
     try
         UserID = gui_ctx:get_user_id(),
 
         % Default provider is the provider that redirected the user for login.
         % Check if the provider is recognisable
-        DefaultProviderInfo =
+        RefererProviderInfo =
             try
-                {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, DefaultProviderID),
-                ?dump(dyczempions),
+                {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, Referer),
                 {ok, ProvHostname, RedURL}
             catch _:_ ->
                 error
             end,
 
-        case DefaultProviderInfo of
+        case RefererProviderInfo of
             {ok, _, _} ->
                 % Default provider is OK
-                DefaultProviderInfo;
+                RefererProviderInfo;
             error ->
                 % No default provider, check if default space has any providers
                 {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),

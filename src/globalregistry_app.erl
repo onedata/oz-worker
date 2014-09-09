@@ -140,6 +140,11 @@ stop_rest() ->
 %% ===================================================================
 start_n2o() ->
     try
+        %% TODO for development
+        %% This is needed for the redirection to provider to work, as
+        %% we don't use legit server certificates on providers.
+        application:set_env(ctool, verify_server_cert, false),
+
         % Get gui config
         {ok, GuiPort} = application:get_env(?APP_Name, gui_port),
         {ok, GuiHttpsAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),

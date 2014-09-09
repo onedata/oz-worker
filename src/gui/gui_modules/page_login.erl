@@ -32,13 +32,6 @@ body() ->
             gui_jq:redirect(<<"/">>);
         false ->
             Referer = gui_ctx:url_param(<<"referer">>),
-            ?dump(Referer),
-            case Referer of
-                undefined ->
-                    ok;
-                _ ->
-                    gui_ctx:put(referer, Referer)
-            end,
 
             case auth_config:get_auth_providers() of
                 [] ->
@@ -55,7 +48,7 @@ body() ->
                             ButtonIcon = auth_config:get_provider_button_icon(Provider),
                             ButtonColor = auth_config:get_provider_button_color(Provider),
                             HandlerModule = auth_config:get_provider_module(Provider),
-                            #link{class = <<"btn btn-small">>, postback = {auth, HandlerModule},
+                            #link{class = <<"btn btn-small">>, postback = {auth, HandlerModule, Referer},
                                 style = <<"margin: 10px; text-align: left; width: 200px; background-color: ", ButtonColor/binary>>,
                                 body = [
                                     #span{style = <<"display: inline-block; line-height: 32px;">>, body = [
@@ -92,7 +85,10 @@ body() ->
 event(init) -> ok;
 
 % Login event handling
-event({auth, HandlerModule}) ->
+event({auth, HandlerModule, Referer}) ->
+    %% TODO for development purposes
+    %% remember which provider redirected the client to GR
+    erlang:put(referer, Referer),
     {ok, URL} = HandlerModule:get_redirect_url(false),
     gui_jq:redirect(URL);
 

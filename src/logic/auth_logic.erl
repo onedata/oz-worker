@@ -295,7 +295,7 @@ generate_state_token(HandlerModule, ConnectAccount) ->
         % PROBABLY DEVELOPER-ONLY FUNCTIONALITY
         % If this value was set on login page, the user will be redirected to
         % this certain provider if he click "go to your files"
-        {referer, gui_ctx:get(referer)}
+        {referer, erlang:get(referer)}
     ],
 
     ets:insert(?STATE_TOKEN, {Token, Time, StateInfo}),
