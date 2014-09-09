@@ -72,7 +72,10 @@ is_valid_record(Record) ->
 %% ====================================================================
 %% @doc Returns info about given record
 %% @end
--spec record_info(Record :: atom() | string() | tuple()) -> boolean().
+-spec record_info(Record :: atom() | string() | tuple()) -> {Size, Fields, DefaultInstance} when
+    Size :: integer(),
+    Fields :: list(),
+    DefaultInstance :: tuple().
 %% ====================================================================
 record_info(Record) ->
     ?dao_record_info(Record).

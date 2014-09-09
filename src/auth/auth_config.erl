@@ -44,7 +44,7 @@ load_auth_config() ->
 %% @doc Returns list of configured OAuth providers.
 %% @end
 %% ====================================================================
--spec get_auth_providers() -> ok.
+-spec get_auth_providers() -> [term()].
 %% ====================================================================
 get_auth_providers() ->
     {ok, Config} = application:get_env(veil_cluster_node, auth_config),
@@ -59,7 +59,7 @@ get_auth_providers() ->
 %% @doc Returns configuration for given provider, from config.
 %% @end
 %% ====================================================================
--spec get_auth_config(Provider :: atom()) -> ok.
+-spec get_auth_config(Provider :: atom()) -> [term()].
 %% ====================================================================
 get_auth_config(Provider) ->
     {ok, Config} = application:get_env(veil_cluster_node, auth_config),
@@ -71,7 +71,7 @@ get_auth_config(Provider) ->
 %% @doc Returns handler module for given provider, from config.
 %% @end
 %% ====================================================================
--spec get_provider_module(Provider :: atom()) -> ok.
+-spec get_provider_module(Provider :: atom()) -> atom() | undefined.
 %% ====================================================================
 get_provider_module(Provider) ->
     proplists:get_value(auth_module, get_auth_config(Provider)).
@@ -82,7 +82,7 @@ get_provider_module(Provider) ->
 %% @doc Returns application ID for given provider, from config.
 %% @end
 %% ====================================================================
--spec get_provider_app_id(Provider :: atom()) -> ok.
+-spec get_provider_app_id(Provider :: atom()) -> binary() | undefined.
 %% ====================================================================
 get_provider_app_id(Provider) ->
     proplists:get_value(app_id, get_auth_config(Provider)).
@@ -93,7 +93,7 @@ get_provider_app_id(Provider) ->
 %% @doc Returns application secret for given provider, from config.
 %% @end
 %% ====================================================================
--spec get_provider_app_secret(Provider :: atom()) -> ok.
+-spec get_provider_app_secret(Provider :: atom()) -> binary() | undefined.
 %% ====================================================================
 get_provider_app_secret(Provider) ->
     proplists:get_value(app_secret, get_auth_config(Provider)).
@@ -104,7 +104,7 @@ get_provider_app_secret(Provider) ->
 %% @doc Returns provider name for given provider, from config.
 %% @end
 %% ====================================================================
--spec get_provider_name(Provider :: atom()) -> ok.
+-spec get_provider_name(Provider :: atom()) -> binary() | undefined.
 %% ====================================================================
 get_provider_name(Provider) ->
     proplists:get_value(name, get_auth_config(Provider)).
@@ -115,7 +115,7 @@ get_provider_name(Provider) ->
 %% @doc Returns button icon for given provider, from config.
 %% @end
 %% ====================================================================
--spec get_provider_button_icon(Provider :: atom()) -> ok.
+-spec get_provider_button_icon(Provider :: atom()) -> binary() | undefined.
 %% ====================================================================
 get_provider_button_icon(Provider) ->
     proplists:get_value(button_icon, get_auth_config(Provider)).
@@ -126,7 +126,7 @@ get_provider_button_icon(Provider) ->
 %% @doc Returns button color for given provider, from config.
 %% @end
 %% ====================================================================
--spec get_provider_button_color(Provider :: atom()) -> ok.
+-spec get_provider_button_color(Provider :: atom()) -> binary() | undefined.
 %% ====================================================================
 get_provider_button_color(Provider) ->
     proplists:get_value(button_color, get_auth_config(Provider)).

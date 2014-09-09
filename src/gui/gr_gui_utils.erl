@@ -39,7 +39,7 @@ apply_or_redirect(Module, Fun) ->
 %% ====================================================================
 %% @doc Checks if the client has right to do the operation (is logged in). If so, it executes the code.
 %% @end
--spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: list()) -> boolean() | no_return.
+-spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: [term()]) -> boolean() | no_return.
 %% ====================================================================
 apply_or_redirect(Module, Fun, Args) ->
     try
@@ -69,7 +69,7 @@ apply_or_redirect(Module, Fun, Args) ->
 %% Setting "SaveSourcePage" on true will allow a redirect back from login.
 %% NOTE: Should be called from page:main().
 %% @end
--spec maybe_redirect(NeedLogin :: boolean(), SaveSourcePage :: boolean()) -> ok.
+-spec maybe_redirect(NeedLogin :: boolean(), SaveSourcePage :: boolean()) -> boolean().
 %% ====================================================================
 maybe_redirect(NeedLogin, SaveSourcePage) ->
     case NeedLogin and (not gui_ctx:user_logged_in()) of
@@ -150,7 +150,7 @@ get_redirection_url_to_provider(Referer) ->
 %% @doc Convienience function to render top menu in GUI pages. 
 %% Item with ActiveTabID will be highlighted as active.
 %% @end
--spec top_menu(ActiveTabID :: any()) -> list().
+-spec top_menu(ActiveTabID :: term()) -> list().
 %% ====================================================================
 top_menu(ActiveTabID) ->
     top_menu(ActiveTabID, []).
@@ -161,7 +161,7 @@ top_menu(ActiveTabID) ->
 %% Item with ActiveTabID will be highlighted as active.
 %% Submenu body (list of n2o elements) will be concatenated below the main menu.
 %% @end
--spec top_menu(ActiveTabID :: any(), SubMenuBody :: any()) -> list().
+-spec top_menu(ActiveTabID :: term(), SubMenuBody :: term()) -> list().
 %% ====================================================================
 top_menu(ActiveTabID, SubMenuBody) ->
     % Define menu items with ids, so that proper tab can be made active via function parameter

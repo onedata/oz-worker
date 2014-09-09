@@ -8,6 +8,7 @@ rel/globalregistry
 package
 
 .eunit
+.dialyzer.plt
 test/results
 test_distributed/logs
 variables-ct*

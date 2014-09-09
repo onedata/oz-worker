@@ -32,7 +32,7 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec get_redirect_url(boolean()) -> binary().
+-spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 %% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try

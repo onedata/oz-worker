@@ -106,7 +106,7 @@ get_authorization(AuthorizationId) ->
 %% @end
 %% ====================================================================
 -spec get_authorization_by_code(Code :: binary()) ->
-    {ok, authorization_doc()} | {error, any()} | no_return().
+    {ok, authorization_doc()} | {error, not_found} | no_return().
 %% ====================================================================
 get_authorization_by_code(Code) ->
     View = ?AUTHORIZATION_BY_CODE,
@@ -220,7 +220,7 @@ get_access(AccessId) when is_list(AccessId) ->
 %% @end
 %% ====================================================================
 -spec get_access_by_key(Key :: atom(), Code :: binary()) ->
-    {ok, access_doc()} | {error, any()} | no_return().
+    {ok, access_doc()} | {error, not_found} | no_return().
 %% ====================================================================
 get_access_by_key(Key, Value) ->
     View = case Key of
@@ -237,7 +237,7 @@ get_access_by_key(Key, Value) ->
     case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
             {ok, Doc};
-        {ok, []} ->
+        {ok, #view_result{rows = []}} ->
             ?warning("Couldn't find access by ~p with value ~p", [Key, Value]),
             {error, not_found}
     end.

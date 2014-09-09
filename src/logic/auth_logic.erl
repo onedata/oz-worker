@@ -275,7 +275,7 @@ clear_expired_authorizations() ->
 %% and associates some login info, that can be later retrieved given the token.
 %% For example, where to redirect the user after login.
 %% @end
--spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> [tuple()] | error.
+-spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> binary().
 %% ====================================================================
 generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_state_tokens(),

@@ -107,7 +107,7 @@ verify_provider(PeerCertDer) -> %% @todo: CRLs
     delegate({verify_provider, PeerCertDer}).
 
 
-%% generate_gr_cert/1
+%% generate_gr_cert/4
 %% ====================================================================
 %% @doc Generates a certificate for Global Registry's REST interface.
 %% ====================================================================
@@ -228,7 +228,7 @@ ca_config_file(TmpDir, CaDir) ->
 %% ====================================================================
 %% @doc Delegates a request from the API to the GRPCA process.
 %% ====================================================================
--spec delegate(Request :: atom()) -> Response :: any().
+-spec delegate(Request :: term()) -> Response :: any().
 %% ====================================================================
 delegate(Request) ->
     ca_loop ! {self(), Request},

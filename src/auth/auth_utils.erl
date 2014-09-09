@@ -68,6 +68,11 @@ validate_login() ->
                 Module = proplists:get_value(module, Props),
                 Redirect = proplists:get_value(redirect_after_login, Props),
 
+                % PROBABLY DEVELOPER-ONLY FUNCTIONALITY
+                % Save the referer URL in user session. If it was specified, this will cause the user
+                % to be redirected to given provider when he clicks "go to your files"
+                gui_ctx:put(referer, proplists:get_value(referer, Props)),
+
                 % Validate the request and gather user info
                 case Module:validate_login() of
                     {error, Reason} ->
@@ -88,12 +93,6 @@ validate_login() ->
                                         % The account already exists
                                         gui_ctx:create_session(),
                                         gui_ctx:set_user_id(UserId),
-
-                                        % PROBABLY DEVELOPER-ONLY FUNCTIONALITY
-                                        % Save the referer URL in user session. If it was specified, this will cause the user
-                                        % to be redirected to given provider when he clicks "go to your files"
-                                        gui_ctx:put(referer, proplists:get_value(referer, Props)),
-
                                         {redirect, Redirect};
                                     _ ->
                                         % Error
@@ -116,12 +115,6 @@ validate_login() ->
                                                 user_logic:modify(UserId, [{first_space_support_token, Token}]),
                                                 gui_ctx:create_session(),
                                                 gui_ctx:set_user_id(UserId),
-
-                                                % PROBABLY DEVELOPER-ONLY FUNCTIONALITY
-                                                % Save the referer URL in user session. If it was specified, this will cause the user
-                                                % to be redirected to given provider when he clicks "go to your files"
-                                                gui_ctx:put(referer, proplists:get_value(referer, Props)),
-
                                                 new_user
                                         end
                                 end;
@@ -194,7 +187,7 @@ is_any_email_in_use(Emails, UserID) ->
 %% @doc Merges user account with information gathered from new connected account.
 %% @end
 %% ====================================================================
--spec merge_connected_accounts(OAuthAccount :: #oauth_account{}, UserInfo :: #user{}) -> binary().
+-spec merge_connected_accounts(OAuthAccount :: #oauth_account{}, UserInfo :: #user{}) -> [tuple()].
 %% ====================================================================
 merge_connected_accounts(OAuthAccount, UserInfo) ->
     #user{name = Name, email_list = Emails, connected_accounts = ConnectedAccounts} = UserInfo,

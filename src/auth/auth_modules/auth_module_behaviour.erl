@@ -25,7 +25,7 @@
 %% - if this was signing in or connecting next account to the profile.
 %% @end
 %% ====================================================================
--callback get_redirect_url(boolean()) -> binary().
+-callback get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 
 
 %% validate_login/0

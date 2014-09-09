@@ -70,7 +70,7 @@ exist_user(UserId) ->
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec get_user(Key) -> {ok, user_doc()} | {error, any()} | no_return() when
-    Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
+    Key :: UserId :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} | {email, binary()}.
 %% ====================================================================
 get_user(UUID) when is_list(UUID) ->
     dao_external:set_db(?USERS_DB_NAME),

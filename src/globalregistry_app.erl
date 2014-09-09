@@ -84,7 +84,7 @@ stop(_State) ->
 %% start_rest/0
 %% ===================================================================
 %% @doc Starts cowboy with rest api
--spec start_rest() -> {ok, pid()} | {error, any()}.
+-spec start_rest() -> {ok, pid()} | {error, term()}.
 %% ===================================================================
 start_rest() ->
     try
@@ -136,7 +136,7 @@ stop_rest() ->
 %% start_n2o/0
 %% ===================================================================
 %% @doc Starts n2o server
--spec start_n2o() -> {ok, pid()} | {error, any()}.
+-spec start_n2o() -> {ok, pid()} | {error, term()}.
 %% ===================================================================
 start_n2o() ->
     try
@@ -207,7 +207,7 @@ static_dispatches(DocRoot, StaticPaths) ->
 %% ====================================================================
 %% @doc Starts a cowboy listener that will redirect all requests of http to https.
 %% @end
--spec start_redirector() -> ok | no_return().
+-spec start_redirector() -> ok | {error, term()}.
 %% ====================================================================
 start_redirector() ->
     try
