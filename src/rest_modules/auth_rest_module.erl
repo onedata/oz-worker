@@ -98,7 +98,7 @@ resource_exists(_, _Id, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
                       ProviderId :: binary() | undefined, Data :: data(),
                       Client :: client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(Resource, post, Id, Data, _Client, Req)
         when Resource =:= ptokens orelse Resource =:= ctokens ->

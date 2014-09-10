@@ -301,10 +301,7 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
 
     try
         {Result, Req4} = Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3),
-        case Result of
-            {true, {url, URL}} -> {{true, URL}, Req4, State};
-            _ when is_boolean(Result) -> {Result, Req4, State}
-        end
+        {Result, Req4, State}
     catch
         {rest_error, Error, ReqX} when is_atom(Error) ->
             Body = mochijson2:encode([{error, Error}]),

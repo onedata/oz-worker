@@ -124,12 +124,12 @@ resource_exists(_, GroupId, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
                       GroupId :: binary() | undefined, Data :: data(),
                       Client :: client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, GroupId} = group_logic:create(UserId, Name),
-    {{true, {url, <<"/groups/", GroupId/binary>>}}, Req};
+    {{true,  <<"/groups/", GroupId/binary>>}, Req};
 accept_resource(group, patch, GroupId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ok = group_logic:modify(GroupId, Name),
@@ -148,7 +148,7 @@ accept_resource(upriv, put, GroupId, Data, _Client, Req) ->
 accept_resource(spaces, post, GroupId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, SpaceId} = space_logic:create({group, GroupId}, Name),
-    {{true, {url, <<"/spaces/", SpaceId/binary>>}}, Req};
+    {{true,  <<"/spaces/", SpaceId/binary>>}, Req};
 accept_resource(sjoin, post, GroupId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
     case token_logic:is_valid(Token, space_invite_group_token) of
@@ -156,7 +156,7 @@ accept_resource(sjoin, post, GroupId, Data, _Client, Req) ->
             rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             {ok, SpaceId} = space_logic:join({group, GroupId}, Token),
-            {{true, {url, <<"/groups/", GroupId/binary, "/spaces/", SpaceId/binary>>}}, Req}
+            {{true,  <<"/groups/", GroupId/binary, "/spaces/", SpaceId/binary>>}, Req}
     end.
 
 
