@@ -258,5 +258,5 @@ get_accesses_by_user(UserId) ->
                                  include_docs = true},
 
     {ok, #view_result{rows = Rows}} = dao_records:list_records(View, QueryArgs),
-    Accesses = [#veil_document{record = #authorization{}} = Row#view_row.doc || Row <- Rows],
+    Accesses = [#veil_document{record = #access{}} = Row#view_row.doc || Row <- Rows],
     {ok, Accesses}.
