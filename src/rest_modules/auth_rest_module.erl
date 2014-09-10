@@ -150,7 +150,7 @@ accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
     {Data :: json_object(), cowboy_req:req()}.
 %% ====================================================================
 provide_resource(authcode, UserId, _Client, Req) ->
-    {[{accessCode, auth_logic:gen_auth_code(UserId)}], Req};
+    {[{authorizationCode, auth_logic:gen_auth_code(UserId)}], Req};
 provide_resource(ctokens, UserId, _Client, Req) ->
     {[{tokenInfo, auth_logic:get_user_tokens(UserId)}], Req}.
 
