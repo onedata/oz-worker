@@ -17,6 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -define(STATE_TOKEN, state_token).
+-define(EXPIRED_AUTHORIZATION_REMOVE_CHUNK, 50).
 
 %% @todo: config
 -define(TOKEN_LENGTH, 30).
@@ -297,7 +298,7 @@ clear_expired_authorizations() ->
     after
         timer:seconds(?AUTH_CODE_EXPIRATION_SECS) ->
             try
-                remove_expired_authorizations_in_chunks(50)
+                remove_expired_authorizations_in_chunks(?EXPIRED_AUTHORIZATION_REMOVE_CHUNK)
             catch
                 Error:Reason ->
                     ?warning("error while clearing expired authorizations: ~p ~p", [Error, Reason])
