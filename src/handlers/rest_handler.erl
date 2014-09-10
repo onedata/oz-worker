@@ -260,14 +260,20 @@ accept_resource_json(Req, #rstate{} = State) ->
     Data = try
         mochijson2:decode(Body, [{format, proplist}])
     catch
-        _:_ ->
-            Body = mochijson2:encode([
-                {error, invalid_request},
-                {error_description, <<"malformed JSON data">>}]),
-            Req3 = cowboy_req:set_resp_body(Body, Req2),
-            {false, Req3, State}
+        _:_ -> malformed
     end,
-    accept_resource(Data, Req2, State).
+
+    case Data =:= malformed of
+        true ->
+            Body = mochijson2:encode([
+            {error, invalid_request},
+            {error_description, <<"malformed JSON data">>}]),
+            Req3 = cowboy_req:set_resp_body(Body, Req2),
+            {false, Req3, State};
+
+        false ->
+            accept_resource(Data, Req2, State)
+    end.
 
 
 %% accept_resource_form/2
