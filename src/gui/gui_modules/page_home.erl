@@ -113,7 +113,7 @@ about_provider() ->
             #p{class = <<"login-info">>, body = <<"<strong>Provider</strong> in <strong>onedata</strong> ",
             "is anyone who decides to install our software on his servers. After the process, he can ",
             "support storage spaces for onedata users.">>},
-            #h6{style = <<"margin-top: 30px;">>, body = <<"Installation">>},
+            #h6{style = <<"margin-top: 30px;">>, body = <<"Installation steps">>},
             #list{numbered = true, style = <<"text-align: left;">>, body = [
                 #li{body = <<"Prepare a cluster of machines on which you would like to deploy the software. ",
                 "It can run on just 1 machine, although it is <strong>strongly recommended</strong> ",
@@ -134,15 +134,18 @@ about_provider() ->
                 #li{body = <<"Install the package on every server in the cluster ",
                 "you would like to deploy the software on. ">>},
 
-                #li{body = <<"After completing the installation on every node, visit ",
-                "<strong>&lthostname&gt:9443</strong>, where &lthostname&gt is any of the nodes.">>},
+                #li{body = <<"After completing the installation on every node, visit <strong>onepanel</strong>, ",
+                "which is an admin panel for the cluster. It is hosted on every node under ",
+                "<strong>&lthostname&gt:9443</strong>">>},
 
                 #li{body = <<"Follow the installation instructions that appear in the browser.">>},
 
                 #li{body = <<"When you are prompted to register at <strong>Global Registry</strong>, do so.">>},
 
-                #li{body = <<"Congratulations, you are now a <strong>onedata provider</strong>!">>}
+                #li{body = <<"Congratulations, you are now a <strong>onedata provider</strong>!">>},
 
+                #li{body = <<"When you log in, you will receive a token which you can use to get support ",
+                "for your storage space. Use it in onepanel (port 9443) ">>}
             ]},
             #link{class = <<"btn btn-success">>, postback = back_to_homepage,
                 style = <<"margin: 10px 10px 25px; text-align: center; width: 446px;">>,
@@ -160,6 +163,14 @@ event(init) ->
 
 event(terminate) ->
     ok;
+
+% Login event handling
+event({auth, HandlerModule, Referer}) ->
+    %% TODO for development purposes
+    %% remember which provider redirected the client to GR
+    erlang:put(referer, Referer),
+    {ok, URL} = HandlerModule:get_redirect_url(false),
+    gui_jq:redirect(URL);
 
 event(read_about_provider) ->
     gui_jq:replace(<<"main_panel">>, about_provider());
