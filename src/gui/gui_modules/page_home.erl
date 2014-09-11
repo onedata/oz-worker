@@ -115,6 +115,16 @@ about_provider() ->
             "support storage spaces for onedata users.">>},
             #h6{style = <<"margin-top: 30px;">>, body = <<"Installation">>},
             #list{numbered = true, style = <<"text-align: left;">>, body = [
+                #li{body = <<"Prepare a cluster of machines on which you would like to deploy the software. ",
+                "It can run on just 1 machine, although it is <strong>strongly recommended</strong> ",
+                "to use at least 4 machines for performance reasons.">>},
+
+                #li{body = <<"The software is intended for Red Hat based systems. It has been thoroughly ",
+                "tested on Scientific Linux.">>},
+
+                #li{body = <<"All hosts in the cluster must be visible to each other under unique, fully ",
+                "qualified hostnames.">>},
+
                 #li{body = [
                     <<"Download the RPM package from ">>,
                     #link{body = <<"here">>, url = <<?DOWNLOAD_LINK>>},
@@ -122,8 +132,7 @@ about_provider() ->
                 ]},
 
                 #li{body = <<"Install the package on every server in the cluster ",
-                "you would like to deploy the software on. Minimal cluster size is 1 machine, although ",
-                "it is <strong>strongly recommended</strong> to use at least 4 machines.">>},
+                "you would like to deploy the software on. ">>},
 
                 #li{body = <<"After completing the installation on every node, visit ",
                 "<strong>&lthostname&gt:9443</strong>, where &lthostname&gt is any of the nodes.">>},
