@@ -12,6 +12,7 @@
 
 -ifndef(DAO_TYPES_HRL).
 -define(DAO_TYPES_HRL, 1).
+-include("dao/dao_auth.hrl").
 -include("dao/dao_users.hrl").
 -include("dao/dao_providers.hrl").
 -include("dao/dao_groups.hrl").
@@ -45,5 +46,13 @@
 -type token_id() :: uuid().
 -type token_info() :: #token{}.
 -type token_doc() :: #veil_document{record :: #token{}}.
+
+-type authorization_id() :: uuid().
+-type authorization_info() :: #authorization{}.
+-type authorization_doc() :: #veil_document{record :: #authorization{}}.
+
+-type access_id() :: uuid().
+-type access_info() :: #access{}.
+-type access_doc() :: #veil_document{record :: #access{}}.
 
 -endif.
