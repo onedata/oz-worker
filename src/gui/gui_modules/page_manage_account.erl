@@ -246,7 +246,7 @@ find_connected_account(Provider, ProviderInfos) ->
 % Panel that will display a button to redirect a user to his provider,
 % or a token for space support if he has no spaces supported.
 provider_redirection_panel() ->
-    case gr_gui_utils:get_redirection_url_to_provider() of
+    case gr_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
         {ok, ProviderHostname, URL} ->
             #panel{body = [
                 #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
@@ -260,14 +260,18 @@ provider_redirection_panel() ->
                 "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
                 #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
                     value = Token, placeholder = <<"Space support token">>}
-            ]};
-        _ ->
-            page_error:redirect_with_error(?error_internal_server_error)
+            ]}
     end.
 
 
-% Postback event handling
-event(init) -> ok;
+%% event/1
+%% ====================================================================
+%% @doc Postback event handling
+%% @end
+-spec event(init | {action, Fun :: atom()} | {action, Fun :: atom(), Args :: [term()]}) -> term().
+%% ====================================================================
+event(init) ->
+    ok;
 
 event({action, Fun}) ->
     event({action, Fun, []});
@@ -390,6 +394,8 @@ show_name_edition(Flag) ->
 
 redirect_to_veilcluster(ProviderHostname, URL) ->
     case gui_utils:https_get(<<ProviderHostname/binary, ?veilcluster_connection_check_endpoint>>, []) of
-        {ok, _} -> gui_jq:redirect(URL);
-        _ -> gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable.">>})
+        {ok, _} ->
+            gui_jq:redirect(URL);
+        _ ->
+            gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable. Try again later.">>})
     end.

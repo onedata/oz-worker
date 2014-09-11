@@ -42,20 +42,20 @@
     {error, Reason :: term()}).
 %% ===================================================================
 start(_StartType, _StartArgs) ->
-    {RestAns, _} = start_rest(),
-    {GuiAns, _} = start_n2o(),
-    case {RestAns, GuiAns} of
-        {ok, ok} ->
+    case {start_rest(), start_n2o(), start_redirector()} of
+        {ok, ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
                     {ok, Pid};
                 Error ->
                     Error
             end;
-        {error, _} ->
+        {error, _, _} ->
             {error, cannot_start_rest};
-        {_, error} ->
-            {error, cannot_start_gui}
+        {_, error, _} ->
+            {error, cannot_start_gui};
+        {_, _, error} ->
+            {error, cannot_start_redirector}
     end.
 
 %% stop/1
@@ -70,6 +70,7 @@ start(_StartType, _StartArgs) ->
 stop(_State) ->
     cowboy:stop_listener(?rest_listener),
     cowboy:stop_listener(?gui_https_listener),
+    cowboy:stop_listener(?gui_redirector_listener),
     stop_rest(),
     ok.
 
@@ -80,7 +81,7 @@ stop(_State) ->
 %% start_rest/0
 %% ===================================================================
 %% @doc Starts cowboy with rest api
--spec start_rest() -> {ok, pid()} | {error, any()}.
+-spec start_rest() -> {ok, pid()} | {error, term()}.
 %% ===================================================================
 start_rest() ->
     try
@@ -107,7 +108,7 @@ start_rest() ->
             ])}
         ]),
 
-        cowboy:start_https(?rest_listener, RestHttpsAcceptors,
+        {ok, _} = cowboy:start_https(?rest_listener, RestHttpsAcceptors,
             [
                 {port, RestPort},
                 {cacertfile, grpca:cacert_path(GRPCADir)},
@@ -117,10 +118,11 @@ start_rest() ->
             ],
             [
                 {env, [{dispatch, Dispatch}]}
-            ])
+            ]),
+        ok
     catch
         _Type:Error ->
-            ?error("Could not start rest, error: ~p", [Error]),
+            ?error_stacktrace("Could not start rest, error: ~p", [Error]),
             {error, Error}
     end.
 
@@ -128,10 +130,11 @@ stop_rest() ->
     auth_logic:stop(),
     grpca:stop().
 
+
 %% start_n2o/0
 %% ===================================================================
 %% @doc Starts n2o server
--spec start_n2o() -> {ok, pid()} | {error, any()}.
+-spec start_n2o() -> {ok, pid()} | {error, term()}.
 %% ===================================================================
 start_n2o() ->
     try
@@ -165,7 +168,7 @@ start_n2o() ->
         ],
 
         % Create ets tables and set envs needed by n2o
-        gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module, n2o_cowboy),
+        gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module, ?cowboy_bridge_module),
 
         % Initilize auth handler
         auth_config:load_auth_config(),
@@ -183,10 +186,11 @@ start_n2o() ->
                 {timeout, GuiSocketTimeout},
                 % On every request, add headers that improve security to the response
                 {onrequest, fun gui_utils:onrequest_adjust_headers/1}
-            ])
+            ]),
+        ok
     catch
         _Type:Error ->
-            ?error("Could not start gui, error: ~p", [Error]),
+            ?error_stacktrace("Could not start gui, error: ~p", [Error]),
             {error, Error}
     end.
 
@@ -196,3 +200,38 @@ static_dispatches(DocRoot, StaticPaths) ->
     _StaticDispatches = lists:map(fun(Dir) ->
         {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
     end, StaticPaths).
+
+
+%% start_redirector_listener/0
+%% ====================================================================
+%% @doc Starts a cowboy listener that will redirect all requests of http to https.
+%% @end
+-spec start_redirector() -> ok | {error, term()}.
+%% ====================================================================
+start_redirector() ->
+    try
+        {ok, RedirectPort} = application:get_env(?APP_Name, gui_redirect_port),
+        {ok, RedirectNbAcceptors} = application:get_env(?APP_Name, gui_redirect_acceptors),
+        {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
+
+        RedirectDispatch = [
+            {'_', [
+                {'_', redirect_handler, []}
+            ]}
+        ],
+
+        {ok, _} = cowboy:start_http(?gui_redirector_listener, RedirectNbAcceptors,
+            [
+                {port, RedirectPort}
+            ],
+            [
+                {env, [{dispatch, cowboy_router:compile(RedirectDispatch)}]},
+                {max_keepalive, 1},
+                {timeout, Timeout}
+            ]),
+        ok
+    catch
+        _Type:Error ->
+            ?error_stacktrace("Could not start redirector listener, error: ~p", [Error]),
+            {error, Error}
+    end.

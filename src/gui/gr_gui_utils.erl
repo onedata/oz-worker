@@ -19,7 +19,7 @@
 -export([apply_or_redirect/2, apply_or_redirect/3, maybe_redirect/2]).
 
 % Handling redirects to providers
--export([get_redirection_url_to_provider/0]).
+-export([get_redirection_url_to_provider/1]).
 
 % Functions to generate page elements
 -export([top_menu/1, top_menu/2, logotype_footer/1, empty_page/0]).
@@ -39,7 +39,7 @@ apply_or_redirect(Module, Fun) ->
 %% ====================================================================
 %% @doc Checks if the client has right to do the operation (is logged in). If so, it executes the code.
 %% @end
--spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: list()) -> boolean() | no_return.
+-spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: [term()]) -> term() | no_return.
 %% ====================================================================
 apply_or_redirect(Module, Fun, Args) ->
     try
@@ -69,7 +69,7 @@ apply_or_redirect(Module, Fun, Args) ->
 %% Setting "SaveSourcePage" on true will allow a redirect back from login.
 %% NOTE: Should be called from page:main().
 %% @end
--spec maybe_redirect(NeedLogin :: boolean(), SaveSourcePage :: boolean()) -> ok.
+-spec maybe_redirect(NeedLogin :: boolean(), SaveSourcePage :: boolean()) -> boolean().
 %% ====================================================================
 maybe_redirect(NeedLogin, SaveSourcePage) ->
     case NeedLogin and (not gui_ctx:user_logged_in()) of
@@ -81,34 +81,69 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
     end.
 
 
-%% get_redirection_url_to_provider/0
+%% get_redirection_url_to_provider/1
 %% ====================================================================
 %% @doc Returns an URL that the user should be redirected to - if possible.
 %% Otherwise, error is returned.
+%% If the referer is known (the provider who redirected the user for login),
+%% then he will be chosen with highest priority.
 %% @end
--spec get_redirection_url_to_provider() -> {ok, ProvderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
+-spec get_redirection_url_to_provider(Referer :: binary() | undefined) ->
+    {ok, ProvderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
 %% ====================================================================
-get_redirection_url_to_provider() ->
+get_redirection_url_to_provider(Referer) ->
     try
         UserID = gui_ctx:get_user_id(),
-        {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
-        % Select the first provider of the first space that has any
-        ProviderIDs = lists:foldl(
-            fun(Space, Acc) ->
-                {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
-                Providers ++ Acc
-            end, [], Spaces),
 
-        case ProviderIDs of
-            [] ->
-                {error, no_provider};
-            _ ->
-                {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(UserID, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)),
-                {ok, ProviderHostname, RedirectURL}
+        % Default provider is the provider that redirected the user for login.
+        % Check if the provider is recognisable
+        RefererProviderInfo =
+            try
+                {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, Referer),
+                {ok, ProvHostname, RedURL}
+            catch _:_ ->
+                error
+            end,
+
+        case RefererProviderInfo of
+            {ok, _, _} ->
+                % Default provider is OK
+                RefererProviderInfo;
+            error ->
+                % No default provider, check if default space has any providers
+                {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
+                {ok, [{providers, DSProviders}]} = case DefaultSpace of
+                                                       undefined -> {ok, [{providers, []}]};
+                                                       _ -> space_logic:get_providers(DefaultSpace, user) end,
+                case DSProviders of
+                    List when length(List) > 0 ->
+                        % Default space has got some providers, random one
+                        {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(
+                            UserID, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)),
+                        {ok, ProviderHostname, RedirectURL};
+                    _ ->
+                        % Default space does not have a provider, look in other spaces
+                        ProviderIDs = lists:foldl(
+                            fun(Space, Acc) ->
+                                {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
+                                Providers ++ Acc
+                            end, [], Spaces),
+
+                        case ProviderIDs of
+                            [] ->
+                                % No provider for other spaces = nowhere to redirect
+                                {error, no_provider};
+                            _ ->
+                                % There are some providers for other spaces, redirect to a random provider
+                                {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(
+                                    UserID, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)),
+                                {ok, ProviderHostname, RedirectURL}
+                        end
+                end
         end
     catch T:M ->
         ?error_stacktrace("Cannot resolve redirection URL to provider - ~p:~p", [T, M]),
-        {error, {T, M}}
+        {error, no_provider}
     end.
 
 
@@ -117,7 +152,7 @@ get_redirection_url_to_provider() ->
 %% @doc Convienience function to render top menu in GUI pages. 
 %% Item with ActiveTabID will be highlighted as active.
 %% @end
--spec top_menu(ActiveTabID :: any()) -> list().
+-spec top_menu(ActiveTabID :: term()) -> list().
 %% ====================================================================
 top_menu(ActiveTabID) ->
     top_menu(ActiveTabID, []).
@@ -128,7 +163,7 @@ top_menu(ActiveTabID) ->
 %% Item with ActiveTabID will be highlighted as active.
 %% Submenu body (list of n2o elements) will be concatenated below the main menu.
 %% @end
--spec top_menu(ActiveTabID :: any(), SubMenuBody :: any()) -> list().
+-spec top_menu(ActiveTabID :: term(), SubMenuBody :: term()) -> list().
 %% ====================================================================
 top_menu(ActiveTabID, SubMenuBody) ->
     % Define menu items with ids, so that proper tab can be made active via function parameter

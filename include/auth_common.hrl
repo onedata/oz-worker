@@ -13,7 +13,7 @@
 -define(AUTH_COMMON_HRL, 1).
 
 % Location of auth.config file.
--define(auth_config_file_path, "resources/gui_static/auth.config").
+-define(auth_config_file_path, "resources/auth.config").
 
 % Endpoint for OpenID / OAuth validation
 -define(local_auth_endpoint, "/validate_login").

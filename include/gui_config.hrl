@@ -17,6 +17,9 @@
 % ID of GUI listener
 -define(gui_https_listener, https).
 
+% ID of redirector listener
+-define(gui_redirector_listener, http).
+
 % Path to directory that contains gui static files
 -define(gui_static_root, "resources/gui_static").
 % Paths in gui static directory
@@ -27,5 +30,8 @@
 
 % GUI routing module
 -define(gui_routing_module, gui_routes).
+
+% Cowboy brdige module used by n2o
+-define(cowboy_bridge_module, n2o_cowboy).
 
 -endif.

@@ -5,9 +5,11 @@ globalregistry.iml
 deps
 ebin
 rel/globalregistry
+rel/files/auth.config
 package
 
 .eunit
+.dialyzer.plt
 test/results
 test_distributed/logs
 variables-ct*

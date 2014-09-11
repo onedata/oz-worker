@@ -112,7 +112,7 @@ verify_provider(PeerCertDer) -> %% @todo: CRLs
     end.
 
 
-%% generate_gr_cert/1
+%% generate_gr_cert/4
 %% ====================================================================
 %% @doc Generates a certificate for Global Registry's REST interface.
 %% ====================================================================

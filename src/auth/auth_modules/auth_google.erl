@@ -32,7 +32,7 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec get_redirect_url(boolean()) -> binary().
+-spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 %% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
@@ -104,6 +104,7 @@ validate_login() ->
         {ok, ProvUserInfo}
     catch
         Type:Message ->
+            ?debug_stacktrace("Error in ~p:validate_login - ~p:~p", [?MODULE, Type, Message]),
             {error, {Type, Message}}
     end.
 

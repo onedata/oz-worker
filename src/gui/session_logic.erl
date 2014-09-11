@@ -131,7 +131,7 @@ delete_session(SessionID) ->
 %% with a ValidTill arg, that marks a point in time when it expires (in secs since epoch).
 %% The clearing should be performed based on this.
 %% @end
--spec clear_expired_sessions() -> ok.
+-spec clear_expired_sessions() -> non_neg_integer().
 %% ====================================================================
 clear_expired_sessions() ->
     {Megaseconds, Seconds, _} = now(),

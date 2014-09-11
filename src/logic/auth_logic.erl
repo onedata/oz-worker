@@ -312,7 +312,7 @@ clear_expired_authorizations() ->
 %% and associates some login info, that can be later retrieved given the token.
 %% For example, where to redirect the user after login.
 %% @end
--spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> [tuple()] | error.
+-spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> binary().
 %% ====================================================================
 generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_state_tokens(),
@@ -328,7 +328,11 @@ generate_state_token(HandlerModule, ConnectAccount) ->
     StateInfo = [
         {module, HandlerModule},
         {connect_account, ConnectAccount},
-        {redirect_after_login, RedirectAfterLogin}
+        {redirect_after_login, RedirectAfterLogin},
+        % PROBABLY DEVELOPER-ONLY FUNCTIONALITY
+        % If this value was set on login page, the user will be redirected to
+        % this certain provider if he click "go to your files"
+        {referer, erlang:get(referer)}
     ],
 
     ets:insert(?STATE_TOKEN, {Token, Time, StateInfo}),

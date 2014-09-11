@@ -46,8 +46,8 @@ create(User) ->
 %% ====================================================================
 %% @doc Retrieves user from the database.
 %% ====================================================================
--spec get_user(Key :: binary() | {connected_account_user_id, binary()} |
-              {email, binary()}) ->
+-spec get_user(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
+{email, binary()}) ->
     {ok, #user{}} | {error, any()}.
 %% ====================================================================
 get_user(Key) ->
@@ -64,8 +64,8 @@ get_user(Key) ->
 %% ====================================================================
 %% @doc Retrieves user doc from the database.
 %% ====================================================================
--spec get_user_doc(Key :: binary() | {connected_account_user_id, binary()} |
-                   {email, binary()}) ->
+-spec get_user_doc(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
+{email, binary()}) ->
     {ok, #veil_document{}} | {error, any()}.
 %% ====================================================================
 get_user_doc(Key) ->
@@ -97,7 +97,7 @@ modify(UserId, Proplist) ->
             connected_accounts = ConnectedAccounts,
             spaces = Spaces,
             groups = Groups,
-        % TODO mock
+            % TODO mock
             first_space_support_token = FSST} = User,
         NewUser = #user{
             name = proplists:get_value(name, Proplist, Name),
@@ -184,7 +184,7 @@ get_groups(UserId) ->
 %% @doc Rreturns true if user was found by a given key.
 %% ====================================================================
 -spec exists(Key :: binary() | {connected_account_user_id, binary()} |
-             {email, binary()}) ->
+{email, binary()}) ->
     boolean().
 %% ====================================================================
 exists(Key) ->
@@ -303,7 +303,7 @@ get_all_spaces(#veil_document{record = #user{} = User}) ->
 %% @end
 %% ====================================================================
 -spec effective_default_space(AllUserSpaces :: ordsets:ordset(binary()),
-                              UserDoc :: veil_doc()) ->
+    UserDoc :: veil_doc()) ->
     EffectiveDefaultSpaceId :: binary() | undefined.
 %% ====================================================================
 effective_default_space(_, #veil_document{record = #user{default_space = undefined}}) ->

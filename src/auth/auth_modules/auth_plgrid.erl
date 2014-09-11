@@ -33,7 +33,7 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %% ====================================================================
--spec get_redirect_url(boolean()) -> binary().
+-spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 %% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
@@ -148,6 +148,7 @@ validate_login() ->
 
     catch
         Type:Message ->
+            ?debug_stacktrace("Error in ~p:validate_login - ~p:~p", [?MODULE, Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -223,7 +224,7 @@ parse_teams(XMLContent) ->
 %% Finds certain XML node. Assumes that node exists, and checks only
 %% the first child of every node going deeper and deeper.
 %% @end
--spec find_XML_node(atom(), #xmlElement{}) -> [string()].
+-spec find_XML_node(atom(), #xmlElement{}) -> #xmlElement{}.
 %% ====================================================================
 find_XML_node(NodeName, #xmlElement{name = NodeName} = XMLElement) ->
     XMLElement;

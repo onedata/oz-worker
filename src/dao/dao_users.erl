@@ -70,7 +70,7 @@ exist_user(UserId) ->
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec get_user(Key) -> {ok, user_doc()} | {error, any()} | no_return() when
-    Key :: UserId :: binary() | {connected_account_user_id, binary()} | {email, binary()}.
+    Key :: UserId :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} | {email, binary()}.
 %% ====================================================================
 get_user(UUID) when is_list(UUID) ->
     dao_external:set_db(?USERS_DB_NAME),
@@ -85,10 +85,10 @@ get_user({Key, Value}) ->
                                 {?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_query_args{keys =
                                 [
                                     <<?RECORD_FIELD_ATOM_PREFIX,
-                                    (dao_helper:name(ProviderID))/binary,
+                                    ProviderID/binary,
                                     "_",
                                     ?RECORD_FIELD_BINARY_PREFIX,
-                                    (dao_helper:name(UserID))/binary>>
+                                    UserID/binary>>
                                 ], include_docs = true}};
                             email ->
                                 {?USER_BY_EMAIL_VIEW, #view_query_args{keys =

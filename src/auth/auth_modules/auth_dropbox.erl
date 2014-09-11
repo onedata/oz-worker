@@ -6,17 +6,17 @@
 %% @end
 %% ===================================================================
 %% @doc: This module implements auth_module_behaviour and handles singning in
-%% via Facebook.
+%% via Dropbox.
 %% @end
 %% ===================================================================
--module(auth_facebook).
+-module(auth_dropbox).
 -behaviour(auth_module_behaviour).
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
 -include("dao/dao_types.hrl").
 
--define(PROVIDER_NAME, facebook).
+-define(PROVIDER_NAME, dropbox).
 
 %% API
 -export([get_redirect_url/1, validate_login/0]).
@@ -39,7 +39,7 @@ get_redirect_url(ConnectAccount) ->
         ParamsProplist = [
             {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
-            {<<"scope">>, <<"email">>},
+            {<<"response_type">>, <<"code">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
         Params = gui_utils:proplist_to_url_params(ParamsProplist),
@@ -63,37 +63,42 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist =  gui_ctx:get_request_params(),
+        ParamsProplist = gui_ctx:get_request_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
+        % Prepare basic auth code
+        AuthEncoded = base64:encode(<<(auth_config:get_provider_app_id(?PROVIDER_NAME))/binary, ":",
+        (auth_config:get_provider_app_secret(?PROVIDER_NAME))/binary>>),
         % Form access token request
         NewParamsProplist = [
-            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
-            {<<"client_secret">>, auth_config:get_provider_app_secret(?PROVIDER_NAME)},
-            {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
-            {<<"code">>, <<Code/binary>>}
+            {<<"code">>, <<Code/binary>>},
+            {<<"grant_type">>, <<"authorization_code">>},
+            {<<"redirect_uri">>, auth_utils:local_auth_endpoint()}
         ],
         % Convert proplist to params string
         Params = gui_utils:proplist_to_url_params(NewParamsProplist),
-        URL = <<(access_token_endpoint())/binary, "?", Params/binary>>,
-        % Send request to Facebook endpoint
-        {ok, Response} = gui_utils:https_get(URL, [{content_type, "application/x-www-form-urlencoded"}]),
+        % Send request to Dropbox endpoint
+        {ok, Response} = gui_utils:https_post(access_token_endpoint(),
+            [
+                {"Content-Type", "application/x-www-form-urlencoded"},
+                {"Authorization", "Basic " ++ gui_str:to_list(AuthEncoded)}
+            ], Params),
 
-        % Parse out received access token
-        AccessToken = proplists:get_value(<<"access_token">>, cow_qs:parse_qs(Response)),
+        {struct, JSONProplist} = n2o_json:decode(Response),
+        AccessToken = proplists:get_value(<<"access_token">>, JSONProplist),
+        UserID = proplists:get_value(<<"uid">>, JSONProplist),
 
-        % Form user info request
-        URL2 = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
-        % Send request to Facebook endpoint
-        {ok, JSON} = gui_utils:https_get(URL2, [{content_type, "application/x-www-form-urlencoded"}]),
+        % Send request to Dropbox endpoint
+        {ok, JSON} = gui_utils:https_get(user_info_endpoint(), [{"Authorization", "Bearer " ++ gui_str:to_list(AccessToken)}]),
 
         % Parse received JSON
-        {struct, JSONProplist} = n2o_json:decode(JSON),
+        {struct, UserInfoProplist} = n2o_json:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = proplists:get_value(<<"id">>, JSONProplist, <<"">>),
-            email_list = extract_emails(JSONProplist),
-            name = proplists:get_value(<<"name">>, JSONProplist, <<"">>)
+            user_id = UserID,
+            email_list = lists:flatten([proplists:get_value(<<"email">>, UserInfoProplist, [])]),
+            name = proplists:get_value(<<"display_name">>, UserInfoProplist, <<"">>),
+            login = proplists:get_value(<<"login">>, UserInfoProplist, <<"">>)
         },
         {ok, ProvUserInfo}
     catch
@@ -138,17 +143,3 @@ access_token_endpoint() ->
 %% ====================================================================
 user_info_endpoint() ->
     proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
-
-
-%% extract_emails/1
-%% ====================================================================
-%% @doc Extracts email list from JSON in erlang format (after decoding).
-%% @end
-%% ====================================================================
--spec extract_emails([{term(), term()}]) -> [binary()].
-%% ====================================================================
-extract_emails(JSONProplist) ->
-    case proplists:get_value(<<"email">>, JSONProplist, <<"">>) of
-        <<"">> -> [];
-        Email -> [Email]
-    end.

@@ -2,8 +2,8 @@
     {google, [
         % Standard config
         {auth_module, auth_google},
-        {app_id, <<"359107885646-qkln917qvf9tig25gnncgo9sf1303sbs.apps.googleusercontent.com">>},
-        {app_secret, <<"Myzpzu7xG456ny4JTLD_cA5Z">>},
+        {app_id, <<"app id">>},
+        {app_secret, <<"app secret">>},
         {name, <<"Google">>},
         {button_icon, <<"/images/google_icon.png">>},
         {button_color, <<"#D54D53">>},
@@ -15,8 +15,8 @@
     {facebook, [
         % Standard config
         {auth_module, auth_facebook},
-        {app_id, <<"1442818389298539">>},
-        {app_secret, <<"43f950a49ff6dd73c4450140d084e14c">>},
+        {app_id, <<"app id">>},
+        {app_secret, <<"app secret">>},
         {name, <<"Facebook">>},
         {button_icon, <<"/images/facebook_icon.png">>},
         {button_color, <<"#596FA9">>},
@@ -26,20 +26,11 @@
         {user_info_endpoint, <<"https://graph.facebook.com/me">>}
     ]},
 
-%%     {twitter, [
-%%         {auth_module, auth_twitter},
-%%         {app_id, <<"ab87491bb2cc9ebee095">>},
-%%         {app_secret, <<"985567f839a0c9756198b898f8cabfdc66273e05">>},
-%%         {name, <<"Twitter">>},
-%%         {button_icon, <<"/images/twitter_icon.png">>},
-%%         {button_color, <<"#33CAF2">>}
-%%     ]},
-
     {github, [
         % Standard config
         {auth_module, auth_github},
-        {app_id, <<"ab87491bb2cc9ebee095">>},
-        {app_secret, <<"985567f839a0c9756198b898f8cabfdc66273e05">>},
+        {app_id, <<"app id">>},
+        {app_secret, <<"app secret">>},
         {name, <<"GitHub">>},
         {button_icon, <<"/images/github_icon.png">>},
         {button_color, <<"#575757">>},
@@ -50,10 +41,24 @@
         {user_emails_endpoint, <<"https://api.github.com/user/emails">>}
     ]},
 
+    {dropbox, [
+        {auth_module, auth_dropbox},
+        {app_id, <<"app id">>},
+        {app_secret, <<"app secret">>},
+        {name, <<"Dropbox">>},
+        {button_icon, <<"/images/dropbox_icon.png">>},
+        {button_color, <<"#008BD3">>},
+        % Provider specific config
+        {authorize_endpoint, <<"https://www.dropbox.com/1/oauth2/authorize">>},
+        {access_token_endpoint, <<"https://api.dropbox.com/1/oauth2/token">>},
+        {user_info_endpoint, <<"https://api.dropbox.com/1/account/info">>}
+
+    ]},
+
     {plgrid, [
         % Standard config
         {auth_module, auth_plgrid},
-        {name, <<"PlGrid OpenID">>},
+        {name, <<"PLGrid OpenID">>},
         {button_icon, <<"/images/openid_icon.png">>},
         {button_color, <<"#9A9FA2">>},
         % Provider specific config
