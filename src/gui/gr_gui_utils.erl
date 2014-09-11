@@ -81,7 +81,7 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
     end.
 
 
-%% get_redirection_url_to_provider/0
+%% get_redirection_url_to_provider/1
 %% ====================================================================
 %% @doc Returns an URL that the user should be redirected to - if possible.
 %% Otherwise, error is returned.

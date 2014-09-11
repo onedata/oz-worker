@@ -12,4 +12,3 @@ package
 test/results
 test_distributed/logs
 variables-ct*
-auth.config
