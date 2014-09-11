@@ -12,7 +12,14 @@
 -module(token_logic).
 -author("Konrad Zemek").
 
+-include("registered_names.hrl").
 -include("dao/dao_types.hrl").
+
+
+%% Length of generated tokens, before base64.
+-define(TOKEN_LENGTH, 32).
+
+-define(DB(Function, Arg), dao_lib:apply(dao_tokens, Function, [Arg], 1)).
 
 
 %% Atoms representing types of valid tokens.
@@ -26,7 +33,7 @@
 
 
 %% API
--export([is_valid/2, create/2, consume/2]).
+-export([is_valid/2, create/2, consume/2, random_token/0]).
 -export_type([token_type/0, resource_type/0]).
 
 
@@ -39,16 +46,10 @@
 -spec is_valid(Token :: binary(), TokenType :: token_type()) ->
     boolean().
 %% ====================================================================
-is_valid(Token, TokenType) ->
-    case decrypt(Token) of
-        false -> false;
-        {true, TokenId} ->
-            case dao_adapter:token_exists(TokenId) of
-                false -> false;
-                true ->
-                    #token{type = Type} = dao_adapter:token(TokenId), %% @todo: expiration time
-                    Type =:= TokenType
-            end
+is_valid(Token, TokenType) -> %% @todo: expiration time
+    case ?DB(get_token_by_value, Token) of
+        {ok, #veil_document{record = #token{type = TokenType}}} -> true;
+        _ -> false
     end.
 
 
@@ -62,9 +63,10 @@ is_valid(Token, TokenType) ->
     {ok, Token :: binary()}.
 %% ====================================================================
 create(TokenType, Resource) ->
-    TokenRec = #token{type = TokenType, resource = Resource}, %% @todo: expiration time
-    TokenId = dao_adapter:save(TokenRec),
-    encrypt(TokenId).
+    Token = random_token(),
+    TokenRec = #token{value = Token, type = TokenType, resource = Resource}, %% @todo: expiration time
+    {ok, _} = ?DB(save_token, TokenRec),
+    {ok, Token}.
 
 
 %% consume/2
@@ -77,29 +79,21 @@ create(TokenType, Resource) ->
     {ok, {resource_type(), binary()}}.
 %% ====================================================================
 consume(Token, TokenType) ->
-    {true, TokenId} = decrypt(Token),
-    #token{type = TokenType, resource = Resource} = dao_adapter:token(TokenId), %% @todo: expiration time
-    dao_adapter:token_remove(TokenId),
+    {ok, TokenDoc} = ?DB(get_token_by_value, Token), %% @todo: expiration time
+    #veil_document{uuid = TokenId,
+        record = #token{type = TokenType, resource = Resource}} = TokenDoc,
+
+    ok = ?DB(remove_token, TokenId),
     {ok, Resource}.
 
 
-%% encrypt/1
+%% random_token/0
 %% ====================================================================
-%% @doc Encrypts a token with registry's public key.
+%% @doc Generates a globally unique random token.
 %% ====================================================================
--spec encrypt(Token :: binary()) ->
-    {ok, EncryptedToken :: binary()}.
+-spec random_token() -> binary().
 %% ====================================================================
-encrypt(Token) -> %% @todo: encryption
-    {ok, Token}.
-
-
-%% decrypt/1
-%% ====================================================================
-%% @doc Decrypts a token with registry's private key.
-%% ====================================================================
--spec decrypt(EncryptedToken :: binary()) ->
-    {true, Token :: binary()} | false.
-%% ====================================================================
-decrypt(Token) -> %% @todo: decryption
-    {true, Token}.
+random_token() ->
+    binary:list_to_bin(
+        mochihex:to_hex(
+            crypto:rand_bytes(?TOKEN_LENGTH))).

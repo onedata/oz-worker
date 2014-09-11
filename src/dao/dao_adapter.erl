@@ -13,22 +13,19 @@
 -include("dao/dao_types.hrl").
 
 
--type dao_module() :: dao_users | dao_groups | dao_tokens | dao_spaces |
-    dao_providers | dao_auth.
+-type dao_module() :: dao_users | dao_groups | dao_spaces |
+    dao_providers.
 
 -type dao_record() :: veil_doc() | user_info() | provider_info() |
-    group_info() |space_info() | token_info() | authorization_info() |
-    access_info().
+    group_info() | space_info().
 
 
 %% API
--export([space_exists/1, user_exists/1, group_exists/1, token_exists/1,
-    provider_exists/1]).
+-export([space_exists/1, user_exists/1, group_exists/1, provider_exists/1]).
 -export([save/1]).
--export([space/1, user/1, group/1, token/1, provider/1]).
--export([space_doc/1, user_doc/1, group_doc/1, token_doc/1, provider_doc/1]).
--export([user_remove/1, space_remove/1, group_remove/1, token_remove/1,
-    provider_remove/1]).
+-export([space/1, user/1, group/1, provider/1]).
+-export([space_doc/1, user_doc/1, group_doc/1, provider_doc/1]).
+-export([user_remove/1, space_remove/1, group_remove/1, provider_remove/1]).
 
 
 %% space_exists/1
@@ -65,18 +62,6 @@ user_exists(Key) ->
 %% ====================================================================
 group_exists(Key) ->
     exists(Key, dao_groups, exist_group).
-
-
-%% token_exists/1
-%% ====================================================================
-%% @doc Returns whether a token exists in the database.
-%% Throws exception when call to dao fails.
-%% @end
-%% ====================================================================
--spec token_exists(Key :: term()) -> boolean() | no_return().
-%% ====================================================================
-token_exists(Key) ->
-    exists(Key, dao_tokens, exist_token).
 
 
 %% provider_exists/1
@@ -145,19 +130,6 @@ group(Key) ->
     Group.
 
 
-%% token/1
-%% ====================================================================
-%% @doc Returns a token object from the database.
-%% Throws exception when call to dao fails, or document doesn't exist.
-%% @end
-%% ====================================================================
--spec token(Key :: term()) -> token_info() | no_return().
-%% ====================================================================
-token(Key) ->
-    #veil_document{record = Token} = token_doc(Key),
-    Token.
-
-
 %% provider/1
 %% ====================================================================
 %% @doc Returns a provider object from the database.
@@ -210,19 +182,6 @@ group_doc(Key) ->
     GroupDoc.
 
 
-%% token_doc/1
-%% ====================================================================
-%% @doc Returns a token document from the database.
-%% Throws exception when call to dao fails, or document doesn't exist.
-%% @end
-%% ====================================================================
--spec token_doc(Key :: term()) -> token_doc() | no_return().
-%% ====================================================================
-token_doc(Key) ->
-    #veil_document{record = #token{}} = TokenDoc = get_doc(Key, dao_tokens, get_token),
-    TokenDoc.
-
-
 %% provider_doc/1
 %% ====================================================================
 %% @doc Returns a provider document from the database.
@@ -272,18 +231,6 @@ group_remove(Key) ->
     remove(Key, dao_groups, remove_group).
 
 
-%% token_remove/1
-%% ====================================================================
-%% @doc Removes a token document from the database.
-%% Throws exception when call to dao fails, or document doesn't exist.
-%% @end
-%% ====================================================================
--spec token_remove(Key :: term()) -> true | no_return().
-%% ====================================================================
-token_remove(Key) ->
-    remove(Key, dao_tokens, remove_token).
-
-
 %% provider_remove/1
 %% ====================================================================
 %% @doc Removes a provider document from the database.
@@ -329,8 +276,6 @@ save_doc(#veil_document{record = #user{}} = Doc) ->
     dao_lib:apply(dao_users, save_user, [Doc], 1);
 save_doc(#veil_document{record = #user_group{}} = Doc) ->
     dao_lib:apply(dao_groups, save_group, [Doc], 1);
-save_doc(#veil_document{record = #token{}} = Doc) ->
-    dao_lib:apply(dao_tokens, save_token, [Doc], 1);
 save_doc(#veil_document{record = #provider{}} = Doc) ->
     dao_lib:apply(dao_providers, save_provider, [Doc], 1).
 
