@@ -10,7 +10,7 @@
 %% @end
 %% ===================================================================
 
--module(page_home).
+-module(page_login).
 
 -include("gui/common.hrl").
 -include("auth_common.hrl").
