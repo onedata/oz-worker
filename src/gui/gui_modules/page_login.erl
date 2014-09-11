@@ -38,7 +38,13 @@ body() ->
         true ->
             gui_jq:redirect(<<"/">>);
         false ->
+            ErrorPanelStyle = case gui_ctx:url_param(<<"x">>) of
+                                  undefined -> <<"display: none;">>;
+                                  _ -> <<"">>
+                              end,
             #panel{style = <<"padding: 20px 50px;">>, body = [
+                #panel{id = <<"error_message">>, style = ErrorPanelStyle, class = <<"dialog dialog-danger">>, body = #p{
+                    body = <<"Session error or session expired. Please log in again.">>}},
                 #panel{body = homepage_header()},
                 login_panel(),
                 about_provider_panel()
@@ -72,14 +78,7 @@ login_panel() ->
                         ]}
                 end, ProviderList),
 
-            ErrorPanelStyle = case gui_ctx:url_param(<<"x">>) of
-                                  undefined -> <<"display: none;">>;
-                                  _ -> <<"">>
-                              end,
-
             #panel{id = <<"login_panel">>, style = <<"position: relative;">>, body = [
-                #panel{id = <<"error_message">>, style = ErrorPanelStyle, class = <<"dialog dialog-danger">>, body = #p{
-                    body = <<"Session error or session expired. Please log in again.">>}},
                 #panel{class = <<"alert alert-success login-page">>, body = [
                     #h3{id = <<"main_header">>, body = <<"Welcome to onedata">>},
                     #p{class = <<"login-info">>, body = <<"You can sign in using one of your existing accounts.">>},
@@ -88,7 +87,7 @@ login_panel() ->
                     #h3{style = <<"margin-top: 35px;">>, body = <<"Become a provider">>},
                     #p{class = <<"login-info">>, body = <<"Deploy our system on your servers to be a part of <strong>onedata</strong>.">>},
                     #link{id = <<"to_provider">>, class = <<"btn btn-success">>, postback = {toggle_page, provider},
-                        style = <<"margin: 10px 10px 25px; text-align: center; width: 446px;">>,
+                        style = <<"margin: 10px 10px 25px; width: 446px;">>,
                         body = [
                             <<"Read more">>,
                             <<"<i class=\"fui-arrow-right pull-right\"></i>">>
@@ -149,12 +148,12 @@ about_provider_panel() ->
                 "(Spaces -> Settings). You will need a token from a space owner to do so. To try it for yourself, ",
                 "log in to <strong>onedata</strong> as a user to aquire such token.">>}
             ]},
+            #link{class = <<"btn btn-primary">>, url = <<?DOWNLOAD_LINK>>,
+                style = <<"margin: 25px 10px 10px; width: 446px;">>,
+                body = <<"Download RPM">>},
             #link{id = <<"to_login">>, class = <<"btn btn-success">>, postback = {toggle_page, login},
-                style = <<"margin: 25px 10px 25px; text-align: center; width: 446px;">>,
-                body = [
-                    <<"Back to login page">>,
-                    <<"<i class=\"fui-arrow-right pull-right\"></i>">>
-                ]}
+                style = <<"margin: 15px 10px 25px; width: 446px;">>,
+                body = <<"Back to login page">>}
         ]},
         gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
     ] ++ gr_gui_utils:logotype_footer(120)}.
