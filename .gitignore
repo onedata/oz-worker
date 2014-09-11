@@ -5,6 +5,7 @@ globalregistry.iml
 deps
 ebin
 rel/globalregistry
+rel/files/auth.config
 package
 
 .eunit
