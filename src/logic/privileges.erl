@@ -13,6 +13,7 @@
 
 -export([space_user/0, space_manager/0, space_admin/0]).
 -export([group_user/0, group_manager/0, group_admin/0]).
+-export([space_privileges/0, group_privileges/0]).
 -export_type([space_privilege/0, group_privilege/0]).
 
 
@@ -60,7 +61,9 @@ space_manager() ->
 
 %% space_admin/0
 %% ====================================================================
-%% @doc A privilege level of a Space administrator.
+%% @doc A privilege level of a Space administrator. This level contains all
+%% atoms representing space privileges.
+%% @end
 %% ====================================================================
 -spec space_admin() -> [space_privilege()].
 %% ====================================================================
@@ -105,7 +108,9 @@ group_manager() ->
 
 %% group_admin/0
 %% ====================================================================
-%% @doc A privilege level of a group administrator.
+%% @doc A privilege level of a group administrator. This level contains all
+%% atoms representing group privileges.
+%% @end
 %% ====================================================================
 -spec group_admin() -> [group_privilege()].
 %% ====================================================================
@@ -122,3 +127,25 @@ group_admin() ->
             group_remove
         ])
     ).
+
+
+%% space_privileges/0
+%% ====================================================================
+%% @doc All atoms representing space privileges.
+%% @equiv space_admin()
+%% ====================================================================
+-spec space_privileges() -> [space_privilege()].
+%% ====================================================================
+space_privileges() ->
+    space_admin().
+
+
+%% group_privileges/0
+%% ====================================================================
+%% @doc All atoms representing group privileges.
+%% @equiv group_admin()
+%% ====================================================================
+-spec group_privileges() -> [group_privilege()].
+%% ====================================================================
+group_privileges() ->
+    group_admin().

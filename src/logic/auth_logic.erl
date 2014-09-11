@@ -17,6 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -define(STATE_TOKEN, state_token).
+-define(EXPIRED_AUTHORIZATION_REMOVE_CHUNK, 50).
 
 %% @todo: config
 -define(TOKEN_LENGTH, 30).
@@ -75,10 +76,10 @@ stop() ->
 
 %% get_redirection_uri/2
 %% ====================================================================
-%% @doc Returns provider hostname and a full URI to which the user should be redirected from
-%% the global registry. The redirection is part of the OpenID flow and the URI
-%% contains an Authorization token. The provider hostname is useful to check connectivity
-%% before redirecting.
+%% @doc Returns provider hostname and a full URI to which the user should be
+%% redirected from the global registry. The redirection is part of the OpenID
+%% flow and the URI contains an Authorization token. The provider hostname
+%% is useful to check connectivity before redirecting.
 %% @end
 %% ====================================================================
 -spec get_redirection_uri(UserId :: binary(), ProviderId :: binary()) ->
@@ -166,52 +167,71 @@ get_user_tokens(UserId) ->
 %% @end
 %% ====================================================================
 -spec grant_tokens(Client :: {provider, ProviderId :: binary()} | native,
-    AuthCode :: binary()) -> [proplists:property()].
+                   AuthCode :: binary()) ->
+    {ok, [proplists:property()]} |
+    {error, invalid_or_expired | expired | wrong_client}.
 %% ====================================================================
 grant_tokens(Client, AuthCode) ->
-    {ok, AuthDoc} = ?DB(get_authorization_by_code, AuthCode), %% @todo: missing
-    #veil_document{uuid = AuthId, record = Auth} = AuthDoc,
-    #authorization{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Auth,
-    true = vcn_utils:time() < Expiration, %% @todo: expired
-    ok = ?DB(remove_authorization, AuthId),
+    try
+        AuthDoc = case ?DB(get_authorization_by_code, AuthCode) of
+            {ok, AuthDoc1} -> AuthDoc1;
+            {error, not_found} -> throw(invalid_or_expired)
+        end,
 
-    Audience = case ProviderId of undefined -> UserId; _ -> ProviderId end,
+        #veil_document{uuid = AuthId, record = Auth} = AuthDoc,
+        #authorization{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Auth,
 
-    case Client of %% poor man's validation
-        {provider, ProviderId} -> ok; %% @todo: wrong provider
-        native when ProviderId =:= undefined -> ok %% @todo: client using provider's token
-    end,
+        case vcn_utils:time() < Expiration of
+            true -> ok;
+            false -> throw(expired)
+        end,
 
-    AccessToken = random_token(),
-    AccessTokenHash = access_token_hash(AccessToken),
-    RefreshToken = random_token(),
-    Now = vcn_utils:time(),
-    ExpirationTime = Now + ?ACCESS_EXPIRATION_SECS,
+        ok = ?DB(remove_authorization, AuthId),
 
-    Access = #access{token = AccessToken, token_hash = AccessTokenHash,
-        refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
-        expiration_time = ExpirationTime, client_name = client_name_placeholder},
+        Audience = case ProviderId of
+            undefined -> UserId;
+            _ -> ProviderId
+        end,
 
-    {ok, _} = ?DB(save_access, Access),
+        case Client of %% poor man's validation
+            {provider, ProviderId} -> ok;
+            native when ProviderId =:= undefined -> ok;
+            _ -> throw(wrong_client)
+        end,
 
-    {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
-    EmailsList = lists:map(fun(Email) -> [{email, Email}] end, Emails),
-    [
-        {access_token, AccessToken},
-        {token_type, bearer},
-        {expires_in, ?ACCESS_EXPIRATION_SECS},
-        {refresh_token, RefreshToken},
-        {scope, openid},
-        {id_token, jwt_encode([
-            {iss, ?ISSUER_URL},
-            {sub, UserId},
-            {aud, Audience},
-            {name, Name},
-            {email, EmailsList},
-            {exp, ExpirationTime},
-            {iat, Now}
-        ])}
-    ].
+        AccessToken = random_token(),
+        AccessTokenHash = access_token_hash(AccessToken),
+        RefreshToken = random_token(),
+        Now = vcn_utils:time(),
+        ExpirationTime = Now + ?ACCESS_EXPIRATION_SECS,
+
+        Access = #access{token = AccessToken, token_hash = AccessTokenHash,
+            refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
+            expiration_time = ExpirationTime, client_name = client_name_placeholder},
+
+        {ok, _} = ?DB(save_access, Access),
+
+        {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
+        EmailsList = [[{email, Email}] || Email <- Emails],
+        {ok, [
+            {access_token, AccessToken},
+            {token_type, bearer},
+            {expires_in, ?ACCESS_EXPIRATION_SECS},
+            {refresh_token, RefreshToken},
+            {scope, openid},
+            {id_token, jwt_encode([
+                {iss, ?ISSUER_URL},
+                {sub, UserId},
+                {aud, Audience},
+                {name, Name},
+                {email, EmailsList},
+                {exp, ExpirationTime},
+                {iat, Now}
+            ])}
+        ]}
+    catch
+        Error -> {error, Error}
+    end.
 
 
 %% validate_token/2
@@ -221,14 +241,32 @@ grant_tokens(Client, AuthCode) ->
 %% @end
 %% ====================================================================
 -spec validate_token(Client :: {provider, ProviderId :: binary()} | native,
-    AccessToken :: binary()) -> UserId :: binary() | no_return().
+                     AccessToken :: binary()) ->
+    {ok, UserId :: binary()} | {error, not_found | expired | bad_audience}.
 %% ====================================================================
 validate_token(Client, AccessToken) ->
-    ProviderId = case Client of {provider, Id} -> Id; native -> undefined end,
-    {ok, #veil_document{record = Access}} = ?DB(get_access_by_key, token, AccessToken), %% @todo: missing
-    #access{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Access, %% @todo: someone else's token
-    true = vcn_utils:time() < Expiration, %% @todo: expired
-    UserId.
+    ProviderId = case Client of
+        {provider, Id} -> Id;
+        native -> undefined
+    end,
+
+    case ?DB(get_access_by_key, token, AccessToken) of
+        {error, not_found} = Error -> Error;
+        {ok, #veil_document{record = Access}} ->
+            #access{provider_id = IntendedAudience, user_id = UserId,
+                    expiration_time = Expiration} = Access,
+
+            case IntendedAudience of
+                ProviderId ->
+                    case vcn_utils:time() < Expiration of
+                        false -> {error, expired};
+                        true -> {ok, UserId}
+                    end;
+
+                _ ->
+                    {error, bad_audience}
+            end
+    end.
 
 
 %% remove_expired_authorizations_in_chunks/1
@@ -260,7 +298,7 @@ clear_expired_authorizations() ->
     after
         timer:seconds(?AUTH_CODE_EXPIRATION_SECS) ->
             try
-                remove_expired_authorizations_in_chunks(50)
+                remove_expired_authorizations_in_chunks(?EXPIRED_AUTHORIZATION_REMOVE_CHUNK)
             catch
                 Error:Reason ->
                     ?warning("error while clearing expired authorizations: ~p ~p", [Error, Reason])

@@ -57,9 +57,9 @@ test_connection_test() ->
 
     Ans = provider_logic:test_connection(Arg),
     Expected = [
-        {<<"https://172.16.67.194:443/test">>,<<"ok">>},
-        {<<"https://172.16.67.194:8443/rest/latest/test">>,<<"ok">>},
-        {<<"https://172.16.67.194:123/wrong_url">>,<<"error">>}
+        {<<"https://172.16.67.194:443/test">>,ok},
+        {<<"https://172.16.67.194:8443/rest/latest/test">>,ok},
+        {<<"https://172.16.67.194:123/wrong_url">>,error}
     ],
 
     ?assertEqual(Expected, Ans),

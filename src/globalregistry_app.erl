@@ -135,6 +135,11 @@ stop_rest() ->
 %% ===================================================================
 start_n2o() ->
     try
+        %% TODO for development
+        %% This is needed for the redirection to provider to work, as
+        %% we don't use legit server certificates on providers.
+        application:set_env(ctool, verify_server_cert, false),
+
         % Get gui config
         {ok, GuiPort} = application:get_env(?APP_Name, gui_port),
         {ok, GuiHttpsAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),
@@ -160,7 +165,7 @@ start_n2o() ->
         ],
 
         % Create ets tables and set envs needed by n2o
-        gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module),
+        gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module, n2o_cowboy),
 
         % Initilize auth handler
         auth_config:load_auth_config(),

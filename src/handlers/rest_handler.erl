@@ -13,13 +13,14 @@
 -author("Konrad Zemek").
 
 -include("handlers/rest_handler.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 
 %% API
 -export([init/3, allowed_methods/2, content_types_accepted/2, is_authorized/2,
-    content_types_provided/2, delete_resource/2, accept_resource_json/2,
-    accept_resource_form/2, provide_resource/2, rest_init/2, forbidden/2,
-    resource_exists/2]).
+    content_types_provided/2, delete_resource/2, delete_completed/2,
+    accept_resource_json/2, accept_resource_form/2, provide_resource/2,
+    rest_init/2, forbidden/2, resource_exists/2]).
 
 
 %% init/3
@@ -113,8 +114,22 @@ content_types_provided(Req, #rstate{} = State) ->
 %% ====================================================================
 delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {ResId, Req2} = get_res_id(Req, State),
-    Result = Mod:delete_resource(Resource, ResId, Req2),
-    {Result, Req2, State}.
+    {Result, Req3} = Mod:delete_resource(Resource, ResId, Req2),
+    {Result, Req3, State}.
+
+
+%% delete_completed/2
+%% ====================================================================
+%% @doc Cowboy callback function.
+%% Returns if there is a guarantee that the resource gets deleted immediately
+%% from the system.
+%% @end
+%% ====================================================================
+-spec delete_completed(Req :: cowboy_req:req(), State :: rstate()) ->
+    {boolean(), cowboy_req:req(), rstate()}.
+%% ====================================================================
+delete_completed(Req, State) ->
+    {false, Req, State}.
 
 
 %% forbidden/2
@@ -152,23 +167,61 @@ forbidden(Req, #rstate{module = Mod, resource = Resource, client = Client} = Sta
 is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
     {BinMethod, Req2} = cowboy_req:method(Req),
     Method = binary_to_method(BinMethod),
-    case lists:member(Method, NoAuth) of
-        true -> {true, Req, State#rstate{client = #client{}}};
-        false ->
-            {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req2)),
-            {ok, ProviderId} = grpca:verify_provider(PeerCert),
 
-            {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
-            Client = case Authorization of
-                <<"Bearer ", Token/binary>> ->
-                    UserId = auth_logic:validate_token({provider, ProviderId}, Token),
-                    #client{type = user, id = UserId};
+    try
+        case lists:member(Method, NoAuth) of
+            true -> {true, Req, State#rstate{client = #client{}}};
+            false ->
+                PeerCert = case ssl:peercert(cowboy_req:get(socket, Req2)) of
+                    {ok, PeerCert1} -> PeerCert1;
+                    {error, no_peercert} -> throw({silent_error, Req2})
+                end,
 
-                undefined ->
-                    #client{type = provider, id = ProviderId} %% @todo: else?
-            end,
+                ProviderId = case grpca:verify_provider(PeerCert) of
+                    {ok, ProviderId1} -> ProviderId1;
+                    {error, {bad_cert, Reason}} when is_atom(Reason) ->
+                        ?warning("Attempted authentication with bad peer certificate: ~p", [Reason]),
+                        throw({silent_error, Req2})
+                end,
 
-            {true, Req3, State#rstate{client = Client}}
+                {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
+                case Authorization of
+                    undefined ->
+                        Client = #client{type = provider, id = ProviderId},
+                        {true, Req3, State#rstate{client = Client}};
+
+                    <<"Bearer ", Token/binary>> ->
+                        case auth_logic:validate_token({provider, ProviderId}, Token) of
+                            {ok, UserId} ->
+                                Client = #client{type = user, id = UserId},
+                                {true, Req3, State#rstate{client = Client}};
+
+                            {error, Reason1} ->
+                                Description = case Reason1 of
+                                    not_found -> <<"access token not found">>;
+                                    expired -> <<"access token expired">>;
+                                    bad_audience -> <<"token issued to a different audience">>
+                                end,
+                                throw({invalid_token, Description, Req3})
+                        end;
+
+                    _ ->
+                        Description = <<"unknown authorization type: ", Authorization/binary>>,
+                        throw({invalid_request, Description, Req3})
+                end
+        end
+    catch
+        {silent_error, ReqX} -> %% As per RFC 6750 section 3.1
+            {{false, <<"">>}, ReqX, State};
+
+        {Error, Description1, ReqX} when is_atom(Error), is_binary(Description1) ->
+            Body = mochijson2:encode([
+                {error, Error},
+                {error_description, Description1}
+            ]),
+            WWWAuthenticate = <<"error=", (atom_to_binary(Error, latin1))/binary>>,
+            ReqY = cowboy_req:set_resp_body(Body, ReqX),
+            {{false, WWWAuthenticate}, ReqY, State}
     end.
 
 
@@ -188,8 +241,8 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
         <<"POST">> -> {false, Req2, State};
         _ ->
             {ResId, Req3} = get_res_id(Req2, State),
-            Exists = Mod:resource_exists(Resource, ResId, Req3),
-            {Exists, Req3, State}
+            {Exists, Req4} = Mod:resource_exists(Resource, ResId, Req3),
+            {Exists, Req4, State}
     end.
 
 
@@ -204,8 +257,23 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
 %% ====================================================================
 accept_resource_json(Req, #rstate{} = State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
-    Data = mochijson2:decode(Body, [{format, proplist}]),
-    accept_resource(Data, Req2, State).
+    Data = try
+        mochijson2:decode(Body, [{format, proplist}])
+    catch
+        _:_ -> malformed
+    end,
+
+    case Data =:= malformed of
+        true ->
+            Body = mochijson2:encode([
+            {error, invalid_request},
+            {error_description, <<"malformed JSON data">>}]),
+            Req3 = cowboy_req:set_resp_body(Body, Req2),
+            {false, Req3, State};
+
+        false ->
+            accept_resource(Data, Req2, State)
+    end.
 
 
 %% accept_resource_form/2
@@ -237,13 +305,22 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
     {BinMethod, Req3} = cowboy_req:method(Req2),
     Method = binary_to_method(BinMethod),
 
-    case Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3) of % @todo: should return req
-        {true, {url, URL}} -> {{true, URL}, Req3, State};
-        {true, {data, Response}} ->
-            JSON = mochijson2:encode(Response),
-            Req4 = cowboy_req:set_resp_body(JSON, Req3),
-            {true, Req4, State};
-        B -> {B, Req3, State}
+    try
+        {Result, Req4} = Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3),
+        {Result, Req4, State}
+    catch
+        {rest_error, Error, ReqX} when is_atom(Error) ->
+            Body = mochijson2:encode([{error, Error}]),
+            ReqY = cowboy_req:set_resp_body(Body, ReqX),
+            {false, ReqY, State};
+
+        {rest_error, Error, Description, ReqX} when is_atom(Error), is_binary(Description) ->
+            Body = mochijson2:encode([
+                {error, Error},
+                {error_description, Description}
+            ]),
+            ReqY = cowboy_req:set_resp_body(Body, ReqX),
+            {false, ReqY, State}
     end.
 
 
@@ -258,9 +335,9 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
 %% ====================================================================
 provide_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
     {ResId, Req2} = get_res_id(Req, State),
-    Data = Mod:provide_resource(Resource, ResId, Client, Req2),
+    {Data, Req3} = Mod:provide_resource(Resource, ResId, Client, Req2),
     JSON = mochijson2:encode(Data),
-    {JSON, Req2, State}.
+    {JSON, Req3, State}.
 
 
 %% method_to_binary/1

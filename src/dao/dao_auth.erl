@@ -106,16 +106,16 @@ get_authorization(AuthorizationId) ->
 %% @end
 %% ====================================================================
 -spec get_authorization_by_code(Code :: binary()) ->
-    {ok, authorization_doc()} | {error, any()} | no_return().
+    {ok, authorization_doc()} | {error, not_found}.
 %% ====================================================================
 get_authorization_by_code(Code) ->
     View = ?AUTHORIZATION_BY_CODE,
-    QueryArgs = #view_query_args{keys = [<<?RECORD_FIELD_BINARY_PREFIX,
-                                           (dao_helper:name(Code))/binary>>],
+    QueryArgs = #view_query_args{keys = [<<?RECORD_FIELD_BINARY_PREFIX, Code/binary>>],
                                  include_docs = true},
 
     case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
+            #veil_document{record = #authorization{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
             ?warning("Couldn't find authorization with code ~p", [Code]),
@@ -139,7 +139,7 @@ get_expired_authorizations_ids(Limit) ->
     QueryArgs = #view_query_args{start_key = 0, end_key = Now, limit = Limit},
 
     {ok, #view_result{rows = Rows}} = dao_records:list_records(View, QueryArgs),
-    {ok, lists:map(fun(Row) -> Row#view_row.id end, Rows)}.
+    {ok, [Row#view_row.id || Row <- Rows]}.
 
 
 %% save_access/1
@@ -219,8 +219,8 @@ get_access(AccessId) when is_list(AccessId) ->
 %% for more details about #veil_document{} wrapper.
 %% @end
 %% ====================================================================
--spec get_access_by_key(Key :: atom(), Code :: binary()) ->
-    {ok, access_doc()} | {error, any()} | no_return().
+-spec get_access_by_key(Key :: refresh_token | token | token_hash, Value :: binary()) ->
+    {ok, access_doc()} | {error, not_found}.
 %% ====================================================================
 get_access_by_key(Key, Value) ->
     View = case Key of
@@ -229,13 +229,12 @@ get_access_by_key(Key, Value) ->
         token -> ?ACCESS_BY_TOKEN
     end,
 
-    QueryArgs = #view_query_args{keys =
-        [<<?RECORD_FIELD_BINARY_PREFIX, (dao_helper:name(Value))/binary>>],
-        include_docs = true
-    },
+    QueryArgs = #view_query_args{keys = [<<?RECORD_FIELD_BINARY_PREFIX, Value/binary>>],
+                                 include_docs = true},
 
     case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
+            #veil_document{record = #access{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
             ?warning("Couldn't find access by ~p with value ~p", [Key, Value]),
@@ -255,8 +254,9 @@ get_access_by_key(Key, Value) ->
 %% ====================================================================
 get_accesses_by_user(UserId) ->
     View = ?ACCESS_BY_USER_ID,
-    QueryArgs = #view_query_args{keys = [<<?RECORD_FIELD_BINARY_PREFIX, (dao_helper:name(UserId))/binary>>],
+    QueryArgs = #view_query_args{keys = [<<?RECORD_FIELD_BINARY_PREFIX, UserId/binary>>],
                                  include_docs = true},
 
     {ok, #view_result{rows = Rows}} = dao_records:list_records(View, QueryArgs),
-    {ok, lists:map(fun(Row) -> Row#view_row.doc end, Rows)}.
+    Accesses = [#veil_document{record = #access{}} = Row#view_row.doc || Row <- Rows],
+    {ok, Accesses}.
