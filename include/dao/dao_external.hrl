@@ -46,9 +46,11 @@
 -define(SYSTEM_DB_NAME, "system_data").
 -define(USERS_DB_NAME, "user_data").
 -define(AUTHORIZATION_DB_NAME, "authorization_data").
+-define(TOKENS_DB_NAME, "tokens_data").
 
 %% List of all used databases :: [string()]
--define(DB_LIST, [?SYSTEM_DB_NAME, ?USERS_DB_NAME, ?AUTHORIZATION_DB_NAME]).
+-define(DB_LIST, [?SYSTEM_DB_NAME, ?USERS_DB_NAME, ?AUTHORIZATION_DB_NAME,
+    ?TOKENS_DB_NAME]).
 
 %% Views
 -define(USER_BY_EMAIL_VIEW, #view_info{name = "user_by_email", db_name = ?USERS_DB_NAME, version = 1}).
@@ -59,11 +61,13 @@
 -define(ACCESS_BY_USER_ID, #view_info{name = "access_by_user_id", db_name = ?AUTHORIZATION_DB_NAME, version = 1}).
 -define(AUTHORIZATION_BY_CODE, #view_info{name = "authorization_by_code", db_name = ?AUTHORIZATION_DB_NAME, version = 1}).
 -define(AUTHORIZATION_BY_EXPIRATION, #view_info{name = "authorization_by_expiration", db_name = ?AUTHORIZATION_DB_NAME, version = 1}).
+-define(TOKEN_BY_VALUE, #view_info{name = "token_by_value", db_name = ?TOKENS_DB_NAME, version = 1}).
 
 %% List of all used views :: [#view_info]
 -define(VIEW_LIST, [?USER_BY_EMAIL_VIEW, ?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW,
     ?ACCESS_BY_REFRESH_TOKEN_VIEW, ?ACCESS_BY_TOKEN_HASH, ?ACCESS_BY_TOKEN,
-    ?ACCESS_BY_USER_ID, ?AUTHORIZATION_BY_CODE, ?AUTHORIZATION_BY_EXPIRATION]).
+    ?ACCESS_BY_USER_ID, ?AUTHORIZATION_BY_CODE, ?AUTHORIZATION_BY_EXPIRATION,
+    ?TOKEN_BY_VALUE]).
 
 %% Default database name
 -define(DEFAULT_DB, lists:nth(1, ?DB_LIST)).

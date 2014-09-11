@@ -15,8 +15,9 @@
 
 %% This record defines a token that can be used by user to do something
 -record(token, {
-    type :: token_logic:token_type(),
-    expires :: calendar:datetime(),
+    value    :: binary(),
+    type     :: token_logic:token_type(),
+    expires  :: non_neg_integer(),
     resource :: {Type :: token_logic:resource_type(), Resource :: binary()}
 }).
 
