@@ -112,7 +112,9 @@ get_redirection_url_to_provider(Referer) ->
             error ->
                 % No default provider, check if default space has any providers
                 {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
-                {ok, [{providers, DSProviders}]} = try space_logic:get_providers(DefaultSpace, user) catch _:_ -> {ok, [{providers, []}]} end,
+                {ok, [{providers, DSProviders}]} = case DSProviders of
+                                                       undefined -> {ok, [{providers, []}]};
+                                                       _ -> space_logic:get_providers(DefaultSpace, user) end,
                 case DSProviders of
                     List when length(List) > 0 ->
                         % Default space has got some providers, random one
