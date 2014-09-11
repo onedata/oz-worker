@@ -30,7 +30,7 @@ init(State, Ctx) ->
 	{ok, State, Ctx#context{path = Path, module = route(RequestedPage)}}.
 
 route(<<"/">>) -> page_manage_account;
-route(<<"/login">>) -> page_login;
+route(<<"/login">>) -> page_home;
 route(<<"/logout">>) -> page_logout;
 route(<<"/validate_login">>) -> page_validate_login;
 route(<<"/manage_account">>) -> page_manage_account;
