@@ -74,7 +74,7 @@ exist_token(TokenId) ->
 %% @end
 -spec get_token(TokenId :: uuid()) -> {ok, token_doc()} | {error, any()} | no_return().
 %% ====================================================================
-get_token(TokenId) when is_list(TokenId) ->
+get_token(TokenId) ->
     dao_external:set_db(?TOKENS_DB_NAME),
     {ok, #veil_document{record = #token{}}} = dao_records:get_record(TokenId).
 

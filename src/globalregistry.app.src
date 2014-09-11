@@ -32,7 +32,6 @@
         {grpca_dir, "resources/grpca"},
         {rest_cert_file, "resources/grpca/rest.pem"},
         {rest_key_file, "resources/grpca/rest_key.pem"},
-        {symmetric_key_file, "resources/grpca/symmetric_key"},
         {rest_cert_domain, "127.0.0.1"},
         {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'},
 

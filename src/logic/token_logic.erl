@@ -66,7 +66,7 @@ create(TokenType, Resource) ->
     Token = random_token(),
     TokenRec = #token{value = Token, type = TokenType, resource = Resource}, %% @todo: expiration time
     {ok, _} = ?DB(save_token, TokenRec),
-    Token.
+    {ok, Token}.
 
 
 %% consume/2
