@@ -31,7 +31,7 @@
     refresh_token :: binary(),           %% The refresh token associated with the access
     user_id :: binary(),                 %% UserID of the authorizing user
     provider_id :: binary(),             %% ProviderID of the authorized Provider (OpenID Client)
-    client_name :: binary() | atom(),      %% Human-readable name of the authorized Provider
+    client_name :: binary() | atom(),    %% Human-readable name of the authorized Provider
     expiration_time :: non_neg_integer() %% Expiration time point of the Access Token in seconds since epoch
 }).
 

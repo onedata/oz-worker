@@ -17,9 +17,9 @@
 -include_lib("ctool/include/logging.hrl").
 
 -define(STATE_TOKEN, state_token).
+-define(EXPIRED_AUTHORIZATION_REMOVE_CHUNK, 50).
 
 %% @todo: config
--define(TOKEN_LENGTH, 30).
 -define(AUTH_CODE_EXPIRATION_SECS, 600).
 -define(ACCESS_EXPIRATION_SECS, 36000).
 -define(STATE_TOKEN_EXPIRATION_SECS, 60).
@@ -109,7 +109,7 @@ gen_auth_code(UserId) ->
     Token :: binary().
 %% ====================================================================
 gen_auth_code(UserId, ProviderId) ->
-    Token = random_token(),
+    Token = token_logic:random_token(),
     ExpirationPoint = vcn_utils:time() + ?AUTH_CODE_EXPIRATION_SECS,
     Auth = #authorization{code = Token, expiration_time = ExpirationPoint,
                           user_id = UserId, provider_id = ProviderId},
@@ -198,9 +198,9 @@ grant_tokens(Client, AuthCode) ->
             _ -> throw(wrong_client)
         end,
 
-        AccessToken = random_token(),
+        AccessToken = token_logic:random_token(),
         AccessTokenHash = access_token_hash(AccessToken),
-        RefreshToken = random_token(),
+        RefreshToken = token_logic:random_token(),
         Now = vcn_utils:time(),
         ExpirationTime = Now + ?ACCESS_EXPIRATION_SECS,
 
@@ -297,7 +297,7 @@ clear_expired_authorizations() ->
     after
         timer:seconds(?AUTH_CODE_EXPIRATION_SECS) ->
             try
-                remove_expired_authorizations_in_chunks(50)
+                remove_expired_authorizations_in_chunks(?EXPIRED_AUTHORIZATION_REMOVE_CHUNK)
             catch
                 Error:Reason ->
                     ?warning("error while clearing expired authorizations: ~p ~p", [Error, Reason])
@@ -316,7 +316,7 @@ clear_expired_authorizations() ->
 %% ====================================================================
 generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_state_tokens(),
-    Token = random_token(),
+    Token = token_logic:random_token(),
     {M, S, N} = now(),
     Time = M * 1000000000000 + S * 1000000 + N,
 
@@ -420,14 +420,3 @@ jwt_encode(Claims) ->
     Payload64 = mochiweb_base64url:encode(Payload),
     <<Header64/binary, ".", Payload64/binary, ".">>.
 
-
-%% random_token/0
-%% ====================================================================
-%% @doc Generates a globally unique random token.
-%% ====================================================================
--spec random_token() -> binary().
-%% ====================================================================
-random_token() ->
-    binary:list_to_bin(
-        mochihex:to_hex(
-            crypto:rand_bytes(?TOKEN_LENGTH))).

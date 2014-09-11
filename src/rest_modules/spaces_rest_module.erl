@@ -137,12 +137,12 @@ resource_exists(_, SpaceId, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
                       SpaceId :: binary() | undefined, Data :: data(),
                       Client :: client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, SpaceId} = space_logic:create({user, UserId}, Name),
-    {{true, {url, <<"/spaces/", SpaceId/binary>>}}, Req};
+    {{true,  <<"/spaces/", SpaceId/binary>>}, Req};
 accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
@@ -150,7 +150,7 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = Prov
         false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             {ok, SpaceId} = space_logic:create({provider, ProviderId}, Name, Token),
-            {{true, {url, <<"/spaces/", SpaceId/binary>>}}, Req}
+            {{true,  <<"/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(space, patch, SpaceId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),

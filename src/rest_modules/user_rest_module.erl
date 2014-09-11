@@ -107,7 +107,7 @@ resource_exists(_, _, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
                       UserId :: binary() | undefined, Data :: data(),
                       Client :: client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(user, post, _UserId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
@@ -129,7 +129,7 @@ accept_resource(sjoin, post, UserId, Data, _Client, Req) ->
         false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             {ok, SpaceId} = space_logic:join({user, UserId}, Token),
-            {{true, {url, <<"/user/spaces/", SpaceId/binary>>}}, Req}
+            {{true,  <<"/user/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(groups, post, _UserId, Data, Client, Req) ->
     groups_rest_module:accept_resource(groups, post, undefined, Data, Client, Req);
@@ -139,7 +139,7 @@ accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
         false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             {ok, GroupId} = group_logic:join(UserId, Token),
-            {{true, {url, <<"/user/groups/", GroupId/binary>>}}, Req}
+            {{true,  <<"/user/groups/", GroupId/binary>>}, Req}
     end;
 accept_resource(merge, post, UserId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),

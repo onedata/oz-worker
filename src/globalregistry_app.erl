@@ -42,10 +42,7 @@
     {error, Reason :: term()}).
 %% ===================================================================
 start(_StartType, _StartArgs) ->
-    {RestAns, _} = start_rest(),
-    {GuiAns, _} = start_n2o(),
-    {RedirectorAns, _} = start_redirector(),
-    case {RestAns, GuiAns, RedirectorAns} of
+    case {start_rest(), start_n2o(), start_redirector()} of
         {ok, ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
@@ -111,7 +108,7 @@ start_rest() ->
             ])}
         ]),
 
-        cowboy:start_https(?rest_listener, RestHttpsAcceptors,
+        {ok, _} = cowboy:start_https(?rest_listener, RestHttpsAcceptors,
             [
                 {port, RestPort},
                 {cacertfile, grpca:cacert_path(GRPCADir)},
@@ -121,7 +118,8 @@ start_rest() ->
             ],
             [
                 {env, [{dispatch, Dispatch}]}
-            ])
+            ]),
+        ok
     catch
         _Type:Error ->
             ?error_stacktrace("Could not start rest, error: ~p", [Error]),
@@ -188,7 +186,8 @@ start_n2o() ->
                 {timeout, GuiSocketTimeout},
                 % On every request, add headers that improve security to the response
                 {onrequest, fun gui_utils:onrequest_adjust_headers/1}
-            ])
+            ]),
+        ok
     catch
         _Type:Error ->
             ?error_stacktrace("Could not start gui, error: ~p", [Error]),
@@ -229,7 +228,8 @@ start_redirector() ->
                 {env, [{dispatch, cowboy_router:compile(RedirectDispatch)}]},
                 {max_keepalive, 1},
                 {timeout, Timeout}
-            ])
+            ]),
+        ok
     catch
         _Type:Error ->
             ?error_stacktrace("Could not start redirector listener, error: ~p", [Error]),

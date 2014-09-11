@@ -98,7 +98,7 @@ resource_exists(_, _Id, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
                       ProviderId :: binary() | undefined, Data :: data(),
                       Client :: client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(Resource, post, Id, Data, _Client, Req)
         when Resource =:= ptokens orelse Resource =:= ctokens ->
@@ -150,7 +150,7 @@ accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
     {Data :: json_object(), cowboy_req:req()}.
 %% ====================================================================
 provide_resource(authcode, UserId, _Client, Req) ->
-    {[{accessCode, auth_logic:gen_auth_code(UserId)}], Req};
+    {[{authorizationCode, auth_logic:gen_auth_code(UserId)}], Req};
 provide_resource(ctokens, UserId, _Client, Req) ->
     {[{tokenInfo, auth_logic:get_user_tokens(UserId)}], Req}.
 

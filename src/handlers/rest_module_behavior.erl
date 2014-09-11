@@ -63,7 +63,7 @@
 -callback accept_resource(Resource :: atom(), Method :: accept_method(),
                           ResId :: binary() | undefined, Data :: data(),
                           Client :: client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, {url, URL :: binary()}}, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 
 
 %% provide_resource/4
