@@ -36,15 +36,15 @@
 	width: 500px;
 	max-width: 80%;
 	margin: auto;
-	margin-top: 150px;
+	margin-top: 75px;
 	padding: 16px 30px 10px 30px;
 	text-align: center;
 }
 
 .login-info
 {
-	margin-top: 20px;
-	margin-bottom: 30px;
+	margin-top: 12px;
+	margin-bottom: 20px;
 }
 
 .search-bar
