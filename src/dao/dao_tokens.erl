@@ -97,7 +97,7 @@ get_token_by_value(Value) ->
 
     case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
-            #veil_document{record = #access{}} = Doc,
+            #veil_document{record = #token{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
             ?warning("Couldn't find token by value ~p", [Value]),
