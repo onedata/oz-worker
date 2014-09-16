@@ -112,7 +112,9 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
                 {ok, Data1} ->
                     Body = mochijson2:encode(Data1),
                     Req2 = cowboy_req:set_resp_body(Body, Req),
-                    {true, Req2};
+                    Req3 = cowboy_req:set_resp_header(<<"Cache-Control">>, <<"no-store">>, Req2),
+                    Req4 = cowboy_req:set_resp_header(<<"Pragma">>, <<"no-cache">>, Req3),
+                    {true, Req4};
                 {error, Reason} ->
                     Description = case Reason of
                         invalid_or_expired -> <<"authorization code invalid or expired">>;
