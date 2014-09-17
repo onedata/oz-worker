@@ -269,7 +269,9 @@ refresh_tokens(Client, RefreshToken) ->
         case Client of
             {provider, ProviderId} -> ok;
             native when ProviderId =:= undefined -> ok;
-            _ -> throw(refresh_wrong_client)
+            _ ->
+                alert_revoke_access(AccessDoc),
+                throw(refresh_wrong_client)
         end,
 
         {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime} =
@@ -316,7 +318,7 @@ validate_token(Client, AccessToken) ->
 
     case ?DB(get_access_by_key, token, AccessToken) of
         {error, not_found} = Error -> Error;
-        {ok, #veil_document{record = Access}} ->
+        {ok, #veil_document{record = Access} = AccessDoc} ->
             #access{provider_id = IntendedAudience, user_id = UserId,
                     expiration_time = Expiration} = Access,
 
@@ -328,24 +330,9 @@ validate_token(Client, AccessToken) ->
                     end;
 
                 _ ->
+                    alert_revoke_access(AccessDoc),
                     {error, bad_audience}
             end
-    end.
-
-
-%% remove_expired_authorizations_in_chunks/1
-%% ====================================================================
-%% @doc Removes expired authorizations in chunks of given size.
-%% ====================================================================
--spec remove_expired_authorizations_in_chunks(ChunkSize :: non_neg_integer()) ->
-    ok.
-%% ====================================================================
-remove_expired_authorizations_in_chunks(ChunkSize) ->
-    {ok, ExpiredIds} = ?DB(get_expired_authorizations_ids, ChunkSize),
-    lists:foreach(fun(AuthId) -> ?DB(remove_authorization, AuthId) end, ExpiredIds),
-    case length(ExpiredIds) of
-        ChunkSize -> remove_expired_authorizations_in_chunks(ChunkSize);
-        _ -> ok
     end.
 
 
@@ -450,7 +437,11 @@ clear_expired_state_tokens() ->
 verify(UserId, Secret) ->
     case ?DB(get_access_by_key, token_hash, Secret) of
         {ok, #veil_document{record = #access{user_id = UserId}}} -> true;
-        _ -> false
+        {ok, #veil_document{record = #access{}} = AccessDoc} ->
+            alert_revoke_access(AccessDoc),
+            false;
+        _ ->
+            false
     end.
 
 
@@ -502,3 +493,32 @@ generate_access_tokens(Now) ->
     RefreshToken = token_logic:random_token(),
     ExpirationTime = Now + AccessExpirationSecs,
     {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime}.
+
+
+%% remove_expired_authorizations_in_chunks/1
+%% ====================================================================
+%% @doc Removes expired authorizations in chunks of given size.
+%% ====================================================================
+-spec remove_expired_authorizations_in_chunks(ChunkSize :: non_neg_integer()) ->
+    ok.
+%% ====================================================================
+remove_expired_authorizations_in_chunks(ChunkSize) ->
+    {ok, ExpiredIds} = ?DB(get_expired_authorizations_ids, ChunkSize),
+    lists:foreach(fun(AuthId) -> ?DB(remove_authorization, AuthId) end, ExpiredIds),
+    case length(ExpiredIds) of
+        ChunkSize -> remove_expired_authorizations_in_chunks(ChunkSize);
+        _ -> ok
+    end.
+
+
+%% alert_revoke_access/1
+%% ====================================================================
+%% @doc Removes an access and logs an alert.
+%% ====================================================================
+-spec alert_revoke_access(AccessDoc :: access_doc()) ->
+    ok.
+%% ====================================================================
+alert_revoke_access(AccessDoc) ->
+    #veil_document{uuid = AccessId, record = Access} = AccessDoc,
+    ?alert("Revoking access id: ~p, contents: ~p", [AccessId, Access]),
+    ok = ?DB(remove_access, AccessId).
