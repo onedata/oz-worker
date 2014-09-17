@@ -207,7 +207,7 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
 
                     _ ->
                         Description = <<"unknown authorization type: ", Authorization/binary>>,
-                        throw({invalid_request, Description, Req3})
+                        throw({invalid_request, 400, Description, Req3})
                 end
         end
     catch
@@ -215,13 +215,15 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
             {{false, <<"">>}, ReqX, State};
 
         {Error, Description1, ReqX} when is_atom(Error), is_binary(Description1) ->
-            Body = mochijson2:encode([
-                {error, Error},
-                {error_description, Description1}
-            ]),
+            Body = mochijson2:encode([{error, Error}, {error_description, Description1}]),
             WWWAuthenticate = <<"error=", (atom_to_binary(Error, latin1))/binary>>,
             ReqY = cowboy_req:set_resp_body(Body, ReqX),
-            {{false, WWWAuthenticate}, ReqY, State}
+            {{false, WWWAuthenticate}, ReqY, State};
+
+        {Error, StatusCode, Description1, ReqX} when is_atom(Error), is_binary(Description1) ->
+            Body = mochijson2:encode([{error, Error}, {error_description, Description1}]),
+            {ok, ReqY} = cowboy_req:reply(StatusCode, [], Body, ReqX),
+            {halt, ReqY, State}
     end.
 
 
