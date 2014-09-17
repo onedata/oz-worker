@@ -33,8 +33,9 @@
 %% API
 %% ====================================================================
 -export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
-    has_access/2, delete_access/1,  get_user_tokens/1,  grant_tokens/2,
-    validate_token/2, verify/2, clear_expired_authorizations/0]).
+    has_access/2, delete_access/1, get_user_tokens/1, grant_tokens/2,
+    refresh_tokens/2, validate_token/2, verify/2,
+    clear_expired_authorizations/0]).
 
 %% ====================================================================
 %% Handling state tokens
@@ -198,11 +199,9 @@ grant_tokens(Client, AuthCode) ->
             _ -> throw(wrong_client)
         end,
 
-        AccessToken = token_logic:random_token(),
-        AccessTokenHash = access_token_hash(AccessToken),
-        RefreshToken = token_logic:random_token(),
         Now = vcn_utils:time(),
-        ExpirationTime = Now + ?ACCESS_EXPIRATION_SECS,
+        {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime} =
+            generate_access_tokens(Now),
 
         Access = #access{token = AccessToken, token_hash = AccessTokenHash,
             refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
@@ -226,6 +225,56 @@ grant_tokens(Client, AuthCode) ->
                 {exp, ExpirationTime},
                 {iat, Now}
             ])}
+        ]}
+    catch
+        Error -> {error, Error}
+    end.
+
+
+%% refresh_tokens/2
+%% ====================================================================
+%% @doc Refreshes tokens granted through the token endpoint.
+%% @end
+%% ====================================================================
+-spec refresh_tokens(Client :: {provider, ProviderId :: binary()} | native,
+                     RefreshToken :: binary()) ->
+    {ok, [proplists:property()]} |
+    {error, refresh_invalid_or_revoked | refresh_wrong_client}.
+%% ====================================================================
+refresh_tokens(Client, RefreshToken) ->
+    try
+        AccessDoc = case ?DB(get_access_by_key, refresh_token, RefreshToken) of
+            {ok, AccessDoc1} -> AccessDoc1;
+            {error, not_found} -> throw(refresh_invalid_or_revoked)
+        end,
+
+        #veil_document{record = Access} = AccessDoc,
+        #access{provider_id = ProviderId} = Access,
+
+        case Client of
+            {provider, ProviderId} -> ok;
+            native when ProviderId =:= undefined -> ok;
+            _ -> throw(refresh_wrong_client)
+        end,
+
+        {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime} =
+            generate_access_tokens(vcn_utils:time()),
+
+        AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
+            token = AccessToken,
+            token_hash = AccessTokenHash,
+            refresh_token = RefreshToken,
+            expiration_time = ExpirationTime
+        }},
+
+        {ok, _} = ?DB(save_access, AccessDocUpdated),
+
+        {ok, [
+            {access_token, AccessToken},
+            {token_type, bearer},
+            {expires_in, ?ACCESS_EXPIRATION_SECS},
+            {refresh_token, RefreshToken},
+            {scope, openid}
         ]}
     catch
         Error -> {error, Error}
@@ -419,3 +468,18 @@ jwt_encode(Claims) ->
     Payload64 = mochiweb_base64url:encode(Payload),
     <<Header64/binary, ".", Payload64/binary, ".">>.
 
+
+%% generate_access_tokens/1
+%% ====================================================================
+%% @doc Generates a new set of access tokens and token-related information.
+%% ====================================================================
+-spec generate_access_tokens(Now :: non_neg_integer()) ->
+    {AccessToken :: binary(), AccessTokenHash :: binary(),
+     RefreshToken :: binary(), ExpirationTime :: non_neg_integer()}.
+%% ====================================================================
+generate_access_tokens(Now) ->
+    AccessToken = token_logic:random_token(),
+    AccessTokenHash = access_token_hash(AccessToken),
+    RefreshToken = token_logic:random_token(),
+    ExpirationTime = Now + ?ACCESS_EXPIRATION_SECS,
+    {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime}.
