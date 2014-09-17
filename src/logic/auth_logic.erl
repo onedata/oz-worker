@@ -203,11 +203,24 @@ grant_tokens(Client, AuthCode) ->
         {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime} =
             generate_access_tokens(Now),
 
-        Access = #access{token = AccessToken, token_hash = AccessTokenHash,
-            refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
-            expiration_time = ExpirationTime, client_name = client_name_placeholder},
+        %% For a provider, update an existing access document if possible
+        case ?DB(get_access_by_user_and_provider, UserId, ProviderId) of
+            {ok, AccessDoc} ->
+                #veil_document{record = Access} = AccessDoc,
+                AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
+                    token = AccessToken,
+                    token_hash = AccessTokenHash,
+                    refresh_token = RefreshToken,
+                    expiration_time = ExpirationTime
+                }},
+                {ok, _} = ?DB(save_access, AccessDocUpdated);
 
-        {ok, _} = ?DB(save_access, Access),
+            {error, not_found} ->
+                Access = #access{token = AccessToken, token_hash = AccessTokenHash,
+                    refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
+                    expiration_time = ExpirationTime, client_name = client_name_placeholder},
+                {ok, _} = ?DB(save_access, Access)
+        end,
 
         {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
         {ok, [
