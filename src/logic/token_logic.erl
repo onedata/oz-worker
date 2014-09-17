@@ -17,7 +17,7 @@
 
 
 %% Length of generated tokens, before base64.
--define(TOKEN_LENGTH, 32).
+-define(TOKEN_LENGTH, 32). %% 32-byte sequence encodes into base64 without padding
 
 -define(DB(Function, Arg), dao_lib:apply(dao_tokens, Function, [Arg], 1)).
 
@@ -94,6 +94,4 @@ consume(Token, TokenType) ->
 -spec random_token() -> binary().
 %% ====================================================================
 random_token() ->
-    binary:list_to_bin(
-        mochihex:to_hex(
-            crypto:rand_bytes(?TOKEN_LENGTH))).
+    base64:encode(crypto:rand_bytes(?TOKEN_LENGTH)).
