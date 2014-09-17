@@ -211,7 +211,6 @@ grant_tokens(Client, AuthCode) ->
         {ok, _} = ?DB(save_access, Access),
 
         {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
-        EmailsList = [[{email, Email}] || Email <- Emails],
         {ok, [
             {access_token, AccessToken},
             {token_type, bearer},
@@ -223,7 +222,7 @@ grant_tokens(Client, AuthCode) ->
                 {sub, UserId},
                 {aud, Audience},
                 {name, Name},
-                {email, EmailsList},
+                {emails, Emails},
                 {exp, ExpirationTime},
                 {iat, Now}
             ])}
