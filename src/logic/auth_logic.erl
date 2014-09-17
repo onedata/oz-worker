@@ -14,16 +14,13 @@
 
 -include("dao/dao_types.hrl").
 -include("auth_common.hrl").
+-include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(STATE_TOKEN, state_token).
--define(EXPIRED_AUTHORIZATION_REMOVE_CHUNK, 50).
+-define(STATE_TOKEN_EXPIRATION_SECS, 60). %% @todo: config
 
-%% @todo: config
--define(AUTH_CODE_EXPIRATION_SECS, 600).
--define(ACCESS_EXPIRATION_SECS, 36000).
--define(STATE_TOKEN_EXPIRATION_SECS, 60).
--define(ISSUER_URL, <<"https://onedata.org">>).
+-define(EXPIRED_AUTHORIZATION_REMOVE_CHUNK, 50).
 
 -define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
 -define(DB(Function, Arg1, Arg2), dao_lib:apply(dao_auth, Function, [Arg1, Arg2], 1)).
@@ -110,8 +107,10 @@ gen_auth_code(UserId) ->
     Token :: binary().
 %% ====================================================================
 gen_auth_code(UserId, ProviderId) ->
+    {ok, ExpirationSecs} = application:get_env(?APP_Name, authorization_code_expiration_seconds),
+
     Token = token_logic:random_token(),
-    ExpirationPoint = vcn_utils:time() + ?AUTH_CODE_EXPIRATION_SECS,
+    ExpirationPoint = vcn_utils:time() + ExpirationSecs,
     Auth = #authorization{code = Token, expiration_time = ExpirationPoint,
                           user_id = UserId, provider_id = ProviderId},
 
@@ -222,15 +221,18 @@ grant_tokens(Client, AuthCode) ->
                 {ok, _} = ?DB(save_access, Access)
         end,
 
+        {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
+        {ok, IssuerUrl} = application:get_env(?APP_Name, openid_issuer_url),
+
         {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
         {ok, [
             {access_token, AccessToken},
             {token_type, bearer},
-            {expires_in, ?ACCESS_EXPIRATION_SECS},
+            {expires_in, AccessExpirationSecs},
             {refresh_token, RefreshToken},
             {scope, openid},
             {id_token, jwt_encode([
-                {iss, ?ISSUER_URL},
+                {iss, vcn_utils:ensure_binary(IssuerUrl)},
                 {sub, UserId},
                 {aud, Audience},
                 {name, Name},
@@ -282,10 +284,12 @@ refresh_tokens(Client, RefreshToken) ->
 
         {ok, _} = ?DB(save_access, AccessDocUpdated),
 
+        {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
+
         {ok, [
             {access_token, AccessToken},
             {token_type, bearer},
-            {expires_in, ?ACCESS_EXPIRATION_SECS},
+            {expires_in, AccessExpirationSecs},
             {refresh_token, RefreshToken},
             {scope, openid}
         ]}
@@ -353,10 +357,11 @@ remove_expired_authorizations_in_chunks(ChunkSize) ->
 -spec clear_expired_authorizations() -> ok.
 %% ====================================================================
 clear_expired_authorizations() ->
+    {ok, ExpirationSecs} = application:get_env(?APP_Name, authorization_code_expiration_seconds),
     receive
         stop -> ok
     after
-        timer:seconds(?AUTH_CODE_EXPIRATION_SECS) ->
+        timer:seconds(ExpirationSecs) ->
             try
                 remove_expired_authorizations_in_chunks(?EXPIRED_AUTHORIZATION_REMOVE_CHUNK)
             catch
@@ -491,8 +496,9 @@ jwt_encode(Claims) ->
      RefreshToken :: binary(), ExpirationTime :: non_neg_integer()}.
 %% ====================================================================
 generate_access_tokens(Now) ->
+    {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
     AccessToken = token_logic:random_token(),
     AccessTokenHash = access_token_hash(AccessToken),
     RefreshToken = token_logic:random_token(),
-    ExpirationTime = Now + ?ACCESS_EXPIRATION_SECS,
+    ExpirationTime = Now + AccessExpirationSecs,
     {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime}.

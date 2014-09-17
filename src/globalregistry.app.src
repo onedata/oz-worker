@@ -27,7 +27,7 @@
         % DB config
         {db_nodes, ['db@127.0.0.1']},
 
-        % rest config
+        % REST config
         {rest_port, 8443},
         {rest_https_acceptors, 50},
         {grpca_dir, "resources/grpca"},
@@ -35,6 +35,10 @@
         {rest_key_file, "resources/grpca/rest_key.pem"},
         {rest_cert_domain, "127.0.0.1"},
         {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'},
+        %% OpenID Provider for REST
+        {authorization_code_expiration_seconds, 600},
+        {access_token_expiration_seconds, 36000},
+        {openid_issuer_url, "https://onedata.org"},
 
         % gui config
         {gui_port, 443},
