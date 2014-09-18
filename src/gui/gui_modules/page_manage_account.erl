@@ -27,7 +27,7 @@
 
 %% Template points to the template file, which will be filled with content
 main() ->
-    case gr_gui_utils:maybe_redirect(true, true) of
+    case gr_gui_utils:maybe_redirect(true) of
         true ->
             #dtl{file = "bare", app = ?APP_Name, bindings = [{title, <<"">>}, {body, <<"">>}, {custom, <<"">>}]};
         false ->
@@ -259,7 +259,10 @@ provider_redirection_panel() ->
                 #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
                 "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
                 #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
-                    value = Token, placeholder = <<"Space support token">>}
+                    value = Token, placeholder = <<"Space support token">>},
+                #p{style = <<"margin-top: 40px;">>, body = <<"You can also become a provider yourself and support your own space:">>},
+                #link{class = <<"btn btn-success">>, url = <<?become_a_provider_url>>,
+                    style = <<"width: 300px;">>, body = <<"Read more">>}
             ]}
     end.
 

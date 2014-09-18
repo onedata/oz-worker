@@ -16,7 +16,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 % Functions to check for user's session
--export([apply_or_redirect/2, apply_or_redirect/3, maybe_redirect/2]).
+-export([apply_or_redirect/2, apply_or_redirect/3, maybe_redirect/1]).
 
 % Handling redirects to providers
 -export([get_redirection_url_to_provider/1]).
@@ -45,7 +45,7 @@ apply_or_redirect(Module, Fun, Args) ->
     try
         case gui_ctx:user_logged_in() of
             false ->
-                gui_jq:redirect_to_login(true);
+                gui_jq:redirect_to_login();
             true ->
                 erlang:apply(Module, Fun, Args)
         end
@@ -69,12 +69,12 @@ apply_or_redirect(Module, Fun, Args) ->
 %% Setting "SaveSourcePage" on true will allow a redirect back from login.
 %% NOTE: Should be called from page:main().
 %% @end
--spec maybe_redirect(NeedLogin :: boolean(), SaveSourcePage :: boolean()) -> boolean().
+-spec maybe_redirect(NeedLogin :: boolean()) -> boolean().
 %% ====================================================================
-maybe_redirect(NeedLogin, SaveSourcePage) ->
+maybe_redirect(NeedLogin) ->
     case NeedLogin and (not gui_ctx:user_logged_in()) of
         true ->
-            gui_jq:redirect_to_login(SaveSourcePage),
+            gui_jq:redirect_to_login(),
             true;
         false ->
             false

@@ -32,12 +32,11 @@ body() ->
         #panel{class = <<"alert alert-danger login-page">>, body = [
             #h3{body = <<"Error 404">>},
             #p{class = <<"login-info">>, body = <<"Requested page could not be found on the server.">>},
-            #button{postback = to_login, class = <<"btn btn-warning btn-block">>, body = <<"Main page">>}
+            #link{url = <<"/">>, class = <<"btn btn-warning btn-block">>, body = <<"Main page">>}
         ]},
         gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
     ] ++ gr_gui_utils:logotype_footer(120)}.
 
 
 event(init) -> ok;
-event(to_login) -> gui_jq:redirect_to_login(false);
 event(terminate) -> ok.
