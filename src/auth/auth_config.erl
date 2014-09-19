@@ -36,7 +36,7 @@ load_auth_config() ->
                  {ok, [Cfg]} when is_list(Cfg) -> Cfg;
                  _ -> []
              end,
-    application:set_env(veil_cluster_node, auth_config, Config).
+    application:set_env(globalregistry, auth_config, Config).
 
 
 %% get_auth_providers/0
@@ -47,7 +47,7 @@ load_auth_config() ->
 -spec get_auth_providers() -> [term()].
 %% ====================================================================
 get_auth_providers() ->
-    {ok, Config} = application:get_env(veil_cluster_node, auth_config),
+    {ok, Config} = application:get_env(globalregistry, auth_config),
     lists:map(
         fun({Provider, _}) ->
             Provider
@@ -62,7 +62,7 @@ get_auth_providers() ->
 -spec get_auth_config(Provider :: atom()) -> [term()].
 %% ====================================================================
 get_auth_config(Provider) ->
-    {ok, Config} = application:get_env(veil_cluster_node, auth_config),
+    {ok, Config} = application:get_env(globalregistry, auth_config),
     proplists:get_value(Provider, Config).
 
 
