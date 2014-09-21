@@ -289,13 +289,13 @@ refresh_tokens(Client, RefreshToken) ->
                 throw(refresh_wrong_client)
         end,
 
-        {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime} =
+        {AccessToken, AccessTokenHash, RefreshTokenNew, ExpirationTime} =
             generate_access_tokens(vcn_utils:time()),
 
         AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
             token = AccessToken,
             token_hash = AccessTokenHash,
-            refresh_token = RefreshToken,
+            refresh_token = RefreshTokenNew,
             expiration_time = ExpirationTime
         }},
 
@@ -307,7 +307,7 @@ refresh_tokens(Client, RefreshToken) ->
             {access_token, AccessToken},
             {token_type, bearer},
             {expires_in, AccessExpirationSecs},
-            {refresh_token, RefreshToken},
+            {refresh_token, RefreshTokenNew},
             {scope, openid}
         ]}
     catch
