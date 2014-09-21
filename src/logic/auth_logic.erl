@@ -187,11 +187,6 @@ grant_tokens(Client, AuthCode) ->
 
         ok = ?DB(remove_authorization, AuthId),
 
-        Audience = case ProviderId of
-            undefined -> UserId;
-            _ -> ProviderId
-        end,
-
         case Client of %% poor man's validation
             {provider, ProviderId} -> ok;
             native when ProviderId =:= undefined -> ok;
@@ -236,26 +231,7 @@ grant_tokens(Client, AuthCode) ->
                 ok
         end,
 
-        {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
-        {ok, IssuerUrl} = application:get_env(?APP_Name, openid_issuer_url),
-
-        {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
-        {ok, [
-            {access_token, AccessToken},
-            {token_type, bearer},
-            {expires_in, AccessExpirationSecs},
-            {refresh_token, RefreshToken},
-            {scope, openid},
-            {id_token, jwt_encode([
-                {iss, vcn_utils:ensure_binary(IssuerUrl)},
-                {sub, UserId},
-                {aud, Audience},
-                {name, Name},
-                {emails, Emails},
-                {exp, ExpirationTime},
-                {iat, Now}
-            ])}
-        ]}
+        prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now)
     catch
         Error -> {error, Error}
     end.
@@ -279,7 +255,7 @@ refresh_tokens(Client, RefreshToken) ->
         end,
 
         #veil_document{record = Access} = AccessDoc,
-        #access{provider_id = ProviderId} = Access,
+        #access{provider_id = ProviderId, user_id = UserId} = Access,
 
         case Client of
             {provider, ProviderId} -> ok;
@@ -289,8 +265,9 @@ refresh_tokens(Client, RefreshToken) ->
                 throw(refresh_wrong_client)
         end,
 
+        Now = vcn_utils:time(),
         {AccessToken, AccessTokenHash, RefreshTokenNew, ExpirationTime} =
-            generate_access_tokens(vcn_utils:time()),
+            generate_access_tokens(Now),
 
         AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
             token = AccessToken,
@@ -301,15 +278,7 @@ refresh_tokens(Client, RefreshToken) ->
 
         {ok, _} = ?DB(save_access, AccessDocUpdated),
 
-        {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
-
-        {ok, [
-            {access_token, AccessToken},
-            {token_type, bearer},
-            {expires_in, AccessExpirationSecs},
-            {refresh_token, RefreshTokenNew},
-            {scope, openid}
-        ]}
+        prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now)
     catch
         Error -> {error, Error}
     end.
@@ -537,3 +506,40 @@ alert_revoke_access(AccessDoc) ->
     #veil_document{uuid = AccessId, record = Access} = AccessDoc,
     ?alert("Revoking access id: ~p, contents: ~p", [AccessId, Access]),
     ok = ?DB(remove_access, AccessId).
+
+
+%% prepare_token_response/1
+%% ====================================================================
+%% @doc Prepares an OpenID token response to encode into JSON.
+%% ====================================================================
+-spec prepare_token_response(UserId :: binary(), ProviderId :: binary(),
+    AccessToken :: binary(), RefreshToken :: binary(),
+    ExpirationTime :: non_neg_integer(), Now :: non_neg_integer()) ->
+    proplists:proplist().
+%% ====================================================================
+prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now) ->
+    {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
+    {ok, IssuerUrl} = application:get_env(?APP_Name, openid_issuer_url),
+
+    Audience = case ProviderId of
+        undefined -> UserId;
+        _ -> ProviderId
+    end,
+
+    {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
+    {ok, [
+        {access_token, AccessToken},
+        {token_type, bearer},
+        {expires_in, AccessExpirationSecs},
+        {refresh_token, RefreshToken},
+        {scope, openid},
+        {id_token, jwt_encode([
+            {iss, vcn_utils:ensure_binary(IssuerUrl)},
+            {sub, UserId},
+            {aud, Audience},
+            {name, Name},
+            {emails, Emails},
+            {exp, ExpirationTime},
+            {iat, Now}
+        ])}
+    ]}.
