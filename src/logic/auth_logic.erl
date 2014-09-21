@@ -278,7 +278,7 @@ refresh_tokens(Client, RefreshToken) ->
 
         {ok, _} = ?DB(save_access, AccessDocUpdated),
 
-        prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now)
+        prepare_token_response(UserId, ProviderId, AccessToken, RefreshTokenNew, ExpirationTime, Now)
     catch
         Error -> {error, Error}
     end.
