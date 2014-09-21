@@ -419,8 +419,10 @@ clear_expired_state_tokens() ->
     boolean().
 %% ====================================================================
 verify(UserId, Secret) ->
+    Now = vcn_utils:time(),
     case ?DB(get_access_by_key, token_hash, Secret) of
-        {ok, #veil_document{record = #access{user_id = UserId}}} -> true;
+        {ok, #veil_document{record = #access{user_id = UserId, expiration_time = Exp}}} ->
+            Now < Exp;
         {ok, #veil_document{record = #access{}} = AccessDoc} ->
             alert_revoke_access(AccessDoc),
             false;
