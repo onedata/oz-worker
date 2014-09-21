@@ -203,22 +203,37 @@ grant_tokens(Client, AuthCode) ->
             generate_access_tokens(Now),
 
         %% For a provider, update an existing access document if possible
-        case ?DB(get_access_by_user_and_provider, UserId, ProviderId) of
-            {ok, AccessDoc} ->
-                #veil_document{record = Access} = AccessDoc,
-                AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
-                    token = AccessToken,
-                    token_hash = AccessTokenHash,
-                    refresh_token = RefreshToken,
-                    expiration_time = ExpirationTime
-                }},
-                {ok, _} = ?DB(save_access, AccessDocUpdated);
+        CreateNewAccessDocument = case Client of
+            {provider, ProviderId} ->
+                case ?DB(get_access_by_user_and_provider, UserId, ProviderId) of
+                    {ok, AccessDoc} ->
+                        #veil_document{record = Access} = AccessDoc,
+                        AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
+                            token = AccessToken,
+                            token_hash = AccessTokenHash,
+                            refresh_token = RefreshToken,
+                            expiration_time = ExpirationTime
+                        }},
+                        {ok, _} = ?DB(save_access, AccessDocUpdated),
+                        false;
 
-            {error, not_found} ->
-                Access = #access{token = AccessToken, token_hash = AccessTokenHash,
-                    refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
-                    expiration_time = ExpirationTime, client_name = client_name_placeholder},
-                {ok, _} = ?DB(save_access, Access)
+                    {error, not_found} ->
+                        true
+                end;
+
+            native ->
+                true
+        end,
+
+        case CreateNewAccessDocument of
+            true ->
+                Access1 = #access{token = AccessToken, token_hash = AccessTokenHash,
+                refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
+                expiration_time = ExpirationTime, client_name = client_name_placeholder},
+                {ok, _} = ?DB(save_access, Access1);
+
+            false ->
+                ok
         end,
 
         {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
