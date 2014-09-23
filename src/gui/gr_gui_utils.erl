@@ -89,7 +89,7 @@ maybe_redirect(NeedLogin) ->
 %% then he will be chosen with highest priority.
 %% @end
 -spec get_redirection_url_to_provider(Referer :: binary() | undefined) ->
-    {ok, ProvderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
+    {ok, ProviderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
 %% ====================================================================
 get_redirection_url_to_provider(Referer) ->
     try
@@ -98,11 +98,16 @@ get_redirection_url_to_provider(Referer) ->
         % Default provider is the provider that redirected the user for login.
         % Check if the provider is recognisable
         RefererProviderInfo =
-            try
-                {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, Referer),
-                {ok, ProvHostname, RedURL}
-            catch _:_ ->
-                error
+            case Referer of
+                undefined ->
+                    error;
+                _ ->
+                    try
+                        {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, Referer),
+                        {ok, ProvHostname, RedURL}
+                    catch _:_ ->
+                        error
+                    end
             end,
 
         case RefererProviderInfo of
