@@ -3,6 +3,6 @@
 // The record defining access document's structure can be found in dao_auth.hrl
 function(doc) {
     if (doc.record__ == "access") {
-        emit(doc.refresh_token + '_' + doc.provider_id, null)
+        emit(doc.user_id + '_' + doc.provider_id, null)
     }
 }
