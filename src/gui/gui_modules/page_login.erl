@@ -38,13 +38,7 @@ body() ->
         true ->
             gui_jq:redirect(<<"/">>);
         false ->
-            ErrorPanelStyle = case gui_ctx:url_param(<<"x">>) of
-                                  undefined -> <<"display: none;">>;
-                                  _ -> <<"">>
-                              end,
             #panel{style = <<"padding: 20px 50px;">>, body = [
-                #panel{id = <<"error_message">>, style = ErrorPanelStyle, class = <<"dialog dialog-danger">>, body = #p{
-                    body = <<"Session error or session expired. Please log in again.">>}},
                 #panel{body = homepage_header()},
                 login_panel()
             ]}
