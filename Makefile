@@ -82,6 +82,7 @@ package.src: deps
 	rm -rf package/$(PKG_ID)
 	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION)| (cd package && tar -xf -)
 	${MAKE} -C package/$(PKG_ID) deps
+	cp onepanel package/$(PKG_ID)
 	mkdir -p package/$(PKG_ID)/priv
 	git --git-dir=.git describe --tags --always >package/$(PKG_ID)/priv/vsn.git
 	for dep in package/$(PKG_ID)/deps/*; do \
