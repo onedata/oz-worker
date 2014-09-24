@@ -41,8 +41,9 @@ body() ->
         #panel{style = <<"margin-top: 5px; padding: 20px; position: relative;">>, body = [
             #h3{style = <<"padding: 10px;">>, body = <<"Become a provider">>},
             #p{style = <<"padding: 10px; font-size: 18px; width: 45%; line-height: 22.15px;">>,
-                body = <<"Onedata <strong>provider</strong> can be anyone who decides to share storage space by installing ",
-                "onedata software stack. Afterwards, he can support storage spaces for onedata users.">>},
+                body = <<"Onedata is a global network of users sharing data spaces and providers providing shared storage space.<br />",
+                "To become a provider you need to follow a few simple steps described below. To become a user go back to the main page ",
+                "and log in with one of the supported authentication vendors.">>},
 
             #link{class = <<"btn btn-primary">>, url = <<?DOWNLOAD_LINK>>,
                 style = <<"margin: 0 10px 20px; width: 300px;">>,
