@@ -53,7 +53,7 @@ body() ->
 
             #table{style = <<"border-width: 0px; width: 100%;">>, body = [
                 #tbody{body = [
-                    table_row(<<"1">>, <<"Prepare a cluster of machines">>,
+                    table_row(<<"1">>, <<"Prepare a machine or cluster for onedata software stack, having public IP address and access to your storage system.">>,
                         #list{numbered = false, body = [
                             #li{style = ?LIST_ITEM_STYLE, body = <<"The system can run on just 1 machine, although it is ",
                             "<strong>strongly recommended</strong> to use at least 4 machines for performance reasons.">>},
@@ -63,7 +63,7 @@ body() ->
                             "other under unique, fully qualified hostnames.">>}
                         ]}),
                     table_row(<<"2">>,
-                        [<<"Download and install the  ">>, #link{body = <<"RPM package">>, url = <<?DOWNLOAD_LINK>>}],
+                        [<<"Download and install the ">>, #link{body = <<"RPM package">>, url = <<?DOWNLOAD_LINK>>}, <<" on each node of the cluster.">>],
                         <<"After downloading the package, install it on all hosts you would like to deploy the software on.">>),
                     table_row(<<"3">>,
                         <<"Visit <strong>https://&lt;hostname&gt;:9443</strong>, where &lt;hostname&gt; is any node in the cluster">>,
