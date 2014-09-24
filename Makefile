@@ -75,6 +75,7 @@ relclean:
 export PKG_VERSION PKG_ID PKG_BUILD BASE_DIR ERLANG_BIN REBAR OVERLAY_VARS RELEASE
 
 package.src: deps
+	make -C deps/onepanel rel CONFIG=config/globalregistry.config
 	mkdir -p package
 	rm -rf package/$(PKG_ID)
 	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION)| (cd package && tar -xf -)
