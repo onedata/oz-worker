@@ -20,7 +20,7 @@ compile: deps
 	@./rebar compile
 
 generate: compile
-	make -C deps/onepanel rel CONFIG=config/globalregistry.config
+	make -C onepanel rel CONFIG=config/globalregistry.config
 	@./rebar generate $(OVERLAY_VARS)
 
 clean:
