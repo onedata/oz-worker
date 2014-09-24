@@ -1,5 +1,16 @@
 #!/bin/bash
 
+## ===================================================================
+## @author Krzysztof Trzepla
+## @copyright (C): 2014 ACK CYFRONET AGH
+## This software is released under the MIT license
+## cited in 'LICENSE.txt'.
+## @end
+## ===================================================================
+## @doc: This is a convenience script which executes escripts.
+## @end
+## ===================================================================
+
 if [ "$(id -u)" != "0" ]; then
    echo "This script must be run as root"
    exit 1
