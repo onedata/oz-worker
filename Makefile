@@ -15,14 +15,12 @@ all: compile
 
 deps:
 	@./rebar get-deps
-	@git submodule init
-	@git submodule update
 
 compile: deps
 	@./rebar compile
 
 generate: compile
-	make -C onepanel rel CONFIG=config/globalregistry.config
+	make -C deps/onepanel rel CONFIG=config/globalregistry.config
 	@./rebar generate $(OVERLAY_VARS)
 
 clean:
