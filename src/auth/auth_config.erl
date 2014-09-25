@@ -11,6 +11,7 @@
 -module(auth_config).
 
 -include("auth_common.hrl").
+-include("registered_names.hrl").
 
 % Loading and managing auth config
 -export([load_auth_config/0, get_auth_config/1, get_auth_providers/0]).
@@ -36,7 +37,7 @@ load_auth_config() ->
                  {ok, [Cfg]} when is_list(Cfg) -> Cfg;
                  _ -> []
              end,
-    application:set_env(veil_cluster_node, auth_config, Config).
+    application:set_env(?APP_Name, auth_config, Config).
 
 
 %% get_auth_providers/0
@@ -47,7 +48,7 @@ load_auth_config() ->
 -spec get_auth_providers() -> [term()].
 %% ====================================================================
 get_auth_providers() ->
-    {ok, Config} = application:get_env(veil_cluster_node, auth_config),
+    {ok, Config} = application:get_env(?APP_Name, auth_config),
     lists:map(
         fun({Provider, _}) ->
             Provider
@@ -62,7 +63,7 @@ get_auth_providers() ->
 -spec get_auth_config(Provider :: atom()) -> [term()].
 %% ====================================================================
 get_auth_config(Provider) ->
-    {ok, Config} = application:get_env(veil_cluster_node, auth_config),
+    {ok, Config} = application:get_env(?APP_Name, auth_config),
     proplists:get_value(Provider, Config).
 
 

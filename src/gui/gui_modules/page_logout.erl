@@ -34,7 +34,7 @@ body() ->
         #panel{class = <<"alert alert-success login-page">>, body = [
             #h3{class = <<"">>, body = <<"Logout successful">>},
             #p{class = <<"login-info">>, body = <<"Come back soon.">>},
-            #button{postback = to_login, class = <<"btn btn-primary btn-block">>, body = <<"Login page">>}
+            #link{url = <<"/">>, class = <<"btn btn-primary btn-block">>, body = <<"Login page">>}
         ]},
         gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
     ]
@@ -44,5 +44,4 @@ body() ->
 
 
 event(init) -> ok;
-event(to_login) -> gui_jq:redirect_to_login(false);
 event(terminate) -> ok.

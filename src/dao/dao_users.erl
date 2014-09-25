@@ -85,7 +85,7 @@ get_user({Key, Value}) ->
                                 {?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_query_args{keys =
                                 [
                                     <<?RECORD_FIELD_ATOM_PREFIX,
-                                    ProviderID/binary,
+                                    (gui_str:to_binary(ProviderID))/binary,
                                     "_",
                                     ?RECORD_FIELD_BINARY_PREFIX,
                                     UserID/binary>>

@@ -23,7 +23,7 @@
 % Path to directory that contains gui static files
 -define(gui_static_root, "resources/gui_static").
 % Paths in gui static directory
--define(static_paths, ["/css/", "/fonts/", "/images/", "/js/", "/n2o/"]).
+-define(static_paths, ["/css/", "/flatui/", "/fonts/", "/images/", "/n2o/"]).
 
 % Session logic module
 -define(session_logic_module, session_logic).

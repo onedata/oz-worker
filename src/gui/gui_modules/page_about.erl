@@ -23,7 +23,7 @@
 
 %% Template points to the template file, which will be filled with content
 main() ->
-    case gr_gui_utils:maybe_redirect(true, true) of
+    case gr_gui_utils:maybe_redirect(true) of
         true ->
             #dtl{file = "bare", app = ?APP_Name, bindings = [{title, <<"">>}, {body, <<"">>}, {custom, <<"">>}]};
         false ->

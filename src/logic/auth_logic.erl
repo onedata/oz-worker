@@ -320,15 +320,12 @@ generate_state_token(HandlerModule, ConnectAccount) ->
     {M, S, N} = now(),
     Time = M * 1000000000000 + S * 1000000 + N,
 
-    RedirectAfterLogin = case gui_ctx:url_param(<<"x">>) of
-                             undefined -> <<"/">>;
-                             TargetPage -> TargetPage
-                         end,
-
     StateInfo = [
         {module, HandlerModule},
         {connect_account, ConnectAccount},
-        {redirect_after_login, RedirectAfterLogin},
+        % Right now this always redirects to main page, although
+        % might be used in the future.
+        {redirect_after_login, <<"/">>},
         % PROBABLY DEVELOPER-ONLY FUNCTIONALITY
         % If this value was set on login page, the user will be redirected to
         % this certain provider if he click "go to your files"
