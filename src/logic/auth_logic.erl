@@ -30,7 +30,7 @@
 %% API
 %% ====================================================================
 -export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
-    has_access/2, delete_access/1, get_user_tokens/1, grant_tokens/2,
+    has_access/3, delete_access/1, get_user_tokens/2, grant_tokens/2,
     refresh_tokens/2, validate_token/2, verify/2,
     clear_expired_authorizations/0]).
 
@@ -118,17 +118,23 @@ gen_auth_code(UserId, ProviderId) ->
     Token.
 
 
-%% has_access/1
+%% has_access/3
 %% ====================================================================
 %% @doc Checks if a given user authorized a given access id and it exists
 %% within the system.
 %% @end
 %% ====================================================================
--spec has_access(UserId :: binary(), AccessId :: binary()) -> boolean().
+-spec has_access(UserId :: binary(), AccessId :: binary(),
+                 AccessType :: client | provider) -> boolean().
 %% ====================================================================
-has_access(UserId, AccessId) ->
+has_access(UserId, AccessId, AccessType) ->
     case ?DB(get_access, AccessId) of
-        {ok, #veil_document{record = #access{user_id = UserId}}} -> true;
+        {ok, #veil_document{record = #access{user_id = UserId, provider_id = ProviderId}}} ->
+            case {ProviderId, AccessType} of
+                {undefined, client} -> true;
+                {<<_/binary>>, provider} -> true;
+                _ -> false
+            end;
         _ -> false
     end.
 
@@ -148,14 +154,21 @@ delete_access(AccessId) ->
 %% @doc Returns all pseudo-tokens identifying access and refresh tokens in the
 %% system.
 %% ====================================================================
--spec get_user_tokens(UserId :: binary()) -> [[proplists:property()]].
+-spec get_user_tokens(UserId :: binary(), AccessType :: provider | client) ->
+    [proplists:proplist()].
 %% ====================================================================
-get_user_tokens(UserId) ->
+get_user_tokens(UserId, AccessType) ->
     {ok, AccessDocs} = ?DB(get_accesses_by_user, UserId),
-    lists:map(
+    lists:filtermap(
         fun(AccessDoc) ->
-            #veil_document{uuid = AccessId, record = #access{client_name = ClientName}} = AccessDoc,
-            [{accessId, AccessId}, {clientName, ClientName}]
+            #veil_document{uuid = AccessId, record = Access} = AccessDoc,
+            #access{client_name = ClientName, provider_id = ProviderId} = Access,
+            Element = [{accessId, AccessId}, {clientName, ClientName}],
+            case {ProviderId, AccessType} of
+                {undefined, client} -> {true, Element};
+                {<<_/binary>>, provider} -> {true, Element};
+                _ -> false
+            end
         end, AccessDocs).
 
 

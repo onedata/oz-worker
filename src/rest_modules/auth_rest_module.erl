@@ -15,9 +15,9 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource()  :: authcode | ctokens.
+-type provided_resource()  :: authcode | ctokens | prokens.
 -type accepted_resource()  :: ctokens | verify | ptokens.
--type removable_resource() :: ctoken.
+-type removable_resource() :: ctoken | ptoken.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
 
@@ -43,7 +43,8 @@ routes() ->
         {<<"/openid/client/tokens">>,             M, S#rstate{resource = ctokens,  methods = [post, get], noauth = [post]}},
         {<<"/openid/client/tokens/:accessId">>,   M, S#rstate{resource = ctoken,   methods = [delete]}},
         {<<"/openid/client/verify">>,             M, S#rstate{resource = verify,   methods = [post]}},
-        {<<"/openid/provider/tokens">>,           M, S#rstate{resource = ptokens,  methods = [post]}}
+        {<<"/openid/provider/tokens">>,           M, S#rstate{resource = ptokens,  methods = [post, get]}},
+        {<<"/openid/provider/tokens/:accessId">>, M, S#rstate{resource = ptoken,   methods = [delete]}}
     ].
 
 
@@ -59,7 +60,10 @@ routes() ->
     boolean().
 %% ====================================================================
 is_authorized(Resource, _Method, _Id, #client{type = user})
-        when Resource =:= authcode orelse Resource =:= ctokens orelse Resource =:= ctoken ->
+        when Resource =:= authcode orelse Resource =:= ctokens
+        orelse Resource =:= ctoken orelse Resource =:= ptoken ->
+    true;
+is_authorized(ptokens, get, _id, #client{type = user}) ->
     true;
 is_authorized(Resource, post, _Id, #client{type = provider})
         when Resource =:= verify orelse Resource =:= ptokens ->
@@ -80,10 +84,11 @@ is_authorized(_, _, _, _) ->
                       Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
-resource_exists(ctoken, UserId, Req) ->
+resource_exists(Resource, UserId, Req) when Resource =:= ptoken orelse Resource =:= ctoken  ->
+    AccessType = case Resource of ptoken -> provider; ctoken -> client end,
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {accessId, AccessId} = lists:keyfind(accessId, 1, Bindings),
-    {auth_logic:has_access(UserId, AccessId), Req2};
+    {auth_logic:has_access(UserId, AccessId, AccessType), Req2};
 resource_exists(_, _Id, Req) ->
     {true, Req}.
 
@@ -158,8 +163,9 @@ accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
 %% ====================================================================
 provide_resource(authcode, UserId, _Client, Req) ->
     {[{authorizationCode, auth_logic:gen_auth_code(UserId)}], Req};
-provide_resource(ctokens, UserId, _Client, Req) ->
-    {[{tokenInfo, auth_logic:get_user_tokens(UserId)}], Req}.
+provide_resource(Resource, UserId, _Client, Req) when Resource =:= ptokens orelse Resource =:= ctokens ->
+    AccessType = case Resource of ptoken -> provider; ctoken -> client end,
+    {[{tokenInfo, auth_logic:get_user_tokens(UserId, AccessType)}], Req}.
 
 
 %% delete_resource/3
@@ -172,7 +178,7 @@ provide_resource(ctokens, UserId, _Client, Req) ->
                       ResId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
-delete_resource(ctoken, _UserId, Req) ->
+delete_resource(Resource, _UserId, Req) when Resource =:= ptoken orelse Resource =:= ctoken ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {_, AccessId} = lists:keyfind(accessId, 1, Bindings),
     ok = auth_logic:delete_access(AccessId),
