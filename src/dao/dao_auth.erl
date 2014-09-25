@@ -118,7 +118,7 @@ get_authorization_by_code(Code) ->
             #veil_document{record = #authorization{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
-            ?warning("Couldn't find authorization with code ~p", [Code]),
+            ?debug("Couldn't find authorization with code ~p", [Code]),
             {error, not_found}
     end.
 
@@ -237,7 +237,7 @@ get_access_by_key(Key, Value) ->
             #veil_document{record = #access{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
-            ?warning("Couldn't find access by ~p with value ~p", [Key, Value]),
+            ?debug("Couldn't find access by ~p with value ~p", [Key, Value]),
             {error, not_found}
     end.
 
@@ -266,7 +266,7 @@ get_access_by_user_and_provider(UserId, ProviderId) ->
             #veil_document{record = #access{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
-            ?info("Couldn't find access by User ~p and Provider ~p", [UserId, ProviderId]),
+            ?debug("Couldn't find access by User ~p and Provider ~p", [UserId, ProviderId]),
             {error, not_found}
     end.
 
