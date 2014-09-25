@@ -30,8 +30,8 @@
 %% API
 %% ====================================================================
 -export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
-    has_access/3, delete_access/1, get_user_tokens/2, grant_tokens/2,
-    refresh_tokens/2, validate_token/2, verify/2,
+    has_access/3, modify_access/2, delete_access/1, get_user_tokens/2,
+    grant_tokens/2, refresh_tokens/2, validate_token/2, verify/2,
     clear_expired_authorizations/0]).
 
 %% ====================================================================
@@ -137,6 +137,23 @@ has_access(UserId, AccessId, AccessType) ->
             end;
         _ -> false
     end.
+
+
+%% modify_access/2
+%% ====================================================================
+%% @doc Modifies some user-visible details of an access.
+%% ====================================================================
+-spec modify_access(AccessId :: binary(), Data :: proplists:proplist()) ->
+    ok | no_return().
+%% ====================================================================
+modify_access(AccessId, Data) ->
+    {ok, #veil_document{record = Access} = AccessDoc} = ?DB(get_access, AccessId),
+    ClientName = proplists:get_value(<<"clientName">>, Data,
+                                     Access#access.client_name),
+
+    UpdatedDoc = AccessDoc#veil_document{record = Access#access{client_name = ClientName}},
+    {ok, _} = ?DB(save_access, UpdatedDoc),
+    ok.
 
 
 %% delete_access/1

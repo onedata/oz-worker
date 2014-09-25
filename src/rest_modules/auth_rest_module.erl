@@ -15,8 +15,8 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource()  :: authcode | ctokens | prokens.
--type accepted_resource()  :: ctokens | verify | ptokens.
+-type provided_resource()  :: authcode | ctokens | ptokens.
+-type accepted_resource()  :: ctoken | ptoken | ctokens | ptokens | verify.
 -type removable_resource() :: ctoken | ptoken.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
@@ -41,10 +41,10 @@ routes() ->
     [
         {<<"/openid/client/authorization_code">>, M, S#rstate{resource = authcode, methods = [get]}},
         {<<"/openid/client/tokens">>,             M, S#rstate{resource = ctokens,  methods = [post, get], noauth = [post]}},
-        {<<"/openid/client/tokens/:accessId">>,   M, S#rstate{resource = ctoken,   methods = [delete]}},
+        {<<"/openid/client/tokens/:id">>,         M, S#rstate{resource = ctoken,   methods = [patch, delete]}},
         {<<"/openid/client/verify">>,             M, S#rstate{resource = verify,   methods = [post]}},
         {<<"/openid/provider/tokens">>,           M, S#rstate{resource = ptokens,  methods = [post, get]}},
-        {<<"/openid/provider/tokens/:accessId">>, M, S#rstate{resource = ptoken,   methods = [delete]}}
+        {<<"/openid/provider/tokens/:id">>,       M, S#rstate{resource = ptoken,   methods = [patch, delete]}}
     ].
 
 
@@ -101,7 +101,7 @@ resource_exists(_, _Id, Req) ->
 %% @end
 %% ====================================================================
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
-                      ProviderId :: binary() | undefined, Data :: data(),
+                      ResourceId :: binary() | undefined, Data :: data(),
                       Client :: client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 %% ====================================================================
@@ -142,6 +142,10 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
             end,
             rest_module_helper:report_error(invalid_grant, Description1, Req)
     end;
+accept_resource(Resource, patch, AccessId, Data, _Client, Req)
+        when Resource =:= ptoken orelse Resource =:= ctoken ->
+    ok = auth_logic:modify_access(AccessId, Data),
+    {true, Req};
 accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
     UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary, Req),
     Secret = rest_module_helper:assert_key(<<"secret">>, Data, binary, Req),
@@ -164,7 +168,7 @@ accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
 provide_resource(authcode, UserId, _Client, Req) ->
     {[{authorizationCode, auth_logic:gen_auth_code(UserId)}], Req};
 provide_resource(Resource, UserId, _Client, Req) when Resource =:= ptokens orelse Resource =:= ctokens ->
-    AccessType = case Resource of ptoken -> provider; ctoken -> client end,
+    AccessType = case Resource of ptokens -> provider; ctokens -> client end,
     {[{tokenInfo, auth_logic:get_user_tokens(UserId, AccessType)}], Req}.
 
 
@@ -178,8 +182,6 @@ provide_resource(Resource, UserId, _Client, Req) when Resource =:= ptokens orels
                       ResId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
-delete_resource(Resource, _UserId, Req) when Resource =:= ptoken orelse Resource =:= ctoken ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {_, AccessId} = lists:keyfind(accessId, 1, Bindings),
+delete_resource(Resource, AccessId, Req) when Resource =:= ptoken orelse Resource =:= ctoken ->
     ok = auth_logic:delete_access(AccessId),
-    {true, Req2}.
+    {true, Req}.
