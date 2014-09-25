@@ -36,6 +36,7 @@ route(<<"/validate_login">>) -> page_validate_login;
 route(<<"/manage_account">>) -> page_manage_account;
 route(<<"/about">>) -> page_about;
 route(<<?privacy_policy_url>>) -> page_privacy_policy;
+route(<<?become_a_provider_url>>) -> page_become_a_provider;
 route(<<"/error">>) -> page_error;
 route(<<"/auth_endpoint">>) -> page_auth_endpoint;
 route(_) -> page_404.

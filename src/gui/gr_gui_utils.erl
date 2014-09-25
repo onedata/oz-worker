@@ -6,7 +6,7 @@
 %% @end
 %% ===================================================================
 %% @doc: This file contains useful functions commonly used in
-%% veil_cluster_node GUI modules.
+%% globalregistry GUI modules.
 %% @end
 %% ===================================================================
 
@@ -16,7 +16,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 % Functions to check for user's session
--export([apply_or_redirect/2, apply_or_redirect/3, maybe_redirect/2]).
+-export([apply_or_redirect/2, apply_or_redirect/3, maybe_redirect/1]).
 
 % Handling redirects to providers
 -export([get_redirection_url_to_provider/1]).
@@ -45,7 +45,7 @@ apply_or_redirect(Module, Fun, Args) ->
     try
         case gui_ctx:user_logged_in() of
             false ->
-                gui_jq:redirect_to_login(true);
+                gui_jq:redirect_to_login();
             true ->
                 erlang:apply(Module, Fun, Args)
         end
@@ -69,12 +69,12 @@ apply_or_redirect(Module, Fun, Args) ->
 %% Setting "SaveSourcePage" on true will allow a redirect back from login.
 %% NOTE: Should be called from page:main().
 %% @end
--spec maybe_redirect(NeedLogin :: boolean(), SaveSourcePage :: boolean()) -> boolean().
+-spec maybe_redirect(NeedLogin :: boolean()) -> boolean().
 %% ====================================================================
-maybe_redirect(NeedLogin, SaveSourcePage) ->
+maybe_redirect(NeedLogin) ->
     case NeedLogin and (not gui_ctx:user_logged_in()) of
         true ->
-            gui_jq:redirect_to_login(SaveSourcePage),
+            gui_jq:redirect_to_login(),
             true;
         false ->
             false
@@ -89,7 +89,7 @@ maybe_redirect(NeedLogin, SaveSourcePage) ->
 %% then he will be chosen with highest priority.
 %% @end
 -spec get_redirection_url_to_provider(Referer :: binary() | undefined) ->
-    {ok, ProvderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
+    {ok, ProviderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
 %% ====================================================================
 get_redirection_url_to_provider(Referer) ->
     try
@@ -98,11 +98,16 @@ get_redirection_url_to_provider(Referer) ->
         % Default provider is the provider that redirected the user for login.
         % Check if the provider is recognisable
         RefererProviderInfo =
-            try
-                {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, Referer),
-                {ok, ProvHostname, RedURL}
-            catch _:_ ->
-                error
+            case Referer of
+                undefined ->
+                    error;
+                _ ->
+                    try
+                        {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, Referer),
+                        {ok, ProvHostname, RedURL}
+                    catch _:_ ->
+                        error
+                    end
             end,
 
         case RefererProviderInfo of

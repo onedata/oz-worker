@@ -22,12 +22,12 @@
 % Postback functions and other
 -export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
--export([redirect_to_veilcluster/2]).
+-export([redirect_to_provider/2]).
 
 
 %% Template points to the template file, which will be filled with content
 main() ->
-    case gr_gui_utils:maybe_redirect(true, true) of
+    case gr_gui_utils:maybe_redirect(true) of
         true ->
             #dtl{file = "bare", app = ?APP_Name, bindings = [{title, <<"">>}, {body, <<"">>}, {custom, <<"">>}]};
         false ->
@@ -250,7 +250,7 @@ provider_redirection_panel() ->
         {ok, ProviderHostname, URL} ->
             #panel{body = [
                 #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
-                    postback = {action, redirect_to_veilcluster, [ProviderHostname, URL]}}
+                    postback = {action, redirect_to_provider, [ProviderHostname, URL]}}
             ]};
         {error, no_provider} ->
             {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
@@ -259,7 +259,10 @@ provider_redirection_panel() ->
                 #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
                 "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
                 #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
-                    value = Token, placeholder = <<"Space support token">>}
+                    value = Token, placeholder = <<"Space support token">>},
+                #p{style = <<"margin-top: 40px;">>, body = <<"You can also become a provider yourself and support your own space:">>},
+                #link{class = <<"btn btn-success">>, url = <<?become_a_provider_url>>,
+                    style = <<"width: 300px;">>, body = <<"Read more">>}
             ]}
     end.
 
@@ -392,8 +395,8 @@ show_name_edition(Flag) ->
     end.
 
 
-redirect_to_veilcluster(ProviderHostname, URL) ->
-    case gui_utils:https_get(<<ProviderHostname/binary, ?veilcluster_connection_check_endpoint>>, []) of
+redirect_to_provider(ProviderHostname, URL) ->
+    case gui_utils:https_get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, []) of
         {ok, _} ->
             gui_jq:redirect(URL);
         _ ->

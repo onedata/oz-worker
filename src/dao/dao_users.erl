@@ -84,9 +84,10 @@ get_user({Key, Value}) ->
                                 {ProviderID, UserID} = Value,
                                 {?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_query_args{keys =
                                 [[
-                                    <<?RECORD_FIELD_ATOM_PREFIX, ProviderID/binary>>,
+                                    <<?RECORD_FIELD_ATOM_PREFIX, (vcn_utils:ensure_binary(ProviderID))/binary>>,
                                     <<?RECORD_FIELD_BINARY_PREFIX, UserID/binary>>
                                 ]], include_docs = true}};
+
                             email ->
                                 {?USER_BY_EMAIL_VIEW, #view_query_args{keys =
                                 [<<?RECORD_FIELD_BINARY_PREFIX, (dao_helper:name(Value))/binary>>], include_docs = true}}

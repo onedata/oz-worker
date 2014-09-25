@@ -54,8 +54,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"openid.ext1.type.dn2">>, <<"http://openid.plgrid.pl/certificate/dn2">>},
             {<<"openid.ext1.type.dn3">>, <<"http://openid.plgrid.pl/certificate/dn3">>},
             {<<"openid.ext1.type.teams">>, <<"http://openid.plgrid.pl/userTeamsXML">>},
-            {<<"openid.ext1.type.POSTresponse">>, <<"http://openid.plgrid.pl/POSTresponse">>},
-            {<<"openid.ext1.if_available">>, <<"dn1,dn2,dn3,teams,POSTresponse">>}
+            {<<"openid.ext1.if_available">>, <<"dn1,dn2,dn3,teams">>}
         ],
         Params = gui_utils:proplist_to_url_params(ParamsProplist),
         {ok, <<(plgrid_endpoint())/binary, "?", Params/binary>>}
@@ -78,7 +77,7 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist =  gui_ctx:form_params(),
+        ParamsProplist = gui_ctx:get_request_params(),
         % Make sure received endpoint is really the PLGrid endpoint
         ReceivedEndpoint = proplists:get_value(<<"openid.op_endpoint">>, ParamsProplist),
         true = (plgrid_endpoint() =:= ReceivedEndpoint),

@@ -2,6 +2,10 @@
 globalregistry.iml
 *.beam
 
+src/gui/gui_static/flatui
+src/gui/gui_static/fonts
+src/gui/gui_static/n2o
+
 deps
 ebin
 rel/globalregistry
