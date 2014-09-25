@@ -31,7 +31,7 @@
 %% ====================================================================
 -export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
     has_access/3, modify_access/2, delete_access/1, get_user_tokens/2,
-    grant_tokens/2, refresh_tokens/2, validate_token/2, verify/2,
+    grant_tokens/3, refresh_tokens/2, validate_token/2, verify/2,
     clear_expired_authorizations/0]).
 
 %% ====================================================================
@@ -196,11 +196,11 @@ get_user_tokens(UserId, AccessType) ->
 %% @end
 %% ====================================================================
 -spec grant_tokens(Client :: {provider, ProviderId :: binary()} | native,
-                   AuthCode :: binary()) ->
+                   AuthCode :: binary(), ClientName :: binary()) ->
     {ok, [proplists:property()]} |
     {error, invalid_or_expired | expired | wrong_client}.
 %% ====================================================================
-grant_tokens(Client, AuthCode) ->
+grant_tokens(Client, AuthCode, ClientName) ->
     try
         AuthDoc = case ?DB(get_authorization_by_code, AuthCode) of
             {ok, AuthDoc1} -> AuthDoc1;
@@ -254,7 +254,7 @@ grant_tokens(Client, AuthCode) ->
             true ->
                 Access1 = #access{token = AccessToken, token_hash = AccessTokenHash,
                 refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
-                expiration_time = ExpirationTime, client_name = client_name_placeholder},
+                expiration_time = ExpirationTime, client_name = ClientName},
                 {ok, _} = ?DB(save_access, Access1);
 
             false ->
@@ -544,7 +544,7 @@ alert_revoke_access(AccessDoc) ->
 -spec prepare_token_response(UserId :: binary(), ProviderId :: binary(),
     AccessToken :: binary(), RefreshToken :: binary(),
     ExpirationTime :: non_neg_integer(), Now :: non_neg_integer()) ->
-    proplists:proplist().
+    {ok, proplists:proplist()}.
 %% ====================================================================
 prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now) ->
     {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),

@@ -113,7 +113,8 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
     Result = case GrantType of
         <<"authorization_code">> ->
             Code = rest_module_helper:assert_key(<<"code">>, Data, binary, Req),
-            auth_logic:grant_tokens(TokenClient, Code);
+            ClientName = rest_module_helper:assert_key(<<"client_name">>, Data, binary, Req),
+            auth_logic:grant_tokens(TokenClient, Code, ClientName);
 
         <<"refresh_token">> ->
             Token = rest_module_helper:assert_key(<<"refresh_token">>, Data, binary, Req),
