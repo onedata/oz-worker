@@ -257,8 +257,8 @@ get_access_by_key(Key, Value) ->
 get_access_by_user_and_provider(UserId, ProviderId) ->
     View = ?ACCESS_BY_USER_AND_PROVIDER,
     QueryArgs = #view_query_args{keys = [
-        <<?RECORD_FIELD_BINARY_PREFIX, UserId/binary, "_",
-          ?RECORD_FIELD_BINARY_PREFIX, ProviderId/binary>>],
+        [<<?RECORD_FIELD_BINARY_PREFIX, UserId/binary>>,
+         <<?RECORD_FIELD_BINARY_PREFIX, ProviderId/binary>>]],
         include_docs = true},
 
     case dao_records:list_records(View, QueryArgs) of
