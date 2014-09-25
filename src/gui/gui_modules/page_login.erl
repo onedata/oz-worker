@@ -62,7 +62,7 @@ login_panel() ->
                     ButtonColor = auth_config:get_provider_button_color(Provider),
                     HandlerModule = auth_config:get_provider_module(Provider),
                     #link{id = <<"login_", (atom_to_binary(Provider, latin1))/binary>>, class = <<"btn btn-small">>, postback = {auth, HandlerModule, Referer},
-                        style = <<"margin: 10px; text-align: left; width: 200px; background-color: ", ButtonColor/binary>>,
+                        style = <<"margin: 10px; text-align: left; width: 210px; background-color: ", ButtonColor/binary>>,
                         body = [
                             #span{style = <<"display: inline-block; line-height: 32px;">>, body = [
                                 #image{image = ButtonIcon, style = <<"margin-right: 10px;">>},
@@ -79,10 +79,10 @@ login_panel() ->
                     #hr{style = <<"border-color: #E0EAEB;">>},
                     #h3{style = <<"margin-top: 35px;">>, body = <<"Learn more">>},
                     #link{class = <<"btn btn-success">>, url = <<?ONEDATA_INFO>>,
-                        style = <<"margin: 10px; width: 200px;">>,
+                        style = <<"margin: 10px; width: 210px;">>,
                         body = <<"What is onedata?">>},
                     #link{class = <<"btn btn-success">>, url = <<?become_a_provider_url>>,
-                        style = <<"margin: 10px; width: 200px;">>,
+                        style = <<"margin: 10px; width: 210px;">>,
                         body = <<"Become a provider">>}
                 ]},
                 gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)

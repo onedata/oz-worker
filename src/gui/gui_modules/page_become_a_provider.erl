@@ -88,7 +88,7 @@ body() ->
         ]},
         #panel{style = <<"clear: both;">>},
         gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
-    ] ++ gr_gui_utils:logotype_footer(120)}.
+    ]}.
 
 
 % Renders to a table row representing a single step in installation
