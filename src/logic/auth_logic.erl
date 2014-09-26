@@ -180,7 +180,7 @@ get_user_tokens(UserId, AccessType) ->
         fun(AccessDoc) ->
             #veil_document{uuid = AccessId, record = Access} = AccessDoc,
             #access{client_name = ClientName, provider_id = ProviderId} = Access,
-            Element = [{accessId, AccessId}, {clientName, ClientName}],
+            Element = [{accessId, vcn_utils:ensure_binary(AccessId)}, {clientName, ClientName}],
             case {ProviderId, AccessType} of
                 {undefined, client} -> {true, Element};
                 {<<_/binary>>, provider} -> {true, Element};
