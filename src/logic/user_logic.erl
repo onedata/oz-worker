@@ -97,6 +97,7 @@ modify(UserId, Proplist) ->
             connected_accounts = ConnectedAccounts,
             spaces = Spaces,
             groups = Groups,
+            default_space = DefaultSpace,
             % TODO mock
             first_space_support_token = FSST} = User,
         NewUser = #user{
@@ -105,6 +106,7 @@ modify(UserId, Proplist) ->
             connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
             spaces = proplists:get_value(spaces, Proplist, Spaces),
             groups = proplists:get_value(groups, Proplist, Groups),
+            default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
             % TODO mock
             first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST)},
         DocNew = Doc#veil_document{record = NewUser},

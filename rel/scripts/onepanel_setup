@@ -1,0 +1,24 @@
+#!/bin/bash
+
+## ===================================================================
+## @author Krzysztof Trzepla
+## @copyright (C): 2014 ACK CYFRONET AGH
+## This software is released under the MIT license
+## cited in 'LICENSE.txt'.
+## @end
+## ===================================================================
+## @doc: This script sets up onepanel node during Global Registry package
+## post-installation hooks execution. It accepts one argument:
+## * Global Registry package installation prefix
+## @end
+## ===================================================================
+
+sed -i -e s/"^-name .*"/"-name onepanel@"`hostname -f`/g $1/onepanel/etc/vm.args
+sed -i -e s/"^-setcookie .*"/"-setcookie globalregistry"/g $1/onepanel/etc/vm.args
+if [[ -n "$ONEPANEL_MULTICAST_ADDRESS" ]]
+then
+    multicast_address=`echo $ONEPANEL_MULTICAST_ADDRESS | sed s/"\."/", "/g`
+    sed -i -e s/"{multicast_address, .*"/"{multicast_address, {$multicast_address} }"/g $1/onepanel/etc/app.config
+fi
+
+exit 0

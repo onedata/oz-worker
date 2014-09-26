@@ -11,15 +11,18 @@ OVERLAY_VARS    ?=
 
 .PHONY: test deps generate
 
-all: deps compile
+all: rel
 
 deps:
 	@./rebar get-deps
+	@git submodule init
+	@git submodule update
 
 compile:
 	@./rebar compile
 
-generate:
+generate: deps compile
+	make -C onepanel rel CONFIG=config/globalregistry.config
 	@./rebar generate $(OVERLAY_VARS)
 
 clean:
@@ -62,7 +65,7 @@ ct: deps compile
 ##
 ## Release targets
 ##
-rel: deps compile generate
+rel: generate
 
 relclean:
 	rm -rf rel/globalregistry
@@ -79,6 +82,7 @@ package.src: deps
 	rm -rf package/$(PKG_ID)
 	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION)| (cd package && tar -xf -)
 	${MAKE} -C package/$(PKG_ID) deps
+	cp -R onepanel package/$(PKG_ID)
 	mkdir -p package/$(PKG_ID)/priv
 	git --git-dir=.git describe --tags --always >package/$(PKG_ID)/priv/vsn.git
 	for dep in package/$(PKG_ID)/deps/*; do \
