@@ -16,12 +16,44 @@
 
 %% API
 -export([report_error/2, report_error/3, report_invalid_value/3, report_missing_key/2]).
--export([assert_key/4, assert_key_value/5]).
+-export([assert_type/4, assert_key/4, assert_key_value/5]).
 
 -type json_string() :: atom() | binary().
 -type error() :: invalid_request | invalid_client | invalid_grant |
     unauthorized_client | unsupported_grant_type | invalid_scope.
 -export_type([error/0]).
+
+
+%% assert_type/4
+%% ====================================================================
+%% @doc Returns a value of a parameter if it has an expected type, or 'undefined'
+%% if it doesn't exist. Throws otherwise.
+%% @end
+%% ====================================================================
+-spec assert_type(Key :: json_string(), List :: [{json_string(), term()}],
+                  Type :: list_of_bin, Req :: cowboy_req:req()) ->
+    [binary()] | undefined | no_return();
+                 (Key :: json_string(), List :: [{json_string(), term()}],
+                  Type :: binary, Req :: cowboy_req:req()) ->
+    binary() | undefined | no_return().
+%% ====================================================================
+assert_type(Key, List, Type, Req) ->
+    case lists:keyfind(Key, 1, List) of
+        {Key, Value} when Type =:= binary andalso is_binary(Value) ->
+            Value;
+
+        {Key, Value} when Type =:= list_of_bin andalso is_list(Value) ->
+            case lists:all(fun is_binary/1, Value) of
+                true -> Value;
+                false -> report_invalid_value(Key, Value, Req)
+            end;
+
+        {Key, Value} ->
+            report_invalid_value(Key, Value, Req);
+
+        false ->
+            undefined
+    end.
 
 
 %% assert_key/4
@@ -38,21 +70,9 @@
     binary() | no_return().
 %% ====================================================================
 assert_key(Key, List, Type, Req) ->
-    case lists:keyfind(Key, 1, List) of
-        {Key, Value} when Type =:= binary andalso is_binary(Value) ->
-            Value;
-
-        {Key, Value} when Type =:= list_of_bin andalso is_list(Value) ->
-            case lists:all(fun is_binary/1, Value) of
-                true -> Value;
-                false -> report_invalid_value(Key, Value, Req)
-            end;
-
-        {Key, Value} ->
-            report_invalid_value(Key, Value, Req);
-
-        false ->
-            report_missing_key(Key, Req)
+    case assert_type(Key, List, Type, Req) of
+        undefined -> report_missing_key(Key, Req);
+        Value -> Value
     end.
 
 

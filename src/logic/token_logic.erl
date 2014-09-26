@@ -94,4 +94,4 @@ consume(Token, TokenType) ->
 -spec random_token() -> binary().
 %% ====================================================================
 random_token() ->
-    mochiweb_base64url:encode(crypto:rand_bytes(?TOKEN_LENGTH)).
+    mochiweb_base64url:encode([crypto:rand_bytes(?TOKEN_LENGTH)]).

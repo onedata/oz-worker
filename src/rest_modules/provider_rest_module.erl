@@ -116,6 +116,9 @@ accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
     Req2 = cowboy_req:set_resp_body(Body, Req),
     {true, Req2};
 accept_resource(provider, patch, ProviderId, Data, _Client, Req) ->
+    rest_module_helper:assert_type(<<"urls">>, Data, list_of_bin, Req),
+    rest_module_helper:assert_type(<<"csr">>, Data, binary, Req),
+    rest_module_helper:assert_type(<<"redirectionPoint">>, Data, binary, Req),
     ok = provider_logic:modify(ProviderId, Data),
     {true, Req};
 accept_resource(spaces, post, _ProviderId, Data, Client, Req) ->
