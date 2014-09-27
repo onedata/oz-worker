@@ -23,7 +23,7 @@
     get_authorization/1, get_expired_authorizations_ids/1,
     get_authorization_by_code/1]).
 -export([save_access/1, remove_access/1, exist_access/1, get_access/1,
-    get_access_by_key/2, get_accesses_by_user/1]).
+    get_access_by_key/2, get_accesses_by_user/1, get_access_by_user_and_provider/2]).
 
 
 %% save_authorization/1
@@ -118,7 +118,7 @@ get_authorization_by_code(Code) ->
             #veil_document{record = #authorization{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
-            ?warning("Couldn't find authorization with code ~p", [Code]),
+            ?debug("Couldn't find authorization with code ~p", [Code]),
             {error, not_found}
     end.
 
@@ -212,7 +212,7 @@ get_access(AccessId) when is_list(AccessId) ->
 
 %% get_access_by_key/2
 %% ====================================================================
-%% @doc Gets authorization from DB by a given key and value. The function
+%% @doc Gets access from DB by a given key and value. The function
 %% doesn't throw when such record doesn't exist, instead returning
 %% {error, not_found}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
@@ -237,7 +237,36 @@ get_access_by_key(Key, Value) ->
             #veil_document{record = #access{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
-            ?warning("Couldn't find access by ~p with value ~p", [Key, Value]),
+            ?debug("Couldn't find access by ~p with value ~p", [Key, Value]),
+            {error, not_found}
+    end.
+
+
+%% get_access_by_user_and_provider/2
+%% ====================================================================
+%% @doc Gets access from the DB by a given userId and providerId. The function
+%% doesn't throw when such record doesn't exist, instead returning
+%% {error, not_found}.
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
+%% for more details about #veil_document{} wrapper.
+%% @end
+%% ====================================================================
+-spec get_access_by_user_and_provider(UserId :: binary(), ProviderId :: binary()) ->
+    {ok, access_doc()} | {error, not_found}.
+%% ====================================================================
+get_access_by_user_and_provider(UserId, ProviderId) ->
+    View = ?ACCESS_BY_USER_AND_PROVIDER,
+    QueryArgs = #view_query_args{keys = [
+        [<<?RECORD_FIELD_BINARY_PREFIX, UserId/binary>>,
+         <<?RECORD_FIELD_BINARY_PREFIX, ProviderId/binary>>]],
+        include_docs = true},
+
+    case dao_records:list_records(View, QueryArgs) of
+        {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
+            #veil_document{record = #access{}} = Doc,
+            {ok, Doc};
+        {ok, #view_result{rows = []}} ->
+            ?debug("Couldn't find access by User ~p and Provider ~p", [UserId, ProviderId]),
             {error, not_found}
     end.
 

@@ -14,16 +14,13 @@
 
 -include("dao/dao_types.hrl").
 -include("auth_common.hrl").
+-include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(STATE_TOKEN, state_token).
--define(EXPIRED_AUTHORIZATION_REMOVE_CHUNK, 50).
+-define(STATE_TOKEN_EXPIRATION_SECS, 60). %% @todo: config
 
-%% @todo: config
--define(AUTH_CODE_EXPIRATION_SECS, 600).
--define(ACCESS_EXPIRATION_SECS, 36000).
--define(STATE_TOKEN_EXPIRATION_SECS, 60).
--define(ISSUER_URL, <<"https://onedata.org">>).
+-define(EXPIRED_AUTHORIZATION_REMOVE_CHUNK, 50).
 
 -define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
 -define(DB(Function, Arg1, Arg2), dao_lib:apply(dao_auth, Function, [Arg1, Arg2], 1)).
@@ -33,8 +30,9 @@
 %% API
 %% ====================================================================
 -export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
-    has_access/2, delete_access/1,  get_user_tokens/1,  grant_tokens/2,
-    validate_token/2, verify/2, clear_expired_authorizations/0]).
+    has_access/2, delete_access/1, get_user_tokens/1, grant_tokens/2,
+    refresh_tokens/2, validate_token/2, verify/2,
+    clear_expired_authorizations/0]).
 
 %% ====================================================================
 %% Handling state tokens
@@ -109,8 +107,10 @@ gen_auth_code(UserId) ->
     Token :: binary().
 %% ====================================================================
 gen_auth_code(UserId, ProviderId) ->
+    {ok, ExpirationSecs} = application:get_env(?APP_Name, authorization_code_expiration_seconds),
+
     Token = token_logic:random_token(),
-    ExpirationPoint = vcn_utils:time() + ?AUTH_CODE_EXPIRATION_SECS,
+    ExpirationPoint = vcn_utils:time() + ExpirationSecs,
     Auth = #authorization{code = Token, expiration_time = ExpirationPoint,
                           user_id = UserId, provider_id = ProviderId},
 
@@ -187,47 +187,98 @@ grant_tokens(Client, AuthCode) ->
 
         ok = ?DB(remove_authorization, AuthId),
 
-        Audience = case ProviderId of
-            undefined -> UserId;
-            _ -> ProviderId
-        end,
-
         case Client of %% poor man's validation
             {provider, ProviderId} -> ok;
             native when ProviderId =:= undefined -> ok;
             _ -> throw(wrong_client)
         end,
 
-        AccessToken = token_logic:random_token(),
-        AccessTokenHash = access_token_hash(AccessToken),
-        RefreshToken = token_logic:random_token(),
         Now = vcn_utils:time(),
-        ExpirationTime = Now + ?ACCESS_EXPIRATION_SECS,
+        {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime} =
+            generate_access_tokens(Now),
 
-        Access = #access{token = AccessToken, token_hash = AccessTokenHash,
-            refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
-            expiration_time = ExpirationTime, client_name = client_name_placeholder},
+        %% For a provider, update an existing access document if possible
+        CreateNewAccessDocument = case Client of
+            {provider, ProviderId} ->
+                case ?DB(get_access_by_user_and_provider, UserId, ProviderId) of
+                    {ok, AccessDoc} ->
+                        #veil_document{record = Access} = AccessDoc,
+                        AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
+                            token = AccessToken,
+                            token_hash = AccessTokenHash,
+                            refresh_token = RefreshToken,
+                            expiration_time = ExpirationTime
+                        }},
+                        {ok, _} = ?DB(save_access, AccessDocUpdated),
+                        false;
 
-        {ok, _} = ?DB(save_access, Access),
+                    {error, not_found} ->
+                        true
+                end;
 
-        {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
-        EmailsList = [[{email, Email}] || Email <- Emails],
-        {ok, [
-            {access_token, AccessToken},
-            {token_type, bearer},
-            {expires_in, ?ACCESS_EXPIRATION_SECS},
-            {refresh_token, RefreshToken},
-            {scope, openid},
-            {id_token, jwt_encode([
-                {iss, ?ISSUER_URL},
-                {sub, UserId},
-                {aud, Audience},
-                {name, Name},
-                {email, EmailsList},
-                {exp, ExpirationTime},
-                {iat, Now}
-            ])}
-        ]}
+            native ->
+                true
+        end,
+
+        case CreateNewAccessDocument of
+            true ->
+                Access1 = #access{token = AccessToken, token_hash = AccessTokenHash,
+                refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
+                expiration_time = ExpirationTime, client_name = client_name_placeholder},
+                {ok, _} = ?DB(save_access, Access1);
+
+            false ->
+                ok
+        end,
+
+        prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now)
+    catch
+        Error -> {error, Error}
+    end.
+
+
+%% refresh_tokens/2
+%% ====================================================================
+%% @doc Refreshes tokens granted through the token endpoint.
+%% @end
+%% ====================================================================
+-spec refresh_tokens(Client :: {provider, ProviderId :: binary()} | native,
+                     RefreshToken :: binary()) ->
+    {ok, [proplists:property()]} |
+    {error, refresh_invalid_or_revoked | refresh_wrong_client}.
+%% ====================================================================
+refresh_tokens(Client, RefreshToken) ->
+    try
+        AccessDoc = case ?DB(get_access_by_key, refresh_token, RefreshToken) of
+            {ok, AccessDoc1} -> AccessDoc1;
+            {error, not_found} -> throw(refresh_invalid_or_revoked)
+        end,
+
+        #veil_document{record = Access} = AccessDoc,
+        #access{provider_id = ProviderId, user_id = UserId} = Access,
+
+        case Client of
+            {provider, ProviderId} -> ok;
+            native when ProviderId =:= undefined -> ok;
+            _ ->
+                alert_revoke_access(AccessDoc),
+                throw(refresh_wrong_client)
+        end,
+
+        Now = vcn_utils:time(),
+        {AccessToken, AccessTokenHash, RefreshTokenNew, ExpirationTime} =
+            generate_access_tokens(Now),
+
+        AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
+            token = AccessToken,
+            token_hash = AccessTokenHash,
+            refresh_token = RefreshTokenNew,
+            expiration_time = ExpirationTime
+        }},
+
+        {ok, _} = ?DB(save_access, AccessDocUpdated),
+
+        prepare_token_response(UserId, ProviderId, AccessToken, RefreshTokenNew, ExpirationTime, Now)
     catch
         Error -> {error, Error}
     end.
@@ -251,7 +302,7 @@ validate_token(Client, AccessToken) ->
 
     case ?DB(get_access_by_key, token, AccessToken) of
         {error, not_found} = Error -> Error;
-        {ok, #veil_document{record = Access}} ->
+        {ok, #veil_document{record = Access} = AccessDoc} ->
             #access{provider_id = IntendedAudience, user_id = UserId,
                     expiration_time = Expiration} = Access,
 
@@ -263,24 +314,9 @@ validate_token(Client, AccessToken) ->
                     end;
 
                 _ ->
+                    alert_revoke_access(AccessDoc),
                     {error, bad_audience}
             end
-    end.
-
-
-%% remove_expired_authorizations_in_chunks/1
-%% ====================================================================
-%% @doc Removes expired authorizations in chunks of given size.
-%% ====================================================================
--spec remove_expired_authorizations_in_chunks(ChunkSize :: non_neg_integer()) ->
-    ok.
-%% ====================================================================
-remove_expired_authorizations_in_chunks(ChunkSize) ->
-    {ok, ExpiredIds} = ?DB(get_expired_authorizations_ids, ChunkSize),
-    lists:foreach(fun(AuthId) -> ?DB(remove_authorization, AuthId) end, ExpiredIds),
-    case length(ExpiredIds) of
-        ChunkSize -> remove_expired_authorizations_in_chunks(ChunkSize);
-        _ -> ok
     end.
 
 
@@ -292,10 +328,11 @@ remove_expired_authorizations_in_chunks(ChunkSize) ->
 -spec clear_expired_authorizations() -> ok.
 %% ====================================================================
 clear_expired_authorizations() ->
+    {ok, ExpirationSecs} = application:get_env(?APP_Name, authorization_code_expiration_seconds),
     receive
         stop -> ok
     after
-        timer:seconds(?AUTH_CODE_EXPIRATION_SECS) ->
+        timer:seconds(ExpirationSecs) ->
             try
                 remove_expired_authorizations_in_chunks(?EXPIRED_AUTHORIZATION_REMOVE_CHUNK)
             catch
@@ -379,9 +416,15 @@ clear_expired_state_tokens() ->
     boolean().
 %% ====================================================================
 verify(UserId, Secret) ->
+    Now = vcn_utils:time(),
     case ?DB(get_access_by_key, token_hash, Secret) of
-        {ok, #veil_document{record = #access{user_id = UserId}}} -> true;
-        _ -> false
+        {ok, #veil_document{record = #access{user_id = UserId, expiration_time = Exp}}} ->
+            Now < Exp;
+        {ok, #veil_document{record = #access{}} = AccessDoc} ->
+            alert_revoke_access(AccessDoc),
+            false;
+        _ ->
+            false
     end.
 
 
@@ -417,3 +460,85 @@ jwt_encode(Claims) ->
     Payload64 = mochiweb_base64url:encode(Payload),
     <<Header64/binary, ".", Payload64/binary, ".">>.
 
+
+%% generate_access_tokens/1
+%% ====================================================================
+%% @doc Generates a new set of access tokens and token-related information.
+%% ====================================================================
+-spec generate_access_tokens(Now :: non_neg_integer()) ->
+    {AccessToken :: binary(), AccessTokenHash :: binary(),
+     RefreshToken :: binary(), ExpirationTime :: non_neg_integer()}.
+%% ====================================================================
+generate_access_tokens(Now) ->
+    {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
+    AccessToken = token_logic:random_token(),
+    AccessTokenHash = access_token_hash(AccessToken),
+    RefreshToken = token_logic:random_token(),
+    ExpirationTime = Now + AccessExpirationSecs,
+    {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime}.
+
+
+%% remove_expired_authorizations_in_chunks/1
+%% ====================================================================
+%% @doc Removes expired authorizations in chunks of given size.
+%% ====================================================================
+-spec remove_expired_authorizations_in_chunks(ChunkSize :: non_neg_integer()) ->
+    ok.
+%% ====================================================================
+remove_expired_authorizations_in_chunks(ChunkSize) ->
+    {ok, ExpiredIds} = ?DB(get_expired_authorizations_ids, ChunkSize),
+    lists:foreach(fun(AuthId) -> ?DB(remove_authorization, AuthId) end, ExpiredIds),
+    case length(ExpiredIds) of
+        ChunkSize -> remove_expired_authorizations_in_chunks(ChunkSize);
+        _ -> ok
+    end.
+
+
+%% alert_revoke_access/1
+%% ====================================================================
+%% @doc Removes an access and logs an alert.
+%% ====================================================================
+-spec alert_revoke_access(AccessDoc :: access_doc()) ->
+    ok.
+%% ====================================================================
+alert_revoke_access(AccessDoc) ->
+    #veil_document{uuid = AccessId, record = Access} = AccessDoc,
+    ?alert("Revoking access id: ~p, contents: ~p", [AccessId, Access]),
+    ok = ?DB(remove_access, AccessId).
+
+
+%% prepare_token_response/1
+%% ====================================================================
+%% @doc Prepares an OpenID token response to encode into JSON.
+%% ====================================================================
+-spec prepare_token_response(UserId :: binary(), ProviderId :: binary(),
+    AccessToken :: binary(), RefreshToken :: binary(),
+    ExpirationTime :: non_neg_integer(), Now :: non_neg_integer()) ->
+    proplists:proplist().
+%% ====================================================================
+prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now) ->
+    {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
+    {ok, IssuerUrl} = application:get_env(?APP_Name, openid_issuer_url),
+
+    Audience = case ProviderId of
+        undefined -> UserId;
+        _ -> ProviderId
+    end,
+
+    {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
+    {ok, [
+        {access_token, AccessToken},
+        {token_type, bearer},
+        {expires_in, AccessExpirationSecs},
+        {refresh_token, RefreshToken},
+        {scope, openid},
+        {id_token, jwt_encode([
+            {iss, vcn_utils:ensure_binary(IssuerUrl)},
+            {sub, UserId},
+            {aud, Audience},
+            {name, Name},
+            {emails, Emails},
+            {exp, ExpirationTime},
+            {iat, Now}
+        ])}
+    ]}.

@@ -105,30 +105,37 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
     TokenClient = case Resource of ptokens -> {provider, Id}; ctokens -> native end,
 
     GrantType = rest_module_helper:assert_key(<<"grant_type">>, Data, binary, Req),
-    case GrantType of
+    Result = case GrantType of
         <<"authorization_code">> ->
             Code = rest_module_helper:assert_key(<<"code">>, Data, binary, Req),
-            case auth_logic:grant_tokens(TokenClient, Code) of
-                {ok, Data1} ->
-                    Body = mochijson2:encode(Data1),
-                    Req2 = cowboy_req:set_resp_body(Body, Req),
-                    {true, Req2};
-                {error, Reason} ->
-                    Description = case Reason of
-                        invalid_or_expired -> <<"authorization code invalid or expired">>;
-                        expired            -> <<"authorization code expired">>;
-                        wrong_client       -> <<"authorization code issued to another client">>
-                    end,
-                    rest_module_helper:report_error(invalid_grant, Description, Req)
-            end;
+            auth_logic:grant_tokens(TokenClient, Code);
 
         <<"refresh_token">> ->
-            error(not_implemented); %% @TODO: VFS-679
+            Token = rest_module_helper:assert_key(<<"refresh_token">>, Data, binary, Req),
+            auth_logic:refresh_tokens(TokenClient, Token);
 
         _ ->
             Description = <<"the authorization grant type '", GrantType/binary,
                             "' is not supported by the authorization server">>,
             rest_module_helper:report_error(unsupported_grant_type, Description, Req)
+    end,
+    case Result of
+        {ok, Data1} ->
+            Body = mochijson2:encode(Data1),
+            Req2 = cowboy_req:set_resp_body(Body, Req),
+            Req3 = cowboy_req:set_resp_header(<<"Cache-Control">>, <<"no-store">>, Req2),
+            Req4 = cowboy_req:set_resp_header(<<"Pragma">>, <<"no-cache">>, Req3),
+            {true, Req4};
+
+        {error, Reason} ->
+            Description1 = case Reason of
+                refresh_invalid_or_revoked -> <<"refresh token invalid or revoked">>;
+                refresh_wrong_client       -> <<"refresh token issued to another client">>;
+                invalid_or_expired -> <<"authorization code invalid or expired">>;
+                expired            -> <<"authorization code expired">>;
+                wrong_client       -> <<"authorization code issued to another client">>
+            end,
+            rest_module_helper:report_error(invalid_grant, Description1, Req)
     end;
 accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
     UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary, Req),
