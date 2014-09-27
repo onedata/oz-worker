@@ -41,10 +41,10 @@ routes() ->
     [
         {<<"/openid/client/authorization_code">>, M, S#rstate{resource = authcode, methods = [get]}},
         {<<"/openid/client/tokens">>,             M, S#rstate{resource = ctokens,  methods = [post, get], noauth = [post]}},
-        {<<"/openid/client/tokens/:id">>,         M, S#rstate{resource = ctoken,   methods = [patch, delete]}},
+        {<<"/openid/client/tokens/:accessId">>,   M, S#rstate{resource = ctoken,   methods = [patch, delete]}},
         {<<"/openid/client/verify">>,             M, S#rstate{resource = verify,   methods = [post]}},
         {<<"/openid/provider/tokens">>,           M, S#rstate{resource = ptokens,  methods = [post, get]}},
-        {<<"/openid/provider/tokens/:id">>,       M, S#rstate{resource = ptoken,   methods = [patch, delete]}}
+        {<<"/openid/provider/tokens/:accessId">>, M, S#rstate{resource = ptoken,   methods = [patch, delete]}}
     ].
 
 
@@ -150,10 +150,12 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
             end,
             rest_module_helper:report_error(invalid_grant, Description1, Req)
     end;
-accept_resource(Resource, patch, AccessId, Data, _Client, Req)
+accept_resource(Resource, patch, _UserId, Data, _Client, Req)
         when Resource =:= ptoken orelse Resource =:= ctoken ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {accessId, AccessId} = lists:keyfind(accessId, 1, Bindings),
     ok = auth_logic:modify_access(AccessId, Data),
-    {true, Req};
+    {true, Req2};
 accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
     UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary, Req),
     Secret = rest_module_helper:assert_key(<<"secret">>, Data, binary, Req),
@@ -190,6 +192,8 @@ provide_resource(Resource, UserId, _Client, Req) when Resource =:= ptokens orels
                       ResId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
-delete_resource(Resource, AccessId, Req) when Resource =:= ptoken orelse Resource =:= ctoken ->
+delete_resource(Resource, _UserId, Req) when Resource =:= ptoken orelse Resource =:= ctoken ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {accessId, AccessId} = lists:keyfind(accessId, 1, Bindings),
     ok = auth_logic:delete_access(AccessId),
-    {true, Req}.
+    {true, Req2}.
