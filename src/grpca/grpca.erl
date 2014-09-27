@@ -106,7 +106,7 @@ sign_provider_req(ProviderId, CSRPem) ->
 -spec verify_provider(PeerCertDer :: public_key:der_encoded()) ->
     {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: atom()}}.
 %% ====================================================================
-verify_provider(PeerCertDer) -> %% @todo: CRLs
+verify_provider(PeerCertDer) ->
     case delegate(verify_provider, {PeerCertDer}) of
         {ok, ProviderId} = Result when is_binary(ProviderId) -> Result;
         {error, {bad_cert, Reason}} = Result when is_atom(Reason) -> Result
@@ -121,6 +121,8 @@ verify_provider(PeerCertDer) -> %% @todo: CRLs
     KeyPath :: string(), Domain :: string()) -> ok.
 %% ====================================================================
 generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
+    {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
+
     TmpDir = mochitemp:mkdtemp(),
     CSRFile = random_filename(TmpDir),
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
@@ -146,6 +148,14 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
         " -out ", CertPath]),
 
     ?info("~s", [SigningOutput]),
+    ?info("Generating an empty CRL..."),
+
+    CrlGenerationOutput = os:cmd(["openssl ca",
+        " -config ", CaConfigFile,
+        " -gencrl",
+        " -out ", filename:join(CaDir, "crl.pem")]),
+
+    ?info("~s", [CrlGenerationOutput]),
 
     mochitemp:rmtempdir(TmpDir),
     ok.
@@ -184,11 +194,11 @@ revoke_imp(Serial, CaDir) ->
         " -revoke ", filename:join([CaDir, "newcerts", Serial]), ".pem"]),
     ?info("~s", [RevokeOutput]),
     ?info("Generating an updated CRL"),
-    CreateCrlOutput = os:cmd(["openssl ca"
+    CreateCrlOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,
         " -gencrl",
         " -out ", filename:join(CaDir, "crl.pem")]),
-    ?info(CreateCrlOutput),
+    ?info("~s", [CreateCrlOutput]),
     ok.
 
 
@@ -231,7 +241,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
 -spec verify_provider_imp(PeerCertDer :: public_key:der_encoded(),
     CaDir :: string()) -> {ok, ProviderId :: binary()}.
 %% ====================================================================
-verify_provider_imp(PeerCertDer, CaDir) -> %% @todo: CRLs
+verify_provider_imp(PeerCertDer, CaDir) ->
     CaCertFile = cacert_path(CaDir),
     {ok, CaCertPem} = file:read_file(CaCertFile),
     [{'Certificate', CaCertDer, not_encrypted}] = public_key:pem_decode(CaCertPem),
@@ -239,7 +249,11 @@ verify_provider_imp(PeerCertDer, CaDir) -> %% @todo: CRLs
     case public_key:pkix_path_validation(Cert, [PeerCertDer], [{max_path_length, 0}]) of
         {ok, _} ->
             PeerCert = public_key:pkix_decode_cert(PeerCertDer, plain),
-            {ok, get_provider_id(PeerCert)};
+            case check_revoked(PeerCert) of
+                valid -> {ok, get_provider_id(PeerCert)};
+                BadCert -> {error, BadCert}
+            end;
+
         Error -> Error
     end.
 
@@ -312,6 +326,18 @@ loop(CaDir) ->
     after 60000 ->
         ?MODULE:loop(CaDir)
     end.
+
+
+-spec check_revoked(OtpCert :: #'OTPCertificate'{}) ->
+    valid | {bad_cert, revocation_status_undetermined} | {bad_cert, {revoked, public_key:crl_reason()}}.
+check_revoked(OtpCert) ->
+    {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
+
+    {ok, CRLPem} = file:read_file(filename:join(CaDir, "crl.pem")),
+    [{'CertificateList', CRLDer, not_encrypted}] = public_key:pem_decode(CRLPem),
+    #'CertificateList'{} = CRL = public_key:der_decode('CertificateList', CRLDer),
+
+    public_key:pkix_crls_validate(OtpCert, [{#'DistributionPoint'{}, {CRLDer, CRL}}], []).
 
 
 %% get_provider_id/1
