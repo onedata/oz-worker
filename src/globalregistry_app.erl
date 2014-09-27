@@ -100,6 +100,7 @@ start_rest() ->
 
         Dispatch = cowboy_router:compile([
             {'_', lists:append([
+                [{<<"/crl.pem">>, cowboy_static, {file, filename:join(GRPCADir, "crl.pem")}}],
                 user_rest_module:routes(),
                 provider_rest_module:routes(),
                 spaces_rest_module:routes(),

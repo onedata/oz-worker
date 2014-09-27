@@ -37,11 +37,12 @@
 %% ====================================================================
 create(URLs, RedirectionPoint, CSRBin) ->
     ProviderId = dao_helper:gen_uuid(),
-    {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(ProviderId, CSRBin),
+    BinProviderId = vcn_utils:ensure_binary(ProviderId),
+    {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
     dao_adapter:save(#veil_document{uuid = ProviderId, record =
         #provider{urls = URLs, redirection_point = RedirectionPoint, serial = Serial}}),
 
-    {ok, ProviderId, ProviderCertPem}.
+    {ok, BinProviderId, ProviderCertPem}.
 
 
 %% modify/2

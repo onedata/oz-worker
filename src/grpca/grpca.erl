@@ -104,12 +104,12 @@ sign_provider_req(ProviderId, CSRPem) ->
 %% @end
 %% ====================================================================
 -spec verify_provider(PeerCertDer :: public_key:der_encoded()) ->
-    {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: atom()}}.
+    {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: any()}}.
 %% ====================================================================
 verify_provider(PeerCertDer) ->
     case delegate(verify_provider, {PeerCertDer}) of
         {ok, ProviderId} = Result when is_binary(ProviderId) -> Result;
-        {error, {bad_cert, Reason}} = Result when is_atom(Reason) -> Result
+        {error, {bad_cert, _Reason}} = Result -> Result
     end.
 
 
@@ -187,11 +187,12 @@ revoke(Serial) ->
 revoke_imp(Serial, CaDir) ->
     TmpDir = mochitemp:mkdtemp(),
     CaConfigFile = ca_config_file(TmpDir, CaDir),
+    LSerial = vcn_utils:ensure_list(Serial),
     ?info("Revoking a certificate with serial number ~p", [Serial]),
     RevokeOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,
         " -batch",
-        " -revoke ", filename:join([CaDir, "newcerts", Serial]), ".pem"]),
+        " -revoke ", filename:join([CaDir, "newcerts", LSerial]), ".pem"]),
     ?info("~s", [RevokeOutput]),
     ?info("Generating an updated CRL"),
     CreateCrlOutput = os:cmd(["openssl ca",
@@ -221,7 +222,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
         " -batch",
         " -notext",
         " -extensions user_cert",
-        " -subj \"/CN=", binary:bin_to_list(ProviderId), "/O=OneData/OU=Providers\"",
+        " -subj \"/CN=", vcn_utils:ensure_list(ProviderId), "/O=OneData/OU=Providers\"",
         " -in ", CSRFile,
         " -out ", CertFile]),
 
@@ -239,7 +240,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
 %% @doc The underlying implementation of {@link grpca:verify_provider_imp/1}.
 %% ====================================================================
 -spec verify_provider_imp(PeerCertDer :: public_key:der_encoded(),
-    CaDir :: string()) -> {ok, ProviderId :: binary()}.
+    CaDir :: string()) -> {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: any()}}.
 %% ====================================================================
 verify_provider_imp(PeerCertDer, CaDir) ->
     CaCertFile = cacert_path(CaDir),
@@ -248,8 +249,8 @@ verify_provider_imp(PeerCertDer, CaDir) ->
     #'OTPCertificate'{} = Cert = public_key:pkix_decode_cert(CaCertDer, otp),
     case public_key:pkix_path_validation(Cert, [PeerCertDer], [{max_path_length, 0}]) of
         {ok, _} ->
-            PeerCert = public_key:pkix_decode_cert(PeerCertDer, plain),
-            case check_revoked(PeerCert) of
+            PeerCert = public_key:pkix_decode_cert(PeerCertDer, otp),
+            case check_revoked(CaCertDer, Cert, PeerCert) of
                 valid -> {ok, get_provider_id(PeerCert)};
                 BadCert -> {error, BadCert}
             end;
@@ -328,33 +329,41 @@ loop(CaDir) ->
     end.
 
 
--spec check_revoked(OtpCert :: #'OTPCertificate'{}) ->
-    valid | {bad_cert, revocation_status_undetermined} | {bad_cert, {revoked, public_key:crl_reason()}}.
-check_revoked(OtpCert) ->
+%% check_revoked/3
+%% ====================================================================
+%% @doc Checks whether the certificate has been revoked by the GRPCA.
+%% ====================================================================
+-spec check_revoked(CaCertDer :: public_key:der_encoded(),
+                    CaCert :: #'OTPCertificate'{},
+                    PeerCert :: #'OTPCertificate'{}) ->
+    valid | {bad_cert, Reason :: any()}.
+%% ====================================================================
+check_revoked(CaCertDer, CaCert, PeerCert) ->
     {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
 
     {ok, CRLPem} = file:read_file(filename:join(CaDir, "crl.pem")),
     [{'CertificateList', CRLDer, not_encrypted}] = public_key:pem_decode(CRLPem),
     #'CertificateList'{} = CRL = public_key:der_decode('CertificateList', CRLDer),
+    FakeDP = #'DistributionPoint'{cRLIssuer = asn1_NOVALUE},
 
-    public_key:pkix_crls_validate(OtpCert, [{#'DistributionPoint'{}, {CRLDer, CRL}}], []).
+    public_key:pkix_crls_validate(PeerCert, [{FakeDP, {CRLDer, CRL}}],
+        [{issuer_fun, {fun(_, _, _, _) -> {ok, CaCert, [CaCertDer]} end, []}}]).
 
 
 %% get_provider_id/1
 %% ====================================================================
 %% @doc Extracts Provider's ID out of the certificate's Common Name.
 %% ====================================================================
--spec get_provider_id(Cert :: #'Certificate'{}) -> ProviderId :: binary().
+-spec get_provider_id(Cert :: #'OTPCertificate'{}) -> ProviderId :: binary().
 %% ====================================================================
-get_provider_id(#'Certificate'{} = Cert) ->
-    #'Certificate'{tbsCertificate =
-    #'TBSCertificate'{subject = {rdnSequence, Attrs}}} = Cert,
+get_provider_id(#'OTPCertificate'{} = Cert) ->
+    #'OTPCertificate'{tbsCertificate =
+        #'OTPTBSCertificate'{subject = {rdnSequence, Attrs}}} = Cert,
 
     [ProviderId] = lists:filtermap(fun([Attribute]) ->
         case Attribute#'AttributeTypeAndValue'.type of
             ?'id-at-commonName' ->
-                Value = Attribute#'AttributeTypeAndValue'.value,
-                {_, Id} = public_key:der_decode('X520CommonName', Value),
+                {_, Id} = Attribute#'AttributeTypeAndValue'.value,
                 {true, vcn_utils:ensure_binary(Id)};
             _ -> false
         end
@@ -431,6 +440,7 @@ req_cnf(DN) ->
 ca_cnf(CaDir) ->
     {ok, CertDomain} = application:get_env(?APP_Name, rest_cert_domain),
     {ok, RestPort} = application:get_env(?APP_Name, rest_port),
+    Port = integer_to_binary(RestPort),
     ["# Purpose: Configuration for CAs.\n"
     "\n"
     "ROOTDIR                = ", CaDir, "\n"
@@ -457,7 +467,7 @@ ca_cnf(CaDir) ->
     "default_md             = sha1\n"
     "preserve               = no\n"
     "policy                 = policy_provider\n"
-    "crlDistributionPoints  = URI:https://", CertDomain, ":", RestPort, "/provider/crl\n"
+    "crlDistributionPoints  = URI:https://", CertDomain, ":", Port, "/crl.pem\n"
     "\n"
 
     "[policy_provider]\n"
@@ -470,7 +480,7 @@ ca_cnf(CaDir) ->
     "\n"
 
     "[user_cert]\n"
-    "crlDistributionPoints  = URI:https://", CertDomain, ":", RestPort, "/provider/crl\n"
+    "crlDistributionPoints  = URI:https://", CertDomain, ":", Port, "/crl.pem\n"
     "basicConstraints       = CA:false\n"
     "keyUsage               = nonRepudiation, digitalSignature, keyEncipherment\n"
     "subjectKeyIdentifier   = hash\n"

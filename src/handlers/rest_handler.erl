@@ -179,7 +179,7 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
 
                 ProviderId = case grpca:verify_provider(PeerCert) of
                     {ok, ProviderId1} -> ProviderId1;
-                    {error, {bad_cert, Reason}} when is_atom(Reason) ->
+                    {error, {bad_cert, Reason}} ->
                         ?warning("Attempted authentication with bad peer certificate: ~p", [Reason]),
                         throw({silent_error, Req2})
                 end,

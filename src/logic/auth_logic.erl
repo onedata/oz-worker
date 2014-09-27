@@ -512,9 +512,9 @@ alert_revoke_access(AccessDoc) ->
 %% @doc Prepares an OpenID token response to encode into JSON.
 %% ====================================================================
 -spec prepare_token_response(UserId :: binary(), ProviderId :: binary(),
-    AccessToken :: binary(), RefreshToken :: binary(),
-    ExpirationTime :: non_neg_integer(), Now :: non_neg_integer()) ->
-    proplists:proplist().
+                             AccessToken :: binary(), RefreshToken :: binary(),
+                             ExpirationTime :: non_neg_integer(), Now :: non_neg_integer()) ->
+    {ok, proplists:proplist()}.
 %% ====================================================================
 prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now) ->
     {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
