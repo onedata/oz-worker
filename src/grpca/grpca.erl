@@ -33,7 +33,7 @@
 %% API
 %% ====================================================================
 -export([start/4, stop/0, sign_provider_req/2, loop/1, verify_provider/1,
-    cacert_path/1]).
+    cacert_path/1, revoke/1]).
 
 
 %% ====================================================================
@@ -88,11 +88,12 @@ stop() ->
 %% @end
 %% ====================================================================
 -spec sign_provider_req(ProviderId :: binary(), CSRPem :: binary()) ->
-    {ok, CertPem :: binary()}.
+    {ok, CertPem :: binary(), Serial :: binary()}.
 %% ====================================================================
 sign_provider_req(ProviderId, CSRPem) ->
     case delegate(sign_provider_req, {ProviderId, CSRPem}) of
-        {ok, CertPem} = Result when is_binary(CertPem) -> Result
+        {ok, CertPem, Serial} when is_binary(CertPem), is_integer(Serial) ->
+            {ok, CertPem, integer_to_binary(Serial, 16)}
     end.
 
 
@@ -150,9 +151,45 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
     ok.
 
 
+%% revoke/1
+%% ====================================================================
+%% @doc Revokes a certificate identified by a given serial.
+%% ====================================================================
+-spec revoke(Serial :: binary()) -> ok.
+%% ====================================================================
+revoke(Serial) ->
+    case delegate(revoke, {Serial}) of
+        ok -> ok
+    end.
+
+
 %% ====================================================================
 %% Internal functions
 %% ====================================================================
+
+
+%% revoke_imp/2
+%% ====================================================================
+%% @doc The underlying implementation of {@link grpca:revoke/1}.
+%% ====================================================================
+-spec revoke_imp(Serial :: binary(), CaDir :: string()) -> ok.
+%% ====================================================================
+revoke_imp(Serial, CaDir) ->
+    TmpDir = mochitemp:mkdtemp(),
+    CaConfigFile = ca_config_file(TmpDir, CaDir),
+    ?info("Revoking a certificate with serial number ~p", [Serial]),
+    RevokeOutput = os:cmd(["openssl ca",
+        " -config ", CaConfigFile,
+        " -batch",
+        " -revoke ", filename:join([CaDir, "newcerts", Serial]), ".pem"]),
+    ?info("~s", [RevokeOutput]),
+    ?info("Generating an updated CRL"),
+    CreateCrlOutput = os:cmd(["openssl ca"
+        " -config ", CaConfigFile,
+        " -gencrl",
+        " -out ", filename:join(CaDir, "crl.pem")]),
+    ?info(CreateCrlOutput),
+    ok.
 
 
 %% sign_provider_req_imp/3
@@ -160,7 +197,7 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
 %% @doc The underlying implementation of {@link grpca:sign_provider_req/2}.
 %% ====================================================================
 -spec sign_provider_req_imp(ProviderId :: binary(), CSRPem :: binary(),
-    CaDir :: string()) -> {ok, Pem :: binary()}.
+    CaDir :: string()) -> {ok, Pem :: binary(), Serial :: integer()}.
 %% ====================================================================
 sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
     TmpDir = mochitemp:mkdtemp(),
@@ -179,9 +216,12 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
         " -out ", CertFile]),
 
     {ok, Pem} = file:read_file(CertFile),
+    [{'Certificate', CertDer, not_encrypted}] = public_key:pem_decode(Pem),
+    Cert = public_key:pkix_decode_cert(CertDer, otp),
+    #'OTPCertificate'{tbsCertificate = #'OTPTBSCertificate'{serialNumber = Serial}} = Cert,
     mochitemp:rmtempdir(TmpDir),
 
-    {ok, Pem}.
+    {ok, Pem, Serial}.
 
 
 %% verify_provider_imp/2
@@ -260,6 +300,11 @@ loop(CaDir) ->
 
         {Requester, {verify_provider, {ProviderId}}} ->
             Reply = (catch verify_provider_imp(ProviderId, CaDir)),
+            Requester ! {ok, Reply},
+            loop(CaDir);
+
+        {Requester, {revoke, {Serial}}} ->
+            Reply = (catch revoke_imp(Serial, CaDir)),
             Requester ! {ok, Reply},
             loop(CaDir);
 
@@ -358,6 +403,8 @@ req_cnf(DN) ->
 -spec ca_cnf(CaDir :: string()) -> Config :: iolist().
 %% ====================================================================
 ca_cnf(CaDir) ->
+    {ok, CertDomain} = application:get_env(?APP_Name, rest_cert_domain),
+    {ok, RestPort} = application:get_env(?APP_Name, rest_port),
     ["# Purpose: Configuration for CAs.\n"
     "\n"
     "ROOTDIR                = ", CaDir, "\n"
@@ -367,20 +414,24 @@ ca_cnf(CaDir) ->
     "[ca]\n"
     "dir                    = $ROOTDIR\n"
     "certs                  = $dir/certs\n"
-    "crl_dir                = $dir/crl\n"
-    "database               = $dir/index.txt\n"
     "new_certs_dir          = $dir/newcerts\n"
-    "certificate            = $dir/", ?CACERT_FILE, "\n"
+    "database               = $dir/index.txt\n"
     "serial                 = $dir/serial\n"
+    "crl_dir                = $dir/crl\n"
+    "crlnumber              = $dir/crlnumber\n"
     "crl                    = $dir/crl.pem\n"
-    "private_key            = $dir/", ?CAKEY_FILE, "\n"
     "RANDFILE               = $dir/private/RAND\n"
+    "certificate            = $dir/", ?CACERT_FILE, "\n"
+    "private_key            = $dir/", ?CAKEY_FILE, "\n"
     "\n"
     "x509_extensions        = user_cert\n"
+    "crl_extensions         = crl_ext\n"
     "default_days           = 3600\n"
+    "default_crl_days       = 1\n"
     "default_md             = sha1\n"
     "preserve               = no\n"
     "policy                 = policy_provider\n"
+    "crlDistributionPoints  = URI:https://", CertDomain, ":", RestPort, "/provider/crl\n"
     "\n"
 
     "[policy_provider]\n"
@@ -393,10 +444,14 @@ ca_cnf(CaDir) ->
     "\n"
 
     "[user_cert]\n"
+    "crlDistributionPoints  = URI:https://", CertDomain, ":", RestPort, "/provider/crl\n"
     "basicConstraints       = CA:false\n"
     "keyUsage               = nonRepudiation, digitalSignature, keyEncipherment\n"
     "subjectKeyIdentifier   = hash\n"
     "authorityKeyIdentifier = keyid,issuer:always\n"
     "subjectAltName         = email:copy\n"
     "issuerAltName          = issuer:copy\n"
-    "\n"].
+    "\n"
+
+    "[crl_ext]\n"
+    "authorityKeyIdentifier = keyid:always, issuer:always"].

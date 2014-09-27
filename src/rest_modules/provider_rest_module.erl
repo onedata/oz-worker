@@ -11,11 +11,12 @@
 -author("Konrad Zemek").
 
 -include("handlers/rest_handler.hrl").
+-include("registered_names.hrl").
 
 -behavior(rest_module_behavior).
 
 
--type provided_resource()  :: provider | spaces | nprovider | space | ip | ports.
+-type provided_resource()  :: provider | spaces | nprovider | space | ip | ports | crl.
 -type accepted_resource()  :: provider | spaces | ssupport.
 -type removable_resource() :: provider | space.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
@@ -36,6 +37,7 @@
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 %% ====================================================================
 routes() ->
+    {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
     S = #rstate{module = ?MODULE},
     M = rest_handler,
     [
@@ -45,7 +47,8 @@ routes() ->
         {<<"/provider/spaces/support">>,                M, S#rstate{resource = ssupport,    methods = [post]                }},
         {<<"/provider/spaces/:sid">>,                   M, S#rstate{resource = space,       methods = [get, delete]         }},
         {<<"/provider/test/check_my_ip">>,              M, S#rstate{resource = ip,          methods = [get], noauth = [get] }},
-        {<<"/provider/test/check_my_ports">>,           M, S#rstate{resource = ports,       methods = [get], noauth = [get] }}
+        {<<"/provider/test/check_my_ports">>,           M, S#rstate{resource = ports,       methods = [get], noauth = [get] }},
+        {<<"/provider/crl">>,                           cowboy_static, {file, filename:join(CaDir, "crl.pem")}}
     ].
 
 
