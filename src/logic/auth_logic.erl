@@ -525,7 +525,8 @@ prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, Expiration
         _ -> ProviderId
     end,
 
-    {ok, #user{name = Name, email_list = Emails}} = user_logic:get_user(UserId),
+    {ok, #user{name = Name, email_list = Emails, connected_accounts = Accounts}} = user_logic:get_user(UserId),
+    Logins = [[{provider_id, OProviderId}, {login, OLogin}] || #oauth_account{provider_id = OProviderId, login = OLogin} <- Accounts, size(OLogin) > 0],
     {ok, [
         {access_token, AccessToken},
         {token_type, bearer},
@@ -537,6 +538,7 @@ prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, Expiration
             {sub, UserId},
             {aud, Audience},
             {name, Name},
+            {logins, Logins},
             {emails, Emails},
             {exp, ExpirationTime},
             {iat, Now}
