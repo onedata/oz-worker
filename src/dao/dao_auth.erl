@@ -202,12 +202,13 @@ exist_access(AccessId) ->
 %% (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 %% ====================================================================
--spec get_access(AccessKey :: access_id() | {atom(), binary()}) ->
+-spec get_access(AccessId :: access_id() | binary()) ->
     {ok, access_doc()} | {error, any()} | no_return().
 %% ====================================================================
-get_access(AccessId) when is_list(AccessId) ->
+get_access(AccessId) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
-    {ok, #veil_document{record = #access{}}} = dao_records:get_record(AccessId).
+    LAccessId = vcn_utils:ensure_list(AccessId),
+    {ok, #veil_document{record = #access{}}} = dao_records:get_record(LAccessId).
 
 
 %% get_access_by_key/2

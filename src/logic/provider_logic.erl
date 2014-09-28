@@ -20,7 +20,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/3, modify/2, exists/1]).
+-export([create/4, modify/2, exists/1]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
 -export([test_connection/1]).
@@ -32,15 +32,17 @@
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec create(URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+-spec create(ClientName :: binary(), URLs :: [binary()],
+             RedirectionPoint :: binary(), CSR :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 %% ====================================================================
-create(URLs, RedirectionPoint, CSRBin) ->
+create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = dao_helper:gen_uuid(),
     BinProviderId = vcn_utils:ensure_binary(ProviderId),
     {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
     dao_adapter:save(#veil_document{uuid = ProviderId, record =
-        #provider{urls = URLs, redirection_point = RedirectionPoint, serial = Serial}}),
+        #provider{client_name = ClientName, urls = URLs,
+                  redirection_point = RedirectionPoint, serial = Serial}}),
 
     {ok, BinProviderId, ProviderCertPem}.
 
@@ -59,10 +61,10 @@ modify(ProviderId, Data) ->
     #veil_document{record = Provider} = Doc,
 
     URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
-    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data,
-                                           Provider#provider.redirection_point),
+    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
+    ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
 
-    ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint},
+    ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint, client_name = ClientName},
     dao_adapter:save(Doc#veil_document{record = ProviderNew}),
     ok.
 
@@ -90,8 +92,13 @@ exists(ProviderId) ->
     {ok, Data :: [proplists:property()]}.
 %% ====================================================================
 get_data(ProviderId) ->
-    #provider{urls = URLs, redirection_point = RedirectionPoint} = dao_adapter:provider(ProviderId),
+    #provider{
+        client_name = ClientName,
+        urls = URLs,
+        redirection_point = RedirectionPoint} = dao_adapter:provider(ProviderId),
+
     {ok, [
+        {clientName, ClientName},
         {providerId, ProviderId},
         {urls, URLs},
         {redirectionPoint, RedirectionPoint}
