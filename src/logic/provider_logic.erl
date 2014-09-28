@@ -37,9 +37,14 @@
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 %% ====================================================================
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
-    ProviderId = dao_adapter:save(#provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint}),
-    {ok, ProviderCertPem} = grpca:sign_provider_req(ProviderId, CSRBin),
-    {ok, ProviderId, ProviderCertPem}.
+    ProviderId = dao_helper:gen_uuid(),
+    BinProviderId = vcn_utils:ensure_binary(ProviderId),
+    {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
+    dao_adapter:save(#veil_document{uuid = ProviderId, record =
+        #provider{client_name = ClientName, urls = URLs,
+                  redirection_point = RedirectionPoint, serial = Serial}}),
+
+    {ok, BinProviderId, ProviderCertPem}.
 
 
 %% modify/2
@@ -124,7 +129,7 @@ get_spaces(ProviderId) ->
     true.
 %% ====================================================================
 remove(ProviderId) ->
-    #provider{spaces = Spaces} = dao_adapter:provider(ProviderId),
+    #provider{spaces = Spaces, serial = Serial} = dao_adapter:provider(ProviderId),
 
     lists:foreach(fun(SpaceId) ->
         SpaceDoc = dao_adapter:space_doc(SpaceId),
@@ -133,6 +138,7 @@ remove(ProviderId) ->
         dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew})
     end, Spaces),
 
+    grpca:revoke(Serial),
     dao_adapter:provider_remove(ProviderId).
 
 

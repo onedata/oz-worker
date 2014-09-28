@@ -33,7 +33,7 @@
         {grpca_dir, "resources/grpca"},
         {rest_cert_file, "resources/grpca/rest.pem"},
         {rest_key_file, "resources/grpca/rest_key.pem"},
-        {rest_cert_domain, "127.0.0.1"},
+        {rest_cert_domain, "127.0.0.1"}, %% the cert domain is also used to provide CRLs
         {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'},
         %% OpenID Provider for REST
         {authorization_code_expiration_seconds, 600},

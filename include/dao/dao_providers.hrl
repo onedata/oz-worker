@@ -18,7 +18,8 @@
     client_name :: binary(),
     redirection_point :: binary(),
     urls :: [binary()],
-    spaces = [] :: [SpaceId :: binary()]
+    spaces = [] :: [SpaceId :: binary()],
+    serial :: binary()
 }).
 
 -endif.

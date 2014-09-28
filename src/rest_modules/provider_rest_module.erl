@@ -11,6 +11,7 @@
 -author("Konrad Zemek").
 
 -include("handlers/rest_handler.hrl").
+-include("registered_names.hrl").
 
 -behavior(rest_module_behavior).
 
