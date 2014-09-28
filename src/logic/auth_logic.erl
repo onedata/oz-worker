@@ -30,8 +30,8 @@
 %% API
 %% ====================================================================
 -export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
-    has_access/2, delete_access/1, get_user_tokens/1, grant_tokens/2,
-    refresh_tokens/2, validate_token/2, verify/2,
+    has_access/3, modify_access/2, delete_access/1, get_user_tokens/2,
+    grant_tokens/3, refresh_tokens/2, validate_token/2, verify/2,
     clear_expired_authorizations/0]).
 
 %% ====================================================================
@@ -118,19 +118,42 @@ gen_auth_code(UserId, ProviderId) ->
     Token.
 
 
-%% has_access/1
+%% has_access/3
 %% ====================================================================
 %% @doc Checks if a given user authorized a given access id and it exists
 %% within the system.
 %% @end
 %% ====================================================================
--spec has_access(UserId :: binary(), AccessId :: binary()) -> boolean().
+-spec has_access(UserId :: binary(), AccessId :: binary(),
+                 AccessType :: client | provider) -> boolean().
 %% ====================================================================
-has_access(UserId, AccessId) ->
+has_access(UserId, AccessId, AccessType) ->
     case ?DB(get_access, AccessId) of
-        {ok, #veil_document{record = #access{user_id = UserId}}} -> true;
+        {ok, #veil_document{record = #access{user_id = UserId, provider_id = ProviderId}}} ->
+            case {ProviderId, AccessType} of
+                {undefined, client} -> true;
+                {<<_/binary>>, provider} -> true;
+                _ -> false
+            end;
         _ -> false
     end.
+
+
+%% modify_access/2
+%% ====================================================================
+%% @doc Modifies some user-visible details of an access.
+%% ====================================================================
+-spec modify_access(AccessId :: binary(), Data :: proplists:proplist()) ->
+    ok | no_return().
+%% ====================================================================
+modify_access(AccessId, Data) ->
+    {ok, #veil_document{record = Access} = AccessDoc} = ?DB(get_access, AccessId),
+    ClientName = proplists:get_value(<<"clientName">>, Data,
+                                     Access#access.client_name),
+
+    UpdatedDoc = AccessDoc#veil_document{record = Access#access{client_name = ClientName}},
+    {ok, _} = ?DB(save_access, UpdatedDoc),
+    ok.
 
 
 %% delete_access/1
@@ -148,14 +171,21 @@ delete_access(AccessId) ->
 %% @doc Returns all pseudo-tokens identifying access and refresh tokens in the
 %% system.
 %% ====================================================================
--spec get_user_tokens(UserId :: binary()) -> [[proplists:property()]].
+-spec get_user_tokens(UserId :: binary(), AccessType :: provider | client) ->
+    [proplists:proplist()].
 %% ====================================================================
-get_user_tokens(UserId) ->
+get_user_tokens(UserId, AccessType) ->
     {ok, AccessDocs} = ?DB(get_accesses_by_user, UserId),
-    lists:map(
+    lists:filtermap(
         fun(AccessDoc) ->
-            #veil_document{uuid = AccessId, record = #access{client_name = ClientName}} = AccessDoc,
-            [{accessId, AccessId}, {clientName, ClientName}]
+            #veil_document{uuid = AccessId, record = Access} = AccessDoc,
+            #access{client_name = ClientName, provider_id = ProviderId} = Access,
+            Element = [{accessId, vcn_utils:ensure_binary(AccessId)}, {clientName, ClientName}],
+            case {ProviderId, AccessType} of
+                {undefined, client} -> {true, Element};
+                {<<_/binary>>, provider} -> {true, Element};
+                _ -> false
+            end
         end, AccessDocs).
 
 
@@ -166,11 +196,11 @@ get_user_tokens(UserId) ->
 %% @end
 %% ====================================================================
 -spec grant_tokens(Client :: {provider, ProviderId :: binary()} | native,
-                   AuthCode :: binary()) ->
+                   AuthCode :: binary(), ClientName :: binary() | undefined) ->
     {ok, [proplists:property()]} |
     {error, invalid_or_expired | expired | wrong_client}.
 %% ====================================================================
-grant_tokens(Client, AuthCode) ->
+grant_tokens(Client, AuthCode, ClientName) ->
     try
         AuthDoc = case ?DB(get_authorization_by_code, AuthCode) of
             {ok, AuthDoc1} -> AuthDoc1;
@@ -220,11 +250,21 @@ grant_tokens(Client, AuthCode) ->
                 true
         end,
 
+        ClientName1 =
+            case ClientName of
+                undefined ->
+                    {ok, Data} = provider_logic:get_data(ProviderId),
+                    {clientName, <<Name/binary>>} = lists:keyfind(clientName, 1, Data),
+                    Name;
+
+                _ -> ClientName
+            end,
+
         case CreateNewAccessDocument of
             true ->
                 Access1 = #access{token = AccessToken, token_hash = AccessTokenHash,
                 refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
-                expiration_time = ExpirationTime, client_name = client_name_placeholder},
+                expiration_time = ExpirationTime, client_name = ClientName1},
                 {ok, _} = ?DB(save_access, Access1);
 
             false ->
@@ -514,7 +554,7 @@ alert_revoke_access(AccessDoc) ->
 -spec prepare_token_response(UserId :: binary(), ProviderId :: binary(),
     AccessToken :: binary(), RefreshToken :: binary(),
     ExpirationTime :: non_neg_integer(), Now :: non_neg_integer()) ->
-    proplists:proplist().
+    {ok, proplists:proplist()}.
 %% ====================================================================
 prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now) ->
     {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),

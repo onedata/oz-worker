@@ -107,15 +107,17 @@ resource_exists(_, _, Req) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 %% ====================================================================
 accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
+    ClientName = rest_module_helper:assert_key(<<"clientName">>, Data, binary, Req),
     URLs = rest_module_helper:assert_key(<<"urls">>, Data, list_of_bin, Req),
     CSR = rest_module_helper:assert_key(<<"csr">>, Data, binary, Req),
     RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary, Req),
 
-    {ok, ProviderId, SignedPem} = provider_logic:create(URLs, RedirectionPoint, CSR),
+    {ok, ProviderId, SignedPem} = provider_logic:create(ClientName, URLs, RedirectionPoint, CSR),
     Body = mochijson2:encode([{providerId, ProviderId}, {certificate, SignedPem}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),
     {true, Req2};
 accept_resource(provider, patch, ProviderId, Data, _Client, Req) ->
+    rest_module_helper:assert_type(<<"clientName">>, Data, binary, Req),
     rest_module_helper:assert_type(<<"urls">>, Data, list_of_bin, Req),
     rest_module_helper:assert_type(<<"redirectionPoint">>, Data, binary, Req),
     ok = provider_logic:modify(ProviderId, Data),

@@ -15,9 +15,9 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource()  :: authcode | ctokens.
--type accepted_resource()  :: ctokens | verify | ptokens.
--type removable_resource() :: ctoken.
+-type provided_resource()  :: authcode | ctokens | ptokens.
+-type accepted_resource()  :: ctoken | ptoken | ctokens | ptokens | verify.
+-type removable_resource() :: ctoken | ptoken.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
 
@@ -41,9 +41,10 @@ routes() ->
     [
         {<<"/openid/client/authorization_code">>, M, S#rstate{resource = authcode, methods = [get]}},
         {<<"/openid/client/tokens">>,             M, S#rstate{resource = ctokens,  methods = [post, get], noauth = [post]}},
-        {<<"/openid/client/tokens/:accessId">>,   M, S#rstate{resource = ctoken,   methods = [delete]}},
+        {<<"/openid/client/tokens/:accessId">>,   M, S#rstate{resource = ctoken,   methods = [patch, delete]}},
         {<<"/openid/client/verify">>,             M, S#rstate{resource = verify,   methods = [post]}},
-        {<<"/openid/provider/tokens">>,           M, S#rstate{resource = ptokens,  methods = [post]}}
+        {<<"/openid/provider/tokens">>,           M, S#rstate{resource = ptokens,  methods = [post, get]}},
+        {<<"/openid/provider/tokens/:accessId">>, M, S#rstate{resource = ptoken,   methods = [patch, delete]}}
     ].
 
 
@@ -59,7 +60,10 @@ routes() ->
     boolean().
 %% ====================================================================
 is_authorized(Resource, _Method, _Id, #client{type = user})
-        when Resource =:= authcode orelse Resource =:= ctokens orelse Resource =:= ctoken ->
+        when Resource =:= authcode orelse Resource =:= ctokens
+        orelse Resource =:= ctoken orelse Resource =:= ptoken ->
+    true;
+is_authorized(ptokens, get, _id, #client{type = user}) ->
     true;
 is_authorized(Resource, post, _Id, #client{type = provider})
         when Resource =:= verify orelse Resource =:= ptokens ->
@@ -80,10 +84,11 @@ is_authorized(_, _, _, _) ->
                       Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
-resource_exists(ctoken, UserId, Req) ->
+resource_exists(Resource, UserId, Req) when Resource =:= ptoken orelse Resource =:= ctoken  ->
+    AccessType = case Resource of ptoken -> provider; ctoken -> client end,
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {accessId, AccessId} = lists:keyfind(accessId, 1, Bindings),
-    {auth_logic:has_access(UserId, AccessId), Req2};
+    {auth_logic:has_access(UserId, AccessId, AccessType), Req2};
 resource_exists(_, _Id, Req) ->
     {true, Req}.
 
@@ -96,7 +101,7 @@ resource_exists(_, _Id, Req) ->
 %% @end
 %% ====================================================================
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
-                      ProviderId :: binary() | undefined, Data :: data(),
+                      ResourceId :: binary() | undefined, Data :: data(),
                       Client :: client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 %% ====================================================================
@@ -108,7 +113,15 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
     Result = case GrantType of
         <<"authorization_code">> ->
             Code = rest_module_helper:assert_key(<<"code">>, Data, binary, Req),
-            auth_logic:grant_tokens(TokenClient, Code);
+            ClientName =
+                case proplists:get_value(<<"client_name">>, Data) of
+                    undefined when Resource =:= ptokens -> ok;
+                    undefined when Resource =:= ctokens -> rest_module_helper:report_missing_key(<<"client_name">>, Req);
+                    Value when is_binary(Value) -> Value;
+                    Value -> rest_module_helper:report_invalid_value(<<"client_name">>, Value, Req)
+                end,
+
+            auth_logic:grant_tokens(TokenClient, Code, ClientName);
 
         <<"refresh_token">> ->
             Token = rest_module_helper:assert_key(<<"refresh_token">>, Data, binary, Req),
@@ -137,6 +150,12 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
             end,
             rest_module_helper:report_error(invalid_grant, Description1, Req)
     end;
+accept_resource(Resource, patch, _UserId, Data, _Client, Req)
+        when Resource =:= ptoken orelse Resource =:= ctoken ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {accessId, AccessId} = lists:keyfind(accessId, 1, Bindings),
+    ok = auth_logic:modify_access(AccessId, Data),
+    {true, Req2};
 accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
     UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary, Req),
     Secret = rest_module_helper:assert_key(<<"secret">>, Data, binary, Req),
@@ -158,8 +177,9 @@ accept_resource(verify, post, _ProviderId, Data, _Client, Req) ->
 %% ====================================================================
 provide_resource(authcode, UserId, _Client, Req) ->
     {[{authorizationCode, auth_logic:gen_auth_code(UserId)}], Req};
-provide_resource(ctokens, UserId, _Client, Req) ->
-    {[{tokenInfo, auth_logic:get_user_tokens(UserId)}], Req}.
+provide_resource(Resource, UserId, _Client, Req) when Resource =:= ptokens orelse Resource =:= ctokens ->
+    AccessType = case Resource of ptokens -> provider; ctokens -> client end,
+    {[{tokenInfo, auth_logic:get_user_tokens(UserId, AccessType)}], Req}.
 
 
 %% delete_resource/3
@@ -172,8 +192,8 @@ provide_resource(ctokens, UserId, _Client, Req) ->
                       ResId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 %% ====================================================================
-delete_resource(ctoken, _UserId, Req) ->
+delete_resource(Resource, _UserId, Req) when Resource =:= ptoken orelse Resource =:= ctoken ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
-    {_, AccessId} = lists:keyfind(accessId, 1, Bindings),
+    {accessId, AccessId} = lists:keyfind(accessId, 1, Bindings),
     ok = auth_logic:delete_access(AccessId),
     {true, Req2}.
