@@ -110,7 +110,7 @@ gen_auth_code(UserId, ProviderId) ->
     {ok, ExpirationSecs} = application:get_env(?APP_Name, authorization_code_expiration_seconds),
 
     Token = token_logic:random_token(),
-    ExpirationPoint = vcn_utils:time() + ExpirationSecs,
+    ExpirationPoint = opn_utils:time() + ExpirationSecs,
     Auth = #authorization{code = Token, expiration_time = ExpirationPoint,
                           user_id = UserId, provider_id = ProviderId},
 
@@ -180,7 +180,7 @@ get_user_tokens(UserId, AccessType) ->
         fun(AccessDoc) ->
             #db_document{uuid = AccessId, record = Access} = AccessDoc,
             #access{client_name = ClientName, provider_id = ProviderId} = Access,
-            Element = [{accessId, vcn_utils:ensure_binary(AccessId)}, {clientName, ClientName}],
+            Element = [{accessId, opn_utils:ensure_binary(AccessId)}, {clientName, ClientName}],
             case {ProviderId, AccessType} of
                 {undefined, client} -> {true, Element};
                 {<<_/binary>>, provider} -> {true, Element};
@@ -210,7 +210,7 @@ grant_tokens(Client, AuthCode, ClientName) ->
         #db_document{uuid = AuthId, record = Auth} = AuthDoc,
         #authorization{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Auth,
 
-        case vcn_utils:time() < Expiration of
+        case opn_utils:time() < Expiration of
             true -> ok;
             false -> throw(expired)
         end,
@@ -223,7 +223,7 @@ grant_tokens(Client, AuthCode, ClientName) ->
             _ -> throw(wrong_client)
         end,
 
-        Now = vcn_utils:time(),
+        Now = opn_utils:time(),
         {AccessToken, AccessTokenHash, RefreshToken, ExpirationTime} =
             generate_access_tokens(Now),
 
@@ -305,7 +305,7 @@ refresh_tokens(Client, RefreshToken) ->
                 throw(refresh_wrong_client)
         end,
 
-        Now = vcn_utils:time(),
+        Now = opn_utils:time(),
         {AccessToken, AccessTokenHash, RefreshTokenNew, ExpirationTime} =
             generate_access_tokens(Now),
 
@@ -348,7 +348,7 @@ validate_token(Client, AccessToken) ->
 
             case IntendedAudience of
                 ProviderId ->
-                    case vcn_utils:time() < Expiration of
+                    case opn_utils:time() < Expiration of
                         false -> {error, expired};
                         true -> {ok, UserId}
                     end;
@@ -456,7 +456,7 @@ clear_expired_state_tokens() ->
     boolean().
 %% ====================================================================
 verify(UserId, Secret) ->
-    Now = vcn_utils:time(),
+    Now = opn_utils:time(),
     case ?DB(get_access_by_key, token_hash, Secret) of
         {ok, #db_document{record = #access{user_id = UserId, expiration_time = Exp}}} ->
             Now < Exp;
@@ -574,7 +574,7 @@ prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, Expiration
         {refresh_token, RefreshToken},
         {scope, openid},
         {id_token, jwt_encode([
-            {iss, vcn_utils:ensure_binary(IssuerUrl)},
+            {iss, opn_utils:ensure_binary(IssuerUrl)},
             {sub, UserId},
             {aud, Audience},
             {name, Name},
