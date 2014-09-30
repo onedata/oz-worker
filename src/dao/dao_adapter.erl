@@ -16,7 +16,7 @@
 -type dao_module() :: dao_users | dao_groups | dao_spaces |
     dao_providers.
 
--type dao_record() :: veil_doc() | user_info() | provider_info() |
+-type dao_record() :: db_doc() | user_info() | provider_info() |
     group_info() | space_info().
 
 
@@ -84,11 +84,11 @@ provider_exists(Key) ->
 %% ====================================================================
 -spec save(Doc :: dao_record()) -> Id :: binary() | no_return().
 %% ====================================================================
-save(#veil_document{} = Doc) ->
+save(#db_document{} = Doc) ->
     {ok, StrId} = save_doc(Doc),
     binary:list_to_bin(StrId);
 save(Resource) ->
-    save(#veil_document{record = Resource}).
+    save(#db_document{record = Resource}).
 
 
 %% space/1
@@ -100,7 +100,7 @@ save(Resource) ->
 -spec space(Key :: term()) -> space_info() | no_return().
 %% ====================================================================
 space(Key) ->
-    #veil_document{record = Space} = space_doc(Key),
+    #db_document{record = Space} = space_doc(Key),
     Space.
 
 
@@ -113,7 +113,7 @@ space(Key) ->
 -spec user(Key :: term()) -> user_info() | no_return().
 %% ====================================================================
 user(Key) ->
-    #veil_document{record = User} = user_doc(Key),
+    #db_document{record = User} = user_doc(Key),
     User.
 
 
@@ -126,7 +126,7 @@ user(Key) ->
 -spec group(Key :: term()) -> group_info() | no_return().
 %% ====================================================================
 group(Key) ->
-    #veil_document{record = Group} = group_doc(Key),
+    #db_document{record = Group} = group_doc(Key),
     Group.
 
 
@@ -139,7 +139,7 @@ group(Key) ->
 -spec provider(Key :: term()) -> provider_info() | no_return().
 %% ====================================================================
 provider(Key) ->
-    #veil_document{record = Provider} = provider_doc(Key),
+    #db_document{record = Provider} = provider_doc(Key),
     Provider.
 
 
@@ -152,7 +152,7 @@ provider(Key) ->
 -spec space_doc(Key :: term()) -> space_doc() | no_return().
 %% ====================================================================
 space_doc(Key) ->
-    #veil_document{record = #space{}} = SpaceDoc = get_doc(Key, dao_spaces, get_space),
+    #db_document{record = #space{}} = SpaceDoc = get_doc(Key, dao_spaces, get_space),
     SpaceDoc.
 
 
@@ -165,7 +165,7 @@ space_doc(Key) ->
 -spec user_doc(Key :: term()) -> user_doc() | no_return().
 %% ====================================================================
 user_doc(Key) ->
-    #veil_document{record = #user{}} = UserDoc = get_doc(Key, dao_users, get_user),
+    #db_document{record = #user{}} = UserDoc = get_doc(Key, dao_users, get_user),
     UserDoc.
 
 
@@ -178,7 +178,7 @@ user_doc(Key) ->
 -spec group_doc(Key :: term()) -> group_doc() | no_return().
 %% ====================================================================
 group_doc(Key) ->
-    #veil_document{record = #user_group{}} = GroupDoc = get_doc(Key, dao_groups, get_group),
+    #db_document{record = #user_group{}} = GroupDoc = get_doc(Key, dao_groups, get_group),
     GroupDoc.
 
 
@@ -191,7 +191,7 @@ group_doc(Key) ->
 -spec provider_doc(Key :: term()) -> provider_doc() | no_return().
 %% ====================================================================
 provider_doc(Key) ->
-    #veil_document{record = #provider{}} = ProviderDoc = get_doc(Key, dao_providers, get_provider),
+    #db_document{record = #provider{}} = ProviderDoc = get_doc(Key, dao_providers, get_provider),
     ProviderDoc.
 
 
@@ -267,16 +267,16 @@ exists(Key, Module, Method) ->
 %% ====================================================================
 %% @doc Creates a new document or updates an existing one. Internal function.
 %% ====================================================================
--spec save_doc(Doc :: veil_doc()) ->
+-spec save_doc(Doc :: db_doc()) ->
     {ok, uuid()} | {error, any()}.
 %% ====================================================================
-save_doc(#veil_document{record = #space{}} = Doc) ->
+save_doc(#db_document{record = #space{}} = Doc) ->
     dao_lib:apply(dao_spaces, save_space, [Doc], 1);
-save_doc(#veil_document{record = #user{}} = Doc) ->
+save_doc(#db_document{record = #user{}} = Doc) ->
     dao_lib:apply(dao_users, save_user, [Doc], 1);
-save_doc(#veil_document{record = #user_group{}} = Doc) ->
+save_doc(#db_document{record = #user_group{}} = Doc) ->
     dao_lib:apply(dao_groups, save_group, [Doc], 1);
-save_doc(#veil_document{record = #provider{}} = Doc) ->
+save_doc(#db_document{record = #provider{}} = Doc) ->
     dao_lib:apply(dao_providers, save_provider, [Doc], 1).
 
 
@@ -287,12 +287,12 @@ save_doc(#veil_document{record = #provider{}} = Doc) ->
 %% @end
 %% ====================================================================
 -spec get_doc(Key :: term(), Module :: dao_module(), Method :: atom()) ->
-    veil_doc() | no_return().
+    db_doc() | no_return().
 %% ====================================================================
 get_doc(Key, Module, Method) when is_binary(Key) ->
     get_doc(binary_to_list(Key),Module,Method);
 get_doc(Key, Module, Method)  ->
-    {ok, #veil_document{} = Doc} = dao_lib:apply(Module, Method, [Key], 1),
+    {ok, #db_document{} = Doc} = dao_lib:apply(Module, Method, [Key], 1),
     Doc.
 
 

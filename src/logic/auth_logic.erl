@@ -129,7 +129,7 @@ gen_auth_code(UserId, ProviderId) ->
 %% ====================================================================
 has_access(UserId, AccessId, AccessType) ->
     case ?DB(get_access, AccessId) of
-        {ok, #veil_document{record = #access{user_id = UserId, provider_id = ProviderId}}} ->
+        {ok, #db_document{record = #access{user_id = UserId, provider_id = ProviderId}}} ->
             case {ProviderId, AccessType} of
                 {undefined, client} -> true;
                 {<<_/binary>>, provider} -> true;
@@ -147,11 +147,11 @@ has_access(UserId, AccessId, AccessType) ->
     ok | no_return().
 %% ====================================================================
 modify_access(AccessId, Data) ->
-    {ok, #veil_document{record = Access} = AccessDoc} = ?DB(get_access, AccessId),
+    {ok, #db_document{record = Access} = AccessDoc} = ?DB(get_access, AccessId),
     ClientName = proplists:get_value(<<"clientName">>, Data,
                                      Access#access.client_name),
 
-    UpdatedDoc = AccessDoc#veil_document{record = Access#access{client_name = ClientName}},
+    UpdatedDoc = AccessDoc#db_document{record = Access#access{client_name = ClientName}},
     {ok, _} = ?DB(save_access, UpdatedDoc),
     ok.
 
@@ -178,7 +178,7 @@ get_user_tokens(UserId, AccessType) ->
     {ok, AccessDocs} = ?DB(get_accesses_by_user, UserId),
     lists:filtermap(
         fun(AccessDoc) ->
-            #veil_document{uuid = AccessId, record = Access} = AccessDoc,
+            #db_document{uuid = AccessId, record = Access} = AccessDoc,
             #access{client_name = ClientName, provider_id = ProviderId} = Access,
             Element = [{accessId, vcn_utils:ensure_binary(AccessId)}, {clientName, ClientName}],
             case {ProviderId, AccessType} of
@@ -207,7 +207,7 @@ grant_tokens(Client, AuthCode, ClientName) ->
             {error, not_found} -> throw(invalid_or_expired)
         end,
 
-        #veil_document{uuid = AuthId, record = Auth} = AuthDoc,
+        #db_document{uuid = AuthId, record = Auth} = AuthDoc,
         #authorization{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Auth,
 
         case vcn_utils:time() < Expiration of
@@ -232,8 +232,8 @@ grant_tokens(Client, AuthCode, ClientName) ->
             {provider, ProviderId} ->
                 case ?DB(get_access_by_user_and_provider, UserId, ProviderId) of
                     {ok, AccessDoc} ->
-                        #veil_document{record = Access} = AccessDoc,
-                        AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
+                        #db_document{record = Access} = AccessDoc,
+                        AccessDocUpdated = AccessDoc#db_document{record = Access#access{
                             token = AccessToken,
                             token_hash = AccessTokenHash,
                             refresh_token = RefreshToken,
@@ -294,7 +294,7 @@ refresh_tokens(Client, RefreshToken) ->
             {error, not_found} -> throw(refresh_invalid_or_revoked)
         end,
 
-        #veil_document{record = Access} = AccessDoc,
+        #db_document{record = Access} = AccessDoc,
         #access{provider_id = ProviderId, user_id = UserId} = Access,
 
         case Client of
@@ -309,7 +309,7 @@ refresh_tokens(Client, RefreshToken) ->
         {AccessToken, AccessTokenHash, RefreshTokenNew, ExpirationTime} =
             generate_access_tokens(Now),
 
-        AccessDocUpdated = AccessDoc#veil_document{record = Access#access{
+        AccessDocUpdated = AccessDoc#db_document{record = Access#access{
             token = AccessToken,
             token_hash = AccessTokenHash,
             refresh_token = RefreshTokenNew,
@@ -342,7 +342,7 @@ validate_token(Client, AccessToken) ->
 
     case ?DB(get_access_by_key, token, AccessToken) of
         {error, not_found} = Error -> Error;
-        {ok, #veil_document{record = Access} = AccessDoc} ->
+        {ok, #db_document{record = Access} = AccessDoc} ->
             #access{provider_id = IntendedAudience, user_id = UserId,
                     expiration_time = Expiration} = Access,
 
@@ -458,9 +458,9 @@ clear_expired_state_tokens() ->
 verify(UserId, Secret) ->
     Now = vcn_utils:time(),
     case ?DB(get_access_by_key, token_hash, Secret) of
-        {ok, #veil_document{record = #access{user_id = UserId, expiration_time = Exp}}} ->
+        {ok, #db_document{record = #access{user_id = UserId, expiration_time = Exp}}} ->
             Now < Exp;
-        {ok, #veil_document{record = #access{}} = AccessDoc} ->
+        {ok, #db_document{record = #access{}} = AccessDoc} ->
             alert_revoke_access(AccessDoc),
             false;
         _ ->
@@ -542,7 +542,7 @@ remove_expired_authorizations_in_chunks(ChunkSize) ->
     ok.
 %% ====================================================================
 alert_revoke_access(AccessDoc) ->
-    #veil_document{uuid = AccessId, record = Access} = AccessDoc,
+    #db_document{uuid = AccessId, record = Access} = AccessDoc,
     ?alert("Revoking access id: ~p, contents: ~p", [AccessId, Access]),
     ok = ?DB(remove_access, AccessId).
 

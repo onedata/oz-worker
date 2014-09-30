@@ -1,7 +1,7 @@
 About
 =====
 
-GlobalRegistry is a server that can store data needed by large scale distributed systems to cooperate.
+*GlobalRegistry* is a server that can store data needed by large scale distributed systems to cooperate.
 
 Goals
 -----

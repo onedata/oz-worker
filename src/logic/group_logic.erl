@@ -87,14 +87,14 @@ has_privilege(GroupId, UserId, Privilege) ->
 %% ====================================================================
 create(UserId, Name) ->
     UserDoc = dao_adapter:user_doc(UserId),
-    #veil_document{record = #user{groups = Groups} = User} = UserDoc,
+    #db_document{record = #user{groups = Groups} = User} = UserDoc,
 
     Privileges = privileges:group_admin(),
     Group = #user_group{name = Name, users = [{UserId, Privileges}]},
     GroupId = dao_adapter:save(Group),
 
     UserNew = User#user{groups = [GroupId | Groups]},
-    dao_adapter:save(UserDoc#veil_document{record = UserNew}),
+    dao_adapter:save(UserDoc#db_document{record = UserNew}),
 
     {ok, GroupId}.
 
@@ -110,9 +110,9 @@ create(UserId, Name) ->
 %% ====================================================================
 modify(GroupId, Name) ->
     Doc = dao_adapter:group_doc(GroupId),
-    #veil_document{record = #user_group{} = Group} = Doc,
+    #db_document{record = #user_group{} = Group} = Doc,
     GroupNew = Group#user_group{name = Name},
-    dao_adapter:save(Doc#veil_document{record = GroupNew}),
+    dao_adapter:save(Doc#db_document{record = GroupNew}),
     ok.
 
 
@@ -133,15 +133,15 @@ join(UserId, Token) ->
         false ->
             Privileges = privileges:group_user(),
             GroupDoc = dao_adapter:group_doc(GroupId),
-            #veil_document{record = #user_group{users = Users} = Group} = GroupDoc,
+            #db_document{record = #user_group{users = Users} = Group} = GroupDoc,
             GroupNew = Group#user_group{users = [{UserId, Privileges} | Users]},
 
             UserDoc = dao_adapter:user_doc(UserId),
-            #veil_document{record = #user{groups = Groups} = User} = UserDoc,
+            #db_document{record = #user{groups = Groups} = User} = UserDoc,
             UserNew = User#user{groups = [GroupId | Groups]},
 
-            dao_adapter:save(GroupDoc#veil_document{record = GroupNew}),
-            dao_adapter:save(UserDoc#veil_document{record = UserNew})
+            dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
+            dao_adapter:save(UserDoc#db_document{record = UserNew})
     end,
     {ok, GroupId}.
 
@@ -158,10 +158,10 @@ join(UserId, Token) ->
 %% ====================================================================
 set_privileges(GroupId, UserId, Privileges) ->
     Doc = dao_adapter:group_doc(GroupId),
-    #veil_document{record = #user_group{users = Users} = Group} = Doc,
+    #db_document{record = #user_group{users = Users} = Group} = Doc,
     UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, Privileges}),
     GroupNew = Group#user_group{users = UsersNew},
-    dao_adapter:save(Doc#veil_document{record = GroupNew}),
+    dao_adapter:save(Doc#db_document{record = GroupNew}),
     ok.
 
 
@@ -255,16 +255,16 @@ remove(GroupId) ->
 
     lists:foreach(fun({UserId, _}) ->
         UserDoc = dao_adapter:user_doc(UserId),
-        #veil_document{record = #user{groups = UGroups} = User} = UserDoc,
+        #db_document{record = #user{groups = UGroups} = User} = UserDoc,
         NewUser = User#user{groups = lists:delete(GroupId, UGroups)},
-        dao_adapter:save(UserDoc#veil_document{record = NewUser})
+        dao_adapter:save(UserDoc#db_document{record = NewUser})
     end, Users),
 
     lists:foreach(fun(SpaceId) ->
         SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #veil_document{record = #space{groups = SGroups} = Space} = SpaceDoc,
+        #db_document{record = #space{groups = SGroups} = Space} = SpaceDoc,
         NewSpace = Space#space{groups = lists:keydelete(GroupId, 1, SGroups)},
-        dao_adapter:save(SpaceDoc#veil_document{record = NewSpace}),
+        dao_adapter:save(SpaceDoc#db_document{record = NewSpace}),
         space_logic:cleanup(SpaceId)
     end, Spaces),
 
@@ -282,15 +282,15 @@ remove(GroupId) ->
 %% ====================================================================
 remove_user(GroupId, UserId) ->
     UserDoc = dao_adapter:user_doc(UserId),
-    #veil_document{record = #user{groups = Groups} = User} = UserDoc,
+    #db_document{record = #user{groups = Groups} = User} = UserDoc,
     UserNew = User#user{groups = lists:delete(GroupId, Groups)},
 
     GroupDoc = dao_adapter:group_doc(GroupId),
-    #veil_document{record = #user_group{users = Users} = Group} = GroupDoc,
+    #db_document{record = #user_group{users = Users} = Group} = GroupDoc,
     GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
 
-    dao_adapter:save(UserDoc#veil_document{record = UserNew}),
-    dao_adapter:save(GroupDoc#veil_document{record = GroupNew}),
+    dao_adapter:save(UserDoc#db_document{record = UserNew}),
+    dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
     cleanup(GroupId),
     true.
 

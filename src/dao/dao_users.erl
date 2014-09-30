@@ -26,15 +26,15 @@
 %% ====================================================================
 %% @doc Saves user to DB. Argument should be either #user{} record
 %% (if you want to save it as new document) <br/>
-%% or #veil_document{} that wraps #user{} if you want to update descriptor in DB. <br/>
-%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% or #db_document{} that wraps #user{} if you want to update descriptor in DB. <br/>
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec save_user(User :: user_info() | user_doc()) -> {ok, user_id()} | {error, any()} | no_return().
 %% ====================================================================
 save_user(#user{} = User) ->
-    save_user(#veil_document{record = User});
-save_user(#veil_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(UUID) ->
+    save_user(#db_document{record = User});
+save_user(#db_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(UUID) ->
     dao_external:set_db(?USERS_DB_NAME),
     dao_records:save_record(UserDoc).
 
@@ -65,8 +65,8 @@ exist_user(UserId) ->
 %% get_user/1
 %% ====================================================================
 %% @doc Gets user from DB
-%% Non-error return value is always {ok, #veil_document{record = #user}.
-%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% Non-error return value is always {ok, #db_document{record = #user}.
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec get_user(Key) -> {ok, user_doc()} | {error, any()} | no_return() when
@@ -103,7 +103,7 @@ get_user({Key, Value}) ->
         {ok, #view_result{rows = [#view_row{doc = FDoc} | Tail] = AllRows}} ->
             case length(lists:usort(AllRows)) of
                 Count when Count > 1 ->
-                    ?warning("User ~p is duplicated. Returning first copy. Others: ~p", [FDoc#veil_document.uuid, Tail]);
+                    ?warning("User ~p is duplicated. Returning first copy. Others: ~p", [FDoc#db_document.uuid, Tail]);
                 _ -> ok
             end,
             {ok, FDoc};

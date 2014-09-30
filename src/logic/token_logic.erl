@@ -48,7 +48,7 @@
 %% ====================================================================
 is_valid(Token, TokenType) -> %% @todo: expiration time
     case ?DB(get_token_by_value, Token) of
-        {ok, #veil_document{record = #token{type = TokenType}}} -> true;
+        {ok, #db_document{record = #token{type = TokenType}}} -> true;
         _ -> false
     end.
 
@@ -80,7 +80,7 @@ create(TokenType, Resource) ->
 %% ====================================================================
 consume(Token, TokenType) ->
     {ok, TokenDoc} = ?DB(get_token_by_value, Token), %% @todo: expiration time
-    #veil_document{uuid = TokenId,
+    #db_document{uuid = TokenId,
         record = #token{type = TokenType, resource = Resource}} = TokenDoc,
 
     ok = ?DB(remove_token, TokenId),

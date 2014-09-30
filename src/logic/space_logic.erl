@@ -152,9 +152,9 @@ create({provider, ProviderId}, Name, Token) ->
     ok.
 %% ====================================================================
 modify(SpaceId, Name) ->
-    #veil_document{record = Space} = Doc = dao_adapter:space_doc(SpaceId),
+    #db_document{record = Space} = Doc = dao_adapter:space_doc(SpaceId),
     SpaceNew = Space#space{name = Name},
-    dao_adapter:save(Doc#veil_document{record = SpaceNew}),
+    dao_adapter:save(Doc#db_document{record = SpaceNew}),
     ok.
 
 
@@ -169,10 +169,10 @@ modify(SpaceId, Name) ->
     ok.
 %% ====================================================================
 set_privileges(SpaceId, Member, Privileges) ->
-    #veil_document{record = Space} = Doc = dao_adapter:space_doc(SpaceId),
+    #db_document{record = Space} = Doc = dao_adapter:space_doc(SpaceId),
     PrivilegesNew = ordsets:from_list(Privileges),
     SpaceNew = set_privileges_aux(Space, Member, PrivilegesNew),
-    dao_adapter:save(Doc#veil_document{record = SpaceNew}),
+    dao_adapter:save(Doc#db_document{record = SpaceNew}),
     ok.
 
 
@@ -192,15 +192,15 @@ join({user, UserId}, Token) ->
         false ->
             Privileges = privileges:space_user(),
             SpaceDoc = dao_adapter:space_doc(SpaceId),
-            #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
+            #db_document{record = #space{users = Users} = Space} = SpaceDoc,
             SpaceNew = Space#space{users = [{UserId, Privileges} | Users]},
 
             UserDoc = dao_adapter:user_doc(UserId),
-            #veil_document{record = #user{spaces = Spaces} = User} = UserDoc,
+            #db_document{record = #user{spaces = Spaces} = User} = UserDoc,
             UserNew = User#user{spaces = [SpaceId | Spaces]},
 
-            dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew}),
-            dao_adapter:save(UserDoc#veil_document{record = UserNew})
+            dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
+            dao_adapter:save(UserDoc#db_document{record = UserNew})
     end,
     {ok, SpaceId};
 join({group, GroupId}, Token) ->
@@ -210,15 +210,15 @@ join({group, GroupId}, Token) ->
         false ->
             Privileges = privileges:space_user(),
             SpaceDoc = dao_adapter:space_doc(SpaceId),
-            #veil_document{record = #space{groups = Groups} = Space} = SpaceDoc,
+            #db_document{record = #space{groups = Groups} = Space} = SpaceDoc,
             SpaceNew = Space#space{groups = [{GroupId, Privileges} | Groups]},
 
             GroupDoc = dao_adapter:group_doc(GroupId),
-            #veil_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
+            #db_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
             GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
 
-            dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew}),
-            dao_adapter:save(GroupDoc#veil_document{record = GroupNew})
+            dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
+            dao_adapter:save(GroupDoc#db_document{record = GroupNew})
     end,
     {ok, SpaceId}.
 
@@ -238,15 +238,15 @@ support(ProviderId, Token) ->
         true -> ok;
         false ->
             SpaceDoc = dao_adapter:space_doc(SpaceId),
-            #veil_document{record = #space{providers = Providers} = Space} = SpaceDoc,
+            #db_document{record = #space{providers = Providers} = Space} = SpaceDoc,
             SpaceNew = Space#space{providers = [ProviderId | Providers]},
 
             ProviderDoc = dao_adapter:provider_doc(ProviderId),
-            #veil_document{record = #provider{spaces = Spaces} = Provider} = ProviderDoc,
+            #db_document{record = #provider{spaces = Spaces} = Provider} = ProviderDoc,
             ProviderNew = Provider#provider{spaces = [SpaceId | Spaces]},
 
-            dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew}),
-            dao_adapter:save(ProviderDoc#veil_document{record = ProviderNew})
+            dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
+            dao_adapter:save(ProviderDoc#db_document{record = ProviderNew})
     end,
     {ok, SpaceId}.
 
@@ -404,23 +404,23 @@ remove(SpaceId) ->
 
     lists:foreach(fun({UserId, _}) ->
         UserDoc = dao_adapter:user_doc(UserId),
-        #veil_document{record = #user{spaces = USpaces} = User} = UserDoc,
+        #db_document{record = #user{spaces = USpaces} = User} = UserDoc,
         NewUser = User#user{spaces = lists:delete(SpaceId, USpaces)},
-        dao_adapter:save(UserDoc#veil_document{record = NewUser})
+        dao_adapter:save(UserDoc#db_document{record = NewUser})
     end, Users),
 
     lists:foreach(fun({GroupId, _}) ->
         GroupDoc = dao_adapter:group_doc(GroupId),
-        #veil_document{record = #user_group{spaces = GSpaces} = Group} = GroupDoc,
+        #db_document{record = #user_group{spaces = GSpaces} = Group} = GroupDoc,
         NewGroup = Group#user_group{spaces = lists:delete(SpaceId, GSpaces)},
-        dao_adapter:save(GroupDoc#veil_document{record = NewGroup})
+        dao_adapter:save(GroupDoc#db_document{record = NewGroup})
     end, Groups),
 
     lists:foreach(fun(ProviderId) ->
         ProviderDoc = dao_adapter:provider_doc(ProviderId),
-        #veil_document{record = #provider{spaces = PSpaces} = Provider} = ProviderDoc,
+        #db_document{record = #provider{spaces = PSpaces} = Provider} = ProviderDoc,
         NewProvider = Provider#provider{spaces = lists:delete(SpaceId, PSpaces)},
-        dao_adapter:save(ProviderDoc#veil_document{record = NewProvider})
+        dao_adapter:save(ProviderDoc#db_document{record = NewProvider})
     end, Providers),
 
     dao_adapter:space_remove(SpaceId).
@@ -437,15 +437,15 @@ remove(SpaceId) ->
 %% ====================================================================
 remove_user(SpaceId, UserId) ->
     UserDoc = dao_adapter:user_doc(UserId),
-    #veil_document{record = #user{spaces = Spaces} = User} = UserDoc,
+    #db_document{record = #user{spaces = Spaces} = User} = UserDoc,
     UserNew = User#user{spaces = lists:delete(SpaceId, Spaces)},
 
     SpaceDoc = dao_adapter:space_doc(SpaceId),
-    #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
+    #db_document{record = #space{users = Users} = Space} = SpaceDoc,
     SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
 
-    dao_adapter:save(UserDoc#veil_document{record = UserNew}),
-    dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew}),
+    dao_adapter:save(UserDoc#db_document{record = UserNew}),
+    dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
     cleanup(SpaceId),
     true.
 
@@ -461,15 +461,15 @@ remove_user(SpaceId, UserId) ->
 %% ====================================================================
 remove_group(SpaceId, GroupId) ->
     GroupDoc = dao_adapter:group_doc(GroupId),
-    #veil_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
+    #db_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
     GroupNew = Group#user_group{spaces = lists:delete(SpaceId, Spaces)},
 
     SpaceDoc = dao_adapter:space_doc(SpaceId),
-    #veil_document{record = #space{groups = Groups} = Space} = SpaceDoc,
+    #db_document{record = #space{groups = Groups} = Space} = SpaceDoc,
     SpaceNew = Space#space{groups = lists:keydelete(GroupId, 1, Groups)},
 
-    dao_adapter:save(GroupDoc#veil_document{record = GroupNew}),
-    dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew}),
+    dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
+    dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
     cleanup(SpaceId),
     true.
 
@@ -485,15 +485,15 @@ remove_group(SpaceId, GroupId) ->
 %% ====================================================================
 remove_provider(SpaceId, ProviderId) ->
     ProviderDoc = dao_adapter:provider_doc(ProviderId),
-    #veil_document{record = #provider{spaces = Spaces} = Provider} = ProviderDoc,
+    #db_document{record = #provider{spaces = Spaces} = Provider} = ProviderDoc,
     ProviderNew = Provider#provider{spaces = lists:delete(SpaceId, Spaces)},
 
     SpaceDoc = dao_adapter:space_doc(SpaceId),
-    #veil_document{record = #space{providers = Providers} = Space} = SpaceDoc,
+    #db_document{record = #space{providers = Providers} = Space} = SpaceDoc,
     SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers)},
 
-    dao_adapter:save(ProviderDoc#veil_document{record = ProviderNew}),
-    dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew}),
+    dao_adapter:save(ProviderDoc#db_document{record = ProviderNew}),
+    dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
     true.
 
 
@@ -509,26 +509,26 @@ remove_provider(SpaceId, ProviderId) ->
 %% ====================================================================
 create_with_provider({user, UserId}, Name, Providers) ->
     UserDoc = dao_adapter:user_doc(UserId),
-    #veil_document{record = #user{spaces = Spaces} = User} = UserDoc,
+    #db_document{record = #user{spaces = Spaces} = User} = UserDoc,
 
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, providers = Providers, users = [{UserId, Privileges}]},
     SpaceId = dao_adapter:save(Space),
 
     UserNew = User#user{spaces = [SpaceId | Spaces]},
-    dao_adapter:save(UserDoc#veil_document{record = UserNew}),
+    dao_adapter:save(UserDoc#db_document{record = UserNew}),
 
     {ok, SpaceId};
 create_with_provider({group, GroupId}, Name, Providers) ->
     GroupDoc = dao_adapter:group_doc(GroupId),
-    #veil_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
+    #db_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
 
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, providers = Providers, groups = [{GroupId, Privileges}]},
     SpaceId = dao_adapter:save(Space),
 
     GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
-    dao_adapter:save(GroupDoc#veil_document{record = GroupNew}),
+    dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
 
     {ok, SpaceId}.
 

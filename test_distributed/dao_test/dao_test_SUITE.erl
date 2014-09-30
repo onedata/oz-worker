@@ -40,14 +40,14 @@ users_crud_test(Config) ->
 
     % Read
     AnsR1 = rpc:call(Node, dao_lib, apply, [dao_users, get_user, [UserId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = UserId, record = User}}, AnsR1),
+    ?assertMatch({ok, #db_document{uuid = UserId, record = User}}, AnsR1),
 
     % Update
-    {AnsU1, UpdatedUserId} = rpc:call(Node, dao_lib, apply, [dao_users, save_user, [#veil_document{record = UpdatedUser, uuid = UserId, force_update = true}], 1]),
+    {AnsU1, UpdatedUserId} = rpc:call(Node, dao_lib, apply, [dao_users, save_user, [#db_document{record = UpdatedUser, uuid = UserId, force_update = true}], 1]),
     ?assertEqual(ok, AnsU1),
     ?assertEqual(UserId, UpdatedUserId),
     AnsU2 = rpc:call(Node, dao_lib, apply, [dao_users, get_user, [UserId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = UserId, record = UpdatedUser}}, AnsU2),
+    ?assertMatch({ok, #db_document{uuid = UserId, record = UpdatedUser}}, AnsU2),
 
     % Delete
     AnsD1 = rpc:call(Node, dao_lib, apply, [dao_users, remove_user, [UserId], 1]),
@@ -72,14 +72,14 @@ groups_crud_test(Config) ->
 
     % Read
     AnsR1 = rpc:call(Node, dao_lib, apply, [dao_groups, get_group, [GroupId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = GroupId, record = Group}}, AnsR1),
+    ?assertMatch({ok, #db_document{uuid = GroupId, record = Group}}, AnsR1),
 
     % Update
-    {AnsU1, UpdatedGroupId} = rpc:call(Node, dao_lib, apply, [dao_groups, save_group, [#veil_document{record = UpdatedGroup, uuid = GroupId, force_update = true}], 1]),
+    {AnsU1, UpdatedGroupId} = rpc:call(Node, dao_lib, apply, [dao_groups, save_group, [#db_document{record = UpdatedGroup, uuid = GroupId, force_update = true}], 1]),
     ?assertEqual(ok, AnsU1),
     ?assertEqual(GroupId, UpdatedGroupId),
     AnsU2 = rpc:call(Node, dao_lib, apply, [dao_groups, get_group, [GroupId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = GroupId, record = UpdatedGroup}}, AnsU2),
+    ?assertMatch({ok, #db_document{uuid = GroupId, record = UpdatedGroup}}, AnsU2),
 
     % Delete
     AnsD1 = rpc:call(Node, dao_lib, apply, [dao_groups, remove_group, [GroupId], 1]),
@@ -104,14 +104,14 @@ providers_crud_test(Config) ->
 
     % Read
     AnsR1 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = ProviderId, record = Provider}}, AnsR1),
+    ?assertMatch({ok, #db_document{uuid = ProviderId, record = Provider}}, AnsR1),
 
     % Update
-    {AnsU1, UpdatedProviderId} = rpc:call(Node, dao_lib, apply, [dao_providers, save_provider, [#veil_document{record = UpdatedProvider, uuid = ProviderId, force_update = true}], 1]),
+    {AnsU1, UpdatedProviderId} = rpc:call(Node, dao_lib, apply, [dao_providers, save_provider, [#db_document{record = UpdatedProvider, uuid = ProviderId, force_update = true}], 1]),
     ?assertEqual(ok, AnsU1),
     ?assertEqual(ProviderId, UpdatedProviderId),
     AnsU2 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = ProviderId, record = UpdatedProvider}}, AnsU2),
+    ?assertMatch({ok, #db_document{uuid = ProviderId, record = UpdatedProvider}}, AnsU2),
 
     % Delete
     AnsD1 = rpc:call(Node, dao_lib, apply, [dao_providers, remove_provider, [ProviderId], 1]),
@@ -136,14 +136,14 @@ spaces_crud_test(Config) ->
 
     % Read
     AnsR1 = rpc:call(Node, dao_lib, apply, [dao_spaces, get_space, [SpaceId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = SpaceId, record = Space}}, AnsR1),
+    ?assertMatch({ok, #db_document{uuid = SpaceId, record = Space}}, AnsR1),
 
     % Update
-    {AnsU1, UpdatedSpaceId} = rpc:call(Node, dao_lib, apply, [dao_spaces, save_space, [#veil_document{record = UpdatedSpace, uuid = SpaceId, force_update = true}], 1]),
+    {AnsU1, UpdatedSpaceId} = rpc:call(Node, dao_lib, apply, [dao_spaces, save_space, [#db_document{record = UpdatedSpace, uuid = SpaceId, force_update = true}], 1]),
     ?assertEqual(ok, AnsU1),
     ?assertEqual(SpaceId, UpdatedSpaceId),
     AnsU2 = rpc:call(Node, dao_lib, apply, [dao_spaces, get_space, [SpaceId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = SpaceId, record = UpdatedSpace}}, AnsU2),
+    ?assertMatch({ok, #db_document{uuid = SpaceId, record = UpdatedSpace}}, AnsU2),
 
     % Delete
     AnsD1 = rpc:call(Node, dao_lib, apply, [dao_spaces, remove_space, [SpaceId], 1]),
@@ -168,14 +168,14 @@ tokens_crud_test(Config) ->
 
     % Read
     AnsR1 = rpc:call(Node, dao_lib, apply, [dao_tokens, get_token, [TokenId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = TokenId, record = Token}}, AnsR1),
+    ?assertMatch({ok, #db_document{uuid = TokenId, record = Token}}, AnsR1),
 
     % Update
-    {AnsU1, UpdatedTokenId} = rpc:call(Node, dao_lib, apply, [dao_tokens, save_token, [#veil_document{record = UpdatedToken, uuid = TokenId, force_update = true}], 1]),
+    {AnsU1, UpdatedTokenId} = rpc:call(Node, dao_lib, apply, [dao_tokens, save_token, [#db_document{record = UpdatedToken, uuid = TokenId, force_update = true}], 1]),
     ?assertEqual(ok, AnsU1),
     ?assertEqual(TokenId, UpdatedTokenId),
     AnsU2 = rpc:call(Node, dao_lib, apply, [dao_tokens, get_token, [TokenId], 1]),
-    ?assertMatch({ok, #veil_document{uuid = TokenId, record = UpdatedToken}}, AnsU2),
+    ?assertMatch({ok, #db_document{uuid = TokenId, record = UpdatedToken}}, AnsU2),
 
     % Delete
     AnsD1 = rpc:call(Node, dao_lib, apply, [dao_tokens, remove_token, [TokenId], 1]),
