@@ -115,7 +115,7 @@ accept_resource(Resource, post, Id, Data, _Client, Req)
             Code = rest_module_helper:assert_key(<<"code">>, Data, binary, Req),
             ClientName =
                 case proplists:get_value(<<"client_name">>, Data) of
-                    undefined when Resource =:= ptokens -> ok;
+                    undefined when Resource =:= ptokens -> undefined;
                     undefined when Resource =:= ctokens -> rest_module_helper:report_missing_key(<<"client_name">>, Req);
                     Value when is_binary(Value) -> Value;
                     Value -> rest_module_helper:report_invalid_value(<<"client_name">>, Value, Req)
