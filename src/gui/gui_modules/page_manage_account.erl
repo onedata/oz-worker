@@ -48,7 +48,7 @@ body() ->
             #panel{id = <<"main_table">>, body = main_table()},
             provider_redirection_panel()
         ]}
-    ] ++ gr_gui_utils:logotype_footer(20)}.
+    ]}.
 
 
 %% Main table containing user account info
@@ -85,7 +85,7 @@ user_name_section(User) ->
         #span{style = <<"font-size: 18px;">>, id = <<"displayed_name">>, body = Name},
         #link{id = <<"change_name_button">>, class = <<"glyph-link">>, style = <<"margin-left: 10px;">>,
             postback = {action, show_name_edition, [true]}, body =
-            #span{class = <<"fui-new">>, style = <<"font-size: 16px;">>}},
+            #span{class = <<"icomoon-pencil2">>, style = <<"font-size: 16px;">>}},
         #textbox{id = <<"new_name_textbox">>, class = <<"flat">>, body = <<"">>, style = <<"display: none;">>,
             placeholder = <<"New name">>, value = Name},
         #link{id = <<"new_name_submit">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,

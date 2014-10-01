@@ -178,15 +178,17 @@ top_menu(ActiveTabID, SubMenuBody) ->
 
     MenuIcons =
         [
-            {manage_account_tab, #li{body = #link{style = <<"padding: 18px;">>, title = <<"Manage account">>,
-                url = <<"/manage_account">>, body = [Name, #span{class = <<"fui-user">>,
-                    style = <<"margin-left: 10px;">>}]}}},
-            %{contact_support_tab, #li { body=#link{ style="padding: 18px;", title="Contact & Support",
-            %    url="/contact_support", body=#span{ class="fui-question" } } } },
-            {about_tab, #li{body = #link{style = <<"padding: 18px;">>, title = <<"About">>,
-                url = <<"/about">>, body = #span{class = <<"fui-info">>}}}},
-            {logout_button, #li{body = #link{style = <<"padding: 18px;">>, title = <<"Log out">>,
-                url = <<"/logout">>, body = #span{class = <<"fui-power">>}}}}
+            {manage_account_tab, #li{body = #link{style = <<"padding: 13px 11px 14px;">>, title = <<"Manage account">>,
+                url = <<"/manage_account">>, body = [
+                    #panel{style = <<"line-height: 24px; height: 24px;">>, body = [
+                        #span{style = <<"display: inline; font-size: 15px; vertical-align:middle;">>, body = Name},
+                        #span{class = <<"icomoon-user">>, style = <<"margin-left: 10px; font-size: 24px; vertical-align:middle;">>}
+                    ]}
+                ]}}},
+            {about_tab, #li{body = #link{style = <<"padding: 14px 13px;">>, title = <<"About">>,
+                url = <<"/about">>, body = #span{class = <<"icomoon-info2">>, style = <<"font-size: 24px;">>}}}},
+            {logout_button, #li{body = #link{style = <<"padding: 14px 13px;">>, title = <<"Log out">>,
+                url = <<"/logout">>, body = #span{class = <<"icomoon-switch">>, style = <<"font-size: 24px;">>}}}}
         ],
 
     MenuCaptionsProcessed = lists:map(

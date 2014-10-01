@@ -97,7 +97,7 @@ table_row(NumberBinary, Body, AdditionalInfo) ->
     #tr{cells = [
         #td{style = ?FIRST_COLUMN_STYLE, body = [<<NumberBinary/binary, ". ">>, Body]},
         #td{style = ?SECOND_COLUMN_STYLE, body = #link{class = <<"glyph-link">>,
-            postback = {toggle_info, InfoCellID}, body = #span{class = <<"fui-question">>, style = <<"font-size: 24px;">>}
+            postback = {toggle_info, InfoCellID}, body = #span{class = <<"icomoon-question">>, style = <<"font-size: 24px;">>}
         }},
         #td{style = ?THIRD_COLUMN_STYLE, body = #panel{id = InfoCellID, style = <<"display: none;">>, body = AdditionalInfo}}
     ]}.
