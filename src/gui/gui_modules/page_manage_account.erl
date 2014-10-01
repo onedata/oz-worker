@@ -48,7 +48,7 @@ body() ->
             #panel{id = <<"main_table">>, body = main_table()},
             provider_redirection_panel()
         ]}
-    ] ++ gr_gui_utils:logotype_footer(20)}.
+    ]}.
 
 
 %% Main table containing user account info

@@ -37,9 +37,7 @@ body() ->
             #link{url = <<"/">>, class = <<"btn btn-primary btn-block">>, body = <<"Login page">>}
         ]},
         gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
-    ]
-    ++ gr_gui_utils:logotype_footer(120)
-        ++ [#p{body = <<"<iframe src=\"", LogoutEndpoint/binary, "\" style=\"display:none\"></iframe>">>}]
+    ] ++ [#p{body = <<"<iframe src=\"", LogoutEndpoint/binary, "\" style=\"display:none\"></iframe>">>}]
     }.
 
 
