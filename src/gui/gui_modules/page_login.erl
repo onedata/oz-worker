@@ -29,7 +29,7 @@ main() ->
 
 
 %% Page title
-title() -> <<"onedata homepage">>.
+title() -> <<"Onedata homepage">>.
 
 
 %% This will be placed in the template instead of {{body}} tag
@@ -73,14 +73,14 @@ login_panel() ->
 
             #panel{id = <<"login_panel">>, style = <<"position: relative;">>, body = [
                 #panel{class = <<"alert alert-success login-page">>, body = [
-                    #h3{id = <<"main_header">>, body = <<"Welcome to onedata">>},
+                    #h3{id = <<"main_header">>, body = <<"Welcome to Onedata">>},
                     #p{class = <<"login-info">>, body = <<"You can sign in using one of your existing accounts.">>},
                     #panel{body = Buttons},
                     #hr{style = <<"border-color: #E0EAEB;">>},
                     #h3{style = <<"margin-top: 35px;">>, body = <<"Learn more">>},
                     #link{class = <<"btn btn-success">>, url = <<?ONEDATA_INFO>>,
                         style = <<"margin: 10px; width: 210px;">>,
-                        body = <<"What is onedata?">>},
+                        body = <<"What is Onedata?">>},
                     #link{class = <<"btn btn-success">>, url = <<?become_a_provider_url>>,
                         style = <<"margin: 10px; width: 210px;">>,
                         body = <<"Become a provider">>}
