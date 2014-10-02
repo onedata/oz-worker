@@ -82,10 +82,10 @@ get_user({Key, Value}) ->
     {View, QueryArgs} = case Key of
                             connected_account_user_id ->
                                 {ProviderID0, UserID} = Value,
-				                ProviderID = opn_utils:ensure_binary(ProviderID0),
+				                ProviderID = utils:ensure_binary(ProviderID0),
                                 {?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_query_args{keys =
                                 [[
-                                    <<?RECORD_FIELD_ATOM_PREFIX, (opn_utils:ensure_binary(ProviderID))/binary>>,
+                                    <<?RECORD_FIELD_ATOM_PREFIX, (utils:ensure_binary(ProviderID))/binary>>,
                                     <<?RECORD_FIELD_BINARY_PREFIX, UserID/binary>>
                                 ]], include_docs = true}};
 

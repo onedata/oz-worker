@@ -60,7 +60,7 @@ save_authorization(#db_document{record = #authorization{}, uuid = UUID} = Author
 %% ====================================================================
 remove_authorization(AuthorizationId) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
-    dao_records:remove_record(opn_utils:ensure_list(AuthorizationId)).
+    dao_records:remove_record(utils:ensure_list(AuthorizationId)).
 
 
 %% exist_authorization/1
@@ -75,7 +75,7 @@ remove_authorization(AuthorizationId) ->
 %% ====================================================================
 exist_authorization(AuthorizationId) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
-    dao_records:exist_record(opn_utils:ensure_list(AuthorizationId)).
+    dao_records:exist_record(utils:ensure_list(AuthorizationId)).
 
 
 %% get_authorization/1
@@ -93,7 +93,7 @@ exist_authorization(AuthorizationId) ->
 get_authorization(AuthorizationId) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
     {ok, #db_document{record = #authorization{}}} =
-        dao_records:get_record(opn_utils:ensure_list(AuthorizationId)).
+        dao_records:get_record(utils:ensure_list(AuthorizationId)).
 
 
 %% get_authorization_by_code/1
@@ -134,7 +134,7 @@ get_authorization_by_code(Code) ->
     {ok, [access_id()]}.
 %% ====================================================================
 get_expired_authorizations_ids(Limit) ->
-    Now = opn_utils:time(),
+    Now = utils:time(),
     View = ?AUTHORIZATION_BY_EXPIRATION,
     QueryArgs = #view_query_args{start_key = 0, end_key = Now, limit = Limit},
 
@@ -207,7 +207,7 @@ exist_access(AccessId) ->
 %% ====================================================================
 get_access(AccessId) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
-    LAccessId = opn_utils:ensure_list(AccessId),
+    LAccessId = utils:ensure_list(AccessId),
     {ok, #db_document{record = #access{}}} = dao_records:get_record(LAccessId).
 
 

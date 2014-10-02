@@ -23,7 +23,7 @@
 
 -record(dn, {commonName,
     organizationalUnitName = "REST",
-    organizationName = "OneData",
+    organizationName = "onedata",
     localityName = "Krakow",
     countryName = "PL",
     emailAddress = "rest@onedata.com"}).
@@ -187,7 +187,7 @@ revoke(Serial) ->
 revoke_imp(Serial, CaDir) ->
     TmpDir = mochitemp:mkdtemp(),
     CaConfigFile = ca_config_file(TmpDir, CaDir),
-    LSerial = opn_utils:ensure_list(Serial),
+    LSerial = utils:ensure_list(Serial),
     ?info("Revoking a certificate with serial number ~p", [Serial]),
     RevokeOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,
@@ -222,7 +222,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
         " -batch",
         " -notext",
         " -extensions user_cert",
-        " -subj \"/CN=", opn_utils:ensure_list(ProviderId), "/O=OneData/OU=Providers\"",
+        " -subj \"/CN=", utils:ensure_list(ProviderId), "/O=onedata/OU=Providers\"",
         " -in ", CSRFile,
         " -out ", CertFile]),
 
@@ -364,7 +364,7 @@ get_provider_id(#'OTPCertificate'{} = Cert) ->
         case Attribute#'AttributeTypeAndValue'.type of
             ?'id-at-commonName' ->
                 {_, Id} = Attribute#'AttributeTypeAndValue'.value,
-                {true, opn_utils:ensure_binary(Id)};
+                {true, utils:ensure_binary(Id)};
             _ -> false
         end
     end, Attrs),
