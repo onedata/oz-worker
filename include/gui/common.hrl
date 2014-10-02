@@ -21,7 +21,7 @@
 % Relative suffix of GUI address, leading to page with info about providers
 -define(become_a_provider_url, "/become_a_provider").
 
-% Endpoint at veil cluster to check connectivity
+% Endpoint at oneprovider to check connectivity
 -define(provider_connection_check_endpoint, "/connection_check").
 
 % Macros used as ids of errors that can appear on GUI pages

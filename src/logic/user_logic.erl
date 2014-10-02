@@ -52,7 +52,7 @@ create(User) ->
 %% ====================================================================
 get_user(Key) ->
     try
-        {ok, #veil_document{record = #user{} = User}} = get_user_doc(Key),
+        {ok, #db_document{record = #user{} = User}} = get_user_doc(Key),
         {ok, User}
     catch
         T:M ->
@@ -66,11 +66,11 @@ get_user(Key) ->
 %% ====================================================================
 -spec get_user_doc(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
 {email, binary()}) ->
-    {ok, #veil_document{}} | {error, any()}.
+    {ok, #db_document{}} | {error, any()}.
 %% ====================================================================
 get_user_doc(Key) ->
     try
-        #veil_document{record = #user{}} = UserDoc = dao_adapter:user_doc(Key),
+        #db_document{record = #user{}} = UserDoc = dao_adapter:user_doc(Key),
         {ok, UserDoc}
     catch
         T:M ->
@@ -90,7 +90,7 @@ get_user_doc(Key) ->
 %% ====================================================================
 modify(UserId, Proplist) ->
     try
-        #veil_document{record = User} = Doc = dao_adapter:user_doc(UserId),
+        #db_document{record = User} = Doc = dao_adapter:user_doc(UserId),
         #user{
             name = Name,
             email_list = Emails,
@@ -109,7 +109,7 @@ modify(UserId, Proplist) ->
             default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
             % TODO mock
             first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST)},
-        DocNew = Doc#veil_document{record = NewUser},
+        DocNew = Doc#db_document{record = NewUser},
         dao_adapter:save(DocNew),
         ok
     catch
@@ -210,17 +210,17 @@ remove(UserId) ->
 
     lists:foreach(fun(GroupId) ->
         GroupDoc = dao_adapter:group_doc(GroupId),
-        #veil_document{record = #user_group{users = Users} = Group} = GroupDoc,
+        #db_document{record = #user_group{users = Users} = Group} = GroupDoc,
         GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
-        dao_adapter:save(GroupDoc#veil_document{record = GroupNew}),
+        dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
         group_logic:cleanup(GroupId)
     end, Groups),
 
     lists:foreach(fun(SpaceId) ->
         SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #veil_document{record = #space{users = Users} = Space} = SpaceDoc,
+        #db_document{record = #space{users = Users} = Space} = SpaceDoc,
         SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
-        dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew}),
+        dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
         space_logic:cleanup(SpaceId)
     end, Spaces),
 
@@ -255,14 +255,14 @@ get_default_space(UserId) ->
 %% ====================================================================
 set_default_space(UserId, SpaceId) ->
     Doc = dao_adapter:user_doc(UserId),
-    #veil_document{record = User} = Doc,
+    #db_document{record = User} = Doc,
 
     AllUserSpaces = get_all_spaces(Doc),
     case ordsets:is_element(SpaceId, AllUserSpaces) of
         false -> false;
         true ->
             UpdatedUser = User#user{default_space = SpaceId},
-            dao_adapter:save(Doc#veil_document{record = UpdatedUser}),
+            dao_adapter:save(Doc#db_document{record = UpdatedUser}),
             true
     end.
 
@@ -279,17 +279,17 @@ set_default_space(UserId, SpaceId) ->
 %% Throws exception when call to dao fails, or user's groups don't exist.
 %% @end
 %% ====================================================================
--spec get_all_spaces(Doc :: veil_doc()) ->
+-spec get_all_spaces(Doc :: db_doc()) ->
     ordsets:ordset(SpaceId :: binary()).
 %% ====================================================================
-get_all_spaces(#veil_document{record = #user{} = User}) ->
+get_all_spaces(#db_document{record = #user{} = User}) ->
     #user{spaces = UserSpaces, groups = Groups} = User,
 
     UserSpacesSet = ordsets:from_list(UserSpaces),
     GroupSpacesSets = lists:map(
         fun(GroupId) ->
             GroupDoc = dao_adapter:group_doc(GroupId),
-            #veil_document{record = #user_group{spaces = GroupSpaces}} = GroupDoc,
+            #db_document{record = #user_group{spaces = GroupSpaces}} = GroupDoc,
             ordsets:from_list(GroupSpaces)
         end, Groups),
 
@@ -305,17 +305,17 @@ get_all_spaces(#veil_document{record = #user{} = User}) ->
 %% @end
 %% ====================================================================
 -spec effective_default_space(AllUserSpaces :: ordsets:ordset(binary()),
-    UserDoc :: veil_doc()) ->
+    UserDoc :: db_doc()) ->
     EffectiveDefaultSpaceId :: binary() | undefined.
 %% ====================================================================
-effective_default_space(_, #veil_document{record = #user{default_space = undefined}}) ->
+effective_default_space(_, #db_document{record = #user{default_space = undefined}}) ->
     undefined;
-effective_default_space(AllUserSpaces, #veil_document{} = UserDoc) ->
-    #veil_document{record = #user{default_space = DefaultSpaceId} = User} = UserDoc,
+effective_default_space(AllUserSpaces, #db_document{} = UserDoc) ->
+    #db_document{record = #user{default_space = DefaultSpaceId} = User} = UserDoc,
     case ordsets:is_element(DefaultSpaceId, AllUserSpaces) of
         true -> DefaultSpaceId;
         false ->
             UserNew = User#user{default_space = undefined},
-            dao_adapter:save(UserDoc#veil_document{record = UserNew}),
+            dao_adapter:save(UserDoc#db_document{record = UserNew}),
             undefined
     end.

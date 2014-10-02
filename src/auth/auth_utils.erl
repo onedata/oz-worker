@@ -88,7 +88,7 @@ validate_login() ->
                             false ->
                                 % Standard login, check if there is an account belonging to the user
                                 case user_logic:get_user_doc({connected_account_user_id, {ProviderID, UserID}}) of
-                                    {ok, #veil_document{uuid = UserIdString}} ->
+                                    {ok, #db_document{uuid = UserIdString}} ->
                                         UserId = list_to_binary(UserIdString),
                                         % The account already exists
                                         gui_ctx:create_session(),
@@ -171,9 +171,9 @@ is_any_email_in_use(Emails, UserID) ->
                     true;
                 _ ->
                     case user_logic:get_user_doc({email, Email}) of
-                        {ok, #veil_document{uuid = UserIDString}} ->
+                        {ok, #db_document{uuid = UserIDString}} ->
                             false;
-                        {ok, #veil_document{}} ->
+                        {ok, #db_document{}} ->
                             true;
                         _ ->
                             false

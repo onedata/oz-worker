@@ -29,10 +29,10 @@
 %% save_authorization/1
 %% ====================================================================
 %% @doc Saves authorization to DB. Argument should be either #authorization{}
-%% record (if you want to save it as new document) or #veil_document{} that
+%% record (if you want to save it as new document) or #db_document{} that
 %% wraps #authorization{} if you want to update descriptor in DB.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead
 %% (See {@link dao_worker:handle_call/3} for more details).
 %% @end
@@ -42,8 +42,8 @@
     {ok, authorization_id()} | {error, any()} | no_return().
 %% ====================================================================
 save_authorization(#authorization{} = Authorization) ->
-    save_authorization(#veil_document{record = Authorization});
-save_authorization(#veil_document{record = #authorization{}, uuid = UUID} = AuthorizationDoc) when is_list(UUID) ->
+    save_authorization(#db_document{record = Authorization});
+save_authorization(#db_document{record = #authorization{}, uuid = UUID} = AuthorizationDoc) when is_list(UUID) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
     dao_records:save_record(AuthorizationDoc).
 
@@ -60,7 +60,7 @@ save_authorization(#veil_document{record = #authorization{}, uuid = UUID} = Auth
 %% ====================================================================
 remove_authorization(AuthorizationId) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
-    dao_records:remove_record(vcn_utils:ensure_list(AuthorizationId)).
+    dao_records:remove_record(utils:ensure_list(AuthorizationId)).
 
 
 %% exist_authorization/1
@@ -75,14 +75,14 @@ remove_authorization(AuthorizationId) ->
 %% ====================================================================
 exist_authorization(AuthorizationId) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
-    dao_records:exist_record(vcn_utils:ensure_list(AuthorizationId)).
+    dao_records:exist_record(utils:ensure_list(AuthorizationId)).
 
 
 %% get_authorization/1
 %% ====================================================================
 %% @doc Gets authorization from DB.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead
 %% (See {@link dao_worker:handle_call/3} for more details).
 %% @end
@@ -92,8 +92,8 @@ exist_authorization(AuthorizationId) ->
 %% ====================================================================
 get_authorization(AuthorizationId) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
-    {ok, #veil_document{record = #authorization{}}} =
-        dao_records:get_record(vcn_utils:ensure_list(AuthorizationId)).
+    {ok, #db_document{record = #authorization{}}} =
+        dao_records:get_record(utils:ensure_list(AuthorizationId)).
 
 
 %% get_authorization_by_code/1
@@ -102,7 +102,7 @@ get_authorization(AuthorizationId) ->
 %% doesn't throw when such record doesn't exist, instead returning
 %% {error, not_found}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% @end
 %% ====================================================================
 -spec get_authorization_by_code(Code :: binary()) ->
@@ -115,7 +115,7 @@ get_authorization_by_code(Code) ->
 
     case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
-            #veil_document{record = #authorization{}} = Doc,
+            #db_document{record = #authorization{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
             ?debug("Couldn't find authorization with code ~p", [Code]),
@@ -127,14 +127,14 @@ get_authorization_by_code(Code) ->
 %% ====================================================================
 %% @doc Gets ids of expired authorization documents from DB.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% @end
 %% ====================================================================
 -spec get_expired_authorizations_ids(Limit :: pos_integer()) ->
     {ok, [access_id()]}.
 %% ====================================================================
 get_expired_authorizations_ids(Limit) ->
-    Now = vcn_utils:time(),
+    Now = utils:time(),
     View = ?AUTHORIZATION_BY_EXPIRATION,
     QueryArgs = #view_query_args{start_key = 0, end_key = Now, limit = Limit},
 
@@ -145,10 +145,10 @@ get_expired_authorizations_ids(Limit) ->
 %% save_access/1
 %% ====================================================================
 %% @doc Saves access to DB. Argument should be either #access{} record
-%% (if you want to save it as new document) or #veil_document{} that wraps
+%% (if you want to save it as new document) or #db_document{} that wraps
 %% #access{} if you want to update descriptor in DB.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead
 %% (See {@link dao_worker:handle_call/3} for more details).
 %% @end
@@ -157,8 +157,8 @@ get_expired_authorizations_ids(Limit) ->
     {ok, access_id()} | {error, any()} | no_return().
 %% ====================================================================
 save_access(#access{} = Access) ->
-    save_access(#veil_document{record = Access});
-save_access(#veil_document{record = #access{}, uuid = UUID} = AccessDoc) when is_list(UUID) ->
+    save_access(#db_document{record = Access});
+save_access(#db_document{record = #access{}, uuid = UUID} = AccessDoc) when is_list(UUID) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
     dao_records:save_record(AccessDoc).
 
@@ -197,7 +197,7 @@ exist_access(AccessId) ->
 %% ====================================================================
 %% @doc Gets access from DB
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead
 %% (See {@link dao_worker:handle_call/3} for more details).
 %% @end
@@ -207,8 +207,8 @@ exist_access(AccessId) ->
 %% ====================================================================
 get_access(AccessId) ->
     dao_external:set_db(?AUTHORIZATION_DB_NAME),
-    LAccessId = vcn_utils:ensure_list(AccessId),
-    {ok, #veil_document{record = #access{}}} = dao_records:get_record(LAccessId).
+    LAccessId = utils:ensure_list(AccessId),
+    {ok, #db_document{record = #access{}}} = dao_records:get_record(LAccessId).
 
 
 %% get_access_by_key/2
@@ -217,7 +217,7 @@ get_access(AccessId) ->
 %% doesn't throw when such record doesn't exist, instead returning
 %% {error, not_found}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% @end
 %% ====================================================================
 -spec get_access_by_key(Key :: refresh_token | token | token_hash, Value :: binary()) ->
@@ -235,7 +235,7 @@ get_access_by_key(Key, Value) ->
 
     case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
-            #veil_document{record = #access{}} = Doc,
+            #db_document{record = #access{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
             ?debug("Couldn't find access by ~p with value ~p", [Key, Value]),
@@ -249,7 +249,7 @@ get_access_by_key(Key, Value) ->
 %% doesn't throw when such record doesn't exist, instead returning
 %% {error, not_found}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% @end
 %% ====================================================================
 -spec get_access_by_user_and_provider(UserId :: binary(), ProviderId :: binary()) ->
@@ -264,7 +264,7 @@ get_access_by_user_and_provider(UserId, ProviderId) ->
 
     case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
-            #veil_document{record = #access{}} = Doc,
+            #db_document{record = #access{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
             ?debug("Couldn't find access by User ~p and Provider ~p", [UserId, ProviderId]),
@@ -276,7 +276,7 @@ get_access_by_user_and_provider(UserId, ProviderId) ->
 %% ====================================================================
 %% @doc Gets a list of authorizations for a given user.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% @end
 %% ====================================================================
 -spec get_accesses_by_user(UserId :: binary()) ->
@@ -288,5 +288,5 @@ get_accesses_by_user(UserId) ->
                                  include_docs = true},
 
     {ok, #view_result{rows = Rows}} = dao_records:list_records(View, QueryArgs),
-    Accesses = [#veil_document{record = #access{}} = Row#view_row.doc || Row <- Rows],
+    Accesses = [#db_document{record = #access{}} = Row#view_row.doc || Row <- Rows],
     {ok, Accesses}.

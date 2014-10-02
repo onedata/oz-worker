@@ -80,7 +80,7 @@ login_panel() ->
                     #h3{style = <<"margin-top: 35px;">>, body = <<"Learn more">>},
                     #link{class = <<"btn btn-success">>, url = <<?ONEDATA_INFO>>,
                         style = <<"margin: 10px; width: 210px;">>,
-                        body = <<"What is onedata?">>},
+                        body = <<"What is <strong>onedata</strong>?">>},
                     #link{class = <<"btn btn-success">>, url = <<?become_a_provider_url>>,
                         style = <<"margin: 10px; width: 210px;">>,
                         body = <<"Become a provider">>}

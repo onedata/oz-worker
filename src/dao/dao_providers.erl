@@ -23,15 +23,15 @@
 %% ====================================================================
 %% @doc Saves provider to DB. Argument should be either #provider{} record
 %% (if you want to save it as new document) <br/>
-%% or #veil_document{} that wraps #provider{} if you want to update descriptor in DB. <br/>
-%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% or #db_document{} that wraps #provider{} if you want to update descriptor in DB. <br/>
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec save_provider(Provider :: provider_info() | provider_doc()) -> {ok, provider_id()} | {error, any()} | no_return().
 %% ====================================================================
 save_provider(#provider{} = Provider) ->
-	save_provider(#veil_document{record = Provider});
-save_provider(#veil_document{record = #provider{}, uuid = UUID} = ProviderDoc) when is_list(UUID) ->
+	save_provider(#db_document{record = Provider});
+save_provider(#db_document{record = #provider{}, uuid = UUID} = ProviderDoc) when is_list(UUID) ->
     dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:save_record(ProviderDoc).
 
@@ -62,12 +62,12 @@ exist_provider(ProviderId) ->
 %% get_provider/1
 %% ====================================================================
 %% @doc Gets provider from DB
-%% Non-error return value is always {ok, #veil_document{record = #provider}.
-%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% Non-error return value is always {ok, #db_document{record = #provider}.
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec get_provider(ProviderId :: uuid()) -> {ok, provider_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_provider(ProviderId) ->
     dao_external:set_db(?SYSTEM_DB_NAME),
-    {ok, #veil_document{record = #provider{}}} = dao_records:get_record(ProviderId).
+    {ok, #db_document{record = #provider{}}} = dao_records:get_record(ProviderId).

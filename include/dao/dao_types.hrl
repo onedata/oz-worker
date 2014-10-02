@@ -22,37 +22,37 @@
 
 
 -type uuid() :: string(). %% Pattern: "^[0-9a-f]+$"
--type veil_doc() :: #veil_document{}.
+-type db_doc() :: #db_document{}.
 
 -type url() :: string().
 -type privileges() :: none | invite | admin.
 
 -type user_id() :: uuid().
 -type user_info() :: #user{}.
--type user_doc() :: #veil_document{record :: #user{}}.
+-type user_doc() :: #db_document{record :: #user{}}.
 
 -type provider_id() :: uuid().
 -type provider_info() :: #provider{}.
--type provider_doc() :: #veil_document{record :: #provider{}}.
+-type provider_doc() :: #db_document{record :: #provider{}}.
 
 -type group_id() :: uuid().
 -type group_info() :: #user_group{}.
--type group_doc() :: #veil_document{record :: #user_group{}}.
+-type group_doc() :: #db_document{record :: #user_group{}}.
 
 -type space_id() :: uuid().
 -type space_info() :: #space{}.
--type space_doc() :: #veil_document{record :: #space{}}.
+-type space_doc() :: #db_document{record :: #space{}}.
 
 -type token_id() :: uuid().
 -type token_info() :: #token{}.
--type token_doc() :: #veil_document{record :: #token{}}.
+-type token_doc() :: #db_document{record :: #token{}}.
 
 -type authorization_id() :: uuid().
 -type authorization_info() :: #authorization{}.
--type authorization_doc() :: #veil_document{record :: #authorization{}}.
+-type authorization_doc() :: #db_document{record :: #authorization{}}.
 
 -type access_id() :: uuid().
 -type access_info() :: #access{}.
--type access_doc() :: #veil_document{record :: #access{}}.
+-type access_doc() :: #db_document{record :: #access{}}.
 
 -endif.

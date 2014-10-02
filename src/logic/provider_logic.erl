@@ -38,9 +38,9 @@
 %% ====================================================================
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = dao_helper:gen_uuid(),
-    BinProviderId = vcn_utils:ensure_binary(ProviderId),
+    BinProviderId = utils:ensure_binary(ProviderId),
     {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
-    dao_adapter:save(#veil_document{uuid = ProviderId, record =
+    dao_adapter:save(#db_document{uuid = ProviderId, record =
         #provider{client_name = ClientName, urls = URLs,
                   redirection_point = RedirectionPoint, serial = Serial}}),
 
@@ -58,14 +58,14 @@ create(ClientName, URLs, RedirectionPoint, CSRBin) ->
 %% ====================================================================
 modify(ProviderId, Data) ->
     Doc = dao_adapter:provider_doc(ProviderId),
-    #veil_document{record = Provider} = Doc,
+    #db_document{record = Provider} = Doc,
 
     URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
     RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
     ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
 
     ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint, client_name = ClientName},
-    dao_adapter:save(Doc#veil_document{record = ProviderNew}),
+    dao_adapter:save(Doc#db_document{record = ProviderNew}),
     ok.
 
 
@@ -133,9 +133,9 @@ remove(ProviderId) ->
 
     lists:foreach(fun(SpaceId) ->
         SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #veil_document{record = #space{providers = Providers} = Space} = SpaceDoc,
+        #db_document{record = #space{providers = Providers} = Space} = SpaceDoc,
         SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers)},
-        dao_adapter:save(SpaceDoc#veil_document{record = SpaceNew})
+        dao_adapter:save(SpaceDoc#db_document{record = SpaceNew})
     end, Spaces),
 
     grpca:revoke(Serial),

@@ -116,8 +116,8 @@ assert_key_value(Key, AcceptedValues, List, binary, Req) ->
     no_return().
 %% ====================================================================
 report_invalid_value(Key, Value, Req) ->
-    Description = <<"invalid '", (vcn_utils:ensure_binary(Key))/binary,
-                    "' value: '", (vcn_utils:ensure_binary(Value))/binary, "'">>,
+    Description = <<"invalid '", (utils:ensure_binary(Key))/binary,
+                    "' value: '", (utils:ensure_binary(Value))/binary, "'">>,
     report_error(invalid_request, Description, Req).
 
 
@@ -130,7 +130,7 @@ report_invalid_value(Key, Value, Req) ->
 %% ====================================================================
 report_missing_key(Key, Req) ->
     Description = <<"missing required key: '",
-                    (vcn_utils:ensure_binary(Key))/binary, "'">>,
+                    (utils:ensure_binary(Key))/binary, "'">>,
     report_error(invalid_request, Description, Req).
 
 

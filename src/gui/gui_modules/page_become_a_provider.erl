@@ -18,7 +18,7 @@
 -export([main/0, event/1]).
 
 % URL where provider software RPM is available.
--define(DOWNLOAD_LINK, "http://packages.onedata.org/VeilCluster-Linux.rpm").
+-define(DOWNLOAD_LINK, "http://packages.onedata.org/oneprovider-Linux.rpm").
 
 % Column styles for main table
 -define(FIRST_COLUMN_STYLE, <<"padding: 10px; vertical-align: top; font-size: 18px; width: 45%;">>).
@@ -41,7 +41,7 @@ body() ->
         #panel{style = <<"margin-top: 5px; padding: 20px; position: relative;">>, body = [
             #h3{style = <<"padding: 10px;">>, body = <<"Become a provider">>},
             #p{style = <<"padding: 10px; font-size: 18px; width: 45%; line-height: 22.15px;">>,
-                body = <<"Onedata is a global network of users sharing data spaces and providers providing shared storage space.<br />",
+                body = <<"<strong>onedata</strong> is a global network of users sharing data spaces and providers providing shared storage space.<br />",
                 "To become a provider you need to follow a few simple steps described below. To become a user go back to the main page ",
                 "and log in with one of the supported authentication vendors.">>},
 
@@ -53,7 +53,7 @@ body() ->
 
             #table{style = <<"border-width: 0px; width: 100%;">>, body = [
                 #tbody{body = [
-                    table_row(<<"1">>, <<"Prepare a machine or cluster for onedata software stack, having public IP address and access to your storage system.">>,
+                    table_row(<<"1">>, <<"Prepare a machine or cluster for <strong>onedata</strong> software stack, having public IP address and access to your storage system.">>,
                         #list{numbered = false, body = [
                             #li{style = ?LIST_ITEM_STYLE, body = <<"The system can run on just 1 machine, although it is ",
                             "<strong>strongly recommended</strong> to use at least 4 machines for performance reasons.">>},

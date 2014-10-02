@@ -23,15 +23,15 @@
 %% ====================================================================
 %% @doc Saves space to DB. Argument should be either #space{} record
 %% (if you want to save it as new document) <br/>
-%% or #veil_document{} that wraps #space{} if you want to update descriptor in DB. <br/>
-%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% or #db_document{} that wraps #space{} if you want to update descriptor in DB. <br/>
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec save_space(Space :: space_info() | space_doc()) -> {ok, space_id()} | {error, any()} | no_return().
 %% ====================================================================
 save_space(#space{} = Space) ->
-	save_space(#veil_document{record = Space});
-save_space(#veil_document{record = #space{}, uuid = UUID} = SpaceDoc) when is_list(UUID) ->
+	save_space(#db_document{record = Space});
+save_space(#db_document{record = #space{}, uuid = UUID} = SpaceDoc) when is_list(UUID) ->
     dao_external:set_db(?SYSTEM_DB_NAME),
     dao_records:save_record(SpaceDoc).
 
@@ -62,12 +62,12 @@ exist_space(SpaceId) ->
 %% get_space/1
 %% ====================================================================
 %% @doc Gets space from DB
-%% Non-error return value is always {ok, #veil_document{record = #space}.
-%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% Non-error return value is always {ok, #db_document{record = #space}.
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec get_space(SpaceId :: uuid()) -> {ok, space_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_space(SpaceId) ->
     dao_external:set_db(?SYSTEM_DB_NAME),
-    {ok, #veil_document{record = #space{}}} = dao_records:get_record(SpaceId).
+    {ok, #db_document{record = #space{}}} = dao_records:get_record(SpaceId).

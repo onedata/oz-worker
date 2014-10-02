@@ -27,15 +27,15 @@
 %% ====================================================================
 %% @doc Saves token to DB. Argument should be either #token{} record
 %% (if you want to save it as new document) <br/>
-%% or #veil_document{} that wraps #token{} if you want to update descriptor in DB. <br/>
-%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% or #db_document{} that wraps #token{} if you want to update descriptor in DB. <br/>
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec save_token(Token :: token_info() | token_doc()) -> {ok, token_id()} | {error, any()} | no_return().
 %% ====================================================================
 save_token(#token{} = Token) ->
-	save_token(#veil_document{record = Token});
-save_token(#veil_document{record = #token{}, uuid = UUID} = TokenDoc) when is_list(UUID) ->
+	save_token(#db_document{record = Token});
+save_token(#db_document{record = #token{}, uuid = UUID} = TokenDoc) when is_list(UUID) ->
     dao_external:set_db(?TOKENS_DB_NAME),
     dao_records:save_record(TokenDoc).
 
@@ -68,15 +68,15 @@ exist_token(TokenId) ->
 %% get_token/1
 %% ====================================================================
 %% @doc Gets token from DB
-%% Non-error return value is always {ok, #veil_document{record = #token}.
-%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #veil_document{} wrapper.<br/>
+%% Non-error return value is always {ok, #db_document{record = #token}.
+%% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec get_token(TokenId :: uuid()) -> {ok, token_doc()} | {error, any()} | no_return().
 %% ====================================================================
 get_token(TokenId) ->
     dao_external:set_db(?TOKENS_DB_NAME),
-    {ok, #veil_document{record = #token{}}} = dao_records:get_record(TokenId).
+    {ok, #db_document{record = #token{}}} = dao_records:get_record(TokenId).
 
 
 %% get_token_by_value/1
@@ -84,7 +84,7 @@ get_token(TokenId) ->
 %% @doc Gets a token from DB by a given value. The function doesn't throw when
 %% such record doesn't exist, instead returning {error, not_found}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1}
-%% for more details about #veil_document{} wrapper.
+%% for more details about #db_document{} wrapper.
 %% @end
 %% ====================================================================
 -spec get_token_by_value(Value :: binary()) ->
@@ -97,7 +97,7 @@ get_token_by_value(Value) ->
 
     case dao_records:list_records(View, QueryArgs) of
         {ok, #view_result{rows = [#view_row{doc = Doc}]}} ->
-            #veil_document{record = #token{}} = Doc,
+            #db_document{record = #token{}} = Doc,
             {ok, Doc};
         {ok, #view_result{rows = []}} ->
             ?warning("Couldn't find token by value ~p", [Value]),
