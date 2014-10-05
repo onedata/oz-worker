@@ -1,23 +1,23 @@
 #!/bin/sh
 
 ### BEGIN INIT INFO
-# Provides:		        globalregistry
-# Required-Start:	    $local_fs $remote_fs $network $time bigcouch
-# Required-Stop:	    $local_fs $remote_fs $network $time
+# Provides:		        bigcouch
+# Required-Start:	    $local_fs $remote_fs $network $time
+# Required-Stop:	    $local_fs $remote_fs $network $time globalregistry
 # Should-Start:		    $syslog
 # Should-Stop:		    $syslog
 # Default-Start:	    3 4 5
 # Default-Stop:		    0 1 2 6
-# Short-Description:	globalregistry service
-# Description:	        Scalable global data registery.
+# Short-Description:	bigcouch service
+# Description:	        Scalable server that can store data needed by large scale distributed systems to cooperate.
 ### END INIT INFO
 
 # Source function library.
 . /etc/rc.d/init.d/functions
 
 RETVAL=0
-NAME=globalregistry
-DEAMON=/opt/globalregistry/nodes/globalregistry/bin/${NAME}
+NAME=bigcouch
+DEAMON=/opt/bigcouch/bin/${NAME}
 LOCKFILE=/var/lock/subsys/${NAME}
 PIDFILE=/var/run/${NAME}/${NAME}.pid
 
@@ -49,7 +49,7 @@ check_pid_status() {
 start() {
     # Start daemons.
     echo -n $"Starting ${NAME}: "
-    ${DEAMON} start
+    nohup ${DEAMON} start &
     RETVAL=$?
     if [ $RETVAL -eq 0 ]; then
         touch ${LOCKFILE}
@@ -62,29 +62,7 @@ start() {
 }
 
 stop() {
-    # Stop daemon.
     echo -n $"Stopping ${NAME}: "
-    ${DEAMON} stop 2>/dev/null
-    for n in $(seq 1 10); do
-        sleep 1
-        check_pid_status
-        RETVAL=$?
-        if [ $RETVAL -eq 1 ]; then
-            break
-        fi
-    done
-    if [ $RETVAL -eq 1 ]; then
-        rm -f ${LOCKFILE} ${PIDFILE}
-        success
-        echo && return 0
-    else
-        failure $"${NAME} stop"
-        echo && return 1
-    fi
-}
-
-hardstop() {
-    echo -n $"Shutting down ${NAME}: "
     su - root -c "ps -ef | grep beam.smp | grep '\-progname ${NAME} ' | grep -v grep | awk '{print \$2}' | xargs kill -9"
     for n in $(seq 1 10); do
         sleep 1

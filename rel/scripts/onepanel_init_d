@@ -1,23 +1,23 @@
 #!/bin/sh
 
 ### BEGIN INIT INFO
-# Provides:		        globalregistry
-# Required-Start:	    $local_fs $remote_fs $network $time bigcouch
+# Provides:		        onepanel
+# Required-Start:	    $local_fs $remote_fs $network $time
 # Required-Stop:	    $local_fs $remote_fs $network $time
 # Should-Start:		    $syslog
 # Should-Stop:		    $syslog
 # Default-Start:	    3 4 5
 # Default-Stop:		    0 1 2 6
-# Short-Description:	globalregistry service
-# Description:	        Scalable global data registery.
+# Short-Description:	onepanel service
+# Description:	        Management tool for onedata components.
 ### END INIT INFO
 
 # Source function library.
 . /etc/rc.d/init.d/functions
 
 RETVAL=0
-NAME=globalregistry
-DEAMON=/opt/globalregistry/nodes/globalregistry/bin/${NAME}
+NAME=onepanel
+DEAMON=/opt/globalregistry/nodes/onepanel/bin/${NAME}
 LOCKFILE=/var/lock/subsys/${NAME}
 PIDFILE=/var/run/${NAME}/${NAME}.pid
 

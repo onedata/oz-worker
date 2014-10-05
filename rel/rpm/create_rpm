@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # RPM package version
-VERSION=`git describe --tags --always`
+VERSION=`git describe --tags --always | tr - .`
 
 # Path, where rpm building will take place
 RPM_BUILD_DIRECTORY=/tmp/globalregistry_rpmbuild
@@ -10,7 +10,7 @@ RPM_BUILD_DIRECTORY=/tmp/globalregistry_rpmbuild
 BIGCOUCH_RELEASE_DIRECTORY=`git rev-parse --show-toplevel`/bigcouchdb
 
 # Onepanel release submodule
-ONEPANEL_RELEASE_DIRECTORY=`git rev-parse --show-toplevel`/onepanel/rel_provider/onepanel
+ONEPANEL_RELEASE_DIRECTORY=`git rev-parse --show-toplevel`/onepanel/rel_globalregistry/onepanel
 
 ##############################
 # Exit on any failure
@@ -35,7 +35,7 @@ mkdir -p BUILD RPMS SOURCES SPECS SRPMS tmp
 
 # Copy spec file and set version
 cp $RUNNER_SCRIPT_DIR/globalregistry.spec SPECS/
-sed -i -e s/"{{version}}"/"$VERSION"/g SPECS/globalregistry.spec
+sed -i -e s/"{{version}}"/"${VERSION}"/g SPECS/globalregistry.spec
 
 # Attach globalregistry release
 mkdir -p $RPM_BUILD_DIRECTORY/SOURCES/globalregistry/files/globalregistry_node

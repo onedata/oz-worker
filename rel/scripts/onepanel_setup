@@ -14,7 +14,7 @@
 ## ===================================================================
 
 mkdir -p $1/nodes
-cp -R $1/files/onepanel_node/* $1/nodes/onepanel
+cp -R $1/files/onepanel_node $1/nodes/onepanel
 sed -i -e s/"^-name .*"/"-name onepanel@"`hostname -f`/g $1/nodes/onepanel/etc/vm.args
 sed -i -e s/"^-setcookie .*"/"-setcookie globalregistry"/g $1/nodes/onepanel/etc/vm.args
 if [[ -n "$ONEPANEL_MULTICAST_ADDRESS" ]]
