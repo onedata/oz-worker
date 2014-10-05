@@ -20,7 +20,7 @@ RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
 
 cd $RUNNER_SCRIPT_DIR/..
 
-RELEASE_PACKAGE_LOCATION=/usr/lib64/globalregistry
+RELEASE_PACKAGE_LOCATION=/opt/globalregistry/files/globalregistry
 
 START_ERL=`cat $RELEASE_PACKAGE_LOCATION/releases/start_erl.data`
 ERTS_VSN=${START_ERL% *}

@@ -57,3 +57,7 @@ rel: generate
 
 relclean:
 	rm -rf rel/globalregistry
+
+rpm: rel
+	make -C onepanel rel CONFIG=config/globalregistry.config
+	./rel/rpm/create_rpm
