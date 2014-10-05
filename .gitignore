@@ -9,7 +9,6 @@ src/gui/gui_static/n2o
 deps
 ebin
 rel/globalregistry
-rel/files/auth.config
 package
 
 .eunit
