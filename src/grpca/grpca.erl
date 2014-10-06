@@ -310,7 +310,7 @@ ca_config_file(TmpDir, CaDir) ->
 -spec delegate(Request :: function(), Args :: list()) -> Response :: any().
 %% ====================================================================
 delegate(Request, Args) ->
-    ca_loop ! {self(), {Request, Args}},
+    ca_loop ! {self(), Request, Args},
     receive
         {ok, Response} -> Response;
         Whatever -> error({unexpected_message, Whatever})
@@ -328,14 +328,14 @@ delegate(Request, Args) ->
 loop(CaDir) ->
     receive
         {Requester, Fun, Args} ->
-            Reply = (catch apply(Fun, Args ++ CaDir)),
+            Reply = (catch apply(Fun, Args ++ [CaDir])),
             Requester ! {ok, Reply},
-            loop(CaDir);
+            ?MODULE:loop(CaDir);
 
         schedule_crl_gen ->
             gen_crl_imp(CaDir),
             erlang:send_after(?CRL_REGENERATION_PERIOD, self(), schedule_crl_gen),
-            loop(CaDir);
+            ?MODULE:loop(CaDir);
 
         stop -> ok
     after timer:minutes(1) ->
