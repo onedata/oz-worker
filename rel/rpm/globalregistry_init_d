@@ -89,6 +89,12 @@ stop_globalregistry() {
 	fi
 }
 
+restart_globalregistry() {
+    stop_globalregistry ; RETVAL1=$?
+	start_globalregistry ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
 status_globalregistry() {
     status_globalregistry_silent ; STATUS=$?
     echo -n $"${GR_NAME}: "
@@ -146,6 +152,12 @@ stop_db() {
 	fi
 }
 
+restart_db() {
+    stop_db ; RETVAL1=$?
+	start_db ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
 status_db() {
     status_db_silent ; STATUS=$?
     echo -n $"database: "
@@ -165,12 +177,8 @@ status_db_silent() {
 }
 
 case "$1" in
-    start)
-        start
-        ;;
-        
-    stop)
-        stop
+    start|stop)
+        $1
         ;;
 
     restart|force-reload)
@@ -183,39 +191,13 @@ case "$1" in
         [ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]
         ;;
         
-    start_globalregistry)
-        start_globalregistry
+    start_globalregistry|stop_globalregistry|restart_globalregistry|status_globalregistry)
+        $1
         ;;
-
-    stop_globalregistry)
-        stop_globalregistry
-	    ;;
-
-    restart_globalregistry)
-	    stop_globalregistry
-	    start_globalregistry
-	    ;;
-
-    status_globalregistry)
-	    status_globalregistry
-	    ;;
 	    
-	start_db)
-        start_db
+	start_db|stop_db|restart_db|status_db)
+        $1
         ;;
-
-    stop_db)
-        stop_db
-	    ;;
-
-    restart_db)
-	    stop_db
-	    start_db
-	    ;;
-
-    status_db)
-	    status_db
-	    ;;
 
     *)
 	    echo "Usage: $0 {start|stop|restart|force-reload|status|"\
