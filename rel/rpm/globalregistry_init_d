@@ -92,7 +92,7 @@ status_globalregistry_silent() {
 start_db() {
 	status_db_silent ; STATUS=$?
 	if [ ${STATUS} -ne 0 ]; then
-		echo -n $"Starting ${DB_NAME}: "
+		echo -n $"Starting database: "
 		ulimit -u ${PROCESSES_LIMIT}
 		ulimit -n ${OPEN_FILES_LIMIT}
 	 	nohup ${DB_DEAMON} start 1>/dev/null 2>&1 &
@@ -114,7 +114,7 @@ start_db() {
 stop_db() {
 	status_db_silent ; STATUS=$?
 	if [ ${STATUS} -eq 0 ]; then
-		echo -n $"Stopping ${DB_NAME}: "
+		echo -n $"Stopping database: "
 		PID=`cat ${DB_PIDFILE}`
 	    kill ${PID} 1>/dev/null 2>&1 ; RETVAL=$?
         if [ ${RETVAL} -eq 0 ]; then
@@ -130,7 +130,7 @@ stop_db() {
 
 status_db() {
     status_db_silent ; STATUS=$?
-    echo -n $"${DB_NAME}: "
+    echo -n $"database: "
 	if [ ${STATUS} -eq 0 ]; then
         echo "running"
 	    return 0
