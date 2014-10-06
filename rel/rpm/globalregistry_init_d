@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# chkconfig: 2345 80 30
+# description: onepanel service
+
 ### BEGIN INIT INFO
 # Provides:		        globalregistry
 # Required-Start:	    $local_fs $remote_fs $network $time
@@ -54,7 +57,6 @@ start_globalregistry() {
 
 stop_globalregistry() {
     status_globalregistry_silent ; STATUS=$?
-	STATUS=$?
 	if [ ${STATUS} -eq 0 ]; then
 	    echo -n $"Stopping ${GR_NAME}: "
 	    ${GR_DEAMON} stop 1>/dev/null 2>&1 ; RETVAL=$?
@@ -155,11 +157,11 @@ case "$1" in
         stop_db
         ;;
 
-    restart)
+    restart|force-reload)
         stop_globalregistry
         stop_db
         start_db
-        status_globalregistry
+        start_globalregistry
         ;;
 
     status)
@@ -202,7 +204,7 @@ case "$1" in
 	    ;;
 
     *)
-	    echo "Usage: $0 {start|stop|restart|status|"\
+	    echo "Usage: $0 {start|stop|restart|force-reload|status|"\
 	                    "start_db|stop_db|restart_db|status_db|"\
 	                    "start_globalregistry|stop_globalregistry|restart_globalregistry|status_globalregistry}"
 	    exit 2
