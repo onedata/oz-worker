@@ -17,7 +17,8 @@
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(REQUEST_TIMEOUT, 10000).
+-define(REQUEST_TIMEOUT, timer:seconds(10)).
+-define(CRL_REGENERATION_PERIOD, timer:hours(1)).
 -define(CACERT_FILE, "cacert.pem").
 -define(CAKEY_FILE, filename:join("private", "cakey.pem")).
 
@@ -33,7 +34,7 @@
 %% API
 %% ====================================================================
 -export([start/4, stop/0, sign_provider_req/2, loop/1, verify_provider/1,
-    cacert_path/1, revoke/1]).
+    cacert_path/1, revoke/1, gen_crl/0]).
 
 
 %% ====================================================================
@@ -66,6 +67,7 @@ start(CADir, CertPath, KeyPath, Domain) ->
             generate_gr_cert(CADir, CertPath, KeyPath, Domain)
     end,
     register(ca_loop, spawn(?MODULE, loop, [CADir])),
+    ca_loop ! schedule_crl_gen,
     ok.
 
 
@@ -91,7 +93,7 @@ stop() ->
     {ok, CertPem :: binary(), Serial :: binary()}.
 %% ====================================================================
 sign_provider_req(ProviderId, CSRPem) ->
-    case delegate(sign_provider_req, {ProviderId, CSRPem}) of
+    case delegate(fun sign_provider_req_imp/3, [ProviderId, CSRPem]) of
         {ok, CertPem, Serial} when is_binary(CertPem), is_integer(Serial) ->
             {ok, CertPem, integer_to_binary(Serial, 16)}
     end.
@@ -107,9 +109,33 @@ sign_provider_req(ProviderId, CSRPem) ->
     {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: any()}}.
 %% ====================================================================
 verify_provider(PeerCertDer) ->
-    case delegate(verify_provider, {PeerCertDer}) of
+    case delegate(fun verify_provider_imp/2, [PeerCertDer]) of
         {ok, ProviderId} = Result when is_binary(ProviderId) -> Result;
         {error, {bad_cert, _Reason}} = Result -> Result
+    end.
+
+
+%% gen_crl/0
+%% ====================================================================
+%% @doc Generates a new CRL file.
+%% ====================================================================
+-spec gen_crl() -> ok.
+%% ====================================================================
+gen_crl() ->
+    case delegate(fun gen_crl_imp/1, []) of
+        ok -> ok
+    end.
+
+
+%% revoke/1
+%% ====================================================================
+%% @doc Revokes a certificate identified by a given serial.
+%% ====================================================================
+-spec revoke(Serial :: binary()) -> ok.
+%% ====================================================================
+revoke(Serial) ->
+    case delegate(fun revoke_imp/2, [Serial]) of
+        ok -> ok
     end.
 
 
@@ -121,8 +147,6 @@ verify_provider(PeerCertDer) ->
     KeyPath :: string(), Domain :: string()) -> ok.
 %% ====================================================================
 generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
-    {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
-
     TmpDir = mochitemp:mkdtemp(),
     CSRFile = random_filename(TmpDir),
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
@@ -148,29 +172,9 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
         " -out ", CertPath]),
 
     ?info("~s", [SigningOutput]),
-    ?info("Generating an empty CRL..."),
-
-    CrlGenerationOutput = os:cmd(["openssl ca",
-        " -config ", CaConfigFile,
-        " -gencrl",
-        " -out ", filename:join(CaDir, "crl.pem")]),
-
-    ?info("~s", [CrlGenerationOutput]),
 
     mochitemp:rmtempdir(TmpDir),
     ok.
-
-
-%% revoke/1
-%% ====================================================================
-%% @doc Revokes a certificate identified by a given serial.
-%% ====================================================================
--spec revoke(Serial :: binary()) -> ok.
-%% ====================================================================
-revoke(Serial) ->
-    case delegate(revoke, {Serial}) of
-        ok -> ok
-    end.
 
 
 %% ====================================================================
@@ -194,12 +198,8 @@ revoke_imp(Serial, CaDir) ->
         " -batch",
         " -revoke ", filename:join([CaDir, "newcerts", LSerial]), ".pem"]),
     ?info("~s", [RevokeOutput]),
-    ?info("Generating an updated CRL"),
-    CreateCrlOutput = os:cmd(["openssl ca",
-        " -config ", CaConfigFile,
-        " -gencrl",
-        " -out ", filename:join(CaDir, "crl.pem")]),
-    ?info("~s", [CreateCrlOutput]),
+    mochitemp:rmtempdir(TmpDir),
+    gen_crl(),
     ok.
 
 
@@ -259,6 +259,25 @@ verify_provider_imp(PeerCertDer, CaDir) ->
     end.
 
 
+%% gen_crl_imp/1
+%% ====================================================================
+%% @doc The underlying implementation of {@link grpca:gen_crl/0}.
+%% ====================================================================
+-spec gen_crl_imp(CaDir :: string()) -> ok.
+%% ====================================================================
+gen_crl_imp(CaDir) ->
+    TmpDir = mochitemp:mkdtemp(),
+    CaConfigFile = ca_config_file(TmpDir, CaDir),
+    ?info("Generating an updated CRL"),
+    CreateCrlOutput = os:cmd(["openssl ca",
+        " -config ", CaConfigFile,
+        " -gencrl",
+        " -out ", filename:join(CaDir, "crl.pem")]),
+    ?info("~s", [CreateCrlOutput]),
+    mochitemp:rmtempdir(TmpDir),
+    ok.
+
+
 %% req_config_file/2
 %% ====================================================================
 %% @doc Creates a temporary config file for creating Global Registry REST
@@ -288,10 +307,10 @@ ca_config_file(TmpDir, CaDir) ->
 %% ====================================================================
 %% @doc Delegates a request from the API to the GRPCA process.
 %% ====================================================================
--spec delegate(Request :: atom(), Args :: tuple()) -> Response :: any().
+-spec delegate(Request :: function(), Args :: list()) -> Response :: any().
 %% ====================================================================
 delegate(Request, Args) ->
-    ca_loop ! {self(), {Request, Args}},
+    ca_loop ! {self(), Request, Args},
     receive
         {ok, Response} -> Response;
         Whatever -> error({unexpected_message, Whatever})
@@ -308,23 +327,18 @@ delegate(Request, Args) ->
 %% ====================================================================
 loop(CaDir) ->
     receive
-        {Requester, {sign_provider_req, {ProviderId, CSRPem}}} ->
-            Reply = (catch sign_provider_req_imp(ProviderId, CSRPem, CaDir)),
+        {Requester, Fun, Args} ->
+            Reply = (catch apply(Fun, Args ++ [CaDir])),
             Requester ! {ok, Reply},
-            loop(CaDir);
+            ?MODULE:loop(CaDir);
 
-        {Requester, {verify_provider, {ProviderId}}} ->
-            Reply = (catch verify_provider_imp(ProviderId, CaDir)),
-            Requester ! {ok, Reply},
-            loop(CaDir);
-
-        {Requester, {revoke, {Serial}}} ->
-            Reply = (catch revoke_imp(Serial, CaDir)),
-            Requester ! {ok, Reply},
-            loop(CaDir);
+        schedule_crl_gen ->
+            gen_crl_imp(CaDir),
+            erlang:send_after(?CRL_REGENERATION_PERIOD, self(), schedule_crl_gen),
+            ?MODULE:loop(CaDir);
 
         stop -> ok
-    after 60000 ->
+    after timer:minutes(1) ->
         ?MODULE:loop(CaDir)
     end.
 
