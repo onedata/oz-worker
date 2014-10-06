@@ -66,6 +66,7 @@ chkconfig --del globalregistry
 chkconfig --del onepanel
 rm -f /usr/bin/onepanel_admin
 rm -rf %{_prefix}
+rm -rf /opt/bigcouch
 
 %clean
 rm -rf $RPM_BUILD_ROOT
