@@ -37,6 +37,24 @@ PROCESSES_LIMIT=`echo ${PROCESSES_LIMIT} | awk -F'"' '{ print $2 }'`
 OPEN_FILES_LIMIT=`cat ${ULIMITS_FILE} 2>/dev/null || echo \{process_limit,\"65535\"\}.`
 OPEN_FILES_LIMIT=`echo ${OPEN_FILES_LIMIT} | awk -F'"' '{ print $2 }'`
 
+start() {
+	start_db ; RETVAL1=$?
+	start_globalregistry ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
+stop() {
+	stop_globalregistry ; RETVAL1=$?
+	stop_db ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
+restart() {
+	stop ; RETVAL1=$?
+	start ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
 start_globalregistry() {
     status_globalregistry_silent ; STATUS=$?
 	if [ ${STATUS} -ne 0 ]; then
@@ -148,25 +166,21 @@ status_db_silent() {
 
 case "$1" in
     start)
-        start_db
-        start_globalregistry
+        start
         ;;
         
     stop)
-        stop_globalregistry
-        stop_db
+        stop
         ;;
 
     restart|force-reload)
-        stop_globalregistry
-        stop_db
-        start_db
-        start_globalregistry
+        restart
         ;;
 
     status)
-        status_globalregistry
-        status_db
+        status_globalregistry ; RETVAL1=$?
+        status_db ; RETVAL2=$?
+        [ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]
         ;;
         
     start_globalregistry)
