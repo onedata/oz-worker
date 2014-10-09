@@ -51,7 +51,6 @@ sed -i -e s/"{{version}}"/"${VERSION}"/g SPECS/globalregistry.spec
 # Attach globalregistry release
 mkdir -p ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry/files/globalregistry_node
 cp ${RUNNER_SCRIPT_DIR}/install_rpm ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry
-cp ${RUNNER_SCRIPT_DIR}/onepanel_init_d ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry
 cp ${RUNNER_SCRIPT_DIR}/globalregistry_init_d ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry
 cp -R ${RUNNER_SCRIPT_DIR}/../scripts ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry
 cp -R ${RUNNER_SCRIPT_DIR}/../globalregistry/* ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry/files/globalregistry_node
