@@ -12,4 +12,4 @@
 ## @end
 ## ===================================================================
 
-/var/lib/globalregistry/scripts/erl_launcher escript /var/lib/globalregistry/onepanel/scripts/onepanel_admin.escript $@
+/opt/globalregistry/scripts/erl_launcher escript /opt/globalregistry/nodes/onepanel/scripts/onepanel_admin.escript $@
