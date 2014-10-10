@@ -46,7 +46,7 @@ routes() ->
         {<<"/provider/spaces/support">>,                M, S#rstate{resource = ssupport,    methods = [post]                }},
         {<<"/provider/spaces/:sid">>,                   M, S#rstate{resource = space,       methods = [get, delete]         }},
         {<<"/provider/test/check_my_ip">>,              M, S#rstate{resource = ip,          methods = [get], noauth = [get] }},
-        {<<"/provider/test/check_my_ports">>,           M, S#rstate{resource = ports,       methods = [get], noauth = [get] }}
+        {<<"/provider/test/check_my_ports">>,           M, S#rstate{resource = ports,       methods = [post], noauth = [post] }}
     ].
 
 
@@ -63,7 +63,7 @@ routes() ->
 %% ====================================================================
 is_authorized(ip, get, _, _) ->
     true;
-is_authorized(ports, get, _, _) ->
+is_authorized(ports, post, _, _) ->
     true;
 is_authorized(provider, post, _, #client{type = undefined}) ->
     true;
@@ -132,8 +132,9 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
         true ->
             {ok, SpaceId} = space_logic:support(ProviderId, Token),
             {{true,  <<"/provider/spaces/", SpaceId/binary>>}, Req}
-    end.
-
+    end;
+accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->
+    {provider_logic:test_connection(Data), Req}.
 
 %% provide_resource/4
 %% ====================================================================
@@ -163,11 +164,7 @@ provide_resource(space, _ProviderId, _Client, Req) ->
     {Space, Req2};
 provide_resource(ip, _ProviderId, _Client, Req) ->
     {{Ip, _Port}, Req2} = cowboy_req:peer(Req),
-    {list_to_binary(inet_parse:ntoa(Ip)), Req2};
-provide_resource(ports, _ProviderId, _Client, Req) ->
-    {ok, Body, Req2} = cowboy_req:body(Req),
-    Data = mochijson2:decode(Body, [{format, proplist}]),
-    {provider_logic:test_connection(Data), Req2}.
+    {list_to_binary(inet_parse:ntoa(Ip)), Req2}.
 
 
 %% delete_resource/3
