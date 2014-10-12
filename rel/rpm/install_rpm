@@ -15,13 +15,13 @@
 ## ===================================================================
 
 FILES=`find . -type f -exec ls {} \; 2> /dev/null`
-ALL_FILES=`echo $FILES | wc -w`
+ALL_FILES=`echo ${FILES} | wc -w`
 N=0
 
-for FILE in $FILES
+for FILE in ${FILES}
 do
     FILE=${FILE:2:${#FILE}}
-    N=`expr $N + 1`
+    N=`expr ${N} + 1`
     if [[ ${FILE} == "globalregistry_init_d" ]]; then
         mkdir -p $1/etc/init.d
         install -m 0700 ${FILE} $1/etc/init.d/globalregistry
@@ -33,7 +33,7 @@ do
         mkdir -p $1/${FILE_DIR}
         install -m 0700 ${FILE} $1/${FILE_DIR}/
     fi
-    PROGRESS=`expr $N \* 100 / $ALL_FILES`
+    PROGRESS=`expr ${N} \* 100 / ${ALL_FILES}`
     echo -ne "Installing files... ( $PROGRESS %)\r"
 done
 echo
