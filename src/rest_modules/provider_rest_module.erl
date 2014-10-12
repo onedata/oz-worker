@@ -134,7 +134,9 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
             {{true,  <<"/provider/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->
-    {provider_logic:test_connection(Data), Req}.
+    Body = mochijson2:encode(provider_logic:test_connection(Data)),
+    Req2 = cowboy_req:set_resp_body(Body, Req),
+    {true, Req2}.
 
 %% provide_resource/4
 %% ====================================================================
