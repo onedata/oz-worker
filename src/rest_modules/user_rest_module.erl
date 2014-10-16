@@ -183,8 +183,8 @@ provide_resource(groups, UserId, _Client, Req) ->
     {Groups, Req};
 provide_resource(group, _UserId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
-    {ok, Group} = group_logic:get_data(SID),
+    {gid, GID} = lists:keyfind(gid, 1, Bindings),
+    {ok, Group} = group_logic:get_data(GID),
     {Group, Req2};
 provide_resource(mtoken, UserId, _Client, Req) ->
     {ok, Token} = token_logic:create(accounts_merge_token, {user, UserId}),
