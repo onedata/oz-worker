@@ -199,7 +199,7 @@ revoke_imp(Serial, CaDir) ->
         " -revoke ", filename:join([CaDir, "newcerts", LSerial]), ".pem"]),
     ?info("~s", [RevokeOutput]),
     mochitemp:rmtempdir(TmpDir),
-    gen_crl(),
+    gen_crl_imp(CaDir),
     ok.
 
 
