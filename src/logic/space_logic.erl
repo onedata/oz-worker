@@ -142,7 +142,7 @@ has_effective_privilege(SpaceId, UserId, Privilege) ->
     case has_effective_user(SpaceId, UserId) of
         false -> false;
         true ->
-            UserPrivileges = get_effective_privileges(SpaceId, UserId),
+            {ok, UserPrivileges} = get_effective_privileges(SpaceId, UserId),
             ordsets:is_element(Privilege, UserPrivileges)
     end.
 
@@ -603,7 +603,7 @@ cleanup(SpaceId) ->
 %% @end
 %% ====================================================================
 -spec get_effective_privileges(SpaceId :: binary(), UserId :: binary()) ->
-    ordsets:ordset(privileges:space_privilege()).
+    {ok, ordsets:ordset(privileges:space_privilege())}.
 %% ====================================================================
 get_effective_privileges(SpaceId, UserId) ->
     #user{groups = UGroups} = dao_adapter:user(UserId),
@@ -624,7 +624,7 @@ get_effective_privileges(SpaceId, UserId) ->
             false -> ordsets:new()
         end,
 
-    ordsets:union([UserPrivileges | PrivilegesSets]).
+    {ok, ordsets:union([UserPrivileges | PrivilegesSets])}.
 
 
 %% set_privileges_aux/3
