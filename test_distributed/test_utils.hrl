@@ -15,7 +15,7 @@
 -ifndef(TEST_UTILS_HRL).
 -define(TEST_UTILS_HRL, 1).
 
--define(GR_DEPS, [sasl, lager, ssl, erlydtl, ranch, cowlib, cowboy, gproc, xmerl, ibrowse]).
+-define(GR_DEPS, [sasl, lager, ssl, erlydtl, ranch, cowlib, cowboy, gproc, xmerl, ibrowse, meck]).
 
 -define(MAKE_DIR(Root, Dir),
     begin
