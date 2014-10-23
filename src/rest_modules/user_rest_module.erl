@@ -88,7 +88,7 @@ is_authorized(_, _, _, _) ->
 resource_exists(space, UserId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {sid, SID} = lists:keyfind(sid, 1, Bindings),
-    {space_logic:has_user(SID, UserId), Req2};
+    {space_logic:has_effective_user(SID, UserId), Req2};
 resource_exists(group, UserId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {gid, GID} = lists:keyfind(gid, 1, Bindings),
