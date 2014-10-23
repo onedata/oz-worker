@@ -1,19 +1,18 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc This module tests the functionality of formatters module.
-%%% It contains unit tests that base on eunit.
-%%%
-%%% @end
-%%% Created : 15. May 2014 12:11
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This is an example test module. It contains unit tests that base on eunit.
+%% @end
+%% ===================================================================
 -module(example_tests).
+-author("Tomasz Lichon").
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--endif.
-
--ifdef(TEST).
 
 %% ===================================================================
 %% Tests description

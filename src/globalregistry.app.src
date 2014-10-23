@@ -1,34 +1,71 @@
+%% ===================================================================
+%% @author Krzysztof Trzepla
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc This file contains the application description.
+%% @end
+%% ===================================================================
 
 {application, globalregistry, [
-	{description, "Global registry of data."},
-	{vsn, "1"},
-	{registered, [globalregistry_sup]},
-	{applications, [
-		kernel,
-		stdlib,
-		sasl,
-		lager,
-		public_key,
-		crypto,
-		ssl,
-		erlydtl,
-		n2o,
-		cowboy,
-		mimetypes,
-		ibrowse
-	]},
-	{modules, [
-		globalregistry_sup,
-		globalregistry_app,
-		globalregistry,
-		hello_world
-	]},
-	{mod, {globalregistry_app, []}},
-	{env, [
-		{db_nodes,['db@127.0.0.1']},
-		% todo generate dedicated certs (this are example ones)
-		{ca_cert_file,"./cacerts/ca.crt"},
-		{cert_file,"./cacerts/server.crt"},
-		{key_file,"./cacerts/server.key"}
-	]}
+    {description, "Global registry of data."},
+    {vsn, git},
+    {registered, [globalregistry_sup]},
+    {applications, [
+        kernel,
+        stdlib,
+        sasl,
+        public_key,
+        crypto,
+        ssl,
+        xmerl,
+        % Meck is needed only for development purposes, should be removed before release.
+        meck,
+        % ctool already requires those apps below, but they are here
+        % for awareness of them being used in the project and
+        % to make sure they are started before the application.
+        gproc,
+        lager,
+        ibrowse,
+        cowboy
+    ]},
+    {mod, {globalregistry_app, []}},
+    {env, [
+        % DB config
+        {db_nodes, ['db@127.0.0.1']},
+
+        % REST config
+        {rest_port, 8443},
+        {rest_https_acceptors, 50},
+        {grpca_dir, "resources/grpca"},
+        {rest_cert_file, "resources/grpca/rest.pem"},
+        {rest_key_file, "resources/grpca/rest_key.pem"},
+        {rest_cert_domain, "127.0.0.1"}, %% the cert domain is also used to provide CRLs
+        {root_cacert_file, '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'},
+        %% OpenID Provider for REST
+        {authorization_code_expiration_seconds, 600},
+        {access_token_expiration_seconds, 3600},
+        {openid_issuer_url, "https://onedata.org"},
+
+        % GUI config
+        {gui_port, 443},
+        {gui_https_acceptors, 100},
+        {gui_socket_timeout, 60000},
+        {gui_max_keepalive, 30},
+        {gui_sessions_cookie_ttl, 3600}, % one hour
+
+        % HTTP redirector config
+        {gui_redirect_port, 80},
+        {gui_redirect_acceptors, 10},
+
+        % certs todo generate dedicated certs (this are example ones)
+        {ca_cert_file, "resources/cacerts/ca.crt"},
+        {cert_file, "resources/cacerts/server.crt"},
+        {key_file, "resources/cacerts/server.key"},
+
+        % dao
+        {view_def_location, "resources/views/"}
+    ]}
 ]}.

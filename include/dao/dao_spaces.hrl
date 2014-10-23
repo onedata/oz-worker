@@ -1,11 +1,15 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% dao_spaces header
-%%% @end
-%%% Created : 12. May 2014 12:44 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Dao definitions for space records
+%% @end
+%% ===================================================================
+-author("Tomasz Lichon").
+
 
 -ifndef(DAO_SPACES_HRL).
 -define(DAO_SPACES_HRL, 1).

@@ -1,0 +1,45 @@
+#!/bin/bash
+
+## ===================================================================
+## @author Krzysztof Trzepla
+## @copyright (C): 2014 ACK CYFRONET AGH
+## This software is released under the MIT license
+## cited in 'LICENSE.txt'.
+## @end
+## ===================================================================
+## @doc: This is a convenience script which executes escripts.
+## @end
+## ===================================================================
+
+if [ "$(id -u)" != "0" ]; then
+   echo "This script must be run as root"
+   exit 1
+fi
+
+RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
+
+cd $RUNNER_SCRIPT_DIR/..
+
+RELEASE_PACKAGE_LOCATION=/opt/globalregistry/files/globalregistry_node
+
+START_ERL=`cat $RELEASE_PACKAGE_LOCATION/releases/start_erl.data`
+ERTS_VSN=${START_ERL% *}
+
+COMMAND=$1
+shift
+
+case $COMMAND in
+	escript)
+		$RELEASE_PACKAGE_LOCATION/erts-$ERTS_VSN/bin/escript "$@"
+		;;
+
+	epmd)
+		$RELEASE_PACKAGE_LOCATION/erts-$ERTS_VSN/bin/epmd -daemon
+		;;
+
+	*)
+		;;
+esac
+
+exit $?
+

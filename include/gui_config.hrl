@@ -1,24 +1,37 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% Definitions connected with n2o
-%%% @end
-%%% Created : 09. May 2014 12:48 PM
-%%%-------------------------------------------------------------------
--author("Tomasz Lichoń").
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Gui common definitions
+%% @end
+%% ===================================================================
+-author("Tomasz Lichon").
+
 
 -ifndef(N2O_CONFIG_HRL).
 -define(N2O_CONFIG_HRL, 1).
 
+% ID of GUI listener
+-define(gui_https_listener, https).
 
--define(gui_port,443).
--define(gui_https_listener,https).
+% ID of redirector listener
+-define(gui_redirector_listener, http).
+
+% Path to directory that contains gui static files
+-define(gui_static_root, "resources/gui_static").
 % Paths in gui static directory
--define(static_paths, ["/css/", "/fonts/", "/images/", "/js/", "/n2o/"]).
--define(gui_https_acceptors,100).
--define(socket_timeout,60000).
--define(max_keepalive,30).
--define(gui_static_root,"./gui_static").
+-define(static_paths, ["/css/", "/flatui/", "/fonts/", "/images/", "/n2o/"]).
+
+% Session logic module
+-define(session_logic_module, session_logic).
+
+% GUI routing module
+-define(gui_routing_module, gui_routes).
+
+% Cowboy brdige module used by n2o
+-define(cowboy_bridge_module, n2o_cowboy).
 
 -endif.

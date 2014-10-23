@@ -1,0 +1,68 @@
+[
+    {google, [
+        % Standard config
+        {auth_module, auth_google},
+        {app_id, <<"app id">>},
+        {app_secret, <<"app secret">>},
+        {name, <<"Google">>},
+        {button_icon, <<"/images/google_icon.png">>},
+        {button_color, <<"#D54D53">>},
+        % Provider specific config
+        {xrds_endpoint, <<"https://accounts.google.com/.well-known/openid-configuration">>}
+
+    ]},
+
+    {facebook, [
+        % Standard config
+        {auth_module, auth_facebook},
+        {app_id, <<"app id">>},
+        {app_secret, <<"app secret">>},
+        {name, <<"Facebook">>},
+        {button_icon, <<"/images/facebook_icon.png">>},
+        {button_color, <<"#596FA9">>},
+        % Provider specific config
+        {authorize_endpoint, <<"https://www.facebook.com/dialog/oauth">>},
+        {access_token_endpoint, <<"https://graph.facebook.com/oauth/access_token">>},
+        {user_info_endpoint, <<"https://graph.facebook.com/me">>}
+    ]},
+
+    {github, [
+        % Standard config
+        {auth_module, auth_github},
+        {app_id, <<"app id">>},
+        {app_secret, <<"app secret">>},
+        {name, <<"GitHub">>},
+        {button_icon, <<"/images/github_icon.png">>},
+        {button_color, <<"#575757">>},
+        % Provider specific config
+        {authorize_endpoint, <<"https://github.com/login/oauth/authorize">>},
+        {access_token_endpoint, <<"https://github.com/login/oauth/access_token">>},
+        {user_info_endpoint, <<"https://api.github.com/user">>},
+        {user_emails_endpoint, <<"https://api.github.com/user/emails">>}
+    ]},
+
+    {dropbox, [
+        {auth_module, auth_dropbox},
+        {app_id, <<"app id">>},
+        {app_secret, <<"app secret">>},
+        {name, <<"Dropbox">>},
+        {button_icon, <<"/images/dropbox_icon.png">>},
+        {button_color, <<"#008BD3">>},
+        % Provider specific config
+        {authorize_endpoint, <<"https://www.dropbox.com/1/oauth2/authorize">>},
+        {access_token_endpoint, <<"https://api.dropbox.com/1/oauth2/token">>},
+        {user_info_endpoint, <<"https://api.dropbox.com/1/account/info">>}
+
+    ]},
+
+    {plgrid, [
+        % Standard config
+        {auth_module, auth_plgrid},
+        {name, <<"PLGrid OpenID">>},
+        {button_icon, <<"/images/openid_icon.png">>},
+        {button_color, <<"#9A9FA2">>},
+        % Provider specific config
+        {xrds_endpoint, <<"https://openid.plgrid.pl/gateway">>},
+        {logout_endpoint, <<"https://openid.plgrid.pl/logout">>}
+    ]}
+].

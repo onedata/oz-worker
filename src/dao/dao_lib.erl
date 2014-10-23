@@ -5,13 +5,15 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: DAO helper/utility functional methods. Those can be used in other modules
+%% @doc DAO helper/utility functional methods. Those can be used in other modules
 %% bypassing worker_host and gen_server.
 %% @end
 %% ===================================================================
 -module(dao_lib).
+-author("Rafal Slota").
 
--include("dao/dao.hrl").
+-include_lib("ctool/include/logging.hrl").
+-include_lib("dao/include/common.hrl").
 -include("registered_names.hrl").
 
 %% API
@@ -53,7 +55,7 @@ apply(Module, {Mode, Method}, Args, ProtocolVersion, _Timeout) ->
 		end
     catch
         Type:Error ->
-            lager:error("Cannot make call to dao, Reason: ~p", [{Type, Error}]),
+            ?error("Cannot make call to dao, Reason: ~p", [{Type, Error}]),
             {error, {Type, Error}}
     end;
 apply(Module, Method, Args, ProtocolVersion, Timeout) ->

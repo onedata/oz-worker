@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: Common definitions for REST handlers.
+%% @doc Common definitions for REST handlers.
 %% @end
 %% ===================================================================
 -author("Konrad Zemek").
@@ -14,31 +14,39 @@
 -define(HANDLERS_REST_HANDLER_HRL, true).
 
 
-%% A type describing atoms relating to REST methods.
--type method() :: post | patch | get | put | delete.
+%% Types describing atoms relating to REST methods.
+-type accept_method()  :: post | patch | put.
+-type method()         :: accept_method() | get | delete.
+
+
+%% Type of data passed into accept_resource handlers.
+-type json_string() :: atom() | binary().
+-type json_number() :: integer() | float().
+-type json_array()  :: [json_term()].
+-type json_object() :: [{json_string(), json_term()}].
+-type json_term()   :: json_string() | json_number() | json_array() | json_object().
+-type qs_data()     :: [{binary(), binary() | true}].
+-type data()        :: json_object() | qs_data().
 
 
 %% A description of REST request's client.
-%% `type` is the client's type.
-%% `id` is the client's ID in the database.
 -record(client, {
-    type :: user | provider,
-    id :: binary()
+    type :: user | provider, %% client's type
+    id = <<"">> :: binary()  %% client's ID in the database
 }).
+
 -type client() :: #client{}.
 
 
-%% The options associated with a particular request.
-%% `module` is the identifier of the REST module handling request's details.
-%% `resource` is the name of the requested resource.
-%% `methods` is an array of REST methods the resource accepts.
-%% `client` is the authenticated client's data.
+%% A record describing the state of REST request.
 -record(rstate, {
-    module :: module(),
-    resource :: atom(),
-    methods :: [method()],
-    client :: client()
+    module :: module(),     %% identifier of the REST module handling request's details
+    resource :: atom(),     %% name of the requested resource
+    methods :: [method()],  %% an array of REST methods the resource accepts
+    client :: client(),     %% the authenticated client's data
+    noauth = [] :: [atom()] %% list of methods not requiring a proper TLS authentication
 }).
+
 -type rstate() :: #rstate{}.
 
 

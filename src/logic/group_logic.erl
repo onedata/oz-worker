@@ -25,26 +25,31 @@
 %% exists/1
 %% ====================================================================
 %% @doc Returns whether a group exists.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
--spec exists(GroupId :: binary()) -> boolean().
+-spec exists(GroupId :: binary()) ->
+    boolean().
 %% ====================================================================
 exists(GroupId) ->
-    logic_helper:group_exists(GroupId).
+    dao_adapter:group_exists(GroupId).
 
 
 %% has_user/2
 %% ====================================================================
 %% @doc Returns whether the user identified by UserId is a member of the group.
 %% Shall return false in any other case (group doesn't exist, etc).
+%% Throws exception when call to dao fails, or group doesn't exist.
 %% @end
 %% ====================================================================
--spec has_user(GroupId :: binary(), UserId :: binary()) -> boolean().
+-spec has_user(GroupId :: binary(), UserId :: binary()) ->
+    boolean().
 %% ====================================================================
 has_user(GroupId, UserId) ->
     case exists(GroupId) of
         false -> false;
         true ->
-            #user_group{users = Users} = logic_helper:group(GroupId),
+            #user_group{users = Users} = dao_adapter:group(GroupId),
             lists:keymember(UserId, 1, Users)
     end.
 
@@ -54,16 +59,18 @@ has_user(GroupId, UserId) ->
 %% @doc Returns whether the group's member identified by UserId has privilege
 %% in the group. Shall return false in any other case (group doesn't exist,
 %% user is not group's member, etc).
+%% Throws exception when call to dao fails, or group doesn't exist.
 %% @end
 %% ====================================================================
 -spec has_privilege(GroupId :: binary(), UserId :: binary(),
-                    Privilege :: privileges:group_privilege()) -> boolean().
+                    Privilege :: privileges:group_privilege()) ->
+    boolean().
 %% ====================================================================
 has_privilege(GroupId, UserId, Privilege) ->
     case has_user(GroupId, UserId) of
         false -> false;
         true ->
-            #user_group{users = Users} = logic_helper:group(GroupId),
+            #user_group{users = Users} = dao_adapter:group(GroupId),
             {_, Privileges} = lists:keyfind(UserId, 1, Users),
             lists:member(Privilege, Privileges)
     end.
@@ -72,20 +79,22 @@ has_privilege(GroupId, UserId, Privilege) ->
 %% create/2
 %% ====================================================================
 %% @doc Creates a group for a user.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec create(UserId :: binary(), Name :: binary()) ->
-    {ok, GroupId :: binary()} | no_return().
+    {ok, GroupId :: binary()}.
 %% ====================================================================
 create(UserId, Name) ->
-    UserDoc = logic_helper:user_doc(UserId),
-    #veil_document{record = #user{groups = Groups} = User} = UserDoc,
+    UserDoc = dao_adapter:user_doc(UserId),
+    #db_document{record = #user{groups = Groups} = User} = UserDoc,
 
     Privileges = privileges:group_admin(),
     Group = #user_group{name = Name, users = [{UserId, Privileges}]},
-    GroupId = logic_helper:save(Group),
+    GroupId = dao_adapter:save(Group),
 
     UserNew = User#user{groups = [GroupId | Groups]},
-    logic_helper:save(UserDoc#veil_document{record = UserNew}),
+    dao_adapter:save(UserDoc#db_document{record = UserNew}),
 
     {ok, GroupId}.
 
@@ -93,24 +102,29 @@ create(UserId, Name) ->
 %% modify/2
 %% ====================================================================
 %% @doc Modifies group's data.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec modify(GroupId :: binary(), Name :: binary()) ->
-    ok | no_return().
+    ok.
 %% ====================================================================
 modify(GroupId, Name) ->
-    Doc = logic_helper:group_doc(GroupId),
-    #veil_document{record = #user_group{} = Group} = Doc,
+    Doc = dao_adapter:group_doc(GroupId),
+    #db_document{record = #user_group{} = Group} = Doc,
     GroupNew = Group#user_group{name = Name},
-    logic_helper:save(Doc#veil_document{record = GroupNew}),
+    dao_adapter:save(Doc#db_document{record = GroupNew}),
     ok.
 
 
 %% join/2
 %% ====================================================================
 %% @doc Adds user to a group identified by a token.
+%% Throws exception when call to dao fails, or token/user/group_from_token
+%% doesn't exist in db.
+%% @end
 %% ====================================================================
 -spec join(UserId :: binary(), Token :: binary()) ->
-    {ok, GroupId :: binary()} | no_return().
+    {ok, GroupId :: binary()}.
 %% ====================================================================
 join(UserId, Token) ->
     {ok, {group, GroupId}} = token_logic:consume(Token, group_invite_token),
@@ -118,16 +132,16 @@ join(UserId, Token) ->
         true -> ok;
         false ->
             Privileges = privileges:group_user(),
-            GroupDoc = logic_helper:group_doc(GroupId),
-            #veil_document{record = #user_group{users = Users} = Group} = GroupDoc,
+            GroupDoc = dao_adapter:group_doc(GroupId),
+            #db_document{record = #user_group{users = Users} = Group} = GroupDoc,
             GroupNew = Group#user_group{users = [{UserId, Privileges} | Users]},
 
-            UserDoc = logic_helper:user_doc(UserId),
-            #veil_document{record = #user{groups = Groups} = User} = UserDoc,
+            UserDoc = dao_adapter:user_doc(UserId),
+            #db_document{record = #user{groups = Groups} = User} = UserDoc,
             UserNew = User#user{groups = [GroupId | Groups]},
 
-            logic_helper:save(GroupDoc#veil_document{record = GroupNew}),
-            logic_helper:save(UserDoc#veil_document{record = UserNew})
+            dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
+            dao_adapter:save(UserDoc#db_document{record = UserNew})
     end,
     {ok, GroupId}.
 
@@ -135,29 +149,33 @@ join(UserId, Token) ->
 %% set_privileges/3
 %% ====================================================================
 %% @doc Sets privileges for a member of the group.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec set_privileges(GroupId :: binary(), UserId :: binary(),
-                     Privileges :: [privileges:group_privileges()]) ->
-    ok | no_return().
+                     Privileges :: [privileges:group_privilege()]) ->
+    ok.
 %% ====================================================================
 set_privileges(GroupId, UserId, Privileges) ->
-    Doc = logic_helper:group_doc(GroupId),
-    #veil_document{record = #user_group{users = Users} = Group} = Doc,
+    Doc = dao_adapter:group_doc(GroupId),
+    #db_document{record = #user_group{users = Users} = Group} = Doc,
     UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, Privileges}),
     GroupNew = Group#user_group{users = UsersNew},
-    logic_helper:save(Doc#veil_document{record = GroupNew}),
+    dao_adapter:save(Doc#db_document{record = GroupNew}),
     ok.
 
 
 %% get_data/1
 %% ====================================================================
 %% @doc Returns details about the group.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_data(GroupId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_data(GroupId) ->
-    #user_group{name = Name} = logic_helper:group(GroupId),
+    #user_group{name = Name} = dao_adapter:group(GroupId),
     {ok, [
         {groupId, GroupId},
         {name, Name}
@@ -167,12 +185,14 @@ get_data(GroupId) ->
 %% get_users/1
 %% ====================================================================
 %% @doc Returns details about group's members.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_users(GroupId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_users(GroupId) ->
-    #user_group{users = UserTuples} = logic_helper:group(GroupId),
+    #user_group{users = UserTuples} = dao_adapter:group(GroupId),
     {Users, _} = lists:unzip(UserTuples),
     {ok, [{users, Users}]}.
 
@@ -180,21 +200,25 @@ get_users(GroupId) ->
 %% get_spaces/1
 %% ====================================================================
 %% @doc Returns details about group's spaces.
+%% Throws exception when call to dao fails, or group doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_spaces(GroupId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_spaces(GroupId) ->
-    #user_group{spaces = Spaces} = logic_helper:group(GroupId),
+    #user_group{spaces = Spaces} = dao_adapter:group(GroupId),
     {ok, [{spaces, Spaces}]}.
 
 
 %% get_user/2
 %% ====================================================================
 %% @doc Returns details about group's member.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_user(GroupId :: binary(), UserId :: binary()) ->
-    {ok, [proplists:property()]} | no_return().
+    {ok, [proplists:property()]}.
 %% ====================================================================
 get_user(_GroupId, UserId) ->
     %% @todo: we don't want to give out every bit of data once clients have more data stored
@@ -204,12 +228,14 @@ get_user(_GroupId, UserId) ->
 %% get_privileges/2
 %% ====================================================================
 %% @doc Returns list of group's member privileges.
+%% Throws exception when call to dao fails, or group/user doesn't exist.
+%% @end
 %% ====================================================================
 -spec get_privileges(GroupId :: binary(), UserId :: binary()) ->
-    {ok, [privileges:group_privilege()]} | no_return().
+    {ok, [privileges:group_privilege()]}.
 %% ====================================================================
 get_privileges(GroupId, UserId) ->
-    #user_group{users = UserTuples} = logic_helper:group(GroupId),
+    #user_group{users = UserTuples} = dao_adapter:group(GroupId),
     {_, Privileges} = lists:keyfind(UserId, 1, UserTuples),
     {ok, Privileges}.
 
@@ -217,48 +243,54 @@ get_privileges(GroupId, UserId) ->
 %% remove/1
 %% ====================================================================
 %% @doc Removes the group.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
--spec remove(GroupId :: binary()) -> boolean().
+-spec remove(GroupId :: binary()) ->
+    true.
 %% ====================================================================
 remove(GroupId) ->
-    Group = logic_helper:group(GroupId),
+    Group = dao_adapter:group(GroupId),
     #user_group{users = Users, spaces = Spaces} = Group,
 
     lists:foreach(fun({UserId, _}) ->
-        UserDoc = logic_helper:user_doc(UserId),
-        #veil_document{record = #user{groups = UGroups} = User} = UserDoc,
+        UserDoc = dao_adapter:user_doc(UserId),
+        #db_document{record = #user{groups = UGroups} = User} = UserDoc,
         NewUser = User#user{groups = lists:delete(GroupId, UGroups)},
-        logic_helper:save(UserDoc#veil_document{record = NewUser})
+        dao_adapter:save(UserDoc#db_document{record = NewUser})
     end, Users),
 
     lists:foreach(fun(SpaceId) ->
-        SpaceDoc = logic_helper:space_doc(SpaceId),
-        #veil_document{record = #space{groups = SGroups} = Space} = SpaceDoc,
+        SpaceDoc = dao_adapter:space_doc(SpaceId),
+        #db_document{record = #space{groups = SGroups} = Space} = SpaceDoc,
         NewSpace = Space#space{groups = lists:keydelete(GroupId, 1, SGroups)},
-        logic_helper:save(SpaceDoc#veil_document{record = NewSpace}),
+        dao_adapter:save(SpaceDoc#db_document{record = NewSpace}),
         space_logic:cleanup(SpaceId)
     end, Spaces),
 
-    logic_helper:group_remove(GroupId).
+    dao_adapter:group_remove(GroupId).
 
 
 %% remove_user/2
 %% ====================================================================
 %% @doc Removes user from the group.
+%% Throws exception when call to dao fails, or group/user doesn't exist.
+%% @end
 %% ====================================================================
--spec remove_user(GroupId :: binary(), UserId :: binary()) -> boolean().
+-spec remove_user(GroupId :: binary(), UserId :: binary()) ->
+    true.
 %% ====================================================================
 remove_user(GroupId, UserId) ->
-    UserDoc = logic_helper:user_doc(UserId),
-    #veil_document{record = #user{groups = Groups} = User} = UserDoc,
+    UserDoc = dao_adapter:user_doc(UserId),
+    #db_document{record = #user{groups = Groups} = User} = UserDoc,
     UserNew = User#user{groups = lists:delete(GroupId, Groups)},
 
-    GroupDoc = logic_helper:group_doc(GroupId),
-    #veil_document{record = #user_group{users = Users} = Group} = GroupDoc,
+    GroupDoc = dao_adapter:group_doc(GroupId),
+    #db_document{record = #user_group{users = Users} = Group} = GroupDoc,
     GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
 
-    logic_helper:save(UserDoc#veil_document{record = UserNew}),
-    logic_helper:save(GroupDoc#veil_document{record = GroupNew}),
+    dao_adapter:save(UserDoc#db_document{record = UserNew}),
+    dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
     cleanup(GroupId),
     true.
 
@@ -266,13 +298,15 @@ remove_user(GroupId, UserId) ->
 %% cleanup/1
 %% ====================================================================
 %% @doc Removes the group if empty.
+%% Throws exception when call to dao fails, or group is already removed.
+%% @end
 %% ====================================================================
--spec cleanup(GroupId :: binary()) -> ok.
+-spec cleanup(GroupId :: binary()) ->
+    ok.
 %% ====================================================================
 cleanup(GroupId) ->
-    #user_group{users = Users} = logic_helper:group(GroupId),
-    case Users of
-        [] -> remove(GroupId);
+    case dao_adapter:group(GroupId) of
+        #user_group{users = []} -> remove(GroupId);
         _ -> ok
     end,
     ok.

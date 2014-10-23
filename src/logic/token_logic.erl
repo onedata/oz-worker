@@ -12,7 +12,14 @@
 -module(token_logic).
 -author("Konrad Zemek").
 
+-include("registered_names.hrl").
 -include("dao/dao_types.hrl").
+
+
+%% Length of generated tokens, before base64.
+-define(TOKEN_LENGTH, 30). %% 30-byte sequence encodes into base64 without padding
+
+-define(DB(Function, Arg), dao_lib:apply(dao_tokens, Function, [Arg], 1)).
 
 
 %% Atoms representing types of valid tokens.
@@ -26,74 +33,65 @@
 
 
 %% API
--export([is_valid/2, create/2, consume/2]).
+-export([is_valid/2, create/2, consume/2, random_token/0]).
 -export_type([token_type/0, resource_type/0]).
 
 
 %% is_valid/2
 %% ====================================================================
 %% @doc Checks if a given token is a valid token of a given type.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec is_valid(Token :: binary(), TokenType :: token_type()) ->
     boolean().
 %% ====================================================================
-is_valid(Token, TokenType) ->
-    case decrypt(Token) of
-        false -> false;
-        {true, TokenId} ->
-            case logic_helper:token_exists(TokenId) of
-                false -> false;
-                true ->
-                    #token{type = Type} = logic_helper:token(TokenId), %% @todo: expiration time
-                    Type =:= TokenType
-            end
+is_valid(Token, TokenType) -> %% @todo: expiration time
+    case ?DB(get_token_by_value, Token) of
+        {ok, #db_document{record = #token{type = TokenType}}} -> true;
+        _ -> false
     end.
 
 
 %% create/2
 %% ====================================================================
 %% @doc Creates a token of a given type.
+%% Throws exception when call to dao fails.
+%% @end
 %% ====================================================================
 -spec create(TokenType :: token_type(), Resource :: {resource_type(), binary()}) ->
-    {ok, Token :: binary()} | no_return().
+    {ok, Token :: binary()}.
 %% ====================================================================
 create(TokenType, Resource) ->
-    TokenRec = #token{type = TokenType, resource = Resource}, %% @todo: expiration time
-    TokenId = logic_helper:save(TokenRec),
-    encrypt(TokenId).
+    Token = random_token(),
+    TokenRec = #token{value = Token, type = TokenType, resource = Resource}, %% @todo: expiration time
+    {ok, _} = ?DB(save_token, TokenRec),
+    {ok, Token}.
 
 
 %% consume/2
 %% ====================================================================
 %% @doc Consumes a token, returning associated resource.
+%% Throws exception when call to dao fails, or token doesn't exist in db.
+%% @end
 %% ====================================================================
 -spec consume(Token :: binary(), TokenType :: token_type()) ->
     {ok, {resource_type(), binary()}}.
 %% ====================================================================
 consume(Token, TokenType) ->
-    {true, TokenId} = decrypt(Token),
-    #token{type = TokenType, resource = Resource} = logic_helper:token(TokenId), %% @todo: expiration time
-    logic_helper:token_remove(TokenId),
+    {ok, TokenDoc} = ?DB(get_token_by_value, Token), %% @todo: expiration time
+    #db_document{uuid = TokenId,
+        record = #token{type = TokenType, resource = Resource}} = TokenDoc,
+
+    ok = ?DB(remove_token, TokenId),
     {ok, Resource}.
 
 
-%% encrypt/1
+%% random_token/0
 %% ====================================================================
-%% @doc Encrypts a token with registry's public key.
+%% @doc Generates a globally unique random token.
 %% ====================================================================
--spec encrypt(Token :: binary()) ->
-    {ok, EncryptedToken :: binary()} | no_return().
+-spec random_token() -> binary().
 %% ====================================================================
-encrypt(Token) -> %% @todo: encryption
-    {ok, Token}.
-
-
-%% decrypt/1
-%% ====================================================================
-%% @doc Decrypts a token with registry's private key.
-%% ====================================================================
--spec decrypt(EncryptedToken :: binary()) ->
-    {true, Token :: binary()} | false.
-%% ====================================================================
-decrypt(Token) -> %% @todo: decryption
-    {true, Token}.
+random_token() ->
+    mochiweb_base64url:encode([crypto:rand_bytes(?TOKEN_LENGTH)]).

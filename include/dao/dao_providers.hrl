@@ -1,19 +1,25 @@
-%%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2014, ACK CYFRONET AGH
-%%% @doc
-%%% dao_providers header
-%%% @end
-%%% Created : 12. May 2014 12:50 PM
-%%%-------------------------------------------------------------------
+%% ===================================================================
+%% @author Tomasz Lichon
+%% @copyright (C): 2014 ACK CYFRONET AGH
+%% This software is released under the MIT license
+%% cited in 'LICENSE.txt'.
+%% @end
+%% ===================================================================
+%% @doc Dao definitions for provider records
+%% @end
+%% ===================================================================
+-author("Tomasz Lichon").
 
 -ifndef(DAO_PROVIDERS_HRL).
 -define(DAO_PROVIDERS_HRL, 1).
 
-%% This record defines a user and is handled as a database document
+%% This record defines a provider who support spaces and can be reached via url
 -record(provider, {
-    url :: binary(),
-    spaces = [] :: [SpaceId :: binary()]
+    client_name :: binary(),
+    redirection_point :: binary(),
+    urls :: [binary()],
+    spaces = [] :: [SpaceId :: binary()],
+    serial :: binary()
 }).
 
 -endif.

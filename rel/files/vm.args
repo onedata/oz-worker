@@ -1,8 +1,8 @@
 ## Name of the node
--name globalregistry@127.0.0.1
+-name {{node}}
 
 ## Cookie for distributed erlang
--setcookie globalregistry
+-setcookie {{cookie}}
 
 ## Heartbeat management; auto-restarts VM if it dies or becomes unresponsive
 ## (Disabled by default..use with caution!)
