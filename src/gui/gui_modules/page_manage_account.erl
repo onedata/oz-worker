@@ -283,14 +283,14 @@ find_connected_account(Provider, ProviderInfos) ->
 provider_redirection_panel() ->
     case gr_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
         {ok, ProviderHostname, URL} ->
-            #panel{body = [
+            #panel{id = <<"redirection_panel">>, body = [
                 #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
                     postback = {action, redirect_to_provider, [ProviderHostname, URL]}}
             ]};
         {error, no_provider} ->
             {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
             gui_jq:select_text(<<"token_textbox">>),
-            #panel{class = <<"dialog dialog-danger">>, body = [
+            #panel{id = <<"redirection_panel">>, class = <<"dialog dialog-danger">>, body = [
                 #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
                 "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
                 #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
@@ -414,6 +414,7 @@ update_alias() ->
         _ ->
             gui_jq:info_popup(<<"Error - cannot update alias">>, <<"Please try again later.">>, <<"">>)
     end,
+    gui_jq:replace(<<"redirection_panel">>, provider_redirection_panel()),
     gui_jq:update(<<"main_table">>, main_table()).
 
 

@@ -93,7 +93,9 @@ get_redirection_uri(UserId, ProviderId) ->
     AuthCode = gen_auth_code(UserId, ProviderId),
     {ok, ProviderData} = provider_logic:get_data(ProviderId),
     {redirectionPoint, RedirectionPoint} = lists:keyfind(redirectionPoint, 1, ProviderData),
-    {ok, {_Scheme, _UserInfo, Host, Port, _Path, _Query}} = http_uri:parse(RedirectionPoint),
+    {ok, {_Scheme, _UserInfo, HostStr, PortStr, _Path, _Query}} = http_uri:parse(gui_str:to_list(RedirectionPoint)),
+    Host = gui_str:to_binary(HostStr),
+    Port = gui_str:to_binary(PortStr),
     RedirectURL = case re:run(Host, ?IP_VALIDATION_REGEXP) of
                       {match, _} ->
                           RedirectionPoint;
