@@ -72,26 +72,26 @@ is_authorized(_, _, _, #client{type = undefined}) ->
 is_authorized(spaces, post, _SpaceId, _Client) ->
     true;
 is_authorized(space, patch, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_privilege(SpaceId, UserId, space_change_data);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_change_data);
 is_authorized(space, delete, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_privilege(SpaceId, UserId, space_remove);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_remove);
 is_authorized(uinvite, get, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_privilege(SpaceId, UserId, space_invite_user);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_invite_user);
 is_authorized(user, delete, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_privilege(SpaceId, UserId, space_remove_user);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_user);
 is_authorized(ginvite, get, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_privilege(SpaceId, UserId, space_invite_group);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_invite_group);
 is_authorized(group, delete, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_privilege(SpaceId, UserId, space_remove_group);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_group);
 is_authorized(pinvite, get, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_privilege(SpaceId, UserId, space_add_provider);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_add_provider);
 is_authorized(provider, delete, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_privilege(SpaceId, UserId, space_remove_provider);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_provider);
 is_authorized(R, put, SpaceId, #client{type = user, id = UserId})
         when R =:= upriv; R =:= gpriv ->
-    space_logic:has_privilege(SpaceId, UserId, space_set_privileges);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_set_privileges);
 is_authorized(_, get, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_privilege(SpaceId, UserId, space_view_data);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_view_data);
 is_authorized(R, get, SpaceId, #client{type = provider, id = ProviderId})
         when R =/= groups, R =/= ginvite, R =/= group, R =/= gpriv ->
     space_logic:has_provider(SpaceId, ProviderId);
@@ -114,7 +114,10 @@ resource_exists(spaces, _SpaceId, Req) ->
 resource_exists(UserBound, SpaceId, Req) when UserBound =:= user; UserBound =:= upriv ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
-    {space_logic:has_user(SpaceId, UID), Req2};
+    case rest_handler:requests_effective_state(Req) of
+        false -> {space_logic:has_user(SpaceId, UID), Req2};
+        true -> {space_logic:has_effective_user(SpaceId, UID), Req2}
+    end;
 resource_exists(GroupBound, SpaceId, Req) when GroupBound =:= group; GroupBound =:= gpriv ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {gid, GID} = lists:keyfind(gid, 1, Bindings),
@@ -193,8 +196,15 @@ accept_resource(gpriv, put, SpaceId, Data, _Client, Req) ->
 provide_resource(space, SpaceId, #client{type = ClientType}, Req) ->
     {ok, Data} = space_logic:get_data(SpaceId, ClientType),
     {Data, Req};
-provide_resource(users, SpaceId, #client{type = ClientType}, Req) ->
-    {ok, Users} = space_logic:get_users(SpaceId, ClientType),
+provide_resource(users, SpaceId, #client{type = user}, Req) ->
+    {ok, Users} =
+        case rest_handler:requests_effective_state(Req) of
+            false -> space_logic:get_users(SpaceId);
+            true -> space_logic:get_effective_users(SpaceId)
+        end,
+    {Users, Req};
+provide_resource(users, SpaceId, #client{type = provider}, Req) ->
+    {ok, Users} = space_logic:get_effective_users(SpaceId),
     {Users, Req};
 provide_resource(uinvite, SpaceId, _Client, Req) ->
     {ok, Token} = token_logic:create(space_invite_user_token, {space, SpaceId}),
@@ -207,7 +217,11 @@ provide_resource(user, SpaceId, #client{type = ClientType}, Req) ->
 provide_resource(upriv, SpaceId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
-    {ok, Privileges} = space_logic:get_privileges(SpaceId, {user, UID}),
+    {ok, Privileges} =
+        case rest_handler:requests_effective_state(Req) of
+            false -> space_logic:get_privileges(SpaceId, {user, UID});
+            true -> space_logic:get_effective_privileges(SpaceId, UID)
+        end,
     {[{privileges, Privileges}], Req2};
 provide_resource(groups, SpaceId, _Client, Req) ->
     {ok, Groups} = space_logic:get_groups(SpaceId),
