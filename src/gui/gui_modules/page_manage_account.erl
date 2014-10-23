@@ -22,7 +22,7 @@
 % Postback functions and other
 -export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
--export([redirect_to_provider/2]).
+-export([show_alias_edition/1, update_alias/0, redirect_to_provider/2, show_alias_info/0]).
 
 
 %% Template points to the template file, which will be filled with content
@@ -64,6 +64,12 @@ main_table() ->
 
             #tr{cells = [
                 #td{style = <<"padding: 15px; vertical-align: top;">>, body =
+                #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"Alias">>}},
+                #td{style = <<"padding: 15px; vertical-align: top;">>, body = alias_section(User)}
+            ]},
+
+            #tr{cells = [
+                #td{style = <<"padding: 15px; vertical-align: top;">>, body =
                 #label{class = <<"label label-large label-inverse">>, style = <<"cursor: auto;">>, body = <<"E-mails">>}},
                 #td{style = <<"padding: 15px; vertical-align: top;">>, body = user_emails_section(User)}
             ]},
@@ -94,6 +100,35 @@ user_name_section(User) ->
         #link{id = <<"new_name_cancel">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
             postback = {action, show_name_edition, [false]}, body =
             #span{class = <<"fui-cross-inverted">>, style = <<"font-size: 20px;">>}}
+    ].
+
+
+%% Table row with user alias edition
+alias_section(User) ->
+    gui_jq:bind_enter_to_submit_button(<<"new_alias_textbox">>, <<"new_alias_submit">>),
+    #user{alias = Alias} = User,
+    {AliasStyle, AliasBody, AliasHint} =
+        case Alias of
+            ?EMPTY_ALIAS ->
+                {<<"font-size: 18px; color: lightgray;">>, <<"no alias">>, <<"">>};
+            _ ->
+                {<<"font-size: 18px;">>, Alias, Alias}
+        end,
+    [
+        #span{style = AliasStyle, id = <<"displayed_alias">>, body = AliasBody},
+        #link{id = <<"change_alias_button">>, class = <<"glyph-link">>, style = <<"margin-left: 10px;">>,
+            postback = {action, show_alias_edition, [true]}, body =
+            #span{class = <<"icomoon-pencil2">>, style = <<"font-size: 16px;">>}},
+        #textbox{id = <<"new_alias_textbox">>, class = <<"flat">>, body = <<"">>, style = <<"display: none;">>,
+            placeholder = <<"New alias">>, value = AliasHint},
+        #link{id = <<"new_alias_submit">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
+            actions = gui_jq:form_submit_action(<<"new_alias_submit">>, {action, update_alias}, <<"new_alias_textbox">>), body =
+            #span{class = <<"fui-check-inverted">>, style = <<"font-size: 20px;">>}},
+        #link{id = <<"new_alias_cancel">>, class = <<"glyph-link">>, style = <<"display: none; margin-left: 10px;">>,
+            postback = {action, show_alias_edition, [false]}, body =
+            #span{class = <<"fui-cross-inverted">>, style = <<"font-size: 20px;">>}},
+        #link{id = <<"alias_info">>, class = <<"glyph-link">>, style = <<"margin-left: 30px;">>,
+            postback = {action, show_alias_info}, body = #span{class = <<"icomoon-help">>, style = <<"font-size: 16px;">>}}
     ].
 
 
@@ -248,14 +283,14 @@ find_connected_account(Provider, ProviderInfos) ->
 provider_redirection_panel() ->
     case gr_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
         {ok, ProviderHostname, URL} ->
-            #panel{body = [
+            #panel{id = <<"redirection_panel">>, body = [
                 #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
                     postback = {action, redirect_to_provider, [ProviderHostname, URL]}}
             ]};
         {error, no_provider} ->
             {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
             gui_jq:select_text(<<"token_textbox">>),
-            #panel{class = <<"dialog dialog-danger">>, body = [
+            #panel{id = <<"redirection_panel">>, class = <<"dialog dialog-danger">>, body = [
                 #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
                 "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
                 #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
@@ -347,7 +382,7 @@ update_email(AddOrRemove) ->
     gui_jq:update(<<"main_table">>, main_table()).
 
 
-% Update email list - add or remove one and save new user doc
+% Update user name
 update_name() ->
     GlobalID = gui_ctx:get_user_id(),
     NewName = gui_ctx:postback_param(<<"new_name_textbox">>),
@@ -355,6 +390,31 @@ update_name() ->
         ok -> ok;
         _ -> gui_jq:wire(#alert{text = <<"Error - cannot update name.">>})
     end,
+    gui_jq:update(<<"main_table">>, main_table()).
+
+
+% Update user alias
+update_alias() ->
+    GlobalID = gui_ctx:get_user_id(),
+    NewAlias = case gui_ctx:postback_param(<<"new_alias_textbox">>) of
+                   <<"">> -> ?EMPTY_ALIAS;
+                   Bin -> Bin
+               end,
+    case user_logic:modify(GlobalID, [{alias, NewAlias}]) of
+        ok ->
+            ok;
+        {error, disallowed_prefix} ->
+            gui_jq:info_popup(<<"Error - cannot update alias">>, <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>, <<"">>);
+        {error, invalid_alias} ->
+            gui_jq:info_popup(<<"Error - cannot update alias">>, <<"Alias can contain only lowercase letters and digits.">>, <<"">>);
+        {error, alias_occupied} ->
+            gui_jq:info_popup(<<"Error - cannot update alias">>, <<"This alias is occupied by someone else. Please choose other alias.">>, <<"">>);
+        {error, alias_conflict} ->
+            gui_jq:info_popup(<<"Error - cannot update alias">>, <<"This alias is occupied by someone else. Please choose other alias.">>, <<"">>);
+        _ ->
+            gui_jq:info_popup(<<"Error - cannot update alias">>, <<"Please try again later.">>, <<"">>)
+    end,
+    gui_jq:replace(<<"redirection_panel">>, provider_redirection_panel()),
     gui_jq:update(<<"main_table">>, main_table()).
 
 
@@ -375,7 +435,7 @@ show_email_adding(Flag) ->
     end.
 
 
-% Show email adding form
+% Show name adding form
 show_name_edition(Flag) ->
     case Flag of
         true ->
@@ -395,6 +455,26 @@ show_name_edition(Flag) ->
     end.
 
 
+% Show alias adding form
+show_alias_edition(Flag) ->
+    case Flag of
+        true ->
+            gui_jq:hide(<<"displayed_alias">>),
+            gui_jq:hide(<<"change_alias_button">>),
+            gui_jq:fade_in(<<"new_alias_textbox">>, 300),
+            gui_jq:fade_in(<<"new_alias_cancel">>, 300),
+            gui_jq:fade_in(<<"new_alias_submit">>, 300),
+            gui_jq:focus(<<"new_alias_textbox">>),
+            gui_jq:select_text(<<"new_alias_textbox">>);
+        false ->
+            gui_jq:fade_in(<<"displayed_alias">>, 300),
+            gui_jq:fade_in(<<"change_alias_button">>, 300),
+            gui_jq:hide(<<"new_alias_textbox">>),
+            gui_jq:hide(<<"new_alias_cancel">>),
+            gui_jq:hide(<<"new_alias_submit">>)
+    end.
+
+
 redirect_to_provider(ProviderHostname, URL) ->
     case gui_utils:https_get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, []) of
         {ok, _} ->
@@ -402,3 +482,13 @@ redirect_to_provider(ProviderHostname, URL) ->
         _ ->
             gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable. Try again later.">>})
     end.
+
+
+% Show info about aliases
+show_alias_info() ->
+    gui_jq:info_popup(
+        <<"Alias info">>,
+        <<"Alias is a unique identifier of user&#39;s choice (it can be perceived as a login). ",
+        "It allows for easy recognition of users and can be changed any time. Having an alias is not mandatory.">>,
+        <<"">>
+    ).

@@ -70,7 +70,10 @@ exist_user(UserId) ->
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 -spec get_user(Key) -> {ok, user_doc()} | {error, any()} | no_return() when
-    Key :: UserId :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} | {email, binary()}.
+    Key :: UserId :: binary() |
+    {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
+    {email, binary()} |
+    {alias, binary()}.
 %% ====================================================================
 get_user(UUID) when is_list(UUID) ->
     dao_external:set_db(?USERS_DB_NAME),
@@ -82,7 +85,7 @@ get_user({Key, Value}) ->
     {View, QueryArgs} = case Key of
                             connected_account_user_id ->
                                 {ProviderID0, UserID} = Value,
-				                ProviderID = utils:ensure_binary(ProviderID0),
+                                ProviderID = utils:ensure_binary(ProviderID0),
                                 {?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_query_args{keys =
                                 [[
                                     <<?RECORD_FIELD_ATOM_PREFIX, (utils:ensure_binary(ProviderID))/binary>>,
@@ -91,6 +94,10 @@ get_user({Key, Value}) ->
 
                             email ->
                                 {?USER_BY_EMAIL_VIEW, #view_query_args{keys =
+                                [<<?RECORD_FIELD_BINARY_PREFIX, (dao_helper:name(Value))/binary>>], include_docs = true}};
+
+                            alias ->
+                                {?USER_BY_ALIAS_VIEW, #view_query_args{keys =
                                 [<<?RECORD_FIELD_BINARY_PREFIX, (dao_helper:name(Value))/binary>>], include_docs = true}}
                         end,
 
@@ -101,12 +108,19 @@ get_user({Key, Value}) ->
             ?warning("User by ~p: ~p not found", [Key, Value]),
             throw(user_not_found);
         {ok, #view_result{rows = [#view_row{doc = FDoc} | Tail] = AllRows}} ->
-            case length(lists:usort(AllRows)) of
-                Count when Count > 1 ->
-                    ?warning("User ~p is duplicated. Returning first copy. Others: ~p", [FDoc#db_document.uuid, Tail]);
-                _ -> ok
-            end,
-            {ok, FDoc};
+            case Key of
+                alias ->
+                    % Getting a duplicated user by alias means there was an error (aliases must be unique)
+                    throw(user_duplicated);
+                _ ->
+                    case length(lists:usort(AllRows)) of
+                        Count when Count > 1 ->
+                            ?warning("User ~p is duplicated. Returning first copy. Others: ~p", [FDoc#db_document.uuid, Tail]);
+                        _ ->
+                            ok
+                    end,
+                    {ok, FDoc}
+            end;
         Other ->
             ?error("Invalid view response: ~p", [Other]),
             throw(invalid_data)

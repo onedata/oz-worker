@@ -55,6 +55,7 @@
 %% Views
 -define(USER_BY_EMAIL_VIEW, #view_info{name = "user_by_email", db_name = ?USERS_DB_NAME, version = 1}).
 -define(USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_info{name = "user_by_connected_account_user_id", db_name = ?USERS_DB_NAME, version = 1}).
+-define(USER_BY_ALIAS_VIEW, #view_info{name = "user_by_alias", db_name = ?USERS_DB_NAME, version = 1}).
 -define(ACCESS_BY_REFRESH_TOKEN_VIEW, #view_info{name = "access_by_refresh_token", db_name = ?AUTHORIZATION_DB_NAME, version = 1}).
 -define(ACCESS_BY_TOKEN_HASH, #view_info{name = "access_by_token_hash", db_name = ?AUTHORIZATION_DB_NAME, version = 1}).
 -define(ACCESS_BY_TOKEN, #view_info{name = "access_by_token", db_name = ?AUTHORIZATION_DB_NAME, version = 1}).
@@ -65,7 +66,7 @@
 -define(TOKEN_BY_VALUE, #view_info{name = "token_by_value", db_name = ?TOKENS_DB_NAME, version = 1}).
 
 %% List of all used views :: [#view_info]
--define(VIEW_LIST, [?USER_BY_EMAIL_VIEW, ?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW,
+-define(VIEW_LIST, [?USER_BY_EMAIL_VIEW, ?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, ?USER_BY_ALIAS_VIEW,
     ?ACCESS_BY_REFRESH_TOKEN_VIEW, ?ACCESS_BY_TOKEN_HASH, ?ACCESS_BY_TOKEN,
     ?ACCESS_BY_USER_ID, ?ACCESS_BY_USER_AND_PROVIDER, ?AUTHORIZATION_BY_CODE,
     ?AUTHORIZATION_BY_EXPIRATION, ?TOKEN_BY_VALUE]).
