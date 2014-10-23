@@ -20,7 +20,7 @@
 -export([init/3, allowed_methods/2, content_types_accepted/2, is_authorized/2,
     content_types_provided/2, delete_resource/2, delete_completed/2,
     accept_resource_json/2, accept_resource_form/2, provide_resource/2,
-    rest_init/2, forbidden/2, resource_exists/2]).
+    rest_init/2, forbidden/2, resource_exists/2, requests_effective_state/1]).
 
 
 %% init/3
@@ -60,7 +60,11 @@ rest_init(Req, #rstate{} = Opts) ->
     {[binary()], cowboy_req:req(), rstate()}.
 %% ====================================================================
 allowed_methods(Req, #rstate{methods = Methods} = State) ->
-    BinMethods = [method_to_binary(M) || M <- Methods],
+    BinMethods =
+        case requests_effective_state(Req) of
+            true  -> [method_to_binary(M) || M <- Methods, M =:= get];
+            false -> [method_to_binary(M) || M <- Methods]
+        end,
     {BinMethods, Req, State}.
 
 
@@ -340,6 +344,25 @@ provide_resource(Req, #rstate{module = Mod, resource = Resource, client = Client
     {Data, Req3} = Mod:provide_resource(Resource, ResId, Client, Req2),
     JSON = mochijson2:encode(Data),
     {JSON, Req3, State}.
+
+
+%% requests_effective_state/1
+%% ====================================================================
+%% @doc Determines whether an "effective" state has been requested through
+%% a query parameter. Effective state can mean different things for different
+%% rest modules, but the state universally reduces allowed methods to GET only.
+%% @end
+%% ====================================================================
+-spec requests_effective_state(Req :: cowboy_req:req()) ->
+    boolean().
+%% ====================================================================
+requests_effective_state(Req) ->
+    {QsVals, _} = cowboy_req:qs_vals(Req), %% to be changed to qs_parse on Cowboy upgrade
+    case lists:keyfind(<<"effective">>, 1, QsVals) of
+        {_, <<"true">>} -> true;
+        {_, true} -> true;
+        _ -> false
+    end.
 
 
 %% method_to_binary/1
