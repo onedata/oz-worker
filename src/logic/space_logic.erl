@@ -16,10 +16,12 @@
 
 
 %% API
--export([exists/1, has_provider/2, has_user/2, has_group/2, has_privilege/3]).
+-export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
+    has_effective_privilege/3]).
 -export([create/2, create/3, modify/2, set_privileges/3, join/2, support/2]).
--export([get_data/2, get_users/2, get_groups/1, get_providers/2, get_user/3,
-    get_group/2, get_provider/3, get_privileges/2]).
+-export([get_data/2, get_users/1, get_effective_users/1, get_groups/1,
+    get_providers/2, get_user/3, get_group/2, get_provider/3, get_privileges/2,
+    get_effective_privileges/2]).
 -export([remove/1, remove_user/2, remove_group/2, remove_provider/2, cleanup/1]).
 
 
@@ -74,6 +76,37 @@ has_user(SpaceId, UserId) ->
     end.
 
 
+%% has_effective_user/2
+%% ====================================================================
+%% @doc Returns whether the user identified by UserId is a member of the Space,
+%% either directly or through a group.
+%% Shall return false in any other case (Space doesn't exist, etc).
+%% Throws exception when call to dao fails.
+%% @end
+%% ====================================================================
+-spec has_effective_user(SpaceId :: binary(), UserId :: binary()) ->
+    boolean().
+%% ====================================================================
+has_effective_user(SpaceId, UserId) ->
+    case exists(SpaceId) of
+        false -> false;
+        true ->
+            #space{users = Users, groups = SpaceGroups} = dao_adapter:space(SpaceId),
+            case lists:keymember(UserId, 1, Users) of
+                true -> true;
+                false ->
+                    case user_logic:exists(UserId) of
+                        false -> false;
+                        true ->
+                            #user{groups = UserGroups} = dao_adapter:user(UserId),
+                            SpaceGroupsSet = ordsets:from_list([GroupId || {GroupId, _} <- SpaceGroups]),
+                            UserGroupsSet  = ordsets:from_list(UserGroups),
+                            not ordsets:is_disjoint(SpaceGroupsSet, UserGroupsSet)
+                    end
+            end
+    end.
+
+
 %% has_group/2
 %% ====================================================================
 %% @doc Returns whether the group identified by GroupId is a member of the
@@ -101,12 +134,12 @@ has_group(SpaceId, GroupId) ->
 %% Throws exception when call to dao fails.
 %% @end
 %% ====================================================================
--spec has_privilege(SpaceId :: binary(), UserId :: binary(),
-                    Privilege :: privileges:space_privilege()) ->
+-spec has_effective_privilege(SpaceId :: binary(), UserId :: binary(),
+                              Privilege :: privileges:space_privilege()) ->
     boolean().
 %% ====================================================================
-has_privilege(SpaceId, UserId, Privilege) ->
-    case has_user(SpaceId, UserId) of
+has_effective_privilege(SpaceId, UserId, Privilege) ->
+    case has_effective_user(SpaceId, UserId) of
         false -> false;
         true ->
             UserPrivileges = get_effective_privileges(SpaceId, UserId),
@@ -268,20 +301,32 @@ get_data(SpaceId, _Client) ->
     ]}.
 
 
-%% get_users/2
+%% get_users/1
 %% ====================================================================
 %% @doc Returns details about Space's users.
 %% Throws exception when call to dao fails, or space doesn't exist.
 %% @end
 %% ====================================================================
--spec get_users(SpaceId :: binary(), Client :: user | provider) ->
+-spec get_users(SpaceId :: binary()) ->
     {ok, [proplists:property()]}.
 %% ====================================================================
-get_users(SpaceId, user) ->
+get_users(SpaceId) ->
     #space{users = Users} = dao_adapter:space(SpaceId),
     {UserIds, _} = lists:unzip(Users),
-    {ok, [{users, UserIds}]};
-get_users(SpaceId, provider) ->
+    {ok, [{users, UserIds}]}.
+
+
+%% get_effective_users/1
+%% ====================================================================
+%% @doc Returns details about Space's users. The users may belong to the Space
+%% directly or indirectly through their groups.
+%% Throws exception when call to dao fails, or space doesn't exist.
+%% @end
+%% ====================================================================
+-spec get_effective_users(SpaceId :: binary()) ->
+    {ok, [proplists:property()]}.
+%% ====================================================================
+get_effective_users(SpaceId) ->
     #space{users = SpaceUserTuples, groups = GroupTuples} = dao_adapter:space(SpaceId),
 
     GroupUsersSets = lists:map(fun({GroupId, _}) ->
@@ -565,6 +610,7 @@ get_effective_privileges(SpaceId, UserId) ->
     #space{users = UserTuples, groups = SGroupTuples} = dao_adapter:space(SpaceId),
 
     UserGroups = sets:from_list(UGroups),
+
     PrivilegesSets = lists:filtermap(fun({GroupId, Privileges}) ->
         case sets:is_element(GroupId, UserGroups) of
             true -> {true, ordsets:from_list(Privileges)};
@@ -572,8 +618,11 @@ get_effective_privileges(SpaceId, UserId) ->
         end
     end, SGroupTuples),
 
-    {_, UPrivileges} = lists:keyfind(UserId, 1, UserTuples),
-    UserPrivileges = ordsets:from_list(UPrivileges),
+    UserPrivileges =
+        case lists:keyfind(UserId, 1, UserTuples) of
+            {UserId, Privileges} -> ordsets:from_list(Privileges);
+            false -> ordsets:new()
+        end,
 
     ordsets:union([UserPrivileges | PrivilegesSets]).
 
