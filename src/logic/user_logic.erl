@@ -47,7 +47,7 @@ create(User) ->
 %% @doc Retrieves user from the database.
 %% ====================================================================
 -spec get_user(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
-{email, binary()}) ->
+{email, binary()} | {alias, binary()}) ->
     {ok, #user{}} | {error, any()}.
 %% ====================================================================
 get_user(Key) ->
@@ -65,7 +65,7 @@ get_user(Key) ->
 %% @doc Retrieves user doc from the database.
 %% ====================================================================
 -spec get_user_doc(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
-{email, binary()}) ->
+{email, binary()} | {alias, binary()}) ->
     {ok, #db_document{}} | {error, any()}.
 %% ====================================================================
 get_user_doc(Key) ->
@@ -271,7 +271,7 @@ get_groups(UserId) ->
 %% @doc Rreturns true if user was found by a given key.
 %% ====================================================================
 -spec exists(Key :: binary() | {connected_account_user_id, binary()} |
-{email, binary()}) ->
+{email, binary()} | {alias, binary()}) ->
     boolean().
 %% ====================================================================
 exists(Key) ->

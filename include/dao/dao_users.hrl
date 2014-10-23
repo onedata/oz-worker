@@ -18,7 +18,6 @@
 % Empty list, must be used as a list not binary so JS view will work correctly
 -define(EMPTY_ALIAS, "").
 
-
 % Regexp to validate aliases
 -define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9]+$">>).
 

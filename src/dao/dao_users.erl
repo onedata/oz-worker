@@ -110,7 +110,7 @@ get_user({Key, Value}) ->
         {ok, #view_result{rows = [#view_row{doc = FDoc} | Tail] = AllRows}} ->
             case Key of
                 alias ->
-                    % Getting a duplicated user by alias means there was an error (alias is unique)
+                    % Getting a duplicated user by alias means there was an error (aliases must be unique)
                     throw(user_duplicated);
                 _ ->
                     case length(lists:usort(AllRows)) of

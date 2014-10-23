@@ -110,7 +110,7 @@ alias_section(User) ->
     {AliasStyle, AliasBody, AliasHint} =
         case Alias of
             ?EMPTY_ALIAS ->
-                {<<"font-size: 18px; color: lightgray; text-decoration: italic;">>, <<"no alias">>, <<"">>};
+                {<<"font-size: 18px; color: lightgray;">>, <<"no alias">>, <<"">>};
             _ ->
                 {<<"font-size: 18px;">>, Alias, Alias}
         end,
@@ -434,7 +434,7 @@ show_email_adding(Flag) ->
     end.
 
 
-% Show email adding form
+% Show name adding form
 show_name_edition(Flag) ->
     case Flag of
         true ->
@@ -454,7 +454,7 @@ show_name_edition(Flag) ->
     end.
 
 
-% Show email adding form
+% Show alias adding form
 show_alias_edition(Flag) ->
     case Flag of
         true ->
@@ -483,7 +483,7 @@ redirect_to_provider(ProviderHostname, URL) ->
     end.
 
 
-% Show info about ceritficates' DN
+% Show info about aliases
 show_alias_info() ->
     gui_jq:info_popup(
         <<"Alias info">>,
