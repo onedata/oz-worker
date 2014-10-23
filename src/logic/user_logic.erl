@@ -86,13 +86,14 @@ get_user_doc(Key) ->
 %% @end
 %% ====================================================================
 -spec modify(UserId :: binary(), Proplist :: [{atom(), binary()}]) ->
-    ok | {error, any()}.
+    ok | {error, disallowed_prefix | invalid_alias | alias_occupied | alias_conflict | any()}.
 %% ====================================================================
 modify(UserId, Proplist) ->
     try
         #db_document{record = User} = Doc = dao_adapter:user_doc(UserId),
         #user{
             name = Name,
+            alias = Alias,
             email_list = Emails,
             connected_accounts = ConnectedAccounts,
             spaces = Spaces,
@@ -100,18 +101,102 @@ modify(UserId, Proplist) ->
             default_space = DefaultSpace,
             % TODO mock
             first_space_support_token = FSST} = User,
-        NewUser = #user{
-            name = proplists:get_value(name, Proplist, Name),
-            email_list = proplists:get_value(email_list, Proplist, Emails),
-            connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
-            spaces = proplists:get_value(spaces, Proplist, Spaces),
-            groups = proplists:get_value(groups, Proplist, Groups),
-            default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
-            % TODO mock
-            first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST)},
-        DocNew = Doc#db_document{record = NewUser},
-        dao_adapter:save(DocNew),
-        ok
+
+        % Check if alias was requested to be modified and if it is allowed
+        DisallowedPrefix = fun(A) ->
+            case A of
+                <<?NO_ALIAS_UUID_PREFIX, _/binary>> -> true;
+                _ -> false
+            end
+        end,
+
+        InvalidAlias = fun(A) ->
+            case re:run(A, ?ALIAS_VALIDATION_REGEXP) of
+                {match, _} ->
+                    false;
+                _ ->
+                    case A of
+                        ?EMPTY_ALIAS -> false;
+                        _ -> true
+                    end
+            end
+        end,
+
+        AliasOccupied = fun(A) ->
+            UserIdStr = gui_str:to_list(UserId),
+            case get_user_doc({alias, A}) of
+                {ok, #db_document{uuid = UserIdStr}} ->
+                    % DB returned the same user, so the
+                    % alias was modified but is identical, don't report errors
+                    false;
+                {ok, #db_document{}} ->
+                    % Alias is occupied by another user
+                    true;
+                _ ->
+                    % Alias is not occupied, ok
+                    false
+            end
+        end,
+
+        SetAlias = case proplists:get_value(alias, Proplist) of
+                       undefined ->
+                           Alias;
+                       NewAlias ->
+                           case DisallowedPrefix(NewAlias) of
+                               true ->
+                                   {error, disallowed_prefix};
+                               false ->
+                                   case InvalidAlias(NewAlias) of
+                                       true ->
+                                           {error, invalid_alias};
+                                       false ->
+                                           case AliasOccupied(NewAlias) of
+                                               true ->
+                                                   {error, alias_occupied};
+                                               _ -> NewAlias
+                                           end
+                                   end
+                           end
+                   end,
+
+        case SetAlias of
+            {error, Reason} ->
+                % Alias not allowed, return error
+                {error, Reason};
+            _ ->
+                NewUser = #user{
+                    name = proplists:get_value(name, Proplist, Name),
+                    alias = SetAlias,
+                    email_list = proplists:get_value(email_list, Proplist, Emails),
+                    connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
+                    spaces = proplists:get_value(spaces, Proplist, Spaces),
+                    groups = proplists:get_value(groups, Proplist, Groups),
+                    default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
+                    % TODO mock
+                    first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST)},
+                DocNew = Doc#db_document{record = NewUser},
+                dao_adapter:save(DocNew),
+                case SetAlias of
+                    Alias ->
+                        % Alias wasn't changed
+                        ok;
+                    ?EMPTY_ALIAS ->
+                        % Alias was changed to blank
+                        ok;
+                    _ ->
+                        % Alias was changed, check for possible conflicts
+                        try
+                            {ok, NewUser} = get_user({alias, SetAlias}),
+                            ok
+                        catch
+                            _:user_duplicated ->
+                                % Alias is duplicated, revert user to initial state and leave the alias blank
+                                remove(UserId),
+                                dao_adapter:save(Doc#db_document{record = #user{alias = ?EMPTY_ALIAS}}),
+                                {error, alias_conflict}
+                        end
+                end
+        end
     catch
         T:M ->
             {error, {T, M}}

@@ -22,6 +22,13 @@
 
 -define(EXPIRED_AUTHORIZATION_REMOVE_CHUNK, 50).
 
+% Regexp used to check if given string is an IP
+-define(IP_VALIDATION_REGEXP,
+    <<"\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).",
+    "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).",
+    "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).",
+    "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b">>).
+
 -define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
 -define(DB(Function, Arg1, Arg2), dao_lib:apply(dao_auth, Function, [Arg1, Arg2], 1)).
 
@@ -85,8 +92,22 @@ stop() ->
 get_redirection_uri(UserId, ProviderId) ->
     AuthCode = gen_auth_code(UserId, ProviderId),
     {ok, ProviderData} = provider_logic:get_data(ProviderId),
-    {redirectionPoint, RedirectURL} = lists:keyfind(redirectionPoint, 1, ProviderData),
-    {RedirectURL, <<RedirectURL/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
+    {redirectionPoint, RedirectionPoint} = lists:keyfind(redirectionPoint, 1, ProviderData),
+    {ok, {_Scheme, _UserInfo, Host, Port, _Path, _Query}} = http_uri:parse(RedirectionPoint),
+    RedirectURL = case re:run(Host, ?IP_VALIDATION_REGEXP) of
+                      {match, _} ->
+                          RedirectionPoint;
+                      _ ->
+                          {ok, #user{alias = Alias}} = user_logic:get_user(UserId),
+                          Prefix = case Alias of
+                              ?EMPTY_ALIAS ->
+                                  <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
+                              _ ->
+                                  Alias
+                          end,
+                          <<"https://", Prefix/binary, ".", Host/binary, ":", Port/binary>>
+                  end,
+    {RedirectionPoint, <<RedirectURL/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
 
 
 %% gen_auth_code/1
@@ -112,7 +133,7 @@ gen_auth_code(UserId, ProviderId) ->
     Token = token_logic:random_token(),
     ExpirationPoint = utils:time() + ExpirationSecs,
     Auth = #authorization{code = Token, expiration_time = ExpirationPoint,
-                          user_id = UserId, provider_id = ProviderId},
+        user_id = UserId, provider_id = ProviderId},
 
     {ok, _} = ?DB(save_authorization, Auth),
     Token.
@@ -125,7 +146,7 @@ gen_auth_code(UserId, ProviderId) ->
 %% @end
 %% ====================================================================
 -spec has_access(UserId :: binary(), AccessId :: binary(),
-                 AccessType :: client | provider) -> boolean().
+    AccessType :: client | provider) -> boolean().
 %% ====================================================================
 has_access(UserId, AccessId, AccessType) ->
     case ?DB(get_access, AccessId) of
@@ -149,7 +170,7 @@ has_access(UserId, AccessId, AccessType) ->
 modify_access(AccessId, Data) ->
     {ok, #db_document{record = Access} = AccessDoc} = ?DB(get_access, AccessId),
     ClientName = proplists:get_value(<<"clientName">>, Data,
-                                     Access#access.client_name),
+        Access#access.client_name),
 
     UpdatedDoc = AccessDoc#db_document{record = Access#access{client_name = ClientName}},
     {ok, _} = ?DB(save_access, UpdatedDoc),
@@ -196,16 +217,16 @@ get_user_tokens(UserId, AccessType) ->
 %% @end
 %% ====================================================================
 -spec grant_tokens(Client :: {provider, ProviderId :: binary()} | native,
-                   AuthCode :: binary(), ClientName :: binary() | undefined) ->
+    AuthCode :: binary(), ClientName :: binary() | undefined) ->
     {ok, [proplists:property()]} |
     {error, invalid_or_expired | expired | wrong_client}.
 %% ====================================================================
 grant_tokens(Client, AuthCode, ClientName) ->
     try
         AuthDoc = case ?DB(get_authorization_by_code, AuthCode) of
-            {ok, AuthDoc1} -> AuthDoc1;
-            {error, not_found} -> throw(invalid_or_expired)
-        end,
+                      {ok, AuthDoc1} -> AuthDoc1;
+                      {error, not_found} -> throw(invalid_or_expired)
+                  end,
 
         #db_document{uuid = AuthId, record = Auth} = AuthDoc,
         #authorization{provider_id = ProviderId, user_id = UserId, expiration_time = Expiration} = Auth,
@@ -229,26 +250,26 @@ grant_tokens(Client, AuthCode, ClientName) ->
 
         %% For a provider, update an existing access document if possible
         CreateNewAccessDocument = case Client of
-            {provider, ProviderId} ->
-                case ?DB(get_access_by_user_and_provider, UserId, ProviderId) of
-                    {ok, AccessDoc} ->
-                        #db_document{record = Access} = AccessDoc,
-                        AccessDocUpdated = AccessDoc#db_document{record = Access#access{
-                            token = AccessToken,
-                            token_hash = AccessTokenHash,
-                            refresh_token = RefreshToken,
-                            expiration_time = ExpirationTime
-                        }},
-                        {ok, _} = ?DB(save_access, AccessDocUpdated),
-                        false;
+                                      {provider, ProviderId} ->
+                                          case ?DB(get_access_by_user_and_provider, UserId, ProviderId) of
+                                              {ok, AccessDoc} ->
+                                                  #db_document{record = Access} = AccessDoc,
+                                                  AccessDocUpdated = AccessDoc#db_document{record = Access#access{
+                                                      token = AccessToken,
+                                                      token_hash = AccessTokenHash,
+                                                      refresh_token = RefreshToken,
+                                                      expiration_time = ExpirationTime
+                                                  }},
+                                                  {ok, _} = ?DB(save_access, AccessDocUpdated),
+                                                  false;
 
-                    {error, not_found} ->
-                        true
-                end;
+                                              {error, not_found} ->
+                                                  true
+                                          end;
 
-            native ->
-                true
-        end,
+                                      native ->
+                                          true
+                                  end,
 
         ClientName1 =
             case ClientName of
@@ -263,8 +284,8 @@ grant_tokens(Client, AuthCode, ClientName) ->
         case CreateNewAccessDocument of
             true ->
                 Access1 = #access{token = AccessToken, token_hash = AccessTokenHash,
-                refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
-                expiration_time = ExpirationTime, client_name = ClientName1},
+                    refresh_token = RefreshToken, user_id = UserId, provider_id = ProviderId,
+                    expiration_time = ExpirationTime, client_name = ClientName1},
                 {ok, _} = ?DB(save_access, Access1);
 
             false ->
@@ -283,16 +304,16 @@ grant_tokens(Client, AuthCode, ClientName) ->
 %% @end
 %% ====================================================================
 -spec refresh_tokens(Client :: {provider, ProviderId :: binary()} | native,
-                     RefreshToken :: binary()) ->
+    RefreshToken :: binary()) ->
     {ok, [proplists:property()]} |
     {error, refresh_invalid_or_revoked | refresh_wrong_client}.
 %% ====================================================================
 refresh_tokens(Client, RefreshToken) ->
     try
         AccessDoc = case ?DB(get_access_by_key, refresh_token, RefreshToken) of
-            {ok, AccessDoc1} -> AccessDoc1;
-            {error, not_found} -> throw(refresh_invalid_or_revoked)
-        end,
+                        {ok, AccessDoc1} -> AccessDoc1;
+                        {error, not_found} -> throw(refresh_invalid_or_revoked)
+                    end,
 
         #db_document{record = Access} = AccessDoc,
         #access{provider_id = ProviderId, user_id = UserId} = Access,
@@ -331,20 +352,20 @@ refresh_tokens(Client, RefreshToken) ->
 %% @end
 %% ====================================================================
 -spec validate_token(Client :: {provider, ProviderId :: binary()} | native,
-                     AccessToken :: binary()) ->
+    AccessToken :: binary()) ->
     {ok, UserId :: binary()} | {error, not_found | expired | bad_audience}.
 %% ====================================================================
 validate_token(Client, AccessToken) ->
     ProviderId = case Client of
-        {provider, Id} -> Id;
-        native -> undefined
-    end,
+                     {provider, Id} -> Id;
+                     native -> undefined
+                 end,
 
     case ?DB(get_access_by_key, token, AccessToken) of
         {error, not_found} = Error -> Error;
         {ok, #db_document{record = Access} = AccessDoc} ->
             #access{provider_id = IntendedAudience, user_id = UserId,
-                    expiration_time = Expiration} = Access,
+                expiration_time = Expiration} = Access,
 
             case IntendedAudience of
                 ProviderId ->
@@ -507,7 +528,7 @@ jwt_encode(Claims) ->
 %% ====================================================================
 -spec generate_access_tokens(Now :: non_neg_integer()) ->
     {AccessToken :: binary(), AccessTokenHash :: binary(),
-     RefreshToken :: binary(), ExpirationTime :: non_neg_integer()}.
+        RefreshToken :: binary(), ExpirationTime :: non_neg_integer()}.
 %% ====================================================================
 generate_access_tokens(Now) ->
     {ok, AccessExpirationSecs} = application:get_env(?APP_Name, access_token_expiration_seconds),
@@ -552,8 +573,8 @@ alert_revoke_access(AccessDoc) ->
 %% @doc Prepares an OpenID token response to encode into JSON.
 %% ====================================================================
 -spec prepare_token_response(UserId :: binary(), ProviderId :: binary(),
-                             AccessToken :: binary(), RefreshToken :: binary(),
-                             ExpirationTime :: non_neg_integer(), Now :: non_neg_integer()) ->
+    AccessToken :: binary(), RefreshToken :: binary(),
+    ExpirationTime :: non_neg_integer(), Now :: non_neg_integer()) ->
     {ok, proplists:proplist()}.
 %% ====================================================================
 prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, ExpirationTime, Now) ->
@@ -561,9 +582,9 @@ prepare_token_response(UserId, ProviderId, AccessToken, RefreshToken, Expiration
     {ok, IssuerUrl} = application:get_env(?APP_Name, openid_issuer_url),
 
     Audience = case ProviderId of
-        undefined -> UserId;
-        _ -> ProviderId
-    end,
+                   undefined -> UserId;
+                   _ -> ProviderId
+               end,
 
     {ok, #user{name = Name, email_list = Emails, connected_accounts = Accounts}} = user_logic:get_user(UserId),
     Logins = [[{provider_id, OProviderId}, {login, OLogin}] || #oauth_account{provider_id = OProviderId, login = OLogin} <- Accounts, size(OLogin) > 0],
