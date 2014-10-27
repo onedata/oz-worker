@@ -1,5 +1,5 @@
 globalregistry 2.1
-============== 
+==============
 
 *globalregistry 2.1* is a part of *onedata 2.1*. This is mainly a bug-fix release. See further details below.
 
