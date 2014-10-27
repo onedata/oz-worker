@@ -37,7 +37,7 @@ title() -> <<"Become a provider">>.
 
 %% This will be placed in the template instead of {{body}} tag
 body() ->
-    #panel{style = <<"position: relative;">>, body = [
+    #panel{class= <<"page-container">>, body = [
         #panel{style = <<"margin-top: 5px; padding: 20px; position: relative;">>, body = [
             #h3{style = <<"padding: 10px;">>, body = <<"Become a provider">>},
             #p{style = <<"padding: 10px; font-size: 18px; width: 45%; line-height: 22.15px;">>,

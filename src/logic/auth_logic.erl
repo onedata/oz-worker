@@ -24,10 +24,8 @@
 
 % Regexp used to check if given string is an IP
 -define(IP_VALIDATION_REGEXP,
-    <<"\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).",
-    "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).",
-    "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).",
-    "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b">>).
+    <<"^(\\d|[1-9]\\d|1\\d\\d|2([0-4]\\d|5[0-5]))\\.(\\d|[1-9]\\d|1\\d\\d|2([0-4]\\d|5[0-5]))\\.",
+    "(\\d|[1-9]\\d|1\\d\\d|2([0-4]\\d|5[0-5]))\\.(\\d|[1-9]\\d|1\\d\\d|2([0-4]\\d|5[0-5]))$">>).
 
 -define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
 -define(DB(Function, Arg1, Arg2), dao_lib:apply(dao_auth, Function, [Arg1, Arg2], 1)).
@@ -102,11 +100,11 @@ get_redirection_uri(UserId, ProviderId) ->
                       _ ->
                           {ok, #user{alias = Alias}} = user_logic:get_user(UserId),
                           Prefix = case Alias of
-                              ?EMPTY_ALIAS ->
-                                  <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
-                              _ ->
-                                  Alias
-                          end,
+                                       ?EMPTY_ALIAS ->
+                                           <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
+                                       _ ->
+                                           Alias
+                                   end,
                           <<"https://", Prefix/binary, ".", Host/binary, ":", Port/binary>>
                   end,
     {RedirectionPoint, <<RedirectURL/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.

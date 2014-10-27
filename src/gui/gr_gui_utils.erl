@@ -207,8 +207,9 @@ top_menu(ActiveTabID, SubMenuBody) ->
             end
         end, MenuIcons),
 
+    gui_jq:wire(<<"initialize_top_menu();">>),
     [
-        #panel{class = <<"navbar navbar-fixed-top">>, body = [
+        #panel{id = <<"top_menu">>, class = <<"navbar navbar-fixed-top">>, body = [
             #panel{class = <<"navbar-inner">>, style = <<"border-bottom: 2px solid gray;">>, body = [
                 #panel{class = <<"container">>, body = [
                     #list{class = <<"nav pull-left">>, body = MenuCaptionsProcessed},
