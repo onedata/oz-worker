@@ -18,7 +18,7 @@
 -export([main/0, event/1]).
 
 % URL where provider software RPM is available.
--define(DOWNLOAD_LINK, "http://packages.onedata.org/oneprovider-Linux.rpm").
+-define(DOWNLOAD_LINK, "http://packages.onedata.org/oneprovider-linux.x86_64.rpm").
 
 % Column styles for main table
 -define(FIRST_COLUMN_STYLE, <<"padding: 10px; vertical-align: top; font-size: 18px; width: 45%;">>).
