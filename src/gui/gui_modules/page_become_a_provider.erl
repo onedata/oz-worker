@@ -78,7 +78,7 @@ body() ->
                         <<"<strong>onepanel</strong> is an admin panel for the cluster. It is hosted on every",
                         " node under <strong>https://&lthostname&gt:9443</strong>. You can use any of the nodes.">>),
                     table_row(<<"4">>,
-                        <<"Follow the installation instructions">>,
+                        <<"Follow the installation instructions.">>,
                         <<"When you are prompted to register as a provider, do so.">>),
                     table_row(<<"5">>,
                         <<"Congratulations, you are now a <strong>onedata provider</strong>!">>,
