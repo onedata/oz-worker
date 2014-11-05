@@ -84,7 +84,7 @@ body() ->
                     table_row(<<"5">>,
                         <<"Congratulations, you are now a <strong>onedata provider</strong>!">>,
                         <<"Use <strong>onepanel</strong> to grant support for spaces ",
-                        "(Spaces -> Settings). You will need a token from a space owner to do so. To try it for yourself, ",
+                        "(Spaces -> Management). You will need a token from a space owner to do so. To try it for yourself, ",
                         "log in to <strong>onedata</strong> as a user to aquire such token.">>)
                 ]}
             ]},
