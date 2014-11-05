@@ -74,7 +74,7 @@ body() ->
                         <<"After downloading the package, install it on all hosts you would like to deploy the software on.">>),
                     table_row(<<"3">>,
                         <<"Visit <strong>https://&lt;hostname&gt;:9443</strong>, where &lt;hostname&gt; is any node in the cluster."
-                        " In order to log in use <strong>admin</strong> and <strong>password</strong> credentials.">>,
+                        " In order to log in use default <strong>admin</strong> and <strong>password</strong> credentials.">>,
                         <<"<strong>onepanel</strong> is an admin panel for the cluster. It is hosted on every",
                         " node under <strong>https://&lthostname&gt:9443</strong>. You can use any of the nodes.">>),
                     table_row(<<"4">>,
