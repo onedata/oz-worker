@@ -18,7 +18,8 @@
 -export([main/0, event/1]).
 
 % URL where provider software RPM is available.
--define(DOWNLOAD_LINK, "http://packages.onedata.org/oneprovider-Linux.rpm").
+-define(RPM_DOWNLOAD_LINK, "http://packages.onedata.org/oneprovider-linux.x86_64.rpm").
+-define(DEB_DOWNLOAD_LINK, "http://packages.onedata.org/oneprovider-linux.x86_64.deb").
 
 % Column styles for main table
 -define(FIRST_COLUMN_STYLE, <<"padding: 10px; vertical-align: top; font-size: 18px; width: 45%;">>).
@@ -37,7 +38,7 @@ title() -> <<"Become a provider">>.
 
 %% This will be placed in the template instead of {{body}} tag
 body() ->
-    #panel{style = <<"position: relative;">>, body = [
+    #panel{class = <<"page-container">>, body = [
         #panel{style = <<"margin-top: 5px; padding: 20px; position: relative;">>, body = [
             #h3{style = <<"padding: 10px;">>, body = <<"Become a provider">>},
             #p{style = <<"padding: 10px; font-size: 18px; width: 45%; line-height: 22.15px;">>,
@@ -45,9 +46,14 @@ body() ->
                 "To become a provider you need to follow a few simple steps described below. To become a user go back to the main page ",
                 "and log in with one of the supported authentication vendors.">>},
 
-            #link{class = <<"btn btn-primary">>, url = <<?DOWNLOAD_LINK>>,
-                style = <<"margin: 0 10px 20px; width: 300px;">>,
+
+            #link{class = <<"btn btn-primary">>, url = <<?RPM_DOWNLOAD_LINK>>,
+                style = <<"margin: 0 10px 20px; width: 250px;">>,
                 body = <<"Download RPM">>},
+
+            #link{class = <<"btn btn-primary">>, url = <<?DEB_DOWNLOAD_LINK>>,
+                style = <<"margin: 0 10px 20px; width: 250px;">>,
+                body = <<"Download DEB">>},
 
             #h5{style = <<"padding: 0px 10px; margin-top: 30px;">>, body = <<"Installation steps">>},
 
@@ -63,19 +69,22 @@ body() ->
                             "other under unique, fully qualified hostnames.">>}
                         ]}),
                     table_row(<<"2">>,
-                        [<<"Download and install the ">>, #link{body = <<"RPM package">>, url = <<?DOWNLOAD_LINK>>}, <<" on each node of the cluster.">>],
+                        [<<"Download and install the ">>, #link{body = <<"RPM">>, url = <<?RPM_DOWNLOAD_LINK>>}, <<" or ">>,
+                            #link{body = <<"DEB">>, url = <<?DEB_DOWNLOAD_LINK>>}, <<" package on each node of the cluster.">>],
                         <<"After downloading the package, install it on all hosts you would like to deploy the software on.">>),
                     table_row(<<"3">>,
-                        <<"Visit <strong>https://&lt;hostname&gt;:9443</strong>, where &lt;hostname&gt; is any node in the cluster">>,
+                        <<"Visit <strong>https://&lt;hostname&gt;:9443</strong>, where &lt;hostname&gt; is any node in the cluster."
+                        " In order to log in use default <strong>admin</strong> and <strong>password</strong> credentials."
+                        " Remember to change the default password after logging in for the first time.">>,
                         <<"<strong>onepanel</strong> is an admin panel for the cluster. It is hosted on every",
                         " node under <strong>https://&lthostname&gt:9443</strong>. You can use any of the nodes.">>),
                     table_row(<<"4">>,
-                        <<"Follow the installation instructions">>,
+                        <<"Follow the installation instructions.">>,
                         <<"When you are prompted to register as a provider, do so.">>),
                     table_row(<<"5">>,
                         <<"Congratulations, you are now a <strong>onedata provider</strong>!">>,
                         <<"Use <strong>onepanel</strong> to grant support for spaces ",
-                        "(Spaces -> Settings). You will need a token from a space owner to do so. To try it for yourself, ",
+                        "(Spaces -> Management). You will need a token from a space owner to do so. To try it for yourself, ",
                         "log in to <strong>onedata</strong> as a user to aquire such token.">>)
                 ]}
             ]},

@@ -7,6 +7,7 @@ Fixed Bugs
 ----------
 
 * Better behaviour when GUI window is small
+* Provider instruction updated
 
 globalregistry 2.0
 ==============
