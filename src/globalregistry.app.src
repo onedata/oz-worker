@@ -33,6 +33,8 @@
     ]},
     {mod, {globalregistry_app, []}},
     {env, [
+        {hostname, "onedata.org"},
+
         % DB config
         {db_nodes, ['db@127.0.0.1']},
 
@@ -66,6 +68,20 @@
         {key_file, "resources/cacerts/server.key"},
 
         % dao
-        {view_def_location, "resources/views/"}
+        {view_def_location, "resources/views/"},
+
+
+        % DNS config
+        %% DNS port
+        {dns_port, 53},
+        %% How long dns response remains valid (in sec)
+        {dns_response_ttl, 60},
+        %% Maximum supported UDP size, that will be advertised by the server (via EDNS). If a client advertises a bigger
+        %% value, it will be assumed to be as high as this.
+        {edns_max_udp_size, 1280},
+        %% Number of dns tcp acceptors
+        {dns_tcp_acceptor_pool_size, 20},
+        %% Time (in sec) after which dns closes idle connection
+        {dns_tcp_timeout, 20}
     ]}
 ]}.
