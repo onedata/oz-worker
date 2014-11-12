@@ -257,7 +257,7 @@ start_dns() ->
     {ok, TCPNumAcceptors} = application:get_env(?APP_Name, dns_tcp_acceptor_pool_size),
     {ok, TCPTImeout} = application:get_env(?APP_Name, dns_tcp_timeout),
     dns_query_handler:load_config(),
-    OnFailureFun = fun() -> ok end,
+    OnFailureFun = fun() -> ?info("DAFUQ") end,
     ?info("Starting DNS server..."),
     case dns_server:start(globalregistry_sup, DNSPort, dns_query_handler, DNSResponseTTL, EdnsMaxUdpSize, TCPNumAcceptors, TCPTImeout, OnFailureFun) of
         ok ->
