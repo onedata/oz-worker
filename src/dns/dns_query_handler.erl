@@ -17,8 +17,37 @@
 -include("dao/dao_types.hrl").
 -include("registered_names.hrl").
 
+
+%% DNS config handling
+-export([load_config/0, load_config/1]).
+
 %% dns_query_handler_behaviour API
 -export([handle_a/1, handle_ns/1, handle_cname/1, handle_soa/1, handle_wks/1, handle_ptr/1, handle_hinfo/1, handle_minfo/1, handle_mx/1, handle_txt/1]).
+
+-define(DEFAULT_DNS_CONFIG_LOCATION, "resources/dns.config").
+
+
+%% load_config/0
+%% ====================================================================
+%% @doc Loads (or reloads) DNS config from default file.
+%% @end
+%% ====================================================================
+-spec load_config() -> ok | no_return().
+%% ====================================================================
+load_config() ->
+    load_config(?DEFAULT_DNS_CONFIG_LOCATION).
+
+
+%% load_config/1
+%% ====================================================================
+%% @doc Loads (or reloads) DNS config from given file.
+%% @end
+%% ====================================================================
+-spec load_config(ConfigFile :: string()) -> ok | no_return().
+%% ====================================================================
+load_config(ConfigFile) ->
+    {ok, Config} = file:consult(ConfigFile),
+    application:set_env(?APP_Name, dns_config, Config).
 
 
 %% ===================================================================
