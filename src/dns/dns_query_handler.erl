@@ -19,7 +19,7 @@
 
 
 %% DNS config handling
--export([load_config/0, load_config/1, parse_domain/1]).
+-export([load_config/0, load_config/1, get_canonical_hostname/0]).
 
 %% dns_query_handler_behaviour API
 -export([handle_a/1, handle_ns/1, handle_cname/1, handle_soa/1, handle_wks/1, handle_ptr/1, handle_hinfo/1, handle_minfo/1, handle_mx/1, handle_txt/1]).
@@ -39,7 +39,12 @@
     mail_exchange = [] :: [{Preference :: integer(), Hostname :: string()}],
     % Parameters used to generate SOA responses
     authority :: {MName :: string(), RName :: string(), Serial :: integer(),
-        Refresh :: integer(), Retry :: integer(), Expiry :: integer(), Minimum :: integer()}
+        Refresh :: integer(), Retry :: integer(), Expiry :: integer(), Minimum :: integer()},
+    ttl_a = 0 :: integer(),
+    ttl_ns = 0 :: integer(),
+    ttl_soa = 0 :: integer(),
+    ttl_mx = 0 :: integer(),
+    ttl_oneprovider_ns = 0 :: integer()
 }).
 
 %% load_config/0
@@ -62,7 +67,7 @@ load_config() ->
 %% ====================================================================
 load_config(ConfigFile) ->
     {ok, Config} = file:consult(ConfigFile),
-    GetParam = fun(Param, Proplist) ->
+    GetProp = fun(Param, Proplist) ->
         case proplists:get_value(Param, Proplist, undefined) of
             undefined -> throw({missing_param, Param});
             Val -> Val
@@ -70,7 +75,7 @@ load_config(ConfigFile) ->
     end,
     DNSConfig = lists:map(
         fun({zone, ZoneProplist}) ->
-            CName = GetParam(cname, ZoneProplist),
+            CName = GetProp(cname, ZoneProplist),
             % Extract prefixes from hostnames ("mx.onedata.org" -> "mx")
             % and convert addresses to DNS-compatible terms
             IPAddresses = lists:map(
@@ -99,26 +104,44 @@ load_config(ConfigFile) ->
                                                string:sub_string(Hostname, 1, Index - 2)
                                        end,
                     {Hostname, StrippedHostname, Addresses}
-                end, GetParam(ip_addresses, ZoneProplist)),
-            AuthorityProplist = GetParam(authority, ZoneProplist),
+                end, GetProp(ip_addresses, ZoneProplist)),
+            AuthorityProplist = GetProp(authority, ZoneProplist),
             SOATuple = {
-                GetParam(primary_ns, AuthorityProplist),
-                GetParam(admin_mailbox, AuthorityProplist),
-                GetParam(serial, AuthorityProplist),
-                GetParam(refresh, AuthorityProplist),
-                GetParam(retry, AuthorityProplist),
-                GetParam(expiry, AuthorityProplist),
-                GetParam(nxdomain_ttl, AuthorityProplist)
+                GetProp(primary_ns, AuthorityProplist),
+                GetProp(admin_mailbox, AuthorityProplist),
+                GetProp(serial, AuthorityProplist),
+                GetProp(refresh, AuthorityProplist),
+                GetProp(retry, AuthorityProplist),
+                GetProp(expiry, AuthorityProplist),
+                GetProp(nxdomain_ttl, AuthorityProplist)
             },
+            TTLProplist = GetProp(ttl, ZoneProplist),
             #dns_zone{
                 cname = CName,
                 ip_addresses = IPAddresses,
-                ns_servers = GetParam(ns_servers, ZoneProplist),
-                mail_exchange = GetParam(mail_exchange, ZoneProplist),
-                authority = SOATuple
+                ns_servers = GetProp(ns_servers, ZoneProplist),
+                mail_exchange = GetProp(mail_exchange, ZoneProplist),
+                authority = SOATuple,
+                ttl_a = GetProp(a, TTLProplist),
+                ttl_ns = GetProp(ns, TTLProplist),
+                ttl_soa = GetProp(soa, TTLProplist),
+                ttl_mx = GetProp(mx, TTLProplist),
+                ttl_oneprovider_ns = GetProp(oneprovider_ns, TTLProplist)
             }
         end, Config),
     application:set_env(?APP_Name, dns_zones, DNSConfig).
+
+
+%% get_canonical_hostname/0
+%% ====================================================================
+%% @doc Returns canonical hostname as specified in dns.config.
+%% @end
+%% ====================================================================
+-spec get_canonical_hostname() -> string().
+%% ====================================================================
+get_canonical_hostname() ->
+    {ok, [#dns_zone{cname = Hostname} | _]} = application:get_env(?APP_Name, dns_zones),
+    Hostname.
 
 
 %% ===================================================================
@@ -131,28 +154,23 @@ load_config(ConfigFile) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_a(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: {A :: byte(), B :: byte(), C :: byte(), D :: byte()}.
+-spec handle_a(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
 handle_a(Domain) ->
     case parse_domain(Domain) of
-        nx_domain ->
-            nx_domain;
-        {Prefix, _Suffix, #dns_zone{ip_addresses = IPAddresses} = DNSZone} ->
+        unknown_domain ->
+            refused;
+        {Prefix, #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone} ->
             case lists:keyfind(Prefix, 2, IPAddresses) of
                 {Domain, Prefix, IPAddrList} ->
                     {ok,
-                        [dns_server:answer_record(Domain, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
-                        [dns_server:authoritative_answer_flag(true)]
+                            [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
+                            [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    answer_with_soa(Domain, DNSZone)
+                    handle_unknown_subdomain(Domain, Prefix, DNSZone)
             end
     end.
-
-
-answer_with_soa(Domain, #dns_zone{authority = Authority}) ->
-    {ok, [dns_server:authority_record(Domain, ?S_SOA, Authority)]}.
 
 
 %% handle_ns/1
@@ -161,27 +179,25 @@ answer_with_soa(Domain, #dns_zone{authority = Authority}) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_ns(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: string().
+-spec handle_ns(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
 handle_ns(Domain) ->
     case parse_domain(Domain) of
-        nx_domain ->
-            nx_domain;
-        {Prefix, Suffix} ->
-            if
-                Prefix =:= "" ->
-                    {ok, [
-                        dns_server:answer_record(Domain, ?S_NS, Suffix),
-                        dns_server:authoritative_answer_flag(true)
-                    ]};
-                Prefix =:= "www" ->
-                    {ok, [
-                        dns_server:answer_record(Domain, ?S_NS, Suffix),
-                        dns_server:authoritative_answer_flag(true)
-                    ]};
-                true ->
-                    maybe_answer_with_authority(Domain, Prefix)
+        unknown_domain ->
+            refused;
+        {Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
+            case Domain of
+                CName ->
+                    {ok,
+                            [dns_server:answer_record(Domain, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
+                            lists:flatten([begin
+                                               {NSHostname, _, IPAddrList} = lists:keyfind(NSHostname, 1, IPAddresses),
+                                               [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
+                                           end || NSHostname <- NSServers]) ++
+                            [dns_server:authoritative_answer_flag(true)]
+                    };
+                _ ->
+                    handle_unknown_subdomain(Domain, Prefix, DNSZone)
             end
     end.
 
@@ -192,28 +208,14 @@ handle_ns(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_cname(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: string().
+-spec handle_cname(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
 handle_cname(Domain) ->
     case parse_domain(Domain) of
-        nx_domain ->
-            nx_domain;
-        {Prefix, Suffix} ->
-            if
-                Prefix =:= "" ->
-                    {ok, [
-                        dns_server:answer_record(Domain, ?S_CNAME, Suffix),
-                        dns_server:authoritative_answer_flag(true)
-                    ]};
-                Prefix =:= "www" ->
-                    {ok, [
-                        dns_server:answer_record(Domain, ?S_CNAME, Suffix),
-                        dns_server:authoritative_answer_flag(true)
-                    ]};
-                true ->
-                    maybe_answer_with_authority(Domain, Prefix)
-            end
+        unknown_domain ->
+            refused;
+        {Prefix, DNSZone} ->
+            handle_unknown_subdomain(Domain, Prefix, DNSZone)
     end.
 
 
@@ -223,27 +225,25 @@ handle_cname(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_mx(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: {Pref :: integer(), Exch :: string()}.
+-spec handle_mx(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
 handle_mx(Domain) ->
     case parse_domain(Domain) of
-        nx_domain ->
-            nx_domain;
-        {Prefix, Suffix} ->
-            if
-                Prefix =:= "" ->
-                    {ok, [
-                        dns_server:answer_record(Domain, ?S_MX, {0, Suffix}),
-                        dns_server:authoritative_answer_flag(true)
-                    ]};
-                Prefix =:= "www" ->
-                    {ok, [
-                        dns_server:answer_record(Domain, ?S_MX, {0, Suffix}),
-                        dns_server:authoritative_answer_flag(true)
-                    ]};
-                true ->
-                    maybe_answer_with_authority(Domain, Prefix)
+        unknown_domain ->
+            refused;
+        {Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, mail_exchange = MXServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
+            case Domain of
+                CName ->
+                    {ok,
+                            [dns_server:answer_record(Domain, TTLNS, ?S_MX, {MXPriority, MXHostname}) || {MXPriority, MXHostname} <- MXServers] ++
+                            lists:flatten([begin
+                                               {MXHostname, _, IPAddrList} = lists:keyfind(MXHostname, 1, IPAddresses),
+                                               [dns_server:additional_record(MXHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
+                                           end || {_MXPriority, MXHostname} <- MXServers]) ++
+                            [dns_server:authoritative_answer_flag(true)]
+                    };
+                _ ->
+                    handle_unknown_subdomain(Domain, Prefix, DNSZone)
             end
     end.
 
@@ -254,11 +254,29 @@ handle_mx(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_soa(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: {MName :: string(), RName :: string(), Serial :: integer(), Refresh :: integer(),
-    Retry :: integer(), Expiry :: integer(), Minimum :: integer()}.
+-spec handle_soa(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_soa(_Domain) -> not_impl.
+handle_soa(Domain) ->
+    case parse_domain(Domain) of
+        unknown_domain ->
+            refused;
+        {Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, authority = Authority,
+            ttl_a = TTLA, ttl_ns = TTLNS, ttl_soa = TTLSOA} = DNSZone} ->
+            case Domain of
+                CName ->
+                    {ok,
+                            [dns_server:answer_record(Domain, TTLSOA, ?S_SOA, Authority)] ++
+                            [dns_server:authority_record(Domain, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
+                            lists:flatten([begin
+                                               {NSHostname, _, IPAddrList} = lists:keyfind(NSHostname, 1, IPAddresses),
+                                               [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
+                                           end || NSHostname <- NSServers]) ++
+                            [dns_server:authoritative_answer_flag(true)]
+                    };
+                _ ->
+                    handle_unknown_subdomain(Domain, Prefix, DNSZone)
+            end
+    end.
 
 
 %% handle_wks/1
@@ -267,10 +285,15 @@ handle_soa(_Domain) -> not_impl.
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_wks(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: {{A :: byte(), B :: byte(), C :: byte(), D :: byte()}, Proto :: string(), BitMap :: string()}.
+-spec handle_wks(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_wks(_Domain) -> not_impl.
+handle_wks(Domain) ->
+    case parse_domain(Domain) of
+        unknown_domain ->
+            refused;
+        {Prefix, DNSZone} ->
+            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+    end.
 
 
 %% handle_ptr1
@@ -279,10 +302,15 @@ handle_wks(_Domain) -> not_impl.
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_ptr(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: string().
+-spec handle_ptr(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_ptr(_Domain) -> not_impl.
+handle_ptr(Domain) ->
+    case parse_domain(Domain) of
+        unknown_domain ->
+            refused;
+        {Prefix, DNSZone} ->
+            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+    end.
 
 
 %% handle_hinfo/1
@@ -291,10 +319,15 @@ handle_ptr(_Domain) -> not_impl.
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_hinfo(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: {CPU :: string(), OS :: string()}.
+-spec handle_hinfo(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_hinfo(_Domain) -> not_impl.
+handle_hinfo(Domain) ->
+    case parse_domain(Domain) of
+        unknown_domain ->
+            refused;
+        {Prefix, DNSZone} ->
+            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+    end.
 
 
 %% handle_minfo/1
@@ -303,10 +336,15 @@ handle_hinfo(_Domain) -> not_impl.
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_minfo(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: {RM :: string(), EM :: string()}.
+-spec handle_minfo(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_minfo(_Domain) -> not_impl.
+handle_minfo(Domain) ->
+    case parse_domain(Domain) of
+        unknown_domain ->
+            refused;
+        {Prefix, DNSZone} ->
+            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+    end.
 
 
 %% handle_txt/1
@@ -315,10 +353,15 @@ handle_minfo(_Domain) -> not_impl.
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_txt(Domain :: string()) -> {ok, [Response]} | serv_fail | nx_domain | not_impl | refused
-    when Response :: [string()].
+-spec handle_txt(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_txt(_Domain) -> not_impl.
+handle_txt(Domain) ->
+    case parse_domain(Domain) of
+        unknown_domain ->
+            refused;
+        {Prefix, DNSZone} ->
+            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+    end.
 
 
 %% ===================================================================
@@ -329,10 +372,10 @@ handle_txt(_Domain) -> not_impl.
 %% ====================================================================
 %% @doc Split the domain name into prefix and suffix, where suffix matches the
 %% canonical provider's hostname (retrieved from env). The split is made on the dot between prefix and suffix.
-%% If that's not possible, returns nx_domain.
+%% If that's not possible, returns unknown_domain.
 %% @end
 %% ====================================================================
--spec parse_domain(Domain :: string()) -> {Prefix :: string(), Suffix :: string(), DNSZone :: #dns_zone{}} | nx_domain.
+-spec parse_domain(Domain :: string()) -> {Prefix :: string(), Suffix :: string(), DNSZone :: #dns_zone{}} | unknown_domain.
 %% ====================================================================
 parse_domain(DomainArg) ->
     % If requested domain starts with 'www.', ignore it
@@ -356,11 +399,11 @@ parse_domain(DomainArg) ->
         end, undefined, DNSZones),
     case MatchingZone of
         undefined ->
-            nx_domain;
+            unknown_domain;
         #dns_zone{cname = ProviderHostnameWithoutDot} ->
             case ProviderHostnameWithoutDot =:= Domain of
                 true ->
-                    {"", ProviderHostnameWithoutDot, MatchingZone};
+                    {"", MatchingZone};
                 false ->
                     ProviderHostname = "." ++ ProviderHostnameWithoutDot,
                     HostNamePos = string:rstr(Domain, ProviderHostname),
@@ -368,59 +411,56 @@ parse_domain(DomainArg) ->
                     ValidHostNamePos = length(Domain) - length(ProviderHostname) + 1,
                     case (HostNamePos =:= ValidHostNamePos) andalso HostNamePos > 0 of
                         false ->
-                            nx_domain;
+                            unknown_domain;
                         true ->
-                            {string:sub_string(Domain, 1, HostNamePos - 1), ProviderHostnameWithoutDot, MatchingZone}
+                            {string:sub_string(Domain, 1, HostNamePos - 1), MatchingZone}
                     end
             end
 
     end.
 
 
-maybe_answer_with_authority(Domain, DomainPrefix) ->
-    case user_logic:get_user_doc({alias, list_to_binary(DomainPrefix)}) of
-        {ok, #db_document{uuid = UserIdString}} ->
-            case get_provider_for_user(list_to_binary(UserIdString)) of
-                {ok, ProviderHostname, _URL} ->
-                    {ok, {_, _, IPString, _, _, _}} = http_uri:parse(binary_to_list(ProviderHostname)),
-                    {ok, [
-                        dns_server:authority_record(Domain, ?S_NS, IPString)
-                    ]};
-                _ ->
-                    nx_domain
-            end;
-        _ ->
-            nx_domain
+%% handle_unknown_subdomain/2
+%% ====================================================================
+%% @doc This function is called when a subdomain is not recognizable according to dns.config.
+%% This happens when:
+%% 1) The requested subdomain does not exist or shouldn't have occured in the request -> return SOA record
+%% 2) The subdomain is in form of alias.onedata.org -> return NS servers of supporting provider
+%% @end
+%% ====================================================================
+-spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}) -> {reply_type(), [authority_record()]}.
+%% ====================================================================
+handle_unknown_subdomain(Domain, Prefix, #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone) ->
+    try
+        case user_logic:get_user({alias, list_to_binary(Prefix)}) of
+            {ok, #user{default_provider = DefaulfProvider}} ->
+                {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
+                URLs = proplists:get_value(urls, DataProplist),
+                {ok,
+                    [dns_server:authority_record(Domain, TTL, ?S_NS, binary_to_list(IPBin)) || IPBin <- URLs]
+                };
+            _ ->
+                answer_with_soa(Domain, DNSZone)
+        end
+    catch _:_ ->
+        answer_with_soa(Domain, DNSZone)
     end.
 
 
-get_provider_for_user(UserID) ->
-    {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
-    {ok, [{providers, DSProviders}]} = case DefaultSpace of
-                                           undefined -> {ok, [{providers, []}]};
-                                           _ -> space_logic:get_providers(DefaultSpace, user) end,
-    case DSProviders of
-        List when length(List) > 0 ->
-            % Default space has got some providers, random one
-            {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(
-                UserID, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)),
-            {ok, ProviderHostname, RedirectURL};
-        _ ->
-            % Default space does not have a provider, look in other spaces
-            ProviderIDs = lists:foldl(
-                fun(Space, Acc) ->
-                    {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
-                    Providers ++ Acc
-                end, [], Spaces),
-
-            case ProviderIDs of
-                [] ->
-                    % No provider for other spaces = nowhere to redirect
-                    {error, no_provider};
-                _ ->
-                    % There are some providers for other spaces, redirect to a random provider
-                    {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(
-                        UserID, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)),
-                    {ok, ProviderHostname, RedirectURL}
-            end
-    end.
+%% answer_with_soa/2
+%% ====================================================================
+%% @doc Returns records that will be evaluated as uthoritative SOA record
+%% in authority section of DNS response.
+%% @end
+%% ====================================================================
+-spec answer_with_soa(Domain :: string(), DNSZone :: #dns_zone{}) -> {reply_type(), [authority_record()]}.
+%% ====================================================================
+answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, authority = Authority, ttl_soa = TTL}) ->
+    ReplyType = case lists:keyfind(Domain, 1, IPAddresses) of
+                    {Domain, _, _} -> ok;
+                    _ -> nx_domain
+                end,
+    {ReplyType, [
+        dns_server:authority_record(CName, TTL, ?S_SOA, Authority),
+        dns_server:authoritative_answer_flag(true)
+    ]}.

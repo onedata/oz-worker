@@ -45,7 +45,8 @@
     default_space :: binary() | undefined,
     groups = [] :: [GroupId :: binary()],
     % TODO this is a mock
-    first_space_support_token = <<"">> :: binary()
+    first_space_support_token = <<"">> :: binary(),
+    default_provider = <<"">> :: binary()
 }).
 
 -endif.

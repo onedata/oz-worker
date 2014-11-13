@@ -97,54 +97,38 @@ get_redirection_url_to_provider(Referer) ->
 
         % Default provider is the provider that redirected the user for login.
         % Check if the provider is recognisable
-        RefererProviderInfo =
-            case Referer of
-                undefined ->
-                    error;
-                _ ->
-                    try
-                        {ProvHostname, RedURL} = auth_logic:get_redirection_uri(UserID, Referer),
-                        {ok, ProvHostname, RedURL}
-                    catch _:_ ->
-                        error
-                    end
+        RefererData =
+            try
+                {ok, Data} = provider_logic:get_data(Referer),
+                Data
+            catch _:_ ->
+                undefined
             end,
 
-        case RefererProviderInfo of
-            {ok, _, _} ->
-                % Default provider is OK
-                RefererProviderInfo;
-            error ->
-                % No default provider, check if default space has any providers
-                {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
-                {ok, [{providers, DSProviders}]} = case DefaultSpace of
-                                                       undefined -> {ok, [{providers, []}]};
-                                                       _ -> space_logic:get_providers(DefaultSpace, user) end,
-                case DSProviders of
-                    List when length(List) > 0 ->
-                        % Default space has got some providers, random one
-                        {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(
-                            UserID, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)),
-                        {ok, ProviderHostname, RedirectURL};
-                    _ ->
-                        % Default space does not have a provider, look in other spaces
-                        ProviderIDs = lists:foldl(
-                            fun(Space, Acc) ->
-                                {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
-                                Providers ++ Acc
-                            end, [], Spaces),
+        {ProviderID, ProviderData} = case RefererData of
+                                         undefined ->
+                                             % If referer isn't recognizable, look for any provider
+                                             case provider_logic:get_default_provider_for_user(UserID) of
+                                                 {error, no_provider} ->
+                                                     {undefined, undefined};
+                                                 {ok, ProvID} ->
+                                                     {ok, PData} = provider_logic:get_data(ProvID),
+                                                     {ProvID, PData}
+                                             end;
+                                         _ ->
+                                             % Referer is OK
+                                             {Referer, RefererData}
+                                     end,
 
-                        case ProviderIDs of
-                            [] ->
-                                % No provider for other spaces = nowhere to redirect
-                                {error, no_provider};
-                            _ ->
-                                % There are some providers for other spaces, redirect to a random provider
-                                {ProviderHostname, RedirectURL} = auth_logic:get_redirection_uri(
-                                    UserID, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)),
-                                {ok, ProviderHostname, RedirectURL}
-                        end
-                end
+        % If any provider was found, get redirection uri
+        case ProviderID of
+            undefined ->
+                {error, no_provider};
+            _ ->
+                RedirectionPoint = proplists:get_value(redirectionPoint, ProviderData),
+                {ok, {_Scheme, _UserInfo, _HostStr, Port, _Path, _Query}} = http_uri:parse(gui_str:to_list(RedirectionPoint)),
+                {ok, RedirectURI} = auth_logic:get_redirection_uri(UserID, ProviderID, Port),
+                {ok, RedirectionPoint, RedirectURI}
         end
     catch T:M ->
         ?error_stacktrace("Cannot resolve redirection URL to provider - ~p:~p", [T, M]),

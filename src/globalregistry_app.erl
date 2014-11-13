@@ -252,14 +252,13 @@ start_redirector() ->
 %% ====================================================================
 start_dns() ->
     {ok, DNSPort} = application:get_env(?APP_Name, dns_port),
-    {ok, DNSResponseTTL} = application:get_env(?APP_Name, dns_response_ttl),
     {ok, EdnsMaxUdpSize} = application:get_env(?APP_Name, edns_max_udp_size),
     {ok, TCPNumAcceptors} = application:get_env(?APP_Name, dns_tcp_acceptor_pool_size),
     {ok, TCPTImeout} = application:get_env(?APP_Name, dns_tcp_timeout),
     dns_query_handler:load_config(),
     OnFailureFun = fun() -> ?info("DAFUQ") end,
     ?info("Starting DNS server..."),
-    case dns_server:start(globalregistry_sup, DNSPort, dns_query_handler, DNSResponseTTL, EdnsMaxUdpSize, TCPNumAcceptors, TCPTImeout, OnFailureFun) of
+    case dns_server:start(globalregistry_sup, DNSPort, dns_query_handler, EdnsMaxUdpSize, TCPNumAcceptors, TCPTImeout, OnFailureFun) of
         ok ->
             ok;
         Error ->

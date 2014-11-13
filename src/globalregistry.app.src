@@ -74,8 +74,6 @@
         % DNS config
         %% DNS port
         {dns_port, 53},
-        %% How long dns response remains valid (in sec)
-        {dns_response_ttl, 60},
         %% Maximum supported UDP size, that will be advertised by the server (via EDNS). If a client advertises a bigger
         %% value, it will be assumed to be as high as this.
         {edns_max_udp_size, 1280},
