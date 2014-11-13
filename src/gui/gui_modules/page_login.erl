@@ -85,8 +85,10 @@ login_panel() ->
                         style = <<"margin: 10px; width: 210px;">>,
                         body = <<"Become a provider">>}
                 ]},
+                #link{postback = show_copernicus_info, body = #image{image = "/images/copernicus.png",
+                    style = <<"display: block; margin-left: auto; margin-right: auto; margin-top: 75px; width: 300px;">>}},
                 gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
-            ] ++ gr_gui_utils:logotype_footer(120)}
+            ] ++ gr_gui_utils:logotype_footer(55)}
     end.
 
 
@@ -110,4 +112,23 @@ event({auth, HandlerModule, Referer}) ->
     %% remember which provider redirected the client to GR
     erlang:put(referer, Referer),
     {ok, URL} = HandlerModule:get_redirect_url(false),
-    gui_jq:redirect(URL).
+    gui_jq:redirect(URL);
+
+event(show_copernicus_info) ->
+    Text = <<
+    "EN<br />A team from UST in Cracow, formed of Department of Computer Science "/utf8,
+    "and ACC Cyfronet workers, realising <b>onedata</b> system as part of "/utf8,
+    "PL-Grid Plus and PL-Grid Core projects, has been <b>awarded 3rd place</b> in "/utf8,
+    "\"T-SYSTEMS BIG DATA CHALLENGE\". Copernicus is an Earth monitoring "/utf8,
+    "programme, headed by the European Commission (EC). Since 2011, "/utf8,
+    "the annual Copernicus Masters competition is awarding prizes to innovative "/utf8,
+    "solutions for business and society based on Earth observation data.<br /><br />"/utf8,
+
+    "PL<br />Zespół Katedry Informatyki i ACK Cyfronet AGH realizujacy system "/utf8,
+    "<b>onedata</b>, w ramach projektów: PL-Grid Plus i PL-Grid Core, <b>zajął 3. miejsce</b> "/utf8,
+    "w konkursie \"T-SYSTEMS BIG DATA CHALLENGE\". Copernicus to program "/utf8,
+    "monitorowania Ziemi realizowany przez Komisję Europejską. Od roku 2011, "/utf8,
+    "corocznie, odbywa się konkurs Copernicus Masters w ramach którego "/utf8,
+    "przyznawane są nagrody za innowacyjne, dla gospodarki i społeczeństwa, "/utf8,
+    "rozwiązania związane z obsługą danych otrzymywanych z obserwacji ziemi. "/utf8>>,
+    gui_jq:info_popup(<<"Onedata in Copernicus Masters">>, Text, <<"">>).

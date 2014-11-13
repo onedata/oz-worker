@@ -34,7 +34,7 @@
 %% ====================================================================
 %% API
 %% ====================================================================
--export([start/0, stop/0, get_redirection_uri/2, gen_auth_code/1,
+-export([start/0, stop/0, get_redirection_uri/3, gen_auth_code/1,
     has_access/3, modify_access/2, delete_access/1, get_user_tokens/2,
     grant_tokens/3, refresh_tokens/2, validate_token/2, verify/2,
     clear_expired_authorizations/0]).
@@ -76,7 +76,7 @@ stop() ->
     ok.
 
 
-%% get_redirection_uri/2
+%% get_redirection_uri/3
 %% ====================================================================
 %% @doc Returns provider hostname and a full URI to which the user should be
 %% redirected from the global registry. The redirection is part of the OpenID
@@ -84,30 +84,24 @@ stop() ->
 %% is useful to check connectivity before redirecting.
 %% @end
 %% ====================================================================
--spec get_redirection_uri(UserId :: binary(), ProviderId :: binary()) ->
+-spec get_redirection_uri(UserId :: binary(), ProviderId :: binary(), ProviderGUIPort :: integer()) ->
     {ProviderHostname :: binary(), RedirectionUri :: binary()}.
 %% ====================================================================
-get_redirection_uri(UserId, ProviderId) ->
+get_redirection_uri(UserId, ProviderId, ProviderGUIPort) ->
     AuthCode = gen_auth_code(UserId, ProviderId),
-    {ok, ProviderData} = provider_logic:get_data(ProviderId),
-    {redirectionPoint, RedirectionPoint} = lists:keyfind(redirectionPoint, 1, ProviderData),
-    {ok, {_Scheme, _UserInfo, HostStr, PortStr, _Path, _Query}} = http_uri:parse(gui_str:to_list(RedirectionPoint)),
-    Host = gui_str:to_binary(HostStr),
-    Port = gui_str:to_binary(PortStr),
-    RedirectURL = case re:run(Host, ?IP_VALIDATION_REGEXP) of
-                      {match, _} ->
-                          RedirectionPoint;
-                      _ ->
-                          {ok, #user{alias = Alias}} = user_logic:get_user(UserId),
-                          Prefix = case Alias of
-                                       ?EMPTY_ALIAS ->
-                                           <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
-                                       _ ->
-                                           Alias
-                                   end,
-                          <<"https://", Prefix/binary, ".", Host/binary, ":", Port/binary>>
-                  end,
-    {RedirectionPoint, <<RedirectURL/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
+    Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
+    {ok, #user{alias = Alias}} = user_logic:get_user(UserId),
+    % TODO for now, we remember (in user doc) what provider was a redirection uri generated for,
+    % TODO so we know in DNS where to redirect.
+    ok = user_logic:modify(UserId, [{default_provider, ProviderId}]),
+    Prefix = case Alias of
+                 ?EMPTY_ALIAS ->
+                     <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
+                 _ ->
+                     Alias
+             end,
+    {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
+    ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
 
 
 %% gen_auth_code/1

@@ -46,7 +46,12 @@ start(_StartType, _StartArgs) ->
         {ok, ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
-                    {ok, Pid};
+                    case start_dns() of
+                        ok ->
+                            {ok, Pid};
+                        Err ->
+                            Err
+                    end;
                 Error ->
                     Error
             end;
@@ -71,6 +76,7 @@ stop(_State) ->
     cowboy:stop_listener(?rest_listener),
     cowboy:stop_listener(?gui_https_listener),
     cowboy:stop_listener(?gui_redirector_listener),
+    stop_dns(),
     stop_rest(),
     ok.
 
@@ -236,3 +242,36 @@ start_redirector() ->
             ?error_stacktrace("Could not start redirector listener, error: ~p", [Error]),
             {error, Error}
     end.
+
+
+%% start_dns/0
+%% ====================================================================
+%% @doc Starts the DNS server.
+%% @end
+-spec start_dns() -> ok | {error, term()}.
+%% ====================================================================
+start_dns() ->
+    {ok, DNSPort} = application:get_env(?APP_Name, dns_port),
+    {ok, EdnsMaxUdpSize} = application:get_env(?APP_Name, edns_max_udp_size),
+    {ok, TCPNumAcceptors} = application:get_env(?APP_Name, dns_tcp_acceptor_pool_size),
+    {ok, TCPTImeout} = application:get_env(?APP_Name, dns_tcp_timeout),
+    dns_query_handler:load_config(),
+    OnFailureFun = fun() -> ?error("DNS Server failed to start!") end,
+    ?info("Starting DNS server..."),
+    case dns_server:start(globalregistry_sup, DNSPort, dns_query_handler, EdnsMaxUdpSize, TCPNumAcceptors, TCPTImeout, OnFailureFun) of
+        ok ->
+            ok;
+        Error ->
+            ?error("Cannot start DNS server - ~p", Error),
+            OnFailureFun()
+    end.
+
+
+%% stop_dns/0
+%% ====================================================================
+%% @doc Stops the DNS server.
+%% @end
+-spec stop_dns() -> ok | {error, term()}.
+%% ====================================================================
+stop_dns() ->
+    dns_server:stop(globalregistry_sup).

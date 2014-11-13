@@ -24,6 +24,7 @@
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
 -export([test_connection/1]).
+-export([get_default_provider_for_user/1]).
 
 
 %% create/1
@@ -169,3 +170,43 @@ test_connection([{ServiceName, Url} | Rest]) ->
             error
     end,
     [{Url, ConnStatus} | test_connection(Rest)].
+
+
+%% get_default_provider_for_user/1
+%% ====================================================================
+%% @doc Returns provider id of provider that has been chosen as default for given user, or
+%% {error, no_provider} otherwise.
+%% If the user has a default spaces and it is supported by some providers, one of them will be chosen randomly.
+%% Otherwise, if any of user spaces is supported by any provider, one of them will be chosen randomly.
+%% @end
+-spec get_default_provider_for_user(Referer :: binary() | undefined) ->
+    {ok, ProviderID :: binary()} | {error, no_provider}.
+%% ====================================================================
+get_default_provider_for_user(UserID) ->
+    % Check if the user has a default space and if it is supported.
+    {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
+    {ok, [{providers, DSProviders}]} = case DefaultSpace of
+                                           undefined -> {ok, [{providers, []}]};
+                                           _ -> space_logic:get_providers(DefaultSpace, user)
+                                       end,
+    case DSProviders of
+        List when length(List) > 0 ->
+            % Default space has got some providers, random one
+            {ok, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)};
+        _ ->
+            % Default space does not have a provider, look in other spaces
+            ProviderIDs = lists:foldl(
+                fun(Space, Acc) ->
+                    {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
+                    Providers ++ Acc
+                end, [], Spaces),
+
+            case ProviderIDs of
+                [] ->
+                    % No provider for other spaces = nowhere to redirect
+                    {error, no_provider};
+                _ ->
+                    % There are some providers for other spaces, random one
+                    {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
+            end
+    end.
