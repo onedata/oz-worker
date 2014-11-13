@@ -33,8 +33,6 @@
     ]},
     {mod, {globalregistry_app, []}},
     {env, [
-        {hostname, "onedata.org"},
-
         % DB config
         {db_nodes, ['db@127.0.0.1']},
 

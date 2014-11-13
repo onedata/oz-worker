@@ -40,6 +40,7 @@
     % Parameters used to generate SOA responses
     authority :: {MName :: string(), RName :: string(), Serial :: integer(),
         Refresh :: integer(), Retry :: integer(), Expiry :: integer(), Minimum :: integer()},
+    % TTLs of different answers
     ttl_a = 0 :: integer(),
     ttl_ns = 0 :: integer(),
     ttl_soa = 0 :: integer(),
@@ -76,7 +77,7 @@ load_config(ConfigFile) ->
     DNSConfig = lists:map(
         fun({zone, ZoneProplist}) ->
             CName = GetProp(cname, ZoneProplist),
-            % Extract prefixes from hostnames ("mx.onedata.org" -> "mx")
+            % Extract prefixes from hostnames ("ns.onedata.org" -> "ns")
             % and convert addresses to DNS-compatible terms
             IPAddresses = lists:map(
                 fun({Hostname, AddressesString}) ->
@@ -87,23 +88,11 @@ load_config(ConfigFile) ->
                         end, AddressesString),
                     Index = string:str(Hostname, CName),
                     % All hostnames must end with cname
-                    case Index + length(CName) - 1 =:= length(Hostname) of
-                        true ->
-                            ok;
-                        false ->
-                            throw(wrong_hostname_in_ip_addresses)
+                    case Index > 0 andalso Index + length(CName) - 1 =:= length(Hostname) of
+                        false -> throw(wrong_hostname_in_ip_addresses);
+                        true -> ok
                     end,
-                    StrippedHostname = case Index of
-                                           0 ->
-                                               % All hostnames must end with cname
-                                               throw(wrong_hostname_in_ip_addresses);
-                                           1 ->
-                                               % Hostname == cname
-                                               "";
-                                           _ ->
-                                               string:sub_string(Hostname, 1, Index - 2)
-                                       end,
-                    {Hostname, StrippedHostname, Addresses}
+                    {Hostname, Addresses}
                 end, GetProp(ip_addresses, ZoneProplist)),
             AuthorityProplist = GetProp(authority, ZoneProplist),
             SOATuple = {
@@ -161,14 +150,14 @@ handle_a(Domain) ->
         unknown_domain ->
             refused;
         {Prefix, #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone} ->
-            case lists:keyfind(Prefix, 2, IPAddresses) of
-                {Domain, Prefix, IPAddrList} ->
+            case proplists:get_value(Domain, IPAddresses, undefined) of
+                undefined ->
+                    handle_unknown_subdomain(Domain, Prefix, DNSZone);
+                IPAddrList ->
                     {ok,
                             [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
                             [dns_server:authoritative_answer_flag(true)]
-                    };
-                _ ->
-                    handle_unknown_subdomain(Domain, Prefix, DNSZone)
+                    }
             end
     end.
 
@@ -191,7 +180,7 @@ handle_ns(Domain) ->
                     {ok,
                             [dns_server:answer_record(Domain, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
                             lists:flatten([begin
-                                               {NSHostname, _, IPAddrList} = lists:keyfind(NSHostname, 1, IPAddresses),
+                                               IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
                                                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
                                            end || NSHostname <- NSServers]) ++
                             [dns_server:authoritative_answer_flag(true)]
@@ -237,7 +226,7 @@ handle_mx(Domain) ->
                     {ok,
                             [dns_server:answer_record(Domain, TTLNS, ?S_MX, {MXPriority, MXHostname}) || {MXPriority, MXHostname} <- MXServers] ++
                             lists:flatten([begin
-                                               {MXHostname, _, IPAddrList} = lists:keyfind(MXHostname, 1, IPAddresses),
+                                               IPAddrList = proplists:get_value(MXHostname, IPAddresses, []),
                                                [dns_server:additional_record(MXHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
                                            end || {_MXPriority, MXHostname} <- MXServers]) ++
                             [dns_server:authoritative_answer_flag(true)]
@@ -268,7 +257,7 @@ handle_soa(Domain) ->
                             [dns_server:answer_record(Domain, TTLSOA, ?S_SOA, Authority)] ++
                             [dns_server:authority_record(Domain, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
                             lists:flatten([begin
-                                               {NSHostname, _, IPAddrList} = lists:keyfind(NSHostname, 1, IPAddresses),
+                                               IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
                                                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
                                            end || NSHostname <- NSServers]) ++
                             [dns_server:authoritative_answer_flag(true)]
@@ -456,9 +445,11 @@ handle_unknown_subdomain(Domain, Prefix, #dns_zone{ttl_oneprovider_ns = TTL} = D
 -spec answer_with_soa(Domain :: string(), DNSZone :: #dns_zone{}) -> {reply_type(), [authority_record()]}.
 %% ====================================================================
 answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, authority = Authority, ttl_soa = TTL}) ->
-    ReplyType = case lists:keyfind(Domain, 1, IPAddresses) of
-                    {Domain, _, _} -> ok;
-                    _ -> nx_domain
+    ReplyType = case proplists:get_value(Domain, IPAddresses, undefined) of
+                    undefined ->
+                        nx_domain;
+                    _ ->
+                        ok
                 end,
     {ReplyType, [
         dns_server:authority_record(CName, TTL, ?S_SOA, Authority),

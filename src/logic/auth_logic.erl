@@ -90,17 +90,8 @@ stop() ->
 get_redirection_uri(UserId, ProviderId, ProviderGUIPort) ->
     AuthCode = gen_auth_code(UserId, ProviderId),
     Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
-%%     {ok, ProviderData} = provider_logic:get_data(ProviderId),
-%%     {redirectionPoint, RedirectionPoint} = lists:keyfind(redirectionPoint, 1, ProviderData),
-%%     {ok, {_Scheme, _UserInfo, HostStr, PortStr, _Path, _Query}} = http_uri:parse(gui_str:to_list(RedirectionPoint)),
-%%     Host = gui_str:to_binary(HostStr),
-%%     Port = gui_str:to_binary(PortStr),
-%%     RedirectURL = case re:run(Host, ?IP_VALIDATION_REGEXP) of
-%%                       {match, _} ->
-%%                           RedirectionPoint;
-%%                       _ ->
     {ok, #user{alias = Alias}} = user_logic:get_user(UserId),
-    % TODO for now, we remember what provider was a redirection uri generated for,
+    % TODO for now, we remember (in user doc) what provider was a redirection uri generated for,
     % TODO so we know in DNS where to redirect.
     ok = user_logic:modify(UserId, [{default_provider, ProviderId}]),
     Prefix = case Alias of

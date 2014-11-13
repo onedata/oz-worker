@@ -189,7 +189,7 @@ get_default_provider_for_user(UserID) ->
     case DSProviders of
         List when length(List) > 0 ->
             % Default space has got some providers, first one
-            {ok, lists:nth(1, DSProviders)};
+            {ok, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)};
         _ ->
             % Default space does not have a provider, look in other spaces
             ProviderIDs = lists:foldl(
@@ -204,6 +204,6 @@ get_default_provider_for_user(UserID) ->
                     {error, no_provider};
                 _ ->
                     % There are some providers for other spaces, redirect to first provider
-                    {ok, lists:nth(1, ProviderIDs)}
+                    {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
             end
     end.
