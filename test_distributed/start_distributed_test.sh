@@ -23,3 +23,4 @@ ct_run -pa ./deps -pa ./deps/**/ebin -noshell -spec test_distributed/test.spec -
 
 #cleanup
 rm -f test_distributed/sys.config
+rm -f test_distributed/resources
