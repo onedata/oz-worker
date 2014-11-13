@@ -172,15 +172,18 @@ test_connection([{ServiceName, Url} | Rest]) ->
     [{Url, ConnStatus} | test_connection(Rest)].
 
 
-%% get_provider_for_user/1
+%% get_default_provider_for_user/1
 %% ====================================================================
 %% @doc Returns provider id of provider that has been chosen as default for given user, or
 %% {error, no_provider} otherwise.
+%% If the user has a default spaces and it is supported by some providers, one of them will be chosen randomly.
+%% Otherwise, if any of user spaces is supported by any provider, one of them will be chosen randomly.
 %% @end
 -spec get_default_provider_for_user(Referer :: binary() | undefined) ->
     {ok, ProviderID :: binary()} | {error, no_provider}.
 %% ====================================================================
 get_default_provider_for_user(UserID) ->
+    % Check if the user has a default space and if it is supported.
     {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
     {ok, [{providers, DSProviders}]} = case DefaultSpace of
                                            undefined -> {ok, [{providers, []}]};
@@ -188,7 +191,7 @@ get_default_provider_for_user(UserID) ->
                                        end,
     case DSProviders of
         List when length(List) > 0 ->
-            % Default space has got some providers, first one
+            % Default space has got some providers, random one
             {ok, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)};
         _ ->
             % Default space does not have a provider, look in other spaces
@@ -203,7 +206,7 @@ get_default_provider_for_user(UserID) ->
                     % No provider for other spaces = nowhere to redirect
                     {error, no_provider};
                 _ ->
-                    % There are some providers for other spaces, redirect to first provider
+                    % There are some providers for other spaces, random one
                     {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
             end
     end.
