@@ -17,6 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include("rest_config.hrl").
 -include("gui_config.hrl").
+-include("provider_channel_config.hrl").
 -include("registered_names.hrl").
 
 %% Application callbacks
@@ -42,8 +43,8 @@
     {error, Reason :: term()}).
 %% ===================================================================
 start(_StartType, _StartArgs) ->
-    case {start_rest(), start_n2o(), start_redirector()} of
-        {ok, ok, ok} ->
+    case {start_rest(), start_provider_channel(), start_n2o(), start_redirector()} of
+        {ok, ok, ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
                     case start_dns() of
@@ -55,12 +56,14 @@ start(_StartType, _StartArgs) ->
                 Error ->
                     Error
             end;
-        {error, _, _} ->
-            {error, cannot_start_rest};
-        {_, error, _} ->
-            {error, cannot_start_gui};
-        {_, _, error} ->
-            {error, cannot_start_redirector}
+        {{error, Reason}, _, _, _} ->
+            {error, {cannot_start_rest, Reason}};
+        {_, {error, Reason}, _, _} ->
+            {error, {cannot_start_provider_channel, Reason}};
+        {_, _, {error, Reason}, _} ->
+            {error, {cannot_start_gui, Reason}};
+        {_, _, _, {error, Reason}} ->
+            {error, {cannot_start_redirector, Reason}}
     end.
 
 %% stop/1
@@ -87,7 +90,7 @@ stop(_State) ->
 %% start_rest/0
 %% ===================================================================
 %% @doc Starts cowboy with rest api
--spec start_rest() -> {ok, pid()} | {error, term()}.
+-spec start_rest() -> ok | {error, term()}.
 %% ===================================================================
 start_rest() ->
     try
@@ -96,17 +99,17 @@ start_rest() ->
         {ok, RestHttpsAcceptors} = application:get_env(?APP_Name, rest_https_acceptors),
 
         % Get cert paths
-        {ok, GRPCADir} = application:get_env(?APP_Name, grpca_dir),
-        {ok, RestCertFile} = application:get_env(?APP_Name, rest_cert_file),
-        {ok, RestKeyFile} = application:get_env(?APP_Name, rest_key_file),
-        {ok, RestCertDomain} = application:get_env(?APP_Name, rest_cert_domain),
+        {ok, GrpCADir} = application:get_env(?APP_Name, grpca_dir),
+        {ok, GrpKeyFile} = application:get_env(?APP_Name, grpkey_file),
+        {ok, GrpCertFile} = application:get_env(?APP_Name, grpcert_file),
+        {ok, GrpCertDomain} = application:get_env(?APP_Name, grpcert_domain),
 
-        grpca:start(GRPCADir, RestCertFile, RestKeyFile, RestCertDomain),
+        grpca:start(GrpCADir, GrpCertFile, GrpKeyFile, GrpCertDomain),
         auth_logic:start(),
 
         Dispatch = cowboy_router:compile([
             {'_', lists:append([
-                [{<<"/crl.pem">>, cowboy_static, {file, filename:join(GRPCADir, "crl.pem")}}],
+                [{<<"/crl.pem">>, cowboy_static, {file, filename:join(GrpCADir, "crl.pem")}}],
                 user_rest_module:routes(),
                 provider_rest_module:routes(),
                 spaces_rest_module:routes(),
@@ -118,9 +121,9 @@ start_rest() ->
         {ok, _} = cowboy:start_https(?rest_listener, RestHttpsAcceptors,
             [
                 {port, RestPort},
-                {cacertfile, grpca:cacert_path(GRPCADir)},
-                {certfile, RestCertFile},
-                {keyfile, RestKeyFile},
+                {cacertfile, grpca:cacert_path(GrpCADir)},
+                {certfile, GrpCertFile},
+                {keyfile, GrpKeyFile},
                 {verify, verify_peer}
             ],
             [
@@ -133,15 +136,59 @@ start_rest() ->
             {error, Error}
     end.
 
+
+%% stop_rest/0
+%% ===================================================================
+%% @doc Stops rest dependencies
+-spec stop_rest() -> ok.
+%% ===================================================================
 stop_rest() ->
     auth_logic:stop(),
     grpca:stop().
 
 
+%% start_provider_channel/0
+%% ===================================================================
+%% @doc Starts communication channel for providers
+-spec start_provider_channel() -> ok | {error, term()}.
+%% ===================================================================
+start_provider_channel() ->
+%%     try
+%%         % Get provider channel config
+%%         {ok, ProviderChannelPort} = application:get_env(?APP_Name, provider_channel_port),
+%%         {ok, ProviderChannelHttpsAcceptors} = application:get_env(?APP_Name, provider_channel_https_acceptors),
+%%
+%%         % Get cert paths
+%%         {ok, GrpCADir} = application:get_env(?APP_Name, grpca_dir),
+%%         {ok, GrpKeyFile} = application:get_env(?APP_Name, grpkey_file),
+%%         {ok, GrpCertFile} = application:get_env(?APP_Name, grpcert_file),
+%%
+%%         Dispatch = cowboy_router:compile([{'_', [{?provider_channel_endpoint, provider_channel_handler, []}]}]),
+%%
+%%         {ok, _} = cowboy:start_https(?provider_channel_listener, ProviderChannelHttpsAcceptors,
+%%             [
+%%                 {port, ProviderChannelPort},
+%%                 {cacertfile, grpca:cacert_path(GrpCADir)},
+%%                 {certfile, GrpCertFile},
+%%                 {keyfile, GrpKeyFile},
+%%                 {verify, verify_peer}
+%%             ],
+%%             [
+%%                 {env, [{dispatch, Dispatch}]}
+%%             ]),
+%%         ok
+%%     catch
+%%         _Type:Error ->
+%%             ?error_stacktrace("Could not start provider channel, error: ~p", [Error]),
+%%             {error, Error}
+%%     end.
+    ok.
+
+
 %% start_n2o/0
 %% ===================================================================
 %% @doc Starts n2o server
--spec start_n2o() -> {ok, pid()} | {error, term()}.
+-spec start_n2o() -> ok | {error, term()}.
 %% ===================================================================
 start_n2o() ->
     try
@@ -156,9 +203,9 @@ start_n2o() ->
         {ok, GuiSocketTimeout} = application:get_env(?APP_Name, gui_socket_timeout),
         {ok, GuiMaxKeepalive} = application:get_env(?APP_Name, gui_max_keepalive),
         % Get cert paths
-        {ok, CaCertFile} = application:get_env(?APP_Name, ca_cert_file),
-        {ok, CertFile} = application:get_env(?APP_Name, cert_file),
-        {ok, KeyFile} = application:get_env(?APP_Name, key_file),
+        {ok, GuiCaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
+        {ok, GuiCertFile} = application:get_env(?APP_Name, gui_cert_file),
+        {ok, GuiKeyFile} = application:get_env(?APP_Name, gui_key_file),
 
         % Setup GUI dispatch opts for cowboy
         GUIDispatch = [
@@ -183,9 +230,9 @@ start_n2o() ->
         {ok, _} = cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
             [
                 {port, GuiPort},
-                {cacertfile, CaCertFile},
-                {certfile, CertFile},
-                {keyfile, KeyFile}
+                {cacertfile, GuiCaCertFile},
+                {certfile, GuiCertFile},
+                {keyfile, GuiKeyFile}
             ],
             [
                 {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
@@ -202,7 +249,12 @@ start_n2o() ->
     end.
 
 
-%% Generates static file routing for cowboy.
+%% static_dispatches/0
+%% ====================================================================
+%% @doc Generates static file routing for cowboy.
+%% @end
+-spec static_dispatches(DocRoot :: string(), StaticPaths :: [string()]) -> term().
+%% ====================================================================
 static_dispatches(DocRoot, StaticPaths) ->
     _StaticDispatches = lists:map(fun(Dir) ->
         {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
