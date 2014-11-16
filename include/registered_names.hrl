@@ -19,4 +19,7 @@
 %% Name of dao genserver
 -define(Dao, dao_worker).
 
+%% Name of oneprovider channel gen_server
+-define(OpChannel, op_channel).
+
 -endif.

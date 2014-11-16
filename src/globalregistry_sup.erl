@@ -32,10 +32,10 @@
 %% ===================================================================
 %% @doc Starts the supervisor
 -spec(start_link() ->
-	{ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 %% ===================================================================
 start_link() ->
-	supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 %%%===================================================================
 %%% Supervisor callbacks
@@ -50,26 +50,30 @@ start_link() ->
 %% specifications.
 %% @end
 -spec(init(Args :: term()) ->
-	{ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
-		MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
-		[ChildSpec :: supervisor:child_spec()]
-	}} |
-	ignore).
+    {ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
+        MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
+        [ChildSpec :: supervisor:child_spec()]
+    }} |
+    ignore).
 %% ===================================================================
 init([]) ->
-	RestartStrategy = one_for_one,
-	MaxRestarts = 1000,
-	MaxSecondsBetweenRestarts = 3600,
+    RestartStrategy = one_for_one,
+    MaxRestarts = 1000,
+    MaxSecondsBetweenRestarts = 3600,
 
-	SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
+    SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
 
-	Restart = permanent,
-	Shutdown = 2000,
-	Type = worker,
+    Restart = permanent,
+    Shutdown = 2000,
+    Type = worker,
 
-	Dao = {?Dao, {dao_worker, start_link, []},
-		Restart, Shutdown, Type, [dao_worker]},
-	{ok, {SupFlags, [Dao]}}.
+    Dao = {?Dao, {dao_worker, start_link, []},
+        Restart, Shutdown, Type, [dao_worker]},
+
+    OpChannel = {?OpChannel, {op_channel, start_link, []},
+        Restart, Shutdown, Type, [op_channel]},
+
+    {ok, {SupFlags, [Dao, OpChannel]}}.
 
 %%%===================================================================
 %%% Internal functions

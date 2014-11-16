@@ -153,36 +153,35 @@ stop_rest() ->
 -spec start_provider_channel() -> ok | {error, term()}.
 %% ===================================================================
 start_provider_channel() ->
-%%     try
-%%         % Get provider channel config
-%%         {ok, ProviderChannelPort} = application:get_env(?APP_Name, provider_channel_port),
-%%         {ok, ProviderChannelHttpsAcceptors} = application:get_env(?APP_Name, provider_channel_https_acceptors),
-%%
-%%         % Get cert paths
-%%         {ok, GrpCADir} = application:get_env(?APP_Name, grpca_dir),
-%%         {ok, GrpKeyFile} = application:get_env(?APP_Name, grpkey_file),
-%%         {ok, GrpCertFile} = application:get_env(?APP_Name, grpcert_file),
-%%
-%%         Dispatch = cowboy_router:compile([{'_', [{?provider_channel_endpoint, provider_channel_handler, []}]}]),
-%%
-%%         {ok, _} = cowboy:start_https(?provider_channel_listener, ProviderChannelHttpsAcceptors,
-%%             [
-%%                 {port, ProviderChannelPort},
-%%                 {cacertfile, grpca:cacert_path(GrpCADir)},
-%%                 {certfile, GrpCertFile},
-%%                 {keyfile, GrpKeyFile},
-%%                 {verify, verify_peer}
-%%             ],
-%%             [
-%%                 {env, [{dispatch, Dispatch}]}
-%%             ]),
-%%         ok
-%%     catch
-%%         _Type:Error ->
-%%             ?error_stacktrace("Could not start provider channel, error: ~p", [Error]),
-%%             {error, Error}
-%%     end.
-    ok.
+    try
+        % Get provider channel config
+        {ok, ProviderChannelPort} = application:get_env(?APP_Name, provider_channel_port),
+        {ok, ProviderChannelHttpsAcceptors} = application:get_env(?APP_Name, provider_channel_https_acceptors),
+
+        % Get cert paths
+        {ok, GrpCADir} = application:get_env(?APP_Name, grpca_dir),
+        {ok, GrpKeyFile} = application:get_env(?APP_Name, grpkey_file),
+        {ok, GrpCertFile} = application:get_env(?APP_Name, grpcert_file),
+
+        Dispatch = cowboy_router:compile([{'_', [{?provider_channel_endpoint, op_channel_handler, []}]}]),
+
+        {ok, _} = cowboy:start_https(?provider_channel_listener, ProviderChannelHttpsAcceptors,
+            [
+                {port, ProviderChannelPort},
+                {cacertfile, grpca:cacert_path(GrpCADir)},
+                {certfile, GrpCertFile},
+                {keyfile, GrpKeyFile},
+                {verify, verify_peer}
+            ],
+            [
+                {env, [{dispatch, Dispatch}]}
+            ]),
+        ok
+    catch
+        _Type:Error ->
+            ?error_stacktrace("Could not start provider channel, error: ~p", [Error]),
+            {error, Error}
+    end.
 
 
 %% start_n2o/0
