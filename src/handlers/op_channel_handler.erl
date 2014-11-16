@@ -68,6 +68,7 @@ websocket_init(ssl, Req, []) ->
             ?warning("Attempted authentication with bad peer certificate: ~p", [Reason]),
             {shutdown, Req}
     end;
+
 websocket_init(_TransportName, Req, _Opts) ->
     {shutdown, Req}.
 
@@ -89,6 +90,7 @@ websocket_init(_TransportName, Req, _Opts) ->
 websocket_handle({binary, Data}, Req, State) ->
     ?dump(Data),
     {ok, Req, State};
+
 websocket_handle(_InFrame, Req, State) ->
     {ok, Req, State}.
 
@@ -107,8 +109,12 @@ websocket_handle(_InFrame, Req, State) ->
     State :: any(),
     OutFrame :: cowboy_websocket:frame().
 %% ====================================================================
+websocket_info(terminate, Req, State) ->
+    {shutdown, Req, State};
+
 websocket_info({push, Msg}, Req, State) ->
     {reply, {binary, Msg}, Req, State};
+
 websocket_info(_Info, Req, State) ->
     {ok, Req, State}.
 

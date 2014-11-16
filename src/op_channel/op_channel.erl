@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc: This module coordinates access to Round Robin Database.
+%% @doc This module allows for communication with oneproviders.
 %% @end
 %% ===================================================================
 -module(op_channel).
@@ -25,7 +25,7 @@
     terminate/2,
     code_change/3]).
 
--record(state, {providers = maps:new(), connections = maps:new()}).
+-record(state, {connections = maps:new()}).
 
 %%%===================================================================
 %%% API
@@ -70,7 +70,6 @@ push(Providers, Msg) ->
     Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 init(_) ->
-    erlang:process_flag(trap_exit, true),
     {ok, #state{}}.
 
 
@@ -108,28 +107,38 @@ handle_call(_Request, _From, State) ->
     NewState :: term(),
     Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-handle_cast({add_connection, Provider, Connection}, #state{providers = Providers, connections = Connections} = State) ->
+handle_cast({add_connection, Provider, Connection}, #state{connections = Connections} = State) ->
     ?info("Adding connection to provider: ~p", [Provider]),
-    erlang:link(Connection),
-    {noreply, State#state{
-        providers = maps:put(Connection, Provider, Providers),
-        connections = maps:put(Provider, Connection, Connections)
-    }};
-handle_cast({remove_connection, Provider, Connection}, #state{providers = Providers, connections = Connections} = State) ->
+    case maps:find(Provider, Connections) of
+        {ok, ProviderConnections} ->
+            {noreply, State#state{connections = maps:put(Provider, [Connection | ProviderConnections], Connections)}};
+        _ ->
+            {noreply, State#state{connections = maps:put(Provider, [Connection], Connections)}}
+    end;
+
+handle_cast({remove_connection, Provider, Connection}, #state{connections = Connections} = State) ->
     ?info("Removing connection to provider: ~p", [Provider]),
-    {noreply, State#state{
-        providers = maps:remove(Connection, Providers),
-        connections = maps:remove(Provider, Connections)
-    }};
+    case maps:find(Provider, Connections) of
+        {ok, [Connection]} ->
+            {noreply, State#state{connections = maps:remove(Provider, Connections)}};
+        {ok, ProviderConnections} ->
+            {noreply, State#state{connections = maps:put(Provider, ProviderConnections -- [Connection], Connections)}};
+        _ ->
+            {noreply, State}
+    end;
+
 handle_cast({push, Providers, Msg}, #state{connections = Connections} = State) ->
     utils:pforeach(fun(Provider) ->
-        Connection = maps:get(Provider, Connections, undefined),
-        case Connection of
-            undefined -> ok;
-            _ -> Connection ! {push, Msg}
+        case maps:find(Provider, Connections) of
+            {ok, ProviderConnections} ->
+                Connection = lists:nth(random:uniform(length(ProviderConnections)), ProviderConnections),
+                Connection ! {push, Msg};
+            _ ->
+                ok
         end
     end, Providers),
     {noreply, State};
+
 handle_cast(_Request, State) ->
     {noreply, State}.
 
@@ -146,15 +155,6 @@ handle_cast(_Request, State) ->
     NewState :: term(),
     Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-handle_info({'EXIT', _, normal}, State) ->
-    {noreply, State};
-handle_info({'EXIT', Connection, Reason}, #state{providers = Providers, connections = Connections} = State) ->
-    Provider = maps:get(Connection, Providers, undefined),
-    ?error("Connection to provider ~p lost due to: ~p.", [Provider, Reason]),
-    {noreply, State#state{
-        providers = maps:remove(Connection, Providers),
-        connections = maps:remove(Provider, Connections)
-    }};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -169,7 +169,12 @@ handle_info(_Info, State) ->
     | {shutdown, term()}
     | term().
 %% ====================================================================
-terminate(_Reason, _State) ->
+terminate(_Reason, #state{connections = Connections}) ->
+    utils:pforeach(fun(ProviderConnections) ->
+        utils:pforeach(fun(ProviderConnection) ->
+            ProviderConnection ! terminate
+        end, ProviderConnections)
+    end, maps:values(Connections)),
     ok.
 
 
