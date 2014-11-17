@@ -13,7 +13,7 @@
 -ifndef(PROVIDER_CHANNEL_CONFIG_HRL).
 -define(PROVIDER_CHANNEL_CONFIG_HRL, 1).
 
--define(provider_channel_endpoint, <<"/oneprovider">>).
--define(provider_channel_listener, provider_channel).
+-define(op_channel_endpoint, <<"/oneprovider">>).
+-define(op_channel_listener, op_channel).
 
 -endif.

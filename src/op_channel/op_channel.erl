@@ -131,7 +131,7 @@ handle_cast({push, Providers, Msg}, #state{connections = Connections} = State) -
     utils:pforeach(fun(Provider) ->
         case maps:find(Provider, Connections) of
             {ok, ProviderConnections} ->
-                Connection = lists:nth(random:uniform(length(ProviderConnections)), ProviderConnections),
+                Connection = lists:nth(crypto:rand_uniform(1, length(ProviderConnections) + 1), ProviderConnections),
                 Connection ! {push, Msg};
             _ ->
                 ok

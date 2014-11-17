@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include("rest_config.hrl").
 -include("gui_config.hrl").
--include("provider_channel_config.hrl").
+-include("op_channel_config.hrl").
 -include("registered_names.hrl").
 
 %% Application callbacks
@@ -43,7 +43,7 @@
     {error, Reason :: term()}).
 %% ===================================================================
 start(_StartType, _StartArgs) ->
-    case {start_rest(), start_provider_channel(), start_n2o(), start_redirector()} of
+    case {start_rest(), start_op_channel(), start_n2o(), start_redirector()} of
         {ok, ok, ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
@@ -59,7 +59,7 @@ start(_StartType, _StartArgs) ->
         {{error, Reason}, _, _, _} ->
             {error, {cannot_start_rest, Reason}};
         {_, {error, Reason}, _, _} ->
-            {error, {cannot_start_provider_channel, Reason}};
+            {error, {cannot_start_op_channel, Reason}};
         {_, _, {error, Reason}, _} ->
             {error, {cannot_start_gui, Reason}};
         {_, _, _, {error, Reason}} ->
@@ -77,6 +77,7 @@ start(_StartType, _StartArgs) ->
 %% ===================================================================
 stop(_State) ->
     cowboy:stop_listener(?rest_listener),
+    cowboy:stop_listener(?op_channel_listener),
     cowboy:stop_listener(?gui_https_listener),
     cowboy:stop_listener(?gui_redirector_listener),
     stop_dns(),
@@ -147,25 +148,25 @@ stop_rest() ->
     grpca:stop().
 
 
-%% start_provider_channel/0
+%% start_op_channel/0
 %% ===================================================================
 %% @doc Starts communication channel for providers
--spec start_provider_channel() -> ok | {error, term()}.
+-spec start_op_channel() -> ok | {error, term()}.
 %% ===================================================================
-start_provider_channel() ->
+start_op_channel() ->
     try
         % Get provider channel config
-        {ok, ProviderChannelPort} = application:get_env(?APP_Name, provider_channel_port),
-        {ok, ProviderChannelHttpsAcceptors} = application:get_env(?APP_Name, provider_channel_https_acceptors),
+        {ok, ProviderChannelPort} = application:get_env(?APP_Name, op_channel_port),
+        {ok, ProviderChannelHttpsAcceptors} = application:get_env(?APP_Name, op_channel_https_acceptors),
 
         % Get cert paths
         {ok, GrpCADir} = application:get_env(?APP_Name, grpca_dir),
         {ok, GrpKeyFile} = application:get_env(?APP_Name, grpkey_file),
         {ok, GrpCertFile} = application:get_env(?APP_Name, grpcert_file),
 
-        Dispatch = cowboy_router:compile([{'_', [{?provider_channel_endpoint, op_channel_handler, []}]}]),
+        Dispatch = cowboy_router:compile([{'_', [{?op_channel_endpoint, op_channel_handler, []}]}]),
 
-        {ok, _} = cowboy:start_https(?provider_channel_listener, ProviderChannelHttpsAcceptors,
+        {ok, _} = cowboy:start_https(?op_channel_listener, ProviderChannelHttpsAcceptors,
             [
                 {port, ProviderChannelPort},
                 {cacertfile, grpca:cacert_path(GrpCADir)},

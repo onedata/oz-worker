@@ -15,6 +15,7 @@ COOKIE=`hostname -f`
 #prepare
 cp rel/globalregistry/etc/app.config test_distributed/sys.config
 cp -R rel/resources test_distributed/
+cp -R src/dao/views rel/resources/
 find test_distributed -name "TEST-report.xml" -exec rm -rf {} \;
 
 # Run tests
