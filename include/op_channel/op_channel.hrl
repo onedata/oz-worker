@@ -10,10 +10,12 @@
 %% ===================================================================
 -author("Krzysztof Trzepla").
 
--ifndef(PROVIDER_CHANNEL_CONFIG_HRL).
--define(PROVIDER_CHANNEL_CONFIG_HRL, 1).
+-ifndef(OP_CHANNEL_HRL).
+-define(OP_CHANNEL_HRL, 1).
 
 -define(op_channel_endpoint, <<"/oneprovider">>).
 -define(op_channel_listener, op_channel).
+
+-record(state, {providers = maps:new(), connections = maps:new()}).
 
 -endif.

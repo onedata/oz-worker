@@ -17,8 +17,8 @@
 -include_lib("ctool/include/logging.hrl").
 -include("rest_config.hrl").
 -include("gui_config.hrl").
--include("op_channel_config.hrl").
 -include("registered_names.hrl").
+-include("op_channel/op_channel.hrl").
 
 %% Application callbacks
 -export([start/2, stop/1]).

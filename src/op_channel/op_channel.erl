@@ -12,6 +12,7 @@
 -behaviour(gen_server).
 
 -include("registered_names.hrl").
+-include("op_channel/op_channel.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -24,8 +25,6 @@
     handle_info/2,
     terminate/2,
     code_change/3]).
-
--record(state, {connections = maps:new()}).
 
 %%%===================================================================
 %%% API
@@ -70,6 +69,7 @@ push(Providers, Msg) ->
     Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 init(_) ->
+    process_flag(trap_exit, true),
     {ok, #state{}}.
 
 
@@ -107,24 +107,20 @@ handle_call(_Request, _From, State) ->
     NewState :: term(),
     Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-handle_cast({add_connection, Provider, Connection}, #state{connections = Connections} = State) ->
-    ?info("Adding connection to provider: ~p", [Provider]),
+handle_cast({add_connection, Provider, Connection}, #state{providers = Providers, connections = Connections} = State) ->
+    ?info("Provider ~p connected successfully.", [Provider]),
+    link(Connection),
     case maps:find(Provider, Connections) of
         {ok, ProviderConnections} ->
-            {noreply, State#state{connections = maps:put(Provider, [Connection | ProviderConnections], Connections)}};
+            {noreply, State#state{
+                providers = maps:put(Connection, Provider, Providers),
+                connections = maps:put(Provider, [Connection | ProviderConnections], Connections)
+            }};
         _ ->
-            {noreply, State#state{connections = maps:put(Provider, [Connection], Connections)}}
-    end;
-
-handle_cast({remove_connection, Provider, Connection}, #state{connections = Connections} = State) ->
-    ?info("Removing connection to provider: ~p", [Provider]),
-    case maps:find(Provider, Connections) of
-        {ok, [Connection]} ->
-            {noreply, State#state{connections = maps:remove(Provider, Connections)}};
-        {ok, ProviderConnections} ->
-            {noreply, State#state{connections = maps:put(Provider, ProviderConnections -- [Connection], Connections)}};
-        _ ->
-            {noreply, State}
+            {noreply, State#state{
+                providers = maps:put(Connection, Provider, Providers),
+                connections = maps:put(Provider, [Connection], Connections)
+            }}
     end;
 
 handle_cast({push, Providers, Msg}, #state{connections = Connections} = State) ->
@@ -155,6 +151,26 @@ handle_cast(_Request, State) ->
     NewState :: term(),
     Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
+handle_info({'EXIT', Connection, Reason}, #state{providers = Providers, connections = Connections} = State) ->
+    case maps:find(Connection, Providers) of
+        {ok, Provider} ->
+            ?warning("Connection to provider ~p lost due to: ~p", [Provider, Reason]),
+            case maps:find(Provider, Connections) of
+                {ok, [Connection]} ->
+                    {noreply, State#state{
+                        providers = maps:remove(Connection, Providers),
+                        connections = maps:remove(Provider, Connections)
+                    }};
+                {ok, ProviderConnections} ->
+                    {noreply, State#state{
+                        providers = maps:remove(Connection, Providers),
+                        connections = maps:put(Provider, ProviderConnections -- [Connection], Connections)
+                    }};
+                _ ->
+                    {noreply, State}
+            end
+    end;
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -169,12 +185,7 @@ handle_info(_Info, State) ->
     | {shutdown, term()}
     | term().
 %% ====================================================================
-terminate(_Reason, #state{connections = Connections}) ->
-    utils:pforeach(fun(ProviderConnections) ->
-        utils:pforeach(fun(ProviderConnection) ->
-            ProviderConnection ! terminate
-        end, ProviderConnections)
-    end, maps:values(Connections)),
+terminate(_Reason, _State) ->
     ok.
 
 

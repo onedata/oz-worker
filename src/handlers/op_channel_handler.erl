@@ -130,7 +130,5 @@ websocket_info(_Info, Req, State) ->
     Req :: cowboy_req:req(),
     State :: any().
 %% ====================================================================
-websocket_terminate(Reason, _Req, #state{provider = Provider}) ->
-    ?warning("Connection to provider ~p lost due to: ~p", [Provider, Reason]),
-    gen_server:cast(?OpChannel, {remove_connection, Provider, self()}),
+websocket_terminate(_Reason, _Req, _State) ->
     ok.

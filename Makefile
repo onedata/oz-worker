@@ -8,7 +8,9 @@ deps:
 	@git submodule update
 
 compile:
+	@cp -r deps/prproto/proto src
 	@./rebar compile
+	@rm -rf src/proto
 
 generate: deps compile
 	@./rebar generate
