@@ -12,7 +12,7 @@
 -module(dns_query_handler).
 -behaviour(dns_query_handler_behaviour).
 
--include_lib("ctool/include/dns/dns.hrl").
+-include_lib("dns/dns.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
 -include("registered_names.hrl").
@@ -45,7 +45,8 @@
     ttl_ns = 0 :: integer(),
     ttl_soa = 0 :: integer(),
     ttl_mx = 0 :: integer(),
-    ttl_oneprovider_ns = 0 :: integer()
+    ttl_oneprovider_ns = 0 :: integer(),
+    ttl_oneprovider_a = 0 :: integer()
 }).
 
 %% load_config/0
@@ -115,7 +116,8 @@ load_config(ConfigFile) ->
                 ttl_ns = GetProp(ns, TTLProplist),
                 ttl_soa = GetProp(soa, TTLProplist),
                 ttl_mx = GetProp(mx, TTLProplist),
-                ttl_oneprovider_ns = GetProp(oneprovider_ns, TTLProplist)
+                ttl_oneprovider_ns = GetProp(oneprovider_ns, TTLProplist),
+                ttl_oneprovider_a = GetProp(oneprovider_a, TTLProplist)
             }
         end, Config),
     application:set_env(?APP_Name, dns_zones, DNSConfig).
