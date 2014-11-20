@@ -145,19 +145,19 @@ get_canonical_hostname() ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_a(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_a(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_a(Domain) ->
-    case parse_domain(Domain) of
+handle_a(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone} ->
+        {Domain, Prefix, #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone} ->
             case proplists:get_value(Domain, IPAddresses, undefined) of
                 undefined ->
-                    handle_unknown_subdomain(Domain, Prefix, DNSZone);
+                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone);
                 IPAddrList ->
                     {ok,
-                            [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
+                            [dns_server:answer_record(DomainNotNormalized, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
                             [dns_server:authoritative_answer_flag(true)]
                     }
             end
@@ -170,17 +170,17 @@ handle_a(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_ns(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_ns(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_ns(Domain) ->
-    case parse_domain(Domain) of
+handle_ns(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
+        {Domain, Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
             case Domain of
                 CName ->
                     {ok,
-                            [dns_server:answer_record(Domain, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
+                            [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
                             lists:flatten([begin
                                                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
                                                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
@@ -188,7 +188,7 @@ handle_ns(Domain) ->
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    handle_unknown_subdomain(Domain, Prefix, DNSZone)
+                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
             end
     end.
 
@@ -199,14 +199,14 @@ handle_ns(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_cname(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_cname(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_cname(Domain) ->
-    case parse_domain(Domain) of
+handle_cname(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, DNSZone} ->
-            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+        {_Domain, Prefix, DNSZone} ->
+            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
 
 
@@ -216,17 +216,17 @@ handle_cname(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_mx(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_mx(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_mx(Domain) ->
-    case parse_domain(Domain) of
+handle_mx(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, mail_exchange = MXServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
+        {Domain, Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, mail_exchange = MXServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
             case Domain of
                 CName ->
                     {ok,
-                            [dns_server:answer_record(Domain, TTLNS, ?S_MX, {MXPriority, MXHostname}) || {MXPriority, MXHostname} <- MXServers] ++
+                            [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_MX, {MXPriority, MXHostname}) || {MXPriority, MXHostname} <- MXServers] ++
                             lists:flatten([begin
                                                IPAddrList = proplists:get_value(MXHostname, IPAddresses, []),
                                                [dns_server:additional_record(MXHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
@@ -234,7 +234,7 @@ handle_mx(Domain) ->
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    handle_unknown_subdomain(Domain, Prefix, DNSZone)
+                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
             end
     end.
 
@@ -245,19 +245,19 @@ handle_mx(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_soa(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_soa(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_soa(Domain) ->
-    case parse_domain(Domain) of
+handle_soa(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, authority = Authority,
+        {Domain, Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, authority = Authority,
             ttl_a = TTLA, ttl_ns = TTLNS, ttl_soa = TTLSOA} = DNSZone} ->
             case Domain of
                 CName ->
                     {ok,
-                            [dns_server:answer_record(Domain, TTLSOA, ?S_SOA, Authority)] ++
-                            [dns_server:authority_record(Domain, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
+                            [dns_server:answer_record(DomainNotNormalized, TTLSOA, ?S_SOA, Authority)] ++
+                            [dns_server:authority_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
                             lists:flatten([begin
                                                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
                                                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
@@ -265,7 +265,7 @@ handle_soa(Domain) ->
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    handle_unknown_subdomain(Domain, Prefix, DNSZone)
+                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
             end
     end.
 
@@ -276,14 +276,14 @@ handle_soa(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_wks(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_wks(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_wks(Domain) ->
-    case parse_domain(Domain) of
+handle_wks(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, DNSZone} ->
-            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+        {_Domain, Prefix, DNSZone} ->
+            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
 
 
@@ -293,14 +293,14 @@ handle_wks(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_ptr(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_ptr(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_ptr(Domain) ->
-    case parse_domain(Domain) of
+handle_ptr(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, DNSZone} ->
-            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+        {_Domain, Prefix, DNSZone} ->
+            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
 
 
@@ -310,14 +310,14 @@ handle_ptr(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_hinfo(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_hinfo(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_hinfo(Domain) ->
-    case parse_domain(Domain) of
+handle_hinfo(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, DNSZone} ->
-            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+        {_Domain, Prefix, DNSZone} ->
+            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
 
 
@@ -327,14 +327,14 @@ handle_hinfo(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_minfo(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_minfo(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_minfo(Domain) ->
-    case parse_domain(Domain) of
+handle_minfo(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, DNSZone} ->
-            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+        {_Domain, Prefix, DNSZone} ->
+            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
 
 
@@ -344,14 +344,14 @@ handle_minfo(Domain) ->
 %% See {@link dns_query_handler_behaviour} for reference.
 %% @end
 %% ====================================================================
--spec handle_txt(Domain :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
+-spec handle_txt(DomainNotNormalized :: string()) -> {reply_type(), dns_query_handler_reponse()} | reply_type().
 %% ====================================================================
-handle_txt(Domain) ->
-    case parse_domain(Domain) of
+handle_txt(DomainNotNormalized) ->
+    case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Prefix, DNSZone} ->
-            handle_unknown_subdomain(Domain, Prefix, DNSZone)
+        {_Domain, Prefix, DNSZone} ->
+            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
 
 
@@ -361,12 +361,11 @@ handle_txt(Domain) ->
 
 %% parse_domain/1
 %% ====================================================================
-%% @doc Split the domain name into prefix and suffix, where suffix matches the
-%% canonical provider's hostname (retrieved from env). The split is made on the dot between prefix and suffix.
-%% If that's not possible, returns unknown_domain.
+%% @doc Analyzes a domain name - normalizes it (deletes leading www), extracts subdomain prefix
+%% and finds a matching zone from config, if existent.
 %% @end
 %% ====================================================================
--spec parse_domain(Domain :: string()) -> {Prefix :: string(), Suffix :: string(), DNSZone :: #dns_zone{}} | unknown_domain.
+-spec parse_domain(Domain :: string()) -> {NormalizedDomain :: string(), Prefix :: string(), Suffix :: string(), DNSZone :: #dns_zone{}} | unknown_domain.
 %% ====================================================================
 parse_domain(DomainArg) ->
     % If requested domain starts with 'www.', ignore it
@@ -394,7 +393,7 @@ parse_domain(DomainArg) ->
         #dns_zone{cname = ProviderHostnameWithoutDot} ->
             case ProviderHostnameWithoutDot =:= Domain of
                 true ->
-                    {"", MatchingZone};
+                    {Domain, "", MatchingZone};
                 false ->
                     ProviderHostname = "." ++ ProviderHostnameWithoutDot,
                     HostNamePos = string:rstr(Domain, ProviderHostname),
@@ -404,7 +403,7 @@ parse_domain(DomainArg) ->
                         false ->
                             unknown_domain;
                         true ->
-                            {string:sub_string(Domain, 1, HostNamePos - 1), MatchingZone}
+                            {Domain, string:sub_string(Domain, 1, HostNamePos - 1), MatchingZone}
                     end
             end
 
