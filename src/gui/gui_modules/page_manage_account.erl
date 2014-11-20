@@ -406,7 +406,7 @@ update_alias() ->
         {error, disallowed_prefix} ->
             gui_jq:info_popup(<<"Error - cannot update alias">>, <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>, <<"">>);
         {error, invalid_alias} ->
-            gui_jq:info_popup(<<"Error - cannot update alias">>, <<"Alias can contain only lowercase letters and digits.">>, <<"">>);
+            gui_jq:info_popup(<<"Error - cannot update alias">>, <<"Alias can contain only lowercase letters and digits, and must be at least 5 characters long.">>, <<"">>);
         {error, alias_occupied} ->
             gui_jq:info_popup(<<"Error - cannot update alias">>, <<"This alias is occupied by someone else. Please choose other alias.">>, <<"">>);
         {error, alias_conflict} ->

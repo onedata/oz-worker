@@ -116,7 +116,7 @@ event({auth, HandlerModule, Referer}) ->
 
 event(show_copernicus_info) ->
     Text = <<
-    "EN<br />A team from UST in Cracow, formed of Department of Computer Science "/utf8,
+    "EN<br />A team from AGH UST in Cracow, formed of Department of Computer Science "/utf8,
     "and ACC Cyfronet workers, realising <b>onedata</b> system as part of "/utf8,
     "PL-Grid Plus and PL-Grid Core projects, has been <b>awarded 3rd place</b> in "/utf8,
     "\"T-SYSTEMS BIG DATA CHALLENGE\". Copernicus is an Earth monitoring "/utf8,

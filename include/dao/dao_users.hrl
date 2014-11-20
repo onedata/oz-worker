@@ -18,8 +18,8 @@
 % Empty list, must be used as a list not binary so JS view will work correctly
 -define(EMPTY_ALIAS, "").
 
-% Regexp to validate aliases
--define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9]+$">>).
+% Regexp to validate aliases - at least 5 alphanumeric chars
+-define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9]{5,}$">>).
 
 % String that will be put in front of uuid when a user does not have an alias set.
 % Aliases are not allowed to start with this string.
