@@ -12,7 +12,7 @@
 -module(dns_query_handler).
 -behaviour(dns_query_handler_behaviour).
 
--include_lib("dns/dns.hrl").
+-include_lib("ctool/include/dns/dns.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
 -include("registered_names.hrl").
