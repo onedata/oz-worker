@@ -5,7 +5,7 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc This module allows for communication with oneproviders.
+%% @doc This module manage communication with oneproviders.
 %% @end
 %% ===================================================================
 -module(op_channel).
@@ -16,7 +16,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([start_link/0, push/2]).
+-export([start_link/0]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -39,16 +39,6 @@
 %% ====================================================================
 start_link() ->
     gen_server:start_link({local, ?OpChannel}, ?MODULE, [], []).
-
-
-%% push/2
-%% ====================================================================
-%% @doc Pushes message to providers.
-%% @end
--spec push(Providers :: [binary()], Msg :: term()) -> ok.
-%% ====================================================================
-push(Providers, Msg) ->
-    gen_server:cast(?OpChannel, {push, Providers, Msg}).
 
 
 %%%===================================================================
