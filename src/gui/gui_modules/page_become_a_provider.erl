@@ -70,7 +70,8 @@ body() ->
                         ]}),
                     table_row(<<"2">>,
                         [<<"Download and install the ">>, #link{body = <<"RPM">>, url = <<?RPM_DOWNLOAD_LINK>>}, <<" or ">>,
-                            #link{body = <<"DEB">>, url = <<?DEB_DOWNLOAD_LINK>>}, <<" package on each node of the cluster.">>],
+                            #link{body = <<"DEB">>, url = <<?DEB_DOWNLOAD_LINK>>}, <<" package on each node of the cluster.">>,
+                            <<" Domain name of each cluster node should be fully qualified.">>],
                         <<"After downloading the package, install it on all hosts you would like to deploy the software on.">>),
                     table_row(<<"3">>,
                         <<"Visit <strong>https://&lt;hostname&gt;:9443</strong>, where &lt;hostname&gt; is any node in the cluster."
