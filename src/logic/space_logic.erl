@@ -18,7 +18,7 @@
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
     has_effective_privilege/3]).
--export([create/2, create/3, modify/2, set_privileges/3, join/2, support/2]).
+-export([create/2, create/4, modify/2, set_privileges/3, join/2, support/3]).
 -export([get_data/2, get_users/1, get_effective_users/1, get_groups/1,
     get_providers/2, get_user/3, get_group/2, get_provider/3, get_privileges/2,
     get_effective_privileges/2]).
@@ -157,22 +157,22 @@ has_effective_privilege(SpaceId, UserId, Privilege) ->
     {ok, SpaceId :: binary()} | no_return().
 %% ====================================================================
 create(Member, Name) ->
-    create_with_provider(Member, Name, []).
+    create_with_provider(Member, Name, [], []).
 
 
-%% create/3
+%% create/4
 %% ====================================================================
 %% @doc Creates a Space for a user, by a provider that will support it.
 %% Throws exception when call to dao fails, or token/member_from_token doesn't exist.
 %% @end
 %% ====================================================================
 -spec create({provider, ProviderId :: binary()}, Name :: binary(),
-             Token :: binary()) ->
+             Token :: binary(), Size :: pos_integer()) ->
     {ok, SpaceId :: binary()}.
 %% ====================================================================
-create({provider, ProviderId}, Name, Token) ->
+create({provider, ProviderId}, Name, Token, Size) ->
     {ok, Member} = token_logic:consume(Token, space_create_token),
-    create_with_provider(Member, Name, [ProviderId]).
+    create_with_provider(Member, Name, [ProviderId], [{ProviderId, Size}]).
 
 
 %% modify/2
@@ -262,17 +262,17 @@ join({group, GroupId}, Token) ->
 %% Throws exception when call to dao fails, or provider/token/space_from_token doesn't exist.
 %% @end
 %% ====================================================================
--spec support(ProviderId :: binary(), Token :: binary()) ->
+-spec support(ProviderId :: binary(), Token :: binary(), SupportedSize :: pos_integer()) ->
     {ok, SpaceId :: binary()}.
 %% ====================================================================
-support(ProviderId, Token) ->
+support(ProviderId, Token, SupportedSize) ->
     {ok, {space, SpaceId}} = token_logic:consume(Token, space_support_token),
     case has_provider(SpaceId, ProviderId) of
         true -> ok;
         false ->
             SpaceDoc = dao_adapter:space_doc(SpaceId),
-            #db_document{record = #space{providers = Providers} = Space} = SpaceDoc,
-            SpaceNew = Space#space{providers = [ProviderId | Providers]},
+            #db_document{record = #space{size = Size, providers = Providers} = Space} = SpaceDoc,
+            SpaceNew = Space#space{size = [{ProviderId, SupportedSize} | Size], providers = [ProviderId | Providers]},
 
             ProviderDoc = dao_adapter:provider_doc(ProviderId),
             #db_document{record = #provider{spaces = Spaces} = Provider} = ProviderDoc,
@@ -549,27 +549,27 @@ remove_provider(SpaceId, ProviderId) ->
 %% @end
 %% ====================================================================
 -spec create_with_provider({user | group, Id :: binary()}, Name :: binary(),
-                           Providers :: [binary()]) ->
+    Providers :: [binary()], Size :: [{Provider :: binary(), ProvidedSize :: pos_integer()}]) ->
     {ok, SpaceId :: binary()}.
 %% ====================================================================
-create_with_provider({user, UserId}, Name, Providers) ->
+create_with_provider({user, UserId}, Name, Providers, Size) ->
     UserDoc = dao_adapter:user_doc(UserId),
     #db_document{record = #user{spaces = Spaces} = User} = UserDoc,
 
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, providers = Providers, users = [{UserId, Privileges}]},
+    Space = #space{name = Name, size = Size, providers = Providers, users = [{UserId, Privileges}]},
     SpaceId = dao_adapter:save(Space),
 
     UserNew = User#user{spaces = [SpaceId | Spaces]},
     dao_adapter:save(UserDoc#db_document{record = UserNew}),
 
     {ok, SpaceId};
-create_with_provider({group, GroupId}, Name, Providers) ->
+create_with_provider({group, GroupId}, Name, Providers, Size) ->
     GroupDoc = dao_adapter:group_doc(GroupId),
     #db_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
 
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, providers = Providers, groups = [{GroupId, Privileges}]},
+    Space = #space{name = Name, size = Size, providers = Providers, groups = [{GroupId, Privileges}]},
     SpaceId = dao_adapter:save(Space),
 
     GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},

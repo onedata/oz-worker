@@ -35,6 +35,9 @@
     [binary()] | undefined | no_return();
                  (Key :: json_string(), List :: [{json_string(), term()}],
                   Type :: binary, Req :: cowboy_req:req()) ->
+    binary() | undefined | no_return();
+                 (Key :: json_string(), List :: [{json_string(), term()}],
+                  Type :: pos_integer, Req :: cowboy_req:req()) ->
     binary() | undefined | no_return().
 %% ====================================================================
 assert_type(Key, List, Type, Req) ->
@@ -46,6 +49,13 @@ assert_type(Key, List, Type, Req) ->
             case lists:all(fun is_binary/1, Value) of
                 true -> Value;
                 false -> report_invalid_value(Key, Value, Req)
+            end;
+
+        {Key, Value} when Type =:= pos_integer andalso is_binary(Value) ->
+            Regex = <<"[1-9][0-9]*">>,
+            case re:run(Value, Regex, [{capture, first, binary}]) of
+                {match, [Value]} -> Value;
+                _ -> report_invalid_value(Key, Value, Req)
             end;
 
         {Key, Value} ->
