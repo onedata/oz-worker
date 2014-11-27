@@ -18,6 +18,7 @@
 -include("rest_config.hrl").
 -include("gui_config.hrl").
 -include("registered_names.hrl").
+-include("messages_white_list.hrl").
 -include("op_channel/op_channel.hrl").
 
 %% Application callbacks
@@ -43,6 +44,7 @@
     {error, Reason :: term()}).
 %% ===================================================================
 start(_StartType, _StartArgs) ->
+    activate_white_lists(),
     case {start_rest(), start_op_channel(), start_n2o(), start_redirector()} of
         {ok, ok, ok, ok} ->
             case globalregistry_sup:start_link() of
@@ -327,3 +329,22 @@ start_dns() ->
 %% ====================================================================
 stop_dns() ->
     dns_server:stop(globalregistry_sup).
+
+
+%% activate_white_lists/0
+%% ====================================================================
+%% @doc Activates white lists of messages that can be processed by
+%% Global Registry.
+%% @end
+-spec activate_white_lists() -> ok.
+%% ====================================================================
+activate_white_lists() ->
+    lists:foreach(fun(Decoder) ->
+        list_to_atom(atom_to_list(Decoder) ++ "_pb")
+    end, ?DecodersList),
+
+    lists:foreach(fun(Message) ->
+        {list_to_atom("decode_" ++ atom_to_list(Message)), list_to_atom("encode_" ++ atom_to_list(Message))}
+    end, ?MessagesWhiteList),
+
+    ok.

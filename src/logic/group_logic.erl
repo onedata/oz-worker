@@ -119,7 +119,7 @@ modify(GroupId, Name) ->
     GroupNew = Group#user_group{name = Name},
     dao_adapter:save(Doc#db_document{record = GroupNew}),
 
-    op_channel_logic:group_modified(GroupProviders, GroupId, Group),
+    op_channel_logic:group_modified(GroupProviders, GroupId, GroupNew),
     ok.
 
 

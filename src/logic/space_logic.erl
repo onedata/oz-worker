@@ -14,6 +14,8 @@
 
 -include("dao/dao_types.hrl").
 
+-include_lib("ctool/include/logging.hrl").
+
 
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
@@ -185,7 +187,7 @@ create({provider, ProviderId}, Name, Token, Size) ->
     ok.
 %% ====================================================================
 modify(SpaceId, Name) ->
-    #db_document{uuid = SpaceId, record = #space{providers = SpaceProviders} = Space}
+    #db_document{record = #space{providers = SpaceProviders} = Space}
         = Doc = dao_adapter:space_doc(SpaceId),
     SpaceNew = Space#space{name = Name},
     dao_adapter:save(Doc#db_document{record = SpaceNew}),
@@ -262,8 +264,8 @@ join({group, GroupId}, Token) ->
             op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew),
             {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
             op_channel_logic:group_modified(GroupProviders, GroupId, GroupNew),
-            lists:foreach(fun(User) ->
-                op_channel_logic:user_modified(GroupProviders, User, dao_adapter:user(User))
+            lists:foreach(fun({UserId, _}) ->
+                op_channel_logic:user_modified(GroupProviders, UserId, dao_adapter:user(UserId))
             end, Users)
     end,
     {ok, SpaceId}.
@@ -284,7 +286,7 @@ support(ProviderId, Token, SupportedSize) ->
         true -> ok;
         false ->
             SpaceDoc = dao_adapter:space_doc(SpaceId),
-            #db_document{record = #space{size = Size, providers = Providers} = Space} = SpaceDoc,
+            #db_document{record = #space{size = Size, users = Users, groups = Groups, providers = Providers} = Space} = SpaceDoc,
             SpaceNew = Space#space{size = [{ProviderId, SupportedSize} | Size], providers = [ProviderId | Providers]},
 
             ProviderDoc = dao_adapter:provider_doc(ProviderId),
@@ -293,7 +295,17 @@ support(ProviderId, Token, SupportedSize) ->
 
             dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
             dao_adapter:save(ProviderDoc#db_document{record = ProviderNew}),
-            op_channel_logic:space_modified([ProviderId | Providers], SpaceId, SpaceNew)
+            op_channel_logic:space_modified([ProviderId | Providers], SpaceId, SpaceNew),
+            lists:foreach(fun({UserId, _}) ->
+                op_channel_logic:user_modified([ProviderId], UserId, dao_adapter:user(UserId))
+            end, Users),
+            lists:foreach(fun({GroupId, _}) ->
+                #user_group{users = GroupUsers} = Group = dao_adapter:group(GroupId),
+                op_channel_logic:group_modified([ProviderId], GroupId, Group),
+                lists:foreach(fun({GroupUserId, _}) ->
+                    op_channel_logic:user_modified([ProviderId], GroupUserId, dao_adapter:user(GroupUserId))
+                end, GroupUsers)
+            end, Groups)
     end,
     {ok, SpaceId}.
 
@@ -308,10 +320,11 @@ support(ProviderId, Token, SupportedSize) ->
     {ok, [proplists:property()]}.
 %% ====================================================================
 get_data(SpaceId, _Client) ->
-    #space{name = Name} = dao_adapter:space(SpaceId),
+    #space{name = Name, size = Size} = dao_adapter:space(SpaceId),
     {ok, [
         {spaceId, SpaceId},
-        {name, Name}
+        {name, Name},
+        {size, Size}
     ]}.
 
 
@@ -606,8 +619,8 @@ create_with_provider({group, GroupId}, Name, Providers, Size) ->
 
     op_channel_logic:space_modified(Providers, SpaceId, Space),
     op_channel_logic:group_modified(Providers, GroupId, Group),
-    lists:foreach(fun(User) ->
-        op_channel_logic:user_modified(Providers, User, dao_adapter:user(User))
+    lists:foreach(fun({UserId, _}) ->
+        op_channel_logic:user_modified(Providers, UserId, dao_adapter:user(UserId))
     end, Users),
     {ok, SpaceId}.
 

@@ -33,19 +33,13 @@
 -spec push(ProviderIds :: [provider_id()], ProtocolVersion :: integer(), MsgType :: string(), Msg :: term()) -> ok.
 %% ====================================================================
 push(ProviderIds, ProtocolVersion, MsgType, Msg) ->
-    ?dump(ProviderIds),
-    ?dump(ProtocolVersion),
-    ?dump(MsgType),
-    ?dump(Msg),
     {ok, EncodedInput} = pb:encode(MsgType, Msg),
-    ?dump(EncodedInput),
     {ok, EncodedMsg} = pb:encode("gr_communication_protocol", #message{
         protocol_version = ProtocolVersion,
-        message_type = MsgType,
-        message_decoder_name = atom_to_list(element(1, Msg)),
+        message_type = atom_to_list(element(1, Msg)),
+        message_decoder_name = MsgType,
         input = EncodedInput
     }),
-    ?dump(EncodedMsg),
     gen_server:cast(?OpChannel, {push, ProviderIds, EncodedMsg}).
 
 
@@ -55,13 +49,15 @@ push(ProviderIds, ProtocolVersion, MsgType, Msg) ->
 %% @end
 -spec space_modified(ProviderIds :: [provider_id()], SpaceId :: space_id(), Space :: space_info()) -> ok.
 %% ====================================================================
-space_modified(ProviderIds, SpaceId, #space{name = Name, users = Users, groups = Groups, providers = Providers}) ->
+space_modified(ProviderIds, SpaceId, #space{name = Name, size = Size, users = Users, groups = Groups, providers = Providers}) ->
     push(ProviderIds, ?PROTOCOL_VERSION, ?MESSAGE_TYPE, #spacemodified{
         id = SpaceId,
         name = Name,
-        size = [],
+        size = lists:map(fun({ProviderId, SupportedSize}) ->
+            #spacemodified_size{provider = ProviderId, size = SupportedSize}
+        end, Size),
         users = lists:map(fun({UserId, _}) -> UserId end, Users),
-        groups = Groups,
+        groups = lists:map(fun({GroupId, _}) -> GroupId end, Groups),
         providers = Providers
     }).
 
