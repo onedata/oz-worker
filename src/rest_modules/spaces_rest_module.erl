@@ -149,10 +149,11 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId},
 accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
+    Size = rest_module_helper:assert_key(<<"size">>, Data, pos_integer, Req),
     case token_logic:is_valid(Token, space_create_token) of
         false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
-            {ok, SpaceId} = space_logic:create({provider, ProviderId}, Name, Token),
+            {ok, SpaceId} = space_logic:create({provider, ProviderId}, Name, Token, binary_to_integer(Size)),
             {{true,  <<"/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(space, patch, SpaceId, Data, _Client, Req) ->
