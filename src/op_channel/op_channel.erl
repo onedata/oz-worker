@@ -119,8 +119,8 @@ handle_cast({push, Providers, Msg}, #state{connections = Connections} = State) -
             {ok, ProviderConnections} ->
                 Connection = lists:nth(crypto:rand_uniform(1, length(ProviderConnections) + 1), ProviderConnections),
                 Connection ! {push, Msg};
-            _ ->
-                ok
+            Other ->
+                ?warning("Cannot find provider ~p connections: ~p", [Provider, Other])
         end
     end, Providers),
     {noreply, State};
@@ -156,9 +156,13 @@ handle_info({'EXIT', Connection, Reason}, #state{providers = Providers, connecti
                         providers = maps:remove(Connection, Providers),
                         connections = maps:put(Provider, ProviderConnections -- [Connection], Connections)
                     }};
-                _ ->
+                Other ->
+                    ?error("Cannot find provider ~p connections: ~p", [Provider, Other]),
                     {noreply, State}
-            end
+            end;
+        Other ->
+            ?error("Cannot find provider for connection ~p: ~p", [Connection, Other]),
+            {noreply, State}
     end;
 
 handle_info(_Info, State) ->

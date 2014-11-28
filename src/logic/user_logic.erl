@@ -89,9 +89,8 @@ get_user_doc(Key) ->
     ok | {error, disallowed_prefix | invalid_alias | alias_occupied | alias_conflict | any()}.
 %% ====================================================================
 modify(UserId, Proplist) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-
     try
+        {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
         #db_document{record = User} = Doc = dao_adapter:user_doc(UserId),
         #user{
             name = Name,
