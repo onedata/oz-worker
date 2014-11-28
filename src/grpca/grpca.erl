@@ -23,11 +23,11 @@
 -define(CAKEY_FILE, filename:join("private", "cakey.pem")).
 
 -record(dn, {commonName,
-    organizationalUnitName = "REST",
+    organizationalUnitName = "GRP",
     organizationName = "onedata",
     localityName = "Krakow",
     countryName = "PL",
-    emailAddress = "rest@onedata.com"}).
+    emailAddress = "grp@onedata.com"}).
 
 
 %% ====================================================================
@@ -141,7 +141,7 @@ revoke(Serial) ->
 
 %% generate_gr_cert/4
 %% ====================================================================
-%% @doc Generates a certificate for Global Registry's REST interface.
+%% @doc Generates a certificate for Global Registry's interfaces.
 %% ====================================================================
 -spec generate_gr_cert(CaDir :: string(), CertPath :: string(),
     KeyPath :: string(), Domain :: string()) -> ok.
@@ -152,7 +152,7 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
     CaConfigFile = ca_config_file(TmpDir, CADir),
 
-    ?info("Creating a CSR for the Global Registry REST interface..."),
+    ?info("Creating a CSR for the Global Registry interfaces..."),
 
     RequestOutput = os:cmd(["openssl req",
         " -config ", ReqConfigFile,
@@ -161,7 +161,7 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
         " -out ", CSRFile]),
 
     ?info("~s", [RequestOutput]),
-    ?info("Signing the Global Resistry REST interface CSR..."),
+    ?info("Signing the Global Resistry interfaces CSR..."),
 
     SigningOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,
@@ -280,7 +280,7 @@ gen_crl_imp(CaDir) ->
 
 %% req_config_file/2
 %% ====================================================================
-%% @doc Creates a temporary config file for creating Global Registry REST
+%% @doc Creates a temporary config file for creating Global Registry
 %% certificate's CSR.
 %% ====================================================================
 -spec req_config_file(TmpDir :: string(), DN :: #dn{}) -> string().
@@ -452,7 +452,7 @@ req_cnf(DN) ->
 -spec ca_cnf(CaDir :: string()) -> Config :: iolist().
 %% ====================================================================
 ca_cnf(CaDir) ->
-    {ok, CertDomain} = application:get_env(?APP_Name, rest_cert_domain),
+    {ok, CertDomain} = application:get_env(?APP_Name, grpcert_domain),
     {ok, RestPort} = application:get_env(?APP_Name, rest_port),
     Port = integer_to_binary(RestPort),
     ["# Purpose: Configuration for CAs.\n"

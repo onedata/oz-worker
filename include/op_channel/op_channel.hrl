@@ -5,21 +5,17 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc Definitions of names used to identify different parts of application (or whole application).
+%% @doc Provider channel common definitions.
 %% @end
 %% ===================================================================
--author("Tomasz Lichon").
+-author("Krzysztof Trzepla").
 
--ifndef(REGISTERED_NAMES_HRL).
--define(REGISTERED_NAMES_HRL, 1).
+-ifndef(OP_CHANNEL_HRL).
+-define(OP_CHANNEL_HRL, 1).
 
-%% App name
--define(APP_Name, globalregistry).
+-define(op_channel_endpoint, <<"/oneprovider">>).
+-define(op_channel_listener, op_channel).
 
-%% Name of dao genserver
--define(Dao, dao_worker).
-
-%% Name of oneprovider channel gen_server
--define(OpChannel, op_channel).
+-record(state, {providers = maps:new(), connections = maps:new()}).
 
 -endif.

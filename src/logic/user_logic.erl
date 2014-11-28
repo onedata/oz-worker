@@ -18,7 +18,7 @@
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
--export([get_data/1, get_spaces/1, get_groups/1]).
+-export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
 -export([exists/1, remove/1]).
 
@@ -90,6 +90,7 @@ get_user_doc(Key) ->
 %% ====================================================================
 modify(UserId, Proplist) ->
     try
+        {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
         #db_document{record = User} = Doc = dao_adapter:user_doc(UserId),
         #user{
             name = Name,
@@ -189,6 +190,7 @@ modify(UserId, Proplist) ->
                         % Alias was changed, check for possible conflicts
                         try
                             {ok, NewUser} = get_user({alias, SetAlias}),
+                            op_channel_logic:user_modified(UserProviders, UserId, NewUser),
                             ok
                         catch
                             _:user_duplicated ->
@@ -268,6 +270,25 @@ get_groups(UserId) ->
     {ok, [{groups, Groups}]}.
 
 
+%% get_providers/1
+%% ====================================================================
+%% @doc Returns providers of user's spaces.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
+%% ====================================================================
+-spec get_providers(UserId :: binary()) ->
+    {ok, [proplists:property()]}.
+%% ====================================================================
+get_providers(UserId) ->
+    Doc = dao_adapter:user_doc(UserId),
+    Spaces = get_all_spaces(Doc),
+    UserProviders = lists:foldl(fun(Space, Providers) ->
+        #space{providers = SpaceProviders} = dao_adapter:space(Space),
+        ordsets:union(ordsets:from_list(SpaceProviders), Providers)
+    end, ordsets:new(), Spaces),
+    {ok, [{providers, UserProviders}]}.
+
+
 %% exists/1
 %% ====================================================================
 %% @doc Rreturns true if user was found by a given key.
@@ -293,6 +314,7 @@ exists(Key) ->
     true.
 %% ====================================================================
 remove(UserId) ->
+    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     #user{groups = Groups, spaces = Spaces} = dao_adapter:user(UserId),
 
     lists:foreach(fun(GroupId) ->
@@ -305,13 +327,16 @@ remove(UserId) ->
 
     lists:foreach(fun(SpaceId) ->
         SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #db_document{record = #space{users = Users} = Space} = SpaceDoc,
+        #db_document{record = #space{users = Users, providers = SpaceProviders} = Space} = SpaceDoc,
         SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
         dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
-        space_logic:cleanup(SpaceId)
+        space_logic:cleanup(SpaceId),
+
+        op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew)
     end, Spaces),
 
-    dao_adapter:user_remove(UserId).
+    dao_adapter:user_remove(UserId),
+    op_channel_logic:user_removed(UserProviders, UserId).
 
 
 %% get_default_space/1
@@ -341,6 +366,7 @@ get_default_space(UserId) ->
     true.
 %% ====================================================================
 set_default_space(UserId, SpaceId) ->
+    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     Doc = dao_adapter:user_doc(UserId),
     #db_document{record = User} = Doc,
 
@@ -350,6 +376,7 @@ set_default_space(UserId, SpaceId) ->
         true ->
             UpdatedUser = User#user{default_space = SpaceId},
             dao_adapter:save(Doc#db_document{record = UpdatedUser}),
+            op_channel_logic:user_modified(UserProviders, UserId, UpdatedUser),
             true
     end.
 

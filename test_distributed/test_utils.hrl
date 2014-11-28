@@ -36,17 +36,18 @@
     begin
         [{project_root, ProjectRoot}] = ets:lookup(suite_state, project_root),
         GRPCADir = filename:join(ProjectRoot, "grpca"),
+        CertsDir = filename:join(ProjectRoot, "certs"),
         CACertsDir = filename:join(ProjectRoot, "cacerts"),
-        {CACertsDir, GRPCADir}
+        {CertsDir, CACertsDir, GRPCADir}
     end).
 
--define(cert_paths(CACertsDir, GRPCADir),
-    {ca_cert_file, filename:join(CACertsDir, "ca.crt")},
-    {cert_file, filename:join(CACertsDir, "server.crt")},
-    {key_file, filename:join(CACertsDir, "server.key")},
+-define(cert_paths(CertsDir, CACertsDir, GRPCADir),
+    {gui_key_file, filename:join(CertsDir, "gui_key.pem")},
+    {gui_cert_file, filename:join(CertsDir, "gui_cert.pem")},
+    {gui_cacert_file, filename:join(CACertsDir, "gui_cacert.pem")},
     {grpca_dir, GRPCADir},
-    {rest_cert_file, filename:join(GRPCADir, "rest.pem")},
-    {rest_key_file, filename:join(GRPCADir, "rest_key.pem")}).
+    {grpkey_file, filename:join(GRPCADir, "grpkey.pem")},
+    {grpcert_file, filename:join(GRPCADir, "grpcert.pem")}).
 
 
 -endif.
