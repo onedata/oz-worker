@@ -43,10 +43,17 @@
 %% DB definitions
 %% ====================================================================
 %% DB Names
+-ifdef(TEST).
+-define(SYSTEM_DB_NAME, "system_data_test").
+-define(USERS_DB_NAME, "user_data_test").
+-define(AUTHORIZATION_DB_NAME, "authorization_data_test").
+-define(TOKENS_DB_NAME, "tokens_data_test").
+-else.
 -define(SYSTEM_DB_NAME, "system_data").
 -define(USERS_DB_NAME, "user_data").
 -define(AUTHORIZATION_DB_NAME, "authorization_data").
 -define(TOKENS_DB_NAME, "tokens_data").
+-endif.
 
 %% List of all used databases :: [string()]
 -define(DB_LIST, [?SYSTEM_DB_NAME, ?USERS_DB_NAME, ?AUTHORIZATION_DB_NAME,

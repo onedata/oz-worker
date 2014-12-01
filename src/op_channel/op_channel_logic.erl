@@ -20,15 +20,26 @@
 -define(PROTOCOL_VERSION, 1).
 
 %% API
--export([push/4]).
+-export([push/2, push/4]).
 -export([space_modified/3, space_removed/2]).
 -export([user_modified/3, user_removed/2]).
 -export([group_modified/3, group_removed/2]).
 
+
 %% push/2
 %% ====================================================================
-%% @doc Pushes message to given providers or all providers that support
-%% given Space.
+%% @doc Pushes message to providers.
+%% @end
+-spec push(ProviderIds :: [provider_id()], Msg :: iolist() | binary()) -> ok.
+%% ====================================================================
+push(ProviderIds, Msg) ->
+    gen_server:cast(?OpChannel, {push, ProviderIds, Msg}).
+
+
+%% push/4
+%% ====================================================================
+%% @doc Encodes message into protocol buffers frame and pushes it
+%% to providers.
 %% @end
 -spec push(ProviderIds :: [provider_id()], ProtocolVersion :: integer(), MsgType :: string(), Msg :: term()) -> ok.
 %% ====================================================================
@@ -40,7 +51,7 @@ push(ProviderIds, ProtocolVersion, MsgType, Msg) ->
         message_decoder_name = MsgType,
         input = EncodedInput
     }),
-    gen_server:cast(?OpChannel, {push, ProviderIds, EncodedMsg}).
+    push(ProviderIds, EncodedMsg).
 
 
 %% space_modified/3

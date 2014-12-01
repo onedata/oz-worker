@@ -9,18 +9,24 @@
 ## @doc: This script starts distributed tests.
 ## ===================================================================
 
-# Get host ip, to set cookie
+## compile test files
+cd test_distributed
+erl -make
+cd ..
+
+## get host ip, to set cookie
 COOKIE=`hostname -f`
 
-#prepare
+## prepare
 cp rel/globalregistry/etc/app.config test_distributed/sys.config
 cp -R rel/resources test_distributed/
 cp -R src/dao/views rel/resources/
 find test_distributed -name "TEST-report.xml" -exec rm -rf {} \;
 
-# Run tests
-ct_run -pa ./deps -pa ./deps/**/ebin -noshell -spec test_distributed/test.spec -name tester -setcookie $COOKIE
+## run tests
+ct_run -pa ./deps -pa ./deps/**/ebin -pa ./test_distributed -noshell -spec test_distributed/test.spec -name tester -setcookie $COOKIE
 
-#cleanup
+## cleanup
 rm -f test_distributed/sys.config
 rm -rf test_distributed/resources
+find test_distributed -name "*.beam" -exec rm -rf {} \;
