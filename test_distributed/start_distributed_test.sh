@@ -9,10 +9,8 @@
 ## @doc: This script starts distributed tests.
 ## ===================================================================
 
-## compile test files
-cd test_distributed
-erl -make
-cd ..
+## compile utility test files
+erlc -I ./include test_distributed/*.erl
 
 ## get host ip, to set cookie
 COOKIE=`hostname -f`
@@ -24,7 +22,7 @@ cp -R src/dao/views rel/resources/
 find test_distributed -name "TEST-report.xml" -exec rm -rf {} \;
 
 ## run tests
-ct_run -pa ./deps -pa ./deps/**/ebin -pa ./test_distributed -noshell -spec test_distributed/test.spec -name tester -setcookie $COOKIE
+ct_run -pa ./ebin -pa ./deps/**/ebin -pa ./test_distributed -noshell -spec test_distributed/test.spec -name tester -setcookie $COOKIE
 
 ## cleanup
 rm -f test_distributed/sys.config
