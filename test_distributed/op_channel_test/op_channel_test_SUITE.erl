@@ -142,6 +142,31 @@ space_support_test(Config) ->
     assert_received(Config, [Socket2], #usermodified{id = UserId3, spaces = [], groups = [GroupId1]}),
     assert_received(Config, [Socket2], #usermodified{id = UserId2, spaces = [], groups = [GroupId1]}),
 
+    assert_not_received([Socket1, Socket2]),
+
+    unsupport_space(Config, [ProviderId1], SpaceId1),
+
+    assert_received(Config, [Socket1], #spaceremoved{id = SpaceId1}),
+
+    assert_received(Config, [Socket2], #spacemodified{
+        id = SpaceId1,
+        name = SpaceName1,
+        size = [
+            #spacemodified_size{provider = ProviderId2, size = 2}
+        ],
+        users = [UserId1],
+        groups = [GroupId1],
+        providers = [ProviderId2]
+    }),
+
+    assert_not_received([Socket1, Socket2]),
+
+    remove_providers(Config, [ProviderId2]),
+
+    assert_received(Config, [Socket2], #spaceremoved{id = SpaceId1}),
+
+    assert_not_received([Socket1, Socket2]),
+
     disconnect_providers(Sockets).
 
 
@@ -155,7 +180,7 @@ init_per_suite(Config) ->
     {Certs, CACertsDir, GRPCADir} = ?PREPARE_CERT_FILES(Config),
 
     DbNodesEnv = {db_nodes, [?DB_NODE]},
-    Nodes = test_node_starter:start_test_nodes(1, true),
+    Nodes = test_node_starter:start_test_nodes(1),
     test_node_starter:start_app_on_nodes(?APP_Name, ?GR_DEPS, Nodes,
         [[
             DbNodesEnv,
@@ -184,6 +209,13 @@ create_providers(Config, N, Providers) ->
     ?assertMatch({ok, _, _, _}, CreateProviderAns),
     {ok, ProviderId, KeyFile, CertFile} = CreateProviderAns,
     create_providers(Config, N - 1, [{ProviderId, KeyFile, CertFile} | Providers]).
+
+
+remove_providers(Config, Providers) ->
+    [Node] = ?config(nodes, Config),
+    lists:foreach(fun(Provider) ->
+        ?assert(rpc:call(Node, provider_logic, remove, [Provider]))
+    end, Providers).
 
 
 create_users(_, 0, Users) ->
@@ -216,6 +248,13 @@ create_spaces(Config, Member, N, Spaces) ->
     ?assertMatch({ok, _}, CreateSpaceAns),
     {ok, SpaceId} = CreateSpaceAns,
     create_spaces(Config, Member, N - 1, [{SpaceId, Name} | Spaces]).
+
+
+unsupport_space(Config, Providers, Space) ->
+    [Node] = ?config(nodes, Config),
+    lists:foreach(fun(Provider) ->
+        ?assert(rpc:call(Node, space_logic, remove_provider, [Space, Provider]))
+    end, Providers).
 
 
 connect_providers(Config, Providers) ->

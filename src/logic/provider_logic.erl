@@ -130,12 +130,15 @@ get_spaces(ProviderId) ->
     true.
 %% ====================================================================
 remove(ProviderId) ->
-    #provider{spaces = Spaces, serial = Serial} = dao_adapter:provider(ProviderId),
+    ct:print("Remove provider ID: ~p~n", [ProviderId]),
+    #provider{spaces = Spaces, serial = Serial} = P = dao_adapter:provider(ProviderId),
+    ct:print("P: ~p~n", [P]),
 
     lists:foreach(fun(SpaceId) ->
         SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #db_document{record = #space{providers = Providers} = Space} = SpaceDoc,
-        SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers)},
+        #db_document{record = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
+        ct:print("Space: ~p~n", [Space]),
+        SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers), size = proplists:delete(ProviderId, Size)},
         dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
         op_channel_logic:space_modified(SpaceNew#space.providers, SpaceId, SpaceNew),
         op_channel_logic:space_removed([ProviderId], SpaceId)
