@@ -45,25 +45,25 @@ connection_test(Config) ->
     Msg = <<"test_message">>,
 
     send_to_providers(Config, [ProviderId1, ProviderId2, ProviderId3], Msg),
-    assert_received([Socket1, Socket2, Socket3], {raw, Msg}),
+    assert_received([Socket1, Socket2, Socket3], Msg),
 
     send_to_providers(Config, [ProviderId1, ProviderId2], Msg),
-    assert_received([Socket1, Socket2], {raw, Msg}),
+    assert_received([Socket1, Socket2], Msg),
     assert_not_received([Socket3]),
 
     send_to_providers(Config, [ProviderId1], Msg),
-    assert_received([Socket1], {raw, Msg}),
+    assert_received([Socket1], Msg),
     assert_not_received([Socket2, Socket3]),
 
     disconnect_providers([Socket3]),
 
     send_to_providers(Config, [ProviderId1, ProviderId2, ProviderId3], Msg),
-    assert_received([Socket1, Socket2], {raw, Msg}),
+    assert_received([Socket1, Socket2], Msg),
     assert_not_received([Socket3]),
 
     [NewSocket3] = connect_providers(Config, [{ProviderId3, KeyFile3, CertFile3}]),
     send_to_providers(Config, [ProviderId1, ProviderId2, ProviderId3], Msg),
-    assert_received([Socket1, Socket2, NewSocket3], {raw, Msg}),
+    assert_received([Socket1, Socket2, NewSocket3], Msg),
 
     disconnect_providers(Sockets).
 
@@ -84,28 +84,63 @@ space_support_test(Config) ->
 
     [{SpaceId1, SpaceName1}] = create_spaces(Config, {user, UserId1}, 1, []),
 
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId1, SpaceId1, 1000)),
+    ?assertEqual(ok, test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
 
-    assert_received([Socket1], {encoded, #spacemodified{
+    assert_received(Config, [Socket1], #spacemodified{
         id = SpaceId1,
         name = SpaceName1,
-        size = [#spacemodified_size{provider = ProviderId1, size = 1000}],
+        size = [#spacemodified_size{provider = ProviderId1, size = 1}],
         users = [UserId1],
         groups = [],
         providers = [ProviderId1]
-    }}),
+    }),
 
-    [GroupId1] = create_groups(Config, UserId2, 1, []),
+    assert_received(Config, [Socket1], #usermodified{id = UserId1, spaces = [SpaceId1], groups = []}),
+
+    assert_not_received([Socket1]),
+
+    [{GroupId1, GroupName1}] = create_groups(Config, UserId2, 1, []),
 
     ?assertEqual(ok, test_utils:join_group(Config, UserId3, GroupId1)),
 
     ?assertEqual(ok, test_utils:join_space(Config, {group, GroupId1}, SpaceId1)),
 
-    %
+    assert_received(Config, [Socket1], #spacemodified{
+        id = SpaceId1,
+        name = SpaceName1,
+        size = [#spacemodified_size{provider = ProviderId1, size = 1}],
+        users = [UserId1],
+        groups = [GroupId1],
+        providers = [ProviderId1]
+    }),
 
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId2, SpaceId1, 1000)),
+    assert_received(Config, [Socket1], #groupmodified{id = GroupId1, name = GroupName1}),
 
-    %
+    assert_received(Config, [Socket1], #usermodified{id = UserId3, spaces = [], groups = [GroupId1]}),
+    assert_received(Config, [Socket1], #usermodified{id = UserId2, spaces = [], groups = [GroupId1]}),
+
+    assert_not_received([Socket1]),
+
+    ?assertEqual(ok, test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
+
+    assert_received(Config, [Socket1, Socket2], #spacemodified{
+        id = SpaceId1,
+        name = SpaceName1,
+        size = [
+            #spacemodified_size{provider = ProviderId2, size = 2},
+            #spacemodified_size{provider = ProviderId1, size = 1}
+        ],
+        users = [UserId1],
+        groups = [GroupId1],
+        providers = [ProviderId2, ProviderId1]
+    }),
+
+    assert_received(Config, [Socket2], #usermodified{id = UserId1, spaces = [SpaceId1], groups = []}),
+
+    assert_received(Config, [Socket2], #groupmodified{id = GroupId1, name = GroupName1}),
+
+    assert_received(Config, [Socket2], #usermodified{id = UserId3, spaces = [], groups = [GroupId1]}),
+    assert_received(Config, [Socket2], #usermodified{id = UserId2, spaces = [], groups = [GroupId1]}),
 
     disconnect_providers(Sockets).
 
@@ -165,10 +200,11 @@ create_groups(_, _, 0, Groups) ->
     Groups;
 
 create_groups(Config, UserId, N, Groups) ->
-    CreateGroupAns = test_utils:create_group(Config, UserId, <<"group", (integer_to_binary(N))/binary>>),
+    Name = <<"group", (integer_to_binary(N))/binary>>,
+    CreateGroupAns = test_utils:create_group(Config, UserId, Name),
     ?assertMatch({ok, _}, CreateGroupAns),
     {ok, GroupId} = CreateGroupAns,
-    create_groups(Config, UserId, N - 1, [GroupId | Groups]).
+    create_groups(Config, UserId, N - 1, [{GroupId, Name} | Groups]).
 
 
 create_spaces(_, _, 0, Spaces) ->
@@ -199,20 +235,21 @@ send_to_providers(Config, ProviderIds, Msg) ->
     rpc:call(Node, op_channel_logic, push, [ProviderIds, Msg]).
 
 
-assert_received(Sockets, {raw, Msg}) ->
+assert_received(Sockets, Msg) ->
     lists:foreach(fun(Socket) ->
         ?assertEqual({ok, Msg}, wss:recv(Socket))
-    end, Sockets);
+    end, Sockets).
 
-assert_received(Sockets, {encoded, Msg}) ->
+assert_received(Config, Sockets, Msg) ->
+    [Node] = ?config(nodes, Config),
     lists:foreach(fun(Socket) ->
         WSSReceiveAns = wss:recv(Socket),
         ?assertMatch({ok, _}, WSSReceiveAns),
         {ok, Data} = WSSReceiveAns,
-        PbDecodeAns = pb:decode("gr_communication_protocol", "message", Data),
+        PbDecodeAns = rpc:call(Node, pb, decode, ["gr_communication_protocol", "message", Data]),
         ?assertMatch({ok, _}, PbDecodeAns),
         {ok, #message{message_decoder_name = Decoder, message_type = Type, input = Input}} = PbDecodeAns,
-        ?assertEqual({ok, Msg}, pb:decode(Decoder, Type, Input))
+        ?assertEqual({ok, Msg}, rpc:call(Node, pb, decode, [Decoder, Type, Input]))
     end, Sockets).
 
 

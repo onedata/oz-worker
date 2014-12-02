@@ -144,7 +144,7 @@ connect(Host, Port, Opts) ->
     {ok, Data :: binary()} | {error, timout} | {error, Reason :: any()}.
 %% ====================================================================
 recv(Socket) ->
-    recv(Socket, 1000).
+    recv(Socket, 500).
 
 
 %% recv/2

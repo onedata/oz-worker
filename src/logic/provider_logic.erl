@@ -136,7 +136,9 @@ remove(ProviderId) ->
         SpaceDoc = dao_adapter:space_doc(SpaceId),
         #db_document{record = #space{providers = Providers} = Space} = SpaceDoc,
         SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers)},
-        dao_adapter:save(SpaceDoc#db_document{record = SpaceNew})
+        dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
+        op_channel_logic:space_modified(SpaceNew#space.providers, SpaceId, SpaceNew),
+        op_channel_logic:space_removed([ProviderId], SpaceId)
     end, Spaces),
 
     grpca:revoke(Serial),
