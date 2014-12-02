@@ -30,7 +30,7 @@
 %% ====================================================================
 %% @doc Pushes message to providers.
 %% @end
--spec push(ProviderIds :: [provider_id()], Msg :: iolist() | binary()) -> ok.
+-spec push(ProviderIds :: [binary()], Msg :: iolist() | binary()) -> ok.
 %% ====================================================================
 push(ProviderIds, Msg) ->
     gen_server:cast(?OpChannel, {push, ProviderIds, Msg}).
@@ -41,7 +41,7 @@ push(ProviderIds, Msg) ->
 %% @doc Encodes message into protocol buffers frame and pushes it
 %% to providers.
 %% @end
--spec push(ProviderIds :: [provider_id()], ProtocolVersion :: integer(), MsgType :: string(), Msg :: term()) -> ok.
+-spec push(ProviderIds :: [binary()], ProtocolVersion :: integer(), MsgType :: string(), Msg :: term()) -> ok.
 %% ====================================================================
 push(ProviderIds, ProtocolVersion, MsgType, Msg) ->
     {ok, EncodedInput} = pb:encode(MsgType, Msg),
@@ -58,7 +58,7 @@ push(ProviderIds, ProtocolVersion, MsgType, Msg) ->
 %% ====================================================================
 %% @doc Notifies given providers about space modification.
 %% @end
--spec space_modified(ProviderIds :: [provider_id()], SpaceId :: space_id(), Space :: space_info()) -> ok.
+-spec space_modified(ProviderIds :: [binary()], SpaceId :: binary(), Space :: space_info()) -> ok.
 %% ====================================================================
 space_modified(ProviderIds, SpaceId, #space{name = Name, size = Size, users = Users, groups = Groups, providers = Providers}) ->
     push(ProviderIds, ?PROTOCOL_VERSION, ?MESSAGE_TYPE, #spacemodified{
@@ -77,7 +77,7 @@ space_modified(ProviderIds, SpaceId, #space{name = Name, size = Size, users = Us
 %% ====================================================================
 %% @doc Notifies given providers about space removal.
 %% @end
--spec space_removed(ProviderIds :: [provider_id()], SpaceId :: space_id()) -> ok.
+-spec space_removed(ProviderIds :: [binary()], SpaceId :: binary()) -> ok.
 %% ====================================================================
 space_removed(ProviderIds, SpaceId) ->
     push(ProviderIds, ?PROTOCOL_VERSION, ?MESSAGE_TYPE, #spaceremoved{id = SpaceId}).
@@ -87,7 +87,7 @@ space_removed(ProviderIds, SpaceId) ->
 %% ====================================================================
 %% @doc Notifies given providers about user modification.
 %% @end
--spec user_modified(ProviderIds :: [provider_id()], UserId :: user_id(), User :: user_info()) -> ok.
+-spec user_modified(ProviderIds :: [binary()], UserId :: binary(), User :: user_info()) -> ok.
 %% ====================================================================
 user_modified(ProviderIds, UserId, #user{default_space = undefined, spaces = Spaces, groups = Groups}) ->
     push(ProviderIds, ?PROTOCOL_VERSION, ?MESSAGE_TYPE, #usermodified{id = UserId, spaces = Spaces, groups = Groups});
@@ -101,7 +101,7 @@ user_modified(ProviderIds, UserId, #user{default_space = DefaultSpace, spaces = 
 %% ====================================================================
 %% @doc Notifies given providers about user removal.
 %% @end
--spec user_removed(ProviderIds :: [provider_id()], UserId :: user_id()) -> ok.
+-spec user_removed(ProviderIds :: [binary()], UserId :: binary()) -> ok.
 %% ====================================================================
 user_removed(ProviderIds, UserId) ->
     push(ProviderIds, ?PROTOCOL_VERSION, ?MESSAGE_TYPE, #userremoved{id = UserId}).
@@ -111,7 +111,7 @@ user_removed(ProviderIds, UserId) ->
 %% ====================================================================
 %% @doc Notifies given providers about group modification.
 %% @end
--spec group_modified(ProviderIds :: [provider_id()], GroupId :: group_id(), Group :: group_info()) -> ok.
+-spec group_modified(ProviderIds :: [binary()], GroupId :: binary(), Group :: group_info()) -> ok.
 %% ====================================================================
 group_modified(ProviderIds, GroupId, #user_group{name = Name}) ->
     push(ProviderIds, ?PROTOCOL_VERSION, ?MESSAGE_TYPE, #groupmodified{id = GroupId, name = Name}).
@@ -121,7 +121,7 @@ group_modified(ProviderIds, GroupId, #user_group{name = Name}) ->
 %% ====================================================================
 %% @doc Notifies given providers about group removal.
 %% @end
--spec group_removed(ProviderIds :: [provider_id()], GroupId :: group_id()) -> ok.
+-spec group_removed(ProviderIds :: [binary()], GroupId :: binary()) -> ok.
 %% ====================================================================
 group_removed(ProviderIds, GroupId) ->
     push(ProviderIds, ?PROTOCOL_VERSION, ?MESSAGE_TYPE, #groupremoved{id = GroupId}).

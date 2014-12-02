@@ -631,15 +631,14 @@ create_with_provider({group, GroupId}, Name, Providers, Size) ->
 %% Throws exception when call to dao fails, or space is already removed.
 %% @end
 %% ====================================================================
--spec cleanup(SpaceId :: binary()) -> ok | no_return().
+-spec cleanup(SpaceId :: binary()) -> boolean() | no_return().
 %% ====================================================================
 cleanup(SpaceId) ->
     #space{groups = Groups, users = Users} = dao_adapter:space(SpaceId),
     case {Groups, Users} of
         {[], []} -> remove(SpaceId);
-        _ -> ok
-    end,
-    ok.
+        _ -> false
+    end.
 
 
 %% get_effective_privileges/2

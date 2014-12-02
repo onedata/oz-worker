@@ -38,7 +38,7 @@
     binary() | undefined | no_return();
                  (Key :: json_string(), List :: [{json_string(), term()}],
                   Type :: pos_integer, Req :: cowboy_req:req()) ->
-    binary() | undefined | no_return().
+    pos_integer() | undefined | no_return().
 %% ====================================================================
 assert_type(Key, List, Type, Req) ->
     case lists:keyfind(Key, 1, List) of
@@ -54,7 +54,7 @@ assert_type(Key, List, Type, Req) ->
         {Key, Value} when Type =:= pos_integer andalso is_binary(Value) ->
             Regex = <<"[1-9][0-9]*">>,
             case re:run(Value, Regex, [{capture, first, binary}]) of
-                {match, [Value]} -> Value;
+                {match, [Value]} -> binary_to_integer(Value);
                 _ -> report_invalid_value(Key, Value, Req)
             end;
 
@@ -73,15 +73,15 @@ assert_type(Key, List, Type, Req) ->
 %% @end
 %% ====================================================================
 -spec assert_key(Key :: json_string(), List :: [{json_string(), term()}],
-                 Type :: list_of_bin, Req :: cowboy_req:req()) ->
-    [binary()] | no_return();
+                 Type :: list_of_bin, Req :: cowboy_req:req()) -> [binary()] | no_return();
                 (Key :: json_string(), List :: [{json_string(), term()}],
-                 Type :: binary, Req :: cowboy_req:req()) ->
-    binary() | no_return().
+                 Type :: binary, Req :: cowboy_req:req()) -> binary() | no_return();
+                (Key :: json_string(), List :: [{json_string(), term()}],
+                 Type :: pos_integer, Req :: cowboy_req:req()) -> pos_integer() | no_return().
 %% ====================================================================
 assert_key(Key, List, Type, Req) ->
     case assert_type(Key, List, Type, Req) of
-        undefined -> report_missing_key(Key, Req);
+        undefined ->  report_missing_key(Key, Req);
         Value -> Value
     end.
 
@@ -94,12 +94,10 @@ assert_key(Key, List, Type, Req) ->
 %% ====================================================================
 -spec assert_key_value(Key :: json_string(), AcceptedValues :: [binary()],
                        List :: [{json_string(), term()}], Type :: list_of_bin,
-                       Req :: cowboy_req:req()) ->
-    [binary()] | no_return();
+                       Req :: cowboy_req:req()) -> [binary()] | no_return();
                       (Key :: json_string(), AcceptedValues :: [binary()],
                        List :: [{json_string(), term()}], Type :: binary,
-                       Req :: cowboy_req:req()) ->
-    binary() | no_return().
+                       Req :: cowboy_req:req()) -> binary() | no_return().
 %% ====================================================================
 assert_key_value(Key, AcceptedValues, List, list_of_bin, Req) ->
     Value = assert_key(Key, List, list_of_bin, Req),

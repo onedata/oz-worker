@@ -296,13 +296,15 @@ remove(GroupId) ->
         #db_document{record = #space{providers = SpaceProviders, groups = SGroups} = Space} = SpaceDoc,
         NewSpace = Space#space{groups = lists:keydelete(GroupId, 1, SGroups)},
         dao_adapter:save(SpaceDoc#db_document{record = NewSpace}),
-        space_logic:cleanup(SpaceId),
-
-        op_channel_logic:space_modified(SpaceProviders, SpaceId, NewSpace)
+        case space_logic:cleanup(SpaceId) of
+            true -> ok;
+            false -> op_channel_logic:space_modified(SpaceProviders, SpaceId, NewSpace)
+        end
     end, Spaces),
 
     dao_adapter:group_remove(GroupId),
-    op_channel_logic:group_removed(GroupProviders, GroupId).
+    op_channel_logic:group_removed(GroupProviders, GroupId),
+    true.
 
 
 %% remove_user/2
@@ -339,12 +341,10 @@ remove_user(GroupId, UserId) ->
 %% Throws exception when call to dao fails, or group is already removed.
 %% @end
 %% ====================================================================
--spec cleanup(GroupId :: binary()) ->
-    ok.
+-spec cleanup(GroupId :: binary()) -> boolean().
 %% ====================================================================
 cleanup(GroupId) ->
     case dao_adapter:group(GroupId) of
         #user_group{users = []} -> remove(GroupId);
-        _ -> ok
-    end,
-    ok.
+        _ -> false
+    end.

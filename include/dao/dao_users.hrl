@@ -38,7 +38,7 @@
 %% This record defines a user and is handled as a database document
 -record(user, {
     name = <<"">> :: binary(),
-    alias = ?EMPTY_ALIAS :: integer() | binary(),
+    alias = ?EMPTY_ALIAS :: string() | integer() | binary(),
     email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],
     spaces = [] :: [SpaceId :: binary()],

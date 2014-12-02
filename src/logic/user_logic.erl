@@ -336,7 +336,8 @@ remove(UserId) ->
     end, Spaces),
 
     dao_adapter:user_remove(UserId),
-    op_channel_logic:user_removed(UserProviders, UserId).
+    op_channel_logic:user_removed(UserProviders, UserId),
+    true.
 
 
 %% get_default_space/1
