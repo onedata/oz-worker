@@ -433,13 +433,13 @@ send_to_providers(Config, ProviderIds, Msg) ->
 
 assert_received(Sockets, Msg) ->
     lists:foreach(fun(Socket) ->
-        ?assertEqual({ok, Msg}, wss:recv(Socket))
+        ?assertEqual({ok, Msg}, wss_handler:recv(Socket))
     end, Sockets).
 
 assert_received(Config, Sockets, Msg) ->
     [Node] = ?config(nodes, Config),
     lists:foreach(fun(Socket) ->
-        WSSReceiveAns = wss:recv(Socket),
+        WSSReceiveAns = wss_handler:recv(Socket),
         ?assertMatch({ok, _}, WSSReceiveAns),
         {ok, Data} = WSSReceiveAns,
         PbDecodeAns = rpc:call(Node, pb, decode, ["gr_communication_protocol", "message", Data]),
@@ -451,11 +451,11 @@ assert_received(Config, Sockets, Msg) ->
 
 assert_not_received(Sockets) ->
     lists:foreach(fun(Socket) ->
-        ?assertEqual({error, timeout}, wss:recv(Socket))
+        ?assertEqual({error, timeout}, wss_handler:recv(Socket))
     end, Sockets).
 
 
 disconnect_providers(Sockets) ->
     lists:foreach(fun(Socket) ->
-        ?assertEqual(ok, wss:disconnect(Socket))
+        ?assertEqual(ok, wss_handler:disconnect(Socket))
     end, Sockets).
