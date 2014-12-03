@@ -48,6 +48,10 @@ test: deps compile
 
 
 ct: generate
+	-@if [ ! -f ebin/.test ]; then rm -rf ebin; fi
+	-@mkdir -p ebin ; touch ebin/.test
+	cp -R deps/prproto/proto src
+	./rebar -D TEST compile
 	@./test_distributed/start_distributed_test.sh
 	@for tout in `find test_distributed/log -name "TEST-report.xml"`; do awk '/testcase/{gsub("<testcase name=\"[a-z]+_per_suite\"(([^/>]*/>)|([^>]*>[^<]*</testcase>))", "")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
 

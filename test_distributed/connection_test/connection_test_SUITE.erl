@@ -43,7 +43,7 @@ dao_connection_test(Config) ->
 
 init_per_suite(Config) ->
     ?INIT_CODE_PATH,
-    ?CREATE_DUMMY_AUTH,
+    test_utils:cleanup(),
     {Certs, CACertsDir, GRPCADir} = ?PREPARE_CERT_FILES(Config),
 
     DbNodesEnv = {db_nodes, [?DB_NODE]},

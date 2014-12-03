@@ -85,7 +85,7 @@ stop() ->
 %% @end
 %% ====================================================================
 -spec get_redirection_uri(UserId :: binary(), ProviderId :: binary(), ProviderGUIPort :: integer()) ->
-    {ProviderHostname :: binary(), RedirectionUri :: binary()}.
+    {ok, RedirectionUri :: binary()}.
 %% ====================================================================
 get_redirection_uri(UserId, ProviderId, ProviderGUIPort) ->
     AuthCode = gen_auth_code(UserId, ProviderId),

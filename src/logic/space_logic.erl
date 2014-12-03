@@ -571,14 +571,14 @@ remove_provider(SpaceId, ProviderId) ->
     ProviderNew = Provider#provider{spaces = lists:delete(SpaceId, Spaces)},
 
     SpaceDoc = dao_adapter:space_doc(SpaceId),
-    #db_document{record = #space{providers = Providers} = Space} = SpaceDoc,
-    SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers)},
+    #db_document{record = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
+    SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers), size = proplists:delete(ProviderId, Size)},
 
     dao_adapter:save(ProviderDoc#db_document{record = ProviderNew}),
     dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
 
     op_channel_logic:space_modified(SpaceNew#space.providers, SpaceId, SpaceNew),
-    op_channel_logic:space_removed([Provider], SpaceId),
+    op_channel_logic:space_removed([ProviderId], SpaceId),
     true.
 
 
@@ -631,15 +631,14 @@ create_with_provider({group, GroupId}, Name, Providers, Size) ->
 %% Throws exception when call to dao fails, or space is already removed.
 %% @end
 %% ====================================================================
--spec cleanup(SpaceId :: binary()) -> ok | no_return().
+-spec cleanup(SpaceId :: binary()) -> boolean() | no_return().
 %% ====================================================================
 cleanup(SpaceId) ->
     #space{groups = Groups, users = Users} = dao_adapter:space(SpaceId),
     case {Groups, Users} of
         {[], []} -> remove(SpaceId);
-        _ -> ok
-    end,
-    ok.
+        _ -> false
+    end.
 
 
 %% get_effective_privileges/2

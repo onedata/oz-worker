@@ -18,5 +18,5 @@ package
 .eunit
 .dialyzer.plt
 test/results
-test_distributed/logs
+test_distributed/log
 variables-ct*

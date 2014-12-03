@@ -131,7 +131,7 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
     case token_logic:is_valid(Token, space_support_token) of
         false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
-            {ok, SpaceId} = space_logic:support(ProviderId, Token, binary_to_integer(Size)),
+            {ok, SpaceId} = space_logic:support(ProviderId, Token, Size),
             {{true,  <<"/provider/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->
