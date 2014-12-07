@@ -130,7 +130,7 @@ get_spaces(ProviderId) ->
     true.
 %% ====================================================================
 remove(ProviderId) ->
-    #provider{spaces = Spaces, serial = Serial} = P = dao_adapter:provider(ProviderId),
+    #provider{spaces = Spaces, serial = Serial} = dao_adapter:provider(ProviderId),
 
     lists:foreach(fun(SpaceId) ->
         SpaceDoc = dao_adapter:space_doc(SpaceId),
