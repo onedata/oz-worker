@@ -20,6 +20,6 @@ package
 *.pyc
 
 .eunit
-.dialyzer.plt
+.dialyzer_gr.plt
 test/eunit_results
 variables-ct*

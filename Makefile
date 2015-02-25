@@ -25,7 +25,7 @@ distclean: clean
 ## Dialyzer targets local
 ##
 
-PLT ?= .dialyzer.plt
+PLT ?= .dialyzer_gr.plt
 
 # Builds dialyzer's Persistent Lookup Table file.
 .PHONY: plt
