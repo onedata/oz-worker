@@ -40,7 +40,7 @@ plt:
 
 # Dialyzes the project.
 dialyzer: plt
-	dialyzer ./ebin --plt ${PLT} -Werror_handling -Wrace_conditions --fullpatha
+	dialyzer ./ebin --plt ${PLT} -Werror_handling -Wrace_conditions --fullpath
 
 
 ##
