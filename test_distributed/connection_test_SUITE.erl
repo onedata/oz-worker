@@ -13,8 +13,8 @@
 
 %% Includes
 -include("registered_names.hrl").
--include("test_utils.hrl").
--include_lib("ctool/include/test/test_node_starter.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 
 %% API
