@@ -11,7 +11,7 @@
 
 -module(gr_test_utils).
 
--include("test_utils.hrl").
+-include("gr_test_utils.hrl").
 -include("dao/dao_users.hrl").
 
 %% API
