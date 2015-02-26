@@ -18,6 +18,7 @@
 -include("gr_test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
+-include_lib("annotations/include/annotations.hrl").
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
@@ -25,6 +26,9 @@
 
 all() -> [users_crud_test, groups_crud_test, spaces_crud_test, providers_crud_test, tokens_crud_test].
 
+-define(REPEATS, 10).
+
+-perf_test({repeats, ?REPEATS}).
 users_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -57,6 +61,7 @@ users_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_users, get_user, [UserId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
+-perf_test({repeats, ?REPEATS}).
 groups_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -89,6 +94,7 @@ groups_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_groups, get_group, [GroupId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
+-perf_test({repeats, ?REPEATS}).
 providers_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -121,6 +127,7 @@ providers_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
+-perf_test({repeats, ?REPEATS}).
 spaces_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -153,6 +160,7 @@ spaces_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_spaces, get_space, [SpaceId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
+-perf_test({repeats, ?REPEATS}).
 tokens_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
