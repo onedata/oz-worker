@@ -21,6 +21,7 @@
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([rest_api_connection_test/1, dao_connection_test/1]).
 
+-perf_test({perf_cases, []}).
 all() -> [rest_api_connection_test, dao_connection_test].
 
 rest_api_connection_test(Config) ->
