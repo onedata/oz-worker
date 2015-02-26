@@ -8,7 +8,6 @@
 %% @doc Common definitions for ct tests.
 %% @end
 %% ===================================================================
--author("Tomasz Lichon").
 
 -include_lib("ctool/include/test/test_utils.hrl").
 
