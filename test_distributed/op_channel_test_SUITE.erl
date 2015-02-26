@@ -405,7 +405,7 @@ connect_providers(Config, Providers) ->
         [Node] = ?config(gr_nodes, Config),
         CACertFile = ?config(grpcacert_file, Config),
         {ok, Port} = rpc:call(Node, application, get_env, [?APP_Name, op_channel_port]),
-        WSSConnectAns = wss:connect("127.0.0.1", Port, [{keyfile, KeyFile}, {certfile, CertFile}, {cacertfile, CACertFile}]),
+        WSSConnectAns = wss:connect(atom_to_list(?GET_HOST(Node)), Port, [{keyfile, KeyFile}, {certfile, CertFile}, {cacertfile, CACertFile}]),
         ?assertMatch({ok, _}, WSSConnectAns),
         {ok, Socket} = WSSConnectAns,
         Socket

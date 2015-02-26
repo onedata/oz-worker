@@ -18,7 +18,7 @@
 -define(GR_DEPS, [sasl, lager, ssl, erlydtl, ranch, cowlib, cowboy, gproc, xmerl, ibrowse, meck]).
 
 %% temporary directory for test files
--define(TEMP_DIR, "/tmp/onedata").
+-define(TEMP_DIR, "/tmp").
 
 %% Returns absolute path to given file using virtual CWD which equals to ct_root/common_files
 -define(COMMON_FILE(File), filename:join(ets:match(suite_state, {ct_root, '$1'}) ++ ["common_files"] ++ [File])).
