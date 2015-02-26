@@ -15,8 +15,8 @@
 %% Includes
 -include("registered_names.hrl").
 -include("dao/dao_types.hrl").
--include("test_utils.hrl").
--include_lib("ctool/include/test/test_node_starter.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 
 %% API
@@ -26,7 +26,7 @@
 all() -> [users_crud_test, groups_crud_test, spaces_crud_test, providers_crud_test, tokens_crud_test].
 
 users_crud_test(Config) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
 
     % Data
     User = #user{name = "name", spaces = ["uuid1", "uuid2"], groups = ["uuid3", "uuid4"]},
@@ -58,7 +58,7 @@ users_crud_test(Config) ->
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
 groups_crud_test(Config) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
 
     % Data
     Group = #user_group{name = "name", spaces = ["uuid1", "uuid2"], users = ["uuid3", "uuid4"]},
@@ -90,7 +90,7 @@ groups_crud_test(Config) ->
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
 providers_crud_test(Config) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
 
     % Data
     Provider = #provider{redirection_point = <<"http://redirpoi.nt">>, urls = [<<"1.1.1.1">>], spaces = [<<"uuid1">>, <<"uuid2">>]},
@@ -122,7 +122,7 @@ providers_crud_test(Config) ->
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
 spaces_crud_test(Config) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
 
     % Data
     Space = #space{name = <<"name">>, users = [{<<"uuid1">>, [space_invite_user]}], groups = [{<<"uuid4">>, []}], providers = [<<"uuid5">>]},
@@ -154,7 +154,7 @@ spaces_crud_test(Config) ->
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
 tokens_crud_test(Config) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
 
     % Data
     Token = #token{type = some_type1, expires = time_in_some_format},
@@ -191,21 +191,9 @@ tokens_crud_test(Config) ->
 %% ====================================================================
 
 init_per_suite(Config) ->
-    ?INIT_CODE_PATH,
-    test_utils:cleanup(),
-    {Certs, CACertsDir, GRPCADir} = ?PREPARE_CERT_FILES(Config),
-
-    DbNodesEnv = {db_nodes, [?DB_NODE]},
-    Nodes = test_node_starter:start_test_nodes(1),
-    test_node_starter:start_app_on_nodes(?APP_Name, ?GR_DEPS, Nodes,
-        [[
-            DbNodesEnv,
-            ?cert_paths(Certs, CACertsDir, GRPCADir)
-        ]]
-    ),
-    Config ++ [{nodes, Nodes}].
+    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
+    timer:sleep(30000), % TODO add nagios to GR and delete sleep
+    NewConfig.
 
 end_per_suite(Config) ->
-    Nodes = ?config(nodes, Config),
-    test_node_starter:stop_app_on_nodes(?APP_Name, ?GR_DEPS, Nodes),
-    test_node_starter:stop_test_nodes(Nodes).
+    test_node_starter:clean_environment(Config).

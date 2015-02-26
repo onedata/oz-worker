@@ -13,13 +13,13 @@
 -author("Krzysztof Trzepla").
 
 %% Includes
--include("test_utils.hrl").
 -include("dao/dao_users.hrl").
 -include("registered_names.hrl").
 -include("gr_messages_pb.hrl").
 -include("gr_communication_protocol_pb.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
--include_lib("ctool/include/test/test_node_starter.hrl").
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
@@ -304,26 +304,12 @@ removal_test(Config) ->
 %% ====================================================================
 
 init_per_suite(Config) ->
-    ?INIT_CODE_PATH,
-    test_utils:cleanup(),
-    {Certs, CACertsDir, GRPCADir} = ?PREPARE_CERT_FILES(Config),
-
-    DbNodesEnv = {db_nodes, [?DB_NODE]},
-    Nodes = test_node_starter:start_test_nodes(1),
-    test_node_starter:start_app_on_nodes(?APP_Name, ?GR_DEPS, Nodes,
-        [[
-            DbNodesEnv,
-            ?cert_paths(Certs, CACertsDir, GRPCADir)
-        ]]
-    ),
-    Config ++ [{nodes, Nodes}].
-
+    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
+    timer:sleep(30000), % TODO add nagios to GR and delete sleep
+    NewConfig.
 
 end_per_suite(Config) ->
-    Nodes = ?config(nodes, Config),
-    test_node_starter:stop_app_on_nodes(?APP_Name, ?GR_DEPS, Nodes),
-    test_node_starter:stop_test_nodes(Nodes).
-
+    test_node_starter:clean_environment(Config).
 
 %% ====================================================================
 %% Internal functions
@@ -341,7 +327,7 @@ create_providers(Config, N, Providers) ->
 
 
 remove_providers(Config, Providers) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     lists:foreach(fun(Provider) ->
         ?assert(rpc:call(Node, provider_logic, remove, [Provider]))
     end, Providers).
@@ -369,21 +355,21 @@ create_groups(Config, UserId, N, Groups) ->
 
 
 modify_groups(Config, Groups) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     lists:foreach(fun({GroupId, Name}) ->
         ?assertEqual(ok, rpc:call(Node, group_logic, modify, [GroupId, Name]))
     end, Groups).
 
 
 remove_groups(Config, Groups) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     lists:foreach(fun(GroupId) ->
         ?assert(rpc:call(Node, group_logic, remove, [GroupId]))
     end, Groups).
 
 
 remove_group_users(Config, Users, GroupId) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     lists:foreach(fun(UserId) ->
         ?assert(rpc:call(Node, group_logic, remove_user, [GroupId, UserId]))
     end, Users).
@@ -401,14 +387,14 @@ create_spaces(Config, Member, N, Spaces) ->
 
 
 modify_spaces(Config, Spaces) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     lists:foreach(fun({SpaceId, Name}) ->
         ?assertEqual(ok, rpc:call(Node, space_logic, modify, [SpaceId, Name]))
     end, Spaces).
 
 
 unsupport_space(Config, Providers, Space) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     lists:foreach(fun(Provider) ->
         ?assert(rpc:call(Node, space_logic, remove_provider, [Space, Provider]))
     end, Providers).
@@ -416,7 +402,7 @@ unsupport_space(Config, Providers, Space) ->
 
 connect_providers(Config, Providers) ->
     lists:map(fun({_, KeyFile, CertFile}) ->
-        [Node] = ?config(nodes, Config),
+        [Node] = ?config(gr_nodes, Config),
         CACertFile = ?config(grpcacert_file, Config),
         {ok, Port} = rpc:call(Node, application, get_env, [?APP_Name, op_channel_port]),
         WSSConnectAns = wss:connect("127.0.0.1", Port, [{keyfile, KeyFile}, {certfile, CertFile}, {cacertfile, CACertFile}]),
@@ -427,7 +413,7 @@ connect_providers(Config, Providers) ->
 
 
 send_to_providers(Config, ProviderIds, Msg) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     rpc:call(Node, op_channel_logic, push, [ProviderIds, Msg]).
 
 
@@ -437,7 +423,7 @@ assert_received(Sockets, Msg) ->
     end, Sockets).
 
 assert_received(Config, Sockets, Msg) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     lists:foreach(fun(Socket) ->
         WSSReceiveAns = wss_handler:recv(Socket),
         ?assertMatch({ok, _}, WSSReceiveAns),

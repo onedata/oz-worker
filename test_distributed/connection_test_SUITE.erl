@@ -28,13 +28,14 @@ rest_api_connection_test(Config) ->
     ssl:start(),
     [Node] = ?config(gr_nodes, Config),
     {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
-    Ans = ibrowse:send_req("https://127.0.0.1:" ++ integer_to_list(RestPort) ++ "/provider/test/check_my_ip", [], get, [], [{ssl_options, [{verify, verify_none}]}]),
+    Ans = ibrowse:send_req("https://" ++ atom_to_list(?GET_HOST(Node)) ++ ":" ++ integer_to_list(RestPort) ++ "/provider/test/check_my_ip", [], get, [], [{ssl_options, [{verify, verify_none}]}]),
     ?assertMatch({ok, _, _, _}, Ans),
     ssl:stop(),
     ibrowse:stop().
 
 dao_connection_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
+
     ?assertMatch({ok, _}, rpc:call(Node, dao_lib, apply, [dao_helper, list_dbs, [], 1])).
 
 %% ====================================================================
@@ -42,7 +43,9 @@ dao_connection_test(Config) ->
 %% ====================================================================
 
 init_per_suite(Config) ->
-    ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
+    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
+    timer:sleep(30000), % TODO add nagios to GR and delete sleep
+    NewConfig.
 
 end_per_suite(Config) ->
     test_node_starter:clean_environment(Config).

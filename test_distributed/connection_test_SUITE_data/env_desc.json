@@ -8,7 +8,7 @@
             "gr1": {
                 "vm.args": {
                     "name": "gr1@",
-                    "setcookie": "cookie1"
+                    "setcookie": "oneprovider_node"
                 },
                 "sys.config": {
                     "db_nodes": [ "gr1_db@" ],
@@ -16,5 +16,5 @@
                 }
             }
         }
-    },
+    }
 }
