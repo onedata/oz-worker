@@ -9,7 +9,7 @@
 %% @end
 %% ===================================================================
 
--module(test_utils).
+-module(gr_test_utils).
 
 -include("test_utils.hrl").
 -include("dao/dao_users.hrl").

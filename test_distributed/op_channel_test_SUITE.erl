@@ -17,7 +17,7 @@
 -include("registered_names.hrl").
 -include("gr_messages_pb.hrl").
 -include("gr_communication_protocol_pb.hrl").
--include("test_utils.hrl").
+-include("gr_test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 
@@ -85,7 +85,7 @@ space_support_test(Config) ->
 
     [{SpaceId1, SpaceName1}] = create_spaces(Config, {user, UserId1}, 1, []),
 
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
 
     assert_received(Config, [Socket1], #spacemodified{
         id = SpaceId1,
@@ -102,9 +102,9 @@ space_support_test(Config) ->
 
     [{GroupId1, GroupName1}] = create_groups(Config, UserId2, 1, []),
 
-    ?assertEqual(ok, test_utils:join_group(Config, UserId3, GroupId1)),
+    ?assertEqual(ok, gr_test_utils:join_group(Config, UserId3, GroupId1)),
 
-    ?assertEqual(ok, test_utils:join_space(Config, {group, GroupId1}, SpaceId1)),
+    ?assertEqual(ok, gr_test_utils:join_space(Config, {group, GroupId1}, SpaceId1)),
 
     assert_received(Config, [Socket1], #spacemodified{
         id = SpaceId1,
@@ -122,7 +122,7 @@ space_support_test(Config) ->
 
     assert_not_received([Socket1]),
 
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
 
     assert_received(Config, [Socket1, Socket2], #spacemodified{
         id = SpaceId1,
@@ -189,14 +189,14 @@ modification_test(Config) ->
     [{SpaceId2, SpaceName2}] = create_spaces(Config, {group, GroupId2}, 1, []),
     [{SpaceId3, SpaceName3}] = create_spaces(Config, {group, GroupId3}, 1, []),
 
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId1, SpaceId2, 1)),
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId1, SpaceId3, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId2, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId3, 1)),
 
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId2, SpaceId2, 2)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId2, SpaceId2, 2)),
 
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId3, SpaceId1, 3)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId3, SpaceId1, 3)),
 
     [Socket1, Socket2, Socket3] = Sockets = connect_providers(Config, Providers),
 
@@ -270,13 +270,13 @@ removal_test(Config) ->
 
     [{GroupId1, _}] = create_groups(Config, UserId1, 1, []),
 
-    ?assertEqual(ok, test_utils:join_group(Config, UserId2, GroupId1)),
-    ?assertEqual(ok, test_utils:join_group(Config, UserId3, GroupId1)),
+    ?assertEqual(ok, gr_test_utils:join_group(Config, UserId2, GroupId1)),
+    ?assertEqual(ok, gr_test_utils:join_group(Config, UserId3, GroupId1)),
 
     [{SpaceId1, _}] = create_spaces(Config, {group, GroupId1}, 1, []),
 
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
-    ?assertEqual(ok, test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
 
     [Socket1, Socket2] = Sockets = connect_providers(Config, Providers),
 
@@ -320,7 +320,7 @@ create_providers(_, 0, Providers) ->
     Providers;
 
 create_providers(Config, N, Providers) ->
-    CreateProviderAns = test_utils:create_provider(Config, <<"provider", (integer_to_binary(N))/binary>>,
+    CreateProviderAns = gr_test_utils:create_provider(Config, <<"provider", (integer_to_binary(N))/binary>>,
         [<<"127.0.0.1">>], <<"https://127.0.0.1:443">>),
     ?assertMatch({ok, _, _, _}, CreateProviderAns),
     {ok, ProviderId, KeyFile, CertFile} = CreateProviderAns,
@@ -338,7 +338,7 @@ create_users(_, 0, Users) ->
     Users;
 
 create_users(Config, N, Users) ->
-    CreateUserAns = test_utils:create_user(Config, #user{name = <<"user", (integer_to_binary(N))/binary>>}),
+    CreateUserAns = gr_test_utils:create_user(Config, #user{name = <<"user", (integer_to_binary(N))/binary>>}),
     ?assertMatch({ok, _}, CreateUserAns),
     {ok, UserId} = CreateUserAns,
     create_users(Config, N - 1, [UserId | Users]).
@@ -349,7 +349,7 @@ create_groups(_, _, 0, Groups) ->
 
 create_groups(Config, UserId, N, Groups) ->
     Name = <<"group", (integer_to_binary(N))/binary>>,
-    CreateGroupAns = test_utils:create_group(Config, UserId, Name),
+    CreateGroupAns = gr_test_utils:create_group(Config, UserId, Name),
     ?assertMatch({ok, _}, CreateGroupAns),
     {ok, GroupId} = CreateGroupAns,
     create_groups(Config, UserId, N - 1, [{GroupId, Name} | Groups]).
@@ -381,7 +381,7 @@ create_spaces(_, _, 0, Spaces) ->
 
 create_spaces(Config, Member, N, Spaces) ->
     Name = <<"space", (integer_to_binary(N))/binary>>,
-    CreateSpaceAns = test_utils:create_space(Config, Member, Name),
+    CreateSpaceAns = gr_test_utils:create_space(Config, Member, Name),
     ?assertMatch({ok, _}, CreateSpaceAns),
     {ok, SpaceId} = CreateSpaceAns,
     create_spaces(Config, Member, N - 1, [{SpaceId, Name} | Spaces]).
