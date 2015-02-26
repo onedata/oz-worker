@@ -26,7 +26,7 @@ all() -> [rest_api_connection_test, dao_connection_test].
 rest_api_connection_test(Config) ->
     ibrowse:start(),
     ssl:start(),
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
     Ans = ibrowse:send_req("https://127.0.0.1:" ++ integer_to_list(RestPort) ++ "/provider/test/check_my_ip", [], get, [], [{ssl_options, [{verify, verify_none}]}]),
     ?assertMatch({ok, _, _, _}, Ans),
@@ -34,7 +34,7 @@ rest_api_connection_test(Config) ->
     ibrowse:stop().
 
 dao_connection_test(Config) ->
-    [Node] = ?config(nodes, Config),
+    [Node] = ?config(gr_nodes, Config),
     ?assertMatch({ok, _}, rpc:call(Node, dao_lib, apply, [dao_helper, list_dbs, [], 1])).
 
 %% ====================================================================
@@ -42,21 +42,7 @@ dao_connection_test(Config) ->
 %% ====================================================================
 
 init_per_suite(Config) ->
-    ?INIT_CODE_PATH,
-    test_utils:cleanup(),
-    {Certs, CACertsDir, GRPCADir} = ?PREPARE_CERT_FILES(Config),
-
-    DbNodesEnv = {db_nodes, [?DB_NODE]},
-    Nodes = test_node_starter:start_test_nodes(1),
-    test_node_starter:start_app_on_nodes(?APP_Name, ?GR_DEPS, Nodes,
-        [[
-            DbNodesEnv,
-            ?cert_paths(Certs, CACertsDir, GRPCADir)
-        ]]
-    ),
-    Config ++ [{nodes, Nodes}].
+    ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
 
 end_per_suite(Config) ->
-    Nodes = ?config(nodes, Config),
-    test_node_starter:stop_app_on_nodes(?APP_Name, ?GR_DEPS, Nodes),
-    test_node_starter:stop_test_nodes(Nodes).
+    test_node_starter:clean_environment(Config).
