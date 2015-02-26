@@ -26,7 +26,7 @@
 
 all() -> [users_crud_test, groups_crud_test, spaces_crud_test, providers_crud_test, tokens_crud_test].
 
--define(REPEATS, 10).
+-define(REPEATS, 100).
 
 -perf_test({repeats, ?REPEATS}).
 users_crud_test(Config) ->
