@@ -17,7 +17,7 @@
 -include("registered_names.hrl").
 -include("gr_messages_pb.hrl").
 -include("gr_communication_protocol_pb.hrl").
--include("test_utils.hrl").a
+-include("test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 
