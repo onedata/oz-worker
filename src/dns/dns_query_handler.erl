@@ -420,9 +420,16 @@ parse_domain(DomainArg) ->
 %% ====================================================================
 -spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}) -> {reply_type(), [authority_record()]}.
 %% ====================================================================
-handle_unknown_subdomain(Domain, Prefix, #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone) ->
+handle_unknown_subdomain(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone) ->
     try
-        case user_logic:get_user({alias, list_to_binary(Prefix)}) of
+        Prefix = list_to_binary(PrefixStr),
+        GetUserResult = case Prefix of
+                   <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
+                       user_logic:get_user(UUID);
+                   _ ->
+                       user_logic:get_user({alias, Prefix})
+               end,
+        case GetUserResult of
             {ok, #user{default_provider = DefaulfProvider}} ->
                 {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
                 URLs = proplists:get_value(urls, DataProplist),
