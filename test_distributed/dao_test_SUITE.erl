@@ -15,7 +15,7 @@
 %% Includes
 -include("registered_names.hrl").
 -include("dao/dao_types.hrl").
--include("gr_test_utils.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("annotations/include/annotations.hrl").
