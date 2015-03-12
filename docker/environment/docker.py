@@ -1,15 +1,14 @@
-"""A custom library for interacting with Docker through command-line tool."""
-
 import json
 import os
 import sys
 import subprocess
 
-def run(image, docker_host=None, detach=False, dns=[], hostname=None,
-        interactive=False, link={}, tty=False, rm=False, reflect=[],
-        volumes=[], name=None, workdir=None, user=None, run_params=[],
-        command=None):
 
+# noinspection PyDefaultArgument
+def run(image, docker_host=None, detach=False, dns_list=[], envs={},
+        hostname=None, interactive=False, link={}, tty=False, rm=False,
+        reflect=[], volumes=[], name=None, workdir=None, user=None,
+        run_params=[], command=None, stdin=None, stdout=None, stderr=None):
     cmd = ['docker']
 
     if docker_host:
@@ -20,8 +19,11 @@ def run(image, docker_host=None, detach=False, dns=[], hostname=None,
     if detach:
         cmd.append('-d')
 
-    for addr in dns:
+    for addr in dns_list:
         cmd.extend(['--dns', addr])
+
+    for key in envs:
+        cmd.extend(['-e', '{0}={1}'.format(key, envs[key])])
 
     if hostname:
         cmd.extend(['-h', hostname])
@@ -41,8 +43,8 @@ def run(image, docker_host=None, detach=False, dns=[], hostname=None,
     if rm:
         cmd.append('--rm')
 
-    for path in reflect:
-        vol = '{0}:{0}:rw'.format(os.path.abspath(path))
+    for path, read in reflect:
+        vol = '{0}:{0}:{1}'.format(os.path.abspath(path), read)
         cmd.extend(['-v', vol])
 
     for entry in volumes:
@@ -54,7 +56,7 @@ def run(image, docker_host=None, detach=False, dns=[], hostname=None,
             cmd.extend(['-v', entry])
 
     if workdir:
-        cmd.extend(['-w', workdir])
+        cmd.extend(['-w', os.path.abspath(workdir)])
 
     if user:
         cmd.extend(['-u', user])
@@ -68,9 +70,42 @@ def run(image, docker_host=None, detach=False, dns=[], hostname=None,
         cmd.extend(command)
 
     if detach:
-        return subprocess.check_output(cmd).decode('utf-8').strip()
+        return subprocess.check_output(cmd, stdin=stdin, stderr=stderr).decode(
+            'utf-8').strip()
 
-    return subprocess.call(cmd)
+    return subprocess.call(cmd, stdin=stdin, stderr=stderr, stdout=stdout)
+
+
+def exec_(container, command, docker_host=None, detach=False, interactive=False,
+          tty=False, output=False, stdin=None, stdout=None, stderr=None):
+    cmd = ['docker']
+
+    if docker_host:
+        cmd.extend(['-H', docker_host])
+
+    cmd.append('exec')
+
+    if detach:
+        cmd.append('-d')
+
+    if detach or sys.__stdin__.isatty():
+        if interactive:
+            cmd.append('-i')
+        if tty:
+            cmd.append('-t')
+
+    cmd.append(container)
+
+    if isinstance(command, str):
+        cmd.extend(['sh', '-c', command])
+    elif isinstance(command, list):
+        cmd.extend(command)
+
+    if detach or output:
+        return subprocess.check_output(cmd, stdin=stdin, stderr=stderr).decode(
+            'utf-8').strip()
+
+    return subprocess.call(cmd, stdin=stdin, stderr=stderr, stdout=stdout)
 
 
 def inspect(container, docker_host=None):
