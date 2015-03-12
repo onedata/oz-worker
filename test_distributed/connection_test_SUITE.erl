@@ -30,7 +30,7 @@ rest_api_connection_test(Config) ->
     ssl:start(),
     [Node] = ?config(gr_nodes, Config),
     {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
-    Ans = ibrowse:send_req("https://" ++ atom_to_list(utils:get_host(Node)) ++ ":" ++ integer_to_list(RestPort) ++ "/provider/test/check_my_ip", [], get, [], [{ssl_options, [{verify, verify_none}]}]),
+    Ans = ibrowse:send_req("https://" ++ utils:get_host(Node) ++ ":" ++ integer_to_list(RestPort) ++ "/provider/test/check_my_ip", [], get, [], [{ssl_options, [{verify, verify_none}]}]),
     ?assertMatch({ok, _, _, _}, Ans),
     ssl:stop(),
     ibrowse:stop().
