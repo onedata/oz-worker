@@ -17,7 +17,7 @@
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(REQUEST_TIMEOUT, timer:seconds(20)).
+-define(REQUEST_TIMEOUT, timer:seconds(10)).
 -define(CRL_REGENERATION_PERIOD, timer:hours(1)).
 -define(CACERT_FILE, "cacert.pem").
 -define(CAKEY_FILE, filename:join("private", "cakey.pem")).
