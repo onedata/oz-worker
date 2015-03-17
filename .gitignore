@@ -1,6 +1,5 @@
 .idea
 globalregistry.iml
-*.beam
 
 include/*_pb.hrl
 
@@ -15,8 +14,12 @@ rel/globalregistry
 rel/resources/auth.config
 package
 
+*.iml
+*.sublime*
+*.beam
+*.pyc
+
 .eunit
 .dialyzer.plt
-test/results
-test_distributed/log
+test/eunit_results
 variables-ct*

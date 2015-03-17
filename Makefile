@@ -22,38 +22,36 @@ distclean: clean
 	@./rebar delete-deps
 
 ##
-## Dialyzer
+## Dialyzer targets local
 ##
 
-# Builds .dialyzer.plt init file. This is internal target, call dialyzer_init instead
-.dialyzer.plt:
-	-dialyzer --build_plt --output_plt .dialyzer.plt --apps kernel stdlib sasl erts ssl tools runtime_tools crypto inets xmerl snmp public_key eunit syntax_tools compiler ./deps/*/ebin
+PLT ?= .dialyzer.plt
+
+# Builds dialyzer's Persistent Lookup Table file.
+.PHONY: plt
+plt:
+	dialyzer --check_plt --plt ${PLT}; \
+	if [ $$? != 0 ]; then \
+	    dialyzer --build_plt --output_plt ${PLT} --apps kernel stdlib sasl erts \
+	        ssl tools runtime_tools crypto inets xmerl snmp public_key eunit \
+	        common_test test_server syntax_tools compiler ./deps/*/ebin; \
+	fi; exit 0
 
 
-# Starts dialyzer on whole ./ebin dir. If .dialyzer.plt does not exist, will be generated
-dialyzer: compile .dialyzer.plt
-	-dialyzer ./ebin --plt .dialyzer.plt -Werror_handling -Wrace_conditions
+# Dialyzes the project.
+dialyzer: plt
+	dialyzer ./ebin --plt ${PLT} -Werror_handling -Wrace_conditions --fullpath
 
-
-# Starts full initialization of .dialyzer.plt that is required by dialyzer
-dialyzer_init: compile .dialyzer.plt
 
 ##
 ## Testing
 ##
 
-test: deps compile
-	@./rebar skip_deps=true eunit
+eunit:
+	./rebar eunit skip_deps=true suites=${SUITES}
+## Rename all tests in order to remove duplicated names (add _(++i) suffix to each test)
 	@for tout in `find test -name "TEST-*.xml"`; do awk '/testcase/{gsub("_[0-9]+\"", "_" ++i "\"")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
 
-
-ct: generate
-	-@if [ ! -f ebin/.test ]; then rm -rf ebin; fi
-	-@mkdir -p ebin ; touch ebin/.test
-	cp -R deps/prproto/proto src
-	./rebar -D TEST compile
-	@./test_distributed/start_distributed_test.sh
-	@for tout in `find test_distributed/log -name "TEST-report.xml"`; do awk '/testcase/{gsub("<testcase name=\"[a-z]+_per_suite\"(([^/>]*/>)|([^>]*>[^<]*</testcase>))", "")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
 
 ##
 ## Release targets

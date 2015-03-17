@@ -9,9 +9,9 @@
 %% @end
 %% ===================================================================
 
--module(test_utils).
+-module(gr_test_utils).
 
--include("test_utils.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include("dao/dao_users.hrl").
 
 %% API
@@ -74,7 +74,7 @@ create_provider(Config, Name, URLs, RedirectionPoint) ->
         os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
         os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
         {ok, CSR} = file:read_file(CSRFile),
-        [Node] = ?config(nodes, Config),
+        [Node] = ?config(gr_nodes, Config),
         {ok, Id, Cert} = rpc:call(Node, provider_logic, create, [Name, URLs, RedirectionPoint, CSR]),
         file:write_file(CertFile, Cert),
         {ok, Id, KeyFile, CertFile}
@@ -94,7 +94,7 @@ create_provider(Config, Name, URLs, RedirectionPoint) ->
 %% ====================================================================
 create_space(Config, Member, Name) ->
     try
-        [Node] = ?config(nodes, Config),
+        [Node] = ?config(gr_nodes, Config),
         rpc:call(Node, space_logic, create, [Member, Name])
     catch
         _:Reason ->
@@ -112,7 +112,7 @@ create_space(Config, Member, Name) ->
 %% ====================================================================
 create_user(Config, User) ->
     try
-        [Node] = ?config(nodes, Config),
+        [Node] = ?config(gr_nodes, Config),
         rpc:call(Node, user_logic, create, [User])
     catch
         _:Reason ->
@@ -130,7 +130,7 @@ create_user(Config, User) ->
 %% ====================================================================
 create_group(Config, UserId, Name) ->
     try
-        [Node] = ?config(nodes, Config),
+        [Node] = ?config(gr_nodes, Config),
         rpc:call(Node, group_logic, create, [UserId, Name])
     catch
         _:Reason ->
@@ -148,7 +148,7 @@ create_group(Config, UserId, Name) ->
 %% ====================================================================
 join_group(Config, UserId, GroupId) ->
     try
-        [Node] = ?config(nodes, Config),
+        [Node] = ?config(gr_nodes, Config),
         {ok, Token} = rpc:call(Node, token_logic, create, [group_invite_token, {group, GroupId}]),
         {ok, GroupId} = rpc:call(Node, group_logic, join, [UserId, Token]),
         ok
@@ -168,7 +168,7 @@ join_group(Config, UserId, GroupId) ->
 %% ====================================================================
 join_space(Config, {user, UserId}, SpaceId) ->
     try
-        [Node] = ?config(nodes, Config),
+        [Node] = ?config(gr_nodes, Config),
         {ok, Token} = rpc:call(Node, token_logic, create, [space_invite_user_token, {space, SpaceId}]),
         {ok, SpaceId} = rpc:call(Node, space_logic, join, [{user, UserId}, Token]),
         ok
@@ -179,7 +179,7 @@ join_space(Config, {user, UserId}, SpaceId) ->
 
 join_space(Config, {group, GroupId}, SpaceId) ->
     try
-        [Node] = ?config(nodes, Config),
+        [Node] = ?config(gr_nodes, Config),
         {ok, Token} = rpc:call(Node, token_logic, create, [space_invite_group_token, {space, SpaceId}]),
         {ok, SpaceId} = rpc:call(Node, space_logic, join, [{group, GroupId}, Token]),
         ok
@@ -199,7 +199,7 @@ join_space(Config, {group, GroupId}, SpaceId) ->
 %% ====================================================================
 support_space(Config, ProviderId, SpaceId, Size) ->
     try
-        [Node] = ?config(nodes, Config),
+        [Node] = ?config(gr_nodes, Config),
         {ok, Token} = rpc:call(Node, token_logic, create, [space_support_token, {space, SpaceId}]),
         {ok, SpaceId} = rpc:call(Node, space_logic, support, [ProviderId, Token, Size]),
         ok
