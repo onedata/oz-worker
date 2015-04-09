@@ -22,4 +22,4 @@ package
 .eunit
 .dialyzer.plt
 test/eunit_results
-variables-ct*
+test_distributed/logs
