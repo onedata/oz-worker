@@ -15,7 +15,7 @@
 
 %% Common dirs
 {include, ["../include","."]}.
-{logdir, "./log/"}.
+{logdir, "./logs"}.
 
 %% Suites
 {suites, connection_test, all}.

@@ -15,8 +15,8 @@
 %% Includes
 -include("registered_names.hrl").
 -include("dao/dao_types.hrl").
--include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("annotations/include/annotations.hrl").
 
@@ -28,7 +28,10 @@ all() -> [users_crud_test, groups_crud_test, spaces_crud_test, providers_crud_te
 
 -define(REPEATS, 100).
 
--perf_test({repeats, ?REPEATS}).
+-performance([
+    {repeats, ?REPEATS},
+    {config, [{name, users_crud}]}
+]).
 users_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -61,7 +64,10 @@ users_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_users, get_user, [UserId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
--perf_test({repeats, ?REPEATS}).
+-performance([
+    {repeats, ?REPEATS},
+    {config, [{name, groups_crud}]}
+]).
 groups_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -94,7 +100,10 @@ groups_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_groups, get_group, [GroupId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
--perf_test({repeats, ?REPEATS}).
+-performance([
+    {repeats, ?REPEATS},
+    {config, [{name, providers_crud}]}
+]).
 providers_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -127,7 +136,10 @@ providers_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
--perf_test({repeats, ?REPEATS}).
+-performance([
+    {repeats, ?REPEATS},
+    {config, [{name, spaces_crud}]}
+]).
 spaces_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -160,7 +172,10 @@ spaces_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_spaces, get_space, [SpaceId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
--perf_test({repeats, ?REPEATS}).
+-performance([
+    {repeats, ?REPEATS},
+    {config, [{name, tokens_crud}]}
+]).
 tokens_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
