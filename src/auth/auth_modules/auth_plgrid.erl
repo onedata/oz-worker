@@ -122,7 +122,7 @@ validate_login() ->
         Name = get_signed_param(<<"openid.sreg.fullname">>, ParamsProplist, SignedArgs),
         Emails =
             case get_signed_param(<<"openid.sreg.email">>, ParamsProplist, SignedArgs) of
-                <<"">> -> [];
+                <<>> -> [];
                 Email -> [Email]
             end,
 
@@ -166,8 +166,8 @@ validate_login() ->
 plgrid_endpoint() ->
     XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)),
     {ok, XRDS} = gui_utils:https_get(XRDSEndpoint, [
-        {"Accept", "application/xrds+xml;level=1, */*"},
-        {"Connection", "close"}
+        {<<"Accept">>, <<"application/xrds+xml;level=1, */*">>},
+        {<<"Connection">>, <<"close">>}
     ]),
     discover_op_endpoint(XRDS).
 
@@ -241,10 +241,10 @@ find_XML_node(_NodeName, _) ->
 %% @doc
 %% Retrieves given request parameter, but only if it was signed by the provider
 %% @end
--spec get_signed_param(binary(), [binary()], [binary()]) -> string().
+-spec get_signed_param(binary(), [binary()], [binary()]) -> binary().
 %% ====================================================================
 get_signed_param(ParamName, ParamsProplist, SignedParams) ->
     case lists:member(ParamName, SignedParams) of
-        true -> proplists:get_value(ParamName, ParamsProplist, <<"">>);
-        false -> <<"">>
+        true -> proplists:get_value(ParamName, ParamsProplist, <<>>);
+        false -> <<>>
     end.

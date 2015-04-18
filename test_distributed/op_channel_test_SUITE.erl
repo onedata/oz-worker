@@ -15,8 +15,8 @@
 %% Includes
 -include("dao/dao_users.hrl").
 -include("registered_names.hrl").
--include("gr_messages_pb.hrl").
--include("gr_communication_protocol_pb.hrl").
+-include_lib("prproto/include/gr_messages.hrl").
+-include_lib("prproto/include/gr_communication_protocol.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -69,7 +69,6 @@ connection_test(Config) ->
 
     disconnect_providers(Sockets).
 
-
 %% This test checks whether porivders supporting given space get notification
 %% about new provider that starts to support this space. Moreover it checks
 %% whether new provider gets to know about all users and groups belonging to
@@ -88,16 +87,16 @@ space_support_test(Config) ->
 
     ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
 
-    assert_received(Config, [Socket1], #spacemodified{
+    assert_received(Config, [Socket1], #'SpaceModified'{
         id = SpaceId1,
         name = SpaceName1,
-        size = [#spacemodified_size{provider = ProviderId1, size = 1}],
+        size = [#'SpaceModified.Size'{provider = ProviderId1, size = 1}],
         users = [UserId1],
         groups = [],
         providers = [ProviderId1]
     }),
 
-    assert_received(Config, [Socket1], #usermodified{id = UserId1, spaces = [SpaceId1], groups = []}),
+    assert_received(Config, [Socket1], #'UserModified'{id = UserId1, spaces = [SpaceId1], groups = []}),
 
     assert_not_received([Socket1]),
 
@@ -107,54 +106,54 @@ space_support_test(Config) ->
 
     ?assertEqual(ok, gr_test_utils:join_space(Config, {group, GroupId1}, SpaceId1)),
 
-    assert_received(Config, [Socket1], #spacemodified{
+    assert_received(Config, [Socket1], #'SpaceModified'{
         id = SpaceId1,
         name = SpaceName1,
-        size = [#spacemodified_size{provider = ProviderId1, size = 1}],
+        size = [#'SpaceModified.Size'{provider = ProviderId1, size = 1}],
         users = [UserId1],
         groups = [GroupId1],
         providers = [ProviderId1]
     }),
 
-    assert_received(Config, [Socket1], #groupmodified{id = GroupId1, name = GroupName1}),
+    assert_received(Config, [Socket1], #'GroupModified'{id = GroupId1, name = GroupName1}),
 
-    assert_received(Config, [Socket1], #usermodified{id = UserId3, spaces = [], groups = [GroupId1]}),
-    assert_received(Config, [Socket1], #usermodified{id = UserId2, spaces = [], groups = [GroupId1]}),
+    assert_received(Config, [Socket1], #'UserModified'{id = UserId3, spaces = [], groups = [GroupId1]}),
+    assert_received(Config, [Socket1], #'UserModified'{id = UserId2, spaces = [], groups = [GroupId1]}),
 
     assert_not_received([Socket1]),
 
     ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
 
-    assert_received(Config, [Socket1, Socket2], #spacemodified{
+    assert_received(Config, [Socket1, Socket2], #'SpaceModified'{
         id = SpaceId1,
         name = SpaceName1,
         size = [
-            #spacemodified_size{provider = ProviderId2, size = 2},
-            #spacemodified_size{provider = ProviderId1, size = 1}
+            #'SpaceModified.Size'{provider = ProviderId2, size = 2},
+            #'SpaceModified.Size'{provider = ProviderId1, size = 1}
         ],
         users = [UserId1],
         groups = [GroupId1],
         providers = [ProviderId2, ProviderId1]
     }),
 
-    assert_received(Config, [Socket2], #usermodified{id = UserId1, spaces = [SpaceId1], groups = []}),
+    assert_received(Config, [Socket2], #'UserModified'{id = UserId1, spaces = [SpaceId1], groups = []}),
 
-    assert_received(Config, [Socket2], #groupmodified{id = GroupId1, name = GroupName1}),
+    assert_received(Config, [Socket2], #'GroupModified'{id = GroupId1, name = GroupName1}),
 
-    assert_received(Config, [Socket2], #usermodified{id = UserId3, spaces = [], groups = [GroupId1]}),
-    assert_received(Config, [Socket2], #usermodified{id = UserId2, spaces = [], groups = [GroupId1]}),
+    assert_received(Config, [Socket2], #'UserModified'{id = UserId3, spaces = [], groups = [GroupId1]}),
+    assert_received(Config, [Socket2], #'UserModified'{id = UserId2, spaces = [], groups = [GroupId1]}),
 
     assert_not_received([Socket1, Socket2]),
 
     unsupport_space(Config, [ProviderId1], SpaceId1),
 
-    assert_received(Config, [Socket1], #spaceremoved{id = SpaceId1}),
+    assert_received(Config, [Socket1], #'SpaceRemoved'{id = SpaceId1}),
 
-    assert_received(Config, [Socket2], #spacemodified{
+    assert_received(Config, [Socket2], #'SpaceModified'{
         id = SpaceId1,
         name = SpaceName1,
         size = [
-            #spacemodified_size{provider = ProviderId2, size = 2}
+            #'SpaceModified.Size'{provider = ProviderId2, size = 2}
         ],
         users = [UserId1],
         groups = [GroupId1],
@@ -165,12 +164,11 @@ space_support_test(Config) ->
 
     remove_providers(Config, [ProviderId2]),
 
-    assert_received(Config, [Socket2], #spaceremoved{id = SpaceId1}),
+    assert_received(Config, [Socket2], #'SpaceRemoved'{id = SpaceId1}),
 
     assert_not_received([Socket1, Socket2]),
 
     disconnect_providers(Sockets).
-
 
 %% This test checks whether providers receive notifications about modifications of groups and spaces.
 modification_test(Config) ->
@@ -207,9 +205,9 @@ modification_test(Config) ->
 
     modify_groups(Config, [{GroupId1, NewGroupName1}, {GroupId2, NewGroupName2}, {GroupId3, NewGroupName3}]),
 
-    assert_received(Config, [Socket1, Socket2, Socket3], #groupmodified{id = GroupId1, name = NewGroupName1}),
-    assert_received(Config, [Socket1, Socket2], #groupmodified{id = GroupId2, name = NewGroupName2}),
-    assert_received(Config, [Socket1], #groupmodified{id = GroupId3, name = NewGroupName3}),
+    assert_received(Config, [Socket1, Socket2, Socket3], #'GroupModified'{id = GroupId1, name = NewGroupName1}),
+    assert_received(Config, [Socket1, Socket2], #'GroupModified'{id = GroupId2, name = NewGroupName2}),
+    assert_received(Config, [Socket1], #'GroupModified'{id = GroupId3, name = NewGroupName3}),
 
     assert_not_received([Socket1, Socket2, Socket3]),
 
@@ -219,36 +217,36 @@ modification_test(Config) ->
 
     modify_spaces(Config, [{SpaceId1, NewSpaceName1}, {SpaceId2, NewSpaceName2}, {SpaceId3, NewSpaceName3}]),
 
-    assert_received(Config, [Socket1, Socket2, Socket3], #spacemodified{
+    assert_received(Config, [Socket1, Socket2, Socket3], #'SpaceModified'{
         id = SpaceId1,
         name = NewSpaceName1,
         size = [
-            #spacemodified_size{provider = ProviderId3, size = 3},
-            #spacemodified_size{provider = ProviderId2, size = 2},
-            #spacemodified_size{provider = ProviderId1, size = 1}
+            #'SpaceModified.Size'{provider = ProviderId3, size = 3},
+            #'SpaceModified.Size'{provider = ProviderId2, size = 2},
+            #'SpaceModified.Size'{provider = ProviderId1, size = 1}
         ],
         users = [],
         groups = [GroupId1],
         providers = [ProviderId3, ProviderId2, ProviderId1]
     }),
 
-    assert_received(Config, [Socket1, Socket2], #spacemodified{
+    assert_received(Config, [Socket1, Socket2], #'SpaceModified'{
         id = SpaceId2,
         name = NewSpaceName2,
         size = [
-            #spacemodified_size{provider = ProviderId2, size = 2},
-            #spacemodified_size{provider = ProviderId1, size = 1}
+            #'SpaceModified.Size'{provider = ProviderId2, size = 2},
+            #'SpaceModified.Size'{provider = ProviderId1, size = 1}
         ],
         users = [],
         groups = [GroupId2],
         providers = [ProviderId2, ProviderId1]
     }),
 
-    assert_received(Config, [Socket1], #spacemodified{
+    assert_received(Config, [Socket1], #'SpaceModified'{
         id = SpaceId3,
         name = NewSpaceName3,
         size = [
-            #spacemodified_size{provider = ProviderId1, size = 1}
+            #'SpaceModified.Size'{provider = ProviderId1, size = 1}
         ],
         users = [],
         groups = [GroupId3],
@@ -258,7 +256,6 @@ modification_test(Config) ->
     assert_not_received([Socket1, Socket2, Socket3]),
 
     disconnect_providers(Sockets).
-
 
 %% This test checks whether providers receive notifications about removal of groups and spaces.
 removal_test(Config) ->
@@ -283,23 +280,22 @@ removal_test(Config) ->
 
     remove_group_users(Config, [UserId1], GroupId1),
 
-    assert_received(Config, [Socket1, Socket2], #usermodified{id = UserId1, spaces = [], groups = []}),
+    assert_received(Config, [Socket1, Socket2], #'UserModified'{id = UserId1, spaces = [], groups = []}),
 
     assert_not_received(Sockets),
 
     remove_groups(Config, [GroupId1]),
 
-    assert_received(Config, Sockets, #usermodified{id = UserId3, spaces = [], groups = []}),
-    assert_received(Config, Sockets, #usermodified{id = UserId2, spaces = [], groups = []}),
+    assert_received(Config, Sockets, #'UserModified'{id = UserId3, spaces = [], groups = []}),
+    assert_received(Config, Sockets, #'UserModified'{id = UserId2, spaces = [], groups = []}),
 
-    assert_received(Config, Sockets, #spaceremoved{id = SpaceId1}),
+    assert_received(Config, Sockets, #'SpaceRemoved'{id = SpaceId1}),
 
-    assert_received(Config, Sockets, #groupremoved{id = GroupId1}),
+    assert_received(Config, Sockets, #'GroupRemoved'{id = GroupId1}),
 
     assert_not_received(Sockets),
 
     disconnect_providers(Sockets).
-
 
 %% ====================================================================
 %% SetUp and TearDown functions
@@ -432,7 +428,7 @@ assert_received(Config, Sockets, Msg) ->
         {ok, Data} = WSSReceiveAns,
         PbDecodeAns = rpc:call(Node, pb, decode, ["gr_communication_protocol", "message", Data]),
         ?assertMatch({ok, _}, PbDecodeAns),
-        {ok, #message{message_decoder_name = Decoder, message_type = Type, input = Input}} = PbDecodeAns,
+        {ok, #'Message'{message_decoder_name = Decoder, message_type = Type, input = Input}} = PbDecodeAns,
         ?assertEqual({ok, Msg}, rpc:call(Node, pb, decode, [Decoder, Type, Input]))
     end, Sockets).
 

@@ -38,7 +38,6 @@ init() ->
     ets:new(?SESSION_ETS, [named_table, public, bag, {read_concurrency, true}]),
     ok.
 
-
 %% cleanup/0
 %% ====================================================================
 %% @doc Performs any cleanup, such as deleting the previously created ets tables.
@@ -48,7 +47,6 @@ init() ->
 cleanup() ->
     ets:delete(?SESSION_ETS),
     ok.
-
 
 %% save_session/3
 %% ====================================================================
@@ -60,22 +58,18 @@ cleanup() ->
 -spec save_session(SessionID :: binary(), Props :: [tuple()], ValidTill :: integer() | undefined) -> ok | no_return().
 %% ====================================================================
 save_session(SessionID, Props, TillArg) ->
-    Till = case TillArg of
-               undefined ->
-                   case ets:lookup(?SESSION_ETS, SessionID) of
-                       [{SessionID, _, CurrentTill}] ->
-                           CurrentTill;
-                       _ ->
-                           throw("session expiration not specified")
-                   end;
-               _ ->
-                   TillArg
-           end,
-
-    delete_session(SessionID),
-    ets:insert(?SESSION_ETS, {SessionID, Props, Till}),
+    UpdateSpec = case TillArg of
+                     undefined -> [{2, Props}];
+                     _ -> [{2, Props}, {3, TillArg}]
+                 end,
+    case ets:update_element(?SESSION_ETS, SessionID, UpdateSpec) of
+        true -> ok;
+        false -> case TillArg of
+                     undefined -> throw("session expiration not specified");
+                     _ -> ets:insert(?SESSION_ETS, {SessionID, Props, TillArg})
+                 end
+    end,
     ok.
-
 
 %% lookup_session/1
 %% ====================================================================
@@ -108,7 +102,6 @@ lookup_session(SessionID) ->
             end
     end.
 
-
 %% delete_session/1
 %% ====================================================================
 %% @doc Deletes a session by SessionID key.
@@ -123,7 +116,6 @@ delete_session(SessionID) ->
             ets:delete(?SESSION_ETS, SessionID),
             ok
     end.
-
 
 %% clear_expired_sessions/0
 %% ====================================================================
@@ -143,7 +135,6 @@ clear_expired_sessions() ->
         end, ExpiredSessions),
     length(ExpiredSessions).
 
-
 %% get_cookie_ttl/0
 %% ====================================================================
 %% @doc Returns cookies time to live in seconds.
@@ -152,7 +143,7 @@ clear_expired_sessions() ->
 %% ====================================================================
 get_cookie_ttl() ->
     case application:get_env(globalregistry, gui_sessions_cookie_ttl) of
-        {ok, Val} when is_integer(Val)->
+        {ok, Val} when is_integer(Val) ->
             Val;
         _ ->
             throw("No cookie TTL specified in env")

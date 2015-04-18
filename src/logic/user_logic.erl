@@ -85,7 +85,7 @@ get_user_doc(Key) ->
 %% subset of fields to change.
 %% @end
 %% ====================================================================
--spec modify(UserId :: binary(), Proplist :: [{atom(), binary()}]) ->
+-spec modify(UserId :: binary(), Proplist :: [{atom(), term()}]) ->
     ok | {error, disallowed_prefix | invalid_alias | alias_occupied | alias_conflict | any()}.
 %% ====================================================================
 modify(UserId, Proplist) ->
@@ -102,7 +102,8 @@ modify(UserId, Proplist) ->
             default_space = DefaultSpace,
             % TODO mock
             first_space_support_token = FSST,
-            default_provider = DefaultProvider} = User,
+            default_provider = DefaultProvider
+        } = User,
 
         % Check if alias was requested to be modified and if it is allowed
         DisallowedPrefix = fun(A) ->

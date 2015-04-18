@@ -21,7 +21,6 @@
 %% API
 -export([get_redirect_url/1, validate_login/0]).
 
-
 %% ====================================================================
 %% API functions
 %% ====================================================================
@@ -49,7 +48,6 @@ get_redirect_url(ConnectAccount) ->
             ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_NAME]),
             {error, {Type, Message}}
     end.
-
 
 %% validate_login/1
 %% ====================================================================
@@ -80,8 +78,8 @@ validate_login() ->
         % Send request to Dropbox endpoint
         {ok, Response} = gui_utils:https_post(access_token_endpoint(),
             [
-                {"Content-Type", "application/x-www-form-urlencoded"},
-                {"Authorization", "Basic " ++ gui_str:to_list(AuthEncoded)}
+                {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>},
+                {<<"Authorization">>, <<"Basic ", (gui_str:to_binary(AuthEncoded))/binary>>}
             ], Params),
 
         {struct, JSONProplist} = n2o_json:decode(Response),
@@ -89,7 +87,9 @@ validate_login() ->
         UserID = proplists:get_value(<<"uid">>, JSONProplist),
 
         % Send request to Dropbox endpoint
-        {ok, JSON} = gui_utils:https_get(user_info_endpoint(), [{"Authorization", "Bearer " ++ gui_str:to_list(AccessToken)}]),
+        {ok, JSON} = gui_utils:https_get(user_info_endpoint(), [
+            {<<"Authorization">>, <<"Bearer ", (gui_str:to_list(AccessToken))/binary>>}
+        ]),
 
         % Parse received JSON
         {struct, UserInfoProplist} = n2o_json:decode(JSON),
@@ -107,7 +107,6 @@ validate_login() ->
             {error, {Type, Message}}
     end.
 
-
 %% ====================================================================
 %% Internal functions
 %% ====================================================================
@@ -122,7 +121,6 @@ validate_login() ->
 authorize_endpoint() ->
     proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
 
-
 %% access_token_endpoint/0
 %% ====================================================================
 %% @doc Provider endpoint, where access token is aquired.
@@ -132,7 +130,6 @@ authorize_endpoint() ->
 %% ====================================================================
 access_token_endpoint() ->
     proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
-
 
 %% user_info_endpoint/0
 %% ====================================================================

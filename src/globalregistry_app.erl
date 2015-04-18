@@ -316,7 +316,7 @@ start_dns() ->
         ok ->
             ok;
         Error ->
-            ?error("Cannot start DNS server - ~p", Error),
+            ?error("Cannot start DNS server - ~p", [Error]),
             OnFailureFun()
     end.
 

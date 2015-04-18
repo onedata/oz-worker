@@ -36,8 +36,8 @@ users_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
     % Data
-    User = #user{name = "name", spaces = ["uuid1", "uuid2"], groups = ["uuid3", "uuid4"]},
-    UpdatedUser = User#user{name = "name2"},
+    User = #user{name = <<"name">>, spaces = [<<"uuid1">>, <<"uuid2">>], groups = [<<"uuid3">>, <<"uuid4">>]},
+    UpdatedUser = User#user{name = <<"name2">>},
 
     % Create
     {AnsC1, UserId} = rpc:call(Node, dao_lib, apply, [dao_users, save_user, [User], 1]),
@@ -72,8 +72,8 @@ groups_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
     % Data
-    Group = #user_group{name = "name", spaces = ["uuid1", "uuid2"], users = ["uuid3", "uuid4"]},
-    UpdatedGroup = Group#user_group{name = "name2"},
+    Group = #user_group{name = <<"name">>, spaces = [<<"uuid1">>, <<"uuid2">>], users = [{<<"uuid3">>, []}, {<<"uuid4">>, []}]},
+    UpdatedGroup = Group#user_group{name = <<"name2">>},
 
     % Create
     {AnsC1, GroupId} = rpc:call(Node, dao_lib, apply, [dao_groups, save_group, [Group], 1]),
@@ -180,8 +180,8 @@ tokens_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
     % Data
-    Token = #token{type = some_type1, expires = time_in_some_format},
-    UpdatedToken = Token#token{type = some_type2},
+    Token = #token{type = group_invite_token, expires = 1000},
+    UpdatedToken = Token#token{type = space_create_token},
 
     % Create
     {AnsC1, TokenId} = rpc:call(Node, dao_lib, apply, [dao_tokens, save_token, [Token], 1]),
