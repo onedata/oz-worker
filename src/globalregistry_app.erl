@@ -1,19 +1,18 @@
-%% ===================================================================
-%% @author Tomasz Lichon
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc Applicatin main app file
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc Applicatin main app file
+%%% @end
+%%%-------------------------------------------------------------------
 -module(globalregistry_app).
 -author("Tomasz Lichon").
 
 -behaviour(application).
 
-%% Includes
 -include_lib("ctool/include/logging.hrl").
 -include("rest_config.hrl").
 -include("gui_config.hrl").
@@ -28,8 +27,7 @@
 %%% Application callbacks
 %%%===================================================================
 
-%% start/2
-%% ===================================================================
+%%--------------------------------------------------------------------
 %% @doc
 %% This function is called whenever an application is started using
 %% application:start/[1,2], and should start the processes of the
@@ -37,12 +35,12 @@
 %% design principles as a supervision tree, this means starting the
 %% top supervisor of the tree.
 %% @end
+%%--------------------------------------------------------------------
 -spec(start(StartType :: normal | {takeover, node()} | {failover, node()},
     StartArgs :: term()) ->
     {ok, pid()} |
     {ok, pid(), State :: term()} |
     {error, Reason :: term()}).
-%% ===================================================================
 start(_StartType, _StartArgs) ->
     activate_white_lists(),
     case {start_rest(), start_op_channel(), start_n2o(), start_redirector()} of
@@ -68,15 +66,14 @@ start(_StartType, _StartArgs) ->
             {error, {cannot_start_redirector, Reason}}
     end.
 
-%% stop/1
-%% ===================================================================
+%%--------------------------------------------------------------------
 %% @doc
 %% This function is called whenever an application has stopped. It
 %% is intended to be the opposite of Module:start/2 and should do
 %% any necessary cleaning up. The return value is ignored.
 %% @end
+%%--------------------------------------------------------------------
 -spec(stop(State :: term()) -> term()).
-%% ===================================================================
 stop(_State) ->
     cowboy:stop_listener(?rest_listener),
     cowboy:stop_listener(?op_channel_listener),
@@ -90,11 +87,11 @@ stop(_State) ->
 %%% Internal functions
 %%%===================================================================
 
-%% start_rest/0
-%% ===================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Starts cowboy with rest api
+%%--------------------------------------------------------------------
 -spec start_rest() -> ok | {error, term()}.
-%% ===================================================================
 start_rest() ->
     try
         % Get rest config
@@ -139,22 +136,20 @@ start_rest() ->
             {error, Error}
     end.
 
-
-%% stop_rest/0
-%% ===================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Stops rest dependencies
+%%--------------------------------------------------------------------
 -spec stop_rest() -> ok.
-%% ===================================================================
 stop_rest() ->
     auth_logic:stop(),
     grpca:stop().
 
-
-%% start_op_channel/0
-%% ===================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Starts communication channel for providers
+%%--------------------------------------------------------------------
 -spec start_op_channel() -> ok | {error, term()}.
-%% ===================================================================
 start_op_channel() ->
     try
         % Get provider channel config
@@ -186,12 +181,11 @@ start_op_channel() ->
             {error, Error}
     end.
 
-
-%% start_n2o/0
-%% ===================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Starts n2o server
+%%--------------------------------------------------------------------
 -spec start_n2o() -> ok | {error, term()}.
-%% ===================================================================
 start_n2o() ->
     try
         %% TODO for development
@@ -250,25 +244,23 @@ start_n2o() ->
             {error, Error}
     end.
 
-
-%% static_dispatches/0
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Generates static file routing for cowboy.
 %% @end
+%%--------------------------------------------------------------------
 -spec static_dispatches(DocRoot :: string(), StaticPaths :: [string()]) -> term().
-%% ====================================================================
 static_dispatches(DocRoot, StaticPaths) ->
     _StaticDispatches = lists:map(fun(Dir) ->
         {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
     end, StaticPaths).
 
-
-%% start_redirector_listener/0
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Starts a cowboy listener that will redirect all requests of http to https.
 %% @end
+%%--------------------------------------------------------------------
 -spec start_redirector() -> ok | {error, term()}.
-%% ====================================================================
 start_redirector() ->
     try
         {ok, RedirectPort} = application:get_env(?APP_Name, gui_redirect_port),
@@ -297,13 +289,12 @@ start_redirector() ->
             {error, Error}
     end.
 
-
-%% start_dns/0
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Starts the DNS server.
 %% @end
+%%--------------------------------------------------------------------
 -spec start_dns() -> ok | {error, term()}.
-%% ====================================================================
 start_dns() ->
     {ok, DNSPort} = application:get_env(?APP_Name, dns_port),
     {ok, EdnsMaxUdpSize} = application:get_env(?APP_Name, edns_max_udp_size),
@@ -320,24 +311,22 @@ start_dns() ->
             OnFailureFun()
     end.
 
-
-%% stop_dns/0
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Stops the DNS server.
 %% @end
+%%--------------------------------------------------------------------
 -spec stop_dns() -> ok | {error, term()}.
-%% ====================================================================
 stop_dns() ->
     dns_server:stop(globalregistry_sup).
 
-
-%% activate_white_lists/0
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Activates white lists of messages that can be processed by
 %% Global Registry.
 %% @end
+%%--------------------------------------------------------------------
 -spec activate_white_lists() -> ok.
-%% ====================================================================
 activate_white_lists() ->
     lists:foreach(fun(Decoder) ->
         list_to_atom(atom_to_list(Decoder) ++ "_pb")

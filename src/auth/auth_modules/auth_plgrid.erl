@@ -1,14 +1,14 @@
-%% ===================================================================
-%% @author Lukasz Opiola
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc: This module implements auth_module_behaviour and handles singning in
-%% via Github.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc: This module implements auth_module_behaviour and handles singning in
+%%% via Github.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(auth_plgrid).
 -behaviour(auth_module_behaviour).
 
@@ -22,19 +22,16 @@
 %% API
 -export([get_redirect_url/1, validate_login/0]).
 
+%%%===================================================================
+%%% API functions
+%%%===================================================================
 
-%% ====================================================================
-%% API functions
-%% ====================================================================
-
-%% get_redirect_url/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns full URL, where the user will be redirected for authorization.
 %% See function specification in auth_module_behaviour.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
-%% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
         HostName = gui_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
@@ -64,16 +61,13 @@ get_redirect_url(ConnectAccount) ->
             {error, {Type, Message}}
     end.
 
-
-%% validate_login/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Validates login request that came back from the provider.
 %% See function specification in auth_module_behaviour.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec validate_login() ->
     {ok, #oauth_account{}} | {error, term()}.
-%% ====================================================================
 validate_login() ->
     try
         % Retrieve URL params
@@ -96,7 +90,8 @@ validate_login() ->
         NewParamsProplist = lists:map(
             fun(Key) ->
                 Value = case proplists:get_value(Key, ParamsProplist) of
-                            undefined -> throw("Value for " ++ gui_str:to_list(Key) ++ " not found");
+                            undefined ->
+                                throw("Value for " ++ gui_str:to_list(Key) ++ " not found");
                             Val -> Val
                         end,
                 {Key, Value}
@@ -151,18 +146,16 @@ validate_login() ->
             {error, {Type, Message}}
     end.
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
-%% ====================================================================
-%% Internal functions
-%% ====================================================================
-
-%% plgrid_endpoint/0
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Provider endpoint, where users are redirected for authorization.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec plgrid_endpoint() -> binary().
-%% ====================================================================
 plgrid_endpoint() ->
     XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)),
     {ok, XRDS} = gui_utils:https_get(XRDSEndpoint, [
@@ -171,40 +164,37 @@ plgrid_endpoint() ->
     ]),
     discover_op_endpoint(XRDS).
 
-
-%% discover_op_endpoint/1
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Retrieves an XRDS document from given endpoint URL and parses out the URI which will
 %% be used for OpenID login redirect.
 %% @end
+%%--------------------------------------------------------------------
 -spec discover_op_endpoint(binary()) -> binary().
-%% ====================================================================
 discover_op_endpoint(XRDS) ->
     {Xml, _} = xmerl_scan:string(binary_to_list(XRDS)),
     list_to_binary(xml_extract_value("URI", Xml)).
 
-
-%% xml_extract_value/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Extracts value from under a certain key
 %% @end
+%%--------------------------------------------------------------------
 -spec xml_extract_value(string(), #xmlElement{}) -> string().
-%% ====================================================================
 xml_extract_value(KeyName, Xml) ->
     [#xmlElement{content = [#xmlText{value = Value} | _]}] = xmerl_xpath:string("//" ++ KeyName, Xml),
     Value.
 
-
-%% parse_teams/1
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Parses user's teams from XML to a list of strings. Returns an empty list
 %% for empty XML.
 %% @end
+%%--------------------------------------------------------------------
 -spec parse_teams(string()) -> [string()].
-%% ====================================================================
 parse_teams([]) ->
     [];
 
@@ -216,15 +206,14 @@ parse_teams(XMLContent) ->
             binary_to_list(unicode:characters_to_binary(Value, unicode))
         end, TeamList).
 
-
-%% find_XML_node/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Finds certain XML node. Assumes that node exists, and checks only
 %% the first child of every node going deeper and deeper.
 %% @end
+%%--------------------------------------------------------------------
 -spec find_XML_node(atom(), #xmlElement{}) -> #xmlElement{}.
-%% ====================================================================
 find_XML_node(NodeName, #xmlElement{name = NodeName} = XMLElement) ->
     XMLElement;
 
@@ -235,14 +224,13 @@ find_XML_node(NodeName, #xmlElement{} = XMLElement) ->
 find_XML_node(_NodeName, _) ->
     undefined.
 
-
-%% get_signed_param/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Retrieves given request parameter, but only if it was signed by the provider
 %% @end
+%%--------------------------------------------------------------------
 -spec get_signed_param(binary(), [binary()], [binary()]) -> binary().
-%% ====================================================================
 get_signed_param(ParamName, ParamsProplist, SignedParams) ->
     case lists:member(ParamName, SignedParams) of
         true -> proplists:get_value(ParamName, ParamsProplist, <<>>);

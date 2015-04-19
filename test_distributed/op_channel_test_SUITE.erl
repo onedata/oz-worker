@@ -1,18 +1,17 @@
-%% ===================================================================
-%% @author Krzysztof Trzepla
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc This file contains tests for communication channel between
-%% providers and Global Registry.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Krzysztof Trzepla
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc This file contains tests for communication channel between
+%%% providers and Global Registry.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(op_channel_test_SUITE).
 -author("Krzysztof Trzepla").
 
-%% Includes
 -include("dao/dao_users.hrl").
 -include("registered_names.hrl").
 -include_lib("prproto/include/gr_messages.hrl").
@@ -29,9 +28,9 @@
 -performance({test_cases, []}).
 all() -> [connection_test, space_support_test, modification_test, removal_test].
 
-%% ====================================================================
-%% Test functions
-%% ====================================================================
+%%%===================================================================
+%%% Test functions
+%%%===================================================================
 
 %% This test checks whether connections to providers are properly added and removed.
 %% Moreover it tests whether messages are pushed to providers.
@@ -297,9 +296,9 @@ removal_test(Config) ->
 
     disconnect_providers(Sockets).
 
-%% ====================================================================
-%% SetUp and TearDown functions
-%% ====================================================================
+%%%===================================================================
+%%% Setup/teardown functions
+%%%===================================================================
 
 init_per_suite(Config) ->
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
@@ -309,9 +308,9 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     test_node_starter:clean_environment(Config).
 
-%% ====================================================================
-%% Internal functions
-%% ====================================================================
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 create_providers(_, 0, Providers) ->
     Providers;
@@ -426,7 +425,7 @@ assert_received(Config, Sockets, Msg) ->
         WSSReceiveAns = wss_handler:recv(Socket),
         ?assertMatch({ok, _}, WSSReceiveAns),
         {ok, Data} = WSSReceiveAns,
-        PbDecodeAns = rpc:call(Node, pb, decode, ["gr_communication_protocol", "message", Data]),
+        PbDecodeAns = rpc:call(Node, pb, decode, [gr_communication_protocol, 'Message', Data]),
         ?assertMatch({ok, _}, PbDecodeAns),
         {ok, #'Message'{message_decoder_name = Decoder, message_type = Type, input = Input}} = PbDecodeAns,
         ?assertEqual({ok, Msg}, rpc:call(Node, pb, decode, [Decoder, Type, Input]))

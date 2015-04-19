@@ -1,15 +1,13 @@
-%% ===================================================================
-%% @author Tomasz Lichon
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc Dao definitions for space records
-%% @end
-%% ===================================================================
--author("Tomasz Lichon").
-
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc Dao definitions for space records
+%%% @end
+%%%-------------------------------------------------------------------
 
 -ifndef(DAO_SPACES_HRL).
 -define(DAO_SPACES_HRL, 1).

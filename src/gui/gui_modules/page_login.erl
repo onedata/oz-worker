@@ -1,14 +1,14 @@
-%% ===================================================================
-%% @author Lukasz Opiola
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc: This file contains n2o website code - the homepage of GR,
-%% with a customisable section.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc: This file contains n2o website code - the homepage of GR,
+%%% with a customisable section.
+%%% @end
+%%%-------------------------------------------------------------------
 
 -module(page_login).
 
@@ -27,10 +27,8 @@
 main() ->
     #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}.
 
-
 %% Page title
 title() -> <<"onedata homepage">>.
-
 
 %% This will be placed in the template instead of {{body}} tag
 body() ->
@@ -90,7 +88,6 @@ login_panel() ->
                 gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
             ] ++ gr_gui_utils:logotype_footer(55)}
     end.
-
 
 % content of HOMEPAGE_HEADER.html file
 homepage_header() ->

@@ -1,17 +1,16 @@
-%% ===================================================================
-%% @author Tomasz Lichon
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc Basic tests that check connection to main parts of application
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc Basic tests that check connection to main parts of application
+%%% @end
+%%%-------------------------------------------------------------------
 -module(connection_test_SUITE).
 -author("Tomasz Lichon").
 
-%% Includes
 -include("registered_names.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -21,6 +20,10 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([rest_api_connection_test/1, dao_connection_test/1]).
+
+%%%===================================================================
+%%% API functions
+%%%===================================================================
 
 -performance({test_cases, []}).
 all() -> [rest_api_connection_test, dao_connection_test].
@@ -40,9 +43,9 @@ dao_connection_test(Config) ->
 
     ?assertMatch({ok, _}, rpc:call(Node, dao_lib, apply, [dao_helper, list_dbs, [], 1])).
 
-%% ====================================================================
-%% SetUp and TearDown functions
-%% ====================================================================
+%%%===================================================================
+%%% Setup/teardown functions
+%%%===================================================================
 
 init_per_suite(Config) ->
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),

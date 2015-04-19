@@ -1,14 +1,14 @@
-%% ===================================================================
-%% @author Lukasz Opiola
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc: This file contains n2o website code.
-%% The page contains information how to become a provider.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc: This file contains n2o website code.
+%%% The page contains information how to become a provider.
+%%% @end
+%%%-------------------------------------------------------------------
 
 -module(page_become_a_provider).
 
@@ -31,10 +31,8 @@
 main() ->
     #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}.
 
-
 %% Page title
 title() -> <<"Become a provider">>.
-
 
 %% This will be placed in the template instead of {{body}} tag
 body() ->
@@ -45,7 +43,6 @@ body() ->
                 body = <<"<strong>onedata</strong> is a global network of users sharing data spaces and providers providing shared storage space.<br />",
                 "To become a provider you need to follow a few simple steps described below. To become a user go back to the main page ",
                 "and log in with one of the supported authentication vendors.">>},
-
 
             #link{class = <<"btn btn-primary">>, url = <<?RPM_DOWNLOAD_LINK>>,
                 style = <<"margin: 0 10px 20px; width: 250px;">>,
@@ -99,7 +96,6 @@ body() ->
         #panel{style = <<"clear: both;">>},
         gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
     ]}.
-
 
 % Renders to a table row representing a single step in installation
 table_row(NumberBinary, Body, AdditionalInfo) ->

@@ -1,18 +1,17 @@
-%% ===================================================================
-%% @author Tomasz Lichon
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc This file contains tests for basic create-read-update-delete
-%% operations on: users, groups, spaces and providers
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc This file contains tests for basic create-read-update-delete
+%%% operations on: users, groups, spaces and providers
+%%% @end
+%%%-------------------------------------------------------------------
 -module(dao_test_SUITE).
 -author("Tomasz Lichon").
 
-%% Includes
 -include("registered_names.hrl").
 -include("dao/dao_types.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -24,7 +23,12 @@
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([users_crud_test/1, groups_crud_test/1, spaces_crud_test/1, providers_crud_test/1, tokens_crud_test/1]).
 
-all() -> [users_crud_test, groups_crud_test, spaces_crud_test, providers_crud_test, tokens_crud_test].
+%%%===================================================================
+%%% API functions
+%%%===================================================================
+
+all() ->
+    [users_crud_test, groups_crud_test, spaces_crud_test, providers_crud_test, tokens_crud_test].
 
 -define(REPEATS, 100).
 
@@ -208,10 +212,9 @@ tokens_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_tokens, get_token, [TokenId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
-
-%% ====================================================================
-%% SetUp and TearDown functions
-%% ====================================================================
+%%%===================================================================
+%%% Setup/teardown functions
+%%%===================================================================
 
 init_per_suite(Config) ->
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),

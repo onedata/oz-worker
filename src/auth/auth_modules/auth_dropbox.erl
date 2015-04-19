@@ -1,14 +1,14 @@
-%% ===================================================================
-%% @author Lukasz Opiola
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc: This module implements auth_module_behaviour and handles singning in
-%% via Dropbox.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc: This module implements auth_module_behaviour and handles singning in
+%%% via Dropbox.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(auth_dropbox).
 -behaviour(auth_module_behaviour).
 
@@ -21,18 +21,16 @@
 %% API
 -export([get_redirect_url/1, validate_login/0]).
 
-%% ====================================================================
-%% API functions
-%% ====================================================================
+%%%===================================================================
+%%% API
+%%%===================================================================
 
-%% get_redirect_url/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns full URL, where the user will be redirected for authorization.
 %% See function specification in auth_module_behaviour.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
-%% ====================================================================
 get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
@@ -49,15 +47,13 @@ get_redirect_url(ConnectAccount) ->
             {error, {Type, Message}}
     end.
 
-%% validate_login/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Validates login request that came back from the provider.
 %% See function specification in auth_module_behaviour.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec validate_login() ->
     {ok, #oauth_account{}} | {error, term()}.
-%% ====================================================================
 validate_login() ->
     try
         % Retrieve URL params
@@ -107,36 +103,33 @@ validate_login() ->
             {error, {Type, Message}}
     end.
 
-%% ====================================================================
-%% Internal functions
-%% ====================================================================
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
-%% authorize_endpoint/0
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Provider endpoint, where users are redirected for authorization.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec authorize_endpoint() -> binary().
-%% ====================================================================
 authorize_endpoint() ->
     proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
 
-%% access_token_endpoint/0
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Provider endpoint, where access token is aquired.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec access_token_endpoint() -> binary().
-%% ====================================================================
 access_token_endpoint() ->
     proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
 
-%% user_info_endpoint/0
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Provider endpoint, where user info is aquired.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec user_info_endpoint() -> binary().
-%% ====================================================================
 user_info_endpoint() ->
     proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
