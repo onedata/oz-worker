@@ -1,12 +1,12 @@
-%% ===================================================================
-%% @author Konrad Zemek
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc The module handling logic behind /user REST resources.
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Konrad Zemek
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc The module handling logic behind /user REST resources.
+%%%-------------------------------------------------------------------
 -module(user_rest_module).
 -author("Konrad Zemek").
 
@@ -18,55 +18,53 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource()  :: user | spaces | defspace | screate | space | groups | group | mtoken.
--type accepted_resource()  :: user | spaces | defspace | sjoin | groups | gjoin | merge.
+-type provided_resource() :: user | spaces | defspace | screate | space | groups | group | mtoken.
+-type accepted_resource() :: user | spaces | defspace | sjoin | groups | gjoin | merge.
 -type removable_resource() :: user | space | group.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
-
 
 %% API
 -export([routes/0, is_authorized/4, accept_resource/6, provide_resource/4,
     delete_resource/3, resource_exists/3]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
-%% routes/0
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns a Cowboy-understandable PathList of routes supported by a module
 %% implementing this behavior.
 %% @see rest_module_behavior
 %% @end
+%%--------------------------------------------------------------------
 -spec routes() ->
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
-%% ====================================================================
 routes() ->
     S = #rstate{module = ?MODULE},
     M = rest_handler,
     [
-        {<<"/user">>,               M, S#rstate{resource = user,    methods = [get, post, patch, delete]}},
-        {<<"/user/spaces">>,        M, S#rstate{resource = spaces,  methods = [get, post]   }},
-        {<<"/user/spaces/default">>,M, S#rstate{resource = defspace,methods = [get, put]    }},
-        {<<"/user/spaces/join">>,   M, S#rstate{resource = sjoin,   methods = [post]        }},
-        {<<"/user/spaces/token">>,  M, S#rstate{resource = screate, methods = [get]         }},
-        {<<"/user/spaces/:sid">>,   M, S#rstate{resource = space,   methods = [get, delete] }},
-        {<<"/user/groups">>,        M, S#rstate{resource = groups,  methods = [get, post]   }},
-        {<<"/user/groups/join">>,   M, S#rstate{resource = gjoin,   methods = [post]        }},
-        {<<"/user/groups/:gid">>,   M, S#rstate{resource = group,   methods = [get, delete] }},
-        {<<"/user/merge">>,         M, S#rstate{resource = merge,   methods = [post]        }},
-        {<<"/user/merge/token">>,   M, S#rstate{resource = mtoken,  methods = [get]         }}
+        {<<"/user">>, M, S#rstate{resource = user, methods = [get, post, patch, delete]}},
+        {<<"/user/spaces">>, M, S#rstate{resource = spaces, methods = [get, post]}},
+        {<<"/user/spaces/default">>, M, S#rstate{resource = defspace, methods = [get, put]}},
+        {<<"/user/spaces/join">>, M, S#rstate{resource = sjoin, methods = [post]}},
+        {<<"/user/spaces/token">>, M, S#rstate{resource = screate, methods = [get]}},
+        {<<"/user/spaces/:sid">>, M, S#rstate{resource = space, methods = [get, delete]}},
+        {<<"/user/groups">>, M, S#rstate{resource = groups, methods = [get, post]}},
+        {<<"/user/groups/join">>, M, S#rstate{resource = gjoin, methods = [post]}},
+        {<<"/user/groups/:gid">>, M, S#rstate{resource = group, methods = [get, delete]}},
+        {<<"/user/merge">>, M, S#rstate{resource = merge, methods = [post]}},
+        {<<"/user/merge/token">>, M, S#rstate{resource = mtoken, methods = [get]}}
     ].
 
-
-%% is_authorized/4
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns a boolean() determining if the authenticated client is
 %% authorized to carry the request on the resource.
 %% @see rest_module_behavior
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec is_authorized(Resource :: resource(), Method :: method(),
-                    UserId :: binary() | undefined, Client :: client()) ->
+    UserId :: binary() | undefined, Client :: client()) ->
     boolean().
-%% ====================================================================
 is_authorized(user, post, _UserId, #client{type = undefined}) ->
     true;
 is_authorized(_, _, _, #client{type = user}) ->
@@ -74,17 +72,14 @@ is_authorized(_, _, _, #client{type = user}) ->
 is_authorized(_, _, _, _) ->
     false.
 
-
-%% resource_exists/3
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns whether a resource exists.
 %% @see rest_module_behavior
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec resource_exists(Resource :: resource(), UserId :: binary() | undefined,
-                      Req :: cowboy_req:req()) ->
+    Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
-%% ====================================================================
 resource_exists(space, UserId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {sid, SID} = lists:keyfind(sid, 1, Bindings),
@@ -96,19 +91,16 @@ resource_exists(group, UserId, Req) ->
 resource_exists(_, _, Req) ->
     {true, Req}.
 
-
-%% accept_resource/6
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Processes data submitted by a client through POST, PATCH, PUT on a REST
 %% resource.
 %% @see rest_module_behavior
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
-                      UserId :: binary() | undefined, Data :: data(),
-                      Client :: client(), Req :: cowboy_req:req()) ->
+    UserId :: binary() | undefined, Data :: data(),
+    Client :: client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
-%% ====================================================================
 accept_resource(user, post, _UserId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, _} = user_logic:create(#user{name = Name}),
@@ -126,41 +118,41 @@ accept_resource(defspace, put, UserId, Data, _Client, Req) ->
 accept_resource(sjoin, post, UserId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
     case token_logic:is_valid(Token, space_invite_user_token) of
-        false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
+        false ->
+            rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             {ok, SpaceId} = space_logic:join({user, UserId}, Token),
-            {{true,  <<"/user/spaces/", SpaceId/binary>>}, Req}
+            {{true, <<"/user/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(groups, post, _UserId, Data, Client, Req) ->
     groups_rest_module:accept_resource(groups, post, undefined, Data, Client, Req);
 accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
     case token_logic:is_valid(Token, group_invite_token) of
-        false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
+        false ->
+            rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             {ok, GroupId} = group_logic:join(UserId, Token),
-            {{true,  <<"/user/groups/", GroupId/binary>>}, Req}
+            {{true, <<"/user/groups/", GroupId/binary>>}, Req}
     end;
 accept_resource(merge, post, UserId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
     case token_logic:is_valid(Token, accounts_merge_token) of
-        false -> rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
+        false ->
+            rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         true ->
             ok = user_logic:merge(UserId, Token),
             {true, Req}
     end.
 
-
-%% provide_resource/4
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns data requested by a client through GET on a REST resource.
 %% @see rest_module_behavior
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec provide_resource(Resource :: provided_resource(), UserId :: binary() | undefined,
-                       Client :: client(), Req :: cowboy_req:req()) ->
+    Client :: client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
-%% ====================================================================
 provide_resource(user, UserId, _Client, Req) ->
     {ok, User} = user_logic:get_data(UserId),
     {User, Req};
@@ -190,17 +182,14 @@ provide_resource(mtoken, UserId, _Client, Req) ->
     {ok, Token} = token_logic:create(accounts_merge_token, {user, UserId}),
     {[{token, Token}], Req}.
 
-
-%% delete_resource/3
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Deletes the resource.
 %% @see rest_module_behavior
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec delete_resource(Resource :: removable_resource(),
-                      UserId :: binary() | undefined, Req :: cowboy_req:req()) ->
+    UserId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
-%% ====================================================================
 delete_resource(user, UserId, Req) ->
     {user_logic:remove(UserId), Req};
 delete_resource(space, UserId, Req) ->

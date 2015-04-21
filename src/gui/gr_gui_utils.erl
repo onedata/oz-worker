@@ -1,14 +1,14 @@
-%% ===================================================================
-%% @author Lukasz Opiola
-%% @copyright (C): 2013 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc: This file contains useful functions commonly used in
-%% globalregistry GUI modules.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2013 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc: This file contains useful functions commonly used in
+%%% globalregistry GUI modules.
+%%% @end
+%%%-------------------------------------------------------------------
 
 -module(gr_gui_utils).
 -include("gui/common.hrl").
@@ -24,23 +24,23 @@
 % Functions to generate page elements
 -export([top_menu/1, top_menu/2, logotype_footer/1, empty_page/0]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
-%% apply_or_redirect/2
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Checks if the client has right to do the operation (is logged in). If so, it executes the code.
 %% @end
+%%--------------------------------------------------------------------
 -spec apply_or_redirect(Module :: atom, Fun :: atom) -> boolean().
-%% ====================================================================
 apply_or_redirect(Module, Fun) ->
     apply_or_redirect(Module, Fun, []).
 
-
-%% apply_or_redirect/3
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Checks if the client has right to do the operation (is logged in). If so, it executes the code.
 %% @end
--spec apply_or_redirect(Module :: atom, Fun :: atom, Args :: [term()]) -> term() | no_return.
-%% ====================================================================
+%%--------------------------------------------------------------------
+-spec apply_or_redirect(Module :: module(), Fun :: atom(), Args :: [term()]) -> term() | no_return.
 apply_or_redirect(Module, Fun, Args) ->
     try
         case gui_ctx:user_logged_in() of
@@ -60,17 +60,15 @@ apply_or_redirect(Module, Fun, Args) ->
         end
     end.
 
-
-%% maybe_redirect/2
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Decides if user can view the page, depending on arguments.
 %% Returns false if no redirection is needed.
 %% Otherwise, it issues a redirection and returns true.
 %% Setting "SaveSourcePage" on true will allow a redirect back from login.
 %% NOTE: Should be called from page:main().
 %% @end
+%%--------------------------------------------------------------------
 -spec maybe_redirect(NeedLogin :: boolean()) -> boolean().
-%% ====================================================================
 maybe_redirect(NeedLogin) ->
     case NeedLogin and (not gui_ctx:user_logged_in()) of
         true ->
@@ -80,17 +78,15 @@ maybe_redirect(NeedLogin) ->
             false
     end.
 
-
-%% get_redirection_url_to_provider/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns an URL that the user should be redirected to - if possible.
 %% Otherwise, error is returned.
 %% If the referer is known (the provider who redirected the user for login),
 %% then he will be chosen with highest priority.
 %% @end
+%%--------------------------------------------------------------------
 -spec get_redirection_url_to_provider(Referer :: binary() | undefined) ->
     {ok, ProviderHostname :: binary(), URL :: binary()} | {error, Desc :: no_provider | term()}.
-%% ====================================================================
 get_redirection_url_to_provider(Referer) ->
     try
         UserID = gui_ctx:get_user_id(),
@@ -135,25 +131,22 @@ get_redirection_url_to_provider(Referer) ->
         {error, no_provider}
     end.
 
-
-%% top_menu/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Convienience function to render top menu in GUI pages. 
 %% Item with ActiveTabID will be highlighted as active.
 %% @end
+%%--------------------------------------------------------------------
 -spec top_menu(ActiveTabID :: term()) -> list().
-%% ====================================================================
 top_menu(ActiveTabID) ->
     top_menu(ActiveTabID, []).
 
-%% top_menu/2
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Convienience function to render top menu in GUI pages.
 %% Item with ActiveTabID will be highlighted as active.
 %% Submenu body (list of n2o elements) will be concatenated below the main menu.
 %% @end
+%%--------------------------------------------------------------------
 -spec top_menu(ActiveTabID :: term(), SubMenuBody :: term()) -> list().
-%% ====================================================================
 top_menu(ActiveTabID, SubMenuBody) ->
     % Define menu items with ids, so that proper tab can be made active via function parameter
     {ok, #user{name = Name}} = user_logic:get_user(gui_ctx:get_user_id()),
@@ -203,13 +196,11 @@ top_menu(ActiveTabID, SubMenuBody) ->
         ] ++ SubMenuBody}
     ] ++ gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>).
 
-
-%% logotype_footer/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Convienience function to render logotype footer, coming after page content.
 %% @end
+%%--------------------------------------------------------------------
 -spec logotype_footer(MarginTop :: integer()) -> list().
-%% ====================================================================
 logotype_footer(MarginTop) ->
     Height = integer_to_binary(MarginTop + 82),
     Margin = integer_to_binary(MarginTop),
@@ -223,8 +214,10 @@ logotype_footer(MarginTop) ->
         ]}
     ].
 
+%%%===================================================================
+%%% Development functions
+%%%===================================================================
 
-% Development functions
 empty_page() ->
     [
         #h6{body = <<"Not yet implemented">>},

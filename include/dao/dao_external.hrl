@@ -1,14 +1,13 @@
-%% ===================================================================
-%% @author Tomasz Lichon
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc Application specific definitions
-%% @end
-%% ===================================================================
--author("Tomasz Lichon").
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc Application specific definitions
+%%% @end
+%%%-------------------------------------------------------------------
 
 -ifndef(DAO_DRIVER).
 -define(DAO_DRIVER, 1).
@@ -27,21 +26,23 @@
 %% where 'record_name' is the name of the record. 'some_record' is an example.
 -define(dao_record_info(R),
     case R of
-        some_record         -> ?record_info_gen(some_record);   %example record from dao common.hrl
-        user                -> ?record_info_gen(user);
-        oauth_account       -> ?record_info_gen(oauth_account);
-        provider            -> ?record_info_gen(provider);
-        space               -> ?record_info_gen(space);
-        token               -> ?record_info_gen(token);
-        user_group          -> ?record_info_gen(user_group);
-        authorization       -> ?record_info_gen(authorization);
-        access              -> ?record_info_gen(access);
+        some_record ->
+            ?record_info_gen(some_record);   %example record from dao common.hrl
+        user -> ?record_info_gen(user);
+        oauth_account -> ?record_info_gen(oauth_account);
+        provider -> ?record_info_gen(provider);
+        space -> ?record_info_gen(space);
+        token -> ?record_info_gen(token);
+        user_group -> ?record_info_gen(user_group);
+        authorization -> ?record_info_gen(authorization);
+        access -> ?record_info_gen(access);
         _ -> {error, unsupported_record}
     end).
 
-%% ====================================================================
-%% DB definitions
-%% ====================================================================
+%%%===================================================================
+%%% DB definitions
+%%%===================================================================
+
 %% DB Names
 -ifdef(TEST).
 -define(SYSTEM_DB_NAME, "system_data_test").

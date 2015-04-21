@@ -1,13 +1,13 @@
-%% ===================================================================
-%% @author Krzysztof Trzepla
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc Common functions for ct tests.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Krzysztof Trzepla
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc Common functions for ct tests.
+%%% @end
+%%%-------------------------------------------------------------------
 
 -module(gr_test_utils).
 
@@ -19,19 +19,16 @@
 -export([create_provider/4, create_space/3, create_user/2, create_group/3]).
 -export([join_group/3, join_space/3, support_space/4]).
 
-%% ====================================================================
-%% API functions
-%% ====================================================================
+%%%===================================================================
+%%% API functions
+%%%===================================================================
 
-
-%% make_dir/2
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Creates directory starting from given root.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec make_dir(Root :: string(), Dir :: string()) ->
     Path :: string().
-%% ====================================================================
 make_dir(Root, Dir) ->
     lists:foldl(fun(Leaf, Path) ->
         NewPath = filename:join(Path, Leaf),
@@ -39,14 +36,11 @@ make_dir(Root, Dir) ->
         NewPath
     end, Root, filename:split(Dir)).
 
-
-%% cleanup/0
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Deletes databases and temporary files.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec cleanup() -> ok.
-%% ====================================================================
 cleanup() ->
     os:cmd("rm -rf " ++ ?TEMP_DIR),
     os:cmd("./delete_test_dbs.sh"),
@@ -55,19 +49,17 @@ cleanup() ->
     file:write_file("resources/auth.config", <<"[].">>),
     ok.
 
-
-%% create_provider/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Creates provider in Global Registry.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec create_provider(Config :: term(), Name :: binary(), URLs :: [binary()], RedirectionPoint :: binary()) ->
     {ok, Id :: binary(), KeyFile :: string(), CertFile :: string()} | {error, Reason :: term()}.
-%% ====================================================================
 create_provider(Config, Name, URLs, RedirectionPoint) ->
     try
         {MegaSec, Sec, MiliSec} = erlang:now(),
-        Prefix = lists:foldl(fun(Int, Acc) -> Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
+        Prefix = lists:foldl(fun(Int, Acc) ->
+            Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
         KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
         CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
         CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
@@ -83,15 +75,12 @@ create_provider(Config, Name, URLs, RedirectionPoint) ->
             {error, Reason}
     end.
 
-
-%% create_space/3
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Creates space in Global Registry.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec create_space(Config :: term(), Member :: {user | group, Id :: binary()}, Name :: binary()) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
-%% ====================================================================
 create_space(Config, Member, Name) ->
     try
         [Node] = ?config(gr_nodes, Config),
@@ -101,15 +90,12 @@ create_space(Config, Member, Name) ->
             {error, Reason}
     end.
 
-
-%% create_user/2
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Creates user in Global Registry.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec create_user(Config :: term(), User :: #user{}) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
-%% ====================================================================
 create_user(Config, User) ->
     try
         [Node] = ?config(gr_nodes, Config),
@@ -119,15 +105,12 @@ create_user(Config, User) ->
             {error, Reason}
     end.
 
-
-%% create_group/3
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Creates group in Global Registry.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec create_group(Config :: term(), UserId :: binary(), Name :: binary()) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
-%% ====================================================================
 create_group(Config, UserId, Name) ->
     try
         [Node] = ?config(gr_nodes, Config),
@@ -137,15 +120,12 @@ create_group(Config, UserId, Name) ->
             {error, Reason}
     end.
 
-
-%% join_group/3
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Adds user to group in Global Registry.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec join_group(Config :: term(), UserId :: binary(), GroupId :: binary()) ->
     ok | {error, Reason :: term()}.
-%% ====================================================================
 join_group(Config, UserId, GroupId) ->
     try
         [Node] = ?config(gr_nodes, Config),
@@ -157,15 +137,12 @@ join_group(Config, UserId, GroupId) ->
             {error, Reason}
     end.
 
-
-%% join_space/3
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Creates group in Global Registry.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec join_space(Config :: term(), {user | group, Id :: binary()}, SpaceId :: binary()) ->
     ok | {error, Reason :: term()}.
-%% ====================================================================
 join_space(Config, {user, UserId}, SpaceId) ->
     try
         [Node] = ?config(gr_nodes, Config),
@@ -188,15 +165,12 @@ join_space(Config, {group, GroupId}, SpaceId) ->
             {error, Reason}
     end.
 
-
-%% support_space/4
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Supports space by provider.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec support_space(Config :: term(), ProviderId :: binary(), SpaceId :: binary(), Size :: non_neg_integer()) ->
     ok | {error, Reason :: term()}.
-%% ====================================================================
 support_space(Config, ProviderId, SpaceId, Size) ->
     try
         [Node] = ?config(gr_nodes, Config),

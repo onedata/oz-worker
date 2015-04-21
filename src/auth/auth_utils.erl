@@ -1,14 +1,14 @@
-%% ===================================================================
-%% @author Lukasz Opiola
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc: This module provides functionalities used in authentication flow
-%% and convenience functions that can be used from auth modules.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc: This module provides functionalities used in authentication flow
+%%% and convenience functions that can be used from auth modules.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(auth_utils).
 
 -include_lib("ctool/include/logging.hrl").
@@ -23,33 +23,27 @@
 % Authentication flow handling
 -export([validate_login/0]).
 
-%% ====================================================================
-%% API functions
-%% ====================================================================
+%%%===================================================================
+%%% API functions
+%%%===================================================================
 
-
-%% local_auth_endpoint/0
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns the URL that will be used to redirect back authentication flow.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec local_auth_endpoint() -> binary().
-%% ====================================================================
 local_auth_endpoint() ->
     <<(gui_utils:fully_qualified_url(gui_ctx:get_requested_hostname()))/binary, ?local_auth_endpoint>>.
 
-
-%% validate_login/0
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Function used to validate login by processing a redirect that came from
 %% an OAuth provider. Must be called from n2o context to work. Returns one of the following:
 %% 1. atom 'new_user' if the login has been verified and a new user has been created
 %% 2. {redirect, URL} if the account already exists, to state where the user should be redirected now
 %% 3. {error, Desription} if the validation failed or any other error occurred.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec validate_login() -> new_user | {redirect, URL :: binary()} | {error, term()}.
-%% ====================================================================
 validate_login() ->
     try
         % Check url params for state parameter
@@ -82,7 +76,8 @@ validate_login() ->
                         {error, ?error_auth_invalid_request};
 
                     {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderID, user_id = UserID, email_list = OriginalEmails, name = Name}} ->
-                        Emails = lists:map(fun(Email) -> gui_utils:normalize_email(Email) end, OriginalEmails),
+                        Emails = lists:map(fun(Email) ->
+                            gui_utils:normalize_email(Email) end, OriginalEmails),
                         OAuthAccount = OriginalOAuthAccount#oauth_account{email_list = Emails},
                         case proplists:get_value(connect_account, Props) of
                             false ->
@@ -151,17 +146,15 @@ validate_login() ->
             {error, ?error_auth_invalid_request}
     end.
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
-%% ====================================================================
-%% Internal functions
-%% ====================================================================
-
-%% is_any_email_in_use/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Returns true if any of the given emails is occupied (but not by the specified user).
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec is_any_email_in_use(Emails :: [binary()], binary()) -> true | false.
-%% ====================================================================
 is_any_email_in_use(Emails, UserID) ->
     UserIDString = binary_to_list(UserID),
     lists:foldl(
@@ -181,14 +174,12 @@ is_any_email_in_use(Emails, UserID) ->
             end
         end, false, Emails).
 
-
-%% merge_connected_accounts/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Merges user account with information gathered from new connected account.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec merge_connected_accounts(OAuthAccount :: #oauth_account{}, UserInfo :: #user{}) -> [tuple()].
-%% ====================================================================
 merge_connected_accounts(OAuthAccount, UserInfo) ->
     #user{name = Name, email_list = Emails, connected_accounts = ConnectedAccounts} = UserInfo,
     #oauth_account{name = ProvName, email_list = ConnAccEmails} = OAuthAccount,

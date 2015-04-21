@@ -1,14 +1,14 @@
-%% ===================================================================
-%% @author Lukasz Opiola
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc: This file contains n2o website code.
-%% The page displays information about the user and allows some editing.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc: This file contains n2o website code.
+%%% The page displays information about the user and allows some editing.
+%%% @end
+%%%-------------------------------------------------------------------
 
 -module(page_manage_account).
 
@@ -24,7 +24,6 @@
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
 -export([show_alias_edition/1, update_alias/0, redirect_to_provider/2, show_alias_info/0]).
 
-
 %% Template points to the template file, which will be filled with content
 main() ->
     case gr_gui_utils:maybe_redirect(true) of
@@ -34,14 +33,12 @@ main() ->
             #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}
     end.
 
-
 %% Page title
 title() -> <<"Manage account">>.
 
-
 %% This will be placed in the template instead of [[[page:body()]]] tag
 body() ->
-    #panel{class= <<"page-container">>, body = [
+    #panel{class = <<"page-container">>, body = [
         gr_gui_utils:top_menu(manage_account_tab),
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
@@ -49,7 +46,6 @@ body() ->
             provider_redirection_panel()
         ]}
     ]}.
-
 
 %% Main table containing user account info
 main_table() ->
@@ -82,7 +78,6 @@ main_table() ->
         ]}
     ]}.
 
-
 %% Table row with user name edition
 user_name_section(User) ->
     gui_jq:bind_enter_to_submit_button(<<"new_name_textbox">>, <<"new_name_submit">>),
@@ -101,7 +96,6 @@ user_name_section(User) ->
             postback = {action, show_name_edition, [false]}, body =
             #span{class = <<"fui-cross-inverted">>, style = <<"font-size: 20px;">>}}
     ].
-
 
 %% Table row with user alias edition
 alias_section(User) ->
@@ -130,7 +124,6 @@ alias_section(User) ->
         #link{id = <<"alias_info">>, class = <<"glyph-link">>, style = <<"margin-left: 30px;">>,
             postback = {action, show_alias_info}, body = #span{class = <<"icomoon-help">>, style = <<"font-size: 16px;">>}}
     ].
-
 
 % HTML list with emails printed
 user_emails_section(User) ->
@@ -164,7 +157,6 @@ user_emails_section(User) ->
     ],
     gui_jq:bind_enter_to_submit_button(<<"new_email_textbox">>, <<"new_email_submit">>),
     #list{numbered = true, style = <<"margin-top: -3px;">>, body = CurrentEmails ++ NewEmail}.
-
 
 % Section allowing for edition of connected accounts
 connected_accounts_section(User) ->
@@ -204,7 +196,8 @@ connected_accounts_section(User) ->
             BasicStyle = <<"margin: 0; line-height: 32px; cursor: auto; padding: 5px; text-align: left; width: 130px; ",
             "color: white; background-color: ", Color/binary, ";">>,
             Style = case ProviderInfo of
-                        undefined -> <<BasicStyle/binary, "opacity:0.4; filter:alpha(opacity=40);">>;
+                        undefined ->
+                            <<BasicStyle/binary, "opacity:0.4; filter:alpha(opacity=40);">>;
                         _ -> BasicStyle
                     end,
             ProviderLabel = #label{class = <<"label">>, style = Style, body = [
@@ -225,7 +218,8 @@ connected_accounts_section(User) ->
                                          fun(Mail, Acc) ->
                                              case Acc of
                                                  <<"">> -> Mail;
-                                                 _ -> <<Acc/binary, "<br />", Mail/binary>>
+                                                 _ ->
+                                                     <<Acc/binary, "<br />", Mail/binary>>
                                              end
                                          end, <<"">>, List)
                              end
@@ -267,7 +261,6 @@ connected_accounts_section(User) ->
     ]},
     #panel{style = <<"position: relative;">>, body = Table}.
 
-
 % Finds a connected accounr record in list of records
 find_connected_account(Provider, ProviderInfos) ->
     lists:foldl(fun(ProvUserInfo = #oauth_account{provider_id = ProviderID}, Acc) ->
@@ -276,7 +269,6 @@ find_connected_account(Provider, ProviderInfos) ->
             _ -> Acc
         end
     end, undefined, ProviderInfos).
-
 
 % Panel that will display a button to redirect a user to his provider,
 % or a token for space support if he has no spaces supported.
@@ -301,13 +293,11 @@ provider_redirection_panel() ->
             ]}
     end.
 
-
-%% event/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Postback event handling
 %% @end
+%%--------------------------------------------------------------------
 -spec event(init | {action, Fun :: atom()} | {action, Fun :: atom(), Args :: [term()]}) -> term().
-%% ====================================================================
 event(init) ->
     ok;
 
@@ -317,13 +307,11 @@ event({action, Fun}) ->
 event({action, Fun, Args}) ->
     gr_gui_utils:apply_or_redirect(?MODULE, Fun, Args).
 
-
 % Connects an oauth account to users account
 connect_account(Provider) ->
     HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
     gui_jq:redirect(URL).
-
 
 % Prompt to ask for confirmation to disconnect an account
 disconnect_account_prompt(Provider) ->
@@ -341,7 +329,6 @@ disconnect_account_prompt(Provider) ->
                 postback = {action, disconnect_account, [Provider]}})
     end.
 
-
 % Disconnects an oauth account from user's accounts
 disconnect_account(Provider) ->
     UserId = gui_ctx:get_user_id(),
@@ -350,7 +337,6 @@ disconnect_account(Provider) ->
     OAuthAccount = find_connected_account(Provider, ConnectedAccounts),
     user_logic:modify(UserId, [{connected_accounts, ConnectedAccounts -- [OAuthAccount]}]),
     gui_jq:redirect(<<"/manage_account">>).
-
 
 % Update email list - add or remove one and save new user doc
 update_email(AddOrRemove) ->
@@ -369,18 +355,19 @@ update_email(AddOrRemove) ->
                         true ->
                             case user_logic:modify(UserId, [{email_list, OldEmailList ++ [NewEmail]}]) of
                                 ok -> ok;
-                                _ -> gui_jq:wire(#alert{text = <<"Error - cannot update email list.">>})
+                                _ ->
+                                    gui_jq:wire(#alert{text = <<"Error - cannot update email list.">>})
                             end
                     end
             end;
         {remove, Email} ->
             case user_logic:modify(UserId, [{email_list, OldEmailList -- [Email]}]) of
                 ok -> ok;
-                _ -> gui_jq:wire(#alert{text = <<"Error - cannot update email list.">>})
+                _ ->
+                    gui_jq:wire(#alert{text = <<"Error - cannot update email list.">>})
             end
     end,
     gui_jq:update(<<"main_table">>, main_table()).
-
 
 % Update user name
 update_name() ->
@@ -391,7 +378,6 @@ update_name() ->
         _ -> gui_jq:wire(#alert{text = <<"Error - cannot update name.">>})
     end,
     gui_jq:update(<<"main_table">>, main_table()).
-
 
 % Update user alias
 update_alias() ->
@@ -417,7 +403,6 @@ update_alias() ->
     gui_jq:replace(<<"redirection_panel">>, provider_redirection_panel()),
     gui_jq:update(<<"main_table">>, main_table()).
 
-
 % Show email adding form
 show_email_adding(Flag) ->
     case Flag of
@@ -433,7 +418,6 @@ show_email_adding(Flag) ->
             gui_jq:hide(<<"new_email_cancel">>),
             gui_jq:hide(<<"new_email_submit">>)
     end.
-
 
 % Show name adding form
 show_name_edition(Flag) ->
@@ -453,7 +437,6 @@ show_name_edition(Flag) ->
             gui_jq:hide(<<"new_name_cancel">>),
             gui_jq:hide(<<"new_name_submit">>)
     end.
-
 
 % Show alias adding form
 show_alias_edition(Flag) ->
@@ -482,7 +465,6 @@ redirect_to_provider(ProviderHostname, URL) ->
         _ ->
             gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable. Try again later.">>})
     end.
-
 
 % Show info about aliases
 show_alias_info() ->

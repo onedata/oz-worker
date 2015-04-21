@@ -1,14 +1,14 @@
-%% ===================================================================
-%% @author Krzysztof Trzepla
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license 
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc: This file contains n2o website code.
-%% The page contains information about the project, licence and contact for support.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Krzysztof Trzepla
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license 
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc: This file contains n2o website code.
+%%% The page contains information about the project, licence and contact for support.
+%%% @end
+%%%-------------------------------------------------------------------
 
 -module(page_about).
 
@@ -20,7 +20,6 @@
 -define(LICENSE_FILE, "LICENSE.txt").
 -define(CONTACT_EMAIL, "support@onedata.org").
 
-
 %% Template points to the template file, which will be filled with content
 main() ->
     case gr_gui_utils:maybe_redirect(true) of
@@ -30,21 +29,18 @@ main() ->
             #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}
     end.
 
-
 %% Page title
 title() -> <<"About">>.
 
-
 %% This will be placed in the template instead of {{body}} tag
 body() ->
-    #panel{class= <<"page-container">>, body = [
+    #panel{class = <<"page-container">>, body = [
         gr_gui_utils:top_menu(about_tab),
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"About">>},
             #panel{id = <<"about_table">>, body = about_table()}
         ]}
     ]}.
-
 
 %% Main table containing couple of sections
 about_table() ->
@@ -84,14 +80,12 @@ about_table() ->
 %%         ]}
     ]}.
 
-
 % content of LICENSE.txt file
 get_license() ->
     case file:read_file(?LICENSE_FILE) of
         {ok, File} -> File;
         {error, _Error} -> <<"">>
     end.
-
 
 %% % HTML list with team members
 %% get_team() ->

@@ -1,20 +1,19 @@
-%% ===================================================================
-%% @author Konrad Zemek
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc The module implementing the business logic for registry's users.
-%% This module serves as a buffer between the database and the REST API.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Konrad Zemek
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc The module implementing the business logic for registry's users.
+%%% This module serves as a buffer between the database and the REST API.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(user_logic).
 -author("Konrad Zemek").
 
 -include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
-
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
@@ -22,34 +21,27 @@
 -export([get_default_space/1, set_default_space/2]).
 -export([exists/1, remove/1]).
 
+%%%===================================================================
+%%% API functions
+%%%===================================================================
 
-%% ====================================================================
-%% API functions
-%% ====================================================================
-
-
-%% create/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Creates a user account.
 %% Throws exception when call to dao fails.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec create(User :: #user{}) ->
     {ok, UserId :: binary()}.
-%% ====================================================================
 create(User) ->
     UserId = dao_adapter:save(User),
     {ok, UserId}.
 
-
-%% get_user/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Retrieves user from the database.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_user(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     {ok, #user{}} | {error, any()}.
-%% ====================================================================
 get_user(Key) ->
     try
         {ok, #db_document{record = #user{} = User}} = get_user_doc(Key),
@@ -59,15 +51,12 @@ get_user(Key) ->
             {error, {T, M}}
     end.
 
-
-%% get_user_doc/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Retrieves user doc from the database.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_user_doc(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     {ok, #db_document{}} | {error, any()}.
-%% ====================================================================
 get_user_doc(Key) ->
     try
         #db_document{record = #user{}} = UserDoc = dao_adapter:user_doc(Key),
@@ -77,17 +66,14 @@ get_user_doc(Key) ->
             {error, {T, M}}
     end.
 
-
-%% modify/2
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Modifies user details. Second argument is proplist with keys
 %% corresponding to record field names. The proplist may contain any
 %% subset of fields to change.
 %% @end
-%% ====================================================================
--spec modify(UserId :: binary(), Proplist :: [{atom(), binary()}]) ->
+%%--------------------------------------------------------------------
+-spec modify(UserId :: binary(), Proplist :: [{atom(), term()}]) ->
     ok | {error, disallowed_prefix | invalid_alias | alias_occupied | alias_conflict | any()}.
-%% ====================================================================
 modify(UserId, Proplist) ->
     try
         {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
@@ -102,7 +88,8 @@ modify(UserId, Proplist) ->
             default_space = DefaultSpace,
             % TODO mock
             first_space_support_token = FSST,
-            default_provider = DefaultProvider} = User,
+            default_provider = DefaultProvider
+        } = User,
 
         % Check if alias was requested to be modified and if it is allowed
         DisallowedPrefix = fun(A) ->
@@ -206,28 +193,22 @@ modify(UserId, Proplist) ->
             {error, {T, M}}
     end.
 
-
-%% merge/2
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Merges an account identified by token into current user's account.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec merge(UserId :: binary(), Token :: binary()) ->
     ok.
-%% ====================================================================
 merge(_UserId, _Token) ->
     %% @todo: a functional merge
     ok.
 
-
-%% get_data/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns user details.
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_data(UserId :: binary()) ->
     {ok, [proplists:property()]}.
-%% ====================================================================
 get_data(UserId) ->
     #user{name = Name} = dao_adapter:user(UserId),
     {ok, [
@@ -235,17 +216,14 @@ get_data(UserId) ->
         {name, Name}
     ]}.
 
-
-%% get_spaces/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns user's spaces.
 %% Throws exception when call to dao fails, or user doesn't exist, or his groups
 %% don't exist.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_spaces(UserId :: binary()) ->
     {ok, [proplists:property()]}.
-%% ====================================================================
 get_spaces(UserId) ->
     Doc = dao_adapter:user_doc(UserId),
     AllUserSpaces = get_all_spaces(Doc),
@@ -255,30 +233,24 @@ get_spaces(UserId) ->
         {default, EffectiveDefaultSpace}
     ]}.
 
-
-%% get_groups/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns user's groups.
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_groups(UserId :: binary()) ->
     {ok, [proplists:property()]}.
-%% ====================================================================
 get_groups(UserId) ->
     #user{groups = Groups} = dao_adapter:user(UserId),
     {ok, [{groups, Groups}]}.
 
-
-%% get_providers/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns providers of user's spaces.
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_providers(UserId :: binary()) ->
     {ok, [proplists:property()]}.
-%% ====================================================================
 get_providers(UserId) ->
     Doc = dao_adapter:user_doc(UserId),
     Spaces = get_all_spaces(Doc),
@@ -288,31 +260,25 @@ get_providers(UserId) ->
     end, ordsets:new(), Spaces),
     {ok, [{providers, UserProviders}]}.
 
-
-%% exists/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Rreturns true if user was found by a given key.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec exists(Key :: binary() | {connected_account_user_id, binary()} |
 {email, binary()} | {alias, binary()}) ->
     boolean().
-%% ====================================================================
 exists(Key) ->
     case get_user_doc(Key) of
         {ok, _} -> true;
         _ -> false
     end.
 
-
-%% remove/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Remove user's account.
 %% Throws exception when call to dao fails, or user is already deleted.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec remove(UserId :: binary()) ->
     true.
-%% ====================================================================
 remove(UserId) ->
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     #user{groups = Groups, spaces = Spaces} = dao_adapter:user(UserId),
@@ -339,33 +305,27 @@ remove(UserId) ->
     op_channel_logic:user_removed(UserProviders, UserId),
     true.
 
-
-%% get_default_space/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Retrieve user's default space ID.
 %% Throws exception when call to dao fails, or user doesn't exist, or his groups
 %% don't exist.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_default_space(UserId :: binary()) ->
     {ok, SpaceId :: binary() | undefined}.
-%% ====================================================================
 get_default_space(UserId) ->
     Doc = dao_adapter:user_doc(UserId),
     AllUserSpaces = get_all_spaces(Doc),
     {ok, effective_default_space(AllUserSpaces, Doc)}.
 
-
-%% set_default_space/2
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Set user's default space ID.
 %% Throws exception when call to dao fails, or user doesn't exist, or his groups
 %% don't exist.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec set_default_space(UserId :: binary(), SpaceId :: binary()) ->
     true.
-%% ====================================================================
 set_default_space(UserId, SpaceId) ->
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     Doc = dao_adapter:user_doc(UserId),
@@ -381,22 +341,19 @@ set_default_space(UserId, SpaceId) ->
             true
     end.
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
-%% ====================================================================
-%% Internal functions
-%% ====================================================================
-
-
-%% get_all_spaces/1
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Returns a list of all spaces that a user belongs to, directly or through
 %% a group.
 %% Throws exception when call to dao fails, or user's groups don't exist.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_all_spaces(Doc :: db_doc()) ->
     ordsets:ordset(SpaceId :: binary()).
-%% ====================================================================
 get_all_spaces(#db_document{record = #user{} = User}) ->
     #user{spaces = UserSpaces, groups = Groups} = User,
 
@@ -410,19 +367,17 @@ get_all_spaces(#db_document{record = #user{} = User}) ->
 
     ordsets:union([UserSpacesSet | GroupSpacesSets]).
 
-
-%% effective_default_space/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Returns an effective default space id; i.e. validates and changes
 %% (if needed) the default space id set in the user doc. Returns the new, valid
 %% space id.
 %% Throws exception when call to dao fails, or user's groups don't exist.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec effective_default_space(AllUserSpaces :: ordsets:ordset(binary()),
     UserDoc :: db_doc()) ->
     EffectiveDefaultSpaceId :: binary() | undefined.
-%% ====================================================================
 effective_default_space(_, #db_document{record = #user{default_space = undefined}}) ->
     undefined;
 effective_default_space(AllUserSpaces, #db_document{} = UserDoc) ->

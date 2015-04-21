@@ -8,9 +8,7 @@ deps:
 	@git submodule update
 
 compile:
-	@cp -r deps/prproto/proto src
 	@./rebar compile
-	@rm -rf src/proto
 
 generate: deps compile
 	@./rebar generate
@@ -34,7 +32,7 @@ plt:
 	if [ $$? != 0 ]; then \
 	    dialyzer --build_plt --output_plt ${PLT} --apps kernel stdlib sasl erts \
 	        ssl tools runtime_tools crypto inets xmerl snmp public_key eunit \
-	        common_test test_server syntax_tools compiler ./deps/*/ebin; \
+	        common_test test_server syntax_tools compiler edoc -r deps; \
 	fi; exit 0
 
 

@@ -1,19 +1,18 @@
-%% ===================================================================
-%% @author Tomasz Lichon
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc Application main supervisor
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc Application main supervisor
+%%% @end
+%%%-------------------------------------------------------------------
 -module(globalregistry_sup).
 -author("Tomasz Lichon").
 
 -behaviour(supervisor).
 
-%% Includes
 -include("registered_names.hrl").
 
 %% API
@@ -28,12 +27,13 @@
 %%% API functions
 %%%===================================================================
 
-%% start_link/0
-%% ===================================================================
-%% @doc Starts the supervisor
--spec(start_link() ->
-    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-%% ===================================================================
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts the supervisor
+%% @end
+%%--------------------------------------------------------------------
+-spec start_link() ->
+    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
@@ -41,21 +41,21 @@ start_link() ->
 %%% Supervisor callbacks
 %%%===================================================================
 
-%% init/1
-%% ===================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Whenever a supervisor is started using supervisor:start_link/[2,3],
 %% this function is called by the new process to find out about
 %% restart strategy, maximum restart frequency and child
 %% specifications.
 %% @end
--spec(init(Args :: term()) ->
+%%--------------------------------------------------------------------
+-spec init(Args :: term()) ->
     {ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
         MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
         [ChildSpec :: supervisor:child_spec()]
     }} |
-    ignore).
-%% ===================================================================
+    ignore.
 init([]) ->
     RestartStrategy = one_for_one,
     MaxRestarts = 1000,

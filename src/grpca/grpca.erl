@@ -1,15 +1,15 @@
-%% ===================================================================
-%% @author Konrad Zemek
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc The main module implementing the logic behind Global Registry Provider
-%% CA. This module's methods should be used to manipulate Providers'
-%% certificates.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Konrad Zemek
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc The main module implementing the logic behind Global Registry Provider
+%%% CA. This module's methods should be used to manipulate Providers'
+%%% certificates.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(grpca).
 -author("Konrad Zemek").
 
@@ -29,37 +29,27 @@
     countryName = "PL",
     emailAddress = "grp@onedata.com"}).
 
-
-%% ====================================================================
 %% API
-%% ====================================================================
 -export([start/4, stop/0, sign_provider_req/2, loop/1, verify_provider/1,
     cacert_path/1, revoke/1, gen_crl/0]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
-%% ====================================================================
-%% API functions
-%% ====================================================================
-
-
-%% cacert_path/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Returns a path to a CA Certificate based on a given CA directory.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec cacert_path(CaDir :: string()) -> string().
-%% ====================================================================
 cacert_path(CaDir) ->
     {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
     filename:join(CaDir, ?CACERT_FILE).
 
-
-%% start/4
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Starts a GRPCA process which handles all CA duties.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec start(CaDir :: string(), CertPath :: string(), KeyPath :: string(),
     Domain :: string()) -> ok.
-%% ====================================================================
 start(CADir, CertPath, KeyPath, Domain) ->
     case filelib:is_regular(CertPath) of
         true -> ok;
@@ -70,82 +60,64 @@ start(CADir, CertPath, KeyPath, Domain) ->
     ca_loop ! schedule_crl_gen,
     ok.
 
-
-%% stop/0
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Stops the GRPCA process.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec stop() -> ok.
-%% ====================================================================
 stop() ->
     ca_loop ! stop,
     ok.
 
-
-%% sign_provider_req/2
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Signs CSR from a provider, returning a new certificate.
 %% The CSR's DN will be overriden by the GRPCA; most importantly the
 %% Common Name will be set to the Provider's ID.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec sign_provider_req(ProviderId :: binary(), CSRPem :: binary()) ->
     {ok, CertPem :: binary(), Serial :: binary()}.
-%% ====================================================================
 sign_provider_req(ProviderId, CSRPem) ->
     case delegate(fun sign_provider_req_imp/3, [ProviderId, CSRPem]) of
         {ok, CertPem, Serial} when is_binary(CertPem), is_integer(Serial) ->
             {ok, CertPem, integer_to_binary(Serial, 16)}
     end.
 
-
-%% verify_provider/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Verifies provider's certificate, returning Provider's ID if the
 %% certificate is valid.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec verify_provider(PeerCertDer :: public_key:der_encoded()) ->
     {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: any()}}.
-%% ====================================================================
 verify_provider(PeerCertDer) ->
     case delegate(fun verify_provider_imp/2, [PeerCertDer]) of
         {ok, ProviderId} = Result when is_binary(ProviderId) -> Result;
         {error, {bad_cert, _Reason}} = Result -> Result
     end.
 
-
-%% gen_crl/0
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Generates a new CRL file.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec gen_crl() -> ok.
-%% ====================================================================
 gen_crl() ->
     case delegate(fun gen_crl_imp/1, []) of
         ok -> ok
     end.
 
-
-%% revoke/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Revokes a certificate identified by a given serial.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec revoke(Serial :: binary()) -> ok.
-%% ====================================================================
 revoke(Serial) ->
     case delegate(fun revoke_imp/2, [Serial]) of
         ok -> ok
     end.
 
-
-%% generate_gr_cert/4
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Generates a certificate for Global Registry's interfaces.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec generate_gr_cert(CaDir :: string(), CertPath :: string(),
     KeyPath :: string(), Domain :: string()) -> ok.
-%% ====================================================================
 generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
     TmpDir = mochitemp:mkdtemp(),
     CSRFile = random_filename(TmpDir),
@@ -176,18 +148,15 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
     mochitemp:rmtempdir(TmpDir),
     ok.
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
-%% ====================================================================
-%% Internal functions
-%% ====================================================================
-
-
-%% revoke_imp/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc The underlying implementation of {@link grpca:revoke/1}.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec revoke_imp(Serial :: binary(), CaDir :: string()) -> ok.
-%% ====================================================================
 revoke_imp(Serial, CaDir) ->
     TmpDir = mochitemp:mkdtemp(),
     CaConfigFile = ca_config_file(TmpDir, CaDir),
@@ -202,14 +171,12 @@ revoke_imp(Serial, CaDir) ->
     gen_crl_imp(CaDir),
     ok.
 
-
-%% sign_provider_req_imp/3
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc The underlying implementation of {@link grpca:sign_provider_req/2}.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec sign_provider_req_imp(ProviderId :: binary(), CSRPem :: binary(),
     CaDir :: string()) -> {ok, Pem :: binary(), Serial :: integer()}.
-%% ====================================================================
 sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
     TmpDir = mochitemp:mkdtemp(),
     CSRFile = random_filename(TmpDir),
@@ -234,14 +201,12 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
 
     {ok, Pem, Serial}.
 
-
-%% verify_provider_imp/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc The underlying implementation of {@link grpca:verify_provider_imp/1}.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec verify_provider_imp(PeerCertDer :: public_key:der_encoded(),
     CaDir :: string()) -> {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: any()}}.
-%% ====================================================================
 verify_provider_imp(PeerCertDer, CaDir) ->
     CaCertFile = cacert_path(CaDir),
     {ok, CaCertPem} = file:read_file(CaCertFile),
@@ -258,13 +223,11 @@ verify_provider_imp(PeerCertDer, CaDir) ->
         Error -> Error
     end.
 
-
-%% gen_crl_imp/1
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc The underlying implementation of {@link grpca:gen_crl/0}.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec gen_crl_imp(CaDir :: string()) -> ok.
-%% ====================================================================
 gen_crl_imp(CaDir) ->
     TmpDir = mochitemp:mkdtemp(),
     CaConfigFile = ca_config_file(TmpDir, CaDir),
@@ -277,38 +240,32 @@ gen_crl_imp(CaDir) ->
     mochitemp:rmtempdir(TmpDir),
     ok.
 
-
-%% req_config_file/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Creates a temporary config file for creating Global Registry
 %% certificate's CSR.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec req_config_file(TmpDir :: string(), DN :: #dn{}) -> string().
-%% ====================================================================
 req_config_file(TmpDir, #dn{} = DN) ->
     Config = random_filename(TmpDir),
     ok = file:write_file(Config, req_cnf(DN)),
     Config.
 
-
-%% ca_config_file/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Creates a temporary config file for signing CSR requests.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec ca_config_file(TmpDir :: string(), CaDir :: string()) -> string().
-%% ====================================================================
 ca_config_file(TmpDir, CaDir) ->
     Config = random_filename(TmpDir),
     ok = file:write_file(Config, ca_cnf(CaDir)),
     Config.
 
-
-%% delegate/2
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Delegates a request from the API to the GRPCA process.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec delegate(Request :: function(), Args :: list()) -> Response :: any().
-%% ====================================================================
 delegate(Request, Args) ->
     ca_loop ! {self(), Request, Args},
     receive
@@ -318,13 +275,11 @@ delegate(Request, Args) ->
         error(ca_loop_not_responding)
     end.
 
-
-%% loop/1
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc The GRPCA process loop. @see start/4, @see stop/0 .
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec loop(CaDir :: string()) -> ok.
-%% ====================================================================
 loop(CaDir) ->
     receive
         {Requester, Fun, Args} ->
@@ -342,16 +297,14 @@ loop(CaDir) ->
         ?MODULE:loop(CaDir)
     end.
 
-
-%% check_revoked/3
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Checks whether the certificate has been revoked by the GRPCA.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec check_revoked(CaCertDer :: public_key:der_encoded(),
-                    CaCert :: #'OTPCertificate'{},
-                    PeerCert :: #'OTPCertificate'{}) ->
+    CaCert :: #'OTPCertificate'{},
+    PeerCert :: #'OTPCertificate'{}) ->
     valid | {bad_cert, Reason :: any()}.
-%% ====================================================================
 check_revoked(CaCertDer, CaCert, PeerCert) ->
     {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
 
@@ -363,16 +316,14 @@ check_revoked(CaCertDer, CaCert, PeerCert) ->
     public_key:pkix_crls_validate(PeerCert, [{FakeDP, {CRLDer, CRL}}],
         [{issuer_fun, {fun(_, _, _, _) -> {ok, CaCert, [CaCertDer]} end, []}}]).
 
-
-%% get_provider_id/1
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Extracts Provider's ID out of the certificate's Common Name.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec get_provider_id(Cert :: #'OTPCertificate'{}) -> ProviderId :: binary().
-%% ====================================================================
 get_provider_id(#'OTPCertificate'{} = Cert) ->
     #'OTPCertificate'{tbsCertificate =
-        #'OTPTBSCertificate'{subject = {rdnSequence, Attrs}}} = Cert,
+    #'OTPTBSCertificate'{subject = {rdnSequence, Attrs}}} = Cert,
 
     [ProviderId] = lists:filtermap(fun([Attribute]) ->
         case Attribute#'AttributeTypeAndValue'.type of
@@ -385,31 +336,26 @@ get_provider_id(#'OTPCertificate'{} = Cert) ->
 
     ProviderId.
 
-
-%% random_filename/1
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Generates a random file name and returns a path residing under a given
 %% directory.
 %% @end
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec random_filename(TmpDir :: string()) -> string().
-%% ====================================================================
 random_filename(TmpDir) ->
     FileName = mochihex:to_hex(crypto:hash(sha, term_to_binary({make_ref(), now()}))),
     filename:join(TmpDir, FileName).
 
+%%%===================================================================
+%%% Contents of configuration files.
+%%%===================================================================
 
-%% ====================================================================
-%% Contents of configuration files.
-%% ====================================================================
-
-
-%% req_cnf/1
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Returns a configuration for creating a CSR with given DN by the GRPCA.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec req_cnf(DN :: #dn{}) -> Config :: iolist().
-%% ====================================================================
 req_cnf(DN) ->
     ["# Purpose: Configuration for requests (end users and CAs)."
     "\n"
@@ -444,13 +390,11 @@ req_cnf(DN) ->
     "subjectKeyIdentifier   = hash\n"
     "subjectAltName         = email:copy\n"].
 
-
-%% ca_cnf/1
-%% ====================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Returns a configuration for the GRPCA.
-%% ====================================================================
+%%--------------------------------------------------------------------
 -spec ca_cnf(CaDir :: string()) -> Config :: iolist().
-%% ====================================================================
 ca_cnf(CaDir) ->
     {ok, CertDomain} = application:get_env(?APP_Name, grpcert_domain),
     {ok, RestPort} = application:get_env(?APP_Name, rest_port),
