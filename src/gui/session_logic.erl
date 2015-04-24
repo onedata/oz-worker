@@ -34,7 +34,7 @@
 -spec init() -> ok.
 init() ->
     % Ets table needed for session storing.
-    ets:new(?SESSION_ETS, [named_table, public, bag, {read_concurrency, true}]),
+    ets:new(?SESSION_ETS, [named_table, public, set, {read_concurrency, true}]),
     ok.
 
 %%--------------------------------------------------------------------
