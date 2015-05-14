@@ -5,12 +5,12 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc: This module implements dns_query_handler_behaviour and is responsible
+%%% @doc: This module implements dns_handler_behaviour and is responsible
 %%% for handling DNS queries.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(dns_query_handler).
--behaviour(dns_query_handler_behaviour).
+-behaviour(dns_handler_behaviour).
 
 -include_lib("kernel/src/inet_dns.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -20,7 +20,7 @@
 %% DNS config handling
 -export([load_config/0, load_config/1, get_canonical_hostname/0]).
 
-%% dns_query_handler_behaviour API
+%% dns_handler_behaviour API
 -export([handle_a/1, handle_ns/1, handle_cname/1, handle_soa/1, handle_wks/1,
     handle_ptr/1, handle_hinfo/1, handle_minfo/1, handle_mx/1, handle_txt/1]).
 
@@ -132,16 +132,15 @@ get_canonical_hostname() ->
     Hostname.
 
 %%%===================================================================
-%%% dns_query_handler_behaviour API
+%%% dns_handler_behaviour API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type A.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_a(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_a(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_a(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -160,11 +159,10 @@ handle_a(DomainNotNormalized) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type NS.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_ns(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_ns(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_ns(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -187,11 +185,10 @@ handle_ns(DomainNotNormalized) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type CNAME.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_cname(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_cname(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_cname(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -202,11 +199,10 @@ handle_cname(DomainNotNormalized) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type MX.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_mx(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_mx(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_mx(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -229,11 +225,10 @@ handle_mx(DomainNotNormalized) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type SOA.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_soa(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_soa(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_soa(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -258,11 +253,10 @@ handle_soa(DomainNotNormalized) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type WKS.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_wks(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_wks(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_wks(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -273,11 +267,10 @@ handle_wks(DomainNotNormalized) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type PTR.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_ptr(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_ptr(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_ptr(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -288,11 +281,10 @@ handle_ptr(DomainNotNormalized) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type HINFO.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_hinfo(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_hinfo(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_hinfo(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -303,11 +295,10 @@ handle_hinfo(DomainNotNormalized) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type MINFO.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_minfo(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_minfo(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_minfo(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -318,11 +309,10 @@ handle_minfo(DomainNotNormalized) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type TXT.
-%% See {@link dns_query_handler_behaviour} for reference.
+%% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_txt(DomainNotNormalized :: string()) -> {dns_server:reply_type(),
-    dns_server:dns_query_handler_reponse()} | dns_server:reply_type().
+-spec handle_txt(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
 handle_txt(DomainNotNormalized) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -394,7 +384,7 @@ parse_domain(DomainArg) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}) ->
-    {dns_server:reply_type(), [dns_server:authority_record()]}.
+    dns_handler_behaviour:handler_reply().
 handle_unknown_subdomain(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone) ->
     try
         Prefix = list_to_binary(PrefixStr),
@@ -424,8 +414,7 @@ handle_unknown_subdomain(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = TTL} 
 %% in authority section of DNS response.
 %% @end
 %%--------------------------------------------------------------------
--spec answer_with_soa(Domain :: string(), DNSZone :: #dns_zone{}) ->
-    {dns_server:reply_type(), [dns_server:authority_record() | tuple()]}.
+-spec answer_with_soa(Domain :: string(), DNSZone :: #dns_zone{}) -> dns_handler_behaviour:handler_reply().
 answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses,
     authority = Authority, ttl_soa = TTL}) ->
     ReplyType = case proplists:get_value(Domain, IPAddresses, undefined) of
