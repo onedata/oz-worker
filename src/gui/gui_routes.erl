@@ -42,4 +42,9 @@ route(<<?privacy_policy_url>>) -> page_privacy_policy;
 route(<<?become_a_provider_url>>) -> page_become_a_provider;
 route(<<"/error">>) -> page_error;
 route(<<"/auth_endpoint">>) -> page_auth_endpoint;
+route(<<"/validate_dev_login">>) ->
+    case application:get_env(?APP_Name, dev_mode) of
+        {ok, true} -> page_validate_dev_login;
+        _ -> page_404
+    end;
 route(_) -> page_404.

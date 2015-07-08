@@ -26,69 +26,76 @@
 %%%===================================================================
 
 set_up_test_entities(Users, Groups, Spaces) ->
-    % Create users
-    lists:foreach(
-        fun({UserID, Props}) ->
-            DefaultSpace = proplists:get_value(<<"default_space">>, Props),
-            UserInfo = #user{
-                name = UserID,
-                alias = UserID,
-                email_list = [],
-                connected_accounts = [],
-                spaces = [],
-                default_space = DefaultSpace,
-                groups = [],
-                first_space_support_token = <<"">>,
-                default_provider = <<"">>
-            },
-            {ok, UserID} = create_user_with_uuid(UserInfo, UserID)
-        end, Users),
+    try
+        % Create users
+        lists:foreach(
+            fun({UserID, Props}) ->
+                DefaultSpace = proplists:get_value(<<"default_space">>, Props),
+                UserInfo = #user{
+                    name = UserID,
+                    alias = UserID,
+                    email_list = [<<UserID/binary, "@email.com">>],
+                    connected_accounts = [],
+                    spaces = [],
+                    default_space = DefaultSpace,
+                    groups = [],
+                    first_space_support_token = <<"">>,
+                    default_provider = <<"">>
+                },
+                {ok, UserID} = create_user_with_uuid(UserInfo, UserID)
+            end, Users),
 
-    % Create groups
-    lists:foreach(
-        fun({GroupID, Props}) ->
-            UserList = proplists:get_value(<<"users">>, Props),
-            [FirstUser | UsersToAdd] = UserList,
-            {ok, GroupID} = create_group_with_uuid(FirstUser, GroupID, GroupID),
-            % Add all users to group
-            lists:foreach(
-                fun(UserID) ->
-                    {ok, GroupToken} = token_logic:create(group_invite_token, {group, GroupID}),
-                    group_logic:join(UserID, GroupToken)
-                end, UsersToAdd)
-        end, Groups),
+        % Create groups
+        lists:foreach(
+            fun({GroupID, Props}) ->
+                UserList = proplists:get_value(<<"users">>, Props),
+                [FirstUser | UsersToAdd] = UserList,
+                {ok, GroupID} = create_group_with_uuid(FirstUser, GroupID, GroupID),
+                % Add all users to group
+                lists:foreach(
+                    fun(UserID) ->
+                        {ok, GroupToken} = token_logic:create(group_invite_token, {group, GroupID}),
+                        group_logic:join(UserID, GroupToken)
+                    end, UsersToAdd)
+            end, Groups),
 
-    % Create spaces
-    lists:foreach(
-        fun({SpaceID, Props}) ->
-            UserList = proplists:get_value(<<"users">>, Props),
-            GroupList = proplists:get_value(<<"groups">>, Props),
-            ProviderList = proplists:get_value(<<"providers">>, Props),
-            {Member, UsersToAdd, GroupsToAdd} =
-                case GroupList of
-                    [] -> {{user, hd(UserList)}, tl(UserList), []};
-                    _ -> {{group, hd(GroupList)}, UserList, tl(GroupList)}
-                end,
-            {ok, SpaceID} = create_space_with_uuid(Member, SpaceID, SpaceID),
-            % Support the space by all providers
-            lists:foreach(
-                fun({ProviderID, Size}) ->
-                    {ok, SpaceToken} = token_logic:create(space_support_token, {space, SpaceID}),
-                    space_logic:support(ProviderID, SpaceToken, Size)
-                end, ProviderList),
-            % Add all users to space
-            lists:foreach(
-                fun(UserID) ->
-                    {ok, SpaceToken} = token_logic:create(space_invite_user_token, {space, SpaceID}),
-                    space_logic:join({user, UserID}, SpaceToken)
-                end, UsersToAdd),
-            % Add all groups to space
-            lists:foreach(
-                fun(GroupID) ->
-                    {ok, SpaceToken} = token_logic:create(space_invite_group_token, {space, SpaceID}),
-                    space_logic:join({group, GroupID}, SpaceToken)
-                end, GroupsToAdd)
-        end, Spaces),
+        % Create spaces
+        lists:foreach(
+            fun({SpaceID, Props}) ->
+                UserList = proplists:get_value(<<"users">>, Props),
+                GroupList = proplists:get_value(<<"groups">>, Props),
+                ProviderList = proplists:get_value(<<"providers">>, Props),
+                {Member, UsersToAdd, GroupsToAdd} =
+                    case GroupList of
+                        [] -> {{user, hd(UserList)}, tl(UserList), []};
+                        _ -> {{group, hd(GroupList)}, UserList, tl(GroupList)}
+                    end,
+                {ok, SpaceID} = create_space_with_uuid(Member, SpaceID, SpaceID),
+                % Support the space by all providers
+                lists:foreach(
+                    fun(ProviderProps) ->
+                        ProviderID = proplists:get_value(<<"provider">>, ProviderProps),
+                        SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
+                        {ok, SpaceToken} = token_logic:create(space_support_token, {space, SpaceID}),
+                        space_logic:support(ProviderID, SpaceToken, SupportedSize)
+                    end, ProviderList),
+                % Add all users to space
+                lists:foreach(
+                    fun(UserID) ->
+                        {ok, SpaceToken} = token_logic:create(space_invite_user_token, {space, SpaceID}),
+                        space_logic:join({user, UserID}, SpaceToken)
+                    end, UsersToAdd),
+                % Add all groups to space
+                lists:foreach(
+                    fun(GroupID) ->
+                        {ok, SpaceToken} = token_logic:create(space_invite_group_token, {space, SpaceID}),
+                        space_logic:join({group, GroupID}, SpaceToken)
+                    end, GroupsToAdd)
+            end, Spaces)
+    catch
+        T:M ->
+            ?error_stacktrace("Cannot set up test entities - ~p:~p", [T, M])
+    end,
     ok.
 
 
