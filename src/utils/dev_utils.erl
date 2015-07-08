@@ -29,7 +29,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
     % Create users
     lists:foreach(
         fun({UserID, Props}) ->
-            DefaultSpace = proplists:get_value(default_space, Props),
+            DefaultSpace = proplists:get_value(<<"default_space">>, Props),
             UserInfo = #user{
                 name = UserID,
                 alias = UserID,
@@ -47,7 +47,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
     % Create groups
     lists:foreach(
         fun({GroupID, Props}) ->
-            UserList = proplists:get_value(users, Props),
+            UserList = proplists:get_value(<<"users">>, Props),
             [FirstUser | UsersToAdd] = UserList,
             {ok, GroupID} = create_group_with_uuid(FirstUser, GroupID, GroupID),
             % Add all users to group
@@ -61,9 +61,9 @@ set_up_test_entities(Users, Groups, Spaces) ->
     % Create spaces
     lists:foreach(
         fun({SpaceID, Props}) ->
-            UserList = proplists:get_value(users, Props),
-            GroupList = proplists:get_value(groups, Props),
-            ProviderList = proplists:get_value(providers, Props),
+            UserList = proplists:get_value(<<"users">>, Props),
+            GroupList = proplists:get_value(<<"groups">>, Props),
+            ProviderList = proplists:get_value(<<"providers">>, Props),
             {Member, UsersToAdd, GroupsToAdd} =
                 case GroupList of
                     [] -> {{user, hd(UserList)}, tl(UserList), []};
@@ -117,7 +117,7 @@ destroy_test_entities(Users, Groups, Spaces) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
     {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(UUID, CSRBin),
-    dao_adapter:save(#db_document{uuid = UUID, record =
+    dao_adapter:save(#db_document{uuid = binary:bin_to_list(UUID), record =
     #provider{client_name = ClientName, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial}}),
     {ok, UUID, ProviderCertPem}.

@@ -60,12 +60,14 @@ routes() ->
 -spec is_authorized(Resource :: resource(), Method :: method(),
     ProviderId :: binary() | undefined, Client :: client()) ->
     boolean().
-is_authorized(provider_dev, _, _, _) ->
-    {ok, true} =:= application:get_env(?APP_Name, dev_mode);
+is_authorized(ip, get, _, _) ->
+    true;
 is_authorized(ports, post, _, _) ->
     true;
 is_authorized(provider, post, _, #client{type = undefined}) ->
     true;
+is_authorized(provider_dev, _, _, _) ->
+    {ok, true} =:= application:get_env(?APP_Name, dev_mode);
 is_authorized(_, _, _, #client{type = provider}) ->
     true;
 is_authorized(_, _, _, _) ->
