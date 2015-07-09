@@ -125,8 +125,10 @@ get_user({Key, Value}) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Gets all users from DB
-%% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
+%% @doc Gets all users from DB (that have at least one email address set).
+%% This function is used for development purposes, there appears to be no production use case.
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead
+%% (See {@link dao_worker:handle_call/3} for more details).
 %% @end
 %%--------------------------------------------------------------------
 -spec get_all_users() -> {ok, [binary()]}.
@@ -134,4 +136,4 @@ get_all_users() ->
     dao_external:set_db(?USERS_DB_NAME),
     {ok, #view_result{rows = AllRows}} = dao_records:list_records(?USER_BY_EMAIL_VIEW, #view_query_args{include_docs = true}),
     UserIDs = [list_to_binary(Row#view_row.doc#db_document.uuid) || Row <- AllRows],
-    {ok, UserIDs}.
+    {ok, lists:usort(UserIDs)}.

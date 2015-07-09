@@ -459,7 +459,6 @@ show_alias_edition(Flag) ->
 
 
 redirect_to_provider(ProviderHostname, URL) ->
-    ?dump(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>),
     case gui_utils:https_get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, []) of
         {ok, _} ->
             gui_jq:redirect(URL);

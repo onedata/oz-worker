@@ -16,7 +16,7 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: provider | provider_test | spaces | nprovider | space | ip | ports.
+-type provided_resource() :: provider | provider_dev | spaces | nprovider | space | ip | ports.
 -type accepted_resource() :: provider | spaces | ssupport.
 -type removable_resource() :: provider | space.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().

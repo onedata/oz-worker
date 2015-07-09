@@ -1,12 +1,41 @@
 %%%-------------------------------------------------------------------
-%%% @author Krzysztof Trzepla
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2015 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module provides common encoding and decoding functions for
-%%% protobuffs' messages.
+%%% @doc This module contains functionas used for development purposes,
+%%% mostly setting up test environment.
+%%% The input arguments for set_up_test_entities/3, destroy_test_entities/3 are as follows:
+%%%
+%%%     Users = [
+%%%         {<<"u1">>, [{<<"default_space">>, <<"sp1">>}]},
+%%%         {<<"u2">>, [{<<"default_space">>, <<"sp2">>}]},
+%%%         {<<"u3">>, [{<<"default_space">>, <<"sp1">>}]}
+%%%     ].
+%%%     Groups = [
+%%%         {<<"g1">>, [{<<"users">>, [<<"u1">>, <<"u2">>]}]},
+%%%         {<<"g2">>, [{<<"users">>, [<<"u2">>, <<"u3">>]}]}
+%%%     ].
+%%%     Spaces = [
+%%%         {<<"s1">>, [
+%%%             {<<"users">>, [<<"u1">>, <<"u3">>]},
+%%%             {<<"groups">>, [<<"g1">>]},
+%%%             {<<"providers">>, [
+%%%                 {<<"provider">>, <<"p2">>}, {<<"supported_size">>, 1 * 1024 * 1024 * 1024}
+%%%             ]}
+%%%         ]},
+%%%         {<<"s2">>, [
+%%%             {<<"sers, [<<"u2">>]},
+%%%             {<<"groups, [<<"g2">>]},
+%%%             {<<"providers, [
+%%%                 {<<"provider">>, <<"p1">>}, {<<"supported_size">>, 2 * 1024 * 1024 * 1024},
+%%%                 {<<"provider">>, <<"p2">>}, {<<"supported_size">>, 3 * 1024 * 1024 * 1024}
+%%%             ]}
+%%%         ]}
+%%%     ].
+%%%
 %%% @end
 %%%-------------------------------------------------------------------
 -module(dev_utils).
@@ -25,6 +54,12 @@
 %%% API
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc Creates given entities in GR database, with all the dependencies (supports, group joining etc).
+%% Used for development purposes to set up an environment using the env_up script.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_up_test_entities(Users :: term(), Groups :: term(), Spaces :: term()) -> ok | error.
 set_up_test_entities(Users, Groups, Spaces) ->
     try
         % Create users
@@ -100,6 +135,12 @@ set_up_test_entities(Users, Groups, Spaces) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc Removes all the given entities.
+%% Used for development purposes to clean up the environment created using the env_up script.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_up_test_entities(Users :: term(), Groups :: term(), Spaces :: term()) -> ok | error.
 destroy_test_entities(Users, Groups, Spaces) ->
     lists:foreach(
         fun({UserID, _}) ->
@@ -112,11 +153,12 @@ destroy_test_entities(Users, Groups, Spaces) ->
     lists:foreach(
         fun({SpaceID, _}) ->
             try space_logic:remove(SpaceID) catch _:_ -> ok end
-        end, Spaces).
+        end, Spaces),
+    ok.
 
 
 %%--------------------------------------------------------------------
-%% @doc Create a provider's account.
+%% @doc Create a provider's account with implicit UUID.
 %% Throws exception when call to dao fails.
 %% @end
 %%--------------------------------------------------------------------
@@ -132,7 +174,7 @@ create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Creates a user account with given UUID.
+%% @doc Creates a user account with implicit UUID.
 %% Throws exception when call to dao fails.
 %% @end
 %%--------------------------------------------------------------------
@@ -144,7 +186,7 @@ create_user_with_uuid(User, UUID) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Creates a group for a user.
+%% @doc Creates a group for a user with implicit UUID.
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
@@ -167,7 +209,7 @@ create_group_with_uuid(UserId, Name, UUID) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Creates a Space for a user or group.
+%% @doc Creates a Space for a user or group with implicit UUID.
 %% Throws exception when call to dao fails, or given member doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
@@ -178,7 +220,7 @@ create_space_with_uuid(Member, Name, UUID) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Creates a Space for a user or group, by a provider that will support it.
+%% @doc Creates a Space for a user or group with implicit UUID, by a provider that will support it.
 %% Throws exception when call to dao fails, or token/member_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
@@ -191,7 +233,7 @@ create_space_with_uuid({provider, ProviderId}, Name, Token, Size, UUID) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Creates a Space for a user or a group, with a preexisting provider.
+%% @doc Creates a Space for a user or a group with implicit UUID, with a preexisting provider.
 %% Throws exception when call to dao fails, or user/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------

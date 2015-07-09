@@ -36,6 +36,7 @@ title() -> <<"onedata homepage">>.
 
 %% This will be placed in the template instead of {{body}} tag
 body() ->
+    % If dev_mode is on, include a logging menu that allows to log on any account.
     DevLoginPanel = case application:get_env(?APP_Name, dev_mode) of
                         {ok, true} ->
                             {ok, UserIDs} = dao_lib:apply(dao_users, get_all_users, [], 1),
@@ -45,9 +46,10 @@ body() ->
                                 #h5{body = <<"dev login:">>},
                                 lists:map(
                                     fun(UserID) ->
-                                        #panel{style = <<"width: 100%; margin: 10px 0;">>, body = #link{class = <<"btn btn-inverse">>, style = <<"width: 200px;">>,
+                                        #panel{style = <<"width: 100%; margin: 10px 0;">>,
+                                            body = #link{class = <<"btn btn-inverse">>, style = <<"width: 200px;">>,
                                             postback = {dev_login, UserID}, body = UserID}}
-                                    end, lists:usort(UserIDs)),
+                                    end, UserIDs),
                                 #hr{},
                                 #p{body = <<"Or log in normally:">>}
                             ]};
@@ -127,7 +129,7 @@ event(init) ->
 event(terminate) ->
     ok;
 
-% Login event handling
+% Developer login event handling
 event({dev_login, UserID}) ->
     gui_jq:redirect(<<"validate_dev_login?user=", UserID/binary>>);
 
