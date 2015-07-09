@@ -140,7 +140,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
 %% Used for development purposes to clean up the environment created using the env_up script.
 %% @end
 %%--------------------------------------------------------------------
--spec set_up_test_entities(Users :: term(), Groups :: term(), Spaces :: term()) -> ok | error.
+-spec destroy_test_entities(Users :: term(), Groups :: term(), Spaces :: term()) -> ok.
 destroy_test_entities(Users, Groups, Spaces) ->
     lists:foreach(
         fun({UserID, _}) ->
