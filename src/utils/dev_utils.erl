@@ -91,12 +91,13 @@ set_up_test_entities(Users, Groups, Spaces) ->
                         {ok, SpaceToken} = token_logic:create(space_invite_group_token, {space, SpaceID}),
                         space_logic:join({group, GroupID}, SpaceToken)
                     end, GroupsToAdd)
-            end, Spaces)
+            end, Spaces),
+        ok
     catch
         T:M ->
-            ?error_stacktrace("Cannot set up test entities - ~p:~p", [T, M])
-    end,
-    ok.
+            ?error_stacktrace("Cannot set up test entities - ~p:~p", [T, M]),
+            error
+    end.
 
 
 destroy_test_entities(Users, Groups, Spaces) ->

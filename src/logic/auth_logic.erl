@@ -85,8 +85,13 @@ get_redirection_uri(UserId, ProviderId, ProviderGUIPort) ->
                  _ ->
                      Alias
              end,
-    {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
-    ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
+    % TODO return IP address rather than alias.onedata.org
+    {ok, PData} = provider_logic:get_data(ProviderId),
+    RedirectionPoint = proplists:get_value(redirectionPoint, PData),
+    {ok, <<RedirectionPoint/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
+
+    %% {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
+    %% ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
 
 %%--------------------------------------------------------------------
 %% @doc Creates an authorization code for a native client.

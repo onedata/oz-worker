@@ -118,15 +118,15 @@ start_rest() ->
             ])}
         ]),
 
-        ranch:start_listener(?rest_listener, RestHttpsAcceptors,
-            ranch_ssl2, [
-                {ip, {127, 0, 0, 1}},
+        {ok, _} = cowboy:start_https(?rest_listener, RestHttpsAcceptors,
+            [
                 {port, RestPort},
                 {cacertfile, grpca:cacert_path(GrpCADir)},
                 {certfile, GrpCertFile},
                 {keyfile, GrpKeyFile},
                 {verify, verify_peer}
-            ], cowboy_protocol, [
+            ],
+            [
                 {env, [{dispatch, Dispatch}]}
             ]),
         ok
@@ -163,15 +163,15 @@ start_op_channel() ->
 
         Dispatch = cowboy_router:compile([{'_', [{?op_channel_endpoint, op_channel_handler, []}]}]),
 
-        ranch:start_listener(?op_channel_listener, ProviderChannelHttpsAcceptors,
-            ranch_ssl2, [
-                {ip, {127, 0, 0, 1}},
+        {ok, _} = cowboy:start_https(?op_channel_listener, ProviderChannelHttpsAcceptors,
+            [
                 {port, ProviderChannelPort},
                 {cacertfile, grpca:cacert_path(GrpCADir)},
                 {certfile, GrpCertFile},
                 {keyfile, GrpKeyFile},
                 {verify, verify_peer}
-            ], cowboy_protocol, [
+            ],
+            [
                 {env, [{dispatch, Dispatch}]}
             ]),
         ok
@@ -223,14 +223,14 @@ start_n2o() ->
         % Initilize auth handler
         auth_config:load_auth_config(),
 
-        ranch:start_listener(?gui_https_listener, GuiHttpsAcceptors,
-            ranch_ssl2, [
-                {ip, {127, 0, 0, 1}},
+        {ok, _} = cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
+            [
                 {port, GuiPort},
                 {cacertfile, GuiCaCertFile},
                 {certfile, GuiCertFile},
                 {keyfile, GuiKeyFile}
-            ], cowboy_protocol, [
+            ],
+            [
                 {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
                 {max_keepalive, GuiMaxKeepalive},
                 {timeout, GuiSocketTimeout},
