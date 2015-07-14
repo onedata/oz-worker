@@ -42,6 +42,7 @@
     {ok, pid(), State :: term()} |
     {error, Reason :: term()}).
 start(_StartType, _StartArgs) ->
+    test_node_starter:maybe_start_cover(),
     activate_white_lists(),
     case {start_rest(), start_op_channel(), start_n2o(), start_redirector()} of
         {ok, ok, ok, ok} ->
@@ -81,6 +82,7 @@ stop(_State) ->
     cowboy:stop_listener(?gui_redirector_listener),
     stop_dns(),
     stop_rest(),
+    test_node_starter:maybe_stop_cover(),
     ok.
 
 %%%===================================================================
