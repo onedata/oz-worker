@@ -12,8 +12,12 @@
 
 -module(page_login).
 
+-include("registered_names.hrl").
 -include("gui/common.hrl").
 -include("auth_common.hrl").
+-include("dao/dao_users.hrl").
+-include("dao/dao_external.hrl").
+-include_lib("dao/include/dao_helper.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 % n2o API
@@ -32,11 +36,33 @@ title() -> <<"onedata homepage">>.
 
 %% This will be placed in the template instead of {{body}} tag
 body() ->
+    % If dev_mode is on, include a logging menu that allows to log on any account.
+    DevLoginPanel = case application:get_env(?APP_Name, dev_mode) of
+                        {ok, true} ->
+                            {ok, UserIDs} = dao_lib:apply(dao_users, get_all_users, [], 1),
+                            #panel{style = <<"text-align: center; margin-bottom: 100px;">>, body = [
+                                #h2{body = <<"GlobalRegistry works in DEV MODE">>},
+                                #p{body = <<"You can use the menu below to login on user accounts, bypassing OpenID">>},
+                                #h5{body = <<"dev login:">>},
+                                lists:map(
+                                    fun(UserID) ->
+                                        #panel{style = <<"width: 100%; margin: 10px 0;">>,
+                                            body = #link{class = <<"btn btn-inverse">>, style = <<"width: 200px;">>,
+                                            postback = {dev_login, UserID}, body = UserID}}
+                                    end, UserIDs),
+                                #hr{},
+                                #p{body = <<"Or log in normally:">>}
+                            ]};
+                        _ ->
+                            []
+                    end,
+
     case gui_ctx:user_logged_in() of
         true ->
             gui_jq:redirect(<<"/">>);
         false ->
             #panel{style = <<"padding: 20px 50px;">>, body = [
+                DevLoginPanel,
                 #panel{body = homepage_header()},
                 login_panel()
             ]}
@@ -103,6 +129,10 @@ event(init) ->
 event(terminate) ->
     ok;
 
+% Developer login event handling
+event({dev_login, UserID}) ->
+    gui_jq:redirect(<<"validate_dev_login?user=", UserID/binary>>);
+
 % Login event handling
 event({auth, HandlerModule, Referer}) ->
     %% TODO for development purposes
@@ -129,3 +159,4 @@ event(show_copernicus_info) ->
     "przyznawane są nagrody za innowacyjne, dla gospodarki i społeczeństwa, "/utf8,
     "rozwiązania związane z obsługą danych otrzymywanych z obserwacji ziemi. "/utf8>>,
     gui_jq:info_popup(<<"Onedata in Copernicus Masters">>, Text, <<"">>).
+

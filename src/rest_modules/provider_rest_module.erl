@@ -16,7 +16,7 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: provider | spaces | nprovider | space | ip | ports.
+-type provided_resource() :: provider | provider_dev | spaces | nprovider | space | ip | ports.
 -type accepted_resource() :: provider | spaces | ssupport.
 -type removable_resource() :: provider | space.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
@@ -42,6 +42,7 @@ routes() ->
     M = rest_handler,
     [
         {<<"/provider">>, M, S#rstate{resource = provider, methods = [get, post, patch, delete], noauth = [post]}},
+        {<<"/provider_dev">>, M, S#rstate{resource = provider_dev, methods = [post], noauth = [post]}},
         {<<"/provider/spaces/">>, M, S#rstate{resource = spaces, methods = [get, post]}},
         {<<"/provider/:pid">>, M, S#rstate{resource = nprovider, methods = [get]}},
         {<<"/provider/spaces/support">>, M, S#rstate{resource = ssupport, methods = [post]}},
@@ -65,6 +66,8 @@ is_authorized(ports, post, _, _) ->
     true;
 is_authorized(provider, post, _, #client{type = undefined}) ->
     true;
+is_authorized(provider_dev, _, _, _) ->
+    {ok, true} =:= application:get_env(?APP_Name, dev_mode);
 is_authorized(_, _, _, #client{type = provider}) ->
     true;
 is_authorized(_, _, _, _) ->
@@ -99,6 +102,19 @@ resource_exists(_, _, Req) ->
     ProviderId :: binary() | undefined, Data :: data(),
     Client :: client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
+accept_resource(provider_dev, post, _ProviderId, Data, _Client, Req) ->
+    ClientName = rest_module_helper:assert_key(<<"clientName">>, Data, binary, Req),
+    URLs = rest_module_helper:assert_key(<<"urls">>, Data, list_of_bin, Req),
+    CSR = rest_module_helper:assert_key(<<"csr">>, Data, binary, Req),
+    RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary, Req),
+    UUID = rest_module_helper:assert_key(<<"uuid">>, Data, binary, Req),
+
+    % Create provider with given UUID - UUID is the same as the provider name.
+    {ok, ProviderId, SignedPem} =
+        dev_utils:create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSR, UUID),
+    Body = mochijson2:encode([{providerId, ProviderId}, {certificate, SignedPem}]),
+    Req2 = cowboy_req:set_resp_body(Body, Req),
+    {true, Req2};
 accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
     ClientName = rest_module_helper:assert_key(<<"clientName">>, Data, binary, Req),
     URLs = rest_module_helper:assert_key(<<"urls">>, Data, list_of_bin, Req),

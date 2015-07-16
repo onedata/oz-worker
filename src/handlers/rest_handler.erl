@@ -30,10 +30,10 @@
 %% Upgrade the protocol to cowboy_rest.
 %% @end
 %%--------------------------------------------------------------------
--spec init({TransportName :: ssl, ProtocolName :: http},
+-spec init({TransportName :: atom(), ProtocolName :: http},
     Req :: cowboy_req:req(), Opts :: any()) ->
     {upgrade, protocol, cowboy_rest}.
-init({ssl, http}, _Req, _Opts) ->
+init({_, http}, _Req, _Opts) ->
     {upgrade, protocol, cowboy_rest}.
 
 %%--------------------------------------------------------------------

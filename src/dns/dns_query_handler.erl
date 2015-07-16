@@ -62,6 +62,7 @@
 load_config() ->
     load_config(?DEFAULT_DNS_CONFIG_LOCATION).
 
+
 %%--------------------------------------------------------------------
 %% @doc Loads (or reloads) DNS config from given file.
 %% @end
@@ -122,6 +123,7 @@ load_config(ConfigFile) ->
         end, Config),
     application:set_env(?APP_Name, dns_zones, DNSConfig).
 
+
 %%--------------------------------------------------------------------
 %% @doc Returns canonical hostname as specified in dns.config.
 %% @end
@@ -130,6 +132,7 @@ load_config(ConfigFile) ->
 get_canonical_hostname() ->
     {ok, [#dns_zone{cname = Hostname} | _]} = application:get_env(?APP_Name, dns_zones),
     Hostname.
+
 
 %%%===================================================================
 %%% dns_handler_behaviour API
@@ -148,7 +151,9 @@ handle_a(DomainNotNormalized) ->
         {Domain, Prefix, #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone} ->
             case proplists:get_value(Domain, IPAddresses, undefined) of
                 undefined ->
-                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone);
+%%                     handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone);
+                    % TODO temporary fix
+                    return_providers_a_records(DomainNotNormalized, Prefix, DNSZone);
                 IPAddrList ->
                     {ok,
                             [dns_server:answer_record(DomainNotNormalized, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
@@ -156,6 +161,7 @@ handle_a(DomainNotNormalized) ->
                     }
             end
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type NS.
@@ -183,6 +189,7 @@ handle_ns(DomainNotNormalized) ->
             end
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type CNAME.
 %% See {@link dns_handler_behaviour} for reference.
@@ -196,6 +203,7 @@ handle_cname(DomainNotNormalized) ->
         {_Domain, Prefix, DNSZone} ->
             handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type MX.
@@ -222,6 +230,7 @@ handle_mx(DomainNotNormalized) ->
                     handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
             end
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type SOA.
@@ -251,6 +260,7 @@ handle_soa(DomainNotNormalized) ->
             end
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type WKS.
 %% See {@link dns_handler_behaviour} for reference.
@@ -264,6 +274,7 @@ handle_wks(DomainNotNormalized) ->
         {_Domain, Prefix, DNSZone} ->
             handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type PTR.
@@ -279,6 +290,7 @@ handle_ptr(DomainNotNormalized) ->
             handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type HINFO.
 %% See {@link dns_handler_behaviour} for reference.
@@ -292,6 +304,7 @@ handle_hinfo(DomainNotNormalized) ->
         {_Domain, Prefix, DNSZone} ->
             handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type MINFO.
@@ -307,6 +320,7 @@ handle_minfo(DomainNotNormalized) ->
             handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc Handles DNS queries of type TXT.
 %% See {@link dns_handler_behaviour} for reference.
@@ -320,6 +334,7 @@ handle_txt(DomainNotNormalized) ->
         {_Domain, Prefix, DNSZone} ->
             handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
     end.
+
 
 %%%===================================================================
 %%% Internal functions
@@ -375,6 +390,7 @@ parse_domain(DomainArg) ->
 
     end.
 
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc This function is called when a subdomain is not recognizable according to dns.config.
@@ -385,28 +401,38 @@ parse_domain(DomainArg) ->
 %%--------------------------------------------------------------------
 -spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}) ->
     dns_handler_behaviour:handler_reply().
-handle_unknown_subdomain(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone) ->
+handle_unknown_subdomain(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = _TTL} = DNSZone) ->
     try
         Prefix = list_to_binary(PrefixStr),
         GetUserResult = case Prefix of
                             <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
                                 user_logic:get_user(UUID);
                             _ ->
-                                user_logic:get_user({alias, Prefix})
+                                case user_logic:get_user({alias, Prefix}) of
+                                    {ok, Ans} ->
+                                        {ok, Ans};
+                                    _ ->
+                                        user_logic:get_user(Prefix)
+                                end
                         end,
         case GetUserResult of
-            {ok, #user{default_provider = DefaulfProvider}} ->
-                {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
-                URLs = proplists:get_value(urls, DataProplist),
-                {ok,
-                    [dns_server:authority_record(Domain, TTL, ?S_NS, binary_to_list(IPBin)) || IPBin <- URLs]
-                };
+%%             {ok, #user{default_provider = DefaulfProvider}} ->
+%%                 {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
+%%                 URLs = proplists:get_value(urls, DataProplist),
+%%                 {ok,
+%%                     [dns_server:authority_record(Domain, TTL, ?S_NS, binary_to_list(IPBin)) || IPBin <- URLs]
+%%                 };
+        % TODO temporary fix
+        % Return GR's NS servers instead of provider's NS servers.
+            {ok, #user{}} ->
+                return_gr_nameservers(Domain, DNSZone);
             _ ->
                 answer_with_soa(Domain, DNSZone)
         end
     catch _:_ ->
         answer_with_soa(Domain, DNSZone)
     end.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -415,8 +441,7 @@ handle_unknown_subdomain(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = TTL} 
 %% @end
 %%--------------------------------------------------------------------
 -spec answer_with_soa(Domain :: string(), DNSZone :: #dns_zone{}) -> dns_handler_behaviour:handler_reply().
-answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses,
-    authority = Authority, ttl_soa = TTL}) ->
+answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, authority = Authority, ttl_soa = TTL}) ->
     ReplyType = case proplists:get_value(Domain, IPAddresses, undefined) of
                     undefined ->
                         nx_domain;
@@ -427,3 +452,48 @@ answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses,
         dns_server:authority_record(CName, TTL, ?S_SOA, Authority),
         dns_server:authoritative_answer_flag(true)
     ]}.
+
+
+% TODO this is a temporary solution to always return A records of provider when
+% the DNS is asked for address of alias.onedata.org
+return_providers_a_records(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone) ->
+    try
+        Prefix = list_to_binary(PrefixStr),
+        GetUserResult = case Prefix of
+                            <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
+                                user_logic:get_user(UUID);
+                            _ ->
+                                case user_logic:get_user({alias, Prefix}) of
+                                    {ok, Ans} ->
+                                        {ok, Ans};
+                                    _ ->
+                                        user_logic:get_user(Prefix)
+                                end
+                        end,
+        case GetUserResult of
+            {ok, #user{default_provider = DefaulfProvider}} ->
+                {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
+                URLs = proplists:get_value(urls, DataProplist),
+                IPAddrList = [begin {ok, IP} = inet_parse:ipv4_address(binary_to_list(IPBin)), IP end || IPBin <- URLs],
+                {ok,
+                        [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
+                        [dns_server:authoritative_answer_flag(true)]
+                };
+            _ ->
+                answer_with_soa(Domain, DNSZone)
+        end
+    catch _:_ ->
+        answer_with_soa(Domain, DNSZone)
+    end.
+
+
+% TODO this is a temporary solution, returns GR's NS addresses
+return_gr_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}) ->
+    {ok,
+            [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
+            lists:flatten([begin
+                               IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
+                               [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
+                           end || NSHostname <- NSServers]) ++
+            [dns_server:authoritative_answer_flag(true)]
+    }.

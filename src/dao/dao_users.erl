@@ -18,7 +18,7 @@
 -include("dao/dao_external.hrl").
 
 %% API
--export([save_user/1, remove_user/1, exist_user/1, get_user/1]).
+-export([save_user/1, remove_user/1, exist_user/1, get_user/1, get_all_users/0]).
 
 %%%===================================================================
 %%% API
@@ -122,3 +122,18 @@ get_user({Key, Value}) ->
             ?error("Invalid view response: ~p", [Other]),
             throw(invalid_data)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Gets all users from DB (that have at least one email address set).
+%% This function is used for development purposes, there appears to be no production use case.
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead
+%% (See {@link dao_worker:handle_call/3} for more details).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_users() -> {ok, [binary()]}.
+get_all_users() ->
+    dao_external:set_db(?USERS_DB_NAME),
+    {ok, #view_result{rows = AllRows}} = dao_records:list_records(?USER_BY_EMAIL_VIEW, #view_query_args{include_docs = true}),
+    UserIDs = [list_to_binary(Row#view_row.doc#db_document.uuid) || Row <- AllRows],
+    {ok, lists:usort(UserIDs)}.

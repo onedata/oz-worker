@@ -1,20 +1,23 @@
 {
-  "globalregistry": {
-    "config": {
-      "input_dir": "rel/globalregistry",
-      "target_dir": "rel/test_cluster"
-    },
-    "nodes": {
-      "gr1": {
-        "vm.args": {
-          "name": "gr1@",
-          "setcookie": "test_cookie"
+    "globalregistry": {
+        "config": {
+            "input_dir": "rel/globalregistry",
+            "target_dir": "rel/test_cluster"
         },
-        "sys.config": {
-          "db_nodes": ["gr1_db@"],
-          "grpcert_domain": {"string": "127.0.0.1"}
+        "nodes": {
+            "gr1": {
+                "vm.args": {
+                    "setcookie": "test_cookie"
+                },
+                "sys.config": {
+                    "db_nodes": [
+                        "gr1_db@"
+                    ],
+                    "grpcert_domain": {
+                        "string": "127.0.0.1"
+                    }
+                }
+            }
         }
-      }
     }
-  }
 }
