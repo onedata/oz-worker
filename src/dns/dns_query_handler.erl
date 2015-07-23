@@ -12,8 +12,7 @@
 -module(dns_query_handler).
 -behaviour(dns_handler_behaviour).
 
-% TODO
-%% -include_lib("kernel/src/inet_dns.hrl").
+-include_lib("kernel/src/inet_dns.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
 -include("registered_names.hrl").
