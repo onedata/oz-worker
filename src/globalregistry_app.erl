@@ -42,6 +42,8 @@
     {ok, pid(), State :: term()} |
     {error, Reason :: term()}).
 start(_StartType, _StartArgs) ->
+    % DNS config needs to be loaded here as n2o listener needs to access it.
+    dns_query_handler:load_config(),
     test_node_starter:maybe_start_cover(),
     activate_white_lists(),
     case {start_rest(), start_op_channel(), start_n2o(), start_redirector()} of
@@ -205,6 +207,8 @@ start_n2o() ->
         {ok, GuiCertFile} = application:get_env(?APP_Name, gui_cert_file),
         {ok, GuiKeyFile} = application:get_env(?APP_Name, gui_key_file),
 
+        GRHostname = dns_query_handler:get_canonical_hostname(),
+
         % Setup GUI dispatch opts for cowboy
         GUIDispatch = [
             % Matching requests will be redirected to the same address without leading 'www.'
@@ -212,6 +216,7 @@ start_n2o() ->
             % This will match hostnames with up to 8 segments
             % e. g. www.seg2.seg3.seg4.seg5.seg6.seg7.com
             {"www.:_[.:_[.:_[.:_[.:_[.:_[.:_]]]]]]", [{'_', https_redirect_handler, []}]},
+            {":alias." ++ GRHostname, [{'_', client_redirect_handler, []}]},
             % Proper requests are routed to handler modules
             {'_', static_dispatches(?gui_static_root, ?static_paths) ++ [
                 {"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
@@ -302,7 +307,7 @@ start_dns() ->
     {ok, EdnsMaxUdpSize} = application:get_env(?APP_Name, edns_max_udp_size),
     {ok, TCPNumAcceptors} = application:get_env(?APP_Name, dns_tcp_acceptor_pool_size),
     {ok, TCPTImeout} = application:get_env(?APP_Name, dns_tcp_timeout),
-    dns_query_handler:load_config(),
+    % DNS config is loaded in start function
     OnFailureFun = fun() -> ?error("DNS Server failed to start!") end,
     ?info("Starting DNS server..."),
     case dns_server:start(globalregistry_sup, DNSPort, dns_query_handler, EdnsMaxUdpSize, TCPNumAcceptors, TCPTImeout, OnFailureFun) of

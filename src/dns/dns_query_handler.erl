@@ -432,7 +432,6 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                     end,
                 GRDomain = get_canonical_hostname(),
                 RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
-                ?dump(RedPoint),
                 % Check if provider is in the same domain - then return NS
                 % It not, return A records of GR servers and then make a HTTP
                 % redirect.
