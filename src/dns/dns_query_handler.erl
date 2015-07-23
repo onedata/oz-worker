@@ -415,8 +415,9 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                                 end
                         end,
         case GetUserResult of
-            {ok, #db_document{uuid = UserID,
+            {ok, #db_document{uuid = UserIDStr,
                 record = #user{default_provider = DefaultProvider}}} ->
+                UserID = list_to_binary(UserIDStr),
                 % If default provider is not known, set it.
                 DataProplist =
                     try
@@ -424,8 +425,7 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                         Data
                     catch _:_ ->
                         {ok, NewDefProv} =
-                            provider_logic:get_default_provider_for_user(
-                                list_to_binary(UserID)),
+                            provider_logic:get_default_provider_for_user(UserID),
                         ok = user_logic:modify(UserID, [{default_provider, NewDefProv}]),
                         {ok, Data2} = provider_logic:get_data(NewDefProv),
                         Data2
