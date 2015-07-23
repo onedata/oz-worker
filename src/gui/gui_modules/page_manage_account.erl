@@ -23,6 +23,7 @@
 -export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
 -export([show_alias_edition/1, update_alias/0, redirect_to_provider/2, show_alias_info/0]).
+-export([redirect_to_provider_dev/1]).
 
 %% Template points to the template file, which will be filled with content
 main() ->
@@ -273,24 +274,44 @@ find_connected_account(Provider, ProviderInfos) ->
 % Panel that will display a button to redirect a user to his provider,
 % or a token for space support if he has no spaces supported.
 provider_redirection_panel() ->
-    case gr_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
-        {ok, ProviderHostname, URL} ->
-            #panel{id = <<"redirection_panel">>, body = [
-                #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
-                    postback = {action, redirect_to_provider, [ProviderHostname, URL]}}
-            ]};
-        {error, no_provider} ->
-            {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
-            gui_jq:select_text(<<"token_textbox">>),
-            #panel{id = <<"redirection_panel">>, class = <<"dialog dialog-danger">>, body = [
-                #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
-                "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
-                #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
-                    value = Token, placeholder = <<"Space support token">>},
-                #p{style = <<"margin-top: 40px;">>, body = <<"You can also become a provider yourself and support your own space:">>},
-                #link{class = <<"btn btn-success">>, url = <<?become_a_provider_url>>,
-                    style = <<"width: 300px;">>, body = <<"Read more">>}
-            ]}
+    % If dev_mode is on, allow to log in on any provider.
+    case application:get_env(?APP_Name, dev_mode) of
+        {ok, true} ->
+            UserID = gui_ctx:get_user_id(),
+            {ok, Props} = user_logic:get_spaces(UserID),
+            Spaces = proplists:get_value(spaces, Props),
+            Providers = lists:foldl(
+                fun(Space, Acc) ->
+                    {ok, [{providers, Providers}]} = space_logic:get_providers(Space, provider),
+                    Providers ++ Acc
+                end, [], Spaces),
+            #panel{id = <<"redirection_panel">>, body = lists:map(
+                fun(ProviderID) ->
+                    #button{body = <<"Go to your files in provider <b>", ProviderID/binary, "</b>">>,
+                        class = <<"btn btn-huge btn-inverse btn-block">>,
+                        postback = {action, redirect_to_provider_dev, [ProviderID]}}
+                end, lists:usort(Providers))
+            };
+        _ ->
+            case gr_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
+                {ok, ProviderHostname, URL} ->
+                    #panel{id = <<"redirection_panel">>, body = [
+                        #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
+                            postback = {action, redirect_to_provider, [ProviderHostname, URL]}}
+                    ]};
+                {error, no_provider} ->
+                    {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
+                    gui_jq:select_text(<<"token_textbox">>),
+                    #panel{id = <<"redirection_panel">>, class = <<"dialog dialog-danger">>, body = [
+                        #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
+                        "you must find a provider willing to support your space. Below is a token that you should give to the provider:">>},
+                        #textbox{id = <<"token_textbox">>, class = <<"flat">>, style = <<"width: 500px;">>,
+                            value = Token, placeholder = <<"Space support token">>},
+                        #p{style = <<"margin-top: 40px;">>, body = <<"You can also become a provider yourself and support your own space:">>},
+                        #link{class = <<"btn btn-success">>, url = <<?become_a_provider_url>>,
+                            style = <<"width: 300px;">>, body = <<"Read more">>}
+                    ]}
+            end
     end.
 
 %%--------------------------------------------------------------------
@@ -459,6 +480,16 @@ show_alias_edition(Flag) ->
 
 
 redirect_to_provider(ProviderHostname, URL) ->
+    case gui_utils:https_get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, []) of
+        {ok, _} ->
+            gui_jq:redirect(URL);
+        _ ->
+            gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable. Try again later.">>})
+    end.
+
+
+redirect_to_provider_dev(ProviderID) ->
+    {ok, ProviderHostname, URL} = gr_gui_utils:get_redirection_url_to_provider(ProviderID),
     case gui_utils:https_get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, []) of
         {ok, _} ->
             gui_jq:redirect(URL);
