@@ -60,7 +60,7 @@ handle(Req, State) ->
             ], <<"">>, Req),
         {ok, Req2, State}
     catch T:M ->
-        ?debug_stacktrace("Error while redirecting client - ~p:~p", [?MODULE, T, M]),
+        ?debug_stacktrace("Error while redirecting client - ~p:~p", [T, M]),
         {ok, Req3} = cowboy_req:reply(404, [], <<"">>, Req),
         {ok, Req3, State}
     end.
