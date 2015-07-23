@@ -209,9 +209,9 @@ start_n2o() ->
         GUIDispatch = [
             % Matching requests will be redirected to the same address without leading 'www.'
             % Cowboy does not have a mechanism to match every hostname starting with 'www.'
-            % This will match hostnames with up to 6 segments
-            % e. g. www.seg2.seg3.seg4.seg5.com
-            {"www.:_[.:_[.:_[.:_[.:_]]]]", [{'_', redirect_handler, []}]},
+            % This will match hostnames with up to 8 segments
+            % e. g. www.seg2.seg3.seg4.seg5.seg6.seg7.com
+            {"www.:_[.:_[.:_[.:_[.:_[.:_[.:_]]]]]]", [{'_', https_redirect_handler, []}]},
             % Proper requests are routed to handler modules
             {'_', static_dispatches(?gui_static_root, ?static_paths) ++ [
                 {"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
