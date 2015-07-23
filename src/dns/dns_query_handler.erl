@@ -155,7 +155,7 @@ handle_a(DomainNotNormalized) ->
                     handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone);
                 IPAddrList ->
                     {ok,
-                            [dns_server:answer_record(DomainNotNormalized, TTL, a, IPAddress) || IPAddress <- IPAddrList] ++
+                            [dns_server:answer_record(DomainNotNormalized, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
                             [dns_server:authoritative_answer_flag(true)]
                     }
             end
@@ -176,10 +176,10 @@ handle_ns(DomainNotNormalized) ->
             case Domain of
                 CName ->
                     {ok,
-                            [dns_server:answer_record(DomainNotNormalized, TTLNS, ns, NSHostname) || NSHostname <- NSServers] ++
+                            [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
                             lists:flatten([begin
                                                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
-                                               [dns_server:additional_record(NSHostname, TTLA, a, IPAddress) || IPAddress <- IPAddrList]
+                                               [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
                                            end || NSHostname <- NSServers]) ++
                             [dns_server:authoritative_answer_flag(true)]
                     };
@@ -218,10 +218,10 @@ handle_mx(DomainNotNormalized) ->
             case Domain of
                 CName ->
                     {ok,
-                            [dns_server:answer_record(DomainNotNormalized, TTLNS, mx, {MXPriority, MXHostname}) || {MXPriority, MXHostname} <- MXServers] ++
+                            [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_MX, {MXPriority, MXHostname}) || {MXPriority, MXHostname} <- MXServers] ++
                             lists:flatten([begin
                                                IPAddrList = proplists:get_value(MXHostname, IPAddresses, []),
-                                               [dns_server:additional_record(MXHostname, TTLA, a, IPAddress) || IPAddress <- IPAddrList]
+                                               [dns_server:additional_record(MXHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
                                            end || {_MXPriority, MXHostname} <- MXServers]) ++
                             [dns_server:authoritative_answer_flag(true)]
                     };
@@ -246,11 +246,11 @@ handle_soa(DomainNotNormalized) ->
             case Domain of
                 CName ->
                     {ok,
-                            [dns_server:answer_record(DomainNotNormalized, TTLSOA, soa, Authority)] ++
-                            [dns_server:authority_record(DomainNotNormalized, TTLNS, ns, NSHostname) || NSHostname <- NSServers] ++
+                            [dns_server:answer_record(DomainNotNormalized, TTLSOA, ?S_SOA, Authority)] ++
+                            [dns_server:authority_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
                             lists:flatten([begin
                                                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
-                                               [dns_server:additional_record(NSHostname, TTLA, a, IPAddress) || IPAddress <- IPAddrList]
+                                               [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
                                            end || NSHostname <- NSServers]) ++
                             [dns_server:authoritative_answer_flag(true)]
                     };
@@ -428,7 +428,7 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                             provider_logic:get_default_provider_for_user(UserID),
                         ok = user_logic:modify(UserID, [{default_provider, NewDefProv}]),
                         {ok, Data2} = provider_logic:get_data(NewDefProv),
-                        Data2
+                        Data2\
                     end,
                 GRDomain = get_canonical_hostname(),
                 RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
@@ -440,14 +440,14 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                         #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone,
                         IPAddressList = proplists:get_value(GRDomain, IPAddresses),
                         {ok,
-                                [dns_server:answer_record(Domain, TTL, a, IPAddress) || IPAddress <- IPAddressList] ++
+                                [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddressList] ++
                                 [dns_server:authoritative_answer_flag(true)]
                         };
                     _ ->
                         #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone,
                         {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(gui_str:to_list(RedPoint)),
                         {ok,
-                            [dns_server:answer_record(Domain, TTL, ns, HostStr)]
+                            [dns_server:answer_record(Domain, TTL, ?S_NS, HostStr)]
                         }
                 end;
             _ ->
@@ -473,7 +473,7 @@ answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, aut
                         ok
                 end,
     {ReplyType, [
-        dns_server:authority_record(CName, TTL, soa, Authority),
+        dns_server:authority_record(CName, TTL, ?S_SOA, Authority),
         dns_server:authoritative_answer_flag(true)
     ]}.
 
@@ -500,7 +500,7 @@ answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, aut
 %%                 URLs = proplists:get_value(urls, DataProplist),
 %%                 IPAddrList = [begin {ok, IP} = inet_parse:ipv4_address(binary_to_list(IPBin)), IP end || IPBin <- URLs],
 %%                 {ok,
-%%                         [dns_server:answer_record(Domain, TTL, a, IPAddress) || IPAddress <- IPAddrList] ++
+%%                         [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
 %%                         [dns_server:authoritative_answer_flag(true)]
 %%                 };
 %%             _ ->
@@ -514,10 +514,10 @@ answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, aut
 %% % TODO this is a temporary solution, returns GR's NS addresses
 %% return_gr_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}) ->
 %%     {ok,
-%%             [dns_server:answer_record(DomainNotNormalized, TTLNS, ns, NSHostname) || NSHostname <- NSServers] ++
+%%             [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
 %%             lists:flatten([begin
 %%                                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
-%%                                [dns_server:additional_record(NSHostname, TTLA, a, IPAddress) || IPAddress <- IPAddrList]
+%%                                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
 %%                            end || NSHostname <- NSServers]) ++
 %%             [dns_server:authoritative_answer_flag(true)]
 %%     }.
