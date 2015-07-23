@@ -427,7 +427,7 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                             provider_logic:get_default_provider_for_user(UserID),
                         ok = user_logic:modify(UserID, [{default_provider, NewDefProv}]),
                         {ok, Data2} = provider_logic:get_data(NewDefProv),
-                        Data2\
+                        Data2
                     end,
                 GRDomain = get_canonical_hostname(),
                 RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
