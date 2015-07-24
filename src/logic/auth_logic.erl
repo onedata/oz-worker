@@ -72,19 +72,28 @@ stop() ->
 %%--------------------------------------------------------------------
 -spec get_redirection_uri(UserId :: binary(), ProviderId :: binary(), ProviderGUIPort :: integer()) ->
     {ok, RedirectionUri :: binary()}.
-get_redirection_uri(UserId, ProviderId, ProviderGUIPort) ->
+get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
     AuthCode = gen_auth_code(UserId, ProviderId),
-    Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
+    _Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
     {ok, #user{alias = Alias}} = user_logic:get_user(UserId),
     ok = user_logic:modify(UserId, [{default_provider, ProviderId}]),
-    Prefix = case Alias of
-                 ?EMPTY_ALIAS ->
-                     <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
-                 _ ->
-                     Alias
-             end,
-    {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
-    ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
+    _Prefix = case Alias of
+                  ?EMPTY_ALIAS ->
+                      <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
+                  _ ->
+                      Alias
+              end,
+    % TODO return IP address rather than alias.onedata.org
+    % It shall be used normally when we have a possibility to
+    % resolve domains on developer's host systems (so their web browsers can connect).
+    % To do this, we need a recursive DNS server in docker environment,
+    % whose address must be fed to system's resolv.conf.
+    {ok, PData} = provider_logic:get_data(ProviderId),
+    [RedirectionIP | _] = proplists:get_value(urls, PData),
+    {ok, <<RedirectionIP/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
+
+%% {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
+%% ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
 
 %%--------------------------------------------------------------------
 %% @doc Creates an authorization code for a native client.
