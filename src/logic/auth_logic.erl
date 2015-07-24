@@ -76,8 +76,6 @@ get_redirection_uri(UserId, ProviderId, ProviderGUIPort) ->
     AuthCode = gen_auth_code(UserId, ProviderId),
     Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
     {ok, #user{alias = Alias}} = user_logic:get_user(UserId),
-    % TODO for now, we remember (in user doc) what provider was a redirection uri generated for,
-    % TODO so we know in DNS where to redirect.
     ok = user_logic:modify(UserId, [{default_provider, ProviderId}]),
     Prefix = case Alias of
                  ?EMPTY_ALIAS ->
@@ -85,13 +83,8 @@ get_redirection_uri(UserId, ProviderId, ProviderGUIPort) ->
                  _ ->
                      Alias
              end,
-    % TODO return IP address rather than alias.onedata.org
-    {ok, PData} = provider_logic:get_data(ProviderId),
-    RedirectionPoint = proplists:get_value(redirectionPoint, PData),
-    {ok, <<RedirectionPoint/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
-
-    %% {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
-    %% ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
+    {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
+    ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
 
 %%--------------------------------------------------------------------
 %% @doc Creates an authorization code for a native client.

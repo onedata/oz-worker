@@ -151,9 +151,7 @@ handle_a(DomainNotNormalized) ->
         {Domain, Prefix, #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone} ->
             case proplists:get_value(Domain, IPAddresses, undefined) of
                 undefined ->
-%%                     handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone);
-                    % TODO temporary fix
-                    return_providers_a_records(DomainNotNormalized, Prefix, DNSZone);
+                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone);
                 IPAddrList ->
                     {ok,
                             [dns_server:answer_record(DomainNotNormalized, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
@@ -401,31 +399,56 @@ parse_domain(DomainArg) ->
 %%--------------------------------------------------------------------
 -spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}) ->
     dns_handler_behaviour:handler_reply().
-handle_unknown_subdomain(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = _TTL} = DNSZone) ->
+handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
     try
         Prefix = list_to_binary(PrefixStr),
         GetUserResult = case Prefix of
                             <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
-                                user_logic:get_user(UUID);
+                                user_logic:get_user_doc(UUID);
                             _ ->
-                                case user_logic:get_user({alias, Prefix}) of
+                                case user_logic:get_user_doc({alias, Prefix}) of
                                     {ok, Ans} ->
                                         {ok, Ans};
                                     _ ->
-                                        user_logic:get_user(Prefix)
+                                        user_logic:get_user_doc(Prefix)
                                 end
                         end,
         case GetUserResult of
-%%             {ok, #user{default_provider = DefaulfProvider}} ->
-%%                 {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
-%%                 URLs = proplists:get_value(urls, DataProplist),
-%%                 {ok,
-%%                     [dns_server:authority_record(Domain, TTL, ?S_NS, binary_to_list(IPBin)) || IPBin <- URLs]
-%%                 };
-        % TODO temporary fix
-        % Return GR's NS servers instead of provider's NS servers.
-            {ok, #user{}} ->
-                return_gr_nameservers(Domain, DNSZone);
+            {ok, #db_document{uuid = UserIDStr,
+                record = #user{default_provider = DefaultProvider}}} ->
+                UserID = list_to_binary(UserIDStr),
+                % If default provider is not known, set it.
+                DataProplist =
+                    try
+                        {ok, Data} = provider_logic:get_data(DefaultProvider),
+                        Data
+                    catch _:_ ->
+                        {ok, NewDefProv} =
+                            provider_logic:get_default_provider_for_user(UserID),
+                        ok = user_logic:modify(UserID, [{default_provider, NewDefProv}]),
+                        {ok, Data2} = provider_logic:get_data(NewDefProv),
+                        Data2
+                    end,
+                GRDomain = get_canonical_hostname(),
+                RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
+                % Check if provider is in the same domain - then return NS
+                % It not, return A records of GR servers and then make a HTTP
+                % redirect.
+                case string:rstr(RedPoint, GRDomain) of
+                    0 ->
+                        #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone,
+                        IPAddressList = proplists:get_value(GRDomain, IPAddresses),
+                        {ok,
+                                [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddressList] ++
+                                [dns_server:authoritative_answer_flag(true)]
+                        };
+                    _ ->
+                        #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone,
+                        {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(gui_str:to_list(RedPoint)),
+                        {ok,
+                            [dns_server:answer_record(Domain, TTL, ?S_NS, HostStr)]
+                        }
+                end;
             _ ->
                 answer_with_soa(Domain, DNSZone)
         end
@@ -454,46 +477,46 @@ answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, aut
     ]}.
 
 
-% TODO this is a temporary solution to always return A records of provider when
-% the DNS is asked for address of alias.onedata.org
-return_providers_a_records(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone) ->
-    try
-        Prefix = list_to_binary(PrefixStr),
-        GetUserResult = case Prefix of
-                            <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
-                                user_logic:get_user(UUID);
-                            _ ->
-                                case user_logic:get_user({alias, Prefix}) of
-                                    {ok, Ans} ->
-                                        {ok, Ans};
-                                    _ ->
-                                        user_logic:get_user(Prefix)
-                                end
-                        end,
-        case GetUserResult of
-            {ok, #user{default_provider = DefaulfProvider}} ->
-                {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
-                URLs = proplists:get_value(urls, DataProplist),
-                IPAddrList = [begin {ok, IP} = inet_parse:ipv4_address(binary_to_list(IPBin)), IP end || IPBin <- URLs],
-                {ok,
-                        [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
-                        [dns_server:authoritative_answer_flag(true)]
-                };
-            _ ->
-                answer_with_soa(Domain, DNSZone)
-        end
-    catch _:_ ->
-        answer_with_soa(Domain, DNSZone)
-    end.
-
-
-% TODO this is a temporary solution, returns GR's NS addresses
-return_gr_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}) ->
-    {ok,
-            [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
-            lists:flatten([begin
-                               IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
-                               [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
-                           end || NSHostname <- NSServers]) ++
-            [dns_server:authoritative_answer_flag(true)]
-    }.
+%% % TODO this is a temporary solution to always return A records of provider when
+%% % the DNS is asked for address of alias.onedata.org
+%% return_providers_a_records(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone) ->
+%%     try
+%%         Prefix = list_to_binary(PrefixStr),
+%%         GetUserResult = case Prefix of
+%%                             <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
+%%                                 user_logic:get_user(UUID);
+%%                             _ ->
+%%                                 case user_logic:get_user({alias, Prefix}) of
+%%                                     {ok, Ans} ->
+%%                                         {ok, Ans};
+%%                                     _ ->
+%%                                         user_logic:get_user(Prefix)
+%%                                 end
+%%                         end,
+%%         case GetUserResult of
+%%             {ok, #user{default_provider = DefaulfProvider}} ->
+%%                 {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
+%%                 URLs = proplists:get_value(urls, DataProplist),
+%%                 IPAddrList = [begin {ok, IP} = inet_parse:ipv4_address(binary_to_list(IPBin)), IP end || IPBin <- URLs],
+%%                 {ok,
+%%                         [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
+%%                         [dns_server:authoritative_answer_flag(true)]
+%%                 };
+%%             _ ->
+%%                 answer_with_soa(Domain, DNSZone)
+%%         end
+%%     catch _:_ ->
+%%         answer_with_soa(Domain, DNSZone)
+%%     end.
+%%
+%%
+%% % TODO this is a temporary solution, returns GR's NS addresses
+%% return_gr_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}) ->
+%%     {ok,
+%%             [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
+%%             lists:flatten([begin
+%%                                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
+%%                                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
+%%                            end || NSHostname <- NSServers]) ++
+%%             [dns_server:authoritative_answer_flag(true)]
+%%     }.

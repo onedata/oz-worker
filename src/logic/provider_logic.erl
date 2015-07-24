@@ -157,22 +157,27 @@ test_connection([{ServiceName, Url} | Rest]) ->
     [{Url, ConnStatus} | test_connection(Rest)].
 
 %%--------------------------------------------------------------------
-%% @doc Returns provider id of provider that has been chosen as default for given user, or
-%% {error, no_provider} otherwise.
-%% If the user has a default spaces and it is supported by some providers, one of them will be chosen randomly.
-%% Otherwise, if any of user spaces is supported by any provider, one of them will be chosen randomly.
+%% @doc Returns provider id of provider that has been chosen
+%% as default for given user, or {error, no_provider} otherwise.
+%% If the user has a default spaces and it is supported by some providers,
+%% one of them will be chosen randomly.
+%% Otherwise, if any of user spaces is supported by any provider,
+%% one of them will be chosen randomly.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_default_provider_for_user(Referer :: binary() | undefined) ->
     {ok, ProviderID :: binary()} | {error, no_provider}.
 get_default_provider_for_user(UserID) ->
     % Check if the user has a default space and if it is supported.
-    {ok, [{spaces, Spaces}, {default, DefaultSpace}]} = user_logic:get_spaces(UserID),
-    {ok, [{providers, DSProviders}]} = case DefaultSpace of
-                                           undefined -> {ok, [{providers, []}]};
-                                           _ ->
-                                               space_logic:get_providers(DefaultSpace, user)
-                                       end,
+    {ok, [{spaces, Spaces}, {default, DefaultSpace}]} =
+        user_logic:get_spaces(UserID),
+    {ok, [{providers, DSProviders}]} =
+        case DefaultSpace of
+            undefined ->
+                {ok, [{providers, []}]};
+            _ ->
+                space_logic:get_providers(DefaultSpace, user)
+        end,
     case DSProviders of
         List when length(List) > 0 ->
             % Default space has got some providers, random one
