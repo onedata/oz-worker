@@ -90,7 +90,7 @@ get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
     % whose address must be fed to system's resolv.conf.
     {ok, PData} = provider_logic:get_data(ProviderId),
     [RedirectionIP | _] = proplists:get_value(urls, PData),
-    {ok, <<RedirectionIP/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
+    {ok, <<"https://", RedirectionIP/binary, ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
 
 %% {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
 %% ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
