@@ -196,9 +196,9 @@ modify(UserId, Proplist) ->
 %%--------------------------------------------------------------------
 %% @doc Merges an account identified by token into current user's account.
 %%--------------------------------------------------------------------
--spec merge(UserId :: binary(), Token :: binary()) ->
+-spec merge(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
     ok.
-merge(_UserId, _Token) ->
+merge(_UserId, _Macaroon) ->
     %% @todo: a functional merge
     ok.
 

@@ -117,31 +117,31 @@ accept_resource(defspace, put, UserId, Data, _Client, Req) ->
     {Result, Req};
 accept_resource(sjoin, post, UserId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
-    case token_logic:is_valid(Token, space_invite_user_token) of
+    case token_logic:validate(Token, space_invite_user_token) of
         false ->
             rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
-        true ->
-            {ok, SpaceId} = space_logic:join({user, UserId}, Token),
+        {true, Macaroon} ->
+            {ok, SpaceId} = space_logic:join({user, UserId}, Macaroon),
             {{true, <<"/user/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(groups, post, _UserId, Data, Client, Req) ->
     groups_rest_module:accept_resource(groups, post, undefined, Data, Client, Req);
 accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
-    case token_logic:is_valid(Token, group_invite_token) of
+    case token_logic:validate(Token, group_invite_token) of
         false ->
             rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
-        true ->
-            {ok, GroupId} = group_logic:join(UserId, Token),
+        {true, Macaroon} ->
+            {ok, GroupId} = group_logic:join(UserId, Macaroon),
             {{true, <<"/user/groups/", GroupId/binary>>}, Req}
     end;
 accept_resource(merge, post, UserId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
-    case token_logic:is_valid(Token, accounts_merge_token) of
+    case token_logic:validate(Token, accounts_merge_token) of
         false ->
             rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
-        true ->
-            ok = user_logic:merge(UserId, Token),
+        {true, Macaroon} ->
+            ok = user_logic:merge(UserId, Macaroon),
             {true, Req}
     end.
 

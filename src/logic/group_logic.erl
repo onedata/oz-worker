@@ -116,11 +116,11 @@ modify(GroupId, Name) ->
 %% doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
--spec join(UserId :: binary(), Token :: binary()) ->
+-spec join(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
     {ok, GroupId :: binary()}.
-join(UserId, Token) ->
+join(UserId, Macaroon) ->
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-    {ok, {group, GroupId}} = token_logic:consume(Token, group_invite_token),
+    {ok, {group, GroupId}} = token_logic:consume(Macaroon),
     case has_user(GroupId, UserId) of
         true -> ok;
         false ->

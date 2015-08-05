@@ -149,10 +149,10 @@ create(Member, Name) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create({provider, ProviderId :: binary()}, Name :: binary(),
-    Token :: binary(), Size :: pos_integer()) ->
+    Macaroon :: macaroon:macaroon(), Size :: pos_integer()) ->
     {ok, SpaceId :: binary()}.
-create({provider, ProviderId}, Name, Token, Size) ->
-    {ok, Member} = token_logic:consume(Token, space_create_token),
+create({provider, ProviderId}, Name, Macaroon, Size) ->
+    {ok, Member} = token_logic:consume(Macaroon),
     create_with_provider(Member, Name, [ProviderId], [{ProviderId, Size}]).
 
 %%--------------------------------------------------------------------
@@ -190,10 +190,10 @@ set_privileges(SpaceId, Member, Privileges) ->
 %% Throws exception when call to dao fails, or member/token/space_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec join({group | user, Id :: binary()}, Token :: binary()) ->
+-spec join({group | user, Id :: binary()}, Macaroon :: macaroon:macaroon()) ->
     {ok, SpaceId :: binary()}.
-join({user, UserId}, Token) ->
-    {ok, {space, SpaceId}} = token_logic:consume(Token, space_invite_user_token),
+join({user, UserId}, Macaroon) ->
+    {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
     case has_user(SpaceId, UserId) of
         true -> ok;
         false ->
@@ -214,8 +214,8 @@ join({user, UserId}, Token) ->
             op_channel_logic:user_modified(UserProviders, UserId, UserNew)
     end,
     {ok, SpaceId};
-join({group, GroupId}, Token) ->
-    {ok, {space, SpaceId}} = token_logic:consume(Token, space_invite_group_token),
+join({group, GroupId}, Macaroon) ->
+    {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
     case has_group(SpaceId, GroupId) of
         true -> ok;
         false ->
@@ -245,10 +245,11 @@ join({group, GroupId}, Token) ->
 %% Throws exception when call to dao fails, or provider/token/space_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec support(ProviderId :: binary(), Token :: binary(), SupportedSize :: pos_integer()) ->
+-spec support(ProviderId :: binary(), Macaroon :: macaroon:macaroon(),
+    SupportedSize :: pos_integer()) ->
     {ok, SpaceId :: binary()}.
-support(ProviderId, Token, SupportedSize) ->
-    {ok, {space, SpaceId}} = token_logic:consume(Token, space_support_token),
+support(ProviderId, Macaroon, SupportedSize) ->
+    {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
     case has_provider(SpaceId, ProviderId) of
         true -> ok;
         false ->
