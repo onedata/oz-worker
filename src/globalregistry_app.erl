@@ -106,7 +106,7 @@ start_rest() ->
         {ok, GrpCADir} = application:get_env(?APP_Name, grpca_dir),
         {ok, GrpKeyFile} = application:get_env(?APP_Name, grpkey_file),
         {ok, GrpCertFile} = application:get_env(?APP_Name, grpcert_file),
-        {ok, GrpCertDomain} = application:get_env(?APP_Name, grpcert_domain),
+        {ok, GrpCertDomain} = application:get_env(?APP_Name, http_domain),
 
         grpca:start(GrpCADir, GrpCertFile, GrpKeyFile, GrpCertDomain),
         auth_logic:start(),

@@ -38,7 +38,7 @@
 -spec routes() ->
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 routes() ->
-    S = #rstate{module = ?MODULE},
+    S = #rstate{module = ?MODULE, root = provider},
     M = rest_handler,
     [
         {<<"/provider">>, M, S#rstate{resource = provider, methods = [get, post, patch, delete], noauth = [post]}},

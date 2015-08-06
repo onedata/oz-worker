@@ -36,7 +36,7 @@
 -spec routes() ->
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 routes() ->
-    S = #rstate{module = ?MODULE},
+    S = #rstate{module = ?MODULE, root = groups},
     M = rest_handler,
     [
         {<<"/groups">>, M, S#rstate{resource = groups, methods = [post]}},

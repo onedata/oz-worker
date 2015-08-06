@@ -38,7 +38,7 @@ ginvite | group | gpriv | providers | pinvite | provider.
 -spec routes() ->
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 routes() ->
-    S = #rstate{module = ?MODULE},
+    S = #rstate{module = ?MODULE, root = spaces},
     M = rest_handler,
     [
         {<<"/spaces">>, M, S#rstate{resource = spaces, methods = [post]}},

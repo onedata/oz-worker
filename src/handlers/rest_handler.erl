@@ -144,7 +144,7 @@ forbidden(Req, #rstate{module = Mod, resource = Resource, client = Client} = Sta
 %%--------------------------------------------------------------------
 -spec is_authorized(Req :: cowboy_req:req(), State :: rstate()) ->
     {true | {false, binary()}, cowboy_req:req(), rstate()}.
-is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
+is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
     {BinMethod, Req2} = cowboy_req:method(Req),
     Method = binary_to_method(BinMethod),
 
@@ -172,21 +172,13 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
                         {true, Req3, State#rstate{client = Client}};
 
                     <<"Bearer ", Token/binary>> ->
-                        case auth_logic:validate_token({provider, ProviderId}, Token) of
+                        case auth_logic:validate_token(ProviderId, Token, BinMethod, Root) of
                             {ok, UserId} ->
                                 Client = #client{type = user, id = UserId},
                                 {true, Req3, State#rstate{client = Client}};
 
-                            {error, Reason1} ->
-                                Description = case Reason1 of
-                                                  not_found ->
-                                                      <<"access token not found">>;
-                                                  expired ->
-                                                      <<"access token expired">>;
-                                                  bad_audience ->
-                                                      <<"token issued to a different audience">>
-                                              end,
-                                throw({invalid_token, Description, Req3})
+                            {error, _Reason1} ->
+                                throw({invalid_token, <<"access token invalid">>, Req3})
                         end;
 
                     _ ->

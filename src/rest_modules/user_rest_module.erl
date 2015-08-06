@@ -19,7 +19,7 @@
 
 
 -type provided_resource() :: user | spaces | defspace | screate | space | groups | group | mtoken.
--type accepted_resource() :: user | spaces | defspace | sjoin | groups | gjoin | merge.
+-type accepted_resource() :: user | auth | spaces | defspace | sjoin | groups | gjoin | merge.
 -type removable_resource() :: user | space | group.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
@@ -40,10 +40,11 @@
 -spec routes() ->
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 routes() ->
-    S = #rstate{module = ?MODULE},
+    S = #rstate{module = ?MODULE, root = user},
     M = rest_handler,
     [
         {<<"/user">>, M, S#rstate{resource = user, methods = [get, post, patch, delete]}},
+        {<<"/user/authorize">>, M, S#rstate{resource = auth, methods = [post], noauth = [post]}},
         {<<"/user/spaces">>, M, S#rstate{resource = spaces, methods = [get, post]}},
         {<<"/user/spaces/default">>, M, S#rstate{resource = defspace, methods = [get, put]}},
         {<<"/user/spaces/join">>, M, S#rstate{resource = sjoin, methods = [post]}},
@@ -66,6 +67,8 @@ routes() ->
     UserId :: binary() | undefined, Client :: client()) ->
     boolean().
 is_authorized(user, post, _UserId, #client{type = undefined}) ->
+    true;
+is_authorized(auth, post, _, _) ->
     true;
 is_authorized(_, _, _, #client{type = user}) ->
     true;
@@ -109,6 +112,15 @@ accept_resource(user, patch, UserId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ok = user_logic:modify(UserId, [{name, Name}]),
     {true, Req};
+accept_resource(auth, post, _User, Data, _Client, Req) ->
+    Identifier = rest_module_helper:assert_key(<<"identifier">>, Data, binary, Req),
+    case auth_logic:authenticate_user(Identifier) of
+        {ok, DischargeMacaroonToken} ->
+            {ok, Req2} = cowboy_req:reply(200, [], DischargeMacaroonToken, Req),
+            {true, Req2};
+        _ ->
+            {false, Req}
+    end;
 accept_resource(spaces, post, _UserId, Data, Client, Req) ->
     spaces_rest_module:accept_resource(spaces, post, undefined, Data, Client, Req);
 accept_resource(defspace, put, UserId, Data, _Client, Req) ->
