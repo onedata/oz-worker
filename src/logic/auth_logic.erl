@@ -71,10 +71,13 @@ authenticate_user(Identifier) ->
             {ok, M2} = macaroon:add_first_party_caveat(M,
                 ["time < ", utils:time() + ExpirationSecs]),
 
-            {ok, macaroon:serialize(M2)};
+            case macaroon:serialize(M2) of
+                {ok, _} = Serialized -> Serialized;
+                {error, _} = Error -> Error
+            end;
 
         _ ->
-            {error, reasons}
+            {error, no_auth_record}
     end.
 
 
@@ -118,7 +121,7 @@ gen_token(UserId) ->
     Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
     Caveats = ["method = GET", "rootResource in spaces,user"],
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
-    {ok, M} = create_macaroon(Secret, Identifier, Caveats),
+    {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier), Caveats),
     {ok, Token} = macaroon:serialize(M),
     Token.
 
@@ -131,7 +134,8 @@ gen_token(UserId, ProviderId) ->
     Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
     {ok, Location} = application:get_env(?APP_Name, http_domain),
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
-    {ok, M} = create_macaroon(Secret, Identifier, [["provider = ", ProviderId]]),
+    {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier),
+        [["provider = ", ProviderId]]),
 
     CaveatKey = crypto:rand_bytes(macaroon:suggested_secret_length()),
     {ok, CaveatId} = ?DB(save_auth, #auth{secret = CaveatKey, user_id = UserId}),
@@ -146,20 +150,20 @@ gen_token(UserId, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec validate_token(ProviderId :: binary(), AccessToken :: binary(),
     Method :: binary(), RootResource :: atom()) ->
-    {ok, UserId :: binary()} | {error, not_found | expired | bad_audience}.
+    {ok, UserId :: binary()} | {error, Reason :: any()}.
 validate_token(ProviderId, AccessToken, Method, RootResource) ->
     case macaroon:deserialize(AccessToken) of
-        {error, _} -> {error, oops};
+        {error, _} -> {error, bad_macaroon};
         {ok, M} ->
-            case ?DB(get_authorization, macaroon:identifier(M)) of
-                {ok, #db_document{record = #auth{secret = Secret}}} ->
+            case ?DB(get_auth, macaroon:identifier(M)) of
+                {ok, #db_document{record = #auth{secret = Secret, user_id = UserId}}} ->
                     {ok, V} = macaroon_verifier:create(),
 
                     VerifyFun = fun
                         (<<"time < ", Integer/binary>>) ->
                             utils:time() < binary_to_integer(Integer);
-                        (<<"method = ", M/binary>>) ->
-                            Method =:= M;
+                        (<<"method = ", Met/binary>>) ->
+                            Method =:= Met;
                         (<<"rootResource in ", Resources/binary>>) ->
                             lists:member(atom_to_binary(RootResource, utf8),
                                 binary:split(Resources, <<",">>, [global]));
@@ -170,16 +174,8 @@ validate_token(ProviderId, AccessToken, Method, RootResource) ->
 
                     macaroon_verifier:satisfy_general(V, VerifyFun),
                     case macaroon_verifier:verify(V, M, Secret) of
-                        ok ->
-                            case ?DB(get_access, macaroon:identifier(M)) of
-                                {ok, #db_document{record = #auth{user_id = UserId}}} ->
-                                    {ok, UserId};
-
-                                _ ->
-                                    {error, wut}
-                            end;
-
-                        _ -> {error, false}
+                        ok -> {ok, UserId};
+                        {error, Reason} -> {error, Reason}
                     end
             end
     end.
@@ -193,7 +189,7 @@ validate_token(ProviderId, AccessToken, Method, RootResource) ->
 -spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> binary().
 generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_state_tokens(),
-    Token = mochihex:to_hex(crypto:rand_bytes(32)),
+    Token = list_to_binary(mochihex:to_hex(crypto:rand_bytes(32))),
     {M, S, N} = now(),
     Time = M * 1000000000000 + S * 1000000 + N,
 
@@ -246,8 +242,8 @@ clear_expired_state_tokens() ->
 %%% Internal functions
 %%%===================================================================
 
--spec create_macaroon(Secret :: iolist(), Identifier :: iolist(),
-    Caveats :: [iolist()]) -> {ok, macaroon:macaroon(), binary()}.
+-spec create_macaroon(Secret :: iodata(), Identifier :: iodata(),
+    Caveats :: [iodata()]) -> {ok, macaroon:macaroon()}.
 create_macaroon(Secret, Identifier, Caveats) ->
     {ok, ExpirationSeconds} = application:get_env(?APP_Name,
         authorization_macaroon_expiration_seconds),
@@ -262,4 +258,4 @@ create_macaroon(Secret, Identifier, Caveats) ->
         macaroon:create(Location, Secret, Identifier),
         ["time < ", integer_to_binary(ExpirationTime)] ++ Caveats),
 
-    {ok, M, Secret}.
+    {ok, M}.

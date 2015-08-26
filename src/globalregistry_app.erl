@@ -117,8 +117,7 @@ start_rest() ->
                 user_rest_module:routes(),
                 provider_rest_module:routes(),
                 spaces_rest_module:routes(),
-                groups_rest_module:routes(),
-                auth_rest_module:routes()
+                groups_rest_module:routes()
             ])}
         ]),
 
