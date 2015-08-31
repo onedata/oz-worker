@@ -87,7 +87,7 @@ create(TokenType, {ResourceType, ResourceId}) ->
 -spec consume(Macaroon :: macaroon:macaroon()) ->
     {ok, {resource_type(), binary()}}.
 consume(M) ->
-    Identifier = macaroon:identifier(M),
+    {ok, Identifier} = macaroon:identifier(M),
     {ok, TokenDoc} = ?DB(get_token, Identifier),
     #db_document{record = #token{resource = ResourceType,
         resource_id = ResourceId}} = TokenDoc,

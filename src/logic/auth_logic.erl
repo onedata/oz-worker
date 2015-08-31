@@ -69,7 +69,7 @@ authenticate_user(Identifier) ->
             {ok, Location} = application:get_env(?APP_Name, http_domain),
             {ok, M} = macaroon:create(Location, Secret, Identifier),
             {ok, M2} = macaroon:add_first_party_caveat(M,
-                ["time < ", utils:time() + ExpirationSecs]),
+                ["time < ", integer_to_binary(utils:time() + ExpirationSecs)]),
 
             case macaroon:serialize(M2) of
                 {ok, _} = Serialized -> Serialized;
@@ -256,6 +256,6 @@ create_macaroon(Secret, Identifier, Caveats) ->
             macaroon:add_first_party_caveat(Macaroon, Caveat)
         end,
         macaroon:create(Location, Secret, Identifier),
-        ["time < ", integer_to_binary(ExpirationTime)] ++ Caveats),
+        [["time < ", integer_to_binary(ExpirationTime)] | Caveats]),
 
     {ok, M}.
