@@ -20,6 +20,9 @@
 -define(STATE_TOKEN, state_token).
 -define(STATE_TOKEN_EXPIRATION_SECS, 60). %% @todo: config
 
+% String that will be placed in macaroons' location field
+-define(MACAROONS_LOCATION, <<"globalregistry">>).
+
 -define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
 
 %% API
@@ -66,7 +69,7 @@ authenticate_user(Identifier) ->
             {ok, ExpirationSecs} = application:get_env(?APP_Name,
                 authentication_macaroon_expiration_seconds),
 
-            {ok, Location} = application:get_env(?APP_Name, http_domain),
+            Location = ?MACAROONS_LOCATION,
             {ok, M} = macaroon:create(Location, Secret, Identifier),
             {ok, M2} = macaroon:add_first_party_caveat(M,
                 ["time < ", integer_to_binary(utils:time() + ExpirationSecs)]),
@@ -132,7 +135,7 @@ gen_token(UserId) ->
     Token :: binary().
 gen_token(UserId, ProviderId) ->
     Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
-    {ok, Location} = application:get_env(?APP_Name, http_domain),
+    Location = ?MACAROONS_LOCATION,
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
     {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier),
         [["providerId = ", ProviderId]]),
@@ -248,7 +251,7 @@ create_macaroon(Secret, Identifier, Caveats) ->
         authorization_macaroon_expiration_seconds),
     ExpirationTime = utils:time() + ExpirationSeconds,
 
-    {ok, Location} = application:get_env(?APP_Name, http_domain),
+    Location = ?MACAROONS_LOCATION,
 
     {ok, M} = lists:foldl(
         fun(Caveat, {ok, Macaroon}) ->
