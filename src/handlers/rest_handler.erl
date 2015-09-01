@@ -125,12 +125,14 @@ delete_completed(Req, State) ->
 %%--------------------------------------------------------------------
 -spec forbidden(Req :: cowboy_req:req(), State :: rstate()) ->
     {boolean(), cowboy_req:req(), rstate()}.
-forbidden(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
+forbidden(Req, State) ->
+    #rstate{module = Mod, resource = Res, client = Client} = State,
+
     {ResId, Req2} = get_res_id(Req, State),
     {BinMethod, Req3} = cowboy_req:method(Req2),
     Method = binary_to_method(BinMethod),
 
-    Forbidden = not Mod:is_authorized(Resource, Method, ResId, Client),
+    Forbidden = not Mod:is_authorized(Res, Method, ResId, Client),
     {Forbidden, Req3, State}.
 
 %%--------------------------------------------------------------------
@@ -161,43 +163,58 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
                 ProviderId = case grpca:verify_provider(PeerCert) of
                                  {ok, ProviderId1} -> ProviderId1;
                                  {error, {bad_cert, Reason}} ->
-                                     ?warning("Attempted authentication with bad peer certificate: ~p", [Reason]),
+                                     ?warning("Attempted authentication with "
+                                     "bad peer certificate: ~p", [Reason]),
                                      throw({silent_error, Req2})
                              end,
 
-                {Authorization, Req3} = cowboy_req:header(<<"authorization">>, Req2),
-                case Authorization of
+                {Macaroon, DischargeMacaroons, Req3} =
+                    parse_macaroons_from_headers(Req2),
+
+                case Macaroon of
                     undefined ->
                         Client = #client{type = provider, id = ProviderId},
                         {true, Req3, State#rstate{client = Client}};
 
-                    <<"Bearer ", Token/binary>> ->
-                        case auth_logic:validate_token(ProviderId, Token, BinMethod, Root) of
+                    _ ->
+                        case auth_logic:validate_token(ProviderId, Macaroon,
+                            DischargeMacaroons, BinMethod, Root) of
+
                             {ok, UserId} ->
                                 Client = #client{type = user, id = UserId},
                                 {true, Req3, State#rstate{client = Client}};
 
-                            {error, _Reason1} ->
-                                throw({invalid_token, <<"access token invalid">>, Req3})
-                        end;
-
-                    _ ->
-                        Description = <<"unknown authorization type: ", Authorization/binary>>,
-                        throw({invalid_request, 400, Description, Req3})
+                            {error, Reason1} ->
+                                ?info("Bad auth: ~p", [Reason1]),
+                                throw({invalid_token, <<"access denied">>,
+                                    Req3})
+                        end
                 end
         end
     catch
         {silent_error, ReqX} -> %% As per RFC 6750 section 3.1
             {{false, <<"">>}, ReqX, State};
 
-        {Error, Description1, ReqX} when is_atom(Error), is_binary(Description1) ->
-            Body = mochijson2:encode([{error, Error}, {error_description, Description1}]),
-            WWWAuthenticate = <<"error=", (atom_to_binary(Error, latin1))/binary>>,
+
+        {Error, Description1, ReqX}
+            when is_atom(Error), is_binary(Description1) ->
+
+            Body = mochijson2:encode([{error, Error},
+                {error_description, Description1}]),
+
+            WWWAuthenticate =
+                <<"error=", (atom_to_binary(Error, latin1))/binary>>,
+
             ReqY = cowboy_req:set_resp_body(Body, ReqX),
             {{false, WWWAuthenticate}, ReqY, State};
 
-        {Error, StatusCode, Description1, ReqX} when is_atom(Error), is_binary(Description1) ->
-            Body = mochijson2:encode([{error, Error}, {error_description, Description1}]),
+
+        {Error, StatusCode, Description1, ReqX}
+            when is_atom(Error), is_binary(Description1) ->
+
+            Body = mochijson2:encode([{error, Error},
+                {error_description, Description1}]),
+
             {ok, ReqY} = cowboy_req:reply(StatusCode, [], Body, ReqX),
             {halt, ReqY, State}
     end.
@@ -266,21 +283,30 @@ accept_resource_form(Req, #rstate{} = State) ->
 -spec accept_resource(Data :: [proplists:property()], Req :: cowboy_req:req(),
     State :: rstate()) ->
     {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
-accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
+accept_resource(Data, Req, State) ->
+    #rstate{module = Mod, resource = Resource, client = Client} = State,
+
     {ResId, Req2} = get_res_id(Req, State),
     {BinMethod, Req3} = cowboy_req:method(Req2),
     Method = binary_to_method(BinMethod),
 
     try
-        {Result, Req4} = Mod:accept_resource(Resource, Method, ResId, Data, Client, Req3),
+        {Result, Req4} = Mod:accept_resource(Resource, Method, ResId, Data,
+            Client, Req3),
+
         {Result, Req4, State}
     catch
-        {rest_error, Error, ReqX} when is_atom(Error) ->
+        {rest_error, Error, ReqX}
+            when is_atom(Error) ->
+
             Body = mochijson2:encode([{error, Error}]),
             ReqY = cowboy_req:set_resp_body(Body, ReqX),
             {false, ReqY, State};
 
-        {rest_error, Error, Description, ReqX} when is_atom(Error), is_binary(Description) ->
+
+        {rest_error, Error, Description, ReqX}
+            when is_atom(Error), is_binary(Description) ->
+
             Body = mochijson2:encode([
                 {error, Error},
                 {error_description, Description}
@@ -296,7 +322,9 @@ accept_resource(Data, Req, #rstate{module = Mod, resource = Resource, client = C
 %%--------------------------------------------------------------------
 -spec provide_resource(Req :: cowboy_req:req(), State :: rstate()) ->
     {iodata(), cowboy_req:req(), rstate()}.
-provide_resource(Req, #rstate{module = Mod, resource = Resource, client = Client} = State) ->
+provide_resource(Req, State) ->
+    #rstate{module = Mod, resource = Resource, client = Client} = State,
+
     {ResId, Req2} = get_res_id(Req, State),
     {Data, Req3} = Mod:provide_resource(Resource, ResId, Client, Req2),
     JSON = mochijson2:encode(Data),
@@ -311,7 +339,8 @@ provide_resource(Req, #rstate{module = Mod, resource = Resource, client = Client
 -spec requests_effective_state(Req :: cowboy_req:req()) ->
     boolean().
 requests_effective_state(Req) ->
-    {QsVals, _} = cowboy_req:qs_vals(Req), %% to be changed to qs_parse on Cowboy upgrade
+    % @todo change to qs_parse on Cowboy upgrade
+    {QsVals, _} = cowboy_req:qs_vals(Req),
     case lists:keyfind(<<"effective">>, 1, QsVals) of
         {_, <<"true">>} -> true;
         {_, true} -> true;
@@ -356,3 +385,48 @@ get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
                 X -> X
             end,
     {ResId, Req2}.
+
+%%--------------------------------------------------------------------
+%% @doc Parses macaroon and discharge macaroons out of request's
+%% headers.
+%% @end
+%%--------------------------------------------------------------------
+-spec parse_macaroons_from_headers(Req :: cowboy_req:req()) ->
+    {Macaroon :: macaroon:macaroon() | undefined,
+        DischargeMacaroons :: [macaroon:macaroon()], cowboy_req:req()} |
+    no_return().
+parse_macaroons_from_headers(Req) ->
+    {SerializedMacaroon, Req2} = cowboy_req:header(<<"macaroon">>, Req),
+    {SerializedDischarges, Req3} =
+        cowboy_req:header(<<"discharge-macaroons">>, Req2),
+
+    Macaroon =
+        case SerializedMacaroon of
+            <<_/binary>> -> deserialize_macaroon(SerializedMacaroon, Req3);
+            _ -> undefined
+        end,
+
+    DischargeMacaroons =
+        case SerializedDischarges of
+            <<_/binary>> ->
+                Split = binary:split(SerializedDischarges, <<" ">>, [global]),
+                [deserialize_macaroon(S, Req3) || S <- Split];
+
+            _ ->
+                []
+        end,
+
+    {Macaroon, DischargeMacaroons, Req3}.
+
+%%--------------------------------------------------------------------
+%% @doc Deserializes a macaroon and throws on error.
+%% @end
+%%--------------------------------------------------------------------
+-spec deserialize_macaroon(Data :: binary(), Req :: cowboy_req:req()) ->
+    macaroon:macaroon() | no_return().
+deserialize_macaroon(Data, Req) ->
+    case macaroon:deserialize(Data) of
+        {ok, M} -> M;
+        {error, Reason} ->
+            throw({invalid_token, atom_to_binary(Reason, latin1), Req})
+    end.

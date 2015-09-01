@@ -23,7 +23,7 @@
 -define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
 
 %% API
--export([start/0, stop/0, get_redirection_uri/3, gen_token/1, validate_token/4,
+-export([start/0, stop/0, get_redirection_uri/3, gen_token/1, validate_token/5,
     authenticate_user/1]).
 
 %% Handling state tokens
@@ -148,35 +148,32 @@ gen_token(UserId, ProviderId) ->
 %% the user that gave the authorization.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_token(ProviderId :: binary(), AccessToken :: binary(),
-    Method :: binary(), RootResource :: atom()) ->
+-spec validate_token(ProviderId :: binary(), Macaroon :: macaroon:macaroon(),
+    DischargeMacaroons :: [macaroon:macaroon()], Method :: binary(),
+    RootResource :: atom()) ->
     {ok, UserId :: binary()} | {error, Reason :: any()}.
-validate_token(ProviderId, AccessToken, Method, RootResource) ->
-    case macaroon:deserialize(AccessToken) of
-        {error, _} -> {error, bad_macaroon};
-        {ok, M} ->
-            case ?DB(get_auth, macaroon:identifier(M)) of
-                {ok, #db_document{record = #auth{secret = Secret, user_id = UserId}}} ->
-                    {ok, V} = macaroon_verifier:create(),
+validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) ->
+    case ?DB(get_auth, macaroon:identifier(Macaroon)) of
+        {ok, #db_document{record = #auth{secret = Secret, user_id = UserId}}} ->
+            {ok, V} = macaroon_verifier:create(),
 
-                    VerifyFun = fun
-                        (<<"time < ", Integer/binary>>) ->
-                            utils:time() < binary_to_integer(Integer);
-                        (<<"method = ", Met/binary>>) ->
-                            Method =:= Met;
-                        (<<"rootResource in ", Resources/binary>>) ->
-                            lists:member(atom_to_binary(RootResource, utf8),
-                                binary:split(Resources, <<",">>, [global]));
-                        (<<"providerId = ", PID/binary>>) ->
-                            PID =:= ProviderId;
-                        (_) -> false
-                    end,
+            VerifyFun = fun
+                (<<"time < ", Integer/binary>>) ->
+                    utils:time() < binary_to_integer(Integer);
+                (<<"method = ", Met/binary>>) ->
+                    Method =:= Met;
+                (<<"rootResource in ", Resources/binary>>) ->
+                    lists:member(atom_to_binary(RootResource, utf8),
+                        binary:split(Resources, <<",">>, [global]));
+                (<<"providerId = ", PID/binary>>) ->
+                    PID =:= ProviderId;
+                (_) -> false
+            end,
 
-                    macaroon_verifier:satisfy_general(V, VerifyFun),
-                    case macaroon_verifier:verify(V, M, Secret) of
-                        ok -> {ok, UserId};
-                        {error, Reason} -> {error, Reason}
-                    end
+            macaroon_verifier:satisfy_general(V, VerifyFun),
+            case macaroon_verifier:verify(V, Macaroon, Secret, DischargeMacaroons) of
+                ok -> {ok, UserId};
+                {error, Reason} -> {error, Reason}
             end
     end.
 
