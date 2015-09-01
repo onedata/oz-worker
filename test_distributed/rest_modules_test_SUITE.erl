@@ -73,6 +73,7 @@ provider_rest_module_test(Config) ->
     {ok, _Status, _ResponseHeaders, ResponseBody} = Resp1,
 
     ?PRINT(ResponseBody),
+    ?PRINT(jiffy:decode((ResponseBody)),
 
     Cert = proplists:get_value(<<"certificate">>, jiffy:decode((ResponseBody))),
 
