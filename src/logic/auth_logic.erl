@@ -171,7 +171,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
                         binary:split(Resources, <<",">>, [global]));
                 (<<"providerId = ", PID/binary>>) ->
                     PID =:= ProviderId;
-                () ->
+                (_) ->
                     false
             end,
 
