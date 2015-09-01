@@ -44,21 +44,51 @@ provider_rest_module_test(Config) ->
     ?PRINT("https://" ++ get_node_ip(Node) ++ "/provider"),
 
     URLS = [<<"127.0.0.1">>],
-    CSR = generate_csr(),
+%%     CSR = generate_csr(),
     RedirectionPoint = <<"https://127.0.0.1:443">>,
     ClientName = <<"provider">>,
-    Body = mochijson2:encode([{urls,URLS}, {csr, CSR}, {redirectionPoint, RedirectionPoint},{clientName, ClientName}]),
+
+    {MegaSec, Sec, MiliSec} = erlang:now(),
+    Prefix = lists:foldl(fun(Int, Acc) ->
+        Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
+    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
+    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
+    CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
+    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
+    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
+    {ok, CSR} = file:read_file(CSRFile),
+
+    Body = jiffy:encode({[{urls,URLS}, {csr, CSR}, {redirectionPoint, RedirectionPoint},{clientName, ClientName}]}),
 
     ?PRINT(Body),
+    Headers = [{"Content-Type","application/json"}],
+%%     Options = [
+%%         {response_format, list},
+%%         {trace, true},
+%%         {ssl_options, [{verify, verify_none}]},
+%%         {content_type, "application/json"}
+%%     ],
 
-    Ans1 = ibrowse:send_req("https://" ++ IP ++ ":8443/provider", [], post, Body),
-    Ans2 = ibrowse:send_req("https://" ++ IP ++ ":8443/provider", [], get),
+    Resp1 = ibrowse:send_req("https://" ++ IP ++ ":8443/provider", Headers, post, Body),
+    {ok, _Status, _ResponseHeaders, ResponseBody} = Resp1,
 
-    ?PRINT(Ans1),
-    ?PRINT(Ans2),
+    ?PRINT(ResponseBody),
 
-    ?assertMatch({ok, _, _, _}, Ans1),
-    ?assertMatch({ok, _, _, _}, Ans2),
+    Cert = proplists:get_value(<<"certificate">>, jiffy:decode((ResponseBody))),
+
+    ?PRINT(Cert),
+
+    file:write_file(CertFile, Cert),
+
+    Options = [{ssl_options, [{keyfile, KeyFile}, {certfile, CertFile }]}],
+
+    Resp2 = ibrowse:send_req("https://" ++ IP ++ ":8443/provider", [], get,[], Options),
+
+    ?PRINT(Resp1),
+    ?PRINT(Resp2),
+
+    ?assertMatch({ok, _, _, _}, Resp1),
+    ?assertMatch({ok, _, _, _}, Resp2),
 
     ssl:stop(),
     ibrowse:stop().
@@ -86,13 +116,13 @@ get_node_ip(Node) ->
     re:replace(os:cmd(CMD), "\\s+", "", [global,{return,list}]).
 
 
-generate_csr() ->
-    {MegaSec, Sec, MiliSec} = erlang:now(),
-    Prefix = lists:foldl(fun(Int, Acc) ->
-        Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
-    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
-    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
-    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
-    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
-    {ok, CSR} = file:read_file(CSRFile),
-    CSR.
+%% generate_csr() ->
+%%     {MegaSec, Sec, MiliSec} = erlang:now(),
+%%     Prefix = lists:foldl(fun(Int, Acc) ->
+%%         Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
+%%     KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
+%%     CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
+%%     os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
+%%     os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
+%%     {ok, CSR} = file:read_file(CSRFile),
+%%     CSR.
