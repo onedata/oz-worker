@@ -135,7 +135,7 @@ gen_token(UserId, ProviderId) ->
     {ok, Location} = application:get_env(?APP_Name, http_domain),
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
     {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier),
-        [["provider = ", ProviderId]]),
+        [["providerId = ", ProviderId]]),
 
     CaveatKey = crypto:rand_bytes(macaroon:suggested_secret_length()),
     {ok, CaveatId} = ?DB(save_auth, #auth{secret = CaveatKey, user_id = UserId}),
@@ -153,7 +153,8 @@ gen_token(UserId, ProviderId) ->
     RootResource :: atom()) ->
     {ok, UserId :: binary()} | {error, Reason :: any()}.
 validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) ->
-    case ?DB(get_auth, macaroon:identifier(Macaroon)) of
+    {ok, Identifier} = macaroon:identifier(Macaroon),
+    case ?DB(get_auth, Identifier) of
         {ok, #db_document{record = #auth{secret = Secret, user_id = UserId}}} ->
             {ok, V} = macaroon_verifier:create(),
 
@@ -167,7 +168,8 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
                         binary:split(Resources, <<",">>, [global]));
                 (<<"providerId = ", PID/binary>>) ->
                     PID =:= ProviderId;
-                (_) -> false
+                () ->
+                    false
             end,
 
             macaroon_verifier:satisfy_general(V, VerifyFun),
