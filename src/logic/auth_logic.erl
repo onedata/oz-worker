@@ -326,16 +326,9 @@ validate_token(Client, AccessToken) ->
             #access{provider_id = IntendedAudience, user_id = UserId,
                 expiration_time = Expiration} = Access,
 
-            case IntendedAudience of
-                ProviderId ->
-                    case utils:time() < Expiration of
-                        false -> {error, expired};
-                        true -> {ok, UserId}
-                    end;
-
-                _ ->
-                    alert_revoke_access(AccessDoc),
-                    {error, bad_audience}
+            case utils:time() < Expiration of
+                false -> {error, expired};
+                true -> {ok, UserId}
             end
     end.
 
