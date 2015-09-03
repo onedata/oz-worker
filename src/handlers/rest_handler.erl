@@ -408,6 +408,9 @@ parse_macaroons_from_headers(Req) ->
 
     DischargeMacaroons =
         case SerializedDischarges of
+            <<>> ->
+                [];
+
             <<_/binary>> ->
                 Split = binary:split(SerializedDischarges, <<" ">>, [global]),
                 [deserialize_macaroon(S, Req3) || S <- Split];
