@@ -44,7 +44,7 @@ body() ->
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
             #panel{id = <<"main_table">>, body = main_table()},
-            #panel{id = <<"gen_token_panel">>, body = [
+            #panel{id = <<"gen_token_panel">>, style = <<"margin-top: 10px; margin-bottom: 25px;">>, body = [
                 #button{body = <<"Generate client token">>,
                     class = <<"btn btn-inverse">>,
                     postback = {action, generate_token}}
@@ -293,7 +293,7 @@ provider_redirection_panel() ->
             #panel{id = <<"redirection_panel">>, body = lists:map(
                 fun(ProviderID) ->
                     #button{body = <<"Go to your files in provider <b>", ProviderID/binary, "</b>">>,
-                        class = <<"btn btn-huge btn-inverse btn-block">>,
+                        class = <<"btn btn-huge btn-inverse">>,
                         postback = {action, redirect_to_provider_dev, [ProviderID]}}
                 end, lists:usort(Providers))
             };
@@ -301,7 +301,7 @@ provider_redirection_panel() ->
             case gr_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
                 {ok, ProviderHostname, URL} ->
                     #panel{id = <<"redirection_panel">>, body = [
-                        #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse btn-block">>,
+                        #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse">>,
                             postback = {action, redirect_to_provider, [ProviderHostname, URL]}}
                     ]};
                 {error, no_provider} ->
