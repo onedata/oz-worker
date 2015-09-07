@@ -163,21 +163,15 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 
             VerifyFun = fun
                 (<<"time < ", Integer/binary>>) ->
-                    ?dump(utils:time() < binary_to_integer(Integer)),
                     utils:time() < binary_to_integer(Integer);
                 (<<"method = ", Met/binary>>) ->
-                    ?dump(Method =:= Met),
                     Method =:= Met;
                 (<<"rootResource in ", Resources/binary>>) ->
-                    ?dump(lists:member(atom_to_binary(RootResource, utf8),
-                        binary:split(Resources, <<",">>, [global]))),
                     lists:member(atom_to_binary(RootResource, utf8),
                         binary:split(Resources, <<",">>, [global]));
                 (<<"providerId = ", PID/binary>>) ->
-                    ?dump(PID =:= ProviderId),
                     PID =:= ProviderId;
                 (_) ->
-                    ?dump(false),
                     false
             end,
 
