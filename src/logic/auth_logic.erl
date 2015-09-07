@@ -122,7 +122,7 @@ get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
 -spec gen_token(UserId :: binary()) -> Token :: binary().
 gen_token(UserId) ->
     Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
-    Caveats = [],%["method = GET", "rootResource in spaces,user"],
+    Caveats = ["method = GET", "rootResource in spaces,user"],
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
     {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier), Caveats),
     {ok, Token} = macaroon:serialize(M),
@@ -163,21 +163,15 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 
             VerifyFun = fun
                 (<<"time < ", Integer/binary>>) ->
-                    ?dump(utils:time() < binary_to_integer(Integer)),
                     utils:time() < binary_to_integer(Integer);
                 (<<"method = ", Met/binary>>) ->
-                    ?dump(Method =:= Met),
                     Method =:= Met;
                 (<<"rootResource in ", Resources/binary>>) ->
-                    ?dump(lists:member(atom_to_binary(RootResource, utf8),
-                        binary:split(Resources, <<",">>, [global]))),
                     lists:member(atom_to_binary(RootResource, utf8),
                         binary:split(Resources, <<",">>, [global]));
                 (<<"providerId = ", PID/binary>>) ->
-                    ?dump(PID =:= ProviderId),
                     PID =:= ProviderId;
                 (_) ->
-                    ?dump(false),
                     false
             end,
 
