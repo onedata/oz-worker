@@ -23,7 +23,7 @@
 -export([connect_account/1, disconnect_account_prompt/1, disconnect_account/1]).
 -export([show_email_adding/1, update_email/1, show_name_edition/1, update_name/0]).
 -export([show_alias_edition/1, update_alias/0, redirect_to_provider/2, show_alias_info/0]).
--export([redirect_to_provider_dev/1]).
+-export([redirect_to_provider_dev/1, generate_token/0]).
 
 %% Template points to the template file, which will be filled with content
 main() ->
@@ -44,6 +44,11 @@ body() ->
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
             #panel{id = <<"main_table">>, body = main_table()},
+            #panel{id = <<"gen_token_panel">>, body = [
+                #button{body = <<"Generate client token">>,
+                    class = <<"btn btn-inverse">>,
+                    postback = {action, generate_token}}
+            ]},
             provider_redirection_panel()
         ]}
     ]}.
@@ -333,6 +338,13 @@ connect_account(Provider) ->
     HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
     gui_jq:redirect(URL).
+
+
+generate_token() ->
+    UserID = gui_ctx:get_user_id(),
+    Token = auth_logic:gen_token(UserID),
+    gui_jq:info_popup(<<"Client token">>, Token, <<"">>).
+
 
 % Prompt to ask for confirmation to disconnect an account
 disconnect_account_prompt(Provider) ->
