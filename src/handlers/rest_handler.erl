@@ -182,9 +182,7 @@ is_authorized(Req, #rstate{noauth = NoAuth} = State) ->
                                                   not_found ->
                                                       <<"access token not found">>;
                                                   expired ->
-                                                      <<"access token expired">>;
-                                                  bad_audience ->
-                                                      <<"token issued to a different audience">>
+                                                      <<"access token expired">>
                                               end,
                                 throw({invalid_token, Description, Req3})
                         end;
