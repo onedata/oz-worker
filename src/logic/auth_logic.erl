@@ -313,7 +313,7 @@ refresh_tokens(Client, RefreshToken) ->
 %%--------------------------------------------------------------------
 -spec validate_token(Client :: {provider, ProviderId :: binary()} | native,
     AccessToken :: binary()) ->
-    {ok, UserId :: binary()} | {error, not_found | expired | bad_audience}.
+    {ok, UserId :: binary()} | {error, expired | not_found}.
 validate_token(Client, AccessToken) ->
     ProviderId = case Client of
                      {provider, Id} -> Id;
