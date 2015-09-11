@@ -244,6 +244,13 @@ clear_expired_state_tokens() ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Creates a macaroon with expiration time read from
+%% `authorization_macaroon_expiration_seconds` environment variable.
+%% @end
+%%--------------------------------------------------------------------
 -spec create_macaroon(Secret :: iodata(), Identifier :: iodata(),
     Caveats :: [iodata()]) -> {ok, macaroon:macaroon()}.
 create_macaroon(Secret, Identifier, Caveats) ->
