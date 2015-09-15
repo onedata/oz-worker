@@ -122,7 +122,7 @@ get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
 -spec gen_token(UserId :: binary()) -> Token :: binary().
 gen_token(UserId) ->
     Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
-    Caveats = ["method = GET", "rootResource in spaces,user"],
+    Caveats = [],%["method = GET", "rootResource in spaces,user"],
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
     {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier), Caveats),
     {ok, Token} = macaroon:serialize(M),
@@ -244,6 +244,13 @@ clear_expired_state_tokens() ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Creates a macaroon with expiration time read from
+%% `authorization_macaroon_expiration_seconds` environment variable.
+%% @end
+%%--------------------------------------------------------------------
 -spec create_macaroon(Secret :: iodata(), Identifier :: iodata(),
     Caveats :: [iodata()]) -> {ok, macaroon:macaroon()}.
 create_macaroon(Secret, Identifier, Caveats) ->
