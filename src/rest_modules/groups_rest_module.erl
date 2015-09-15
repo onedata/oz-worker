@@ -36,7 +36,7 @@
 -spec routes() ->
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 routes() ->
-    S = #rstate{module = ?MODULE},
+    S = #rstate{module = ?MODULE, root = groups},
     M = rest_handler,
     [
         {<<"/groups">>, M, S#rstate{resource = groups, methods = [post]}},
@@ -143,11 +143,11 @@ accept_resource(spaces, post, GroupId, Data, _Client, Req) ->
     {{true, <<"/spaces/", SpaceId/binary>>}, Req};
 accept_resource(sjoin, post, GroupId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
-    case token_logic:is_valid(Token, space_invite_group_token) of
+    case token_logic:validate(Token, space_invite_group_token) of
         false ->
             rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
-        true ->
-            {ok, SpaceId} = space_logic:join({group, GroupId}, Token),
+        {true, Macaroon} ->
+            {ok, SpaceId} = space_logic:join({group, GroupId}, Macaroon),
             {{true, <<"/groups/", GroupId/binary, "/spaces/", SpaceId/binary>>}, Req}
     end.
 

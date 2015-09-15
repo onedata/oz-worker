@@ -15,9 +15,6 @@
 -include("registered_names.hrl").
 -include("dao/dao_types.hrl").
 
-%% Length of generated tokens, before base64.
--define(TOKEN_LENGTH, 30). %% 30-byte sequence encodes into base64 without padding
-
 -define(DB(Function, Arg), dao_lib:apply(dao_tokens, Function, [Arg], 1)).
 
 %% Atoms representing types of valid tokens.
@@ -29,7 +26,7 @@ space_support_token.
 -type resource_type() :: user | group | space.
 
 %% API
--export([is_valid/2, create/2, consume/2, random_token/0]).
+-export([validate/2, create/2, consume/1]).
 -export_type([token_type/0, resource_type/0]).
 
 %%%===================================================================
@@ -37,49 +34,64 @@ space_support_token.
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Checks if a given token is a valid token of a given type.
+%% @doc Checks if a given token is a valid macaroon of a given type.
 %% Throws exception when call to dao fails.
 %% @end
 %%--------------------------------------------------------------------
--spec is_valid(Token :: binary(), TokenType :: token_type()) ->
-    boolean().
-is_valid(Token, TokenType) -> %% @todo: expiration time
-    case ?DB(get_token_by_value, Token) of
-        {ok, #db_document{record = #token{type = TokenType}}} -> true;
-        _ -> false
+-spec validate(Token :: binary(), TokenType :: token_type()) ->
+    {true, macaroon:macaroon()} | false.
+validate(Token, TokenType) ->
+    case macaroon:deserialize(Token) of
+        {error, _} -> false;
+        {ok, M} ->
+            case ?DB(get_token, macaroon:identifier(M)) of
+                {error, _} -> false;
+                {ok, #db_document{record = #token{secret = Secret}}} ->
+                    {ok, V} = macaroon_verifier:create(),
+                    ok = macaroon_verifier:satisfy_exact(V,
+                        ["tokenType = ", atom_to_list(TokenType)]),
+
+                    case macaroon_verifier:verify(V, M, Secret) of
+                        ok -> {true, M};
+                        _ -> false
+                    end
+            end
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Creates a token of a given type.
+%% @doc Creates a macaroon token of a given type.
 %% Throws exception when call to dao fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(TokenType :: token_type(), Resource :: {resource_type(), binary()}) ->
-    {ok, Token :: binary()}.
-create(TokenType, Resource) ->
-    Token = random_token(),
-    TokenRec = #token{value = Token, type = TokenType, resource = Resource}, %% @todo: expiration time
-    {ok, _} = ?DB(save_token, TokenRec),
-    {ok, Token}.
+    {ok, Token :: binary()} | {error, Reason :: any()}.
+create(TokenType, {ResourceType, ResourceId}) ->
+    Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
+    TokenData = #token{secret = Secret,
+        resource = ResourceType, resource_id = ResourceId},
+
+    {ok, Identifier} = ?DB(save_token, TokenData),
+
+    % @todo expiration time
+    {ok, M1} = macaroon:create("registry", Secret, Identifier),
+    {ok, M2} = macaroon:add_first_party_caveat(M1,
+        ["tokenType = ", atom_to_list(TokenType)]),
+
+    macaroon:serialize(M2).
 
 %%--------------------------------------------------------------------
 %% @doc Consumes a token, returning associated resource.
 %% Throws exception when call to dao fails, or token doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
--spec consume(Token :: binary(), TokenType :: token_type()) ->
+-spec consume(Macaroon :: macaroon:macaroon()) ->
     {ok, {resource_type(), binary()}}.
-consume(Token, TokenType) ->
-    {ok, TokenDoc} = ?DB(get_token_by_value, Token), %% @todo: expiration time
-    #db_document{uuid = TokenId,
-        record = #token{type = TokenType, resource = Resource}} = TokenDoc,
+consume(M) ->
+    {ok, Identifier} = macaroon:identifier(M),
+    {ok, TokenDoc} = ?DB(get_token, Identifier),
+    #db_document{record = #token{resource = ResourceType,
+        resource_id = ResourceId}} = TokenDoc,
 
-    ok = ?DB(remove_token, TokenId),
-    {ok, Resource}.
+    ok = ?DB(remove_token, Identifier),
+    {ok, {ResourceType, ResourceId}}.
 
-%%--------------------------------------------------------------------
-%% @doc Generates a globally unique random token.
-%%--------------------------------------------------------------------
--spec random_token() -> binary().
-random_token() ->
-    mochiweb_base64url:encode([crypto:rand_bytes(?TOKEN_LENGTH)]).

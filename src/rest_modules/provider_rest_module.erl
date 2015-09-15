@@ -38,7 +38,7 @@
 -spec routes() ->
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 routes() ->
-    S = #rstate{module = ?MODULE},
+    S = #rstate{module = ?MODULE, root = provider},
     M = rest_handler,
     [
         {<<"/provider">>, M, S#rstate{resource = provider, methods = [get, post, patch, delete], noauth = [post]}},
@@ -136,11 +136,11 @@ accept_resource(spaces, post, _ProviderId, Data, Client, Req) ->
 accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
     Size = rest_module_helper:assert_key(<<"size">>, Data, pos_integer, Req),
-    case token_logic:is_valid(Token, space_support_token) of
+    case token_logic:validate(Token, space_support_token) of
         false ->
             rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
-        true ->
-            {ok, SpaceId} = space_logic:support(ProviderId, Token, Size),
+        {true, Macaroon} ->
+            {ok, SpaceId} = space_logic:support(ProviderId, Macaroon, Size),
             {{true, <<"/provider/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->

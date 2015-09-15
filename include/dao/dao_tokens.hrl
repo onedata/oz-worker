@@ -14,10 +14,9 @@
 
 %% This record defines a token that can be used by user to do something
 -record(token, {
-    value :: binary(),
-    type :: token_logic:token_type(),
-    expires :: non_neg_integer(),
-    resource :: {Type :: token_logic:resource_type(), Resource :: binary()}
+    secret :: binary(),
+    resource :: atom(),
+    resource_id :: binary()
 }).
 
 -endif.

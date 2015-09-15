@@ -184,8 +184,8 @@ tokens_crud_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
     % Data
-    Token = #token{type = group_invite_token, expires = 1000},
-    UpdatedToken = Token#token{type = space_create_token},
+    Token = #token{resource = space, secret = <<"secret">>, resource_id = <<"id">>},
+    UpdatedToken = Token#token{resource = group},
 
     % Create
     {AnsC1, TokenId} = rpc:call(Node, dao_lib, apply, [dao_tokens, save_token, [Token], 1]),

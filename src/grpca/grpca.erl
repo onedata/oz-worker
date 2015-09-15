@@ -396,7 +396,7 @@ req_cnf(DN) ->
 %%--------------------------------------------------------------------
 -spec ca_cnf(CaDir :: string()) -> Config :: iolist().
 ca_cnf(CaDir) ->
-    {ok, CertDomain} = application:get_env(?APP_Name, grpcert_domain),
+    {ok, CertDomain} = application:get_env(?APP_Name, http_domain),
     {ok, RestPort} = application:get_env(?APP_Name, rest_port),
     Port = integer_to_binary(RestPort),
     ["# Purpose: Configuration for CAs.\n"
