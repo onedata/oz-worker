@@ -43,7 +43,7 @@ routes() ->
     [
         {<<"/provider">>, M, S#rstate{resource = provider, methods = [get, post, patch, delete], noauth = [post]}},
         {<<"/provider_dev">>, M, S#rstate{resource = provider_dev, methods = [post], noauth = [post]}},
-        {<<"/provider/spaces/">>, M, S#rstate{resource = spaces, methods = [get, post]}},
+        {<<"/provider/spaces">>, M, S#rstate{resource = spaces, methods = [get, post]}},
         {<<"/provider/:pid">>, M, S#rstate{resource = nprovider, methods = [get]}},
         {<<"/provider/spaces/support">>, M, S#rstate{resource = ssupport, methods = [post]}},
         {<<"/provider/spaces/:sid">>, M, S#rstate{resource = space, methods = [get, delete]}},

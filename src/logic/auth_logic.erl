@@ -26,7 +26,7 @@
 -define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
 
 %% API
--export([start/0, stop/0, get_redirection_uri/3, gen_token/1, validate_token/5,
+-export([start/0, stop/0, get_redirection_uri/3, gen_token/1, gen_token/2, validate_token/5,
     authenticate_user/1]).
 
 %% Handling state tokens
