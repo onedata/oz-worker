@@ -20,7 +20,6 @@
 -include("dao/dao_users.hrl").
 
 %% TODO delete after finishing
-
 -define(PRINT(ARG),
     begin
         ct:pal("DEBUG: ~p~n",[ARG])
@@ -43,11 +42,21 @@
 -define(GROUP_NAME2, <<"group2">>).
 -define(SPACE_SIZE1, <<"1024">>).
 -define(SPACE_SIZE2, <<"4096">>).
+-define(GROUP_PRIVILEGES,
+    [
+        group_view_data, group_change_data, group_invite_user,
+        group_remove_user, group_join_space, group_create_space,
+        group_set_privileges, group_remove, group_leave_space,
+        group_create_space_token
+    ]
+).
 
 %% API
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
 -export([provider_crud_test/1, user_space_test/1, user_crud_test/1, group_crud_test/1,
-    provider_space_test/1, provider_check_test/1, many_users_space_test/1, register_provider/5, create_group_for_user/2, user_group_test/1, many_users_group_test/1]).
+    provider_space_test/1, provider_check_test/1, many_users_space_test/1, register_provider/5,
+    create_group_for_user/2, user_group_test/1, many_users_group_test/1, group_users_test/1,
+    group_privileges_test/1, group_spaces_test/1]).
 
 %%%===================================================================
 %%% API functions
@@ -90,7 +99,10 @@ groups() ->
             group_rest_module_test_group,
             [],
             [
-                group_crud_test
+                group_crud_test,
+                group_users_test,
+                group_privileges_test,
+                group_spaces_test
             ]
 
         }
@@ -148,17 +160,17 @@ provider_space_test(Config) ->
     UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
 
     %% get space creation token1
-    SCRToken1 = get_space_creation_token(UserReqParams),
+    SCRToken1 = get_space_creation_token_for_user(UserReqParams),
 
     SID1 = create_space_for_provider(SCRToken1, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
     %% get space creation token2
-    SCRToken2 = get_space_creation_token(UserReqParams),
+    SCRToken2 = get_space_creation_token_for_user(UserReqParams),
 
     SID2 = create_space_for_provider(SCRToken2, ?SPACE_NAME2, ?SPACE_SIZE2, ProviderReqParams),
 
     SupportedSpaces = get_provider_spaces(ProviderReqParams),
-    ?PRINT(SupportedSpaces),
+%%     ?PRINT(SupportedSpaces),
 
 %%     TODO below assert fails
     ?assertMatch(true, is_included([SID1, SID2], SupportedSpaces)),
@@ -230,7 +242,26 @@ user_crud_test(Config) ->
         [UserId, ?USER_NAME2],
         read_user(UserReqParams)
     ),
-    
+
+     UserId2 = create_user(?USER_NAME2, Node),
+
+    %% authenticate user
+    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
+    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
+
+    MergeToken = get_user_merge_token(UserReqParams2),
+
+%%     TODO whoses UID and username stays ?
+    ?PRINT(UserId),
+    ?PRINT(UserId2),
+
+    %%  merge user2 with user1
+    Response = merge_users(MergeToken, UserReqParams),
+
+    ?assertMatch(ok, check_status(Response)),
+
+    ?PRINT(read_user(UserReqParams)),
+
     DeleteResponse = delete_user(UserReqParams),
     ?assertMatch(ok, check_status(DeleteResponse)),
 
@@ -297,27 +328,26 @@ many_users_space_test(Config) ->
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams1),
 
-   ?PRINT(SID1),
-
     SupportToken = get_space_support_token(SID1, UserReqParams1),
 
-    ?PRINT(SupportToken),
-
-    SupportResponse = support_space(SupportToken, ?SPACE_SIZE1, ProviderReqParams),
-
-    ?PRINT(SupportResponse),
+    SupportResponse = provider_support_space(SupportToken, ?SPACE_SIZE1, ProviderReqParams),
 
     ?assertMatch(ok, check_status(SupportResponse)),
 
-    InvitationToken = get_space_invitation_token(SID1, UserReqParams1),
-
-    ?PRINT(InvitationToken),
+    InvitationToken = get_space_invitation_token(user, SID1, UserReqParams1),
 
     SID2 = join_user_to_space(InvitationToken, UserReqParams2),
 
     %% check if SID returned for user2 is the same as SID1
-    ?assertMatch(SID1, SID2).
+    ?assertMatch(SID1, SID2),
 
+    ?PRINT(get_user_spaces(UserReqParams2)),
+
+    %% check if space is in list of user2 space
+    ?assertMatch(
+        [[SID1], <<"undefined">>],
+        get_user_spaces(UserReqParams2)
+    ).
 
 user_group_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -332,22 +362,23 @@ user_group_test(Config) ->
     %% authenticate user
     NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
     UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
-%%
+
     GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
-    ?PRINT(GID1),
+%%     ?PRINT(GID1),
 
     GID2 = create_group_for_user(?GROUP_NAME2, UserReqParams),
-    ?PRINT(GID2),
+%%     ?PRINT(GID2),
     
-    
-    ?PRINT(get_user_groups(UserReqParams)),
+%%     ?PRINT(get_user_groups(UserReqParams)),
 
     ?assertMatch(
-        [[GID1, GID2], "undefined"],
-        get_user_groups(UserReqParams)
+        true,
+        is_included([GID1, GID2], get_user_groups(UserReqParams))
     ),
 
-    user_leave_group(GID2,UserReqParams),
+    Response = user_leave_group(GID2,UserReqParams),
+
+    ?assertMatch(ok, check_status(Response)),
 
     ?assertMatch(
         false,
@@ -356,7 +387,7 @@ user_group_test(Config) ->
 
     ?assertMatch(
         [GID1, ?GROUP_NAME1],
-        get_user_group(GID2, UserReqParams)
+        get_user_group(GID1, UserReqParams)
     ).
 
 many_users_group_test(Config) ->
@@ -368,32 +399,39 @@ many_users_group_test(Config) ->
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
     %% create users
-    UserId = create_user(?USER_NAME1, Node),
+    UserId1 = create_user(?USER_NAME1, Node),
     UserId2 = create_user(?USER_NAME2, Node),
 
     %% authenticate users
-    NewHeaders1 = auth_user(UserId, ProviderId, ReqParams, Node),
+    NewHeaders1 = auth_user(UserId1, ProviderId, ReqParams, Node),
     NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
     UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders1, headers),
     UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
 
     GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams1),
-    ?PRINT(GID1),
 
     InvitationToken = get_group_invitation_token(GID1, UserReqParams1),
-
-    ?PRINT(InvitationToken),
 
     GID2 = join_user_to_group(InvitationToken, UserReqParams2),
 
     %% check if GID returned for user2 is the same as GID1
-    ?assertMatch(GID1, GID2).
+    ?assertMatch(GID1, GID2),
 
+    ?assertMatch(
+        [GID1, ?GROUP_NAME1],
+        get_user_group(GID2, UserReqParams2)
+    ),
 
+    ?PRINT(get_group_users(GID1, UserReqParams1)),
+    ?PRINT(UserId1),
+    ?PRINT(UserId2),
 
-%%%===================================================================
+    ?assertMatch(
+        true,
+        is_included([UserId1, UserId2], get_group_users(GID1, UserReqParams1))
+    ).
 
-%% group_rest_module_test_group=======================================
+%% group_rest_module_test_group =======================================
 
 group_crud_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -431,8 +469,131 @@ group_crud_test(Config) ->
 
     ?assertMatch(request_error, read_group(GID, UserReqParams)).
 
+group_users_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    [Node] = ?config(gr_nodes, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
-%%%===================================================================
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+     %% create users
+    UserId1 = create_user(?USER_NAME1, Node),
+    UserId2 = create_user(?USER_NAME2, Node),
+
+    %% authenticate users
+    NewHeaders = auth_user(UserId1, ProviderId, ReqParams, Node),
+    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders, headers),
+    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
+    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
+
+    GID1 = create_group(?GROUP_NAME1, UserReqParams1),
+    
+    ?assertMatch(
+        [UserId1, ?USER_NAME1],
+        get_group_user(GID1, UserId1, UserReqParams1)
+    ),
+
+    ?assertMatch(
+        [UserId1],
+        get_group_users(GID1, UserReqParams1)
+    ),
+
+    DeleteResponse = delete_group_user(GID1, UserId1, UserReqParams1),
+
+    ?assertMatch(ok, check_status(DeleteResponse)).
+
+group_privileges_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    [Node] = ?config(gr_nodes, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+     %% create users
+    UserId1 = create_user(?USER_NAME1, Node),
+    UserId2 = create_user(?USER_NAME2, Node),
+
+    %% authenticate users
+    NewHeaders = auth_user(UserId1, ProviderId, ReqParams, Node),
+    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders, headers),
+    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
+    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
+
+    InvitationToken = get_group_invitation_token(GID, UserReqParams1),
+
+    %% add user to group
+    join_user_to_group(InvitationToken, UserReqParams2),
+
+    %% TODO check user creator privileges
+    get_group_user_privileges(GID, UserId1, UserReqParams1),
+
+    %% TODO check user creator privileges
+    get_group_user_privileges(GID, UserId2, UserReqParams2),
+
+    Privileges =
+        [
+            group_view_data, group_change_data, group_invite_user,group_set_privileges
+%%  ,           group_remove_user, group_join_space,
+%%             group_create_space, group_remove, group_leave_space,
+%%              group_create_space_token
+        ],
+    ?assertMatch(
+        ok,
+        group_privileges_check(Privileges, {UserId1, UserReqParams1}, {UserId2, UserReqParams2}, GID)
+    ).
+
+group_spaces_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    [Node] = ?config(gr_nodes, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+     %% create user
+    UserId1 = create_user(?USER_NAME1, Node),
+
+    %% authenticate user
+    NewHeaders = auth_user(UserId1, ProviderId, ReqParams, Node),
+    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders, headers),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
+    SID1 = create_space_for_group(?SPACE_NAME1, GID, UserReqParams1),
+    
+    ?assertMatch(
+        [SID1, ?SPACE_NAME1],
+        get_group_space(GID, SID1, UserReqParams1)
+    ),
+    
+    SID2 = create_space_for_user(?SPACE_NAME2, UserReqParams1),
+
+    InvitationToken = get_space_invitation_token(group, SID2, UserReqParams1),
+
+    SID_check = join_group_to_space(InvitationToken, GID, UserReqParams1),
+
+    ?assertMatch(SID2, SID_check),
+
+    ?assertMatch(
+        true,
+        is_included([SID1, SID2], get_group_spaces(GID, UserReqParams1))
+    ),
+
+    DeleteResponse = group_leave_space(GID, SID2, UserReqParams1),
+
+    ?assertMatch(
+        ok,
+        check_status(DeleteResponse)
+    ),
+
+    ?assertMatch(
+        true,
+        is_included([SID1], get_group_spaces(GID, UserReqParams1))
+    ).
+
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -537,7 +698,6 @@ check_status(Response) ->
     case (Status >= 200) and (Status < 300) of
         true -> ok;
         _ -> bad
-%%     TODO replace failure atom with raising exception
     end.
 
 %% returns list of values from responsebody
@@ -556,6 +716,9 @@ get_macaroon_id(Token) ->
     {ok, Macaroon} = macaroon:deserialize(Token),
     {ok, [{_, Identifier}]} = macaroon:third_party_caveats(Macaroon),
     Identifier.
+
+new_privileges(OldPrivileges, NewPrivilige) ->
+    [NewPrivilige | OldPrivileges].
 
 %% TODO chyba mozna usunac
 update_headers(Headers, SerializedMacaroon, SerializedDischarges) ->
@@ -646,39 +809,17 @@ get_provider_spaces(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response = do_request(RestAddress ++ "/provider/spaces", Headers, get, [], Options),
     [Spaces] = get_body_val([spaces],Response),
-    Spaces
-.
+    Spaces.
 
 get_provider_space(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response =
         do_request(RestAddress ++ "/provider/spaces/" ++ binary_to_list(SID), Headers, get, [], Options),
-%%     TODO test what is in the response, remove later
-    ?PRINT(Response),
     get_body_val([spaceId, name, size],Response).
 
 delete_provider_space(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     do_request(RestAddress ++ "/provider/spaces/" ++ binary_to_list(SID), Headers, delete, [], Options).
-
-get_space_support_token(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
-    ?PRINT(SID),
-    ?PRINT(ReqParams),
-    Response = do_request(
-        RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++"/providers/token", Headers, get, [], Options
-    ),
-    [Token] = get_body_val([token], Response),
-    Token.
-
-support_space(Token, Size, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {token, Token}, 
-        {size, Size}
-    ]}),
-    do_request(RestAddress ++ "/provider/spaces/support", Headers, post, Body, Options).
-
 
 check_provider_ip(ReqParams)->
     {RestAddress, _, _} = ReqParams,
@@ -688,19 +829,20 @@ check_provider_ports(ReqParams)->
     {RestAddress, _, _} = ReqParams,
     do_request(RestAddress ++ "/provider/test/check_my_ports", [], post).
 
+provider_support_space(Token, Size, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Body = jiffy:encode({[
+        {token, Token}, 
+        {size, Size}
+    ]}),
+    do_request(RestAddress ++ "/provider/spaces/support", Headers, post, Body, Options).
+
 
 %% User functions
 
 create_user(UserName, Node) ->
     {ok, UserId} = rpc:call(Node, user_logic, create, [#user{name = UserName}]),
     UserId.
-
-%% create_user(UserName, ReqParams) ->
-%%     {RestAddress, Headers, Options} = ReqParams,
-%%     Body = jiffy:encode({[
-%%         {name, UserName}
-%%     ]}),
-%%     do_request(RestAddress ++ "/user", Headers, post, Body, Options).
 
 read_user(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
@@ -741,7 +883,6 @@ create_space_for_user(SpaceName, ReqParams) ->
         {name, SpaceName}
     ]}),
     Response = do_request(RestAddress ++ "/user/spaces", Headers, post, Body, Options),
-    ?PRINT(Response),
     get_header_val("spaces", Response).
 
 set_default_space_for_user(SID, ReqParams) ->
@@ -751,21 +892,18 @@ set_default_space_for_user(SID, ReqParams) ->
     ]}),
     do_request(RestAddress ++ "/user/spaces/default", Headers, put, Body, Options).
 
-get_space_creation_token(ReqParams)->
+get_user_merge_token(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Response = do_request(RestAddress ++ "/user/spaces/token", Headers, get, [], Options),
+    Response = do_request(RestAddress ++ "/user/merge/token", Headers, get, [], Options),
     [Token] = get_body_val([token], Response),
     Token.
 
-get_space_invitation_token(SID, ReqParams) ->
+merge_users(Token, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Response =
-        do_request(
-            RestAddress ++ "/spaces/" ++ binary_to_list(SID)++ "/users/token", Headers, get, [], Options
-        ),
-    ?PRINT(Response),
-    [Token] = get_body_val([token], Response),
-    Token.
+     Body = jiffy:encode({[
+        {token, Token}
+    ]}),
+    do_request(RestAddress ++ "/user/merge", Headers, post, Body, Options).
 
 delete_user_space(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
@@ -787,7 +925,6 @@ join_user_to_space(Token, ReqParams) ->
         {token, Token}
     ]}),
     Response = do_request(RestAddress ++ "/user/spaces/join", Headers, post, Body, Options),
-    ?PRINT(Response),
     get_header_val("user/spaces",Response).
     
 create_group_for_user(GroupName, ReqParams)->
@@ -801,32 +938,26 @@ create_group_for_user(GroupName, ReqParams)->
 get_user_groups(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response = do_request(RestAddress ++ "/user/groups", Headers, get, [], Options),
-    %%     TODO remove belo print
-    ?PRINT(Response),
-    get_body_val([groups, default], Response).
+    [Groups] = get_body_val([groups], Response),
+    Groups.
 
 get_user_group(GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response =
-        do_request(RestAddress ++ "/user/group/" ++ binary_to_list(GID) , Headers, get,[], Options),
-%%     TODO remove belo print
-    ?PRINT(Response),
+        do_request(RestAddress ++ "/user/groups/" ++ binary_to_list(GID) , Headers, get,[], Options),
     get_body_val([groupId, name], Response).
-
 
 user_leave_group(GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     do_request(RestAddress ++ "/user/groups/" ++ binary_to_list(GID), Headers, delete, [], Options).
 
-join_user_to_group(GID, Token, ReqParams) ->
+join_user_to_group(Token, ReqParams) ->
      {RestAddress, Headers, Options} = ReqParams,
     Body = jiffy:encode({[
         {token, Token}
     ]}),
     Response = do_request(RestAddress ++ "/user/groups/join", Headers, post, Body, Options),
-    ?PRINT(Response),
     get_header_val("user/groups",Response).
-
 
 %% Group functions
 
@@ -861,8 +992,212 @@ get_group_invitation_token(GID, ReqParams) ->
         do_request(
             RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/users/token", Headers, get, [], Options
         ),
-    ?PRINT(Response),
+%%     ?PRINT(Response),
     [Token] = get_body_val([token], Response),
     Token.
 
+get_group_users(GID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response =
+        do_request(
+            RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/users", Headers, get, [], Options
+        ),
+    %% TODO remove below line after tests
+    ?PRINT(Response),
+    [Users] = get_body_val([users], Response),
+    Users.
+
+get_group_user(GID, UID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response =
+        do_request(
+            RestAddress ++ "/groups/" ++ binary_to_list(GID) ++ "/users/" ++ binary_to_list(UID),
+            Headers, get, [], Options
+        ),
+    %% TODO remove below line after tests
+    ?PRINT(Response),
+    get_body_val([userId, name], Response).
+
+delete_group_user(GID, UID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    do_request(
+        RestAddress ++ "/groups/" ++ binary_to_list(GID) ++ "/users/" ++ binary_to_list(UID),
+        Headers, delete, [], Options
+    ).
+
+
+get_group_user_privileges(GID, UID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response =
+        do_request(
+            RestAddress ++ "/groups/" ++ binary_to_list(GID) ++ "/users/" ++
+                binary_to_list(UID) ++ "/privileges",
+            Headers, get, [], Options
+        ),
+    %% TODO remove below line after tests
+    ?PRINT(Response),
+    Response.
+
+set_group_user_privileges(GID, UID, Privileges, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response =
+        do_request(
+            RestAddress ++ "/groups/" ++ binary_to_list(GID) ++ "/users/" ++
+                binary_to_list(UID) ++ "/privileges",
+            Headers, post, [], Options
+        ),
+    %% TODO remove below line after tests
+    ?PRINT(Response),
+    Response.
+
+get_group_spaces(GID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response =
+        do_request(
+            RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/spaces", Headers, get, [], Options
+        ),
+    %% TODO remove below line after tests
+    ?PRINT(Response),
+    [Spaces] = get_body_val([spaces], Response),
+    Spaces.
+
+get_group_space(GID, SID, ReqParams) ->
+   {RestAddress, Headers, Options} = ReqParams,
+    Response =
+        do_request(
+            RestAddress ++ "/groups/" ++ binary_to_list(GID) ++ "/spaces/" ++ binary_to_list(SID),
+            Headers, get, [], Options),
+    get_body_val([spaceId, name], Response).
+
+create_space_for_group(Name, GID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Body = jiffy:encode({[
+        {name, Name}
+    ]}),
+    Response = do_request(
+        RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/spaces", Headers, post, Body, Options
+    ),
+    get_header_val("spaces", Response).
+    
+
+group_leave_space(GID, SID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    do_request(
+        RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/spaces/" ++ binary_to_list(SID),
+        Headers, delete, [], Options
+    ).
+
+join_group_to_space(Token, GID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Body = jiffy:encode({[
+        {token, Token}
+    ]}),
+    Response =
+        do_request(
+            RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/spaces/join",
+            Headers, post, Body, Options
+        ),
+    get_header_val("groups/" ++ binary_to_list(GID) ++"/spaces/", Response).
+
 %% Spaces functions
+
+get_space_creation_token_for_user(ReqParams)->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response = do_request(RestAddress ++ "/user/spaces/token", Headers, get, [], Options),
+    [Token] = get_body_val([token], Response),
+    Token.
+
+get_space_creation_token_for_group(GID, ReqParams)->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response = do_request(
+        RestAddress ++ "/groups/"++ binary_to_list(GID) ++ "/spaces/token", Headers, get, [], Options
+    ),
+    [Token] = get_body_val([token], Response),
+    Token.
+
+get_space_invitation_token(UserType, ID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response =
+        do_request(
+            RestAddress ++ "/spaces/" ++ binary_to_list(ID)++ "/" ++ atom_to_list(UserType)++"/token",
+            Headers, get, [], Options
+        ),
+    [Token] = get_body_val([token], Response),
+    Token.
+
+get_space_support_token(SID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response = do_request(
+        RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++"/providers/token", Headers, get, [], Options
+    ),
+    [Token] = get_body_val([token], Response),
+    Token.
+
+
+%% Group privileges tests
+
+group_privileges_check([], _, _, _) -> ok;
+group_privileges_check([FirstPrivilige | Privileges], UserData1, UserData2, GID) ->
+    group_privileges_check(FirstPrivilige,  UserData1, UserData2, GID),
+    group_privileges_check(Privileges, UserData1, UserData2, GID);
+group_privileges_check(group_view_data, UserData1, UserData2, GID) ->
+    {UserId1, UserReqParams1} = UserData1,
+    {UserId2, UserReqParams2} = UserData2,
+
+    %% user who belongs to group should have group_view_data privilege by default
+
+    ?assertMatch(
+        [GID, ?GROUP_NAME1],
+        read_group(GID, UserReqParams2)
+    );
+group_privileges_check(group_change_data, UserData1, UserData2, GID) ->
+    {UserId1, UserReqParams1} = UserData1,
+    {UserId2, UserReqParams2} = UserData2,
+
+     %% test if user2 lacks group_change_data privileges
+    ?assertMatch(
+        bad,
+        check_status(update_group(GID, ?GROUP_NAME2, UserReqParams2))
+    ),
+
+    set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
+
+    ?assertMatch(
+        ok,
+        check_status(update_group(GID, ?GROUP_NAME2, UserReqParams2))
+    );
+group_privileges_check(group_invite_user, UserData1, UserData2, GID) ->
+    {UserId1, UserReqParams1} = UserData1,
+    {UserId2, UserReqParams2} = UserData2,
+
+     %% test if user2 lacks group_change_data privileges
+    ?assertMatch(
+        bad,
+        check_status(get_group_invitation_token(GID, UserReqParams2))
+    ),
+
+    set_group_user_privileges(GID, UserId2, [group_invite_user], UserReqParams1),
+
+    ?assertMatch(
+        ok,
+        check_status(get_group_invitation_token(GID, UserReqParams2))
+    );
+group_privileges_check(group_set_privileges, UserData1, UserData2, GID) ->
+    {UserId1, UserReqParams1} = UserData1,
+    {UserId2, UserReqParams2} = UserData2,
+
+     %% test if user2 lacks group_change_data privileges
+    ?assertMatch(
+        bad,
+        check_status(set_group_user_privileges(GID, UserId1, ?GROUP_PRIVILEGES, UserReqParams2))
+    ),
+
+    set_group_user_privileges(GID, UserId2, [group_set_privileges], UserReqParams1),
+
+    ?assertMatch(
+        ok,
+        check_status(set_group_user_privileges(GID, UserId1, ?GROUP_PRIVILEGES, UserReqParams2))
+    ).
+
+
+
