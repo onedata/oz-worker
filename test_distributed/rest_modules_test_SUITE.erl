@@ -69,8 +69,9 @@ all() ->
     [
         {group, provider_rest_module_test_group},
         {group, user_rest_module_test_group},
-        {group, group_rest_module_test_group},
-        {group, spaces_rest_module_test_group}
+        {group, group_rest_module_test_group}
+%%         ,
+%%         {group, spaces_rest_module_test_group}
 
     ].
 
@@ -84,8 +85,7 @@ groups() ->
                 provider_space_test,
                 provider_check_test
             ]
-        }
-        ,
+        },
         {
             user_rest_module_test_group,
             [],
@@ -96,8 +96,7 @@ groups() ->
                 user_group_test,
                 many_users_group_test
             ]
-        }
-        ,
+        },
         {
             group_rest_module_test_group,
             [],
@@ -107,15 +106,15 @@ groups() ->
                 group_privileges_test,
                 group_spaces_test
             ]
-
-        },
-        {
-            spaces_rest_module_test_group,
-            [],
-            [
-                spaces_crud_test
-            ]
         }
+%%         ,
+%%         {
+%%             spaces_rest_module_test_group,
+%%             [],
+%%             [
+%%                 spaces_crud_test
+%%             ]
+%%         }
     ].
 
 %%%===================================================================
@@ -593,11 +592,10 @@ group_spaces_test(Config) ->
 
 %% spaces_rest_module_test_group =======================================
 
-spaces_crud_test(Config) ->
+%% spaces_crud_test(Config) ->
 %%     TODO
 %% testy do spejsow, CRUD, space_user, space_group
-    .
-
+%%     .1
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -983,7 +981,10 @@ update_group(GID, NewGroupName, ReqParams) ->
      Body = jiffy:encode({[
         {name, NewGroupName}
     ]}),
-    do_request(RestAddress ++ "/groups/" ++ binary_to_list(GID) , Headers, patch, Body, Options).
+%%     TODO remove print
+    Response = do_request(RestAddress ++ "/groups/" ++ binary_to_list(GID) , Headers, patch, Body, Options).
+    ?PRINT(Response),
+    Response.
 
 delete_group(GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
@@ -1042,11 +1043,14 @@ get_group_user_privileges(GID, UID, ReqParams) ->
 
 set_group_user_privileges(GID, UID, Privileges, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
+    Body = jiffy:encode({[
+        {privileges, Privileges}
+    ]}),
     Response =
         do_request(
             RestAddress ++ "/groups/" ++ binary_to_list(GID) ++ "/users/" ++
                 binary_to_list(UID) ++ "/privileges",
-            Headers, put, [], Options
+            Headers, put, Body, Options
         ),
     %% TODO remove below line after tests
     ?PRINT(Response),
@@ -1098,7 +1102,7 @@ join_group_to_space(Token, GID, ReqParams) ->
             RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/spaces/join",
             Headers, post, Body, Options
         ),
-    get_header_val("groups/" ++ binary_to_list(GID) ++"/spaces/", Response).
+    get_header_val("groups/" ++ binary_to_list(GID) ++"/spaces", Response).
 
 %% Spaces functions
 
@@ -1161,7 +1165,7 @@ delete_space_user(SID, UID, ReqParams) ->
         Headers, delete, [], Options
     ).
 
-get_space_user_privileges(SID, UID, ReqParas) ->
+get_space_user_privileges(SID, UID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response =
         do_request(
@@ -1171,7 +1175,7 @@ get_space_user_privileges(SID, UID, ReqParas) ->
         ),
     [Priveleges] = get_body_val([priveleges], Response).
 
-set_space_user_privileges(SID, UID, ReqParas) ->
+set_space_user_privileges(SID, UID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     do_request(
         RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++ "/users/" ++ binary_to_list(UID) ++
