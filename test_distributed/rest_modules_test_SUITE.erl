@@ -44,12 +44,10 @@
 -define(SPACE_SIZE2, <<"4096">>).
 -define(GROUP_PRIVILEGES,
     [
-        group_view_data
-%%         , group_change_data
-%%         , group_invite_user,
-%%         group_remove_user, group_join_space, group_create_space,
-%%         group_set_privileges, group_remove, group_leave_space,
-%%         group_create_space_token
+        group_view_data, group_change_data, group_invite_user,
+        group_remove_user, group_join_space, group_create_space,
+        group_set_privileges, group_remove, group_leave_space,
+        group_create_space_token
     ]
 ).
 -define(SPACE_PRIVILEGES,
@@ -60,10 +58,6 @@
         space_view_data
     ]
 ).
-
-
-
-
 
 %% API
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
@@ -89,35 +83,34 @@ all() ->
 
 groups() ->
     [
-%%         {
-%%             provider_rest_module_test_group,
-%%             [],
-%%             [
-%%                 provider_crud_test,
-%%                 provider_space_test,
-%%                 provider_check_test
-%%             ]
-%%         },
-%%         {
-%%             user_rest_module_test_group,
-%%             [],
-%%             [
-%%                 user_crud_test,
-%%                 user_space_test,
-%%                 many_users_space_test,
-%%                 user_group_test,
-%%                 many_users_group_test
-%%             ]
-%%         },
+        {
+            provider_rest_module_test_group,
+            [],
+            [
+                provider_crud_test,
+                provider_space_test,
+                provider_check_test
+            ]
+        },
+        {
+            user_rest_module_test_group,
+            [],
+            [
+                user_crud_test,
+                user_space_test,
+                many_users_space_test,
+                user_group_test,
+                many_users_group_test
+            ]
+        },
         {
             group_rest_module_test_group,
             [],
             [
-%%                 group_crud_test,
-%%                 group_users_test,
-                group_privileges_test
-%%                 ,
-%%                 group_spaces_test
+                group_crud_test,
+                group_users_test,
+                group_privileges_test,
+                group_spaces_test
             ]
         }
         ,
@@ -125,10 +118,10 @@ groups() ->
             spaces_rest_module_test_group,
             [],
             [
-%%                 spaces_crud_by_user_test,
-%%                 spaces_crud_by_provider_test,
-%%                 spaces_user_test,
-%%                 spaces_group_test,
+                spaces_crud_by_user_test,
+                spaces_crud_by_provider_test,
+                spaces_user_test,
+                spaces_group_test,
                 spaces_provider_test
 
 %%          TODO - add spaces_privileges_test
@@ -521,12 +514,15 @@ group_privileges_test(Config) ->
      %% create users
     UserId1 = create_user(?USER_NAME1, Node),
     UserId2 = create_user(?USER_NAME2, Node),
+    UserId3 = create_user(?USER_NAME3, Node),
 
     %% authenticate users
     NewHeaders = auth_user(UserId1, ProviderId, ReqParams, Node),
     UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders, headers),
     NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
     UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
+    NewHeaders3 = auth_user(UserId3, ProviderId, ReqParams, Node),
+    UserReqParams3 = update_req_params(ProviderReqParams, NewHeaders3, headers),
 
     GID = create_group(?GROUP_NAME1, UserReqParams1),
 
@@ -541,55 +537,53 @@ group_privileges_test(Config) ->
     %% TODO check other user privileges
     get_group_user_privileges(GID, UserId2, UserReqParams1),
 
-%%     SID = create_space_for_user(?SPACE_NAME1, UserReqParams2),
+    SID = create_space_for_user(?SPACE_NAME1, UserReqParams2),
 %%
 %%     set_group_user_privileges(GID, UserId2, [group_view_data, group_change_data], UserReqParams1),
 %%
 
 %%
 %%     get_group_user_privileges(GID, UserId2, UserReqParams1),
-%%
-    set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
-
-    get_group_user_privileges(GID, UserId2, UserReqParams1),
-
-    set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
-
-    get_group_user_privileges(GID, UserId2, UserReqParams1),
-
-    set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
-
-    get_group_user_privileges(GID, UserId2, UserReqParams1).
-%%     ,
-
-%%     set_group_user_privileges(
-%%         GID, UserId2, [group_invite_user], UserReqParams1),
+%% %%
+%%     set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
 %%
 %%     get_group_user_privileges(GID, UserId2, UserReqParams1),
 %%
-%%     set_group_user_privileges(GID, UserId2, [group_view_data], UserReqParams1),
-
-%%     get_group_user_privileges(GID, UserId2, UserReqParams1).
-
-%%     set_group_user_privileges(GID, UserId2, [], UserReqParams1),
-%%
-%%     get_group_user_privileges(GID, UserId2, UserReqParams1).
-
-%%     ?PRINT(SID),
-%%
-%%     clean_privileges(GID, UserId2, UserReqParams1),
-%%
-%%     get_group_user_privileges(GID, UserId1, UserReqParams1),
+%%     set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
 %%
 %%     get_group_user_privileges(GID, UserId2, UserReqParams1),
+%%
+%% %%     TODO sprawdzic czemu za 3 razem sie wypieprza
+%%
+%%     set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
+%%
+%%     get_group_user_privileges(GID, UserId2, UserReqParams1),
+%% %%     ,
+%%
+%% %%     set_group_user_privileges(
+%% %%         GID, UserId2, [group_invite_user], UserReqParams1),
+%% %%
+%% %%     get_group_user_privileges(GID, UserId2, UserReqParams1),
+%% %%
+%% %%     set_group_user_privileges(GID, UserId2, [group_view_data], UserReqParams1),
+%%
+%% %%     get_group_user_privileges(GID, UserId2, UserReqParams1).
+%%
+%% %%     set_group_user_privileges(GID, UserId2, [], UserReqParams1),
+%% %%
+%% %%     get_group_user_privileges(GID, UserId2, UserReqParams1).
+%%
+%% %%     ?PRINT(SID),
+%% %%
+%% %%     clean_group_privileges(GID, UserId2, UserReqParams1),
+%% %%
+%% %%     get_group_user_privileges(GID, UserId1, UserReqParams1),
+%% %%
+%% %%     get_group_user_privileges(GID, UserId2, UserReqParams1),
 
-%%     ?assertMatch(
-%%         ok,
-%%         group_privileges_check(
-%%             ?GROUP_PRIVILEGES, {UserId1, UserReqParams1}, {UserId2, UserReqParams2}, GID, SID
-%%         )
-%%     ).
+    Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
 
+    ?assertMatch(ok, group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID)).
 
 group_spaces_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -852,20 +846,20 @@ spaces_provider_test(Config) ->
 %%     set_group_user_privileges(GID, UserId2, [group_view_data, group_change_data], UserReqParams1),
 %%
 
+%% %%
+%% %%     get_group_user_privileges(GID, UserId2, UserReqParams1),
+%% %%
+%%     set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
 %%
 %%     get_group_user_privileges(GID, UserId2, UserReqParams1),
 %%
-    set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
-
-    get_group_user_privileges(GID, UserId2, UserReqParams1),
-
-    set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
-
-    get_group_user_privileges(GID, UserId2, UserReqParams1),
-
-    set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
-
-    get_group_user_privileges(GID, UserId2, UserReqParams1).
+%%     set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
+%%
+%%     get_group_user_privileges(GID, UserId2, UserReqParams1),
+%%
+%%     set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
+%%
+%%     get_group_user_privileges(GID, UserId2, UserReqParams1).
 
 
 %%
@@ -1257,12 +1251,10 @@ update_group(GID, NewGroupName, ReqParams) ->
      Body = jiffy:encode({[
         {name, NewGroupName}
     ]}),
-%%     TODO remove print
     Response =
         do_request(
             RestAddress ++ "/groups/" ++ binary_to_list(GID) , Headers, patch, Body, Options
         ),
-    ?PRINT(Response),
     Response.
 
 delete_group(GID, ReqParams) ->
@@ -1275,7 +1267,6 @@ get_group_invitation_token(GID, ReqParams) ->
         do_request(
             RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/users/token", Headers, get, [], Options
         ),
-%%     ?PRINT(Response),
     [Token] = get_body_val([token], Response),
     Token.
 
@@ -1341,8 +1332,6 @@ get_group_spaces(GID, ReqParams) ->
         do_request(
             RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/spaces", Headers, get, [], Options
         ),
-    %% TODO remove below line after tests
-%%     ?PRINT(Response),
     [Spaces] = get_body_val([spaces], Response),
     Spaces.
 
@@ -1521,8 +1510,6 @@ delete_space_provider(SID, PID, ReqParams) ->
         ),
     Response.
 
-%% TODO space_groups functions and then test_functions fot this cases
-
 get_space_creation_token_for_user(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response = do_request(RestAddress ++ "/user/spaces/token", Headers, get, [], Options),
@@ -1550,7 +1537,8 @@ get_space_invitation_token(UserType, ID, ReqParams) ->
 get_space_support_token(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response = do_request(
-        RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++"/providers/token", Headers, get, [], Options
+        RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++"/providers/token",
+        Headers, get, [], Options
     ),
     [Token] = get_body_val([token], Response),
     Token.
@@ -1558,70 +1546,12 @@ get_space_support_token(SID, ReqParams) ->
 
 %% Group privileges tests
 
-
-group_privileges_check([group_view_data], UserData1, UserData2, GID, _SID) ->
-    {UserId1, UserReqParams1} = UserData1,
-    {UserId2, UserReqParams2} = UserData2,
-
-    get_group_user_privileges(GID, UserId1, UserReqParams1),
-    get_group_user_privileges(GID, UserId2, UserReqParams1),
-
-     %% test if user2 lacks group_change_data privileges
-    ?assertMatch(
-        bad,
-        check_status(update_group(GID, ?GROUP_NAME2, UserReqParams2))
-    ),
-
-    ?PRINT("SET SET SET"),
-%% TODO uncomment below lines after finding bug in setting priviliges
-
-    set_group_user_privileges(GID, UserId2, [group_view_data], UserReqParams1),
-
-    ?assertMatch(
-        ok,
-        check_status(update_group(GID, ?GROUP_NAME2, UserReqParams2))
-    ),
-    get_group_user_privileges(GID, UserId1, UserReqParams1),
-    get_group_user_privileges(GID, UserId2, UserReqParams1),
-    clean_group_privileges(GID, UserId2, UserReqParams1),
-    ok.
-
-%% group_privileges_check([], _, _, _, _) -> ok;
-%% group_privileges_check([FirstPrivilege | Privileges], UserData1, UserData2, GID, _SID) ->
-%%     ?PRINT("PRIVILEGE"),
-%%     ?PRINT(FirstPrivilege),
+%% group_privilege_check([group_view_data], Users, GID, _SID) ->
 %%     {UserId1, UserReqParams1} = UserData1,
 %%     {UserId2, UserReqParams2} = UserData2,
 %%
 %%     get_group_user_privileges(GID, UserId1, UserReqParams1),
 %%     get_group_user_privileges(GID, UserId2, UserReqParams1),
-%%     group_privileges_check(FirstPrivilege,  UserData1, UserData2, GID, _SID),
-%%     ?PRINT("BACK"),
-%%
-%%     get_group_user_privileges(GID, UserId1, UserReqParams1),
-%%     get_group_user_privileges(GID, UserId2, UserReqParams1),
-%%     group_privileges_check(Privileges, UserData1, UserData2, GID, _SID);
-%% group_privileges_check(group_view_data, UserData1, UserData2, GID, _SID) ->
-%%     {UserId1, UserReqParams1} = UserData1,
-%%     {UserId2, UserReqParams2} = UserData2,
-%%     ?PRINT(UserId1),
-%%     ?PRINT(UserId2),
-%%
-%%     %% user who belongs to group should have group_view_data privilege by default
-%%
-%%     get_group_user_privileges(GID, UserId1, UserReqParams1),
-%%     get_group_user_privileges(GID, UserId2, UserReqParams1),
-%%
-%%     ?assertMatch(
-%%         [GID, ?GROUP_NAME1],
-%%         read_group(GID, UserReqParams2)
-%%     ),
-%%     clean_privileges(GID, UserId2, UserReqParams1),
-%%     get_group_user_privileges(GID, UserId1, UserReqParams1),
-%%     get_group_user_privileges(GID, UserId2, UserReqParams1);
-%% group_privileges_check(group_change_data, UserData1, UserData2, GID, _SID) ->
-%%     {UserId1, UserReqParams1} = UserData1,
-%%     {UserId2, UserReqParams2} = UserData2,
 %%
 %%      %% test if user2 lacks group_change_data privileges
 %%     ?assertMatch(
@@ -1629,167 +1559,102 @@ group_privileges_check([group_view_data], UserData1, UserData2, GID, _SID) ->
 %%         check_status(update_group(GID, ?GROUP_NAME2, UserReqParams2))
 %%     ),
 %%
-%%     ?PRINT("SETTING PRIVILEGES"),
-%% %% TODO uncomment below lines after finding bug in setting priviliges
+%%     set_group_user_privileges(GID, UserId2, [group_view_data], UserReqParams1),
 %%
-%% %%     set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
-%% %%
-%% %%     ?assertMatch(
-%% %%         ok,
-%% %%         check_status(update_group(GID, ?GROUP_NAME2, UserReqParams2))
-%% %%     ),
+%%     ?assertMatch(
+%%         ok,
+%%         check_status(update_group(GID, ?GROUP_NAME2, UserReqParams2))
+%%     ),
 %%     get_group_user_privileges(GID, UserId1, UserReqParams1),
 %%     get_group_user_privileges(GID, UserId2, UserReqParams1),
-%%     clean_privileges(GID, UserId2, UserReqParams1);
-%% group_privileges_check(group_invite_user, UserData1, UserData2, GID, _SID) ->
-%%     {UserId1, UserReqParams1} = UserData1,
-%%     {UserId2, UserReqParams2} = UserData2,
-%%
-%%      %% test if user2 lacks group_invite_user privileges
-%%     ?assertMatch(
-%%         bad,
-%%         check_status(get_group_invitation_token(GID, UserReqParams2))
-%%     ),
-%%
-%%     set_group_user_privileges(GID, UserId2, [group_invite_user], UserReqParams1),
-%%
-%%     ?assertNotMatch(
-%%         ok,
-%%         get_group_invitation_token(GID, UserReqParams2)
-%%     ),
-%%     clean_privileges(GID, UserId2, UserReqParams1);
-%% group_privileges_check(group_set_privileges, UserData1, UserData2, GID, _SID) ->
-%%     {UserId1, UserReqParams1} = UserData1,
-%%     {UserId2, UserReqParams2} = UserData2,
-%%
-%%      %% test if user2 lacks group_set_privileges privileges
-%%     ?assertMatch(
-%%         bad,
-%%         check_status(set_group_user_privileges(GID, UserId1, ?GROUP_PRIVILEGES, UserReqParams2))
-%%     ),
-%%
-%%     set_group_user_privileges(GID, UserId2, [group_set_privileges], UserReqParams1),
-%%
-%%     ?assertMatch(
-%%         ok,
-%%         check_status(set_group_user_privileges(GID, UserId1, ?GROUP_PRIVILEGES, UserReqParams2))
-%%     ),
-%%     clean_privileges(GID, UserId2, UserReqParams1);
-%%
-%% group_privileges_check(group_join_space, UserData1, UserData2, GID, SID) ->
-%%     {UserId1, UserReqParams1} = UserData1,
-%%     {UserId2, UserReqParams2} = UserData2,
-%%
-%%     InvitationToken = get_space_invitation_token(groups, GID, UserReqParams2),
-%%
-%%      %% test if user2 lacks group_join_space privileges
-%%     ?assertMatch(
-%%         bad,
-%%         check_status(join_group_to_space(InvitationToken, SID, UserReqParams2))
-%%     ),
-%%
-%%     set_group_user_privileges(GID, UserId2, [group_join_space], UserReqParams1),
-%%
-%%     ?assertMatch(
-%%         SID,
-%%         check_status(join_group_to_space(InvitationToken, GID, UserReqParams2))
-%%     ),
-%%     clean_privileges(GID, UserId2, UserReqParams1);
-%%
-%% group_privileges_check(group_leave_space, UserData1, UserData2, GID, SID) ->
-%%     {UserId1, UserReqParams1} = UserData1,
-%%     {UserId2, UserReqParams2} = UserData2,
-%%
-%%     InvitationToken = get_space_invitation_token(groups, SID, UserReqParams2),
-%%
-%%     set_group_user_privileges(GID, UserId2, [group_join_space], UserReqParams1),
-%%
-%%     ?assertMatch(
-%%         ok,
-%%         check_status(join_group_to_space(InvitationToken, GID, UserReqParams2))
-%%     ),
-%%     %% test if user2 lacks group_leave_space privileges
-%%     ?assertMatch(
-%%         bad,
-%%         check_status(group_leave_space(GID, SID, UserReqParams2))
-%%     ),
-%%
-%%     set_group_user_privileges(GID, UserId2, [group_join_space, group_leave_space], UserReqParams1),
-%%     ?assertMatch(
-%%         ok,
-%%         check_status(group_leave_space(GID, SID, UserReqParams2))
-%%     ),
-%%     clean_privileges(GID, UserId2, UserReqParams1);
-%%
-%% group_privileges_check(group_create_space_token, UserData1, UserData2, GID, SID) ->
-%%     {UserId1, UserReqParams1} = UserData1,
-%%     {UserId2, UserReqParams2} = UserData2,
-%%
-%%     %% test if user2 lacks group_create_space_token privileges
-%%     ?assertMatch(
-%%         bad,
-%%         check_status(get_space_creation_token_for_group(GID, UserReqParams2))
-%%     ),
-%%
-%%     set_group_user_privileges(GID, UserId2, [group_create_space_token, group_leave_space], UserReqParams1),
-%%
-%%     ?assertNotMatch(
-%%         bad,
-%%         check_status(get_space_creation_token_for_group(GID, UserReqParams2))
-%%     ),
-%%     clean_privileges(GID, UserId2, UserReqParams1);
-%%
-%% group_privileges_check(group_create_space_token, UserData1, UserData2, GID, SID) ->
-%%     {UserId1, UserReqParams1} = UserData1,
-%%     {UserId2, UserReqParams2} = UserData2,
-%%
-%%     %% test if user2 lacks group_create_space_token privileges
-%%     ?assertMatch(
-%%         bad,
-%%         check_status(create_space_for_group(?SPACE_NAME2, GID, UserReqParams2))
-%%     ),
-%%
-%%     set_group_user_privileges(GID, UserId2, [group_create_space], UserReqParams1),
-%%
-%%     ?assertNotMatch(
-%%         bad,
-%%         check_status(create_space_for_group(?SPACE_NAME2, GID, UserReqParams2))
-%%     ),
-%%     clean_privileges(GID, UserId2, UserReqParams1);
-%%
-%% group_privileges_check(group_remove_user, UserData1, UserData2, GID, _SID) ->
-%%     group_privileges_check(group_remove, UserData1, UserData2, GID, _SID);
-%%
-%% group_privileges_check(group_remove, UserData1, UserData2, GID, _SID) ->
-%%
-%%     {UserId1, UserReqParams1} = UserData1,
-%%     {UserId2, UserReqParams2} = UserData2,
-%%
-%%     %% test if user2 lacks group_remove_user privileges
-%%     ?assertMatch(
-%%         bad,
-%%         check_status(delete_group_user(GID, UserId1, UserReqParams2))
-%%     ),
-%%
-%%     %% test if user2 lacks group_remove privileges
-%%     ?assertMatch(
-%%         bad,
-%%         check_status(delete_group(GID, UserReqParams2))
-%%     ),
-%%
-%%     set_group_user_privileges(GID, UserId2, [group_remove_user, group_remove], UserReqParams1),
-%%
-%%     %% test if user2 lacks group_remove_user privileges
-%%     ?assertMatch(
-%%         ok,
-%%         check_status(delete_group_user(GID, UserId1, UserReqParams2))
-%%     ),
-%%
-%%     %% test if user2 lacks group_remove privileges
-%%     ?assertMatch(
-%%         ok,
-%%         check_status(delete_group(GID, UserReqParams2))
-%%     ).
+%%     clean_group_privileges(GID, UserId2, UserReqParams1),
+%%     ok.
+
+group_privileges_check([], _, _, _) -> ok;
+group_privileges_check([FirstPrivilege | Privileges], Users, GID, _SID) ->
+    ?PRINT("PRIVILEGE"),
+    ?PRINT(FirstPrivilege),
+    group_privilege_check(FirstPrivilege, Users, GID, _SID),
+    group_privileges_check(Privileges, Users, GID, _SID).
+
+group_privilege_check(group_view_data, Users, GID, _SID) ->
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+    %% user who belongs to group should have group_view_data privilege by default
+    ?assertMatch([GID, ?GROUP_NAME1], read_group(GID, UserReqParams2)),
+    clean_group_privileges(GID, UserId2, UserReqParams1);
+group_privilege_check(group_change_data, Users, GID, _SID) ->
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+    %% test if user2 lacks group_change_data privileges
+    ?assertMatch(bad, check_status(update_group(GID, ?GROUP_NAME2, UserReqParams2))),
+    set_group_user_privileges(GID, UserId2, [group_change_data], UserReqParams1),
+    ?assertMatch(ok, check_status(update_group(GID, ?GROUP_NAME2, UserReqParams2))),
+    clean_group_privileges(GID, UserId2, UserReqParams1);
+group_privilege_check(group_invite_user, Users, GID, _SID) ->
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+    %% test if user2 lacks group_invite_user privileges
+    ?assertMatch(bad, check_status(get_group_invitation_token(GID, UserReqParams2))),
+    set_group_user_privileges(GID, UserId2, [group_invite_user], UserReqParams1),
+    ?assertNotMatch(bad, get_group_invitation_token(GID, UserReqParams2)),
+    clean_group_privileges(GID, UserId2, UserReqParams1);
+group_privilege_check(group_set_privileges, Users, GID, _SID) ->
+    [{UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+     %% test if user2 lacks group_set_privileges privileges
+    ?assertMatch(bad,
+        check_status(set_group_user_privileges(GID, UserId1, ?GROUP_PRIVILEGES, UserReqParams2))
+    ),
+    set_group_user_privileges(GID, UserId2, [group_set_privileges], UserReqParams1),
+    ?assertMatch(ok,
+        check_status(set_group_user_privileges(GID, UserId1, ?GROUP_PRIVILEGES, UserReqParams2))
+    ),
+    clean_group_privileges(GID, UserId2, UserReqParams1);
+group_privilege_check(group_join_space, Users, GID, SID) ->
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+    InvitationToken = get_space_invitation_token(groups, GID, UserReqParams2),
+     %% test if user2 lacks group_join_space privileges
+    ?assertMatch(bad, check_status(join_group_to_space(InvitationToken, SID, UserReqParams2))),
+    set_group_user_privileges(GID, UserId2, [group_join_space], UserReqParams1),
+    ?assertMatch(SID, check_status(join_group_to_space(InvitationToken, GID, UserReqParams2))),
+    clean_group_privileges(GID, UserId2, UserReqParams1);
+group_privilege_check(group_leave_space, Users, GID, SID) ->
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+    InvitationToken = get_space_invitation_token(groups, SID, UserReqParams2),
+    set_group_user_privileges(GID, UserId2, [group_join_space], UserReqParams1),
+    join_group_to_space(InvitationToken, GID, UserReqParams2),
+    %% test if user2 lacks group_leave_space privileges
+    ?assertMatch(bad, check_status(group_leave_space(GID, SID, UserReqParams2))),
+    set_group_user_privileges(GID, UserId2, [group_join_space, group_leave_space], UserReqParams1),
+    ?assertMatch(ok, check_status(group_leave_space(GID, SID, UserReqParams2))),
+    clean_group_privileges(GID, UserId2, UserReqParams1);
+group_privilege_check(group_create_space_token, Users, GID, _SID) ->
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+    %% test if user2 lacks group_create_space_token privileges
+    ?assertMatch(bad, check_status(get_space_creation_token_for_group(GID, UserReqParams2))),
+    set_group_user_privileges(
+        GID, UserId2, [group_create_space_token, group_leave_space], UserReqParams1
+    ),
+    ?assertNotMatch(bad, check_status(get_space_creation_token_for_group(GID, UserReqParams2))
+    ), clean_group_privileges(GID, UserId2, UserReqParams1);
+group_privilege_check(group_create_space_token, Users, GID, _SID) ->
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+    %% test if user2 lacks group_create_space_token privileges
+    ?assertMatch(bad, check_status(create_space_for_group(?SPACE_NAME2, GID, UserReqParams2))),
+    set_group_user_privileges(GID, UserId2, [group_create_space], UserReqParams1),
+    ?assertNotMatch(bad, check_status(create_space_for_group(?SPACE_NAME2, GID, UserReqParams2))),
+    clean_group_privileges(GID, UserId2, UserReqParams1);
+group_privilege_check(group_remove_user, Users, GID, _SID) ->
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} , {UserId3, UserReqParams3}| _] = Users,
+    Token = get_group_invitation_token(GID, UserReqParams1),
+    join_user_to_group(Token, UserReqParams3),
+    %% test if user2 lacks group_remove_user privilege
+    ?assertMatch(bad, check_status(delete_group_user(GID, UserId3, UserReqParams3))),
+    set_group_user_privileges(GID, UserId2, [group_remove_user], UserReqParams3),
+    ?assertMatch(ok, check_status(delete_group_user(GID, UserId3, UserReqParams3)));
+group_privilege_check(group_remove, Users, GID, _SID) ->
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+    %% test if user2 lacks group_remove privileges
+    ?assertMatch(bad, check_status(delete_group(GID, UserReqParams2))),
+    set_group_user_privileges(GID, UserId2, [group_remove], UserReqParams1),
+    ?assertMatch(ok, check_status(delete_group(GID, UserReqParams2))).
 
 clean_group_privileges(GID, UserId, ReqParams) ->
     set_group_user_privileges(GID, UserId, [group_view_data], ReqParams).
