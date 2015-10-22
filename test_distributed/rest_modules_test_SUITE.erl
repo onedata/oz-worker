@@ -231,7 +231,7 @@ provider_create_space_test(Config) ->
     SCRToken1 = get_space_creation_token_for_user(UserReqParams),
     SID1 = create_space_for_provider(SCRToken1, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
-    ?assertMatch(true, is_included([SID1], get_provider_spaces(ProviderReqParams))).
+    ?assertMatch([SID1], get_provider_spaces(ProviderReqParams)).
 
 provider_get_space_data_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -647,7 +647,8 @@ group_set_privileges_test(Config) ->
     SID = create_space_for_user(?SPACE_NAME1, UserReqParams2),
 
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
-    ?assertMatch(ok, group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID)).
+%%     ?assertMatch(ok, group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID)).
+    group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID).
 
 group_create_space_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -963,7 +964,8 @@ space_set_privileges_test(Config) ->
 
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
 
-    ?assertMatch(ok, space_privileges_check(?SPACE_PRIVILEGES, Users, GID, SID)).
+%%     ?assertMatch(ok, space_privileges_check(?SPACE_PRIVILEGES, Users, GID, SID)).
+    space_privileges_check(?SPACE_PRIVILEGES, Users, GID, SID).
 
 %%%===================================================================
 %%% Setup/teardown functions
