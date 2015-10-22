@@ -647,7 +647,6 @@ group_set_privileges_test(Config) ->
     SID = create_space_for_user(?SPACE_NAME1, UserReqParams2),
 
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
-%%     ?assertMatch(ok, group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID)).
     group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID).
 
 group_create_space_test(Config) ->
@@ -964,7 +963,6 @@ space_set_privileges_test(Config) ->
 
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
 
-%%     ?assertMatch(ok, space_privileges_check(?SPACE_PRIVILEGES, Users, GID, SID)).
     space_privileges_check(?SPACE_PRIVILEGES, Users, GID, SID).
 
 %%%===================================================================
