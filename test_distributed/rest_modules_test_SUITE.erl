@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc Integration tests of rest_modules
+%%% @doc Integration tests of rest_modules in Global Registry
 %%% @end
 %%%-------------------------------------------------------------------
 -module(rest_modules_test_SUITE).
@@ -46,8 +46,7 @@
 ).
 -define(SPACE_PRIVILEGES,
     [
-        space_view_data, space_change_data,
-        space_invite_user,
+        space_view_data, space_change_data, space_invite_user,
         space_remove_user, space_invite_group, space_remove_group,
         space_set_privileges,space_remove, space_add_provider,
         space_remove_provider
@@ -99,7 +98,8 @@ groups() ->
                 provider_create_space_test,
                 provider_get_space_data_test,
                 provider_delete_space_test,
-                provider_check_test,
+                provider_check_ip_test,
+                provider_check_port_test,
                 provider_support_space_test
             ]
         },
@@ -166,7 +166,6 @@ groups() ->
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
-
 
 %% provider_rest_module_test_group====================================
 
@@ -614,11 +613,15 @@ group_get_privileges_test(Config) ->
 
     %% check user creator privileges
     ?assertMatch(true,
-        is_included(?GROUP_PRIVILEGES, get_group_user_privileges(GID, UserId1, UserReqParams1))),
+        is_included(
+            [atom_to_binary(Privilege, latin1) || Privilege <- ?GROUP_PRIVILEGES],
+            get_group_user_privileges(GID, UserId1, UserReqParams1))
+    ),
 
     %% check other user privileges
     ?assertMatch(true,
-        is_included([group_view_data], get_group_user_privileges(GID, UserId2, UserReqParams1))).
+        is_included(
+            [<<"group_view_data">>], get_group_user_privileges(GID, UserId2, UserReqParams1))).
 
 group_set_privileges_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -796,14 +799,12 @@ space_get_user_data_test(Config) ->
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    {_UserId1, UserReqParams1} =
+    {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
-    {UserId2, UserReqParams2} =
-        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
     SID = create_space(?SPACE_NAME1, UserReqParams1),
     
-    ?assertMatch([UserId2, ?USER_NAME2], get_space_user(SID, UserId2, UserReqParams2)).
+    ?assertMatch([UserId1, ?USER_NAME1], get_space_user(SID, UserId1, UserReqParams1)).
 
 space_delete_user_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -835,10 +836,9 @@ space_get_groups_test(Config) ->
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
     GID1 = create_group(?GROUP_NAME1, UserReqParams),
-    GID2 = create_group(?GROUP_NAME2, UserReqParams),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
 
-    ?assertMatch(true, is_included([GID1, GID2], get_space_groups(SID, UserReqParams))).
+    ?assertMatch(true, is_included([GID1], get_space_groups(SID, UserReqParams))).
 
 space_get_group_data_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -853,7 +853,7 @@ space_get_group_data_test(Config) ->
     GID1 = create_group(?GROUP_NAME1, UserReqParams),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
 
-    ?assertMatch([GID1, ?GROUP_NAME2], get_space_group(SID, GID1, UserReqParams)).
+    ?assertMatch([GID1, ?GROUP_NAME1], get_space_group(SID, GID1, UserReqParams)).
 
 space_delete_group_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -868,8 +868,7 @@ space_delete_group_test(Config) ->
     GID1 = create_group(?GROUP_NAME1, UserReqParams),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
 
-    ?assertMatch(ok, check_status(delete_space_group(SID, GID1, UserReqParams))),
-    ?assertMatch(false, is_included([GID1], get_space_groups(SID, UserReqParams))).
+    ?assertMatch(ok, check_status(delete_space_group(SID, GID1, UserReqParams))).
 
 space_get_providers_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -938,11 +937,10 @@ space_get_privileges_test(Config) ->
     join_user_to_space(InvitationToken, UserReqParams2),
 
     ?assertMatch(true,
-        is_included(?SPACE_PRIVILEGES, get_space_privileges(users, SID, UserId1, UserReqParams1))),
+        is_included([atom_to_binary(Privilege, latin1) || Privilege <- ?SPACE_PRIVILEGES], get_space_privileges(users, SID, UserId1, UserReqParams1))),
 
     ?assertMatch(true,
-        is_included([space_view_data], get_space_privileges(users, SID, UserId2, UserReqParams1))).
-
+        is_included([<<"space_view_data">>], get_space_privileges(users, SID, UserId2, UserReqParams1))).
 
 space_set_privileges_test(Config) ->
     RestAddress = ?config(restAddress, Config),
@@ -966,7 +964,6 @@ space_set_privileges_test(Config) ->
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
 
     ?assertMatch(ok, space_privileges_check(?SPACE_PRIVILEGES, Users, GID, SID)).
-
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -1000,7 +997,6 @@ end_per_suite(Config) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
 
 is_included(_, []) -> false;
 is_included([], _MainList) -> true;
@@ -1642,12 +1638,10 @@ get_space_group(SID, GID, ReqParams) ->
 
 delete_space_group(SID, GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Response =
-        do_request(
-            RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++ "/groups/" ++ binary_to_list(GID),
-            Headers, delete, [], Options
-        ),
-    Response.
+    do_request(
+        RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++ "/groups/" ++ binary_to_list(GID),
+        Headers, delete, [], Options
+    ).
 
 get_space_providers(SID, ReqParams) ->
 {RestAddress, Headers, Options} = ReqParams,
@@ -1670,12 +1664,10 @@ get_space_provider(SID, PID, ReqParams) ->
 
 delete_space_provider(SID, PID, ReqParams) ->
 {RestAddress, Headers, Options} = ReqParams,
-    Response =
-        do_request(
-            RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++ "/providers/" ++ binary_to_list(PID),
-            Headers, delete, [], Options
-        ),
-    Response.
+    do_request(
+        RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++ "/providers/" ++ binary_to_list(PID),
+        Headers, delete, [], Options
+    ).
 
 get_space_creation_token_for_user(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
