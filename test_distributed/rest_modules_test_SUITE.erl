@@ -56,18 +56,28 @@
 
 %% API
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
--export([provider_crud_test/1, provider_space_test/1, provider_check_test/1, user_crud_test/1,
-    user_space_test/1, many_users_space_test/1, user_group_test/1, many_users_group_test/1,
-    group_crud_test/1, group_users_test/1, group_privileges_test/1, group_spaces_test/1,
-    spaces_crud_by_user_test/1, spaces_crud_by_provider_test/1, spaces_user_test/1,
-    spaces_group_test/1, spaces_provider_test/1, spaces_privileges_test/1]).
+-export([provider_create_test/1, provider_update_test/1, provider_get_data_test/1,
+    provider_delete_test/1, provider_create_space_test/1, provider_get_space_data_test/1,
+    provider_delete_space_test/1, provider_check_port_test/1, provider_check_ip_test/1,
+    provider_support_space_test/1, user_authenticate_test/1, user_update_test/1, user_delete_test/1,
+    user_merge_test/1, user_create_space_test/1, user_default_space_test/1, user_delete_space_test/1,
+    user_get_space_data_test/1, user_space_invite_test/1, user_get_group_data_test/1,
+    user_leave_group_test/1, user_group_invite_test/1, group_create_test/1, group_update_test/1,
+    group_delete_test/1, user_create_group_test/1, group_invite_user_test/1,
+    group_get_user_data_test/1, group_delete_user_test/1, group_get_privileges_test/1,
+    group_set_privileges_test/1, group_create_space_test/1, group_get_space_data_test/1,
+    group_delete_space_test/1, group_space_invitation_test/1, space_create_by_user_test/1,
+    space_create_by_provider_test/1, space_update_test/1, space_delete_test/1,
+    space_get_users_test/1, space_get_user_data_test/1,
+    space_delete_user_test/1, space_get_groups_test/1, space_get_group_data_test/1,
+    space_delete_group_test/1, space_get_providers_test/1, space_get_provider_data_test/1,
+    space_delete_provider_test/1, space_get_privileges_test/1, space_set_privileges_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 -performance({test_cases, []}).
-
 all() ->
     [
         {group, provider_rest_module_test_group},
@@ -82,43 +92,73 @@ groups() ->
             provider_rest_module_test_group,
             [],
             [
-                provider_crud_test,
-                provider_space_test,
-                provider_check_test
+                provider_create_test,
+                provider_update_test,
+                provider_get_data_test,
+                provider_delete_test,
+                provider_create_space_test,
+                provider_get_space_data_test,
+                provider_delete_space_test,
+                provider_check_test,
+                provider_support_space_test
             ]
         },
         {
             user_rest_module_test_group,
             [],
             [
-                user_crud_test,
-                user_space_test,
-                many_users_space_test,
-                user_group_test,
-                many_users_group_test
+                user_authenticate_test,
+                user_update_test,
+                user_delete_test,
+                user_merge_test,
+                user_create_space_test,
+                user_default_space_test,
+                user_delete_space_test,
+                user_get_space_data_test,
+                user_space_invite_test,
+                user_get_group_data_test,
+                user_leave_group_test,
+                user_group_invite_test
             ]
         },
         {
             group_rest_module_test_group,
             [],
             [
-                group_crud_test,
-                group_users_test,
-                group_privileges_test,
-                group_spaces_test
+                group_create_test,
+                group_update_test,
+                group_delete_test,
+                user_create_group_test,
+                group_invite_user_test,
+                group_get_user_data_test,
+                group_delete_user_test,
+                group_get_privileges_test,
+                group_set_privileges_test,
+                group_create_space_test,
+                group_get_space_data_test,
+                group_delete_space_test,
+                group_space_invitation_test
             ]
-        }
-        ,
+        },
         {
             spaces_rest_module_test_group,
             [],
             [
-                spaces_crud_by_user_test,
-                spaces_crud_by_provider_test,
-                spaces_user_test,
-                spaces_group_test,
-                spaces_provider_test,
-                spaces_privileges_test
+                space_create_by_user_test,
+                space_create_by_provider_test,
+                space_update_test,
+                space_delete_test,
+                space_get_users_test,
+                space_get_user_data_test,
+                space_delete_user_test,
+                space_get_groups_test,
+                space_get_group_data_test,
+                space_delete_group_test,
+                space_get_providers_test,
+                space_get_provider_data_test,
+                space_delete_provider_test,
+                space_get_privileges_test,
+                space_set_privileges_test
             ]
         }
     ].
@@ -130,339 +170,440 @@ groups() ->
 
 %% provider_rest_module_test_group====================================
 
-provider_crud_test(Config) ->
+provider_create_test(Config) ->
     RestAddress = ?config(restAddress, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-    
+
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
     ?assertMatch(
         [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
         read_provider(ProviderReqParams)
-    ),
+    ).
+
+provider_update_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
     update_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, ProviderReqParams),
 
     ?assertMatch(
         [?CLIENT_NAME2, ?URLS2, ?REDIRECTION_POINT2, ProviderId],
         read_provider(ProviderReqParams)
-    ),
+    ).
 
-    ?assertMatch(
-        [?CLIENT_NAME2, ?URLS2, ?REDIRECTION_POINT2, ProviderId],
-        get_provider_data_by_pid(ProviderId, ProviderReqParams)
-    ),
-
-    delete_provider(ProviderReqParams),
-
-    ?assertMatch(request_error,read_provider(ProviderReqParams)).
-
-provider_space_test(Config) ->
+provider_get_data_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    %% create user
-    UserId = create_user(?USER_NAME1, Node),
+    ?assertMatch(
+        [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        get_provider_data_by_pid(ProviderId, ProviderReqParams)
+    ).
 
-    %% authenticate user
-    NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
-    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
+provider_delete_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+    
+    {_ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    ?assertMatch(ok, check_status(delete_provider(ProviderReqParams))),
+    ?assertMatch(request_error,read_provider(ProviderReqParams)).
+
+provider_create_space_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
     %% get space creation token1
     SCRToken1 = get_space_creation_token_for_user(UserReqParams),
-
     SID1 = create_space_for_provider(SCRToken1, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
-    %% get space creation token2
-    SCRToken2 = get_space_creation_token_for_user(UserReqParams),
+    ?assertMatch(true, is_included([SID1], get_provider_spaces(ProviderReqParams))).
 
-    SID2 = create_space_for_provider(SCRToken2, ?SPACE_NAME2, ?SPACE_SIZE2, ProviderReqParams),
+provider_get_space_data_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
-    SupportedSpaces = get_provider_spaces(ProviderReqParams),
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    ?assertMatch(true, is_included([SID1, SID2], SupportedSpaces)),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
-    DeleteResponse = delete_provider_space(SID1, ProviderReqParams),
+    %% get space creation token1
+    SCRToken1 = get_space_creation_token_for_user(UserReqParams),
+    SID = create_space_for_provider(SCRToken1, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
-    ?assertMatch(ok, check_status(DeleteResponse)),
-
-    SupportedSpaces2 = get_provider_spaces(ProviderReqParams),
-
-    ?assertMatch([[SID2]], SupportedSpaces2),
-
-    [SID_test, SpaceName_test, {[{ProviderId_test, SpaceSize}]}] =
-        get_provider_space(SID2, ProviderReqParams),
+    %% assertMatch has problem with nested brackets below
+    [SID_test, SpaceName_test, {[{ProviderId_test, SpaceSize_test}]}] =
+        get_provider_space(SID, ProviderReqParams),
 
     ?assertMatch(
-        [SID_test, SpaceName_test, ProviderId_test, SpaceSize],
-        [SID2, ?SPACE_NAME2, ProviderId, binary_to_integer(?SPACE_SIZE2)]
+        [SID_test, SpaceName_test, ProviderId_test, SpaceSize_test],
+        [SID, ?SPACE_NAME1, ProviderId, binary_to_integer(?SPACE_SIZE1)]
     ).
 
-provider_check_test(Config) ->
+provider_delete_space_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    %% get space creation token1
+    SCRToken1 = get_space_creation_token_for_user(UserReqParams),
+    SID = create_space_for_provider(SCRToken1, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
+
+    ?assertMatch(ok, check_status(delete_provider_space(SID, ProviderReqParams))).
+
+provider_support_space_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    SID = create_space_for_user(?SPACE_NAME1, UserReqParams),
+    Token = get_space_support_token(SID, UserReqParams),
+
+    ?assertMatch(ok,
+        check_status(provider_support_space(Token, ?SPACE_SIZE1, ProviderReqParams))),
+    ?assertMatch(true, is_included([SID], get_provider_spaces(ProviderReqParams))).
+
+provider_check_ip_test(Config) ->
     RestAddress = ?config(restAddress, Config),
     ReqParams = {RestAddress, [], []},
-    ?assertMatch(ok, check_status(check_provider_ip(ReqParams))),
-    ?assertMatch(ok, check_status(check_provider_ports(ReqParams))).
+    ?assertMatch(ok, check_status(check_provider_ip(ReqParams))).
 
-%%%===================================================================
+provider_check_port_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, [], []},
+    ?assertMatch(ok, check_status(check_provider_ports(ReqParams))).
 
 %% user_rest_module_test_group========================================
 
-user_crud_test(Config) ->
+user_authenticate_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-    
+
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-     %% create user
-    UserId = create_user(?USER_NAME1, Node),
+    {UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
-    %% authenticate user
-    NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
-    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
+    ?assertMatch([UserId, ?USER_NAME1], read_user(UserReqParams)).
 
-    %% check if user data is correct
-    ?assertMatch([UserId, ?USER_NAME1], read_user(UserReqParams)),
+user_update_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
-    update_user(?USER_NAME2, UserReqParams),
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    %% check if user data was updated
-    ?assertMatch([UserId, ?USER_NAME2], read_user(UserReqParams)),
+    {UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
-     UserId2 = create_user(?USER_NAME2, Node),
+    ?assertMatch(ok, check_status(update_user(?USER_NAME2, UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2], read_user(UserReqParams)).
 
-    %% authenticate user
-    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
-    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
+user_delete_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    ?assertMatch(ok, check_status(delete_user(UserReqParams))),
+    ?assertMatch(request_error, read_user(UserReqParams)).
+
+user_merge_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {_UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
     MergeToken = get_user_merge_token(UserReqParams2),
 
-    %%  merge user2 with user1
-    Response = merge_users(MergeToken, UserReqParams),
+    ?assertMatch(ok, check_status(merge_users(MergeToken, UserReqParams1))).
 
-    ?assertMatch(ok, check_status(Response)),
-
-    DeleteResponse = delete_user(UserReqParams),
-    ?assertMatch(ok, check_status(DeleteResponse)),
-
-    %% try to read deleted user
-    ?assertMatch(request_error, read_user(UserReqParams)).
-
-user_space_test(Config) ->
+user_create_space_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
-    
-    %% create user
-    UserId = create_user(?USER_NAME1, Node),
 
-    %% authenticate user
-    NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
-    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
-    SID2 = create_space_for_user(?SPACE_NAME2, UserReqParams),
+    SID2 = create_space_for_user(?SPACE_NAME1, UserReqParams),
 
-    ?assertMatch([[SID1, SID2], <<"undefined">>], get_user_spaces(UserReqParams)),
+    ?assertMatch([[SID1, SID2], <<"undefined">>], get_user_spaces(UserReqParams)).
 
-    set_default_space_for_user(SID2, UserReqParams),
-
-    ?assertMatch([[SID1, SID2], SID2], get_user_spaces(UserReqParams)),
-
-    ?assertMatch(SID2, get_user_default_space(UserReqParams)),
-
-    ?assertMatch([SID1, ?SPACE_NAME1], get_user_space(SID1, UserReqParams)),
-
-    DeleteResponse = delete_user_space(SID1, UserReqParams),
-    ?assertMatch(ok, check_status(DeleteResponse)),
-
-    %% try to read deleted user's space
-    ?assertMatch(request_error, get_user_space(SID1, UserReqParams)).
-
-many_users_space_test(Config) ->
+user_default_space_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    %% create users
-    UserId = create_user(?USER_NAME1, Node),
-    UserId2 = create_user(?USER_NAME2, Node),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
-    %% authenticate users
-    NewHeaders1 = auth_user(UserId, ProviderId, ReqParams, Node),
-    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
-    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders1, headers),
-    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
+    SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
+
+    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams)),
+    ?assertMatch(ok, check_status(set_default_space_for_user(SID1, UserReqParams))),
+    ?assertMatch([[SID1], SID1], get_user_spaces(UserReqParams)),
+    ?assertMatch(SID1, get_user_default_space(UserReqParams)).
+
+user_get_space_data_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    SID = create_space_for_user(?SPACE_NAME1, UserReqParams),
+    ?assertMatch([SID, ?SPACE_NAME1], get_user_space(SID, UserReqParams)).
+
+user_delete_space_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
+    ?assertMatch(ok, check_status(delete_user_space(SID1, UserReqParams))),
+    ?assertMatch([[],<<"undefined">>], get_user_spaces(UserReqParams)).
+
+user_space_invite_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    {_UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams1),
-
-    SupportToken = get_space_support_token(SID1, UserReqParams1),
-
-    SupportResponse = provider_support_space(SupportToken, ?SPACE_SIZE1, ProviderReqParams),
-
-    ?assertMatch(ok, check_status(SupportResponse)),
-
+    
     InvitationToken = get_space_invitation_token(users, SID1, UserReqParams1),
-
-    SID2 = join_user_to_space(InvitationToken, UserReqParams2),
-
-    %% check if SID returned for user2 is the same as SID1
-    ?assertMatch(SID1, SID2),
+    
+    ?assertMatch(SID1, join_user_to_space(InvitationToken, UserReqParams2)),
 
     %% check if space is in list of user2 space
     ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams2)).
 
-user_group_test(Config) ->
+user_create_group_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-    {ProviderId, ProviderReqParams} =
-    register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
-
-    %% create users
-    UserId = create_user(?USER_NAME1, Node),
-
-    %% authenticate user
-    NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
-    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
-
-    GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
-    GID2 = create_group_for_user(?GROUP_NAME2, UserReqParams),
-
-    ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))),
-
-    Response = user_leave_group(GID2,UserReqParams),
-
-    ?assertMatch(ok, check_status(Response)),
-    ?assertMatch(false, is_included([GID2], get_user_groups(UserReqParams))),
-    ?assertMatch([GID1, ?GROUP_NAME1], get_user_group(GID1, UserReqParams)).
-
-many_users_group_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    %% create users
-    UserId1 = create_user(?USER_NAME1, Node),
-    UserId2 = create_user(?USER_NAME2, Node),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
-    %% authenticate users
-    NewHeaders1 = auth_user(UserId1, ProviderId, ReqParams, Node),
-    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
-    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders1, headers),
-    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
+    GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
+    GID2 = create_group_for_user(?GROUP_NAME2, UserReqParams),
+
+    ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))).
+
+user_get_group_data_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
+    ?assertMatch([GID1, ?GROUP_NAME1], get_user_group(GID1, UserReqParams)).
+
+user_leave_group_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
+
+    ?assertMatch(ok, check_status(user_leave_group(GID1,UserReqParams))),
+    ?assertMatch(false, is_included([GID1], get_user_groups(UserReqParams))).
+
+user_group_invite_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
     GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams1),
 
     InvitationToken = get_group_invitation_token(GID1, UserReqParams1),
 
-    GID2 = join_user_to_group(InvitationToken, UserReqParams2),
-
     %% check if GID returned for user2 is the same as GID1
-    ?assertMatch(GID1, GID2),
-
-    ?assertMatch([GID1, ?GROUP_NAME1], get_user_group(GID2, UserReqParams2)),
+    ?assertMatch(GID1, join_user_to_group(InvitationToken, UserReqParams2)),
+    ?assertMatch([GID1, ?GROUP_NAME1], get_user_group(GID1, UserReqParams2)),
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID1, UserReqParams1))).
 
 %% group_rest_module_test_group =======================================
 
-group_crud_test(Config) ->
+group_create_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-     %% create users
-    UserId = create_user(?USER_NAME1, Node),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
-    %% authenticate user
-    NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
-    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
-    
-    %% create group
     GID = create_group(?GROUP_NAME1, UserReqParams),
 
-    ?assertMatch([GID, ?GROUP_NAME1], read_group(GID, UserReqParams)),
+    ?assertMatch([GID, ?GROUP_NAME1], read_group(GID, UserReqParams)).
 
-    UpdateResponse = update_group(GID, ?GROUP_NAME2, UserReqParams),
-    ?assertMatch(ok, check_status(UpdateResponse)),
-    ?assertMatch([GID, ?GROUP_NAME2], read_group(GID, UserReqParams)),
+group_update_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
-    DeleteResponse = delete_group(GID, UserReqParams),
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    ?assertMatch(ok, check_status(DeleteResponse)),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams),
+
+    ?assertMatch(ok, check_status(update_group(GID, ?GROUP_NAME2, UserReqParams))),
+    ?assertMatch([GID, ?GROUP_NAME2], read_group(GID, UserReqParams)).
+
+group_delete_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams),
+
+    ?assertMatch(ok, check_status(delete_group(GID, UserReqParams))),
     ?assertMatch(request_error, read_group(GID, UserReqParams)).
 
-group_users_test(Config) ->
+group_invite_user_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-     %% create users
-    UserId1 = create_user(?USER_NAME1, Node),
-    UserId2 = create_user(?USER_NAME2, Node),
+    {UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
-    %% authenticate users
-    NewHeaders = auth_user(UserId1, ProviderId, ReqParams, Node),
-    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders, headers),
-    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
-    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
 
-    GID1 = create_group(?GROUP_NAME1, UserReqParams1),
-    
-    ?assertMatch([UserId1, ?USER_NAME1], get_group_user(GID1, UserId1, UserReqParams1)),
-    ?assertMatch([UserId1], get_group_users(GID1, UserReqParams1)),
+    Token = get_group_invitation_token(GID, UserReqParams1),
+    ?assertMatch(GID, join_user_to_group(Token, UserReqParams2)),
+    ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID, UserReqParams1))).
 
-    Token = get_group_invitation_token(GID1, UserReqParams1),
-    join_user_to_group(Token, UserReqParams2),
-
-    ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID1, UserReqParams1))),
-
-    DeleteResponse = delete_group_user(GID1, UserId1, UserReqParams1),
-
-    ?assertMatch(ok, check_status(DeleteResponse)).
-
-group_privileges_test(Config) ->
+group_get_user_data_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-     %% create users
-    UserId1 = create_user(?USER_NAME1, Node),
-    UserId2 = create_user(?USER_NAME2, Node),
-    UserId3 = create_user(?USER_NAME3, Node),
+    {UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
-    %% authenticate users
-    NewHeaders = auth_user(UserId1, ProviderId, ReqParams, Node),
-    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders, headers),
-    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
-    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
-    NewHeaders3 = auth_user(UserId3, ProviderId, ReqParams, Node),
-    UserReqParams3 = update_req_params(ProviderReqParams, NewHeaders3, headers),
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
+
+    ?assertMatch([UserId1, ?USER_NAME1], get_group_user(GID, UserId1, UserReqParams1)).
+
+group_delete_user_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
+
+    ?assertMatch(ok, check_status(delete_group_user(GID, UserId1, UserReqParams1))).
+
+group_get_privileges_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
     GID = create_group(?GROUP_NAME1, UserReqParams1),
 
@@ -477,205 +618,347 @@ group_privileges_test(Config) ->
 
     %% check other user privileges
     ?assertMatch(true,
-        is_included([group_view_data], get_group_user_privileges(GID, UserId2, UserReqParams1))),
+        is_included([group_view_data], get_group_user_privileges(GID, UserId2, UserReqParams1))).
+
+group_set_privileges_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    {UserId3, UserReqParams3} =
+        register_user(?USER_NAME3, ProviderId, Config, ProviderReqParams),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
+
+    InvitationToken = get_group_invitation_token(GID, UserReqParams1),
+
+    %% add user to group
+    join_user_to_group(InvitationToken, UserReqParams2),
 
     SID = create_space_for_user(?SPACE_NAME1, UserReqParams2),
 
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
     ?assertMatch(ok, group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID)).
 
-group_spaces_test(Config) ->
+group_create_space_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-     %% create user
-    UserId1 = create_user(?USER_NAME1, Node),
-
-    %% authenticate user
-    NewHeaders = auth_user(UserId1, ProviderId, ReqParams, Node),
-    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders, headers),
+    {_UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
     GID = create_group(?GROUP_NAME1, UserReqParams1),
     SID1 = create_space_for_group(?SPACE_NAME1, GID, UserReqParams1),
-    
-    ?assertMatch([SID1, ?SPACE_NAME1], get_group_space(GID, SID1, UserReqParams1)),
-    
+
+    ?assertMatch([SID1], get_group_spaces(GID,UserReqParams1)).
+
+group_get_space_data_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
+    SID1 = create_space_for_group(?SPACE_NAME1, GID, UserReqParams1),
+
+    ?assertMatch([SID1, ?SPACE_NAME1], get_group_space(GID, SID1, UserReqParams1)).
+
+group_delete_space_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
+    SID1 = create_space_for_group(?SPACE_NAME1, GID, UserReqParams1),
+
+    ?assertMatch(ok, check_status(group_leave_space(GID, SID1, UserReqParams1))),
+    ?assertMatch(false, is_included([SID1], get_group_spaces(GID, UserReqParams1))).
+
+group_space_invitation_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
+    SID1 = create_space_for_group(?SPACE_NAME1, GID, UserReqParams1),
     SID2 = create_space_for_user(?SPACE_NAME2, UserReqParams1),
 
     InvitationToken = get_space_invitation_token(groups, SID2, UserReqParams1),
-    SID_check = join_group_to_space(InvitationToken, GID, UserReqParams1),
 
-    ?assertMatch(SID2, SID_check),
-    ?assertMatch(true, is_included([SID1, SID2], get_group_spaces(GID, UserReqParams1))),
-
-    DeleteResponse = group_leave_space(GID, SID2, UserReqParams1),
-
-    ?assertMatch(ok, check_status(DeleteResponse)),
-    ?assertMatch(false, is_included([SID2], get_group_spaces(GID, UserReqParams1))).
+    ?assertMatch(SID2, join_group_to_space(InvitationToken, GID, UserReqParams1)),
+    ?assertMatch(true, is_included([SID1, SID2], get_group_spaces(GID, UserReqParams1))).
 
 %% spaces_rest_module_test_group =======================================
 
-spaces_crud_by_user_test(Config) ->
+space_create_by_user_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-    
+
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    %% create user
-    UserId = create_user(?USER_NAME1, Node),
-
-    %% authenticate user
-    NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
-    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
     SID = create_space(?SPACE_NAME1, UserReqParams),
 
-    ?assertMatch([SID, ?SPACE_NAME1],read_space(SID, UserReqParams)),
-    ?assertMatch(ok, check_status(update_space(?SPACE_NAME2, SID, UserReqParams))),
-    ?assertMatch([SID, ?SPACE_NAME2], read_space(SID, UserReqParams)),
-    ?assertMatch(ok, check_status(delete_space(SID, UserReqParams))).
+    ?assertMatch([SID, ?SPACE_NAME1],read_space(SID, UserReqParams)).
 
-spaces_crud_by_provider_test(Config) ->
+space_create_by_provider_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    %% create user
-    UserId = create_user(?USER_NAME1, Node),
-
-    %% authenticate user
-    NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
-    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
     Token = get_space_creation_token_for_user(UserReqParams),
     SID = create_space(Token, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
-    ?assertMatch([SID, ?SPACE_NAME1],read_space(SID, ProviderReqParams)),
-    ?assertMatch(ok, check_status(delete_space(SID, UserReqParams))).
+    ?assertMatch([SID, ?SPACE_NAME1],read_space(SID, ProviderReqParams)).
 
-spaces_user_test(Config) ->
-
+space_update_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    %% create users
-    UserId1 = create_user(?USER_NAME1, Node),
-    UserId2 = create_user(?USER_NAME2, Node),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
-    %% authenticate users
-    NewHeaders1 = auth_user(UserId1, ProviderId, ReqParams, Node),
-    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
-    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders1, headers),
-    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
+    SID = create_space(?SPACE_NAME1, UserReqParams),
+
+    ?assertMatch(ok, check_status(update_space(?SPACE_NAME2, SID, UserReqParams))),
+    ?assertMatch([SID, ?SPACE_NAME2], read_space(SID, UserReqParams)).
+
+space_delete_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    SID = create_space(?SPACE_NAME1, UserReqParams),
+    ?assertMatch(ok, check_status(delete_space(SID, UserReqParams))).
+
+space_get_users_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
     SID = create_space(?SPACE_NAME1, UserReqParams1),
 
     InvitationToken = get_space_invitation_token(users, SID, UserReqParams1),
 
-    ?assertMatch(SID, join_user_to_space(InvitationToken, UserReqParams2)),
-    ?assertMatch(true, is_included([UserId1, UserId2], get_space_users(SID, UserReqParams1))),
-    ?assertMatch([UserId2, ?USER_NAME2], get_space_user(SID, UserId2, UserReqParams2)),
-    ?assertMatch(ok, check_status(delete_space_user(SID, UserId2, UserReqParams1))),
-    ?assertMatch(false, is_included([UserId2], get_space_users(SID, UserReqParams1))).
+    join_user_to_space(InvitationToken, UserReqParams2),
+    ?assertMatch(true, is_included([UserId1, UserId2], get_space_users(SID, UserReqParams1))).
 
-spaces_group_test(Config) ->
+space_get_user_data_test(Config) ->
     RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    %% create users
-    UserId = create_user(?USER_NAME1, Node),
+    {_UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
-    %% authenticate users
-    NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
-    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
+    SID = create_space(?SPACE_NAME1, UserReqParams1),
+    
+    ?assertMatch([UserId2, ?USER_NAME2], get_space_user(SID, UserId2, UserReqParams2)).
+
+space_delete_user_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+
+    SID = create_space(?SPACE_NAME1, UserReqParams1),
+    Token = get_space_invitation_token(users, SID, UserReqParams1),
+    join_user_to_space(Token, UserReqParams2),
+    
+    ?assertMatch(ok, check_status(delete_space_user(SID, UserId2, UserReqParams1))),
+    ?assertMatch(false, is_included([UserId2], get_space_users(SID, UserReqParams1))).
+
+space_get_groups_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
     GID1 = create_group(?GROUP_NAME1, UserReqParams),
     GID2 = create_group(?GROUP_NAME2, UserReqParams),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
-    InvitationToken = get_space_invitation_token(groups, SID, UserReqParams),
 
-    ?assertMatch(SID, join_group_to_space(InvitationToken, GID2, UserReqParams)),
-    ?assertMatch(true, is_included([GID1, GID2], get_space_groups(SID, UserReqParams))),
-    ?assertMatch([GID2, ?GROUP_NAME2], get_space_group(SID, GID2, UserReqParams)),
-    ?assertMatch(ok, check_status(delete_space_group(SID, GID1, UserReqParams))),
-    ?assertMatch(false, is_included([GID1], get_space_groups(SID, UserReqParams))).
+    ?assertMatch(true, is_included([GID1, GID2], get_space_groups(SID, UserReqParams))).
 
-spaces_provider_test(Config) ->
- RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
+space_get_group_data_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-    %% create users
-    UserId = create_user(?USER_NAME1, Node),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
 
-    %%  authenticate users
-    NewHeaders = auth_user(UserId, ProviderId, ReqParams, Node),
-    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
+    GID1 = create_group(?GROUP_NAME1, UserReqParams),
+    SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
+
+    ?assertMatch([GID1, ?GROUP_NAME2], get_space_group(SID, GID1, UserReqParams)).
+
+space_delete_group_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+
+    GID1 = create_group(?GROUP_NAME1, UserReqParams),
+    SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
+
+    ?assertMatch(ok, check_status(delete_space_group(SID, GID1, UserReqParams))),
+    ?assertMatch(false, is_included([GID1], get_space_groups(SID, UserReqParams))).
+
+space_get_providers_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    
+    Token = get_space_creation_token_for_user(UserReqParams),
+    SID = create_space_for_provider(Token, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
+
+    ?assertMatch([ProviderId], get_space_providers(SID, UserReqParams)).
+
+space_get_provider_data_test(Config) ->
+ RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    
     Token = get_space_creation_token_for_user(UserReqParams),
     SID = create_space_for_provider(Token, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
     ?assertMatch(
-        [ProviderId],
-        get_space_providers(SID, UserReqParams)
-    ),
-
-    ?assertMatch(
         [?CLIENT_NAME1, ProviderId, ?URLS1, ?REDIRECTION_POINT1],
         get_space_provider(SID, ProviderId, UserReqParams)
-    ),
-
-    ?assertMatch(
-        ok,
-        check_status(delete_space_provider(SID, ProviderId, UserReqParams))
-    ),
-
-    ?assertMatch(
-        [],
-        get_space_providers(SID, UserReqParams)
     ).
 
-spaces_privileges_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    [Node] = ?config(gr_nodes, Config),
+space_delete_provider_test(Config) ->
+ RestAddress = ?config(restAddress, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
     {ProviderId, ProviderReqParams} =
-            register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-     %% create users
-    UserId1 = create_user(?USER_NAME1, Node),
-    UserId2 = create_user(?USER_NAME2, Node),
-    UserId3 = create_user(?USER_NAME3, Node),
+    {_UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    
+    Token = get_space_creation_token_for_user(UserReqParams),
+    SID = create_space_for_provider(Token, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
-    %% authenticate users
-    NewHeaders = auth_user(UserId1, ProviderId, ReqParams, Node),
-    UserReqParams1 = update_req_params(ProviderReqParams, NewHeaders, headers),
-    NewHeaders2 = auth_user(UserId2, ProviderId, ReqParams, Node),
-    UserReqParams2 = update_req_params(ProviderReqParams, NewHeaders2, headers),
-    NewHeaders3 = auth_user(UserId3, ProviderId, ReqParams, Node),
-    UserReqParams3 = update_req_params(ProviderReqParams, NewHeaders3, headers),
+    ?assertMatch(ok, check_status(delete_space_provider(SID, ProviderId, UserReqParams))),
 
-    GID = create_group(?GROUP_NAME1, UserReqParams2),
+    ?assertMatch([], get_space_providers(SID, UserReqParams)).
+
+space_get_privileges_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+
+    SID = create_space_for_user(?SPACE_NAME1, UserReqParams1),
+    InvitationToken = get_space_invitation_token(users, SID, UserReqParams1),
+    join_user_to_space(InvitationToken, UserReqParams2),
+
+    ?assertMatch(true,
+        is_included(?SPACE_PRIVILEGES, get_space_privileges(users, SID, UserId1, UserReqParams1))),
+
+    ?assertMatch(true,
+        is_included([space_view_data], get_space_privileges(users, SID, UserId2, UserReqParams1))).
+
+
+space_set_privileges_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+
+    {UserId1, UserReqParams1} =
+        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    {UserId3, UserReqParams3} =
+        register_user(?USER_NAME3, ProviderId, Config, ProviderReqParams),
+
+    GID = create_group(?GROUP_NAME1, UserReqParams1),
     SID = create_space_for_user(?SPACE_NAME1, UserReqParams1),
     InvitationToken = get_space_invitation_token(users, SID, UserReqParams1),
     join_user_to_space(InvitationToken, UserReqParams2),
@@ -712,7 +995,6 @@ end_per_testcase(_, Config) ->
     file:delete(CertFile).
 
 end_per_suite(Config) ->
-%%     timer:sleep(30000),
     test_node_starter:clean_environment(Config).
 
 %%%===================================================================
@@ -798,7 +1080,6 @@ do_request(Endpoint, Headers, Method, Body) ->
 do_request(Endpoint, Headers, Method, Body, Options) ->
     ibrowse:send_req(Endpoint, Headers, Method, Body, Options).
 
-
 get_macaroon_id(Token) ->
     {ok, Macaroon} = macaroon:deserialize(Token),
     {ok, [{_, Identifier}]} = macaroon:third_party_caveats(Macaroon),
@@ -826,6 +1107,7 @@ update_req_params(ReqParams, NewParam, options) ->
     {RestAddress, Headers, Options++ NewParam}.
 
 %% Provider functions =====================================================
+
 register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
     {RestAddress, Headers, _Options} = ReqParams,
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
@@ -918,6 +1200,23 @@ create_user(UserName, Node) ->
     {ok, UserId} = rpc:call(Node, user_logic, create, [#user{name = UserName}]),
     UserId.
 
+%% returns macaroons headers
+auth_user(UserId, ProviderId, ReqParams, Node) ->
+    SerializedMacaroon = rpc:call(Node, auth_logic, gen_token, [UserId, ProviderId]),
+    {RestAddress, Headers, _Options} = ReqParams,
+    Identifier = get_macaroon_id(SerializedMacaroon),
+    Body = jiffy:encode({[{identifier, Identifier}]}),
+    Resp = do_request(RestAddress ++ "/user/authorize", Headers, post, Body),
+    {ok, _, _, SerializedDischarges} = Resp,
+    prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges).
+
+register_user(UserName, ProviderId, Config, ProviderReqParams) ->
+    [Node] = ?config(gr_nodes, Config),
+    UserId = create_user(UserName, Node),
+    NewHeaders = auth_user(UserId, ProviderId, ProviderReqParams, Node),
+    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
+    {UserId, UserReqParams}.
+
 read_user(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response = do_request(RestAddress ++ "/user", Headers, get,[], Options),
@@ -982,16 +1281,6 @@ merge_users(Token, ReqParams) ->
 delete_user_space(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     do_request(RestAddress ++ "/user/spaces/" ++ binary_to_list(SID), Headers, delete, [], Options).
-
-%% returns macaroons headers
-auth_user(UserId, ProviderId, ReqParams, Node) ->
-    SerializedMacaroon = rpc:call(Node, auth_logic, gen_token, [UserId, ProviderId]),
-    {RestAddress, Headers, _Options} = ReqParams,
-    Identifier = get_macaroon_id(SerializedMacaroon),
-    Body = jiffy:encode({[{identifier, Identifier}]}),
-    Resp = do_request(RestAddress ++ "/user/authorize", Headers, post, Body),
-    {ok, _, _, SerializedDischarges} = Resp,
-    prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges).
 
 join_user_to_space(Token, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
