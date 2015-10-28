@@ -20,6 +20,7 @@
 %%%     ].
 %%%     Spaces = [
 %%%         {<<"s1">>, [
+%%%             {<<"displayed_name">>, <<"space 1">>},
 %%%             {<<"users">>, [<<"u1">>, <<"u3">>]},
 %%%             {<<"groups">>, [<<"g1">>]},
 %%%             {<<"providers">>, [
@@ -101,12 +102,13 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 UserList = proplists:get_value(<<"users">>, Props),
                 GroupList = proplists:get_value(<<"groups">>, Props),
                 ProviderList = proplists:get_value(<<"providers">>, Props),
+                SpaceName = proplists:get_value(<<"displayed_name">>, Props),
                 {Member, UsersToAdd, GroupsToAdd} =
                     case GroupList of
                         [] -> {{user, hd(UserList)}, tl(UserList), []};
                         _ -> {{group, hd(GroupList)}, UserList, tl(GroupList)}
                     end,
-                {ok, SpaceID} = create_space_with_uuid(Member, SpaceID, SpaceID),
+                {ok, SpaceID} = create_space_with_uuid(Member, SpaceName, SpaceID),
                 % Support the space by all providers
                 lists:foreach(
                     fun(ProviderProps) ->
