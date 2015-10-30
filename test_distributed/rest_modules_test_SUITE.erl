@@ -182,11 +182,8 @@ provider_create_test(Config) ->
     ).
 
 provider_update_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     update_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, ProviderReqParams),
 
@@ -196,11 +193,8 @@ provider_update_test(Config) ->
     ).
 
 provider_get_data_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     ?assertMatch(
         [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
@@ -218,11 +212,8 @@ provider_delete_test(Config) ->
     ?assertMatch(request_error,read_provider(ProviderReqParams)).
 
 provider_create_space_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -234,11 +225,8 @@ provider_create_space_test(Config) ->
     ?assertMatch([SID1], get_provider_spaces(ProviderReqParams)).
 
 provider_get_space_data_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -257,11 +245,8 @@ provider_get_space_data_test(Config) ->
     ).
 
 provider_delete_space_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -273,11 +258,8 @@ provider_delete_space_test(Config) ->
     ?assertMatch(ok, check_status(delete_provider_space(SID, ProviderReqParams))).
 
 provider_support_space_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -302,11 +284,8 @@ provider_check_port_test(Config) ->
 %% user_rest_module_test_group========================================
 
 user_authenticate_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -314,11 +293,8 @@ user_authenticate_test(Config) ->
     ?assertMatch([UserId, ?USER_NAME1], read_user(UserReqParams)).
 
 user_update_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -327,11 +303,8 @@ user_update_test(Config) ->
     ?assertMatch([UserId, ?USER_NAME2], read_user(UserReqParams)).
 
 user_delete_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -340,11 +313,8 @@ user_delete_test(Config) ->
     ?assertMatch(request_error, read_user(UserReqParams)).
 
 user_merge_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -356,11 +326,8 @@ user_merge_test(Config) ->
     ?assertMatch(ok, check_status(merge_users(MergeToken, UserReqParams1))).
 
 user_create_space_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -371,11 +338,8 @@ user_create_space_test(Config) ->
     ?assertMatch([[SID1, SID2], <<"undefined">>], get_user_spaces(UserReqParams)).
 
 user_default_space_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -388,11 +352,8 @@ user_default_space_test(Config) ->
     ?assertMatch(SID1, get_user_default_space(UserReqParams)).
 
 user_get_space_data_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -401,11 +362,8 @@ user_get_space_data_test(Config) ->
     ?assertMatch([SID, ?SPACE_NAME1], get_user_space(SID, UserReqParams)).
 
 user_delete_space_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -415,11 +373,8 @@ user_delete_space_test(Config) ->
     ?assertMatch([[],<<"undefined">>], get_user_spaces(UserReqParams)).
 
 user_space_invite_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -437,11 +392,8 @@ user_space_invite_test(Config) ->
     ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams2)).
 
 user_create_group_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -452,11 +404,8 @@ user_create_group_test(Config) ->
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))).
 
 user_get_group_data_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -465,11 +414,8 @@ user_get_group_data_test(Config) ->
     ?assertMatch([GID1, ?GROUP_NAME1], get_user_group(GID1, UserReqParams)).
 
 user_leave_group_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -480,11 +426,8 @@ user_leave_group_test(Config) ->
     ?assertMatch(false, is_included([GID1], get_user_groups(UserReqParams))).
 
 user_group_invite_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -503,11 +446,8 @@ user_group_invite_test(Config) ->
 %% group_rest_module_test_group =======================================
 
 group_create_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -517,11 +457,8 @@ group_create_test(Config) ->
     ?assertMatch([GID, ?GROUP_NAME1], read_group(GID, UserReqParams)).
 
 group_update_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -532,11 +469,8 @@ group_update_test(Config) ->
     ?assertMatch([GID, ?GROUP_NAME2], read_group(GID, UserReqParams)).
 
 group_delete_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -547,11 +481,8 @@ group_delete_test(Config) ->
     ?assertMatch(request_error, read_group(GID, UserReqParams)).
 
 group_invite_user_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -565,11 +496,8 @@ group_invite_user_test(Config) ->
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID, UserReqParams1))).
 
 group_get_user_data_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -579,11 +507,8 @@ group_get_user_data_test(Config) ->
     ?assertMatch([UserId1, ?USER_NAME1], get_group_user(GID, UserId1, UserReqParams1)).
 
 group_delete_user_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -593,11 +518,8 @@ group_delete_user_test(Config) ->
     ?assertMatch(ok, check_status(delete_group_user(GID, UserId1, UserReqParams1))).
 
 group_get_privileges_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -624,11 +546,8 @@ group_get_privileges_test(Config) ->
             [<<"group_view_data">>], get_group_user_privileges(GID, UserId2, UserReqParams1))).
 
 group_set_privileges_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -650,11 +569,8 @@ group_set_privileges_test(Config) ->
     group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID).
 
 group_create_space_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -665,11 +581,8 @@ group_create_space_test(Config) ->
     ?assertMatch([SID1], get_group_spaces(GID,UserReqParams1)).
 
 group_get_space_data_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -680,11 +593,8 @@ group_get_space_data_test(Config) ->
     ?assertMatch([SID1, ?SPACE_NAME1], get_group_space(GID, SID1, UserReqParams1)).
 
 group_delete_space_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -696,11 +606,8 @@ group_delete_space_test(Config) ->
     ?assertMatch(false, is_included([SID1], get_group_spaces(GID, UserReqParams1))).
 
 group_space_invitation_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -717,11 +624,8 @@ group_space_invitation_test(Config) ->
 %% spaces_rest_module_test_group =======================================
 
 space_create_by_user_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -731,11 +635,8 @@ space_create_by_user_test(Config) ->
     ?assertMatch([SID, ?SPACE_NAME1],read_space(SID, UserReqParams)).
 
 space_create_by_provider_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -746,11 +647,8 @@ space_create_by_provider_test(Config) ->
     ?assertMatch([SID, ?SPACE_NAME1],read_space(SID, ProviderReqParams)).
 
 space_update_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -761,11 +659,8 @@ space_update_test(Config) ->
     ?assertMatch([SID, ?SPACE_NAME2], read_space(SID, UserReqParams)).
 
 space_delete_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -774,11 +669,8 @@ space_delete_test(Config) ->
     ?assertMatch(ok, check_status(delete_space(SID, UserReqParams))).
 
 space_get_users_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -793,11 +685,8 @@ space_get_users_test(Config) ->
     ?assertMatch(true, is_included([UserId1, UserId2], get_space_users(SID, UserReqParams1))).
 
 space_get_user_data_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -807,11 +696,8 @@ space_get_user_data_test(Config) ->
     ?assertMatch([UserId1, ?USER_NAME1], get_space_user(SID, UserId1, UserReqParams1)).
 
 space_delete_user_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -826,11 +712,8 @@ space_delete_user_test(Config) ->
     ?assertMatch(false, is_included([UserId2], get_space_users(SID, UserReqParams1))).
 
 space_get_groups_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -841,11 +724,8 @@ space_get_groups_test(Config) ->
     ?assertMatch(true, is_included([GID1], get_space_groups(SID, UserReqParams))).
 
 space_get_group_data_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -856,11 +736,8 @@ space_get_group_data_test(Config) ->
     ?assertMatch([GID1, ?GROUP_NAME1], get_space_group(SID, GID1, UserReqParams)).
 
 space_delete_group_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -871,11 +748,8 @@ space_delete_group_test(Config) ->
     ?assertMatch(ok, check_status(delete_space_group(SID, GID1, UserReqParams))).
 
 space_get_providers_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -886,11 +760,8 @@ space_get_providers_test(Config) ->
     ?assertMatch([ProviderId], get_space_providers(SID, UserReqParams)).
 
 space_get_provider_data_test(Config) ->
- RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -904,12 +775,8 @@ space_get_provider_data_test(Config) ->
     ).
 
 space_delete_provider_test(Config) ->
- RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
-
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
     {_UserId, UserReqParams} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     
@@ -921,11 +788,8 @@ space_delete_provider_test(Config) ->
     ?assertMatch([], get_space_providers(SID, UserReqParams)).
 
 space_get_privileges_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -943,11 +807,8 @@ space_get_privileges_test(Config) ->
         is_included([<<"space_view_data">>], get_space_privileges(users, SID, UserId2, UserReqParams1))).
 
 space_set_privileges_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-
-    {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     {UserId1, UserReqParams1} =
         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
@@ -978,10 +839,24 @@ init_per_suite(Config) ->
     timer:sleep(10000), % TODO add nagios to GR and delete sleep
     [{restAddress, RestAddress} | NewConfig ].
 
+init_per_testcase(provider_create_test, Config) ->
+    ibrowse:start(),
+    ssl:start(),
+    RestAddress = RestAddress = ?config(restAddress, Config),
+    [{cert_files, generate_cert_files()} | Config];
 init_per_testcase(_, Config) ->
     ibrowse:start(),
     ssl:start(),
-    [{cert_files,generate_cert_files()}| Config].
+    RestAddress = RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+    NewConfig = [{cert_files, generate_cert_files()} | Config],
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, NewConfig, ReqParams),
+    [
+        {providerId, ProviderId},
+        {providerReqParams, ProviderReqParams}
+        | NewConfig
+    ].
 
 end_per_testcase(_, Config) ->
     ssl:stop(),
@@ -1053,7 +928,7 @@ get_header_val(Parameter, Response) ->
         bad -> request_error;
         _ -> case lists:keysearch("location", 1, get_response_headers(Response)) of
                 {value, {_HeaderType, HeaderValue}} -> read_http_param(Parameter, HeaderValue);
-                false -> parameter_not_in_heading
+                false -> parameter_not_in_header
             end
     end.
 
