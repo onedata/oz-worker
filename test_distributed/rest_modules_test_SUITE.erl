@@ -119,6 +119,7 @@ groups() ->
                 user_get_group_data_test,
                 user_leave_group_test,
                 user_group_invite_test
+%%                 , user_delete_other_user_test
             ]
         },
         {
@@ -202,21 +203,14 @@ provider_get_data_test(Config) ->
     ).
 
 provider_delete_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-    
-    {_ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     ?assertMatch(ok, check_status(delete_provider(ProviderReqParams))),
     ?assertMatch(request_error,read_provider(ProviderReqParams)).
 
 provider_create_space_test(Config) ->
-    ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     %% get space creation token1
     SCRToken1 = get_space_creation_token_for_user(UserReqParams),
@@ -227,9 +221,7 @@ provider_create_space_test(Config) ->
 provider_get_space_data_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     %% get space creation token1
     SCRToken1 = get_space_creation_token_for_user(UserReqParams),
@@ -245,11 +237,8 @@ provider_get_space_data_test(Config) ->
     ).
 
 provider_delete_space_test(Config) ->
-    ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     %% get space creation token1
     SCRToken1 = get_space_creation_token_for_user(UserReqParams),
@@ -258,11 +247,8 @@ provider_delete_space_test(Config) ->
     ?assertMatch(ok, check_status(delete_provider_space(SID, ProviderReqParams))).
 
 provider_support_space_test(Config) ->
-    ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     SID = create_space_for_user(?SPACE_NAME1, UserReqParams),
     Token = get_space_support_token(SID, UserReqParams),
@@ -272,42 +258,30 @@ provider_support_space_test(Config) ->
     ?assertMatch(true, is_included([SID], get_provider_spaces(ProviderReqParams))).
 
 provider_check_ip_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, [], []},
-    ?assertMatch(ok, check_status(check_provider_ip(ReqParams))).
+    ProviderReqParams = ?config(providerReqParams, Config),
+    ?assertMatch(ok, check_status(check_provider_ip(ProviderReqParams))).
 
 provider_check_port_test(Config) ->
-    RestAddress = ?config(restAddress, Config),
-    ReqParams = {RestAddress, [], []},
-    ?assertMatch(ok, check_status(check_provider_ports(ReqParams))).
+    ProviderReqParams = ?config(providerReqParams, Config),
+    ?assertMatch(ok, check_status(check_provider_ports(ProviderReqParams))).
 
 %% user_rest_module_test_group========================================
 
 user_authenticate_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserId = ?config(userId, Config),
+    UserReqParams = ?config(userReqParams, Config),
 
     ?assertMatch([UserId, ?USER_NAME1], read_user(UserReqParams)).
 
 user_update_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserId = ?config(userId, Config),
+    UserReqParams = ?config(userReqParams, Config),
 
     ?assertMatch(ok, check_status(update_user(?USER_NAME2, UserReqParams))),
     ?assertMatch([UserId, ?USER_NAME2], read_user(UserReqParams)).
 
 user_delete_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     ?assertMatch(ok, check_status(delete_user(UserReqParams))),
     ?assertMatch(request_error, read_user(UserReqParams)).
@@ -315,9 +289,8 @@ user_delete_test(Config) ->
 user_merge_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
-    {_UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     {_UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
@@ -326,11 +299,7 @@ user_merge_test(Config) ->
     ?assertMatch(ok, check_status(merge_users(MergeToken, UserReqParams1))).
 
 user_create_space_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
     SID2 = create_space_for_user(?SPACE_NAME1, UserReqParams),
@@ -338,11 +307,7 @@ user_create_space_test(Config) ->
     ?assertMatch([[SID1, SID2], <<"undefined">>], get_user_spaces(UserReqParams)).
 
 user_default_space_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
 
@@ -352,21 +317,13 @@ user_default_space_test(Config) ->
     ?assertMatch(SID1, get_user_default_space(UserReqParams)).
 
 user_get_space_data_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     SID = create_space_for_user(?SPACE_NAME1, UserReqParams),
     ?assertMatch([SID, ?SPACE_NAME1], get_user_space(SID, UserReqParams)).
 
 user_delete_space_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
     ?assertMatch(ok, check_status(delete_user_space(SID1, UserReqParams))),
@@ -375,15 +332,11 @@ user_delete_space_test(Config) ->
 user_space_invite_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams1 = ?config(userReqParams, Config),
 
     {_UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
-
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams1),
-    
     InvitationToken = get_space_invitation_token(users, SID1, UserReqParams1),
     
     ?assertMatch(SID1, join_user_to_space(InvitationToken, UserReqParams2)),
@@ -392,11 +345,7 @@ user_space_invite_test(Config) ->
     ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams2)).
 
 user_create_group_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
     GID2 = create_group_for_user(?GROUP_NAME2, UserReqParams),
@@ -404,21 +353,13 @@ user_create_group_test(Config) ->
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))).
 
 user_get_group_data_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
     ?assertMatch([GID1, ?GROUP_NAME1], get_user_group(GID1, UserReqParams)).
 
 user_leave_group_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
 
@@ -428,9 +369,9 @@ user_leave_group_test(Config) ->
 user_group_invite_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     {UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
@@ -443,25 +384,27 @@ user_group_invite_test(Config) ->
     ?assertMatch([GID1, ?GROUP_NAME1], get_user_group(GID1, UserReqParams2)),
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID1, UserReqParams1))).
 
+%% user_delete_other_user_test(Config) ->
+%%     ProviderId = ?config(providerId, Config),
+%%     ProviderReqParams = ?config(providerReqParams, Config),
+%%
+%%     {UserId1, UserReqParams1} =
+%%         register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+%%     {UserId2, UserReqParams2} =
+%%         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+
+
 %% group_rest_module_test_group =======================================
 
 group_create_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     GID = create_group(?GROUP_NAME1, UserReqParams),
 
     ?assertMatch([GID, ?GROUP_NAME1], read_group(GID, UserReqParams)).
 
 group_update_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     GID = create_group(?GROUP_NAME1, UserReqParams),
 
@@ -469,11 +412,7 @@ group_update_test(Config) ->
     ?assertMatch([GID, ?GROUP_NAME2], read_group(GID, UserReqParams)).
 
 group_delete_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     GID = create_group(?GROUP_NAME1, UserReqParams),
 
@@ -483,9 +422,9 @@ group_delete_test(Config) ->
 group_invite_user_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     {UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
@@ -496,22 +435,16 @@ group_invite_user_test(Config) ->
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID, UserReqParams1))).
 
 group_get_user_data_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
     GID = create_group(?GROUP_NAME1, UserReqParams1),
 
     ?assertMatch([UserId1, ?USER_NAME1], get_group_user(GID, UserId1, UserReqParams1)).
 
 group_delete_user_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
     GID = create_group(?GROUP_NAME1, UserReqParams1),
 
@@ -520,9 +453,9 @@ group_delete_user_test(Config) ->
 group_get_privileges_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     {UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
@@ -548,9 +481,9 @@ group_get_privileges_test(Config) ->
 group_set_privileges_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     {UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
     {UserId3, UserReqParams3} =
@@ -569,11 +502,7 @@ group_set_privileges_test(Config) ->
     group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID).
 
 group_create_space_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams1 = ?config(userReqParams, Config),
 
     GID = create_group(?GROUP_NAME1, UserReqParams1),
     SID1 = create_space_for_group(?SPACE_NAME1, GID, UserReqParams1),
@@ -581,11 +510,7 @@ group_create_space_test(Config) ->
     ?assertMatch([SID1], get_group_spaces(GID,UserReqParams1)).
 
 group_get_space_data_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams1 = ?config(userReqParams, Config),
 
     GID = create_group(?GROUP_NAME1, UserReqParams1),
     SID1 = create_space_for_group(?SPACE_NAME1, GID, UserReqParams1),
@@ -593,11 +518,7 @@ group_get_space_data_test(Config) ->
     ?assertMatch([SID1, ?SPACE_NAME1], get_group_space(GID, SID1, UserReqParams1)).
 
 group_delete_space_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams1 = ?config(userReqParams, Config),
 
     GID = create_group(?GROUP_NAME1, UserReqParams1),
     SID1 = create_space_for_group(?SPACE_NAME1, GID, UserReqParams1),
@@ -606,11 +527,7 @@ group_delete_space_test(Config) ->
     ?assertMatch(false, is_included([SID1], get_group_spaces(GID, UserReqParams1))).
 
 group_space_invitation_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams1 = ?config(userReqParams, Config),
 
     GID = create_group(?GROUP_NAME1, UserReqParams1),
     SID1 = create_space_for_group(?SPACE_NAME1, GID, UserReqParams1),
@@ -624,22 +541,15 @@ group_space_invitation_test(Config) ->
 %% spaces_rest_module_test_group =======================================
 
 space_create_by_user_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     SID = create_space(?SPACE_NAME1, UserReqParams),
 
     ?assertMatch([SID, ?SPACE_NAME1],read_space(SID, UserReqParams)).
 
 space_create_by_provider_test(Config) ->
-    ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     Token = get_space_creation_token_for_user(UserReqParams),
     SID = create_space(Token, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
@@ -647,11 +557,7 @@ space_create_by_provider_test(Config) ->
     ?assertMatch([SID, ?SPACE_NAME1],read_space(SID, ProviderReqParams)).
 
 space_update_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     SID = create_space(?SPACE_NAME1, UserReqParams),
 
@@ -659,11 +565,7 @@ space_update_test(Config) ->
     ?assertMatch([SID, ?SPACE_NAME2], read_space(SID, UserReqParams)).
 
 space_delete_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     SID = create_space(?SPACE_NAME1, UserReqParams),
     ?assertMatch(ok, check_status(delete_space(SID, UserReqParams))).
@@ -671,9 +573,9 @@ space_delete_test(Config) ->
 space_get_users_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     {UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
@@ -685,11 +587,8 @@ space_get_users_test(Config) ->
     ?assertMatch(true, is_included([UserId1, UserId2], get_space_users(SID, UserReqParams1))).
 
 space_get_user_data_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
     SID = create_space(?SPACE_NAME1, UserReqParams1),
     
@@ -698,9 +597,8 @@ space_get_user_data_test(Config) ->
 space_delete_user_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
-    {_UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     {UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
@@ -712,11 +610,7 @@ space_delete_user_test(Config) ->
     ?assertMatch(false, is_included([UserId2], get_space_users(SID, UserReqParams1))).
 
 space_get_groups_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     GID1 = create_group(?GROUP_NAME1, UserReqParams),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
@@ -724,11 +618,7 @@ space_get_groups_test(Config) ->
     ?assertMatch(true, is_included([GID1], get_space_groups(SID, UserReqParams))).
 
 space_get_group_data_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     GID1 = create_group(?GROUP_NAME1, UserReqParams),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
@@ -736,11 +626,7 @@ space_get_group_data_test(Config) ->
     ?assertMatch([GID1, ?GROUP_NAME1], get_space_group(SID, GID1, UserReqParams)).
 
 space_delete_group_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
+    UserReqParams = ?config(userReqParams, Config),
 
     GID1 = create_group(?GROUP_NAME1, UserReqParams),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
@@ -750,10 +636,8 @@ space_delete_group_test(Config) ->
 space_get_providers_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserReqParams = ?config(userReqParams, Config),
 
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
-    
     Token = get_space_creation_token_for_user(UserReqParams),
     SID = create_space_for_provider(Token, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
@@ -762,10 +646,8 @@ space_get_providers_test(Config) ->
 space_get_provider_data_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserReqParams = ?config(userReqParams, Config),
 
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
-    
     Token = get_space_creation_token_for_user(UserReqParams),
     SID = create_space_for_provider(Token, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
@@ -777,22 +659,20 @@ space_get_provider_data_test(Config) ->
 space_delete_provider_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
-    {_UserId, UserReqParams} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
-    
+    UserReqParams = ?config(userReqParams, Config),
+
     Token = get_space_creation_token_for_user(UserReqParams),
     SID = create_space_for_provider(Token, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
     ?assertMatch(ok, check_status(delete_space_provider(SID, ProviderId, UserReqParams))),
-
     ?assertMatch([], get_space_providers(SID, UserReqParams)).
 
 space_get_privileges_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     {UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
@@ -801,7 +681,11 @@ space_get_privileges_test(Config) ->
     join_user_to_space(InvitationToken, UserReqParams2),
 
     ?assertMatch(true,
-        is_included([atom_to_binary(Privilege, latin1) || Privilege <- ?SPACE_PRIVILEGES], get_space_privileges(users, SID, UserId1, UserReqParams1))),
+        is_included(
+            [atom_to_binary(Privilege, latin1) || Privilege <- ?SPACE_PRIVILEGES],
+            get_space_privileges(users, SID, UserId1, UserReqParams1)
+        )
+    ),
 
     ?assertMatch(true,
         is_included([<<"space_view_data">>], get_space_privileges(users, SID, UserId2, UserReqParams1))).
@@ -809,9 +693,9 @@ space_get_privileges_test(Config) ->
 space_set_privileges_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
+    UserId1 = ?config(userId, Config),
+    UserReqParams1 = ?config(userReqParams, Config),
 
-    {UserId1, UserReqParams1} =
-        register_user(?USER_NAME1, ProviderId, Config, ProviderReqParams),
     {UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
     {UserId3, UserReqParams3} =
@@ -840,21 +724,46 @@ init_per_suite(Config) ->
     [{restAddress, RestAddress} | NewConfig ].
 
 init_per_testcase(provider_create_test, Config) ->
+    init_per_testcase(non_register, Config);
+init_per_testcase(provider_update_test, Config) ->
+    init_per_testcase(register_only_provider, Config);
+init_per_testcase(provider_get_data_test, Config) ->
+    init_per_testcase(register_only_provider, Config);
+init_per_testcase(provider_delete_test, Config) ->
+    init_per_testcase(register_only_provider, Config);
+init_per_testcase(provider_check_ip_test, Config) ->
+    init_per_testcase(register_only_provider, Config);
+init_per_testcase(provider_check_port_test, Config) ->
+    init_per_testcase(register_only_provider, Config);
+init_per_testcase(non_register, Config) ->
     ibrowse:start(),
     ssl:start(),
     RestAddress = RestAddress = ?config(restAddress, Config),
     [{cert_files, generate_cert_files()} | Config];
-init_per_testcase(_, Config) ->
-    ibrowse:start(),
-    ssl:start(),
-    RestAddress = RestAddress = ?config(restAddress, Config),
+init_per_testcase(register_only_provider, Config) ->
+%%     this init function is for tests
+%%     than need registered provider
+    NewConfig = init_per_testcase(non_register, Config),
+    RestAddress = ?config(restAddress, NewConfig),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
-    NewConfig = [{cert_files, generate_cert_files()} | Config],
     {ProviderId, ProviderReqParams} =
         register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, NewConfig, ReqParams),
     [
         {providerId, ProviderId},
         {providerReqParams, ProviderReqParams}
+        | NewConfig
+    ];
+init_per_testcase(_Default, Config) ->
+%%     this default init function is for tests
+%%     than need registered provider and user
+    NewConfig = init_per_testcase(register_only_provider, Config),
+    ProviderId = ?config(providerId, NewConfig),
+    ProviderReqParams = ?config(providerReqParams, NewConfig),
+    {UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, NewConfig, ProviderReqParams),
+    [
+        {userId, UserId},
+        {userReqParams, UserReqParams}
         | NewConfig
     ].
 
