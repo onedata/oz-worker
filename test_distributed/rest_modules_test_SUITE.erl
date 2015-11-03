@@ -58,9 +58,9 @@
 -export([provider_create_test/1, provider_update_test/1, provider_get_info_test/1,
     provider_delete_test/1, provider_create_space_test/1, provider_get_supported_space_info_test/1,
     provider_delete_supported_space_test/1, provider_check_port_test/1, provider_check_ip_test/1,
-    support_space_test/1, user_authenticate_test/1, user_update_test/1, user_delete_test/1,
+    support_space_test/1, user_authorize_test/1, user_update_test/1, user_delete_test/1,
     user_merge_test/1, user_create_space_test/1, user_default_space_test/1, user_delete_space_test/1,
-    user_get_space_data_test/1, user_space_invite_test/1, user_get_group_data_test/1,
+    user_get_space_info_test/1, user_space_invitation_test/1, user_get_group_info_test/1,
     user_leave_group_test/1, user_group_invite_test/1, group_create_test/1, group_update_test/1,
     group_delete_test/1, user_create_group_test/1, group_invite_user_test/1,
     group_get_user_data_test/1, group_delete_user_test/1, group_get_privileges_test/1,
@@ -107,21 +107,21 @@ groups() ->
             user_rest_module_test_group,
             [],
             [
-                user_authenticate_test,
+                user_authorize_test,
                 user_update_test,
                 user_delete_test,
                 user_merge_test,
                 user_create_space_test,
                 user_default_space_test,
                 user_delete_space_test,
-                user_get_space_data_test,
-                user_space_invite_test,
-                user_get_group_data_test,
+                user_get_space_info_test,
+                user_space_invitation_test,
+                user_get_group_info_test,
                 user_leave_group_test,
-                user_group_invite_test
+                user_group_invitation_test
             ]
         },
-        {
+%%         TODO zmiana nazw testow
             group_rest_module_test_group,
             [],
             [
@@ -266,7 +266,7 @@ provider_check_port_test(Config) ->
 
 %% user_rest_module_test_group========================================
 
-user_authenticate_test(Config) ->
+user_authorize_test(Config) ->
     UserId = ?config(userId, Config),
     UserReqParams = ?config(userReqParams, Config),
 
@@ -315,7 +315,7 @@ user_default_space_test(Config) ->
     ?assertMatch([[SID1], SID1], get_user_spaces(UserReqParams)),
     ?assertMatch(SID1, get_user_default_space(UserReqParams)).
 
-user_get_space_data_test(Config) ->
+user_get_space_info_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
 
     SID = create_space_for_user(?SPACE_NAME1, UserReqParams),
@@ -328,7 +328,7 @@ user_delete_space_test(Config) ->
     ?assertMatch(ok, check_status(delete_space_by_user(SID1, UserReqParams))),
     ?assertMatch([[],<<"undefined">>], get_user_spaces(UserReqParams)).
 
-user_space_invite_test(Config) ->
+user_space_invitation_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
     UserReqParams1 = ?config(userReqParams, Config),
@@ -351,7 +351,7 @@ user_create_group_test(Config) ->
 
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))).
 
-user_get_group_data_test(Config) ->
+user_get_group_info_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
 
     GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
