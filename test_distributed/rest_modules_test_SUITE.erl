@@ -80,94 +80,92 @@
 -performance({test_cases, []}).
 all() ->
     [
-%%         {group, provider_rest_module_test_group},
-%%         {group, user_rest_module_test_group},
+        {group, provider_rest_module_test_group},
+        {group, user_rest_module_test_group},
         {group, group_rest_module_test_group},
-%%         {group, spaces_rest_module_test_group},
+        {group, spaces_rest_module_test_group},
         bad_request_test
     ].
 
 groups() ->
     [
-%%         {
-%%             provider_rest_module_test_group,
-%%             [],
-%%             [
-%%                 create_provider_test,
-%%                 update_provider_test,
-%%                 get_provider_info_test,
-%%                 delete_provider_test,
-%%                 create_and_support_space_by_provider,
-%%                 get_supported_space_info_test,
-%%                 unsupport_space_test,
-%%                 provider_check_ip_test,
-%%                 provider_check_port_test,
-%%                 support_space_test
-%%             ]
-%%         },
-%%         {
-%%             user_rest_module_test_group,
-%%             [],
-%%             [
-%%                 user_authorize_test,
-%%                 update_user_test,
-%%                 delete_user_test,
-%%                 merge_user_test,
-%%                 create_space_for_user_test,
-%%                 user_default_space_test,
-%%                 last_user_leaves_space_test,
-%%                 not_last_user_leaves_space_test,
-%%                 user_get_space_info_test,
-%%                 invite_user_to_space_test,
-%%                 get_group_info_by_user_test,
-%%                 last_user_leave_group_test,
-%%                 not_last_user_leave_group_test,
-%%                 invite_user_to_group_test
-%%             ]
-%%         },
+        {
+            provider_rest_module_test_group,
+            [],
+            [
+                create_provider_test,
+                update_provider_test,
+                get_provider_info_test,
+                delete_provider_test,
+                create_and_support_space_by_provider,
+                get_supported_space_info_test,
+                unsupport_space_test,
+                provider_check_ip_test,
+                provider_check_port_test,
+                support_space_test
+            ]
+        },
+        {
+            user_rest_module_test_group,
+            [],
+            [
+                user_authorize_test,
+                update_user_test,
+                delete_user_test,
+                merge_user_test,
+                create_space_for_user_test,
+                user_default_space_test,
+                last_user_leaves_space_test,
+                not_last_user_leaves_space_test,
+                user_get_space_info_test,
+                invite_user_to_space_test,
+                get_group_info_by_user_test,
+                last_user_leave_group_test,
+                not_last_user_leave_group_test,
+                invite_user_to_group_test
+            ]
+        },
         {
             group_rest_module_test_group,
             [],
             [
-%%                 create_group_test,
-%%                 update_group_test,
-%%                 delete_group_test,
-%%                 create_group_for_user_test,
-%%                 invite_user_to_group_test,
-%%                 get_user_info_by_group_test,
-%%                 delete_user_from_group_test,
-%%                 get_group_privileges_test,
-%%                 set_group_privileges_test,
-%%                 group_create_space_test,
-%%                 get_space_info_by_group_test,
-%%                 last_group_leave_space_test,
-                not_last_group_leave_space_test
-%%                 ,
-%%                 invite_group_to_space_test
+                create_group_test,
+                update_group_test,
+                delete_group_test,
+                create_group_for_user_test,
+                invite_user_to_group_test,
+                get_user_info_by_group_test,
+                delete_user_from_group_test,
+                get_group_privileges_test,
+                set_group_privileges_test,
+                group_create_space_test,
+                get_space_info_by_group_test,
+                last_group_leave_space_test,
+                not_last_group_leave_space_test,
+                invite_group_to_space_test
+            ]
+        },
+        {
+            spaces_rest_module_test_group,
+            [],
+            [
+                create_space_by_user_test,
+                create_and_support_space_test,
+                update_space_test,
+                delete_space_test,
+                get_users_from_space_test,
+                get_user_from_space_test,
+                delete_user_from_space_test,
+                get_groups_from_space_test,
+                get_group_info_from_space_test,
+                delete_group_from_space_test,
+                get_providers_supporting_space_test,
+                get_info_of_provider_supporting_space_test,
+                delete_provider_supporting_space_test,
+                get_space_privileges_test,
+                set_space_privileges_test
             ]
         }
-%%         ,
-%%         {
-%%             spaces_rest_module_test_group,
-%%             [],
-%%             [
-%%                 create_space_by_user_test,
-%%                 create_and_support_space_test,
-%%                 update_space_test,
-%%                 delete_space_test,
-%%                 get_users_from_space_test,
-%%                 get_user_from_space_test,
-%%                 delete_user_from_space_test,
-%%                 get_groups_from_space_test,
-%%                 get_group_info_from_space_test,
-%%                 delete_group_from_space_test,
-%%                 get_providers_supporting_space_test,
-%%                 get_info_of_provider_supporting_space_test,
-%%                 delete_provider_supporting_space_test,
-%%                 get_space_privileges_test,
-%%                 set_space_privileges_test
-%%             ]
-%%         }
     ].
 
 %%%===================================================================
@@ -765,24 +763,30 @@ bad_request_test(Config) ->
         {wrong_body,"WRONG BODY"}
     ]}),
 
-    Endpoints =
+    Endpoints1 =
     [
-%%     wherever id was needed as a parameter in below endpoints, 0 is used
-        "/provider", "/provider/spaces", "/provider/0", "/provider/spaces/support",
-        "/provider/spaces/0",
-        "/groups", "/groups/0", "/groups/0/users", "/groups/0/users/token",
-        "/groups/0/users/0", "/groups/0/users/0/privileges", "/groups/0/spaces",
-        "/groups/0/spaces/join", "/groups/0/spaces/token", "/groups/0/spaces/0", "/user",
-        "/user/authorize", "/user/spaces", "/user/spaces/default", "/user/spaces/join",
-        "/user/spaces/token", "/user/spaces/0", "/user/groups", "/user/groups/join",
-        "/user/groups/0", "/user/merge", "/user/merge/token", "/spaces", "/spaces/0",
-        "/spaces/0/users", "/spaces/0/users/token", "/spaces/0/users/0",
-        "/spaces/0/users/0/privileges", "/spaces/0/groups", "/spaces/0/groups/token",
-        "/spaces/0/groups/0", "/spaces/0/groups/0/privileges", "/spaces/0/providers",
-        "/spaces/0/providers/token", "/spaces/0/providers/0"
+        %% 0 is used wherever id is needed as a parameter in below endpoints
+        %% below endpoints will be tested with get method
+        "/provider", "/provider/spaces", "/provider/spaces/0", "/groups/0", "/groups/0/users",
+        "/groups/0/users/token", "/groups/0/users/0", "/groups/0/users/0/privileges",
+        "/groups/0/spaces", "/groups/0/spaces/token", "/groups/0/spaces/0", "/user", "/user/spaces",
+        "/user/spaces/default", "/user/spaces/token", "/user/spaces/0", "/user/groups",
+        "/user/groups/join", "/user/groups/0", "/user/merge/token", "/spaces/0", "/spaces/0/users",
+        "/spaces/0/users/token", "/spaces/0/users/0", "/spaces/0/users/0/privileges",
+        "/spaces/0/groups", "/spaces/0/groups/token", "/spaces/0/groups/0",
+        "/spaces/0/groups/0/privileges", "/spaces/0/providers", "/spaces/0/providers/token",
+        "/spaces/0/providers/0"
     ],
-    check_bad_requests(Endpoints, get, Body, UserReqParams ).
+    check_bad_requests(Endpoints1, get, Body, UserReqParams ),
 
+    Endpoints2=
+    [
+        %% 0 is used wherever id is needed as a parameter in below endpoints
+        %% below endpoints will be tested with put method
+        "/provider/0", "/provider/spaces/support", "/provider/test/check_my_ports", "/groups",
+        "/groups/0/spaces/join", "/user/authorize", "/user/spaces/join", "/user/merge", "/spaces"
+    ],
+    check_bad_requests(Endpoints2, post, Body, UserReqParams).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -1271,8 +1275,6 @@ get_group_spaces(GID, ReqParams) ->
         do_request(
             RestAddress ++ "/groups/" ++ binary_to_list(GID)++ "/spaces", Headers, get, [], Options
         ),
-%%     TODO usunac printa
-    ct:pal("DEBUG: ~p~n", [Response]),
     [Spaces] = get_body_val([spaces], Response),
     Spaces.
 
@@ -1657,15 +1659,13 @@ clean_space_privileges(SID, UserId, ReqParams) ->
     set_space_privileges(users, SID, UserId, [space_view_data], ReqParams).
 
 
-check_bad_requests([Endpoint], Body, ReqParams)->
+check_bad_requests([Endpoint], Method, Body, ReqParams)->
     {RestAddress, Headers, Options} = ReqParams,
-    Resp = do_request(RestAddress ++ Endpoint, Headers, get, Body, Options),
-    ct:pal("DEBUG: ~p~n", [Resp]),
+    Resp = do_request(RestAddress ++ Endpoint, Headers, Method, Body, Options),
     ?assertMatch(bad, check_status(Resp));
-check_bad_requests([Endpoint | Endpoints], Body, ReqParams)->
+check_bad_requests([Endpoint | Endpoints], Method, Body, ReqParams)->
     {RestAddress, Headers, Options} = ReqParams,
-    Resp = do_request(RestAddress ++ Endpoint, Headers, get, Body, Options),
-    ct:pal("DEBUG: ~p~n", [Resp]),
+    Resp = do_request(RestAddress ++ Endpoint, Headers, Method, Body, Options),
     ?assertMatch(bad, check_status(Resp)),
-    check_bad_requests(Endpoints, get, Body, ReqParams).
+    check_bad_requests(Endpoints, Method, Body, ReqParams).
     
