@@ -305,7 +305,6 @@ delete_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
 
     ?assertMatch(ok, check_status(delete_user(UserReqParams))),
-%%     TODO jaki kod powinno zwracac ?
     ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(UserReqParams)).
 
 request_merging_users_test(Config) ->
