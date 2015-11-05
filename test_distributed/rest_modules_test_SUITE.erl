@@ -74,7 +74,7 @@
     set_group_privileges_test/1, group_create_space_test/1, get_space_info_by_group_test/1,
     last_group_leave_space_test/1, create_space_by_user_test/1,
     create_and_support_space_test/1, update_space_test/1, delete_space_test/1,
-    get_users_from_space_test/1, get_user_from_space_test/1,
+    get_users_from_space_test/1, get_user_info_from_space_test/1,
     delete_user_from_space_test/1, get_groups_from_space_test/1, get_group_info_from_space_test/1,
     delete_group_from_space_test/1, get_providers_supporting_space_test/1,
     get_info_of_provider_supporting_space_test/1, delete_provider_supporting_space_test/1,
@@ -164,7 +164,7 @@ groups() ->
                 update_space_test,
                 delete_space_test,
                 get_users_from_space_test,
-                get_user_from_space_test,
+                get_user_info_from_space_test,
                 delete_user_from_space_test,
                 get_groups_from_space_test,
                 get_group_info_from_space_test,
@@ -682,13 +682,13 @@ get_users_from_space_test(Config) ->
     join_user_to_space(InvitationToken, UserReqParams2),
     ?assertMatch(true, is_included([UserId1, UserId2], get_space_users(SID, UserReqParams1))).
 
-get_user_from_space_test(Config) ->
+get_user_info_from_space_test(Config) ->
     UserId1 = ?config(userId, Config),
     UserReqParams1 = ?config(userReqParams, Config),
 
     SID = create_space(?SPACE_NAME1, UserReqParams1),
 
-    ?assertMatch([UserId1, ?USER_NAME1], get_user_from_space(SID, UserId1, UserReqParams1)).
+    ?assertMatch([UserId1, ?USER_NAME1], get_user_info_from_space(SID, UserId1, UserReqParams1)).
 
 delete_user_from_space_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -1495,7 +1495,7 @@ get_space_users(SID, ReqParams) ->
     Val = get_body_val([users], Response),
     fetch_value_from_list(Val).
 
-get_user_from_space(SID, UID, ReqParams) ->
+get_user_info_from_space(SID, UID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response =
         do_request(
