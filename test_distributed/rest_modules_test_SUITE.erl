@@ -36,6 +36,13 @@
 -define(GROUP_NAME2, <<"group2">>).
 -define(SPACE_SIZE1, <<"1024">>).
 -define(SPACE_SIZE2, <<"4096">>).
+
+-define(BAD_REQUEST, "400").
+-define(UNAUTHORIZED, "401").
+-define(FORBIDDEN, "403").
+-define(NOT_FOUND, "404").
+
+
 -define(GROUP_PRIVILEGES,
     [
         group_view_data, group_change_data, group_invite_user,
@@ -59,7 +66,7 @@
     delete_provider_test/1, create_and_support_space_by_provider/1, get_supported_space_info_test/1,
     unsupport_space_test/1, provider_check_port_test/1, provider_check_ip_test/1,
     support_space_test/1, user_authorize_test/1, update_user_test/1, delete_user_test/1,
-    merge_user_test/1, create_space_for_user_test/1, user_default_space_test/1, last_user_leaves_space_test/1,
+    request_merging_users_test/1, create_space_for_user_test/1, set_user_default_space_test/1, last_user_leaves_space_test/1,
     user_get_space_info_test/1, invite_user_to_space_test/1, get_group_info_by_user_test/1,
     last_user_leave_group_test/1, not_last_user_leave_group_test/1, group_invitation_test/1, create_group_test/1, update_group_test/1,
     delete_group_test/1, create_group_for_user_test/1, invite_user_to_group_test/1,
@@ -71,7 +78,7 @@
     delete_user_from_space_test/1, get_groups_from_space_test/1, get_group_info_from_space_test/1,
     delete_group_from_space_test/1, get_providers_supporting_space_test/1,
     get_info_of_provider_supporting_space_test/1, delete_provider_supporting_space_test/1,
-    get_space_privileges_test/1, space_set_privileges_test/1, invite_group_to_space_test/1, not_last_group_leave_space_test/1, not_last_user_leaves_space_test/1, bad_request_test/1]).
+    get_space_privileges_test/1, invite_group_to_space_test/1, not_last_group_leave_space_test/1, not_last_user_leaves_space_test/1, bad_request_test/1, get_unsupported_space_info_test/1, set_space_privileges_test/1, set_non_existing_space_as_user_default_space_test/1, set_user_default_space_without_permission_test/1]).
 
 %%%===================================================================
 %%% API functions
@@ -102,7 +109,8 @@ groups() ->
                 unsupport_space_test,
                 provider_check_ip_test,
                 provider_check_port_test,
-                support_space_test
+                support_space_test,
+                get_unsupported_space_info_test
             ]
         },
         {
@@ -112,9 +120,11 @@ groups() ->
                 user_authorize_test,
                 update_user_test,
                 delete_user_test,
-                merge_user_test,
+                request_merging_users_test,
                 create_space_for_user_test,
-                user_default_space_test,
+                set_user_default_space_test,
+                set_user_default_space_without_permission_test,
+                set_non_existing_space_as_user_default_space_test,
                 last_user_leaves_space_test,
                 not_last_user_leaves_space_test,
                 user_get_space_info_test,
@@ -210,7 +220,7 @@ delete_provider_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
 
     ?assertMatch(ok, check_status(delete_provider(ProviderReqParams))),
-    ?assertMatch(request_error,get_provider_info(ProviderReqParams)).
+    ?assertMatch({request_error, ?UNAUTHORIZED},get_provider_info(ProviderReqParams)).
 
 create_and_support_space_by_provider(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
@@ -269,6 +279,13 @@ provider_check_port_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
     ?assertMatch(ok, check_status(check_provider_ports(ProviderReqParams))).
 
+get_unsupported_space_info_test(Config) ->
+    ProviderReqParams = ?config(providerReqParams, Config),
+    UserReqParams = ?config(userReqParams, Config),
+
+    SID = create_space_for_user(?SPACE_NAME1, UserReqParams),
+    ?assertMatch({request_error, ?NOT_FOUND }, get_space_info_by_provider(SID, ProviderReqParams)).
+
 %% user_rest_module_test_group========================================
 
 user_authorize_test(Config) ->
@@ -288,9 +305,10 @@ delete_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
 
     ?assertMatch(ok, check_status(delete_user(UserReqParams))),
-    ?assertMatch(request_error, get_user_info(UserReqParams)).
+%%     TODO jaki kod powinno zwracac ?
+    ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(UserReqParams)).
 
-merge_user_test(Config) ->
+request_merging_users_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
     UserReqParams1 = ?config(userReqParams, Config),
@@ -310,7 +328,7 @@ create_space_for_user_test(Config) ->
 
     ?assertMatch([[SID1, SID2], <<"undefined">>], get_user_spaces(UserReqParams)).
 
-user_default_space_test(Config) ->
+set_user_default_space_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
@@ -320,6 +338,30 @@ user_default_space_test(Config) ->
     ?assertMatch([[SID1], SID1], get_user_spaces(UserReqParams)),
     ?assertMatch(SID1, get_user_default_space(UserReqParams)).
 
+set_user_default_space_without_permission_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
+    ProviderId = ?config(providerId, Config),
+
+    {_UserId2, UserReqParams2} =
+        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
+
+    ?assertMatch([[], <<"undefined">>], get_user_spaces(UserReqParams2)),
+    ?assertMatch(bad, check_status(set_default_space_for_user(SID1, UserReqParams2))),
+    ?assertMatch([[], <<"undefined">>], get_user_spaces(UserReqParams2)),
+    ?assertMatch(<<"undefined">>, get_user_default_space(UserReqParams2)).
+
+set_non_existing_space_as_user_default_space_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+
+    SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
+    SID2 = <<"0">>,
+
+    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams)),
+    ?assertMatch(bad, check_status(set_default_space_for_user(SID2, UserReqParams))),
+    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams)).
+
 user_get_space_info_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
 
@@ -327,11 +369,13 @@ user_get_space_info_test(Config) ->
     ?assertMatch([SID, ?SPACE_NAME1], get_space_info_by_user(SID, UserReqParams)).
 
 last_user_leaves_space_test(Config) ->
+    ProviderReqParams = ?config(providerReqParams, Config),
     UserReqParams = ?config(userReqParams, Config),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
     ?assertMatch(ok, check_status(user_leaves_space(SID1, UserReqParams))),
-    ?assertMatch([[],<<"undefined">>], get_user_spaces(UserReqParams)).
+    ?assertMatch([[],<<"undefined">>], get_user_spaces(UserReqParams)),
+    ?assertMatch(false, is_included([SID1], get_supported_spaces(ProviderReqParams))).
 
 not_last_user_leaves_space_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -354,7 +398,7 @@ invite_user_to_space_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
     UserReqParams1 = ?config(userReqParams, Config),
 
-    {_UserId2, UserReqParams2} =
+    {UserId2, UserReqParams2} =
         register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams1),
     InvitationToken = get_space_invitation_token(users, SID1, UserReqParams1),
@@ -362,7 +406,10 @@ invite_user_to_space_test(Config) ->
     ?assertMatch(SID1, join_user_to_space(InvitationToken, UserReqParams2)),
 
     %% check if space is in list of user2 space
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams2)).
+    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams2)),
+
+    %% check if user2 is in list of space's users
+    ?assertMatch(true, is_included([UserId2],get_space_users(SID1, UserReqParams2))).
 
 create_group_for_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -384,7 +431,8 @@ last_user_leave_group_test(Config) ->
     GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
 
     ?assertMatch(ok, check_status(user_leave_group(GID1,UserReqParams))),
-    ?assertMatch(false, is_included([GID1], get_user_groups(UserReqParams))).
+    ?assertMatch(false, is_included([GID1], get_user_groups(UserReqParams))),
+    ?assertMatch({request_error, ?FORBIDDEN}, get_group_info(GID1, UserReqParams)).
 
 not_last_user_leave_group_test(Config) ->
     ProviderId1 = ?config(providerId, Config),
@@ -445,7 +493,7 @@ delete_group_test(Config) ->
     GID = create_group(?GROUP_NAME1, UserReqParams),
 
     ?assertMatch(ok, check_status(delete_group(GID, UserReqParams))),
-    ?assertMatch(request_error, get_group_info(GID, UserReqParams)).
+    ?assertMatch({request_error, ?BAD_REQUEST}, get_group_info(GID, UserReqParams)).
 
 invite_user_to_group_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -737,7 +785,7 @@ get_space_privileges_test(Config) ->
     ?assertMatch(true,
         is_included([<<"space_view_data">>], get_space_privileges(users, SID, UserId2, UserReqParams1))).
 
-space_set_privileges_test(Config) ->
+set_space_privileges_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
     UserId1 = ?config(userId, Config),
@@ -905,14 +953,14 @@ get_response_body(Response) ->
 %% Keylist is list of atoms
 get_body_val(KeyList, Response) ->
     case check_status(Response) of
-        bad -> request_error;
+        bad -> {request_error, get_response_status(Response)};
         _ -> {JSONOutput} = jiffy:decode(get_response_body(Response)),
             [ proplists:get_value(atom_to_binary(Key,latin1), JSONOutput) || Key <-KeyList ]
     end.
 
 get_header_val(Parameter, Response) ->
     case check_status(Response) of
-        bad -> request_error;
+        bad -> {request_error, get_response_status(Response)};
         _ -> case lists:keysearch("location", 1, get_response_headers(Response)) of
                 {value, {_HeaderType, HeaderValue}} -> parse_http_param(Parameter, HeaderValue);
                 false -> parameter_not_in_header
