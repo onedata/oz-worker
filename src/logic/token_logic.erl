@@ -44,7 +44,8 @@ validate(Token, TokenType) ->
     case macaroon:deserialize(Token) of
         {error, _} -> false;
         {ok, M} ->
-            case ?DB(get_token, macaroon:identifier(M)) of
+            {ok, Id} = macaroon:identifier(M),
+            case ?DB(get_token, Id) of
                 {error, _} -> false;
                 {ok, #db_document{record = #token{secret = Secret}}} ->
                     {ok, V} = macaroon_verifier:create(),
