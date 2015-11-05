@@ -492,7 +492,7 @@ delete_group_test(Config) ->
     GID = create_group(?GROUP_NAME1, UserReqParams),
 
     ?assertMatch(ok, check_status(delete_group(GID, UserReqParams))),
-    ?assertMatch({request_error, ?BAD_REQUEST}, get_group_info(GID, UserReqParams)).
+    ?assertMatch({request_error, ?FORBIDDEN}, get_group_info(GID, UserReqParams)).
 
 invite_user_to_group_test(Config) ->
     ProviderId = ?config(providerId, Config),
