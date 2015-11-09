@@ -107,9 +107,10 @@ set_up_test_entities(Users, Groups, Spaces) ->
                         [] -> {{user, hd(UserList)}, tl(UserList), []};
                         _ -> {{group, hd(GroupList)}, UserList, tl(GroupList)}
                     end,
-                case proplists:get_value(<<"displayed_name">>, Props) of
-                    undefined -> {ok, SpaceID} = create_space_with_uuid(Member, SpaceID, SpaceID);
-                    SpaceName -> {ok, SpaceID} = create_space_with_uuid(Member, SpaceName, SpaceID)
+                %% create space with given name; if name is not defined, set ID as a name
+                {ok, SpaceID} = case proplists:get_value(<<"displayed_name">>, Props) of
+                    undefined -> create_space_with_uuid(Member, SpaceID, SpaceID);
+                    SpaceName -> create_space_with_uuid(Member, SpaceName, SpaceID)
                 end,
                 % Support the space by all providers
                 lists:foreach(
