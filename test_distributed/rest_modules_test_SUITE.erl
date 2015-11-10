@@ -1427,7 +1427,7 @@ group_privilege_check(group_create_space, Users, GID, _SID) ->
     %% test if user2 lacks group_create_space_token privileges
     ?assertMatch({request_error, ?UNAUTHORIZED}, create_space_for_group(?SPACE_NAME2, GID, UserReqParams2)),
     set_group_privileges_of_user(GID, UserId2, [group_create_space], UserReqParams1),
-    ?assertNotMatch({request, error, _}, create_space_for_group(?SPACE_NAME2, GID, UserReqParams2)),
+    ?assertNotMatch({request_error, _}, create_space_for_group(?SPACE_NAME2, GID, UserReqParams2)),
     clean_group_privileges(GID, UserId2, UserReqParams1);
 group_privilege_check(group_remove_user, Users, GID, _SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} , {UserId3, UserReqParams3}| _] = Users,
