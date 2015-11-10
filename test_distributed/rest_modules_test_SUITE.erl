@@ -544,7 +544,6 @@ get_group_privileges_test(Config) ->
     join_user_to_group(InvitationToken, UserReqParams2),
 
     %% check user creator privileges
-
     ?assertMatch(true,
         is_included(
             [atom_to_binary(Privilege, latin1) || Privilege <- ?GROUP_PRIVILEGES],
@@ -1407,13 +1406,13 @@ group_privilege_check(group_join_space, Users, GID, SID) ->
     set_group_privileges_of_user(GID, UserId2, [group_join_space], UserReqParams1),
     ?assertMatch(SID, join_group_to_space(InvitationToken, GID, UserReqParams2)),
     clean_group_privileges(GID, UserId2, UserReqParams1);
-group_privilege_check(group_leaves_space, Users, GID, SID) ->
+group_privilege_check(group_leave_space, Users, GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     InvitationToken = get_space_invitation_token(groups, SID, UserReqParams1),
     join_group_to_space(InvitationToken, GID, UserReqParams1),
     %% test if user2 lacks group_leaves_space privileges
     ?assertMatch(bad, check_status(group_leaves_space(GID, SID, UserReqParams2))),
-    set_group_privileges_of_user(GID, UserId2, [group_leaves_space], UserReqParams1),
+    set_group_privileges_of_user(GID, UserId2, [group_leave_space], UserReqParams1),
     ?assertMatch(ok, check_status(group_leaves_space(GID, SID, UserReqParams2))),
     clean_group_privileges(GID, UserId2, UserReqParams1);
 group_privilege_check(group_create_space_token, Users, GID, _SID) ->
