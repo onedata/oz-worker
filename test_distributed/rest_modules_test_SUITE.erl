@@ -47,7 +47,7 @@
     [
         group_view_data, group_change_data, group_invite_user,
         group_remove_user, group_join_space, group_create_space,
-        group_set_privileges, group_remove, group_leaves_space,
+        group_set_privileges, group_remove, group_leave_space,
         group_create_space_token
     ]
 ).
@@ -544,6 +544,7 @@ get_group_privileges_test(Config) ->
     join_user_to_group(InvitationToken, UserReqParams2),
 
     %% check user creator privileges
+
     ?assertMatch(true,
         is_included(
             [atom_to_binary(Privilege, latin1) || Privilege <- ?GROUP_PRIVILEGES],
@@ -1636,9 +1637,9 @@ space_privilege_check(space_change_data, Users, _GID, SID) ->
 space_privilege_check(space_invite_user, Users, _GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     %% test if user2 lacks space_invite_user privileges
-    ?assertMatch(bad, check_status(get_space_invitation_token(users, SID, UserReqParams2))),
+    ?assertMatch({request_error, ?UNAUTHORIZED}, get_space_invitation_token(users, SID, UserReqParams2)),
     set_space_privileges(users, SID, UserId2, [space_invite_user], UserReqParams1),
-    ?assertNotMatch(bad, check_status(get_space_invitation_token(users, SID, UserReqParams2))),
+    ?assertNotMatch({request_error, _}, get_space_invitation_token(users, SID, UserReqParams2)),
     clean_space_privileges(SID, UserId2, UserReqParams1);
 space_privilege_check(space_invite_group, Users, _GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
