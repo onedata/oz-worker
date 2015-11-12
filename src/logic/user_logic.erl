@@ -301,6 +301,8 @@ remove(UserId) ->
         op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew)
     end, Spaces),
 
+    auth_logic:invalidate_token({user_id, UserId}),
+
     dao_adapter:user_remove(UserId),
     op_channel_logic:user_removed(UserProviders, UserId),
     true.

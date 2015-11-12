@@ -27,7 +27,7 @@
 
 %% API
 -export([start/0, stop/0, get_redirection_uri/3, gen_token/1, gen_token/2, validate_token/5,
-    authenticate_user/1]).
+    authenticate_user/1, invalidate_token/1]).
 
 %% Handling state tokens
 -export([generate_state_token/2, lookup_state_token/1,
@@ -121,7 +121,7 @@ get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
 %%--------------------------------------------------------------------
 -spec gen_token(UserId :: binary()) -> Token :: binary().
 gen_token(UserId) ->
-    Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
+    Secret = generate_secret(),
     Caveats = [],%["method = GET", "rootResource in spaces,user"],
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
     {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier), Caveats),
@@ -134,13 +134,13 @@ gen_token(UserId) ->
 -spec gen_token(UserId :: binary(), ProviderId :: binary() | undefined) ->
     Token :: binary().
 gen_token(UserId, ProviderId) ->
-    Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
+    Secret = generate_secret(),
     Location = ?MACAROONS_LOCATION,
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
     {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier),
         [["providerId = ", ProviderId]]),
 
-    CaveatKey = crypto:rand_bytes(macaroon:suggested_secret_length()),
+    CaveatKey = generate_secret(),
     {ok, CaveatId} = ?DB(save_auth, #auth{secret = CaveatKey, user_id = UserId}),
     {ok, M2} = macaroon:add_third_party_caveat(M, Location, CaveatKey, CaveatId),
     {ok, Token} = macaroon:serialize(M2),
@@ -179,8 +179,26 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
             case macaroon_verifier:verify(V, Macaroon, Secret, DischargeMacaroons) of
                 ok -> {ok, UserId};
                 {error, Reason} -> {error, Reason}
-            end
+            end;
+
+        _ ->
+            {error, unknown_macaroon}
     end.
+
+%%--------------------------------------------------------------------
+%% @doc Invalidates a given token or all of user's tokens.
+%% @end
+%%--------------------------------------------------------------------
+-spec invalidate_token({user_id, binary()} | binary()) -> ok.
+invalidate_token({user_id, UserId}) ->
+    {ok, AuthDocs} = ?DB(get_auth_by_user_id, UserId),
+    lists:foreach(fun(#db_document{uuid = AuthIdL}) ->
+        invalidate_token(utils:ensure_binary(AuthIdL))
+    end, AuthDocs),
+    ok;
+invalidate_token(Identifier) when is_binary(Identifier) ->
+    ?DB(remove_auth, Identifier),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc Generates a state token and retuns it. In the process, it stores the token
@@ -268,3 +286,14 @@ create_macaroon(Secret, Identifier, Caveats) ->
         [["time < ", integer_to_binary(ExpirationTime)] | Caveats]),
 
     {ok, M}.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Generates a hex-encoded random secret for use with Macaroon.
+%% @end
+%%--------------------------------------------------------------------
+-spec generate_secret() -> binary().
+generate_secret() ->
+    BinSecret = crypto:rand_bytes(macaroon:suggested_secret_length()),
+    << <<Y>> ||<<X:4>> <= BinSecret, Y <- integer_to_list(X,16) >>.

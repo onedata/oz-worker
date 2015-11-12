@@ -18,7 +18,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([save_auth/1, remove_auth/1, exist_auth/1, get_auth/1]).
+-export([save_auth/1, remove_auth/1, exist_auth/1, get_auth/1,
+    get_auth_by_user_id/1]).
 
 %%%===================================================================
 %%% API
@@ -83,3 +84,24 @@ get_auth(AuthId) ->
     dao_external:set_db(?AUTH_DB_NAME),
     {ok, #db_document{record = #auth{}}} =
         dao_records:get_record(utils:ensure_list(AuthId)).
+
+%%--------------------------------------------------------------------
+%% @doc Gets auth from DB for a given user id.
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead
+%% (See {@link dao_worker:handle_call/3} for more details).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_auth_by_user_id(UserId :: binary()) -> {ok, [auth_doc()]} | no_return().
+get_auth_by_user_id(UserId) ->
+    {View, QueryArgs} =
+        {?AUTH_BY_USER_ID_VIEW, #view_query_args{keys =
+        [<<?RECORD_FIELD_BINARY_PREFIX, (dao_helper:name(UserId))/binary>>], include_docs = true}},
+
+    case dao_records:list_records(View, QueryArgs) of
+        {ok, #view_result{rows = Rows}} ->
+            {ok, [FDoc || #view_row{doc = FDoc} <- Rows]};
+
+        Other ->
+            ?error("Invalid view response: ~p", [Other]),
+            throw(invalid_data)
+    end.
