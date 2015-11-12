@@ -12,6 +12,7 @@
 
 -include("handlers/rest_handler.hrl").
 -include("registered_names.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -behavior(rest_module_behavior).
 
@@ -144,9 +145,16 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
             {{true, <<"/provider/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->
-    Body = mochijson2:encode(provider_logic:test_connection(Data)),
-    Req2 = cowboy_req:set_resp_body(Body, Req),
-    {true, Req2}.
+    case provider_logic:test_connection(Data) of
+        ResultList when is_list(ResultList) ->
+            Body = mochijson2:encode(),
+            Req2 = cowboy_req:set_resp_body(Body, Req),
+            {true, Req2};
+
+        {error, bad_data} ->
+            rest_module_helper:report_error(
+                invalid_request, <<"bad data">>, Req)
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Returns data requested by a client through GET on a REST resource.

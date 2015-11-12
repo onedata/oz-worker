@@ -137,14 +137,14 @@ remove(ProviderId) ->
     [{ServiceName :: binary(), Status :: ok | error}].
 test_connection([]) ->
     [];
-test_connection([{<<"undefined">>, Url} | Rest]) ->
+test_connection([{<<"undefined">>, Url} | Rest]) when is_binary(Url) ->
     UrlString = binary_to_list(Url),
     ConnStatus = case ibrowse:send_req(UrlString, [], get) of
                      {ok, "200", _, _} -> ok;
                      _ -> error
                  end,
     [{Url, ConnStatus} | test_connection(Rest)];
-test_connection([{ServiceName, Url} | Rest]) ->
+test_connection([{ServiceName, Url} | Rest]) when is_binary(ServiceName), is_binary(Url) ->
     UrlString = binary_to_list(Url),
     ServiceNameString = binary_to_list(ServiceName),
     ConnStatus = case ibrowse:send_req(UrlString, [], get) of
@@ -154,7 +154,9 @@ test_connection([{ServiceName, Url} | Rest]) ->
                          ?debug("Checking connection to ~p failed with error: ~n~p", [Url, Error]),
                          error
                  end,
-    [{Url, ConnStatus} | test_connection(Rest)].
+    [{Url, ConnStatus} | test_connection(Rest)];
+test_connection(_) ->
+    {error, bad_data}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns provider id of provider that has been chosen

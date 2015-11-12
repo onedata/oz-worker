@@ -277,7 +277,7 @@ provider_check_ip_test(Config) ->
 
 provider_check_port_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
-    ?assertMatch(ok, check_status(check_provider_ports(ProviderReqParams))).
+    ?assertMatch(bad, check_status(check_provider_ports(ProviderReqParams))).
 
 get_unsupported_space_info_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
