@@ -1383,7 +1383,7 @@ group_privilege_check(group_change_data, Users, GID, _SID) ->
 group_privilege_check(group_invite_user, Users, GID, _SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     %% test if user2 lacks group_invite_user privileges
-    ?assertMatch({request_error, ?UNAUTHORIZED}, get_group_invitation_token(GID, UserReqParams2)),
+    ?assertMatch({request_error, ?FORBIDDEN}, get_group_invitation_token(GID, UserReqParams2)),
     set_group_privileges_of_user(GID, UserId2, [group_invite_user], UserReqParams1),
     ?assertNotMatch({request_error, _}, get_group_invitation_token(GID, UserReqParams2)),
     clean_group_privileges(GID, UserId2, UserReqParams1);
@@ -1418,7 +1418,7 @@ group_privilege_check(group_leave_space, Users, GID, SID) ->
 group_privilege_check(group_create_space_token, Users, GID, _SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     %% test if user2 lacks group_create_space_token privileges
-    ?assertMatch({request_error, ?UNAUTHORIZED}, get_space_creation_token_for_group(GID, UserReqParams2)),
+    ?assertMatch({request_error, ?FORBIDDEN}, get_space_creation_token_for_group(GID, UserReqParams2)),
     set_group_privileges_of_user(GID, UserId2, [group_create_space_token], UserReqParams1),
     ?assertNotMatch({request_error, _}, get_space_creation_token_for_group(GID, UserReqParams2)),
     clean_group_privileges(GID, UserId2, UserReqParams1);
@@ -1629,9 +1629,9 @@ space_privilege_check(space_view_data, Users, _GID, SID) ->
 space_privilege_check(space_change_data, Users, _GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     %% test if user2 lacks space_change_data privileges
-    ?assertMatch(bad, check_status(update_space(SID, ?SPACE_NAME2, UserReqParams2))),
+    ?assertMatch(bad, check_status(update_space(?SPACE_NAME2, SID, UserReqParams2))),
     set_space_privileges(users, SID, UserId2, [space_change_data], UserReqParams1),
-    ?assertMatch(ok, check_status(update_space(SID, ?SPACE_NAME2, UserReqParams2))),
+    ?assertMatch(ok, check_status(update_space(?SPACE_NAME2, SID, UserReqParams2))),
     clean_space_privileges(SID, UserId2, UserReqParams1);
 space_privilege_check(space_invite_user, Users, _GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
@@ -1643,10 +1643,9 @@ space_privilege_check(space_invite_user, Users, _GID, SID) ->
 space_privilege_check(space_invite_group, Users, _GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     %% test if user2 lacks space_invite_user privileges
-    ?assertMatch({request_error, ?UNAUTHORIZED}, get_space_invitation_token(group, SID, UserReqParams2)),
+    ?assertMatch({request_error, ?FORBIDDEN}, get_space_invitation_token(group, SID, UserReqParams2)),
     set_space_privileges(users, SID, UserId2, [space_invite_group], UserReqParams1),
-    ?assertNotMatch({request_error, ?UNAUTHORIZED},
-        get_space_invitation_token(group, SID, UserReqParams2)),
+    ?assertNotMatch({request_error, _}, get_space_invitation_token(group, SID, UserReqParams2)),
     clean_space_privileges(SID, UserId2, UserReqParams1);
 space_privilege_check(space_set_privileges, Users, _GID, SID) ->
     [{UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
@@ -1686,7 +1685,7 @@ space_privilege_check(space_remove_group, Users, GID, SID) ->
 space_privilege_check(space_add_provider, Users, _GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
      %% test if user2 lacks space_add_provider privileges
-    ?assertMatch({request_error, ?UNAUTHORIZED}, get_space_support_token(SID, UserReqParams2)),
+    ?assertMatch({request_error, ?FORBIDDEN}, get_space_support_token(SID, UserReqParams2)),
     set_space_privileges(users, SID, UserId2, [space_add_provider], UserReqParams1),
     ?assertNotMatch({request_error, _}, get_space_support_token(SID, UserReqParams2)),
     clean_space_privileges(SID, UserId2, UserReqParams1);
