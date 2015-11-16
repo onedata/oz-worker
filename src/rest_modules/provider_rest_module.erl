@@ -146,8 +146,8 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
     end;
 accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->
     case provider_logic:test_connection(Data) of
-        ResultList when is_list(ResultList) ->
-            Body = mochijson2:encode(),
+        {ok, ResultList} ->
+            Body = mochijson2:encode(ResultList),
             Req2 = cowboy_req:set_resp_body(Body, Req),
             {true, Req2};
 

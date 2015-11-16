@@ -95,13 +95,7 @@ get_auth(AuthId) ->
 get_auth_by_user_id(UserId) ->
     {View, QueryArgs} =
         {?AUTH_BY_USER_ID_VIEW, #view_query_args{keys =
-        [<<?RECORD_FIELD_BINARY_PREFIX, (dao_helper:name(UserId))/binary>>], include_docs = true}},
+        [<<?RECORD_FIELD_BINARY_PREFIX, UserId/binary>>], include_docs = true}},
 
-    case dao_records:list_records(View, QueryArgs) of
-        {ok, #view_result{rows = Rows}} ->
-            {ok, [FDoc || #view_row{doc = FDoc} <- Rows]};
-
-        Other ->
-            ?error("Invalid view response: ~p", [Other]),
-            throw(invalid_data)
-    end.
+    {ok, #view_result{rows = Rows}} = dao_records:list_records(View, QueryArgs),
+    {ok, [#db_document{record = #auth{}} = FDoc || #view_row{doc = FDoc} <- Rows]}.

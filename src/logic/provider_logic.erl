@@ -132,19 +132,31 @@ remove(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Tests connection to given url.
+%% @end
 %%--------------------------------------------------------------------
--spec test_connection(ToCheck :: [{ServiceName :: binary(), Url :: binary()}]) ->
-    [{ServiceName :: binary(), Status :: ok | error}].
-test_connection([]) ->
-    [];
-test_connection([{<<"undefined">>, Url} | Rest]) when is_binary(Url) ->
+-spec test_connection(ToCheck :: any()) ->
+    {ok, [{ServiceName :: binary(), Status :: ok | error}]} | {error, bad_data}.
+test_connection(ToCheck) ->
+    test_connection(ToCheck, []).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Tests connection to given url.
+%% @end
+%%--------------------------------------------------------------------
+-spec test_connection(ToCheck :: any(),
+    Acc :: [{ServiceName :: binary(), Status :: ok | error}]) ->
+    {ok, [{ServiceName :: binary(), Status :: ok | error}]} | {error, bad_data}.
+test_connection([], Acc) ->
+    {ok, lists:reverse(Acc)};
+test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
     UrlString = binary_to_list(Url),
     ConnStatus = case ibrowse:send_req(UrlString, [], get) of
                      {ok, "200", _, _} -> ok;
                      _ -> error
                  end,
-    [{Url, ConnStatus} | test_connection(Rest)];
-test_connection([{ServiceName, Url} | Rest]) when is_binary(ServiceName), is_binary(Url) ->
+    test_connection(Rest, [{Url, ConnStatus} | Acc]);
+test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
     UrlString = binary_to_list(Url),
     ServiceNameString = binary_to_list(ServiceName),
     ConnStatus = case ibrowse:send_req(UrlString, [], get) of
@@ -154,8 +166,8 @@ test_connection([{ServiceName, Url} | Rest]) when is_binary(ServiceName), is_bin
                          ?debug("Checking connection to ~p failed with error: ~n~p", [Url, Error]),
                          error
                  end,
-    [{Url, ConnStatus} | test_connection(Rest)];
-test_connection(_) ->
+    test_connection(Rest, [{Url, ConnStatus} | Acc]);
+test_connection(_, _) ->
     {error, bad_data}.
 
 %%--------------------------------------------------------------------
