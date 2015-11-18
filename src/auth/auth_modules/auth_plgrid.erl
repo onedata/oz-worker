@@ -57,7 +57,8 @@ get_redirect_url(ConnectAccount) ->
         {ok, <<(plgrid_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
-            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_NAME]),
+            ?error_stacktrace("Cannot get redirect URL for ~p. ~p:~p",
+                [?PROVIDER_NAME, Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -102,10 +103,9 @@ validate_login() ->
         RequestBody = <<"openid.mode=check_authentication&", Params/binary>>,
 
         % Send validation request
-        {ok, "200", _, Response} = ibrowse:send_req(
-            binary_to_list(ReceivedEndpoint),
-            [{content_type, "application/x-www-form-urlencoded"}],
-            post, RequestBody, [{response_format, binary}]),
+        {ok, 200, _, Response} = http_client:post(ReceivedEndpoint,
+            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}],
+            RequestBody),
 
         % Check if server responded positively
         Response = <<"is_valid:true\n">>,
@@ -158,10 +158,10 @@ validate_login() ->
 -spec plgrid_endpoint() -> binary().
 plgrid_endpoint() ->
     XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)),
-    {ok, XRDS} = gui_utils:https_get(XRDSEndpoint, [
+    {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, [
         {<<"Accept">>, <<"application/xrds+xml;level=1, */*">>},
         {<<"Connection">>, <<"close">>}
-    ]),
+    ], <<>>, [{follow_redirect, true}, {max_redirect, 5}]),
     discover_op_endpoint(XRDS).
 
 %%--------------------------------------------------------------------

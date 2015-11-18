@@ -72,23 +72,22 @@ validate_login() ->
         % Convert proplist to params string
         Params = http_utils:proplist_to_url_params(NewParamsProplist),
         % Send request to Dropbox endpoint
-        {ok, Response} = gui_utils:https_post(access_token_endpoint(),
+        {ok, 200, _, Response} = http_client:post(access_token_endpoint(),
             [
                 {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>},
-                {<<"Authorization">>, <<"Basic ", (str_utils:to_binary(AuthEncoded))/binary>>}
+                {<<"Authorization">>, <<"Basic ", AuthEncoded/binary>>}
             ], Params),
 
-        {struct, JSONProplist} = n2o_json:decode(Response),
+        JSONProplist = json_utils:decode(Response),
         AccessToken = proplists:get_value(<<"access_token">>, JSONProplist),
         UserID = proplists:get_value(<<"uid">>, JSONProplist),
 
         % Send request to Dropbox endpoint
-        {ok, JSON} = gui_utils:https_get(user_info_endpoint(), [
-            {<<"Authorization">>, <<"Bearer ", (str_utils:to_list(AccessToken))/binary>>}
-        ]),
+        {ok, 200, _, JSON} = http_client:get(user_info_endpoint(),
+            [{<<"Authorization">>, <<"Bearer ", AccessToken/binary>>}]),
 
         % Parse received JSON
-        {struct, UserInfoProplist} = n2o_json:decode(JSON),
+        UserInfoProplist = json_utils:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = UserID,

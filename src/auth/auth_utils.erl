@@ -14,7 +14,6 @@
 -include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
 -include("auth_common.hrl").
--include_lib("ibrowse/include/ibrowse.hrl").
 
 %% API
 % Convenience functions

@@ -492,7 +492,7 @@ show_alias_edition(Flag) ->
 
 
 redirect_to_provider(ProviderHostname, URL) ->
-    case gui_utils:https_get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, []) of
+    case http_client:get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, [], <<>>, [insecure]) of
         {ok, _} ->
             gui_jq:redirect(URL);
         _ ->
@@ -502,7 +502,7 @@ redirect_to_provider(ProviderHostname, URL) ->
 
 redirect_to_provider_dev(ProviderID) ->
     {ok, ProviderHostname, URL} = gr_gui_utils:get_redirection_url_to_provider(ProviderID),
-    case gui_utils:https_get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, []) of
+    case http_client:get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, [], <<>>, [insecure]) of
         {ok, _} ->
             gui_jq:redirect(URL);
         _ ->
