@@ -808,9 +808,9 @@ set_space_privileges_test(Config) ->
 
 bad_request_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
-    Body = jiffy:encode({[
-        {wrong_body, "WRONG BODY"}
-    ]}),
+    Body = json_utils:encode([
+        {<<"wrong_body">>, <<"WRONG BODY">>}
+    ]),
 
     Endpoints1 =
         [
@@ -955,7 +955,7 @@ get_response_body(Response) ->
 get_body_val(KeyList, Response) ->
     case check_status(Response) of
         bad -> {request_error, get_response_status(Response)};
-        _ -> {JSONOutput} = jiffy:decode(get_response_body(Response)),
+        _ -> JSONOutput = json_utils:decode(get_response_body(Response)),
             [proplists:get_value(atom_to_binary(Key, latin1), JSONOutput) || Key <- KeyList]
     end.
 
@@ -975,10 +975,10 @@ parse_http_param(Parameter, HeaderValue) ->
     ParamVal.
 
 check_status(Response) ->
-    Status = list_to_integer(get_response_status(Response)),
+    Status = get_response_status(Response),
     case (Status >= 200) and (Status < 300) of
         true -> ok;
-        _ -> bad
+        _ -> {bad_response_status, Status}
     end.
 
 %% returns list of values from responsebody
@@ -987,7 +987,9 @@ do_request(Endpoint, Headers, Method) ->
 do_request(Endpoint, Headers, Method, Body) ->
     do_request(Endpoint, Headers, Method, Body, []).
 do_request(Endpoint, Headers, Method, Body, Options) ->
-    http_client:request(Method, Endpoint, Headers, Body, Options).
+    % Add insecure option - we do not want the GR server cert
+    % to be checked.
+    http_client:request(Method, Endpoint, Headers, Body, [insecure | Options]).
 
 get_macaroon_id(Token) ->
     {ok, Macaroon} = macaroon:deserialize(Token),
@@ -1002,10 +1004,13 @@ prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
             {ok, BDM} = macaroon:prepare_for_request(Macaroon, DM),
             {ok, SBDM} = macaroon:serialize(BDM),
             SBDM
-        end, [list_to_binary(SerializedDischarges)]),
+        end, SerializedDischarges),
+    % Bound discharge macaroons are sent in one header,
+    % separated by spaces.
+    BoundMacaroonsValue = str_utils:join_binary(BoundMacaroons, <<" ">>),
     [
         {<<"macaroon">>, SerializedMacaroon},
-        {<<"discharge-macaroons">>, BoundMacaroons}
+        {<<"discharge-macaroons">>, BoundMacaroonsValue}
     ].
 
 update_req_params(ReqParams, NewParam, headers) ->
@@ -1021,12 +1026,12 @@ register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
     {RestAddress, Headers, _Options} = ReqParams,
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     {ok, CSR} = file:read_file(CSRFile),
-    Body = jiffy:encode({[
-        {urls, URLS},
-        {csr, CSR},
-        {redirectionPoint, RedirectionPoint},
-        {clientName, ClientName}
-    ]}),
+    Body = json_utils:encode([
+        {<<"urls">>, URLS},
+        {<<"csr">>, CSR},
+        {<<"redirectionPoint">>, RedirectionPoint},
+        {<<"clientName">>, ClientName}
+    ]),
     Response = do_request(RestAddress ++ "/provider", Headers, post, Body),
     %% save cert
     [Cert, ProviderId] = get_body_val([certificate, providerId], Response),
@@ -1049,11 +1054,11 @@ get_provider_info(ProviderId, ReqParams) ->
     get_body_val([clientName, urls, redirectionPoint, providerId], Response).
 
 update_provider(URLS, RedirectionPoint, ClientName, ReqParams) ->
-    Body = jiffy:encode({[
-        {urls, URLS},
-        {redirectionPoint, RedirectionPoint},
-        {clientName, ClientName}
-    ]}),
+    Body = json_utils:encode([
+        {<<"urls">>, URLS},
+        {<<"redirectionPoint">>, RedirectionPoint},
+        {<<"clientName">>, ClientName}
+    ]),
     {RestAddress, Headers, Options} = ReqParams,
     do_request(RestAddress ++ "/provider", Headers, patch, Body, Options).
 
@@ -1063,11 +1068,11 @@ delete_provider(ReqParams) ->
 
 create_and_support_space(Token, SpaceName, Size, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, SpaceName},
-        {token, Token},
-        {size, Size}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, SpaceName},
+        {<<"token">>, Token},
+        {<<"size">>, Size}
+    ]),
     Response = do_request(RestAddress ++ "/provider/spaces", Headers, post, Body, Options),
     get_header_val("spaces", Response).
 
@@ -1097,10 +1102,10 @@ check_provider_ports(ReqParams) ->
 
 support_space(Token, Size, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {token, Token},
-        {size, Size}
-    ]}),
+    Body = json_utils:encode([
+        {<<"token">>, Token},
+        {<<"size">>, Size}
+    ]),
     do_request(RestAddress ++ "/provider/spaces/support", Headers, post, Body, Options).
 
 %% User functions =========================================================
@@ -1118,7 +1123,7 @@ authorize_user(UserId, ProviderId, ReqParams, Node) ->
     SerializedMacaroon = rpc:call(Node, auth_logic, gen_token, [UserId, ProviderId]),
     {RestAddress, Headers, _Options} = ReqParams,
     Identifier = get_macaroon_id(SerializedMacaroon),
-    Body = jiffy:encode({[{identifier, Identifier}]}),
+    Body = json_utils:encode([{<<"identifier">>, Identifier}]),
     Resp = do_request(RestAddress ++ "/user/authorize", Headers, post, Body),
     SerializedDischarges = get_response_body(Resp),
     prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges).
@@ -1137,9 +1142,9 @@ get_user_info(ReqParams) ->
 
 update_user(NewUserName, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, NewUserName}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, NewUserName}
+    ]),
     do_request(RestAddress ++ "/user", Headers, patch, Body, Options).
 
 delete_user(ReqParams) ->
@@ -1165,17 +1170,17 @@ get_user_default_space(ReqParams) ->
 
 create_space_for_user(SpaceName, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, SpaceName}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, SpaceName}
+    ]),
     Response = do_request(RestAddress ++ "/user/spaces", Headers, post, Body, Options),
     get_header_val("spaces", Response).
 
 set_default_space_for_user(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {spaceId, SID}
-    ]}),
+    Body = json_utils:encode([
+        {<<"spaceId">>, SID}
+    ]),
     do_request(RestAddress ++ "/user/spaces/default", Headers, put, Body, Options).
 
 get_user_merge_token(ReqParams) ->
@@ -1186,9 +1191,9 @@ get_user_merge_token(ReqParams) ->
 
 merge_users(Token, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {token, Token}
-    ]}),
+    Body = json_utils:encode([
+        {<<"token">>, Token}
+    ]),
     do_request(RestAddress ++ "/user/merge", Headers, post, Body, Options).
 
 user_leaves_space(SID, ReqParams) ->
@@ -1197,17 +1202,17 @@ user_leaves_space(SID, ReqParams) ->
 
 join_user_to_space(Token, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {token, Token}
-    ]}),
+    Body = json_utils:encode([
+        {<<"token">>, Token}
+    ]),
     Response = do_request(RestAddress ++ "/user/spaces/join", Headers, post, Body, Options),
     get_header_val("user/spaces", Response).
 
 create_group_for_user(GroupName, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, GroupName}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, GroupName}
+    ]),
     Response = do_request(RestAddress ++ "/user/groups", Headers, post, Body, Options),
     get_header_val("groups", Response).
 
@@ -1229,9 +1234,9 @@ user_leaves_group(GID, ReqParams) ->
 
 join_user_to_group(Token, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {token, Token}
-    ]}),
+    Body = json_utils:encode([
+        {<<"token">>, Token}
+    ]),
     Response = do_request(RestAddress ++ "/user/groups/join", Headers, post, Body, Options),
     get_header_val("user/groups", Response).
 
@@ -1239,9 +1244,9 @@ join_user_to_group(Token, ReqParams) ->
 
 create_group(GroupName, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, GroupName}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, GroupName}
+    ]),
     Response = do_request(RestAddress ++ "/groups", Headers, post, Body, Options),
     get_header_val("groups", Response).
 
@@ -1253,9 +1258,9 @@ get_group_info(GID, ReqParams) ->
 
 update_group(GID, NewGroupName, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, NewGroupName}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, NewGroupName}
+    ]),
     do_request(
         RestAddress ++ "/groups/" ++ binary_to_list(GID), Headers, patch, Body, Options
     ).
@@ -1311,9 +1316,9 @@ get_group_privileges_of_user(GID, UID, ReqParams) ->
 
 set_group_privileges_of_user(GID, UID, Privileges, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {privileges, Privileges}
-    ]}),
+    Body = json_utils:encode([
+        {<<"privileges">>, Privileges}
+    ]),
     do_request(
         RestAddress ++ "/groups/" ++ binary_to_list(GID) ++ "/users/" ++
             binary_to_list(UID) ++ "/privileges",
@@ -1339,9 +1344,9 @@ get_space_info_by_group(GID, SID, ReqParams) ->
 
 create_space_for_group(Name, GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, Name}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, Name}
+    ]),
     Response = do_request(
         RestAddress ++ "/groups/" ++ binary_to_list(GID) ++ "/spaces", Headers, post, Body, Options
     ),
@@ -1356,9 +1361,9 @@ group_leaves_space(GID, SID, ReqParams) ->
 
 join_group_to_space(Token, GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {token, Token}
-    ]}),
+    Body = json_utils:encode([
+        {<<"token">>, Token}
+    ]),
     Response =
         do_request(
             RestAddress ++ "/groups/" ++ binary_to_list(GID) ++ "/spaces/join",
@@ -1454,20 +1459,20 @@ clean_group_privileges(GID, UserId, ReqParams) ->
 %% create space for user
 create_space(Name, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, Name}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, Name}
+    ]),
     Response = do_request(RestAddress ++ "/spaces", Headers, post, Body, Options),
     get_header_val("spaces", Response).
 
 %% create space for user/group who delivers token
 create_space(Token, Name, Size, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, Name},
-        {token, Token},
-        {size, Size}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, Name},
+        {<<"token">>, Token},
+        {<<"size">>, Size}
+    ]),
     Response = do_request(RestAddress ++ "/spaces", Headers, post, Body, Options),
     get_header_val("spaces", Response).
 
@@ -1479,9 +1484,9 @@ get_space_info(SID, ReqParams) ->
 
 update_space(Name, SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {name, Name}
-    ]}),
+    Body = json_utils:encode([
+        {<<"name">>, Name}
+    ]),
     do_request(RestAddress ++ "/spaces/" ++ binary_to_list(SID), Headers, patch, Body, Options).
 
 delete_space(SID, ReqParams) ->
@@ -1526,9 +1531,9 @@ get_space_privileges(UserType, SID, ID, ReqParams) ->
 
 set_space_privileges(UserType, SID, ID, Privileges, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = jiffy:encode({[
-        {privileges, Privileges}
-    ]}),
+    Body = json_utils:encode([
+        {<<"privileges">>, Privileges}
+    ]),
     do_request(
         RestAddress ++ "/spaces/" ++ binary_to_list(SID) ++ "/" ++ atom_to_list(UserType) ++ "/" ++
             binary_to_list(ID) ++ "/privileges",

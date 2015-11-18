@@ -493,7 +493,7 @@ show_alias_edition(Flag) ->
 
 redirect_to_provider(ProviderHostname, URL) ->
     case http_client:get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, [], <<>>, [insecure]) of
-        {ok, _} ->
+        {ok, _, _, _} ->
             gui_jq:redirect(URL);
         _ ->
             gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable. Try again later.">>})
@@ -503,7 +503,7 @@ redirect_to_provider(ProviderHostname, URL) ->
 redirect_to_provider_dev(ProviderID) ->
     {ok, ProviderHostname, URL} = gr_gui_utils:get_redirection_url_to_provider(ProviderID),
     case http_client:get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, [], <<>>, [insecure]) of
-        {ok, _} ->
+        {ok, _, _, _} ->
             gui_jq:redirect(URL);
         _ ->
             gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable. Try again later.">>})
