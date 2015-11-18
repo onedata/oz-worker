@@ -29,6 +29,7 @@
         gproc,
         lager,
         web_client,
+        ssl2,
         cowboy
     ]},
     {mod, {globalregistry_app, []}},

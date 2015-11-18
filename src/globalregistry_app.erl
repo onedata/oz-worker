@@ -275,7 +275,7 @@ start_redirector() ->
 
         RedirectDispatch = [
             {'_', [
-                {'_', redirect_handler, []}
+                {'_', https_redirect_handler, []}
             ]}
         ],
 

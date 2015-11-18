@@ -863,8 +863,8 @@ init_per_testcase(provider_check_ip_test, Config) ->
 init_per_testcase(provider_check_port_test, Config) ->
     init_per_testcase(register_only_provider, Config);
 init_per_testcase(non_register, Config) ->
+    application:start(ssl2),
     hackney:start(),
-    ssl:start(),
     RestAddress = RestAddress = ?config(restAddress, Config),
     [{cert_files, generate_cert_files()} | Config];
 init_per_testcase(register_only_provider, Config) ->
@@ -895,8 +895,8 @@ init_per_testcase(_Default, Config) ->
     ].
 
 end_per_testcase(_, Config) ->
-    ssl:stop(),
     hackney:stop(),
+    application:stop(ssl2),
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     file:delete(KeyFile),
     file:delete(CSRFile),

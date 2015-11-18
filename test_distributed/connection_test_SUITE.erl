@@ -29,6 +29,7 @@
 all() -> [rest_api_connection_test, dao_connection_test].
 
 rest_api_connection_test(Config) ->
+    application:start(ssl2),
     hackney:start(),
     [Node] = ?config(gr_nodes, Config),
     {ok, RestPort} = rpc:call(Node, application, get_env,
@@ -36,7 +37,8 @@ rest_api_connection_test(Config) ->
     URL = str_utils:format("https://~s:~B/provider/test/check_my_ip",
         [utils:get_host(Node), RestPort]),
     ?assertMatch({ok, _, _, _}, http_client:get(URL, [], <<>>, [insecure])),
-    hackney:stop().
+    hackney:stop(),
+    application:stop(ssl2).
 
 dao_connection_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
