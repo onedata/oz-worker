@@ -40,7 +40,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
-        Params = gui_utils:proplist_to_url_params(ParamsProplist),
+        Params = http_utils:proplist_to_url_params(ParamsProplist),
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
@@ -70,7 +70,7 @@ validate_login() ->
             {<<"grant_type">>, <<"authorization_code">>}
         ],
         % Convert proplist to params string
-        Params = gui_utils:proplist_to_url_params(NewParamsProplist),
+        Params = http_utils:proplist_to_url_params(NewParamsProplist),
         % Send request to Google endpoint
         {ok, "200", _, Response} = ibrowse:send_req(
             binary_to_list(access_token_endpoint()),

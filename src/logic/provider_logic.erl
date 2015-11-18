@@ -40,7 +40,7 @@
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = dao_helper:gen_uuid(),
-    BinProviderId = utils:ensure_binary(ProviderId),
+    BinProviderId = str_utils:to_binary(ProviderId),
     {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
     dao_adapter:save(#db_document{uuid = ProviderId, record =
     #provider{client_name = ClientName, urls = URLs,

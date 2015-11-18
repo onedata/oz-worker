@@ -377,12 +377,12 @@ update_email(AddOrRemove) ->
     {ok, #user{email_list = OldEmailList}} = user_logic:get_user(UserId),
     case AddOrRemove of
         {add, submitted} ->
-            NewEmail = gui_utils:normalize_email(gui_ctx:postback_param(<<"new_email_textbox">>)),
+            NewEmail = http_utils:normalize_email(gui_ctx:postback_param(<<"new_email_textbox">>)),
             case user_logic:get_user({email, NewEmail}) of
                 {ok, _} ->
                     gui_jq:wire(#alert{text = <<"This e-mail address is in use.">>});
                 _ ->
-                    case gui_utils:validate_email(NewEmail) of
+                    case http_utils:validate_email(NewEmail) of
                         false ->
                             gui_jq:wire(#alert{text = <<"Please enter a valid email address.">>});
                         true ->

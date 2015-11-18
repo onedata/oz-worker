@@ -33,7 +33,8 @@
 %%--------------------------------------------------------------------
 -spec local_auth_endpoint() -> binary().
 local_auth_endpoint() ->
-    <<(gui_utils:fully_qualified_url(gui_ctx:get_requested_hostname()))/binary, ?local_auth_endpoint>>.
+    <<(http_utils:fully_qualified_url(gui_ctx:get_requested_hostname()))/binary,
+    ?local_auth_endpoint>>.
 
 %%--------------------------------------------------------------------
 %% @doc Function used to validate login by processing a redirect that came from
@@ -77,7 +78,7 @@ validate_login() ->
 
                     {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderID, user_id = UserID, email_list = OriginalEmails, name = Name}} ->
                         Emails = lists:map(fun(Email) ->
-                            gui_utils:normalize_email(Email) end, OriginalEmails),
+                            http_utils:normalize_email(Email) end, OriginalEmails),
                         OAuthAccount = OriginalOAuthAccount#oauth_account{email_list = Emails},
                         case proplists:get_value(connect_account, Props) of
                             false ->

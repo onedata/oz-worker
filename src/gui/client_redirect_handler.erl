@@ -51,7 +51,7 @@ handle(Req, State) ->
         {ok, #db_document{record = #user{default_provider = DefaultProvider}}} = GetUserResult,
         {ok, DataProplist} = provider_logic:get_data(DefaultProvider),
         RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
-        {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(gui_str:to_list(RedPoint)),
+        {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(str_utils:to_list(RedPoint)),
         {Path, _} = cowboy_req:path(Req),
         {ok, Req2} = cowboy_req:reply(307,
             [

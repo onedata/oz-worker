@@ -40,7 +40,7 @@
 save_auth(#auth{} = Auth) ->
     save_auth(#db_document{record = Auth});
 save_auth(#db_document{uuid = UUID} = AuthDoc) when not is_list(UUID) ->
-    save_auth(AuthDoc#db_document{uuid = utils:ensure_list(UUID)});
+    save_auth(AuthDoc#db_document{uuid = str_utils:to_list(UUID)});
 save_auth(#db_document{record = #auth{}} = AuthDoc) ->
     dao_external:set_db(?AUTH_DB_NAME),
     dao_records:save_record(AuthDoc).
@@ -55,7 +55,7 @@ save_auth(#db_document{record = #auth{}} = AuthDoc) ->
     ok | {error, any()} | no_return().
 remove_auth(AuthId) ->
     dao_external:set_db(?AUTH_DB_NAME),
-    dao_records:remove_record(utils:ensure_list(AuthId)).
+    dao_records:remove_record(str_utils:to_list(AuthId)).
 
 %%--------------------------------------------------------------------
 %% @doc Checks whether auth exists in DB.
@@ -67,7 +67,7 @@ remove_auth(AuthId) ->
     {ok, boolean()} | {error, any()}.
 exist_auth(AuthId) ->
     dao_external:set_db(?AUTH_DB_NAME),
-    dao_records:exist_record(utils:ensure_list(AuthId)).
+    dao_records:exist_record(str_utils:to_list(AuthId)).
 
 %%--------------------------------------------------------------------
 %% @doc Gets auth from DB.
@@ -82,4 +82,4 @@ exist_auth(AuthId) ->
 get_auth(AuthId) ->
     dao_external:set_db(?AUTH_DB_NAME),
     {ok, #db_document{record = #auth{}}} =
-        dao_records:get_record(utils:ensure_list(AuthId)).
+        dao_records:get_record(str_utils:to_list(AuthId)).

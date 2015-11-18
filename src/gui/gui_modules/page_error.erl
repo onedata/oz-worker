@@ -46,7 +46,7 @@ event(terminate) -> ok.
 
 % This function causes a HTTP redirect to error page, which displays an error message.
 redirect_with_error(ErrorID) ->
-    gui_jq:redirect(<<"/error?id=", (gui_str:to_binary(ErrorID))/binary>>).
+    gui_jq:redirect(<<"/error?id=", (str_utils:to_binary(ErrorID))/binary>>).
 
 
 get_reason_and_description() ->

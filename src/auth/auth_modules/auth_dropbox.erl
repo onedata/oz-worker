@@ -39,7 +39,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"response_type">>, <<"code">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
-        Params = gui_utils:proplist_to_url_params(ParamsProplist),
+        Params = http_utils:proplist_to_url_params(ParamsProplist),
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
@@ -70,12 +70,12 @@ validate_login() ->
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()}
         ],
         % Convert proplist to params string
-        Params = gui_utils:proplist_to_url_params(NewParamsProplist),
+        Params = http_utils:proplist_to_url_params(NewParamsProplist),
         % Send request to Dropbox endpoint
         {ok, Response} = gui_utils:https_post(access_token_endpoint(),
             [
                 {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>},
-                {<<"Authorization">>, <<"Basic ", (gui_str:to_binary(AuthEncoded))/binary>>}
+                {<<"Authorization">>, <<"Basic ", (str_utils:to_binary(AuthEncoded))/binary>>}
             ], Params),
 
         {struct, JSONProplist} = n2o_json:decode(Response),
@@ -84,7 +84,7 @@ validate_login() ->
 
         % Send request to Dropbox endpoint
         {ok, JSON} = gui_utils:https_get(user_info_endpoint(), [
-            {<<"Authorization">>, <<"Bearer ", (gui_str:to_list(AccessToken))/binary>>}
+            {<<"Authorization">>, <<"Bearer ", (str_utils:to_list(AccessToken))/binary>>}
         ]),
 
         % Parse received JSON

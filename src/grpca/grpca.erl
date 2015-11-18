@@ -160,7 +160,7 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
 revoke_imp(Serial, CaDir) ->
     TmpDir = mochitemp:mkdtemp(),
     CaConfigFile = ca_config_file(TmpDir, CaDir),
-    LSerial = utils:ensure_list(Serial),
+    LSerial = str_utils:to_list(Serial),
     ?info("Revoking a certificate with serial number ~p", [Serial]),
     RevokeOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,
@@ -189,7 +189,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
         " -batch",
         " -notext",
         " -extensions user_cert",
-        " -subj \"/CN=", utils:ensure_list(ProviderId), "/O=onedata/OU=Providers\"",
+        " -subj \"/CN=", str_utils:to_list(ProviderId), "/O=onedata/OU=Providers\"",
         " -in ", CSRFile,
         " -out ", CertFile]),
 
@@ -329,7 +329,7 @@ get_provider_id(#'OTPCertificate'{} = Cert) ->
         case Attribute#'AttributeTypeAndValue'.type of
             ?'id-at-commonName' ->
                 {_, Id} = Attribute#'AttributeTypeAndValue'.value,
-                {true, utils:ensure_binary(Id)};
+                {true, str_utils:to_binary(Id)};
             _ -> false
         end
     end, Attrs),

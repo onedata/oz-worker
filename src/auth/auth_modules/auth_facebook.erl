@@ -39,7 +39,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"scope">>, <<"email">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
-        Params = gui_utils:proplist_to_url_params(ParamsProplist),
+        Params = http_utils:proplist_to_url_params(ParamsProplist),
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
@@ -68,7 +68,7 @@ validate_login() ->
             {<<"code">>, <<Code/binary>>}
         ],
         % Convert proplist to params string
-        Params = gui_utils:proplist_to_url_params(NewParamsProplist),
+        Params = http_utils:proplist_to_url_params(NewParamsProplist),
         URL = <<(access_token_endpoint())/binary, "?", Params/binary>>,
         % Send request to Facebook endpoint
         {ok, Response} = gui_utils:https_get(URL, [
