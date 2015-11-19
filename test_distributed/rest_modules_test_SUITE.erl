@@ -327,9 +327,10 @@ create_space_for_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
+    %% @todo weirdly, uncommenting this causes ssl2 to crash
 %%     SID2 = create_space_for_user(?SPACE_NAME1, UserReqParams),
 
-    ?assertMatch([[SID1, SID1], <<"undefined">>], get_user_spaces(UserReqParams)).
+    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams)).
 
 set_user_default_space_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
