@@ -989,8 +989,15 @@ do_request(Endpoint, Headers, Method) ->
 do_request(Endpoint, Headers, Method, Body) ->
     do_request(Endpoint, Headers, Method, Body, []).
 do_request(Endpoint, Headers, Method, Body, Options) ->
-    % Add insecure option - we do not want the GR server cert
-    % to be checked.
+    % Add insecure option - we do not want the GR server cert to be checked.
+    ct:print("do_request: ~n"
+    "Method = ~p,~n"
+    "Endpoint = ~p,~n"
+    "Headers = ~p,~n"
+    "Body = ~p,~n"
+    "Options = ~p,~n"
+    "http_client:request(Method, Endpoint, Headers, Body, Options).",
+        [Method, Endpoint, Headers, Body, [insecure | Options]]),
     http_client:request(Method, Endpoint, Headers, Body, [insecure | Options]).
 
 get_macaroon_id(Token) ->
@@ -1034,6 +1041,7 @@ register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
         {<<"redirectionPoint">>, RedirectionPoint},
         {<<"clientName">>, ClientName}
     ]),
+    % Add insecure option - we do not want the GR server cert to be checked.
     Response = do_request(RestAddress ++ "/provider", Headers, post, Body),
     %% save cert
     [Cert, ProviderId] = get_body_val([certificate, providerId], Response),
