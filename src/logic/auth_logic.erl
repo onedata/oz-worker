@@ -191,7 +191,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 -spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> binary().
 generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_state_tokens(),
-    Token = list_to_binary(mochihex:to_hex(crypto:rand_bytes(32))),
+    Token = list_to_binary(hex_utils:to_hex(crypto:rand_bytes(32))),
     {M, S, N} = now(),
     Time = M * 1000000000000 + S * 1000000 + N,
 

@@ -196,7 +196,7 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
             {{false, <<"">>}, ReqX, State};
 
         {Error, <<Description1>>, ReqX} when is_atom(Error) ->
-            Body = mochijson2:encode([{error, Error},
+            Body = json_utils:encode([{error, Error},
                 {error_description, Description1}]),
 
             WWWAuthenticate =
@@ -206,7 +206,7 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
             {{false, WWWAuthenticate}, ReqY, State};
 
         {Error, StatusCode, <<Description1>>, ReqX} when is_atom(Error) ->
-            Body = mochijson2:encode([{error, Error},
+            Body = json_utils:encode([{error, Error},
                 {error_description, Description1}]),
 
             {ok, ReqY} = cowboy_req:reply(StatusCode, [], Body, ReqX),
@@ -241,14 +241,14 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
 accept_resource_json(Req, #rstate{} = State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
     Data = try
-               mochijson2:decode(Body, [{format, proplist}])
+               json_utils:decode(Body)
            catch
                _:_ -> malformed
            end,
 
     case Data =:= malformed of
         true ->
-            Body = mochijson2:encode([
+            Body = json_utils:encode([
                 {error, invalid_request},
                 {error_description, <<"malformed JSON data">>}]),
             Req3 = cowboy_req:set_resp_body(Body, Req2),
@@ -293,7 +293,7 @@ accept_resource(Data, Req, State) ->
         {rest_error, Error, ReqX}
             when is_atom(Error) ->
 
-            Body = mochijson2:encode([{error, Error}]),
+            Body = json_utils:encode([{error, Error}]),
             ReqY = cowboy_req:set_resp_body(Body, ReqX),
             {false, ReqY, State};
 
@@ -301,7 +301,7 @@ accept_resource(Data, Req, State) ->
         {rest_error, Error, Description, ReqX}
             when is_atom(Error), is_binary(Description) ->
 
-            Body = mochijson2:encode([
+            Body = json_utils:encode([
                 {error, Error},
                 {error_description, Description}
             ]),
@@ -321,7 +321,7 @@ provide_resource(Req, State) ->
 
     {ResId, Req2} = get_res_id(Req, State),
     {Data, Req3} = Mod:provide_resource(Resource, ResId, Client, Req2),
-    JSON = mochijson2:encode(Data),
+    JSON = json_utils:encode(Data),
     {JSON, Req3, State}.
 
 %%--------------------------------------------------------------------

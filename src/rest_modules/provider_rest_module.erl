@@ -112,7 +112,7 @@ accept_resource(provider_dev, post, _ProviderId, Data, _Client, Req) ->
     % Create provider with given UUID - UUID is the same as the provider name.
     {ok, ProviderId, SignedPem} =
         dev_utils:create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSR, UUID),
-    Body = mochijson2:encode([{providerId, ProviderId}, {certificate, SignedPem}]),
+    Body = json_utils:encode([{providerId, ProviderId}, {certificate, SignedPem}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),
     {true, Req2};
 accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
@@ -122,7 +122,7 @@ accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
     RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary, Req),
 
     {ok, ProviderId, SignedPem} = provider_logic:create(ClientName, URLs, RedirectionPoint, CSR),
-    Body = mochijson2:encode([{providerId, ProviderId}, {certificate, SignedPem}]),
+    Body = json_utils:encode([{providerId, ProviderId}, {certificate, SignedPem}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),
     {true, Req2};
 accept_resource(provider, patch, ProviderId, Data, _Client, Req) ->
@@ -144,7 +144,7 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
             {{true, <<"/provider/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->
-    Body = mochijson2:encode(provider_logic:test_connection(Data)),
+    Body = json_utils:encode(provider_logic:test_connection(Data)),
     Req2 = cowboy_req:set_resp_body(Body, Req),
     {true, Req2}.
 
