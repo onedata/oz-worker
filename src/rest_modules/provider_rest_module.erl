@@ -12,6 +12,7 @@
 
 -include("handlers/rest_handler.hrl").
 -include("registered_names.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -behavior(rest_module_behavior).
 
@@ -112,7 +113,8 @@ accept_resource(provider_dev, post, _ProviderId, Data, _Client, Req) ->
     % Create provider with given UUID - UUID is the same as the provider name.
     {ok, ProviderId, SignedPem} =
         dev_utils:create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSR, UUID),
-    Body = json_utils:encode([{providerId, ProviderId}, {certificate, SignedPem}]),
+    Body = json_utils:encode([{<<"providerId">>, ProviderId}, 
+        {<<"certificate">>, SignedPem}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),
     {true, Req2};
 accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
@@ -122,7 +124,8 @@ accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
     RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary, Req),
 
     {ok, ProviderId, SignedPem} = provider_logic:create(ClientName, URLs, RedirectionPoint, CSR),
-    Body = json_utils:encode([{providerId, ProviderId}, {certificate, SignedPem}]),
+    Body = json_utils:encode([{<<"providerId">>, ProviderId},
+        {<<"certificate">>, SignedPem}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),
     {true, Req2};
 accept_resource(provider, patch, ProviderId, Data, _Client, Req) ->
@@ -144,9 +147,16 @@ accept_resource(ssupport, post, ProviderId, Data, _Client, Req) ->
             {{true, <<"/provider/spaces/", SpaceId/binary>>}, Req}
     end;
 accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->
-    Body = json_utils:encode(provider_logic:test_connection(Data)),
-    Req2 = cowboy_req:set_resp_body(Body, Req),
-    {true, Req2}.
+    case provider_logic:test_connection(Data) of
+        {ok, ResultList} ->
+            Body = json_utils:encode(ResultList),
+            Req2 = cowboy_req:set_resp_body(Body, Req),
+            {true, Req2};
+
+        {error, bad_data} ->
+            rest_module_helper:report_error(
+                invalid_request, <<"bad data">>, Req)
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Returns data requested by a client through GET on a REST resource.
