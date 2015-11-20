@@ -193,7 +193,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 invalidate_token({user_id, UserId}) ->
     {ok, AuthDocs} = ?DB(get_auth_by_user_id, UserId),
     lists:foreach(fun(#db_document{uuid = AuthIdL}) ->
-        invalidate_token(utils:ensure_binary(AuthIdL))
+        invalidate_token(str_utils:to_binary(AuthIdL))
     end, AuthDocs),
     ok;
 invalidate_token(Identifier) when is_binary(Identifier) ->

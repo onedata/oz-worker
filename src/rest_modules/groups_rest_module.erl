@@ -11,6 +11,7 @@
 -author("Konrad Zemek").
 
 -include("handlers/rest_handler.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -behavior(rest_module_behavior).
 
@@ -77,6 +78,7 @@ is_authorized(upriv, put, GroupId, #client{id = UserId}) ->
 is_authorized(spaces, post, GroupId, #client{id = UserId}) ->
     group_logic:has_privilege(GroupId, UserId, group_create_space);
 is_authorized(sjoin, post, GroupId, #client{id = UserId}) ->
+    ?alert("group_join_space: ~p", [group_logic:has_privilege(GroupId, UserId, group_join_space)]),
     group_logic:has_privilege(GroupId, UserId, group_join_space);
 is_authorized(screate, get, GroupId, #client{id = UserId}) ->
     group_logic:has_privilege(GroupId, UserId, group_create_space_token);

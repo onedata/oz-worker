@@ -78,6 +78,7 @@ is_authorized(uinvite, get, SpaceId, #client{type = user, id = UserId}) ->
 is_authorized(user, delete, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_remove_user);
 is_authorized(ginvite, get, SpaceId, #client{type = user, id = UserId}) ->
+    ?alert("space_invite_group: ~p", [space_logic:has_effective_privilege(SpaceId, UserId, space_invite_group)]),
     space_logic:has_effective_privilege(SpaceId, UserId, space_invite_group);
 is_authorized(group, delete, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_remove_group);

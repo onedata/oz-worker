@@ -236,22 +236,24 @@ create_and_support_space_by_provider(Config) ->
     ?assertMatch([SID1], get_supported_spaces(ProviderReqParams)).
 
 get_supported_space_info_test(Config) ->
-        ProviderId = ?config(providerId, Config),
-        ProviderReqParams = ?config(providerReqParams, Config),
-        UserReqParams = ?config(userReqParams, Config),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
+    UserReqParams = ?config(userReqParams, Config),
 
-        %% get space creation token1
-        SCRToken1 = get_space_creation_token_for_user(UserReqParams),
-        SID = create_and_support_space(SCRToken1, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
+    %% get space creation token1
+    SCRToken1 = get_space_creation_token_for_user(UserReqParams),
+    SID = create_and_support_space(SCRToken1, ?SPACE_NAME1, ?SPACE_SIZE1, ProviderReqParams),
 
-        %% assertMatch has problem with nested brackets below
-        [SID_test, SpaceName_test, {[{ProviderId_test, SpaceSize_test}]}] =
-            get_space_info_by_provider(SID, ProviderReqParams),
+    %% assertMatch has problem with nested brackets below
+    [SID_test, SpaceName_test, [{ProviderId_test, SpaceSize_test}]] =
+        get_space_info_by_provider(SID, ProviderReqParams),
 
-        ?assertMatch(
-            [SID_test, SpaceName_test, ProviderId_test, SpaceSize_test],
-            [SID, ?SPACE_NAME1, ProviderId, binary_to_integer(?SPACE_SIZE1)]
-        ).
+    ct:print("1st: ~p~n", [[SID_test, SpaceName_test, ProviderId_test, SpaceSize_test]]),
+    ct:print("2nd: ~p~n", [[SID, ?SPACE_NAME1, ProviderId, binary_to_integer(?SPACE_SIZE1)]]),
+    ?assertMatch(
+        [SID_test, SpaceName_test, ProviderId_test, SpaceSize_test],
+        [SID, ?SPACE_NAME1, ProviderId, binary_to_integer(?SPACE_SIZE1)]
+    ).
 
 unsupport_space_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
@@ -299,17 +301,25 @@ user_authorize_test(Config) ->
     ?assertMatch([UserId, ?USER_NAME1], get_user_info(UserReqParams)).
 
 update_user_test(Config) ->
-    UserId = ?config(userId, Config),
-    UserReqParams = ?config(userReqParams, Config),
+    try
+        UserId = ?config(userId, Config),
+        UserReqParams = ?config(userReqParams, Config),
 
-    ?assertMatch(ok, check_status(update_user(?USER_NAME2, UserReqParams))),
-    ?assertMatch([UserId, ?USER_NAME2], get_user_info(UserReqParams)).
+        ?assertMatch(ok, check_status(update_user(?USER_NAME2, UserReqParams))),
+        ?assertMatch([UserId, ?USER_NAME2], get_user_info(UserReqParams))
+    catch T:M ->
+        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
+    end.
 
 delete_user_test(Config) ->
-    UserReqParams = ?config(userReqParams, Config),
+    try
+        UserReqParams = ?config(userReqParams, Config),
 
-    ?assertMatch(ok, check_status(delete_user(UserReqParams))),
-    ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(UserReqParams)).
+        ?assertMatch(ok, check_status(delete_user(UserReqParams))),
+        ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(UserReqParams))
+    catch T:M ->
+        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
+    end.
 
 request_merging_users_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -327,10 +337,9 @@ create_space_for_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
-    %% @todo weirdly, uncommenting this causes ssl2 to crash
-%%     SID2 = create_space_for_user(?SPACE_NAME1, UserReqParams),
+    SID2 = create_space_for_user(?SPACE_NAME1, UserReqParams),
 
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams)).
+    ?assertMatch([[SID1, SID2], <<"undefined">>], get_user_spaces(UserReqParams)).
 
 set_user_default_space_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -563,6 +572,7 @@ get_group_privileges_test(Config) ->
             [<<"group_view_data">>], get_group_privileges_of_user(GID, UserId2, UserReqParams1))).
 
 set_group_privileges_test(Config) ->
+    try
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
     UserId1 = ?config(userId, Config),
@@ -583,7 +593,10 @@ set_group_privileges_test(Config) ->
     SID = create_space_for_user(?SPACE_NAME1, UserReqParams2),
 
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
-    group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID).
+    group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID)
+    catch T:M ->
+        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
+    end.
 
 group_creates_space_test(Config) ->
     UserReqParams1 = ?config(userReqParams, Config),
@@ -819,6 +832,14 @@ bad_request_test(Config) ->
         {<<"wrong_body">>, <<"WRONG BODY">>}
     ]),
 
+
+    BodyWhatever=["/user",
+        "/user/spaces",
+            "/user/spaces/default",
+                "/user/spaces/token",
+                    "/user/groups",
+                        "/user/merge/token"],
+    
     Endpoints1 =
         [
             %% 0 is used wherever id is needed as a parameter in below endpoints
@@ -890,16 +911,16 @@ init_per_testcase(register_only_provider, Config) ->
 init_per_testcase(_Default, Config) ->
 %%     this default init function is for tests
 %%     than need registered provider and user
-        NewConfig = init_per_testcase(register_only_provider, Config),
-        ProviderId = ?config(providerId, NewConfig),
-        ProviderReqParams = ?config(providerReqParams, NewConfig),
-        {UserId, UserReqParams} =
-            register_user(?USER_NAME1, ProviderId, NewConfig, ProviderReqParams),
-        [
-            {userId, UserId},
-            {userReqParams, UserReqParams}
-            | NewConfig
-        ].
+    NewConfig = init_per_testcase(register_only_provider, Config),
+    ProviderId = ?config(providerId, NewConfig),
+    ProviderReqParams = ?config(providerReqParams, NewConfig),
+    {UserId, UserReqParams} =
+        register_user(?USER_NAME1, ProviderId, NewConfig, ProviderReqParams),
+    [
+        {userId, UserId},
+        {userReqParams, UserReqParams}
+        | NewConfig
+    ].
 
 end_per_testcase(_, Config) ->
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
@@ -995,15 +1016,19 @@ do_request(Endpoint, Headers, Method, Body) ->
     do_request(Endpoint, Headers, Method, Body, []).
 do_request(Endpoint, Headers, Method, Body, Options) ->
     % Add insecure option - we do not want the GR server cert to be checked.
-    Res = http_client:request(Method, Endpoint, Headers, Body, [insecure | Options]),
-    ct:print("do_request: ~n"
+    random:seed(now()),
+    RandomPoolName = list_to_atom(str_utils:format("test_pool_~B", [random:uniform(999999)])),
+    ok = hackney_pool:start_pool(RandomPoolName, [{timeout, 150000}, {max_connections, 2}]),
+    Res = http_client:request(Method, Endpoint, Headers, Body, [insecure, {pool, RandomPoolName} | Options]),
+    hackney_pool:stop_pool(RandomPoolName),
+    ct:print("do_request:~n"
     "Method = ~p,~n"
     "Endpoint = ~p,~n"
     "Headers = ~p,~n"
     "Body = ~p,~n"
     "Options = ~p,~n"
     "response: ~p~n",
-        [Method, Endpoint, Headers, Body, [insecure | Options], Res]),
+        [Method, Endpoint, Headers, Body, [insecure, {pool, RandomPoolName} | Options], Res]),
     Res.
 
 get_macaroon_id(Token) ->
@@ -1054,6 +1079,8 @@ register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
     %% save cert
     [Cert, ProviderId] = get_body_val([certificate, providerId], Response),
     file:write_file(CertFile, Cert),
+    ct:print("KeyFile:~p~n"
+    "CertFile:~p~n", [file:read_file(KeyFile), file:read_file(CertFile)]),
     %% set request options for provider
     Options = [{ssl_options, [{keyfile, KeyFile}, {certfile, CertFile}]}],
     %% set request parametres for provider
@@ -1428,7 +1455,7 @@ group_privilege_check(group_join_space, Users, GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     InvitationToken = get_space_invitation_token(groups, SID, UserReqParams2),
     %% test if user2 lacks group_join_space privileges
-    ?assertMatch({request_error, ?UNAUTHORIZED}, join_group_to_space(InvitationToken, GID, UserReqParams2)),
+    ?assertMatch({request_error, ?FORBIDDEN}, join_group_to_space(InvitationToken, GID, UserReqParams2)),
     set_group_privileges_of_user(GID, UserId2, [group_join_space], UserReqParams1),
     ?assertMatch(SID, join_group_to_space(InvitationToken, GID, UserReqParams2)),
     clean_group_privileges(GID, UserId2, UserReqParams1);
@@ -1452,7 +1479,7 @@ group_privilege_check(group_create_space_token, Users, GID, _SID) ->
 group_privilege_check(group_create_space, Users, GID, _SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     %% test if user2 lacks group_create_space_token privileges
-    ?assertMatch({request_error, ?UNAUTHORIZED}, create_space_for_group(?SPACE_NAME2, GID, UserReqParams2)),
+    ?assertMatch({request_error, ?FORBIDDEN}, create_space_for_group(?SPACE_NAME2, GID, UserReqParams2)),
     set_group_privileges_of_user(GID, UserId2, [group_create_space], UserReqParams1),
     ?assertNotMatch({request_error, _}, create_space_for_group(?SPACE_NAME2, GID, UserReqParams2)),
     clean_group_privileges(GID, UserId2, UserReqParams1);
@@ -1652,9 +1679,13 @@ space_privileges_check([FirstPrivilege | Privileges], Users, GID, _SID) ->
     space_privileges_check(Privileges, Users, GID, _SID).
 
 space_privilege_check(space_view_data, Users, _GID, SID) ->
-    [{_UserId1, _UserReqParams1}, {_UserId2, UserReqParams2} | _] = Users,
-    %% user who belongs to group should have space_view_data privilege by default
-    ?assertMatch([SID, ?SPACE_NAME1], get_space_info(SID, UserReqParams2));
+    try
+        [{_UserId1, _UserReqParams1}, {_UserId2, UserReqParams2} | _] = Users,
+        %% user who belongs to group should have space_view_data privilege by default
+        ?assertMatch([SID, ?SPACE_NAME1], get_space_info(SID, UserReqParams2))
+    catch T:M ->
+        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
+    end;
 space_privilege_check(space_change_data, Users, _GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     %% test if user2 lacks space_change_data privileges
@@ -1666,7 +1697,7 @@ space_privilege_check(space_change_data, Users, _GID, SID) ->
 space_privilege_check(space_invite_user, Users, _GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     %% test if user2 lacks space_invite_user privileges
-    ?assertMatch({request_error, ?UNAUTHORIZED}, get_space_invitation_token(users, SID, UserReqParams2)),
+    ?assertMatch({request_error, ?FORBIDDEN}, get_space_invitation_token(users, SID, UserReqParams2)),
     set_space_privileges(users, SID, UserId2, [space_invite_user], UserReqParams1),
     ?assertNotMatch({request_error, _}, get_space_invitation_token(users, SID, UserReqParams2)),
     clean_space_privileges(SID, UserId2, UserReqParams1);
@@ -1731,12 +1762,16 @@ space_privilege_check(space_remove_provider, Users, _GID, SID) ->
         check_status(delete_supporting_provider(SID, PID, UserReqParams2))),
     clean_space_privileges(SID, UserId2, UserReqParams1);
 space_privilege_check(space_remove, Users, _GID, SID) ->
-    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
-    %% test if user2 lacks space_remove privileges
-    ?assertMatch({bad_response_code, _},
-        check_status(delete_group(SID, UserReqParams2))),
-    set_space_privileges(users, SID, UserId2, [space_remove], UserReqParams1),
-    ?assertMatch(ok, check_status(delete_group(SID, UserReqParams2))).
+    try
+        [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+        %% test if user2 lacks space_remove privileges
+        ?assertMatch({bad_response_code, _},
+            check_status(delete_group(SID, UserReqParams2))),
+        set_space_privileges(users, SID, UserId2, [space_remove], UserReqParams1),
+        ?assertMatch(ok, check_status(delete_group(SID, UserReqParams2)))
+    catch T:M ->
+        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
+    end.
 
 clean_space_privileges(SID, UserId, ReqParams) ->
     set_space_privileges(users, SID, UserId, [space_view_data], ReqParams).
@@ -1748,8 +1783,12 @@ check_bad_requests([Endpoint], Method, Body, ReqParams) ->
     ?assertMatch({bad_response_code, _}, check_status(Resp));
 check_bad_requests([Endpoint | Endpoints], Method, Body, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Resp = do_request(RestAddress ++ Endpoint, Headers, Method, Body, Options),
-    ?assertMatch({bad_response_code, _}, check_status(Resp)),
+    try
+        Resp = do_request(RestAddress ++ Endpoint, Headers, Method, Body, Options),
+        ?assertMatch({bad_response_code, _}, check_status(Resp))
+    catch T:M ->
+        ct:print("OMG: ~p~n~p", [{Method, Endpoint, Headers, Body}, {T, M, erlang:get_stacktrace()}])
+    end,
     check_bad_requests(Endpoints, Method, Body, ReqParams).
 
 
