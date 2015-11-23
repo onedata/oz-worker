@@ -559,27 +559,31 @@ get_group_privileges_test(Config) ->
             [<<"group_view_data">>], get_group_privileges_of_user(GID, UserId2, UserReqParams1))).
 
 set_group_privileges_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-    UserId1 = ?config(userId, Config),
-    UserReqParams1 = ?config(userReqParams, Config),
+    try
+        ProviderId = ?config(providerId, Config),
+        ProviderReqParams = ?config(providerReqParams, Config),
+        UserId1 = ?config(userId, Config),
+        UserReqParams1 = ?config(userReqParams, Config),
 
-    {UserId2, UserReqParams2} =
-        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
-    {UserId3, UserReqParams3} =
-        register_user(?USER_NAME3, ProviderId, Config, ProviderReqParams),
+        {UserId2, UserReqParams2} =
+            register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+        {UserId3, UserReqParams3} =
+            register_user(?USER_NAME3, ProviderId, Config, ProviderReqParams),
 
-    GID = create_group(?GROUP_NAME1, UserReqParams1),
+        GID = create_group(?GROUP_NAME1, UserReqParams1),
 
-    InvitationToken = get_group_invitation_token(GID, UserReqParams1),
+        InvitationToken = get_group_invitation_token(GID, UserReqParams1),
 
-    %% add user to group
-    join_user_to_group(InvitationToken, UserReqParams2),
+        %% add user to group
+        join_user_to_group(InvitationToken, UserReqParams2),
 
-    SID = create_space_for_user(?SPACE_NAME1, UserReqParams2),
+        SID = create_space_for_user(?SPACE_NAME1, UserReqParams2),
 
-    Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
-    group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID).
+        Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
+        group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID)
+    catch T:M ->
+        ct:print("OMG1: ~p", [{T, M, erlang:get_stacktrace()}])
+    end.
 
 group_creates_space_test(Config) ->
     UserReqParams1 = ?config(userReqParams, Config),
@@ -767,29 +771,30 @@ delete_provider_supporting_space_test(Config) ->
     ?assertMatch([], get_supporting_providers(SID, UserReqParams)).
 
 get_space_privileges_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-    UserId1 = ?config(userId, Config),
-    UserReqParams1 = ?config(userReqParams, Config),
+        ProviderId = ?config(providerId, Config),
+        ProviderReqParams = ?config(providerReqParams, Config),
+        UserId1 = ?config(userId, Config),
+        UserReqParams1 = ?config(userReqParams, Config),
 
-    {UserId2, UserReqParams2} =
-        register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+        {UserId2, UserReqParams2} =
+            register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
-    SID = create_space_for_user(?SPACE_NAME1, UserReqParams1),
-    InvitationToken = get_space_invitation_token(users, SID, UserReqParams1),
-    join_user_to_space(InvitationToken, UserReqParams2),
+        SID = create_space_for_user(?SPACE_NAME1, UserReqParams1),
+        InvitationToken = get_space_invitation_token(users, SID, UserReqParams1),
+        join_user_to_space(InvitationToken, UserReqParams2),
 
-    ?assertMatch(true,
-        is_included(
-            [atom_to_binary(Privilege, latin1) || Privilege <- ?SPACE_PRIVILEGES],
-            get_space_privileges(users, SID, UserId1, UserReqParams1)
-        )
-    ),
+        ?assertMatch(true,
+            is_included(
+                [atom_to_binary(Privilege, latin1) || Privilege <- ?SPACE_PRIVILEGES],
+                get_space_privileges(users, SID, UserId1, UserReqParams1)
+            )
+        ),
 
-    ?assertMatch(true,
-        is_included([<<"space_view_data">>], get_space_privileges(users, SID, UserId2, UserReqParams1))).
+        ?assertMatch(true,
+            is_included([<<"space_view_data">>], get_space_privileges(users, SID, UserId2, UserReqParams1))).
 
 set_space_privileges_test(Config) ->
+    try
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
     UserId1 = ?config(userId, Config),
@@ -807,7 +812,10 @@ set_space_privileges_test(Config) ->
 
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
 
-    space_privileges_check(?SPACE_PRIVILEGES, Users, GID, SID).
+    space_privileges_check(?SPACE_PRIVILEGES, Users, GID, SID)
+catch T:M ->
+ct:print("OMG2: ~p", [{T, M, erlang:get_stacktrace()}])
+end.
 
 bad_request_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -875,8 +883,6 @@ bad_request_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(ssl2),
-    hackney:start(),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
     [Node] = ?config(gr_nodes, NewConfig),
     GR_IP = get_node_ip(Node),
@@ -898,6 +904,14 @@ init_per_testcase(provider_check_ip_test, Config) ->
 init_per_testcase(provider_check_port_test, Config) ->
     init_per_testcase(register_only_provider, Config);
 init_per_testcase(non_register, Config) ->
+    % Start hackney and ssl2
+    application:start(ssl2),
+    hackney:start(),
+    % Start hackney pools for auth and no_auth requsts
+    ok = hackney_pool:start_pool(auth, [
+        {timeout, 150000}, {max_connections, 2}]),
+    ok = hackney_pool:start_pool(no_auth, [
+        {timeout, 150000}, {max_connections, 2}]),
     RestAddress = RestAddress = ?config(restAddress, Config),
     [{cert_files, generate_cert_files()} | Config];
 init_per_testcase(register_only_provider, Config) ->
@@ -928,14 +942,18 @@ init_per_testcase(_Default, Config) ->
     ].
 
 end_per_testcase(_, Config) ->
+    % Stop hackney pools
+    ok = hackney_pool:stop_pool(auth),
+    ok = hackney_pool:stop_pool(no_auth),
+    % Stop hackney and ssl2
+    hackney:stop(),
+    application:stop(ssl2),
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     file:delete(KeyFile),
     file:delete(CSRFile),
     file:delete(CertFile).
 
 end_per_suite(Config) ->
-    hackney:stop(),
-    application:stop(ssl2),
     test_node_starter:clean_environment(Config).
 
 %%%===================================================================
@@ -1021,11 +1039,17 @@ do_request(Endpoint, Headers, Method, Body) ->
     do_request(Endpoint, Headers, Method, Body, []).
 do_request(Endpoint, Headers, Method, Body, Options) ->
     % Add insecure option - we do not want the GR server cert to be checked.
-    random:seed(now()),
-    RandomPoolName = list_to_atom(str_utils:format("test_pool_~B", [random:uniform(999999)])),
-    ok = hackney_pool:start_pool(RandomPoolName, [{timeout, 150000}, {max_connections, 2}]),
-    Res = http_client:request(Method, Endpoint, Headers, Body, [insecure, {pool, RandomPoolName} | Options]),
-    hackney_pool:stop_pool(RandomPoolName),
+    % Use two pools of connections, one for auth, one for noauth requests
+    Pool = case proplists:get_value(ssl_options, Options, undefined) of
+               undefined ->
+                   no_auth;
+               _ ->
+                   auth
+           end,
+%%     random:seed(now()),
+%%     RandomPoolName = list_to_atom(str_utils:format("test_pool_~B", [random:uniform(999999)])),
+%%     ok = hackney_pool:start_pool(RandomPoolName, [{timeout, 150000}, {max_connections, 2}]),
+    Res = http_client:request(Method, Endpoint, Headers, Body, [insecure, {pool, Pool} | Options]),
     ct:print("do_request:~n"
     "Method = ~p,~n"
     "Endpoint = ~p,~n"
@@ -1033,7 +1057,7 @@ do_request(Endpoint, Headers, Method, Body, Options) ->
     "Body = ~p,~n"
     "Options = ~p,~n"
     "response: ~p~n",
-        [Method, Endpoint, Headers, Body, [insecure, {pool, RandomPoolName} | Options], Res]),
+        [Method, Endpoint, Headers, Body, [insecure, {pool, Pool} | Options], Res]),
     Res.
 
 get_macaroon_id(Token) ->
@@ -1683,9 +1707,9 @@ space_privileges_check([FirstPrivilege | Privileges], Users, GID, _SID) ->
 
 space_privilege_check(space_view_data, Users, _GID, SID) ->
 %%     try
-        [{_UserId1, _UserReqParams1}, {_UserId2, UserReqParams2} | _] = Users,
-        %% user who belongs to group should have space_view_data privilege by default
-        ?assertMatch([SID, ?SPACE_NAME1], get_space_info(SID, UserReqParams2));
+    [{_UserId1, _UserReqParams1}, {_UserId2, UserReqParams2} | _] = Users,
+    %% user who belongs to group should have space_view_data privilege by default
+    ?assertMatch([SID, ?SPACE_NAME1], get_space_info(SID, UserReqParams2));
 %%     catch T:M ->
 %%         ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
 %%     end;
