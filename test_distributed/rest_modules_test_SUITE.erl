@@ -202,12 +202,9 @@ update_provider_test(Config) ->
 
     update_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, ProviderReqParams),
 
-    Res = get_provider_info(ProviderReqParams),
-    ct:print("1st: ~p~n", [[?CLIENT_NAME2, ?URLS2, ?REDIRECTION_POINT2, ProviderId]]),
-    ct:print("2nd: ~p~n", [Res]),
     ?assertMatch(
         [?CLIENT_NAME2, ?URLS2, ?REDIRECTION_POINT2, ProviderId],
-        Res
+        get_provider_info(ProviderReqParams)
     ).
 
 get_provider_info_test(Config) ->
@@ -248,8 +245,6 @@ get_supported_space_info_test(Config) ->
     [SID_test, SpaceName_test, [{ProviderId_test, SpaceSize_test}]] =
         get_space_info_by_provider(SID, ProviderReqParams),
 
-    ct:print("1st: ~p~n", [[SID_test, SpaceName_test, ProviderId_test, SpaceSize_test]]),
-    ct:print("2nd: ~p~n", [[SID, ?SPACE_NAME1, ProviderId, binary_to_integer(?SPACE_SIZE1)]]),
     ?assertMatch(
         [SID_test, SpaceName_test, ProviderId_test, SpaceSize_test],
         [SID, ?SPACE_NAME1, ProviderId, binary_to_integer(?SPACE_SIZE1)]
@@ -301,25 +296,17 @@ user_authorize_test(Config) ->
     ?assertMatch([UserId, ?USER_NAME1], get_user_info(UserReqParams)).
 
 update_user_test(Config) ->
-    try
-        UserId = ?config(userId, Config),
-        UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    UserReqParams = ?config(userReqParams, Config),
 
-        ?assertMatch(ok, check_status(update_user(?USER_NAME2, UserReqParams))),
-        ?assertMatch([UserId, ?USER_NAME2], get_user_info(UserReqParams))
-    catch T:M ->
-        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    ?assertMatch(ok, check_status(update_user(?USER_NAME2, UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2], get_user_info(UserReqParams)).
 
 delete_user_test(Config) ->
-    try
-        UserReqParams = ?config(userReqParams, Config),
+    UserReqParams = ?config(userReqParams, Config),
 
-        ?assertMatch(ok, check_status(delete_user(UserReqParams))),
-        ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(UserReqParams))
-    catch T:M ->
-        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    ?assertMatch(ok, check_status(delete_user(UserReqParams))),
+    ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(UserReqParams)).
 
 request_merging_users_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -572,7 +559,6 @@ get_group_privileges_test(Config) ->
             [<<"group_view_data">>], get_group_privileges_of_user(GID, UserId2, UserReqParams1))).
 
 set_group_privileges_test(Config) ->
-    try
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
     UserId1 = ?config(userId, Config),
@@ -593,10 +579,7 @@ set_group_privileges_test(Config) ->
     SID = create_space_for_user(?SPACE_NAME1, UserReqParams2),
 
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
-    group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID)
-    catch T:M ->
-        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    group_privileges_check(?GROUP_PRIVILEGES, Users, GID, SID).
 
 group_creates_space_test(Config) ->
     UserReqParams1 = ?config(userReqParams, Config),
@@ -828,42 +811,64 @@ set_space_privileges_test(Config) ->
 
 bad_request_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
-    Body = json_utils:encode([
+    ProviderReqParams = ?config(providerReqParams, Config),
+
+    %% Endpoints that require user macaroons for authorization.
+    %% They should all fail if no such macaroons are given.
+    RequireMacaroons = [
+        "/user", "/user/spaces", "/user/spaces/default", "/user/spaces/token",
+        "/user/groups", "/user/merge/token"
+    ],
+    check_bad_requests(RequireMacaroons, get, <<"">>, ProviderReqParams),
+
+    %% Endpoints that expect a valid ID in URL. They should all fail if
+    %% no such ID is given (all URL contain ID '0').
+    BadID = [
+        "/provider/spaces/0", "/groups/0", "/groups/0/users",
+        "/groups/0/users/token", "/groups/0/users/0",
+        "/groups/0/users/0/privileges", "/groups/0/spaces",
+        "/groups/0/spaces/token", "/groups/0/spaces/0",
+        "/user/spaces/0", "/user/groups/join", "/user/groups/0", "/spaces/0",
+        "/spaces/0/users", "/spaces/0/users/token", "/spaces/0/users/0",
+        "/spaces/0/users/0/privileges", "/spaces/0/groups",
+        "/spaces/0/groups/token", "/spaces/0/groups/0",
+        "/spaces/0/groups/0/privileges", "/spaces/0/providers",
+        "/spaces/0/providers/token", "/spaces/0/providers/0"
+    ],
+    check_bad_requests(BadID, get, <<"">>, UserReqParams),
+
+    %% Endpoints that require provider certs in request. They should all fail
+    %% when no certs are presented.
+    RequireCerts = [
+        "/provider", "/provider/spaces", "/provider/spaces/0", "/groups/0",
+        "/groups/0/users", "/groups/0/users/token", "/groups/0/users/0",
+        "/groups/0/users/0/privileges", "/groups/0/spaces",
+        "/groups/0/spaces/token", "/groups/0/spaces/0", "/user", "/user/spaces",
+        "/user/spaces/default", "/user/spaces/token", "/user/spaces/0",
+        "/user/groups", "/user/groups/join", "/user/groups/0",
+        "/user/merge/token", "/spaces/0", "/spaces/0/users",
+        "/spaces/0/users/token", "/spaces/0/users/0",
+        "/spaces/0/users/0/privileges",
+        "/spaces/0/groups", "/spaces/0/groups/token", "/spaces/0/groups/0",
+        "/spaces/0/groups/0/privileges", "/spaces/0/providers",
+        "/spaces/0/providers/token", "/spaces/0/providers/0"
+    ],
+    {RestAddress, Headers, Options} = ProviderReqParams,
+    %% Send requests without certs (no options)
+    check_bad_requests(RequireCerts, get, <<"">>, {RestAddress, Headers, []}),
+
+    %% Endpoints that require a valid request body.
+    %% They should all fail if no such body is given.
+    RequireBody =
+        [
+            "/provider/0", "/provider/spaces/support",
+            "/provider/test/check_my_ports", "/groups", "/groups/0/spaces/join",
+            "/user/authorize", "/user/spaces/join", "/user/merge", "/spaces"
+        ],
+    BadBody = json_utils:encode([
         {<<"wrong_body">>, <<"WRONG BODY">>}
     ]),
-
-
-    BodyWhatever=["/user",
-        "/user/spaces",
-            "/user/spaces/default",
-                "/user/spaces/token",
-                    "/user/groups",
-                        "/user/merge/token"],
-    
-    Endpoints1 =
-        [
-            %% 0 is used wherever id is needed as a parameter in below endpoints
-            %% below endpoints will be tested with get method
-            "/provider", "/provider/spaces", "/provider/spaces/0", "/groups/0", "/groups/0/users",
-            "/groups/0/users/token", "/groups/0/users/0", "/groups/0/users/0/privileges",
-            "/groups/0/spaces", "/groups/0/spaces/token", "/groups/0/spaces/0", "/user", "/user/spaces",
-            "/user/spaces/default", "/user/spaces/token", "/user/spaces/0", "/user/groups",
-            "/user/groups/join", "/user/groups/0", "/user/merge/token", "/spaces/0", "/spaces/0/users",
-            "/spaces/0/users/token", "/spaces/0/users/0", "/spaces/0/users/0/privileges",
-            "/spaces/0/groups", "/spaces/0/groups/token", "/spaces/0/groups/0",
-            "/spaces/0/groups/0/privileges", "/spaces/0/providers", "/spaces/0/providers/token",
-            "/spaces/0/providers/0"
-        ],
-    check_bad_requests(Endpoints1, get, Body, UserReqParams),
-
-    Endpoints2 =
-        [
-            %% 0 is used wherever id is needed as a parameter in below endpoints
-            %% below endpoints will be tested with put method
-            "/provider/0", "/provider/spaces/support", "/provider/test/check_my_ports", "/groups",
-            "/groups/0/spaces/join", "/user/authorize", "/user/spaces/join", "/user/merge", "/spaces"
-        ],
-    check_bad_requests(Endpoints2, post, Body, UserReqParams).
+    check_bad_requests(RequireBody, post, BadBody, UserReqParams).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -896,8 +901,8 @@ init_per_testcase(non_register, Config) ->
     RestAddress = RestAddress = ?config(restAddress, Config),
     [{cert_files, generate_cert_files()} | Config];
 init_per_testcase(register_only_provider, Config) ->
-%%     this init function is for tests
-%%     than need registered provider
+    %% this init function is for tests
+    %% than need registered provider
     NewConfig = init_per_testcase(non_register, Config),
     RestAddress = ?config(restAddress, NewConfig),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
@@ -909,8 +914,8 @@ init_per_testcase(register_only_provider, Config) ->
         | NewConfig
     ];
 init_per_testcase(_Default, Config) ->
-%%     this default init function is for tests
-%%     than need registered provider and user
+    %% this default init function is for tests
+    %% than need registered provider and user
     NewConfig = init_per_testcase(register_only_provider, Config),
     ProviderId = ?config(providerId, NewConfig),
     ProviderReqParams = ?config(providerReqParams, NewConfig),
@@ -1079,8 +1084,6 @@ register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
     %% save cert
     [Cert, ProviderId] = get_body_val([certificate, providerId], Response),
     file:write_file(CertFile, Cert),
-    ct:print("KeyFile:~p~n"
-    "CertFile:~p~n", [file:read_file(KeyFile), file:read_file(CertFile)]),
     %% set request options for provider
     Options = [{ssl_options, [{keyfile, KeyFile}, {certfile, CertFile}]}],
     %% set request parametres for provider
@@ -1453,7 +1456,7 @@ group_privilege_check(group_set_privileges, Users, GID, _SID) ->
     clean_group_privileges(GID, UserId2, UserReqParams1);
 group_privilege_check(group_join_space, Users, GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
-    InvitationToken = get_space_invitation_token(groups, SID, UserReqParams2),
+    InvitationToken = get_space_invitation_token(groups, SID, UserReqParams1),
     %% test if user2 lacks group_join_space privileges
     ?assertMatch({request_error, ?FORBIDDEN}, join_group_to_space(InvitationToken, GID, UserReqParams2)),
     set_group_privileges_of_user(GID, UserId2, [group_join_space], UserReqParams1),
@@ -1679,13 +1682,13 @@ space_privileges_check([FirstPrivilege | Privileges], Users, GID, _SID) ->
     space_privileges_check(Privileges, Users, GID, _SID).
 
 space_privilege_check(space_view_data, Users, _GID, SID) ->
-    try
+%%     try
         [{_UserId1, _UserReqParams1}, {_UserId2, UserReqParams2} | _] = Users,
         %% user who belongs to group should have space_view_data privilege by default
-        ?assertMatch([SID, ?SPACE_NAME1], get_space_info(SID, UserReqParams2))
-    catch T:M ->
-        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
-    end;
+        ?assertMatch([SID, ?SPACE_NAME1], get_space_info(SID, UserReqParams2));
+%%     catch T:M ->
+%%         ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
+%%     end;
 space_privilege_check(space_change_data, Users, _GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     %% test if user2 lacks space_change_data privileges
@@ -1762,16 +1765,13 @@ space_privilege_check(space_remove_provider, Users, _GID, SID) ->
         check_status(delete_supporting_provider(SID, PID, UserReqParams2))),
     clean_space_privileges(SID, UserId2, UserReqParams1);
 space_privilege_check(space_remove, Users, _GID, SID) ->
-    try
-        [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
-        %% test if user2 lacks space_remove privileges
-        ?assertMatch({bad_response_code, _},
-            check_status(delete_group(SID, UserReqParams2))),
-        set_space_privileges(users, SID, UserId2, [space_remove], UserReqParams1),
-        ?assertMatch(ok, check_status(delete_group(SID, UserReqParams2)))
-    catch T:M ->
-        ct:print("OMG: ~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
+    %% test if user2 lacks space_remove privileges
+    ?assertMatch({bad_response_code, _},
+        check_status(delete_group(SID, UserReqParams2))),
+    set_space_privileges(users, SID, UserId2, [space_remove], UserReqParams1),
+    ?assertMatch(ok, check_status(delete_group(SID, UserReqParams2)))
+.
 
 clean_space_privileges(SID, UserId, ReqParams) ->
     set_space_privileges(users, SID, UserId, [space_view_data], ReqParams).
@@ -1783,12 +1783,8 @@ check_bad_requests([Endpoint], Method, Body, ReqParams) ->
     ?assertMatch({bad_response_code, _}, check_status(Resp));
 check_bad_requests([Endpoint | Endpoints], Method, Body, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    try
-        Resp = do_request(RestAddress ++ Endpoint, Headers, Method, Body, Options),
-        ?assertMatch({bad_response_code, _}, check_status(Resp))
-    catch T:M ->
-        ct:print("OMG: ~p~n~p", [{Method, Endpoint, Headers, Body}, {T, M, erlang:get_stacktrace()}])
-    end,
+    Resp = do_request(RestAddress ++ Endpoint, Headers, Method, Body, Options),
+    ?assertMatch({bad_response_code, _}, check_status(Resp)),
     check_bad_requests(Endpoints, Method, Body, ReqParams).
 
 
