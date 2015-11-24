@@ -185,20 +185,16 @@ groups() ->
 %% provider_rest_module_test_group====================================
 
 create_provider_test(Config) ->
-    try
-        RestAddress = ?config(restAddress, Config),
-        ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+    RestAddress = ?config(restAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
-        {ProviderId, ProviderReqParams} =
-            register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    {ProviderId, ProviderReqParams} =
+        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
 
-        ?assertMatch(
-            [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
-            get_provider_info(ProviderReqParams)
-        )
-    catch T:M ->
-        ct:print("OMYDZI: ~p", [{T,M,erlang:get_stacktrace()}])
-    end.
+    ?assertMatch(
+        [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        get_provider_info(ProviderReqParams)
+    ).
 
 update_provider_test(Config) ->
     ProviderId = ?config(providerId, Config),

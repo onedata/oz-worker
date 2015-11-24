@@ -58,17 +58,13 @@ create(ClientName, URLs, RedirectionPoint, CSRBin) ->
 modify(ProviderId, Data) ->
     Doc = dao_adapter:provider_doc(ProviderId),
     #db_document{record = Provider} = Doc,
-    ?alert("ProviderId: ~p~n", [ProviderId]),
-    ?alert("Doc: ~p~n", [Doc]),
 
     URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
     RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
     ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
 
     ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint, client_name = ClientName},
-    ?alert("ProviderNew: ~p~n", [ProviderNew]),
     Res = dao_adapter:save(Doc#db_document{record = ProviderNew}),
-    ?alert("Modify: ~p~n", [Res]),
     ok.
 
 %%--------------------------------------------------------------------
