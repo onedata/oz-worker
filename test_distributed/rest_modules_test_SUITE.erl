@@ -1031,11 +1031,7 @@ do_request(Endpoint, Headers, Method, Body) ->
     do_request(Endpoint, Headers, Method, Body, []).
 do_request(Endpoint, Headers, Method, Body, Options) ->
     % Add insecure option - we do not want the GR server cert to be checked.
-    % Do not use a pool of connection - currently hackney and/or ssl2 does
-    % not work properly with pools (the requests are done in the same
-    % way as in ctool).
-    http_client:request(Method, Endpoint, Headers, Body, [
-        insecure, {pool, false} | Options]).
+    http_client:request(Method, Endpoint, Headers, Body, [insecure | Options]).
 
 get_macaroon_id(Token) ->
     {ok, Macaroon} = macaroon:deserialize(Token),
