@@ -5,6 +5,13 @@
             "target_dir": "rel/test_cluster"
         }
     },
+    "os_configs": {
+        "cfg1": {
+            "storages": [],
+            "users": [],
+            "groups": {}
+        }
+    },
     "globalregistry_domains": {
         "gr": {
             "globalregistry": {
