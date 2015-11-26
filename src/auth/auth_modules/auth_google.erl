@@ -40,7 +40,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
-        Params = gui_utils:proplist_to_url_params(ParamsProplist),
+        Params = http_utils:proplist_to_url_params(ParamsProplist),
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
@@ -70,25 +70,21 @@ validate_login() ->
             {<<"grant_type">>, <<"authorization_code">>}
         ],
         % Convert proplist to params string
-        Params = gui_utils:proplist_to_url_params(NewParamsProplist),
+        Params = http_utils:proplist_to_url_params(NewParamsProplist),
         % Send request to Google endpoint
-        {ok, "200", _, Response} = ibrowse:send_req(
-            binary_to_list(access_token_endpoint()),
-            [{content_type, "application/x-www-form-urlencoded"}],
-            post, Params, [{response_format, binary}]),
+        {ok, 200, _, Response} = http_client:post(access_token_endpoint(),
+            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}], Params),
 
         % Parse out received access token and form a user info request
         AccessToken = parse_json(Response, <<"access_token">>),
         URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
 
         % Send request to Google endpoint
-        {ok, "200", _, Response2} = ibrowse:send_req(
-            binary_to_list(URL),
-            [{content_type, "application/x-www-form-urlencoded"}],
-            get, [], [{response_format, binary}]),
+        {ok, 200, _, Response2} = http_client:get(URL,
+            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}]),
 
         % Parse JSON with user info
-        {struct, JSONProplist} = n2o_json:decode(Response2),
+        JSONProplist = json_utils:decode(Response2),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = proplists:get_value(<<"sub">>, JSONProplist, <<"">>),
@@ -122,7 +118,8 @@ xrds_endpoint() ->
 %%--------------------------------------------------------------------
 -spec authorize_endpoint() -> binary().
 authorize_endpoint() ->
-    {ok, XRDS} = gui_utils:https_get(xrds_endpoint(), []),
+    {ok, 200, _, XRDS} = http_client:get(xrds_endpoint(), [], <<>>,
+        [{follow_redirect, true}, {max_redirect, 5}]),
     parse_json(XRDS, <<"authorization_endpoint">>).
 
 %%--------------------------------------------------------------------
@@ -132,7 +129,8 @@ authorize_endpoint() ->
 %%--------------------------------------------------------------------
 -spec access_token_endpoint() -> binary().
 access_token_endpoint() ->
-    {ok, XRDS} = gui_utils:https_get(xrds_endpoint(), []),
+    {ok, 200, _, XRDS} = http_client:get(xrds_endpoint(), [], <<>>,
+        [{follow_redirect, true}, {max_redirect, 5}]),
     parse_json(XRDS, <<"token_endpoint">>).
 
 %%--------------------------------------------------------------------
@@ -142,7 +140,8 @@ access_token_endpoint() ->
 %%--------------------------------------------------------------------
 -spec user_info_endpoint() -> binary().
 user_info_endpoint() ->
-    {ok, XRDS} = gui_utils:https_get(xrds_endpoint(), []),
+    {ok, 200, _, XRDS} = http_client:get(xrds_endpoint(), [], <<>>,
+        [{follow_redirect, true}, {max_redirect, 5}]),
     parse_json(XRDS, <<"userinfo_endpoint">>).
 
 %%--------------------------------------------------------------------
@@ -164,5 +163,4 @@ extract_emails(JSONProplist) ->
 %%--------------------------------------------------------------------
 -spec parse_json(binary(), binary()) -> binary().
 parse_json(JSON, Key) ->
-    {struct, Proplist} = n2o_json:decode(JSON),
-    proplists:get_value(Key, Proplist).
+    proplists:get_value(Key, json_utils:decode(JSON)).

@@ -377,12 +377,12 @@ update_email(AddOrRemove) ->
     {ok, #user{email_list = OldEmailList}} = user_logic:get_user(UserId),
     case AddOrRemove of
         {add, submitted} ->
-            NewEmail = gui_utils:normalize_email(gui_ctx:postback_param(<<"new_email_textbox">>)),
+            NewEmail = http_utils:normalize_email(gui_ctx:postback_param(<<"new_email_textbox">>)),
             case user_logic:get_user({email, NewEmail}) of
                 {ok, _} ->
                     gui_jq:wire(#alert{text = <<"This e-mail address is in use.">>});
                 _ ->
-                    case gui_utils:validate_email(NewEmail) of
+                    case http_utils:validate_email(NewEmail) of
                         false ->
                             gui_jq:wire(#alert{text = <<"Please enter a valid email address.">>});
                         true ->
@@ -492,8 +492,8 @@ show_alias_edition(Flag) ->
 
 
 redirect_to_provider(ProviderHostname, URL) ->
-    case gui_utils:https_get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, []) of
-        {ok, _} ->
+    case http_client:get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, [], <<>>, [insecure]) of
+        {ok, _, _, _} ->
             gui_jq:redirect(URL);
         _ ->
             gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable. Try again later.">>})
@@ -502,8 +502,8 @@ redirect_to_provider(ProviderHostname, URL) ->
 
 redirect_to_provider_dev(ProviderID) ->
     {ok, ProviderHostname, URL} = gr_gui_utils:get_redirection_url_to_provider(ProviderID),
-    case gui_utils:https_get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, []) of
-        {ok, _} ->
+    case http_client:get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, [], <<>>, [insecure]) of
+        {ok, _, _, _} ->
             gui_jq:redirect(URL);
         _ ->
             gui_jq:wire(#alert{text = <<"The provider that supports your space(s) is currently unreachable. Try again later.">>})

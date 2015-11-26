@@ -119,7 +119,7 @@ revoke(Serial) ->
 -spec generate_gr_cert(CaDir :: string(), CertPath :: string(),
     KeyPath :: string(), Domain :: string()) -> ok.
 generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
-    TmpDir = mochitemp:mkdtemp(),
+    TmpDir = utils:mkdtemp(),
     CSRFile = random_filename(TmpDir),
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
     CaConfigFile = ca_config_file(TmpDir, CADir),
@@ -145,7 +145,7 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
 
     ?info("~s", [SigningOutput]),
 
-    mochitemp:rmtempdir(TmpDir),
+    utils:rmtempdir(TmpDir),
     ok.
 
 %%%===================================================================
@@ -158,16 +158,16 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
 %%--------------------------------------------------------------------
 -spec revoke_imp(Serial :: binary(), CaDir :: string()) -> ok.
 revoke_imp(Serial, CaDir) ->
-    TmpDir = mochitemp:mkdtemp(),
+    TmpDir = utils:mkdtemp(),
     CaConfigFile = ca_config_file(TmpDir, CaDir),
-    LSerial = utils:ensure_list(Serial),
+    LSerial = str_utils:to_list(Serial),
     ?info("Revoking a certificate with serial number ~p", [Serial]),
     RevokeOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,
         " -batch",
         " -revoke ", filename:join([CaDir, "newcerts", LSerial]), ".pem"]),
     ?info("~s", [RevokeOutput]),
-    mochitemp:rmtempdir(TmpDir),
+    utils:rmtempdir(TmpDir),
     gen_crl_imp(CaDir),
     ok.
 
@@ -178,7 +178,7 @@ revoke_imp(Serial, CaDir) ->
 -spec sign_provider_req_imp(ProviderId :: binary(), CSRPem :: binary(),
     CaDir :: string()) -> {ok, Pem :: binary(), Serial :: integer()}.
 sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
-    TmpDir = mochitemp:mkdtemp(),
+    TmpDir = utils:mkdtemp(),
     CSRFile = random_filename(TmpDir),
     CertFile = random_filename(TmpDir),
     CaConfigFile = ca_config_file(TmpDir, CaDir),
@@ -189,7 +189,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
         " -batch",
         " -notext",
         " -extensions user_cert",
-        " -subj \"/CN=", utils:ensure_list(ProviderId), "/O=onedata/OU=Providers\"",
+        " -subj \"/CN=", str_utils:to_list(ProviderId), "/O=onedata/OU=Providers\"",
         " -in ", CSRFile,
         " -out ", CertFile]),
 
@@ -197,7 +197,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
     [{'Certificate', CertDer, not_encrypted}] = public_key:pem_decode(Pem),
     Cert = public_key:pkix_decode_cert(CertDer, otp),
     #'OTPCertificate'{tbsCertificate = #'OTPTBSCertificate'{serialNumber = Serial}} = Cert,
-    mochitemp:rmtempdir(TmpDir),
+    utils:rmtempdir(TmpDir),
 
     {ok, Pem, Serial}.
 
@@ -229,7 +229,7 @@ verify_provider_imp(PeerCertDer, CaDir) ->
 %%--------------------------------------------------------------------
 -spec gen_crl_imp(CaDir :: string()) -> ok.
 gen_crl_imp(CaDir) ->
-    TmpDir = mochitemp:mkdtemp(),
+    TmpDir = utils:mkdtemp(),
     CaConfigFile = ca_config_file(TmpDir, CaDir),
     ?info("Generating an updated CRL"),
     CreateCrlOutput = os:cmd(["openssl ca",
@@ -237,7 +237,7 @@ gen_crl_imp(CaDir) ->
         " -gencrl",
         " -out ", filename:join(CaDir, "crl.pem")]),
     ?info("~s", [CreateCrlOutput]),
-    mochitemp:rmtempdir(TmpDir),
+    utils:rmtempdir(TmpDir),
     ok.
 
 %%--------------------------------------------------------------------
@@ -329,7 +329,7 @@ get_provider_id(#'OTPCertificate'{} = Cert) ->
         case Attribute#'AttributeTypeAndValue'.type of
             ?'id-at-commonName' ->
                 {_, Id} = Attribute#'AttributeTypeAndValue'.value,
-                {true, utils:ensure_binary(Id)};
+                {true, str_utils:to_binary(Id)};
             _ -> false
         end
     end, Attrs),
@@ -344,7 +344,7 @@ get_provider_id(#'OTPCertificate'{} = Cert) ->
 %%--------------------------------------------------------------------
 -spec random_filename(TmpDir :: string()) -> string().
 random_filename(TmpDir) ->
-    FileName = mochihex:to_hex(crypto:hash(sha, term_to_binary({make_ref(), now()}))),
+    FileName = hex_utils:to_hex(crypto:hash(sha, term_to_binary({make_ref(), now()}))),
     filename:join(TmpDir, FileName).
 
 %%%===================================================================

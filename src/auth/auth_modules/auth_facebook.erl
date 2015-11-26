@@ -39,7 +39,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"scope">>, <<"email">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
-        Params = gui_utils:proplist_to_url_params(ParamsProplist),
+        Params = http_utils:proplist_to_url_params(ParamsProplist),
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
@@ -68,12 +68,11 @@ validate_login() ->
             {<<"code">>, <<Code/binary>>}
         ],
         % Convert proplist to params string
-        Params = gui_utils:proplist_to_url_params(NewParamsProplist),
+        Params = http_utils:proplist_to_url_params(NewParamsProplist),
         URL = <<(access_token_endpoint())/binary, "?", Params/binary>>,
         % Send request to Facebook endpoint
-        {ok, Response} = gui_utils:https_get(URL, [
-            {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}
-        ]),
+        {ok, 200, _, Response} = http_client:get(URL,
+            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}]),
 
         % Parse out received access token
         AccessToken = proplists:get_value(<<"access_token">>, cow_qs:parse_qs(Response)),
@@ -81,12 +80,11 @@ validate_login() ->
         % Form user info request
         URL2 = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to Facebook endpoint
-        {ok, JSON} = gui_utils:https_get(URL2, [
-            {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}
-        ]),
+        {ok, 200, _, JSON} = http_client:get(URL2,
+            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}]),
 
         % Parse received JSON
-        {struct, JSONProplist} = n2o_json:decode(JSON),
+        JSONProplist = json_utils:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = proplists:get_value(<<"id">>, JSONProplist, <<"">>),

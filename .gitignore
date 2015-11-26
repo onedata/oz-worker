@@ -21,3 +21,4 @@ package
 .dialyzer.plt
 test/eunit_results
 test_distributed/logs
+test_distributed/cover_tmp.spec

@@ -26,7 +26,7 @@
 -define(DB(Function, Arg), dao_lib:apply(dao_auth, Function, [Arg], 1)).
 
 %% API
--export([start/0, stop/0, get_redirection_uri/3, gen_token/1, validate_token/5,
+-export([start/0, stop/0, get_redirection_uri/3, gen_token/1, gen_token/2, validate_token/5,
     authenticate_user/1]).
 
 %% Handling state tokens
@@ -124,7 +124,7 @@ gen_token(UserId) ->
     Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
     Caveats = [],%["method = GET", "rootResource in spaces,user"],
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
-    {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier), Caveats),
+    {ok, M} = create_macaroon(Secret, str_utils:to_binary(Identifier), Caveats),
     {ok, Token} = macaroon:serialize(M),
     Token.
 
@@ -137,7 +137,7 @@ gen_token(UserId, ProviderId) ->
     Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
     Location = ?MACAROONS_LOCATION,
     {ok, Identifier} = ?DB(save_auth, #auth{secret = Secret, user_id = UserId}),
-    {ok, M} = create_macaroon(Secret, utils:ensure_binary(Identifier),
+    {ok, M} = create_macaroon(Secret, str_utils:to_binary(Identifier),
         [["providerId = ", ProviderId]]),
 
     CaveatKey = crypto:rand_bytes(macaroon:suggested_secret_length()),
@@ -191,7 +191,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 -spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> binary().
 generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_state_tokens(),
-    Token = list_to_binary(mochihex:to_hex(crypto:rand_bytes(32))),
+    Token = list_to_binary(hex_utils:to_hex(crypto:rand_bytes(32))),
     {M, S, N} = now(),
     Time = M * 1000000000000 + S * 1000000 + N,
 

@@ -444,7 +444,7 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                         };
                     _ ->
                         #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone,
-                        {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(gui_str:to_list(RedPoint)),
+                        {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(str_utils:to_list(RedPoint)),
                         {ok,
                             [dns_server:answer_record(Domain, TTL, ?S_NS, HostStr)]
                         }

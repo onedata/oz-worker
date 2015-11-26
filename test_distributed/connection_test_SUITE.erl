@@ -29,19 +29,21 @@
 all() -> [rest_api_connection_test, dao_connection_test].
 
 rest_api_connection_test(Config) ->
-    ibrowse:start(),
-    ssl:start(),
+    application:start(ssl2),
+    hackney:start(),
     [Node] = ?config(gr_nodes, Config),
-    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
-    Ans = ibrowse:send_req("https://" ++ utils:get_host(Node) ++ ":" ++ integer_to_list(RestPort) ++ "/provider/test/check_my_ip", [], get, [], [{ssl_options, [{verify, verify_none}]}]),
-    ?assertMatch({ok, _, _, _}, Ans),
-    ssl:stop(),
-    ibrowse:stop().
+    {ok, RestPort} = rpc:call(Node, application, get_env,
+        [?APP_Name, rest_port]),
+    URL = str_utils:format("https://~s:~B/provider/test/check_my_ip",
+        [utils:get_host(Node), RestPort]),
+    ?assertMatch({ok, _, _, _}, http_client:get(URL, [], <<>>, [insecure])),
+    hackney:stop(),
+    application:stop(ssl2).
 
 dao_connection_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
-
-    ?assertMatch({ok, _}, rpc:call(Node, dao_lib, apply, [dao_helper, list_dbs, [], 1])).
+    ?assertMatch({ok, _}, rpc:call(Node, dao_lib, apply,
+        [dao_helper, list_dbs, [], 1])).
 
 %%%===================================================================
 %%% Setup/teardown functions

@@ -78,9 +78,9 @@ assert_type(Key, List, Type, Req) ->
         Type :: pos_integer, Req :: cowboy_req:req()) -> pos_integer() | no_return().
 assert_key(Key, List, Type, Req) ->
     case assert_type(Key, List, Type, Req) of
-        undefined ->   report_missing_key(Key, Req);
-Value -> Value
-end .
+        undefined -> report_missing_key(Key, Req);
+        Value -> Value
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Returns a value of a parameter if it exists and its values are from
@@ -115,8 +115,8 @@ assert_key_value(Key, AcceptedValues, List, binary, Req) ->
     Req :: cowboy_req:req()) ->
     no_return().
 report_invalid_value(Key, Value, Req) ->
-    Description = <<"invalid '", (utils:ensure_binary(Key))/binary,
-    "' value: '", (utils:ensure_binary(Value))/binary, "'">>,
+    Description = <<"invalid '", (str_utils:to_binary(Key))/binary,
+    "' value: '", (str_utils:to_binary(Value))/binary, "'">>,
     report_error(invalid_request, Description, Req).
 
 %%--------------------------------------------------------------------
@@ -126,7 +126,7 @@ report_invalid_value(Key, Value, Req) ->
     no_return().
 report_missing_key(Key, Req) ->
     Description = <<"missing required key: '",
-    (utils:ensure_binary(Key))/binary, "'">>,
+    (str_utils:to_binary(Key))/binary, "'">>,
     report_error(invalid_request, Description, Req).
 
 %%--------------------------------------------------------------------

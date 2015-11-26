@@ -301,11 +301,14 @@ removal_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
+    % Needed for websocket_client
+    application:start(ssl2),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
     timer:sleep(60000), % TODO add nagios to GR and delete sleep
     NewConfig.
 
 end_per_suite(Config) ->
+    application:stop(ssl2),
     test_node_starter:clean_environment(Config).
 
 %%%===================================================================

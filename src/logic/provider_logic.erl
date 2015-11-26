@@ -40,7 +40,7 @@
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = dao_helper:gen_uuid(),
-    BinProviderId = utils:ensure_binary(ProviderId),
+    BinProviderId = str_utils:to_binary(ProviderId),
     {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
     dao_adapter:save(#db_document{uuid = ProviderId, record =
     #provider{client_name = ClientName, urls = URLs,
@@ -138,22 +138,22 @@ remove(ProviderId) ->
 test_connection([]) ->
     [];
 test_connection([{<<"undefined">>, Url} | Rest]) ->
-    UrlString = binary_to_list(Url),
-    ConnStatus = case ibrowse:send_req(UrlString, [], get) of
-                     {ok, "200", _, _} -> ok;
-                     _ -> error
-                 end,
+    ConnStatus =
+        case http_client:get(Url, [], <<>>, [insecure]) of
+            {ok, 200, _, _} -> ok;
+            _ -> error
+        end,
     [{Url, ConnStatus} | test_connection(Rest)];
 test_connection([{ServiceName, Url} | Rest]) ->
-    UrlString = binary_to_list(Url),
-    ServiceNameString = binary_to_list(ServiceName),
-    ConnStatus = case ibrowse:send_req(UrlString, [], get) of
-                     {ok, "200", _, ServiceNameString} ->
-                         ok;
-                     Error ->
-                         ?debug("Checking connection to ~p failed with error: ~n~p", [Url, Error]),
-                         error
-                 end,
+    ConnStatus =
+        case http_client:get(Url, [], <<>>, [insecure]) of
+            {ok, 200, _, ServiceName} ->
+                ok;
+            Error ->
+                ?debug("Checking connection to ~p failed with error: ~n~p",
+                    [Url, Error]),
+                error
+        end,
     [{Url, ConnStatus} | test_connection(Rest)].
 
 %%--------------------------------------------------------------------

@@ -43,14 +43,15 @@ teardown(_) ->
 %%%===================================================================
 
 test_connection_test() ->
-    meck:new(ibrowse),
-    meck:expect(ibrowse, send_req,
+    meck:new(http_client),
+    meck:expect(http_client, get,
         fun
-            ("https://172.16.67.194:443/test", [], get) ->
-                {ok, "200", nothing_important, "gui"};
-            ("https://172.16.67.194:8443/rest/latest/test", [], get) ->
-                {ok, "200", nothing_important, "rest"};
-            ("https://172.16.67.194:123/wrong_url", [], get) ->
+            (<<"https://172.16.67.194:443/test">>, [], <<>>, [insecure]) ->
+                {ok, 200, nothing_important, <<"gui">>};
+            (<<"https://172.16.67.194:8443/rest/latest/test">>, [], <<>>,
+                [insecure]) ->
+                {ok, 200, nothing_important, <<"rest">>};
+            (<<"https://172.16.67.194:123/wrong_url">>, [], <<>>, [insecure]) ->
                 {error, {conn_failed, {error, econnrefused}}}
         end),
     Arg = [
@@ -67,7 +68,7 @@ test_connection_test() ->
     ],
 
     ?assertEqual(Expected, Ans),
-    meck:unload(ibrowse).
+    meck:unload(http_client).
 
 %%%===================================================================
 %%% Internal functions
