@@ -195,9 +195,9 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
         {silent_error, ReqX} -> %% As per RFC 6750 section 3.1
             {{false, <<"">>}, ReqX, State};
 
-        {Error, <<Description1>>, ReqX} when is_atom(Error) ->
+        {Error, Description1, ReqX} when is_atom(Error) ->
             Body = json_utils:encode([{error, Error},
-                {error_description, Description1}]),
+                {error_description, str_utils:to_binary(Description1)}]),
 
             WWWAuthenticate =
                 <<"error=", (atom_to_binary(Error, latin1))/binary>>,
@@ -205,9 +205,11 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
             ReqY = cowboy_req:set_resp_body(Body, ReqX),
             {{false, WWWAuthenticate}, ReqY, State};
 
-        {Error, StatusCode, <<Description1>>, ReqX} when is_atom(Error) ->
-            Body = json_utils:encode([{error, Error},
-                {error_description, Description1}]),
+        {Error, StatusCode, Description1, ReqX} when is_atom(Error) ->
+            Body = json_utils:encode([
+                {<<"error">>, Error},
+                {<<"error_description">>, str_utils:to_binary(Description1)}
+            ]),
 
             {ok, ReqY} = cowboy_req:reply(StatusCode, [], Body, ReqX),
             {halt, ReqY, State}
@@ -249,8 +251,8 @@ accept_resource_json(Req, #rstate{} = State) ->
     case Data =:= malformed of
         true ->
             Body = json_utils:encode([
-                {error, invalid_request},
-                {error_description, <<"malformed JSON data">>}]),
+                {<<"error">>, <<"invalid_request">>},
+                {<<"error_description">>, <<"malformed JSON data">>}]),
             Req3 = cowboy_req:set_resp_body(Body, Req2),
             {false, Req3, State};
 
@@ -293,7 +295,7 @@ accept_resource(Data, Req, State) ->
         {rest_error, Error, ReqX}
             when is_atom(Error) ->
 
-            Body = json_utils:encode([{error, Error}]),
+            Body = json_utils:encode([{<<"error">>, Error}]),
             ReqY = cowboy_req:set_resp_body(Body, ReqX),
             {false, ReqY, State};
 
@@ -302,8 +304,8 @@ accept_resource(Data, Req, State) ->
             when is_atom(Error), is_binary(Description) ->
 
             Body = json_utils:encode([
-                {error, Error},
-                {error_description, Description}
+                {<<"error">>, Error},
+                {<<"error_description">>, Description}
             ]),
             ReqY = cowboy_req:set_resp_body(Body, ReqX),
             {false, ReqY, State}

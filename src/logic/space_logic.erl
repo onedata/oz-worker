@@ -257,12 +257,10 @@ support(ProviderId, Macaroon, SupportedSize) ->
             #db_document{record = #space{size = Size, users = Users, groups = Groups, providers = Providers} = Space} = SpaceDoc,
             SpaceNew = Space#space{size = [{ProviderId, SupportedSize} | Size], providers = [ProviderId | Providers]},
 
-            ProviderDoc = dao_adapter:provider_doc(ProviderId),
-            #db_document{record = #provider{spaces = Spaces} = Provider} = ProviderDoc,
-            ProviderNew = Provider#provider{spaces = [SpaceId | Spaces]},
+            add_space_to_providers(SpaceId, [ProviderId]),
 
             dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
-            dao_adapter:save(ProviderDoc#db_document{record = ProviderNew}),
+
             op_channel_logic:space_modified([ProviderId | Providers], SpaceId, SpaceNew),
             lists:foreach(fun({UserId, _}) ->
                 op_channel_logic:user_modified([ProviderId], UserId, dao_adapter:user(UserId))
@@ -276,6 +274,7 @@ support(ProviderId, Macaroon, SupportedSize) ->
             end, Groups)
     end,
     {ok, SpaceId}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about the Space.
@@ -529,6 +528,8 @@ create_with_provider({user, UserId}, Name, Providers, Size) ->
     UserNew = User#user{spaces = [SpaceId | Spaces]},
     dao_adapter:save(UserDoc#db_document{record = UserNew}),
 
+    add_space_to_providers(SpaceId, Providers),
+
     op_channel_logic:space_modified(Providers, SpaceId, Space),
     op_channel_logic:user_modified(Providers, UserId, UserNew),
     {ok, SpaceId};
@@ -543,12 +544,32 @@ create_with_provider({group, GroupId}, Name, Providers, Size) ->
     GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
     dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
 
+    add_space_to_providers(SpaceId, Providers),
+
     op_channel_logic:space_modified(Providers, SpaceId, Space),
     op_channel_logic:group_modified(Providers, GroupId, Group),
     lists:foreach(fun({UserId, _}) ->
         op_channel_logic:user_modified(Providers, UserId, dao_adapter:user(UserId))
     end, Users),
     {ok, SpaceId}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Adds a space to providers' support list.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_space_to_providers(SpaceId :: binary(), ProviderIds :: [binary()])
+        -> ok.
+add_space_to_providers(_SpaceId, []) -> ok;
+add_space_to_providers(SpaceId, [ProviderId | RestProviders]) ->
+    ProviderDoc = dao_adapter:provider_doc(ProviderId),
+
+    #db_document{record = #provider{spaces = PSpaces} = Provider} = ProviderDoc,
+    ProviderNew = Provider#provider{spaces = [SpaceId | PSpaces]},
+    dao_adapter:save(ProviderDoc#db_document{record = ProviderNew}),
+
+    add_space_to_providers(SpaceId, RestProviders).
+
 
 %%--------------------------------------------------------------------
 %% @doc Removes the space if empty.

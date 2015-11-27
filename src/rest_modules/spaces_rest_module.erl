@@ -11,6 +11,7 @@
 -author("Konrad Zemek").
 
 -include("handlers/rest_handler.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -behavior(rest_module_behavior).
 
