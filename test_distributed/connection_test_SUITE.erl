@@ -58,7 +58,7 @@ init_per_testcase(rest_api_connection_test, Config) ->
 init_per_testcase(_, Config) ->
     Config.
 
-end_per_testcase(rest_api_connection_test, Config) ->
+end_per_testcase(rest_api_connection_test, _Config) ->
     hackney:stop(),
     application:stop(ssl2);
 end_per_testcase(_, _Config) ->
