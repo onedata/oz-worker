@@ -12,7 +12,6 @@
 
 -include("handlers/rest_handler.hrl").
 -include("registered_names.hrl").
--include_lib("ctool/include/logging.hrl").
 
 -behavior(rest_module_behavior).
 

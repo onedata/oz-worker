@@ -29,16 +29,12 @@
 all() -> [rest_api_connection_test, dao_connection_test].
 
 rest_api_connection_test(Config) ->
-    application:start(ssl2),
-    hackney:start(),
     [Node] = ?config(gr_nodes, Config),
     {ok, RestPort} = rpc:call(Node, application, get_env,
         [?APP_Name, rest_port]),
     URL = str_utils:format("https://~s:~B/provider/test/check_my_ip",
         [utils:get_host(Node), RestPort]),
-    ?assertMatch({ok, _, _, _}, http_client:get(URL, [], <<>>, [insecure])),
-    hackney:stop(),
-    application:stop(ssl2).
+    ?assertMatch({ok, _, _, _}, http_client:get(URL, [], <<>>, [insecure])).
 
 dao_connection_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
@@ -50,9 +46,13 @@ dao_connection_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
+    application:start(ssl2),
+    hackney:start(),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
     timer:sleep(60000), % TODO add nagios to GR and delete sleep
     NewConfig.
 
 end_per_suite(Config) ->
+    hackney:stop(),
+    application:stop(ssl2),
     test_node_starter:clean_environment(Config).
