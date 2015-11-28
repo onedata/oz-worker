@@ -19,6 +19,7 @@
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([init_per_testcase/2, end_per_testcase/2]).
 -export([rest_api_connection_test/1, dao_connection_test/1]).
 
 %%%===================================================================
@@ -46,13 +47,22 @@ dao_connection_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(ssl2),
-    hackney:start(),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
     timer:sleep(60000), % TODO add nagios to GR and delete sleep
     NewConfig.
 
-end_per_suite(Config) ->
+init_per_testcase(rest_api_connection_test, Config) ->
+    application:start(ssl2),
+    hackney:start(),
+    Config;
+init_per_testcase(_, Config) ->
+    Config.
+
+end_per_testcase(rest_api_connection_test, Config) ->
     hackney:stop(),
-    application:stop(ssl2),
+    application:stop(ssl2);
+end_per_testcase(_, _Config) ->
+    ok.
+
+end_per_suite(Config) ->
     test_node_starter:clean_environment(Config).
