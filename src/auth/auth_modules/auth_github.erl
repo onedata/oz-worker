@@ -42,7 +42,7 @@ get_redirect_url(ConnectAccount) ->
             {<<"scope">>, <<"user,user:email">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
         ],
-        Params = gui_utils:proplist_to_url_params(ParamsProplist),
+        Params = http_utils:proplist_to_url_params(ParamsProplist),
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
@@ -71,9 +71,9 @@ validate_login() ->
             {<<"code">>, <<Code/binary>>}
         ],
         % Convert proplist to params string
-        Params = gui_utils:proplist_to_url_params(NewParamsProplist),
+        Params = http_utils:proplist_to_url_params(NewParamsProplist),
         % Send request to GitHub endpoint
-        {ok, Response} = gui_utils:https_post(access_token_endpoint(),
+        {ok, 200, _, Response} = http_client:post(access_token_endpoint(),
             [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}], Params),
 
         % Parse out received access token
@@ -82,21 +82,21 @@ validate_login() ->
         % Form user info request
         URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, JSON} = gui_utils:https_get(URL, [
+        {ok, 200, _, JSON} = http_client:get(URL, [
             {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>},
-            {<<"User-Agent">>, ?user_agent_name}
+            {<<"User-Agent">>, <<?user_agent_name>>}
         ]),
 
         % Form user email request
         URLEmail = <<(user_emails_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, JSONEmails} = gui_utils:https_get(URLEmail, [
+        {ok, 200, _, JSONEmails} = http_client:get(URLEmail, [
             {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>},
-            {<<"User-Agent">>, ?user_agent_name}
+            {<<"User-Agent">>, <<?user_agent_name>>}
         ]),
 
         % Parse received JSON
-        {struct, JSONProplist} = n2o_json:decode(JSON),
+        JSONProplist = json_utils:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = proplists:get_value(<<"id">>, JSONProplist, <<"">>),
@@ -158,12 +158,7 @@ user_emails_endpoint() ->
 %%--------------------------------------------------------------------
 -spec extract_emails(binary()) -> [binary()].
 extract_emails(JSON) ->
-    EmailsJSON =
-        case n2o_json:decode(JSON) of
-            {struct, Email} -> [{struct, Email}];
-            List when is_list(List) -> List
-        end,
     lists:map(
-        fun({struct, Email}) ->
+        fun(Email) ->
             proplists:get_value(<<"email">>, Email)
-        end, EmailsJSON).
+        end, json_utils:decode(JSON)).

@@ -112,7 +112,7 @@ modify(UserId, Proplist) ->
         end,
 
         AliasOccupied = fun(A) ->
-            UserIdStr = gui_str:to_list(UserId),
+            UserIdStr = str_utils:to_list(UserId),
             case get_user_doc({alias, A}) of
                 {ok, #db_document{uuid = UserIdStr}} ->
                     % DB returned the same user, so the
@@ -300,6 +300,8 @@ remove(UserId) ->
 
         op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew)
     end, Spaces),
+
+    auth_logic:invalidate_token({user_id, UserId}),
 
     dao_adapter:user_remove(UserId),
     op_channel_logic:user_removed(UserProviders, UserId),

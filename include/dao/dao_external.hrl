@@ -63,9 +63,10 @@
 -define(USER_BY_EMAIL_VIEW, #view_info{name = "user_by_email", db_name = ?USERS_DB_NAME, version = 1}).
 -define(USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_info{name = "user_by_connected_account_user_id", db_name = ?USERS_DB_NAME, version = 1}).
 -define(USER_BY_ALIAS_VIEW, #view_info{name = "user_by_alias", db_name = ?USERS_DB_NAME, version = 1}).
+-define(AUTH_BY_USER_ID_VIEW, #view_info{name = "auth_by_user_id", db_name = ?AUTH_DB_NAME, version = 1}).
 
 %% List of all used views :: [#view_info]
--define(VIEW_LIST, [?USER_BY_EMAIL_VIEW, ?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, ?USER_BY_ALIAS_VIEW]).
+-define(VIEW_LIST, [?USER_BY_EMAIL_VIEW, ?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, ?USER_BY_ALIAS_VIEW, ?AUTH_BY_USER_ID_VIEW]).
 
 %% Default database name
 -define(DEFAULT_DB, lists:nth(1, ?DB_LIST)).

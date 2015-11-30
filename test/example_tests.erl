@@ -43,9 +43,9 @@ teardown(_) ->
 
 mock_example() ->
     ExpectedAns = "<html></html>",
-    meck:new(ibrowse),
-    meck:expect(ibrowse, send_req, fun(_, _, _) -> ExpectedAns end),
-    ?assertEqual(ExpectedAns, ibrowse:send_req("url", [], get)).
+    meck:new(http_client),
+    meck:expect(http_client, get, fun(_, _) -> ExpectedAns end),
+    ?assertEqual(ExpectedAns, http_client:get("url", [])).
 
 %%%===================================================================
 %%% Internal functions

@@ -34,7 +34,8 @@ plt:
 	if [ $$? != 0 ]; then \
 	    dialyzer --build_plt --output_plt ${PLT} --apps kernel stdlib sasl erts \
 	        ssl tools runtime_tools crypto inets xmerl snmp public_key eunit \
-	        common_test test_server syntax_tools compiler edoc -r deps; \
+	        common_test test_server syntax_tools compiler edoc mnesia hipe \
+	        ssh webtool -r deps; \
 	fi; exit 0
 
 

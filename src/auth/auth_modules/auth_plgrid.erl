@@ -34,7 +34,7 @@
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 get_redirect_url(ConnectAccount) ->
     try
-        HostName = gui_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
+        HostName = http_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
         RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_logic:generate_state_token(?MODULE, ConnectAccount))/binary>>,
 
         ParamsProplist = [
@@ -53,11 +53,12 @@ get_redirect_url(ConnectAccount) ->
             {<<"openid.ext1.type.teams">>, <<"http://openid.plgrid.pl/userTeamsXML">>},
             {<<"openid.ext1.if_available">>, <<"dn1,dn2,dn3,teams">>}
         ],
-        Params = gui_utils:proplist_to_url_params(ParamsProplist),
+        Params = http_utils:proplist_to_url_params(ParamsProplist),
         {ok, <<(plgrid_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
-            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_NAME]),
+            ?error_stacktrace("Cannot get redirect URL for ~p. ~p:~p",
+                [?PROVIDER_NAME, Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -91,21 +92,20 @@ validate_login() ->
             fun(Key) ->
                 Value = case proplists:get_value(Key, ParamsProplist) of
                             undefined ->
-                                throw("Value for " ++ gui_str:to_list(Key) ++ " not found");
+                                throw("Value for " ++ str_utils:to_list(Key) ++ " not found");
                             Val -> Val
                         end,
                 {Key, Value}
             end, SignedArgs),
 
         % Create a POST request body
-        Params = gui_utils:proplist_to_url_params(NewParamsProplist),
+        Params = http_utils:proplist_to_url_params(NewParamsProplist),
         RequestBody = <<"openid.mode=check_authentication&", Params/binary>>,
 
         % Send validation request
-        {ok, "200", _, Response} = ibrowse:send_req(
-            binary_to_list(ReceivedEndpoint),
-            [{content_type, "application/x-www-form-urlencoded"}],
-            post, RequestBody, [{response_format, binary}]),
+        {ok, 200, _, Response} = http_client:post(ReceivedEndpoint,
+            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}],
+            RequestBody),
 
         % Check if server responded positively
         Response = <<"is_valid:true\n">>,
@@ -122,7 +122,7 @@ validate_login() ->
             end,
 
         % TODO Teams and DNs are unused
-        _Teams = parse_teams(gui_str:to_list(get_signed_param(<<"openid.ext1.value.teams">>, ParamsProplist, SignedArgs))),
+        _Teams = parse_teams(str_utils:to_list(get_signed_param(<<"openid.ext1.value.teams">>, ParamsProplist, SignedArgs))),
         DN1 = get_signed_param(<<"openid.ext1.value.dn1">>, ParamsProplist, SignedArgs),
         DN2 = get_signed_param(<<"openid.ext1.value.dn2">>, ParamsProplist, SignedArgs),
         DN3 = get_signed_param(<<"openid.ext1.value.dn3">>, ParamsProplist, SignedArgs),
@@ -158,10 +158,10 @@ validate_login() ->
 -spec plgrid_endpoint() -> binary().
 plgrid_endpoint() ->
     XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)),
-    {ok, XRDS} = gui_utils:https_get(XRDSEndpoint, [
+    {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, [
         {<<"Accept">>, <<"application/xrds+xml;level=1, */*">>},
         {<<"Connection">>, <<"close">>}
-    ]),
+    ], <<>>, [{follow_redirect, true}, {max_redirect, 5}]),
     discover_op_endpoint(XRDS).
 
 %%--------------------------------------------------------------------

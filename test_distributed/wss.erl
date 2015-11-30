@@ -29,7 +29,6 @@
 connect(Host, Port, Opts) ->
     process_flag(trap_exit, true),
     wss_handler:flush_errors(),
-    ssl:start(),
     case websocket_client:start_link("wss://" ++ Host ++ ":" ++ integer_to_list(Port) ++ "/oneprovider",
         wss_handler, [self()], Opts ++ [{reuse_sessions, false}]) of
         {ok, Socket} ->

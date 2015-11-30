@@ -18,7 +18,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([save_auth/1, remove_auth/1, exist_auth/1, get_auth/1]).
+-export([save_auth/1, remove_auth/1, exist_auth/1, get_auth/1,
+    get_auth_by_user_id/1]).
 
 %%%===================================================================
 %%% API
@@ -40,7 +41,7 @@
 save_auth(#auth{} = Auth) ->
     save_auth(#db_document{record = Auth});
 save_auth(#db_document{uuid = UUID} = AuthDoc) when not is_list(UUID) ->
-    save_auth(AuthDoc#db_document{uuid = utils:ensure_list(UUID)});
+    save_auth(AuthDoc#db_document{uuid = str_utils:to_list(UUID)});
 save_auth(#db_document{record = #auth{}} = AuthDoc) ->
     dao_external:set_db(?AUTH_DB_NAME),
     dao_records:save_record(AuthDoc).
@@ -55,7 +56,7 @@ save_auth(#db_document{record = #auth{}} = AuthDoc) ->
     ok | {error, any()} | no_return().
 remove_auth(AuthId) ->
     dao_external:set_db(?AUTH_DB_NAME),
-    dao_records:remove_record(utils:ensure_list(AuthId)).
+    dao_records:remove_record(str_utils:to_list(AuthId)).
 
 %%--------------------------------------------------------------------
 %% @doc Checks whether auth exists in DB.
@@ -67,7 +68,7 @@ remove_auth(AuthId) ->
     {ok, boolean()} | {error, any()}.
 exist_auth(AuthId) ->
     dao_external:set_db(?AUTH_DB_NAME),
-    dao_records:exist_record(utils:ensure_list(AuthId)).
+    dao_records:exist_record(str_utils:to_list(AuthId)).
 
 %%--------------------------------------------------------------------
 %% @doc Gets auth from DB.
@@ -82,4 +83,19 @@ exist_auth(AuthId) ->
 get_auth(AuthId) ->
     dao_external:set_db(?AUTH_DB_NAME),
     {ok, #db_document{record = #auth{}}} =
-        dao_records:get_record(utils:ensure_list(AuthId)).
+        dao_records:get_record(str_utils:to_list(AuthId)).
+
+%%--------------------------------------------------------------------
+%% @doc Gets auth from DB for a given user id.
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead
+%% (See {@link dao_worker:handle_call/3} for more details).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_auth_by_user_id(UserId :: binary()) -> {ok, [auth_doc()]} | no_return().
+get_auth_by_user_id(UserId) ->
+    {View, QueryArgs} =
+        {?AUTH_BY_USER_ID_VIEW, #view_query_args{keys =
+        [<<?RECORD_FIELD_BINARY_PREFIX, UserId/binary>>], include_docs = true}},
+
+    {ok, #view_result{rows = Rows}} = dao_records:list_records(View, QueryArgs),
+    {ok, [#db_document{record = #auth{}} = FDoc || #view_row{doc = FDoc} <- Rows]}.

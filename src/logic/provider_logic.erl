@@ -40,7 +40,7 @@
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = dao_helper:gen_uuid(),
-    BinProviderId = utils:ensure_binary(ProviderId),
+    BinProviderId = str_utils:to_binary(ProviderId),
     {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
     dao_adapter:save(#db_document{uuid = ProviderId, record =
     #provider{client_name = ClientName, urls = URLs,
@@ -64,7 +64,7 @@ modify(ProviderId, Data) ->
     ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
 
     ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint, client_name = ClientName},
-    dao_adapter:save(Doc#db_document{record = ProviderNew}),
+    Res = dao_adapter:save(Doc#db_document{record = ProviderNew}),
     ok.
 
 %%--------------------------------------------------------------------
@@ -132,29 +132,42 @@ remove(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Tests connection to given url.
+%% @end
 %%--------------------------------------------------------------------
--spec test_connection(ToCheck :: [{ServiceName :: binary(), Url :: binary()}]) ->
-    [{ServiceName :: binary(), Status :: ok | error}].
-test_connection([]) ->
-    [];
-test_connection([{<<"undefined">>, Url} | Rest]) ->
-    UrlString = binary_to_list(Url),
-    ConnStatus = case ibrowse:send_req(UrlString, [], get) of
-                     {ok, "200", _, _} -> ok;
+-spec test_connection(ToCheck :: any()) ->
+    {ok, [{ServiceName :: binary(), Status :: ok | error}]} | {error, bad_data}.
+test_connection(ToCheck) ->
+    test_connection(ToCheck, []).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Tests connection to given url.
+%% @end
+%%--------------------------------------------------------------------
+-spec test_connection(ToCheck :: any(),
+    Acc :: [{ServiceName :: binary(), Status :: ok | error}]) ->
+    {ok, [{ServiceName :: binary(), Status :: ok | error}]} | {error, bad_data}.
+test_connection([], Acc) ->
+    {ok, lists:reverse(Acc)};
+test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
+    ConnStatus = case http_client:get(Url, [], <<>>, [insecure]) of
+                     {ok, 200, _, _} -> ok;
                      _ -> error
                  end,
-    [{Url, ConnStatus} | test_connection(Rest)];
-test_connection([{ServiceName, Url} | Rest]) ->
-    UrlString = binary_to_list(Url),
-    ServiceNameString = binary_to_list(ServiceName),
-    ConnStatus = case ibrowse:send_req(UrlString, [], get) of
-                     {ok, "200", _, ServiceNameString} ->
+    test_connection(Rest, [{Url, ConnStatus} | Acc]);
+test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
+    ConnStatus = 
+        case http_client:get(Url, [], <<>>, [insecure]) of
+                     {ok, 200, _, ServiceName} ->
                          ok;
                      Error ->
-                         ?debug("Checking connection to ~p failed with error: ~n~p", [Url, Error]),
+                         ?debug("Checking connection to ~p failed with error: ~n~p",
+                             [Url, Error]),
                          error
                  end,
-    [{Url, ConnStatus} | test_connection(Rest)].
+    test_connection(Rest, [{Url, ConnStatus} | Acc]);
+test_connection(_, _) ->
+    {error, bad_data}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns provider id of provider that has been chosen
