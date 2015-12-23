@@ -10,9 +10,8 @@ import os
 import copy
 import subprocess
 import json
-
-from . import appmock, client, common, globalregistry, provider_ccm, \
-    provider_worker, docker, dns
+from . import appmock, client, common, globalregistry, cluster_manager, \
+    provider_worker, cluster_worker, docker, dns
 
 
 def default(key):
@@ -20,15 +19,16 @@ def default(key):
             'bin_am': '{0}/appmock'.format(os.getcwd()),
             'bin_gr': '{0}/globalregistry'.format(os.getcwd()),
             'bin_op_worker': '{0}/op_worker'.format(os.getcwd()),
-            'bin_op_ccm': '{0}/op_ccm'.format(os.getcwd()),
+            'bin_cluster_worker': '{0}/cluster_worker'.format(os.getcwd()),
+            'bin_cluster_manager': '{0}/cluster_manager'.format(os.getcwd()),
             'bin_oc': '{0}/oneclient'.format(os.getcwd()),
             'logdir': None}[key]
 
 
 def up(config_path, image=default('image'), bin_am=default('bin_am'),
-       bin_gr=default('bin_gr'), bin_op_ccm=default('bin_op_ccm'),
-       bin_op_worker=default('bin_op_worker'), bin_oc=default('bin_oc'),
-       logdir=default('logdir')):
+       bin_gr=default('bin_gr'), bin_cluster_manager=default('bin_cluster_manager'),
+       bin_op_worker=default('bin_op_worker'), bin_cluster_worker=default('bin_cluster_worker'),
+       bin_oc=default('bin_oc'), logdir=default('logdir')):
     config = common.parse_json_file(config_path)
     uid = common.generate_uid()
 
@@ -36,8 +36,9 @@ def up(config_path, image=default('image'), bin_am=default('bin_am'),
         'docker_ids': [],
         'gr_nodes': [],
         'gr_db_nodes': [],
-        'op_ccm_nodes': [],
+        'cluster_manager_nodes': [],
         'op_worker_nodes': [],
+        'cluster_worker_nodes': [],
         'appmock_nodes': [],
         'client_nodes': []
     }
@@ -68,15 +69,29 @@ def up(config_path, image=default('image'), bin_am=default('bin_am'),
 
     # Start provider cluster instances
     if 'provider_domains' in config:
-        # Start op_ccm instances
-        op_ccm_output = provider_ccm.up(image, bin_op_ccm, dns_server,
+        # Start cluster_manager instances
+        cluster_manager_output = cluster_manager.up(image, bin_cluster_manager, dns_server,
                                         uid, config_path, logdir)
-        common.merge(output, op_ccm_output)
+        common.merge(output, cluster_manager_output)
 
         # Start op_worker instances
-        op_worker_output = provider_worker.up(image, bin_op_worker, dns_server,
-                                              uid, config_path, logdir)
+        op_worker_output = provider_worker.up(image, bin_op_worker, dns_server, uid, config_path, logdir)
         common.merge(output, op_worker_output)
+        # Make sure OP domains are added to the dns server.
+        # Setting first arg to 'auto' will force the restart and this is needed
+        # so that dockers that start after can immediately see the domains.
+        dns.maybe_restart_with_configuration('auto', uid, output)
+
+    # Start provider cluster instances
+    if 'cluster_domains' in config:
+        # Start cluster_manager instances
+        cluster_manager_output = cluster_manager.up(image, bin_cluster_manager, dns_server,
+                                        uid, config_path, logdir, domains_name='cluster_domains')
+        common.merge(output, cluster_manager_output)
+
+        # Start op_worker instances
+        cluster_worker_output = cluster_worker.up(image, bin_cluster_worker, dns_server, uid, config_path, logdir)
+        common.merge(output, cluster_worker_output)
         # Make sure OP domains are added to the dns server.
         # Setting first arg to 'auto' will force the restart and this is needed
         # so that dockers that start after can immediately see the domains.
