@@ -46,8 +46,8 @@ start(_StartType, _StartArgs) ->
     dns_query_handler:load_config(),
     test_node_starter:maybe_start_cover(),
     activate_white_lists(),
-    case {start_rest(), start_op_channel(), start_n2o(), start_redirector()} of
-        {ok, ok, ok, ok} ->
+    case {start_rest(), start_op_channel(), start_n2o(), start_redirector(), application:start(cluster_worker, permanent)} of
+        {ok, ok, ok, ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
                     case start_dns() of
@@ -59,14 +59,16 @@ start(_StartType, _StartArgs) ->
                 Error ->
                     Error
             end;
-        {{error, Reason}, _, _, _} ->
+        {{error, Reason}, _, _, _, _} ->
             {error, {cannot_start_rest, Reason}};
-        {_, {error, Reason}, _, _} ->
+        {_, {error, Reason}, _, _, _} ->
             {error, {cannot_start_op_channel, Reason}};
-        {_, _, {error, Reason}, _} ->
+        {_, _, {error, Reason}, _, _} ->
             {error, {cannot_start_gui, Reason}};
-        {_, _, _, {error, Reason}} ->
-            {error, {cannot_start_redirector, Reason}}
+        {_, _, _, {error, Reason}, _} ->
+            {error, {cannot_start_redirector, Reason}};
+        {_, _, _, _, {error, Reason}} ->
+            {error, {cannot_start_worker_sup, Reason}}
     end.
 
 %%--------------------------------------------------------------------

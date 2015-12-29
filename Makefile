@@ -34,6 +34,12 @@ generate: deps compile
 	@./rebar generate
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
 
+test_rel: generate cm_rel
+
+cm_rel:
+	ln -sf deps/cluster_worker/cluster_manager/
+	make -C cluster_manager/ rel
+
 clean:
 	@./rebar clean
 
@@ -83,6 +89,7 @@ rel: generate
 
 relclean:
 	rm -rf rel/globalregistry
+	rm -rf cluster_manager/rel/cluster_manager
 
 rpm: rel
 	make -C onepanel rel CONFIG=config/globalregistry.config

@@ -73,7 +73,10 @@ init([]) ->
     OpChannel = {?OpChannel, {op_channel, start_link, []},
         Restart, Shutdown, Type, [op_channel]},
 
-    {ok, {SupFlags, [Dao, OpChannel]}}.
+    Workers = cluster_worker_specs:main_worker_sup_spec(),
+
+    {ok, {SupFlags, [OpChannel, Workers]}}.
+%%    {ok, {SupFlags, [Dao, OpChannel]}}.
 
 %%%===================================================================
 %%% Internal functions
