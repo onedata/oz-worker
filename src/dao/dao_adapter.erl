@@ -10,7 +10,8 @@
 -module(dao_adapter).
 -author("Konrad Zemek").
 
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 
 
 -type dao_module() :: dao_users | dao_groups | dao_spaces |
@@ -74,7 +75,7 @@ provider_exists(Key) ->
 -spec save(Doc :: dao_record()) -> Id :: binary() | no_return().
 save(#db_document{} = Doc) ->
     {ok, StrId} = save_doc(Doc),
-    binary:list_to_bin(StrId);
+    StrId;
 save(Resource) ->
     save(#db_document{record = Resource}).
 
@@ -135,7 +136,7 @@ space_doc(Key) ->
 %%--------------------------------------------------------------------
 -spec user_doc(Key :: term()) -> user_doc() | no_return().
 user_doc(Key) ->
-    #db_document{record = #user{}} = UserDoc = get_doc(Key, dao_users, get_user),
+    #db_document{record = #onedata_user{}} = UserDoc = get_doc(Key, dao_users, get_user),
     UserDoc.
 
 %%--------------------------------------------------------------------
@@ -206,11 +207,20 @@ provider_remove(Key) ->
 %%--------------------------------------------------------------------
 -spec exists(Key :: term(), Module :: dao_module(), Method :: atom()) ->
     boolean() | no_return().
-exists(Key, Module, Method) when is_binary(Key) ->
-    exists(binary_to_list(Key), Module, Method);
-exists(Key, Module, Method) ->
-    {ok, Exists} = dao_lib:apply(Module, Method, [Key], 1),
-    Exists.
+exists(Key, Module, Method) when is_list(Key) ->
+    exists(list_to_binary(Key), Module, Method);
+exists(Key, dao_providers, _) ->
+    provider:exists(Key);
+exists(Key, dao_groups, _) ->
+    user_group:exists(Key);
+exists(Key, dao_spaces, _) ->
+    space:exists(Key);
+exists(Key, dao_tokens, _) ->
+    token:exists(Key);
+exists(Key, dao_users, _) ->
+    onedata_user:exists(Key);
+exists(Key, dao_auth, _) ->
+    onedata_auth:exists(Key).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -218,14 +228,29 @@ exists(Key, Module, Method) ->
 %%--------------------------------------------------------------------
 -spec save_doc(Doc :: db_doc()) ->
     {ok, uuid()} | {error, any()}.
-save_doc(#db_document{record = #space{}} = Doc) ->
-    dao_lib:apply(dao_spaces, save_space, [Doc], 1);
-save_doc(#db_document{record = #user{}} = Doc) ->
-    dao_lib:apply(dao_users, save_user, [Doc], 1);
-save_doc(#db_document{record = #user_group{}} = Doc) ->
-    dao_lib:apply(dao_groups, save_group, [Doc], 1);
-save_doc(#db_document{record = #provider{}} = Doc) ->
-    dao_lib:apply(dao_providers, save_provider, [Doc], 1).
+save_doc(#db_document{record = #space{} = Value, uuid = ID} = Doc) ->
+    Key = case ID of [] -> undefined; _ -> list_to_binary(ID) end,
+    space:save(#document{value = Value, key = Key});
+
+save_doc(#db_document{record = #onedata_user{} = Value, uuid = ID} = Doc) ->
+    Key = case ID of [] -> undefined; _ -> list_to_binary(ID) end,
+    onedata_user:save(#document{value = Value, key = Key});
+
+save_doc(#db_document{record = #user_group{} = Value, uuid = ID} = Doc) ->
+    Key = case ID of [] -> undefined; _ -> list_to_binary(ID) end,
+    user_group:save(#document{value = Value, key = Key});
+
+save_doc(#db_document{record = #provider{} = Value, uuid = ID} = Doc) ->
+    Key = case ID of [] -> undefined; _ -> list_to_binary(ID) end,
+    provider:save(#document{value = Value, key = Key});
+
+save_doc(#db_document{record = #token{} = Value, uuid = ID} = Doc) ->
+    Key = case ID of [] -> undefined; _ -> list_to_binary(ID) end,
+    token:save(#document{value = Value, key = Key});
+
+save_doc(#db_document{record = #onedata_auth{} = Value, uuid = ID} = Doc) ->
+    Key = case ID of [] -> undefined; _ -> list_to_binary(ID) end,
+    onedata_auth:save(#document{value = Value, key = Key}).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -235,11 +260,27 @@ save_doc(#db_document{record = #provider{}} = Doc) ->
 %%--------------------------------------------------------------------
 -spec get_doc(Key :: term(), Module :: dao_module(), Method :: atom()) ->
     db_doc() | no_return().
-get_doc(Key, Module, Method) when is_binary(Key) ->
-    get_doc(binary_to_list(Key), Module, Method);
-get_doc(Key, Module, Method) ->
-    {ok, #db_document{} = Doc} = dao_lib:apply(Module, Method, [Key], 1),
-    Doc.
+get_doc(Key, Module, Method) when is_list(Key) ->
+    get_doc(list_to_binary(Key), Module, Method);
+get_doc(Key, dao_providers, _) ->
+    {ok, #document{value = Value, key = Key}} = provider:get(Key),
+    #db_document{record = Value, uuid = binary_to_list(Key)};
+get_doc(Key, dao_groups, _) ->
+    {ok, #document{value = Value, key = Key}} = user_group:get(Key),
+    #db_document{record = Value, uuid = binary_to_list(Key)};
+get_doc(Key, dao_spaces, _) ->
+    {ok, #document{value = Value, key = Key}} = space:get(Key),
+    #db_document{record = Value, uuid = binary_to_list(Key)};
+get_doc(Key, dao_tokens, _) ->
+    {ok, #document{value = Value, key = Key}} = token:get(Key),
+    #db_document{record = Value, uuid = binary_to_list(Key)};
+get_doc(Key, dao_users, _) ->
+    {ok, #document{value = Value, key = Key}} = onedata_user:get(Key),
+    #db_document{record = Value, uuid = binary_to_list(Key)};
+get_doc(Key, dao_auth, _) ->
+    {ok, #document{value = Value, key = Key}} = onedata_auth:get(Key),
+    #db_document{record = Value, uuid = binary_to_list(Key)}.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -249,8 +290,23 @@ get_doc(Key, Module, Method) ->
 %%--------------------------------------------------------------------
 -spec remove(Key :: term(), Module :: dao_module(), Method :: atom()) ->
     true | no_return().
-remove(Key, Module, Method) when is_binary(Key) ->
-    remove(binary_to_list(Key), Module, Method);
-remove(Key, Module, Method) ->
-    ok = dao_lib:apply(Module, Method, [Key], 1),
+remove(Key, Module, Method) when is_list(Key) ->
+    remove(list_to_binary(Key), Module, Method);
+remove(Key, dao_providers, _) ->
+    ok = provider:delete(Key),
+    true;
+remove(Key, dao_groups, _) ->
+    ok = user_group:delete(Key),
+    true;
+remove(Key, dao_spaces, _) ->
+    ok = space:delete(Key),
+    true;
+remove(Key, dao_tokens, _) ->
+    ok = token:delete(Key),
+    true;
+remove(Key, dao_users, _) ->
+    ok = onedata_user:delete(Key),
+    true;
+remove(Key, dao_auth, _) ->
+    ok = onedata_auth:delete(Key),
     true.

@@ -12,7 +12,8 @@
 -module(provider_logic).
 -author("Konrad Zemek").
 
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include("registered_names.hrl").
 
 -include_lib("dao/include/common.hrl").
@@ -64,7 +65,7 @@ modify(ProviderId, Data) ->
     ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
 
     ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint, client_name = ClientName},
-    Res = dao_adapter:save(Doc#db_document{record = ProviderNew}),
+    dao_adapter:save(Doc#db_document{record = ProviderNew}),
     ok.
 
 %%--------------------------------------------------------------------

@@ -12,7 +12,8 @@
 -module(group_logic).
 -author("Konrad Zemek").
 
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 
 %% API
 -export([exists/1, has_user/2, has_privilege/3]).
@@ -80,13 +81,13 @@ create(UserId, Name) ->
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
 
     UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #user{groups = Groups} = User} = UserDoc,
+    #db_document{record = #onedata_user{groups = Groups} = User} = UserDoc,
 
     Privileges = privileges:group_admin(),
     Group = #user_group{name = Name, users = [{UserId, Privileges}]},
     GroupId = dao_adapter:save(Group),
 
-    UserNew = User#user{groups = [GroupId | Groups]},
+    UserNew = User#onedata_user{groups = [GroupId | Groups]},
     dao_adapter:save(UserDoc#db_document{record = UserNew}),
 
     op_channel_logic:user_modified(UserProviders, UserId, UserNew),
@@ -130,8 +131,8 @@ join(UserId, Macaroon) ->
             GroupNew = Group#user_group{users = [{UserId, Privileges} | Users]},
 
             UserDoc = dao_adapter:user_doc(UserId),
-            #db_document{record = #user{groups = Groups} = User} = UserDoc,
-            UserNew = User#user{groups = [GroupId | Groups]},
+            #db_document{record = #onedata_user{groups = Groups} = User} = UserDoc,
+            UserNew = User#onedata_user{groups = [GroupId | Groups]},
 
             dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
             dao_adapter:save(UserDoc#db_document{record = UserNew}),
@@ -245,8 +246,8 @@ remove(GroupId) ->
 
     lists:foreach(fun({UserId, _}) ->
         UserDoc = dao_adapter:user_doc(UserId),
-        #db_document{record = #user{groups = UGroups} = User} = UserDoc,
-        NewUser = User#user{groups = lists:delete(GroupId, UGroups)},
+        #db_document{record = #onedata_user{groups = UGroups} = User} = UserDoc,
+        NewUser = User#onedata_user{groups = lists:delete(GroupId, UGroups)},
         dao_adapter:save(UserDoc#db_document{record = NewUser}),
 
         op_channel_logic:user_modified(GroupProviders, UserId, NewUser)
@@ -279,8 +280,8 @@ remove_user(GroupId, UserId) ->
     {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
 
     UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #user{groups = Groups} = User} = UserDoc,
-    UserNew = User#user{groups = lists:delete(GroupId, Groups)},
+    #db_document{record = #onedata_user{groups = Groups} = User} = UserDoc,
+    UserNew = User#onedata_user{groups = lists:delete(GroupId, Groups)},
 
     GroupDoc = dao_adapter:group_doc(GroupId),
     #db_document{record = #user_group{users = Users} = Group} = GroupDoc,

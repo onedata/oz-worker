@@ -12,9 +12,8 @@
 -module(space_logic).
 -author("Konrad Zemek").
 
--include("dao/dao_types.hrl").
-
--include_lib("ctool/include/logging.hrl").
+-include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
@@ -91,7 +90,7 @@ has_effective_user(SpaceId, UserId) ->
                     case user_logic:exists(UserId) of
                         false -> false;
                         true ->
-                            #user{groups = UserGroups} = dao_adapter:user(UserId),
+                            #onedata_user{groups = UserGroups} = dao_adapter:user(UserId),
                             SpaceGroupsSet = ordsets:from_list([GroupId || {GroupId, _} <- SpaceGroups]),
                             UserGroupsSet = ordsets:from_list(UserGroups),
                             not ordsets:is_disjoint(SpaceGroupsSet, UserGroupsSet)
@@ -203,8 +202,8 @@ join({user, UserId}, Macaroon) ->
             SpaceNew = Space#space{users = [{UserId, Privileges} | Users]},
 
             UserDoc = dao_adapter:user_doc(UserId),
-            #db_document{record = #user{spaces = Spaces} = User} = UserDoc,
-            UserNew = User#user{spaces = [SpaceId | Spaces]},
+            #db_document{record = #onedata_user{spaces = Spaces} = User} = UserDoc,
+            UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
 
             dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
             dao_adapter:save(UserDoc#db_document{record = UserNew}),
@@ -413,8 +412,8 @@ remove(SpaceId) ->
 
     lists:foreach(fun({UserId, _}) ->
         UserDoc = dao_adapter:user_doc(UserId),
-        #db_document{record = #user{spaces = USpaces} = User} = UserDoc,
-        NewUser = User#user{spaces = lists:delete(SpaceId, USpaces)},
+        #db_document{record = #onedata_user{spaces = USpaces} = User} = UserDoc,
+        NewUser = User#onedata_user{spaces = lists:delete(SpaceId, USpaces)},
         dao_adapter:save(UserDoc#db_document{record = NewUser}),
         {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
         op_channel_logic:user_modified(UserProviders, UserId, NewUser)
@@ -448,8 +447,8 @@ remove_user(SpaceId, UserId) ->
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
 
     UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #user{spaces = Spaces} = User} = UserDoc,
-    UserNew = User#user{spaces = lists:delete(SpaceId, Spaces)},
+    #db_document{record = #onedata_user{spaces = Spaces} = User} = UserDoc,
+    UserNew = User#onedata_user{spaces = lists:delete(SpaceId, Spaces)},
 
     SpaceDoc = dao_adapter:space_doc(SpaceId),
     #db_document{record = #space{users = Users, providers = SpaceProviders} = Space} = SpaceDoc,
@@ -519,13 +518,12 @@ remove_provider(SpaceId, ProviderId) ->
     {ok, SpaceId :: binary()}.
 create_with_provider({user, UserId}, Name, Providers, Size) ->
     UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #user{spaces = Spaces} = User} = UserDoc,
-
+    #db_document{record = #onedata_user{spaces = Spaces} = User} = UserDoc,
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, size = Size, providers = Providers, users = [{UserId, Privileges}]},
     SpaceId = dao_adapter:save(Space),
 
-    UserNew = User#user{spaces = [SpaceId | Spaces]},
+    UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
     dao_adapter:save(UserDoc#db_document{record = UserNew}),
 
     add_space_to_providers(SpaceId, Providers),
@@ -593,7 +591,7 @@ cleanup(SpaceId) ->
 -spec get_effective_privileges(SpaceId :: binary(), UserId :: binary()) ->
     {ok, ordsets:ordset(privileges:space_privilege())}.
 get_effective_privileges(SpaceId, UserId) ->
-    #user{groups = UGroups} = dao_adapter:user(UserId),
+    #onedata_user{groups = UGroups} = dao_adapter:user(UserId),
     #space{users = UserTuples, groups = SGroupTuples} = dao_adapter:space(SpaceId),
 
     UserGroups = sets:from_list(UGroups),

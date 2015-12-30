@@ -10,7 +10,7 @@
 -module(user_rest_module).
 -author("Konrad Zemek").
 
--include("dao/dao_users.hrl").
+-include("datastore/datastore_types.hrl").
 -include("handlers/rest_handler.hrl").
 
 -include_lib("ctool/include/logging.hrl").
@@ -106,7 +106,7 @@ resource_exists(_, _, Req) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(user, post, _UserId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    {ok, _} = user_logic:create(#user{name = Name}),
+    {ok, _} = user_logic:create(#onedata_user{name = Name}),
     {true, Req};
 accept_resource(user, patch, UserId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),

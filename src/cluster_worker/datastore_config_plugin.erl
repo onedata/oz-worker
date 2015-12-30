@@ -25,4 +25,10 @@
 %%--------------------------------------------------------------------
 -spec models() -> Models :: [model_behaviour:model_type()].
 models() -> [
+  onedata_auth,
+  onedata_user,
+  provider,
+  space,
+  token,
+  user_group
 ].

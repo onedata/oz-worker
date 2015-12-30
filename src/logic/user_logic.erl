@@ -13,7 +13,8 @@
 -author("Konrad Zemek").
 
 -include_lib("ctool/include/logging.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
@@ -30,7 +31,7 @@
 %% Throws exception when call to dao fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create(User :: #user{}) ->
+-spec create(User :: #onedata_user{}) ->
     {ok, UserId :: binary()}.
 create(User) ->
     UserId = dao_adapter:save(User),
@@ -41,10 +42,10 @@ create(User) ->
 %%--------------------------------------------------------------------
 -spec get_user(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
-    {ok, #user{}} | {error, any()}.
+    {ok, #onedata_user{}} | {error, any()}.
 get_user(Key) ->
     try
-        {ok, #db_document{record = #user{} = User}} = get_user_doc(Key),
+        {ok, #db_document{record = #onedata_user{} = User}} = get_user_doc(Key),
         {ok, User}
     catch
         T:M ->
@@ -59,7 +60,7 @@ get_user(Key) ->
     {ok, #db_document{}} | {error, any()}.
 get_user_doc(Key) ->
     try
-        #db_document{record = #user{}} = UserDoc = dao_adapter:user_doc(Key),
+        #db_document{record = #onedata_user{}} = UserDoc = dao_adapter:user_doc(Key),
         {ok, UserDoc}
     catch
         T:M ->
@@ -78,7 +79,7 @@ modify(UserId, Proplist) ->
     try
         {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
         #db_document{record = User} = Doc = dao_adapter:user_doc(UserId),
-        #user{
+        #onedata_user{
             name = Name,
             alias = Alias,
             email_list = Emails,
@@ -153,7 +154,7 @@ modify(UserId, Proplist) ->
                 % Alias not allowed, return error
                 {error, Reason};
             _ ->
-                NewUser = #user{
+                NewUser = #onedata_user{
                     name = proplists:get_value(name, Proplist, Name),
                     alias = SetAlias,
                     email_list = proplists:get_value(email_list, Proplist, Emails),
@@ -183,7 +184,7 @@ modify(UserId, Proplist) ->
                             _:user_duplicated ->
                                 % Alias is duplicated, revert user to initial state and leave the alias blank
                                 remove(UserId),
-                                dao_adapter:save(Doc#db_document{record = #user{alias = ?EMPTY_ALIAS}}),
+                                dao_adapter:save(Doc#db_document{record = #onedata_user{alias = ?EMPTY_ALIAS}}),
                                 {error, alias_conflict}
                         end
                 end
@@ -210,7 +211,7 @@ merge(_UserId, _Macaroon) ->
 -spec get_data(UserId :: binary()) ->
     {ok, [proplists:property()]}.
 get_data(UserId) ->
-    #user{name = Name} = dao_adapter:user(UserId),
+    #onedata_user{name = Name} = dao_adapter:user(UserId),
     {ok, [
         {userId, UserId},
         {name, Name}
@@ -241,7 +242,7 @@ get_spaces(UserId) ->
 -spec get_groups(UserId :: binary()) ->
     {ok, [proplists:property()]}.
 get_groups(UserId) ->
-    #user{groups = Groups} = dao_adapter:user(UserId),
+    #onedata_user{groups = Groups} = dao_adapter:user(UserId),
     {ok, [{groups, Groups}]}.
 
 %%--------------------------------------------------------------------
@@ -281,7 +282,7 @@ exists(Key) ->
     true.
 remove(UserId) ->
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-    #user{groups = Groups, spaces = Spaces} = dao_adapter:user(UserId),
+    #onedata_user{groups = Groups, spaces = Spaces} = dao_adapter:user(UserId),
 
     lists:foreach(fun(GroupId) ->
         GroupDoc = dao_adapter:group_doc(GroupId),
@@ -337,7 +338,7 @@ set_default_space(UserId, SpaceId) ->
     case ordsets:is_element(SpaceId, AllUserSpaces) of
         false -> false;
         true ->
-            UpdatedUser = User#user{default_space = SpaceId},
+            UpdatedUser = User#onedata_user{default_space = SpaceId},
             dao_adapter:save(Doc#db_document{record = UpdatedUser}),
             op_channel_logic:user_modified(UserProviders, UserId, UpdatedUser),
             true
@@ -356,8 +357,8 @@ set_default_space(UserId, SpaceId) ->
 %%--------------------------------------------------------------------
 -spec get_all_spaces(Doc :: db_doc()) ->
     ordsets:ordset(SpaceId :: binary()).
-get_all_spaces(#db_document{record = #user{} = User}) ->
-    #user{spaces = UserSpaces, groups = Groups} = User,
+get_all_spaces(#db_document{record = #onedata_user{} = User}) ->
+    #onedata_user{spaces = UserSpaces, groups = Groups} = User,
 
     UserSpacesSet = ordsets:from_list(UserSpaces),
     GroupSpacesSets = lists:map(
@@ -380,14 +381,14 @@ get_all_spaces(#db_document{record = #user{} = User}) ->
 -spec effective_default_space(AllUserSpaces :: ordsets:ordset(binary()),
     UserDoc :: db_doc()) ->
     EffectiveDefaultSpaceId :: binary() | undefined.
-effective_default_space(_, #db_document{record = #user{default_space = undefined}}) ->
+effective_default_space(_, #db_document{record = #onedata_user{default_space = undefined}}) ->
     undefined;
 effective_default_space(AllUserSpaces, #db_document{} = UserDoc) ->
-    #db_document{record = #user{default_space = DefaultSpaceId} = User} = UserDoc,
+    #db_document{record = #onedata_user{default_space = DefaultSpaceId} = User} = UserDoc,
     case ordsets:is_element(DefaultSpaceId, AllUserSpaces) of
         true -> DefaultSpaceId;
         false ->
-            UserNew = User#user{default_space = undefined},
+            UserNew = User#onedata_user{default_space = undefined},
             dao_adapter:save(UserDoc#db_document{record = UserNew}),
             undefined
     end.

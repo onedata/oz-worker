@@ -10,7 +10,7 @@
 %%%-------------------------------------------------------------------
 -module(op_channel_logic).
 
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("prproto/include/gr_messages.hrl").
@@ -89,13 +89,13 @@ space_removed(ProviderIds, SpaceId) ->
 %%--------------------------------------------------------------------
 -spec user_modified(ProviderIds :: [binary()], UserId :: binary(),
     User :: user_info()) -> ok.
-user_modified(ProviderIds, UserId, #user{default_space = undefined,
+user_modified(ProviderIds, UserId, #onedata_user{default_space = undefined,
     spaces = Spaces, groups = Groups}) ->
     push(ProviderIds, ?PROTOCOL_VERSION, ?ENCODING_MODULE, #'UserModified'{
         id = UserId, spaces = Spaces, groups = Groups
     });
 
-user_modified(ProviderIds, UserId, #user{default_space = DefaultSpace,
+user_modified(ProviderIds, UserId, #onedata_user{default_space = DefaultSpace,
     spaces = Spaces, groups = Groups}) ->
     push(ProviderIds, ?PROTOCOL_VERSION, ?ENCODING_MODULE,
         #'UserModified'{id = UserId, spaces = [DefaultSpace |
