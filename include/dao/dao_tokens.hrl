@@ -16,7 +16,8 @@
 -record(token, {
     secret :: binary(),
     resource :: atom(),
-    resource_id :: binary()
+    resource_id :: binary(),
+    issuer :: rest_handler:client()
 }).
 
 -endif.

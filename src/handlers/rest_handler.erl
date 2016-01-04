@@ -21,6 +21,9 @@
     accept_resource_json/2, accept_resource_form/2, provide_resource/2,
     rest_init/2, forbidden/2, resource_exists/2, requests_effective_state/1]).
 
+-type client() :: #client{}.
+-export_type([client/0]).
+
 %%%===================================================================
 %%% API
 %%%===================================================================

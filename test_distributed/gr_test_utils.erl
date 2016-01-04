@@ -12,6 +12,7 @@
 -module(gr_test_utils).
 
 -include_lib("ctool/include/test/test_utils.hrl").
+-include("handlers/rest_handler.hrl").
 -include("dao/dao_users.hrl").
 
 %% API
@@ -130,7 +131,7 @@ join_group(Config, UserId, GroupId) ->
     try
         [Node] = ?config(gr_nodes, Config),
         rpc:call(Node, erlang, apply, [fun() ->
-            {ok, Token} = token_logic:create(group_invite_token, {group, GroupId}),
+            {ok, Token} = token_logic:create(#client{type = user, id = UserId}, group_invite_token, {group, GroupId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
             {ok, GroupId} = group_logic:join(UserId, Macaroon)
         end, []]),
@@ -164,7 +165,7 @@ join_space(Config, {group, GroupId}, SpaceId) ->
     try
         [Node] = ?config(gr_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
-            {ok, Token} = token_logic:create(space_invite_group_token, {space, SpaceId}),
+            {ok, Token} = token_logic:create(#client{type = provider}, space_invite_group_token, {space, SpaceId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
             space_logic:join({group, GroupId}, Macaroon)
         end, []]),
@@ -184,7 +185,7 @@ support_space(Config, ProviderId, SpaceId, Size) ->
     try
         [Node] = ?config(gr_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
-            {ok, Token} = token_logic:create(space_support_token, {space, SpaceId}),
+            {ok, Token} = token_logic:create(#client{type = provider}, space_support_token, {space, SpaceId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
             space_logic:support(ProviderId, Macaroon, Size)
         end, []]),
