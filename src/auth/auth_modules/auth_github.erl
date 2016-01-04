@@ -14,7 +14,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
 
 %% Used in header required by GitHub (probably for statistical purposes)
 -define(user_agent_name, "One Data").

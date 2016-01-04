@@ -14,7 +14,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
 
 -define(PROVIDER_NAME, google).
 

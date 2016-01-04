@@ -13,7 +13,7 @@
 -define(DATASTORE_TYPES_HRL, 1).
 
 -include("datastore/gr_datastore_models_def.hrl").
--include_lib("dao/include/common.hrl").
+-include_lib("dao/include/common.hrl"). %todo: remove
 
 
 -type uuid() :: string(). %% Pattern: "^[0-9a-f]+$"

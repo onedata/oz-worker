@@ -33,7 +33,7 @@
 -spec exists(GroupId :: binary()) ->
     boolean().
 exists(GroupId) ->
-    dao_adapter:group_exists(GroupId).
+    user_group:exists(GroupId).
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether the user identified by UserId is a member of the group.
@@ -47,7 +47,7 @@ has_user(GroupId, UserId) ->
     case exists(GroupId) of
         false -> false;
         true ->
-            #user_group{users = Users} = dao_adapter:group(GroupId),
+            {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
             lists:keymember(UserId, 1, Users)
     end.
 
@@ -65,7 +65,7 @@ has_privilege(GroupId, UserId, Privilege) ->
     case has_user(GroupId, UserId) of
         false -> false;
         true ->
-            #user_group{users = Users} = dao_adapter:group(GroupId),
+            {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
             {_, Privileges} = lists:keyfind(UserId, 1, Users),
             lists:member(Privilege, Privileges)
     end.
@@ -80,15 +80,15 @@ has_privilege(GroupId, UserId, Privilege) ->
 create(UserId, Name) ->
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
 
-    UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #onedata_user{groups = Groups} = User} = UserDoc,
+    {ok, UserDoc} = onedata_user:get(UserId),
+    #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
 
     Privileges = privileges:group_admin(),
     Group = #user_group{name = Name, users = [{UserId, Privileges}]},
-    GroupId = dao_adapter:save(Group),
+    {ok, GroupId} = user_group:save(#document{value = Group}),
 
     UserNew = User#onedata_user{groups = [GroupId | Groups]},
-    dao_adapter:save(UserDoc#db_document{record = UserNew}),
+    onedata_user:save(UserDoc#document{value = UserNew}),
 
     op_channel_logic:user_modified(UserProviders, UserId, UserNew),
     {ok, GroupId}.
@@ -103,10 +103,10 @@ create(UserId, Name) ->
 modify(GroupId, Name) ->
     {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
 
-    Doc = dao_adapter:group_doc(GroupId),
-    #db_document{record = #user_group{} = Group} = Doc,
+    {ok, Doc} = user_group:get(GroupId),
+    #document{value = #user_group{} = Group} = Doc,
     GroupNew = Group#user_group{name = Name},
-    dao_adapter:save(Doc#db_document{record = GroupNew}),
+    user_group:save(Doc#document{value = GroupNew}),
 
     op_channel_logic:group_modified(GroupProviders, GroupId, GroupNew),
     ok.
@@ -126,16 +126,16 @@ join(UserId, Macaroon) ->
         true -> ok;
         false ->
             Privileges = privileges:group_user(),
-            GroupDoc = dao_adapter:group_doc(GroupId),
-            #db_document{record = #user_group{users = Users} = Group} = GroupDoc,
+            {ok, GroupDoc} = user_group:get(GroupId),
+            #document{value = #user_group{users = Users} = Group} = GroupDoc,
             GroupNew = Group#user_group{users = [{UserId, Privileges} | Users]},
 
-            UserDoc = dao_adapter:user_doc(UserId),
-            #db_document{record = #onedata_user{groups = Groups} = User} = UserDoc,
+            {ok, UserDoc} = onedata_user:get(UserId),
+            #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
             UserNew = User#onedata_user{groups = [GroupId | Groups]},
 
-            dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
-            dao_adapter:save(UserDoc#db_document{record = UserNew}),
+            user_group:save(GroupDoc#document{value = GroupNew}),
+            onedata_user:save(UserDoc#document{value = UserNew}),
 
             op_channel_logic:user_modified(UserProviders, UserId, UserNew)
     end,
@@ -150,11 +150,11 @@ join(UserId, Macaroon) ->
     Privileges :: [privileges:group_privilege()]) ->
     ok.
 set_privileges(GroupId, UserId, Privileges) ->
-    Doc = dao_adapter:group_doc(GroupId),
-    #db_document{record = #user_group{users = Users} = Group} = Doc,
+    {ok, Doc} = user_group:get(GroupId),
+    #document{value = #user_group{users = Users} = Group} = Doc,
     UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, Privileges}),
     GroupNew = Group#user_group{users = UsersNew},
-    dao_adapter:save(Doc#db_document{record = GroupNew}),
+    user_group:save(Doc#document{value = GroupNew}),
     ok.
 
 %%--------------------------------------------------------------------
@@ -165,7 +165,7 @@ set_privileges(GroupId, UserId, Privileges) ->
 -spec get_data(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_data(GroupId) ->
-    #user_group{name = Name} = dao_adapter:group(GroupId),
+    {ok, #document{value = #user_group{name = Name}}} = user_group:get(GroupId),
     {ok, [
         {groupId, GroupId},
         {name, Name}
@@ -179,7 +179,7 @@ get_data(GroupId) ->
 -spec get_users(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_users(GroupId) ->
-    #user_group{users = UserTuples} = dao_adapter:group(GroupId),
+    {ok, #document{value = #user_group{users = UserTuples}}} = user_group:get(GroupId),
     {Users, _} = lists:unzip(UserTuples),
     {ok, [{users, Users}]}.
 
@@ -191,7 +191,7 @@ get_users(GroupId) ->
 -spec get_spaces(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_spaces(GroupId) ->
-    #user_group{spaces = Spaces} = dao_adapter:group(GroupId),
+    {ok, #document{value = #user_group{spaces = Spaces}}} = user_group:get(GroupId),
     {ok, [{spaces, Spaces}]}.
 
 %%--------------------------------------------------------------------
@@ -202,9 +202,9 @@ get_spaces(GroupId) ->
 -spec get_providers(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_providers(GroupId) ->
-    #db_document{record = #user_group{spaces = Spaces}} = dao_adapter:group_doc(GroupId),
+    {ok, #document{value = #user_group{spaces = Spaces}}} = user_group:get(GroupId),
     GroupProviders = lists:foldl(fun(Space, Providers) ->
-        #space{providers = SpaceProviders} = dao_adapter:space(Space),
+        {ok, #document{value = #space{providers = SpaceProviders}}} = space:get(Space),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)
     end, ordsets:new(), Spaces),
     {ok, [{providers, GroupProviders}]}.
@@ -228,7 +228,7 @@ get_user(_GroupId, UserId) ->
 -spec get_privileges(GroupId :: binary(), UserId :: binary()) ->
     {ok, [privileges:group_privilege()]}.
 get_privileges(GroupId, UserId) ->
-    #user_group{users = UserTuples} = dao_adapter:group(GroupId),
+    {ok, #document{value = #user_group{users = UserTuples}}} = user_group:get(GroupId),
     {_, Privileges} = lists:keyfind(UserId, 1, UserTuples),
     {ok, Privileges}.
 
@@ -241,23 +241,22 @@ get_privileges(GroupId, UserId) ->
     true.
 remove(GroupId) ->
     {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
-    Group = dao_adapter:group(GroupId),
-    #user_group{users = Users, spaces = Spaces} = Group,
+    {ok, #document{value = #user_group{users = Users, spaces = Spaces}}} = user_group:get(GroupId),
 
     lists:foreach(fun({UserId, _}) ->
-        UserDoc = dao_adapter:user_doc(UserId),
-        #db_document{record = #onedata_user{groups = UGroups} = User} = UserDoc,
+        {ok, UserDoc} = onedata_user:get(UserId),
+        #document{value = #onedata_user{groups = UGroups} = User} = UserDoc,
         NewUser = User#onedata_user{groups = lists:delete(GroupId, UGroups)},
-        dao_adapter:save(UserDoc#db_document{record = NewUser}),
+        onedata_user:save(UserDoc#document{value = NewUser}),
 
         op_channel_logic:user_modified(GroupProviders, UserId, NewUser)
     end, Users),
 
     lists:foreach(fun(SpaceId) ->
-        SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #db_document{record = #space{providers = SpaceProviders, groups = SGroups} = Space} = SpaceDoc,
+        {ok, SpaceDoc} = space:get(SpaceId),
+        #document{value = #space{providers = SpaceProviders, groups = SGroups} = Space} = SpaceDoc,
         NewSpace = Space#space{groups = lists:keydelete(GroupId, 1, SGroups)},
-        dao_adapter:save(SpaceDoc#db_document{record = NewSpace}),
+        space:save(SpaceDoc#document{value = NewSpace}),
         case space_logic:cleanup(SpaceId) of
             true -> ok;
             false ->
@@ -265,7 +264,7 @@ remove(GroupId) ->
         end
     end, Spaces),
 
-    dao_adapter:group_remove(GroupId),
+    user_group:delete(GroupId),
     op_channel_logic:group_removed(GroupProviders, GroupId),
     true.
 
@@ -279,16 +278,16 @@ remove(GroupId) ->
 remove_user(GroupId, UserId) ->
     {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
 
-    UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #onedata_user{groups = Groups} = User} = UserDoc,
+    {ok, UserDoc} = onedata_user:get(UserId),
+    #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
     UserNew = User#onedata_user{groups = lists:delete(GroupId, Groups)},
 
-    GroupDoc = dao_adapter:group_doc(GroupId),
-    #db_document{record = #user_group{users = Users} = Group} = GroupDoc,
+    {ok, GroupDoc} = user_group:get(GroupId),
+    #document{value = #user_group{users = Users} = Group} = GroupDoc,
     GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
 
-    dao_adapter:save(UserDoc#db_document{record = UserNew}),
-    dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
+    onedata_user:save(UserDoc#document{value = UserNew}),
+    user_group:save(GroupDoc#document{value = GroupNew}),
     cleanup(GroupId),
 
     op_channel_logic:user_modified(GroupProviders, UserId, UserNew),
@@ -301,7 +300,8 @@ remove_user(GroupId, UserId) ->
 %%--------------------------------------------------------------------
 -spec cleanup(GroupId :: binary()) -> boolean().
 cleanup(GroupId) ->
-    case dao_adapter:group(GroupId) of
+    {ok, #document{value = Group}} = user_group:get(GroupId),
+    case Group of
         #user_group{users = []} -> remove(GroupId);
         _ -> false
     end.

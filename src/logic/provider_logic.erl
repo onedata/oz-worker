@@ -43,9 +43,9 @@ create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = dao_helper:gen_uuid(),
     BinProviderId = str_utils:to_binary(ProviderId),
     {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
-    dao_adapter:save(#db_document{uuid = ProviderId, record =
-    #provider{client_name = ClientName, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial}}),
+
+    Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
+    provider:save(#document{key = BinProviderId, value = Provider}),
 
     {ok, BinProviderId, ProviderCertPem}.
 
@@ -57,15 +57,15 @@ create(ClientName, URLs, RedirectionPoint, CSRBin) ->
 -spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
     ok.
 modify(ProviderId, Data) ->
-    Doc = dao_adapter:provider_doc(ProviderId),
-    #db_document{record = Provider} = Doc,
+    {ok, Doc} = provider:get(ProviderId),
+    #document{value = Provider} = Doc,
 
     URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
     RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
     ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
 
     ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint, client_name = ClientName},
-    dao_adapter:save(Doc#db_document{record = ProviderNew}),
+    provider:save(Doc#document{value = ProviderNew}),
     ok.
 
 %%--------------------------------------------------------------------
@@ -76,7 +76,7 @@ modify(ProviderId, Data) ->
 -spec exists(ProviderId :: binary()) ->
     boolean().
 exists(ProviderId) ->
-    dao_adapter:provider_exists(ProviderId).
+    provider:exists(ProviderId).
 
 %%--------------------------------------------------------------------
 %% @doc Get provider's details.
@@ -86,10 +86,11 @@ exists(ProviderId) ->
 -spec get_data(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_data(ProviderId) ->
-    #provider{
+    {ok, #document{value = #provider{
         client_name = ClientName,
         urls = URLs,
-        redirection_point = RedirectionPoint} = dao_adapter:provider(ProviderId),
+        redirection_point = RedirectionPoint
+    }}} = provider:get(ProviderId),
 
     {ok, [
         {clientName, ClientName},
@@ -106,7 +107,7 @@ get_data(ProviderId) ->
 -spec get_spaces(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_spaces(ProviderId) ->
-    #provider{spaces = Spaces} = dao_adapter:provider(ProviderId),
+    {ok, #document{value = #provider{spaces = Spaces}}} = provider:get(ProviderId),
     {ok, [{spaces, Spaces}]}.
 
 %%--------------------------------------------------------------------
@@ -117,19 +118,22 @@ get_spaces(ProviderId) ->
 -spec remove(ProviderId :: binary()) ->
     true.
 remove(ProviderId) ->
-    #provider{spaces = Spaces, serial = Serial} = dao_adapter:provider(ProviderId),
+    {ok, #document{value = #provider{spaces = Spaces, serial = Serial}}} = provider:get(ProviderId),
 
     lists:foreach(fun(SpaceId) ->
-        SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #db_document{record = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
+        {ok, SpaceDoc} = space:get(SpaceId),
+        #document{value = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
         SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers), size = proplists:delete(ProviderId, Size)},
-        dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
+        space:save(SpaceDoc#document{value = SpaceNew}),
         op_channel_logic:space_modified(SpaceNew#space.providers, SpaceId, SpaceNew),
         op_channel_logic:space_removed([ProviderId], SpaceId)
     end, Spaces),
 
     grpca:revoke(Serial),
-    dao_adapter:provider_remove(ProviderId).
+    case provider:delete(ProviderId) of
+        ok -> true;
+        _ -> flase
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Tests connection to given url.

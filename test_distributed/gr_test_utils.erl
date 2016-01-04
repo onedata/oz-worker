@@ -12,7 +12,7 @@
 -module(gr_test_utils).
 
 -include_lib("ctool/include/test/test_utils.hrl").
--include("dao/dao_users.hrl").
+-include("datastore/datastore_types.hrl").
 
 %% API
 -export([make_dir/2, cleanup/0]).
@@ -94,7 +94,7 @@ create_space(Config, Member, Name) ->
 %% @doc Creates user in Global Registry.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user(Config :: term(), User :: #user{}) ->
+-spec create_user(Config :: term(), User :: #onedata_user{}) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_user(Config, User) ->
     try

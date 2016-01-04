@@ -14,7 +14,7 @@
 
 -include_lib("kernel/src/inet_dns.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
 -include("registered_names.hrl").
 
 %% DNS config handling
@@ -414,9 +414,7 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                                 end
                         end,
         case GetUserResult of
-            {ok, #db_document{uuid = UserIDStr,
-                record = #user{default_provider = DefaultProvider}}} ->
-                UserID = list_to_binary(UserIDStr),
+            {ok, #document{key = UserID, value = #onedata_user{default_provider = DefaultProvider}}} ->
                 % If default provider is not known, set it.
                 DataProplist =
                     try

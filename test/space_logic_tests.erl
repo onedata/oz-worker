@@ -12,7 +12,7 @@
 
 -ifdef(TEST).
 
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================
@@ -20,7 +20,9 @@
 %%%===================================================================
 
 has_effective_privilege_test() ->
-    ok = meck:new(dao_lib),
+    ok = meck:new(space),
+    ok = meck:new(user_group),
+    ok = meck:new(onedata_user),
 
     GroupId = <<"GroupId">>,
     SpaceId = <<"SpaceId">>,
@@ -29,22 +31,24 @@ has_effective_privilege_test() ->
 
     Space = #space{name = <<"Space">>, groups = [{GroupId, [space_view_data]}], users = [{UserId, [space_invite_user]}]},
     Group = #user_group{name = <<"Group">>, spaces = [SpaceId], users = [{UserId, privileges:group_admin()}, {User2Id, privileges:group_admin()}]},
-    User = #user{name = <<"User">>, groups = [GroupId], spaces = [SpaceId]},
-    User2 = #user{name = <<"User2">>, groups = [GroupId]},
-    SpaceDoc = #db_document{uuid = SpaceId, record = Space},
-    GroupDoc = #db_document{uuid = GroupId, record = Group},
-    UserDoc = #db_document{uuid = UserId, record = User},
-    User2Doc = #db_document{uuid = User2Id, record = User2},
+    User = #onedata_user{name = <<"User">>, groups = [GroupId], spaces = [SpaceId]},
+    User2 = #onedata_user{name = <<"User2">>, groups = [GroupId]},
+    SpaceDoc = #document{key = SpaceId, value = Space},
+    GroupDoc = #document{key = GroupId, value = Group},
+    UserDoc = #document{key = UserId, value = User},
+    User2Doc = #document{key = User2Id, value = User2},
 
-    ok = meck:expect(dao_lib, apply, fun
-        (dao_spaces, exist_space, _, _) -> {ok, true};
-        (dao_groups, exist_group, _, _) -> {ok, true};
-        (dao_users, exist_user, _, _) -> {ok, true};
-        (dao_spaces, get_space, _, _) -> {ok, SpaceDoc};
-        (dao_groups, get_group, _, _) -> {ok, GroupDoc};
-        (dao_users, get_user, ["UserId" | _], _) -> {ok, UserDoc};
-        (dao_users, get_user, ["User2Id" | _], _) -> {ok, User2Doc}
-    end),
+    ok = meck:expect(space, exists, fun(_) -> true end),
+    ok = meck:expect(user_group, exists, fun(_) -> true end),
+    ok = meck:expect(onedata_user, exists, fun(_) -> true end),
+    ok = meck:expect(space, get, fun(_) -> {ok, SpaceDoc} end),
+    ok = meck:expect(user_group, get, fun(_) -> {ok, GroupDoc} end),
+    ok = meck:expect(onedata_user, get,
+        fun
+            (UserId) -> {ok, UserDoc};
+            (User2Id) -> {ok, User2Doc}
+        end
+    ),
 
     ?assert(space_logic:has_effective_privilege(SpaceId, UserId, space_view_data)),
     ?assert(space_logic:has_effective_privilege(SpaceId, UserId, space_invite_user)),

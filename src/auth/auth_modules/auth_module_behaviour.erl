@@ -10,7 +10,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(auth_module_behaviour).
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
 -include("auth_common.hrl").
 
 %%--------------------------------------------------------------------

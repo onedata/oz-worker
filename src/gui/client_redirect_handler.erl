@@ -12,7 +12,7 @@
 -module(client_redirect_handler).
 
 -include_lib("ctool/include/logging.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
 
 -export([init/3, handle/2, terminate/3]).
 
@@ -48,7 +48,7 @@ handle(Req, State) ->
                                         user_logic:get_user_doc(Alias)
                                 end
                         end,
-        {ok, #db_document{record = #user{default_provider = DefaultProvider}}} = GetUserResult,
+        {ok, #document{value = #onedata_user{default_provider = DefaultProvider}}} = GetUserResult,
         {ok, DataProplist} = provider_logic:get_data(DefaultProvider),
         RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
         {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(str_utils:to_list(RedPoint)),

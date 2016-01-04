@@ -20,14 +20,14 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([rest_api_connection_test/1, dao_connection_test/1]).
+-export([rest_api_connection_test/1, datastore_connection_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 -performance({test_cases, []}).
-all() -> [rest_api_connection_test, dao_connection_test].
+all() -> [rest_api_connection_test, datastore_connection_test].
 
 rest_api_connection_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
@@ -37,10 +37,9 @@ rest_api_connection_test(Config) ->
         [utils:get_host(Node), RestPort]),
     ?assertMatch({ok, _, _, _}, http_client:get(URL, [], <<>>, [insecure])).
 
-dao_connection_test(Config) ->
+datastore_connection_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
-    ?assertMatch({ok, _}, rpc:call(Node, dao_lib, apply,
-        [dao_helper, list_dbs, [], 1])).
+    ?assertEqual(pong, rpc:call(Node, worker_proxy, call, [datastore_worker, ping])).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -48,7 +47,6 @@ dao_connection_test(Config) ->
 
 init_per_suite(Config) ->
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
-    timer:sleep(60000), % TODO add nagios to GR and delete sleep
     NewConfig.
 
 init_per_testcase(rest_api_connection_test, Config) ->

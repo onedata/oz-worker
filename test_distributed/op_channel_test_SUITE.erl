@@ -12,8 +12,8 @@
 -module(op_channel_test_SUITE).
 -author("Krzysztof Trzepla").
 
--include("dao/dao_users.hrl").
 -include("registered_names.hrl").
+-include("datastore/datastore_types.hrl").
 -include_lib("prproto/include/gr_messages.hrl").
 -include_lib("prproto/include/gr_communication_protocol.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -304,7 +304,6 @@ init_per_suite(Config) ->
     % Needed for websocket_client
     application:start(ssl2),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
-    timer:sleep(60000), % TODO add nagios to GR and delete sleep
     NewConfig.
 
 end_per_suite(Config) ->
@@ -337,7 +336,7 @@ create_users(_, 0, Users) ->
     Users;
 
 create_users(Config, N, Users) ->
-    CreateUserAns = gr_test_utils:create_user(Config, #user{name = <<"user", (integer_to_binary(N))/binary>>}),
+    CreateUserAns = gr_test_utils:create_user(Config, #onedata_user{name = <<"user", (integer_to_binary(N))/binary>>}),
     ?assertMatch({ok, _}, CreateUserAns),
     {ok, UserId} = CreateUserAns,
     create_users(Config, N - 1, [UserId | Users]).

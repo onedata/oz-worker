@@ -14,7 +14,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 -define(PROVIDER_NAME, plgrid).

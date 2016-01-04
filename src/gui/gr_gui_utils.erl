@@ -12,7 +12,7 @@
 
 -module(gr_gui_utils).
 -include("gui/common.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/datastore_types.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 % Functions to check for user's session
@@ -149,7 +149,7 @@ top_menu(ActiveTabID) ->
 -spec top_menu(ActiveTabID :: term(), SubMenuBody :: term()) -> list().
 top_menu(ActiveTabID, SubMenuBody) ->
     % Define menu items with ids, so that proper tab can be made active via function parameter
-    {ok, #user{name = Name}} = user_logic:get_user(gui_ctx:get_user_id()),
+    {ok, #onedata_user{name = Name}} = user_logic:get_user(gui_ctx:get_user_id()),
 
     MenuCaptions = [],
 

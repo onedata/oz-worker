@@ -899,7 +899,6 @@ init_per_suite(Config) ->
     GR_IP = get_node_ip(Node),
     RestPort = get_rest_port(Node),
     RestAddress = "https://" ++ GR_IP ++ ":" ++ integer_to_list(RestPort),
-    timer:sleep(10000), % TODO add nagios to GR and delete sleep
     [{restAddress, RestAddress} | NewConfig].
 
 init_per_testcase(create_provider_test, Config) ->
