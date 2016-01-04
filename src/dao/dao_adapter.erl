@@ -12,6 +12,7 @@
 
 -include("datastore/datastore_types.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
+-include_lib("dao/include/common.hrl").
 
 
 -type dao_module() :: dao_users | dao_groups | dao_spaces |
@@ -227,7 +228,7 @@ exists(Key, dao_auth, _) ->
 %% @doc Creates a new document or updates an existing one.
 %%--------------------------------------------------------------------
 -spec save_doc(Doc :: db_doc()) ->
-    {ok, uuid()} | {error, any()}.
+    {ok, model_id()} | {error, any()}.
 save_doc(#db_document{record = #space{} = Value, uuid = ID} = Doc) ->
     Key = case ID of [] -> undefined; _ -> list_to_binary(ID) end,
     space:save(#document{value = Value, key = Key});

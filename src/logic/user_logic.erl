@@ -12,7 +12,6 @@
 -module(user_logic).
 -author("Konrad Zemek").
 
--include_lib("ctool/include/logging.hrl").
 -include("datastore/datastore_types.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
 
