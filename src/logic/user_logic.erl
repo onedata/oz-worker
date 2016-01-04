@@ -59,7 +59,10 @@ get_user(Key) ->
     {ok, #document{}} | {error, any()}.
 get_user_doc(Key) ->
     try
-        {ok, #document{value = #onedata_user{}} = UserDoc} = onedata_user:get(Key),
+        case is_binary(Key) of
+            true -> {ok, #document{value = #onedata_user{}} = UserDoc} = onedata_user:get(Key);
+            false -> {ok, #document{value = #onedata_user{}} = UserDoc} = onedata_user:get_by_criterion(Key)
+        end,
         {ok, UserDoc}
     catch
         T:M ->

@@ -19,6 +19,9 @@
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
   model_init/0, 'after'/5, before/4]).
 
+%% API
+-export([get_all_ids/0, get_by_criterion/1]).
+
 %%%===================================================================
 %%% model_behaviour callbacks
 %%%===================================================================
@@ -107,3 +110,91 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
   ok.
+
+%%%===================================================================
+%%% API callbacks
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc 
+%% @private
+%% Gets all users from DB (that have at least one email address set).
+%% This function is used for development purposes, there appears to be no production use case.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_ids() -> {ok, [binary()]}.
+get_all_ids() ->
+  Filter = fun
+             ('$end_of_table', Acc) ->
+               {abort, Acc};
+             (#document{value = #onedata_user{}, key = Id}, Acc) ->
+               {next, [Id | Acc]};
+             (_, Acc) ->
+               {next, Acc}
+           end,
+  datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).
+
+%%--------------------------------------------------------------------
+%% @doc 
+%% @private
+%% Gets first user matching given criterion.
+%% todo: change implementation to something fast
+%% @end
+%%--------------------------------------------------------------------
+
+-spec get_by_criterion(Criterion :: {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
+{email, binary()} | {alias, binary()}) ->
+  {ok, #document{}} | {error, any()}.
+
+get_by_criterion({email, Value}) ->
+  Filter = fun
+             ('$end_of_table', Acc) ->
+               {abort, Acc};
+             (#document{value = #onedata_user{email_list = EmailList}} = Doc, Acc) ->
+               case lists:member(Value, EmailList) of
+                 true -> {abort, [Doc | Acc]};
+                 false -> {next, [Acc]}
+               end;
+             (_, Acc) ->
+               {next, Acc}
+           end,
+  [Result | _] = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
+  Result;
+
+get_by_criterion({alias, Value}) ->
+  Filter = fun
+             ('$end_of_table', Acc) ->
+               {abort, Acc};
+             (#document{value = #onedata_user{alias = Alias}} = Doc, Acc) ->
+               case Alias of
+                 Value -> {abort, [Doc | Acc]};
+                 _ -> {next, [Acc]}
+               end;
+             (_, Acc) ->
+               {next, Acc}
+           end,
+  [Result | _] = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
+  Result;
+
+get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
+  Filter = fun
+             ('$end_of_table', Acc) ->
+               {abort, Acc};
+             (#document{value = #onedata_user{connected_accounts = Accounts}} = Doc, Acc) ->
+               Found = lists:any(fun
+                                   (#oauth_account{provider_id = PID, user_id = UID}) ->
+                                     case {PID, UID} of
+                                       {ProviderID, UserID} -> true;
+                                       _ -> false
+                                     end;
+                                   (_) -> false
+                                 end, Accounts),
+               case Found of
+                 true -> {abort, [Doc | Acc]};
+                 _ -> {next, [Acc]}
+               end;
+             (_, Acc) ->
+               {next, Acc}
+           end,
+  [Result | _] = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
+  Result.
