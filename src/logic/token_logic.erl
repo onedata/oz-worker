@@ -16,8 +16,6 @@
 -include("datastore/datastore_types.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
 
--define(DB(Function, Arg), dao_lib:apply(dao_tokens, Function, [Arg], 1)).
-
 %% Atoms representing types of valid tokens.
 -type token_type() :: group_invite_token | space_create_token |
 space_invite_user_token | space_invite_group_token | accounts_merge_token |

@@ -39,7 +39,7 @@ body() ->
     % If dev_mode is on, include a logging menu that allows to log on any account.
     DevLoginPanel = case application:get_env(?APP_Name, dev_mode) of
                         {ok, true} ->
-                            {ok, UserIDs} = dao_lib:apply(dao_users, get_all_users, [], 1),
+                            {ok, UserIDs} = onedata_user:get_all_ids(),
                             #panel{style = <<"text-align: center; margin-bottom: 100px;">>, body = [
                                 #h2{body = <<"GlobalRegistry works in DEV MODE">>},
                                 #p{body = <<"You can use the menu below to login on user accounts, bypassing OpenID">>},

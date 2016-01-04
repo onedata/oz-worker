@@ -40,7 +40,7 @@
     RedirectionPoint :: binary(), CSR :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
-    ProviderId = dao_helper:gen_uuid(),
+    ProviderId = gen_uuid(),
     BinProviderId = str_utils:to_binary(ProviderId),
     {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
 
@@ -217,3 +217,22 @@ get_default_provider_for_user(UserID) ->
                     {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
             end
     end.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% --------------------------------------------------------------------
+%% @doc
+%% @private
+%% Generates UUID with CouchDBs 'utc_random' algorithm
+%% @end
+%% --------------------------------------------------------------------
+-spec gen_uuid() -> string().
+gen_uuid() ->
+    {M, S, N} = now(),
+    Time = M * 1000000000000 + S * 1000000 + N,
+    TimeHex = string:right(integer_to_list(Time, 16), 14, $0),
+    ?SEED,
+    Rand = [lists:nth(1, integer_to_list(?RND(16)-1, 16)) || _<- lists:seq(1, 18)],
+    string:to_lower(string:concat(TimeHex, Rand)).

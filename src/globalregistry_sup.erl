@@ -67,16 +67,12 @@ init([]) ->
     Shutdown = 2000,
     Type = worker,
 
-    Dao = {?Dao, {dao_worker, start_link, []},
-        Restart, Shutdown, Type, [dao_worker]},
-
     OpChannel = {?OpChannel, {op_channel, start_link, []},
         Restart, Shutdown, Type, [op_channel]},
 
     Workers = cluster_worker_specs:main_worker_sup_spec(),
 
     {ok, {SupFlags, [OpChannel, Workers]}}.
-%%    {ok, {SupFlags, [Dao, OpChannel]}}.
 
 %%%===================================================================
 %%% Internal functions
