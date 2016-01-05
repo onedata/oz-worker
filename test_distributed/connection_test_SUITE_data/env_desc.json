@@ -9,17 +9,9 @@
             "target_dir": "rel/test_cluster"
         }
     },
-    "os_configs": {
-        "cfg1": {
-            "storages": [],
-            "users": [],
-            "groups": {}
-        }
-    },
     "globalregistry_domains": {
         "gr": {
             "db_driver": "couchbase",
-            "os_config": "cfg1",
             "cluster_manager": {
                 "cm": {
                     "vm.args": {
