@@ -22,7 +22,7 @@
 -define(become_a_provider_url, "/become_a_provider").
 
 % Endpoint at oneprovider to check connectivity
--define(provider_connection_check_endpoint, "/nagios").
+-define(provider_connection_check_endpoint, ":6666/nagios").
 
 % Macros used as ids of errors that can appear on GUI pages
 -define(error_internal_server_error, "internal_server_error").
