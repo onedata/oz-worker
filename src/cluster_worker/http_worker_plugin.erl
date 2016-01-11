@@ -60,8 +60,7 @@ handle(_Request) ->
 -spec healthcheck_endpoints() -> list({Module :: atom(), Endpoint :: atom()}).
 healthcheck_endpoints() ->
     [
-        {?HTTP_WORKER_MODULE, nagios}
-%%        , {?HTTP_WORKER_MODULE, redirector}
+        {?HTTP_WORKER_MODULE, nagios}, {?HTTP_WORKER_MODULE, redirector}
     ].
 
 %%--------------------------------------------------------------------

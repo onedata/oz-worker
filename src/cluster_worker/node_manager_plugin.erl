@@ -22,8 +22,8 @@
 
 %% node_manager_plugin_behaviour callbacks
 -export([on_init/1, on_terminate/2, on_code_change/3,
-  handle_call_extension/3, handle_cast_extension/2, handle_info_extension/2,
-  modules_with_args/0, listeners/0, cm_nodes/0, db_nodes/0, check_node_ip_address/0, app_name/0]).
+    handle_call_extension/3, handle_cast_extension/2, handle_info_extension/2,
+    modules_with_args/0, listeners/0, cm_nodes/0, db_nodes/0, check_node_ip_address/0, app_name/0]).
 
 %%%===================================================================
 %%% node_manager_plugin_behaviour callbacks
@@ -35,7 +35,7 @@
 %%--------------------------------------------------------------------
 -spec app_name() -> {ok, Name :: atom()}.
 app_name() ->
-  {ok, op_worker}.
+    {ok, op_worker}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -44,7 +44,7 @@ app_name() ->
 %%--------------------------------------------------------------------
 -spec cm_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 cm_nodes() ->
-  application:get_env(?APP_Name, cm_nodes).
+    application:get_env(?APP_Name, cm_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -53,7 +53,7 @@ cm_nodes() ->
 %%--------------------------------------------------------------------
 -spec db_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 db_nodes() ->
-  application:get_env(?APP_Name, db_nodes).
+    application:get_env(?APP_Name, db_nodes).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -63,9 +63,9 @@ db_nodes() ->
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> %%node_manager:cluster_worker_listeners() ++
-  [
-    nagios_listener
-  ].
+    [
+        nagios_listener, redirector_listener
+    ].
 
 %%--------------------------------------------------------------------
 %% @private
@@ -85,13 +85,13 @@ modules_with_args() -> node_manager:cluster_worker_modules() ++ [
 %%--------------------------------------------------------------------
 -spec on_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 on_init([]) ->
-  try
-    ok
-  catch
-    _:Error ->
-      ?error_stacktrace("Cannot start node_manager plugin: ~p", [Error]),
-      {error, cannot_start_node_manager_plugin}
-  end.
+    try
+        ok
+    catch
+        _:Error ->
+            ?error_stacktrace("Cannot start node_manager plugin: ~p", [Error]),
+            {error, cannot_start_node_manager_plugin}
+    end.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -100,22 +100,22 @@ on_init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_call_extension(Request :: term(), From :: {pid(), Tag :: term()}, State :: term()) -> Result when
-  Result :: {reply, Reply, NewState}
-  | {reply, Reply, NewState, Timeout}
-  | {reply, Reply, NewState, hibernate}
-  | {noreply, NewState}
-  | {noreply, NewState, Timeout}
-  | {noreply, NewState, hibernate}
-  | {stop, Reason, Reply, NewState}
-  | {stop, Reason, NewState},
-  Reply :: nagios_handler:healthcheck_response() | term(),
-  NewState :: term(),
-  Timeout :: non_neg_integer() | infinity,
-  Reason :: term().
+    Result :: {reply, Reply, NewState}
+    | {reply, Reply, NewState, Timeout}
+    | {reply, Reply, NewState, hibernate}
+    | {noreply, NewState}
+    | {noreply, NewState, Timeout}
+    | {noreply, NewState, hibernate}
+    | {stop, Reason, Reply, NewState}
+    | {stop, Reason, NewState},
+    Reply :: nagios_handler:healthcheck_response() | term(),
+    NewState :: term(),
+    Timeout :: non_neg_integer() | infinity,
+    Reason :: term().
 
 handle_call_extension(_Request, _From, State) ->
-  ?log_bad_request(_Request),
-  {reply, wrong_request, State}.
+    ?log_bad_request(_Request),
+    {reply, wrong_request, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -124,16 +124,16 @@ handle_call_extension(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_cast_extension(Request :: term(), State :: term()) -> Result when
-  Result :: {noreply, NewState}
-  | {noreply, NewState, Timeout}
-  | {noreply, NewState, hibernate}
-  | {stop, Reason :: term(), NewState},
-  NewState :: term(),
-  Timeout :: non_neg_integer() | infinity.
+    Result :: {noreply, NewState}
+    | {noreply, NewState, Timeout}
+    | {noreply, NewState, hibernate}
+    | {stop, Reason :: term(), NewState},
+    NewState :: term(),
+    Timeout :: non_neg_integer() | infinity.
 
 handle_cast_extension(_Request, State) ->
-  ?log_bad_request(_Request),
-  {noreply, State}.
+    ?log_bad_request(_Request),
+    {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -142,16 +142,16 @@ handle_cast_extension(_Request, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_info_extension(Info :: timeout | term(), State :: term()) -> Result when
-  Result :: {noreply, NewState}
-  | {noreply, NewState, Timeout}
-  | {noreply, NewState, hibernate}
-  | {stop, Reason :: term(), NewState},
-  NewState :: term(),
-  Timeout :: non_neg_integer() | infinity.
+    Result :: {noreply, NewState}
+    | {noreply, NewState, Timeout}
+    | {noreply, NewState, hibernate}
+    | {stop, Reason :: term(), NewState},
+    NewState :: term(),
+    Timeout :: non_neg_integer() | infinity.
 
 handle_info_extension(_Request, State) ->
-  ?log_bad_request(_Request),
-  {noreply, State}.
+    ?log_bad_request(_Request),
+    {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -163,12 +163,12 @@ handle_info_extension(_Request, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec on_terminate(Reason, State :: term()) -> Any :: term() when
-  Reason :: normal
-  | shutdown
-  | {shutdown, term()}
-  | term().
+    Reason :: normal
+    | shutdown
+    | {shutdown, term()}
+    | term().
 on_terminate(_Reason, _State) ->
-  ok.
+    ok.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -177,11 +177,11 @@ on_terminate(_Reason, _State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec on_code_change(OldVsn, State :: term(), Extra :: term()) -> Result when
-  Result :: {ok, NewState :: term()} | {error, Reason :: term()},
-  OldVsn :: Vsn | {down, Vsn},
-  Vsn :: term().
+    Result :: {ok, NewState :: term()} | {error, Reason :: term()},
+    OldVsn :: Vsn | {down, Vsn},
+    Vsn :: term().
 on_code_change(_OldVsn, State, _Extra) ->
-  {ok, State}.
+    {ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -191,6 +191,6 @@ on_code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 -spec check_node_ip_address() -> IPV4Addr :: {A :: byte(), B :: byte(), C :: byte(), D :: byte()}.
 check_node_ip_address() ->
-  ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
-  {127, 0, 0, 1}.
+    ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
+    {127, 0, 0, 1}.
 

@@ -46,8 +46,8 @@ start(_StartType, _StartArgs) ->
     dns_query_handler:load_config(),
     test_node_starter:maybe_start_cover(),
     activate_white_lists(),
-    case {start_rest(), start_op_channel(), start_n2o(), start_redirector(), application:start(cluster_worker, permanent)} of
-        {ok, ok, ok, ok, ok} ->
+    case {start_rest(), start_op_channel(), start_n2o(), application:start(cluster_worker, permanent)} of
+        {ok, ok, ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
                     case start_dns() of
@@ -59,15 +59,13 @@ start(_StartType, _StartArgs) ->
                 Error ->
                     Error
             end;
-        {{error, Reason}, _, _, _, _} ->
+        {{error, Reason}, _, _, _} ->
             {error, {cannot_start_rest, Reason}};
-        {_, {error, Reason}, _, _, _} ->
+        {_, {error, Reason}, _, _} ->
             {error, {cannot_start_op_channel, Reason}};
-        {_, _, {error, Reason}, _, _} ->
+        {_, _, {error, Reason}, _} ->
             {error, {cannot_start_gui, Reason}};
-        {_, _, _, {error, Reason}, _} ->
-            {error, {cannot_start_redirector, Reason}};
-        {_, _, _, _, {error, Reason}} ->
+        {_, _, _, {error, Reason}} ->
             {error, {cannot_start_worker_sup, Reason}}
     end.
 
@@ -83,7 +81,6 @@ stop(_State) ->
     cowboy:stop_listener(?rest_listener),
     cowboy:stop_listener(?op_channel_listener),
     cowboy:stop_listener(?gui_https_listener),
-    cowboy:stop_listener(?gui_redirector_listener),
     stop_dns(),
     stop_rest(),
     test_node_starter:maybe_stop_cover(),
@@ -293,40 +290,6 @@ static_dispatches(DocRoot, StaticPaths) ->
     _StaticDispatches = lists:map(fun(Dir) ->
         {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
     end, StaticPaths).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Starts a cowboy listener that will redirect all requests of http to https.
-%% @end
-%%--------------------------------------------------------------------
--spec start_redirector() -> ok | {error, term()}.
-start_redirector() ->
-    try
-        {ok, RedirectPort} = application:get_env(?APP_Name, gui_redirect_port),
-        {ok, RedirectNbAcceptors} = application:get_env(?APP_Name, gui_redirect_acceptors),
-        {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
-
-        RedirectDispatch = [
-            {'_', [
-                {'_', https_redirect_handler, []}
-            ]}
-        ],
-
-        {ok, _} = cowboy:start_http(?gui_redirector_listener, RedirectNbAcceptors,
-            [
-                {port, RedirectPort}
-            ],
-            [
-                {env, [{dispatch, cowboy_router:compile(RedirectDispatch)}]},
-                {max_keepalive, 1},
-                {timeout, Timeout}
-            ]),
-        ok
-    catch
-        _Type:Error ->
-            ?error_stacktrace("Could not start redirector listener, error: ~p", [Error]),
-            {error, Error}
-    end.
 
 %%--------------------------------------------------------------------
 %% @private
