@@ -62,10 +62,8 @@ db_nodes() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
-listeners() -> %%node_manager:cluster_worker_listeners() ++
-    [
-        nagios_listener, redirector_listener
-    ].
+listeners() -> node_manager:cluster_worker_listeners() ++ [
+].
 
 %%--------------------------------------------------------------------
 %% @private

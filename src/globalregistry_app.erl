@@ -48,17 +48,7 @@ start(_StartType, _StartArgs) ->
     activate_white_lists(),
     case {start_rest(), start_op_channel(), start_n2o(), application:start(cluster_worker, permanent)} of
         {ok, ok, ok, ok} ->
-            case globalregistry_sup:start_link() of
-                {ok, Pid} ->
-                    case start_dns() of
-                        ok ->
-                            {ok, Pid};
-                        Err ->
-                            Err
-                    end;
-                Error ->
-                    Error
-            end;
+             globalregistry_sup:start_link();
         {{error, Reason}, _, _, _} ->
             {error, {cannot_start_rest, Reason}};
         {_, {error, Reason}, _, _} ->
@@ -298,6 +288,7 @@ static_dispatches(DocRoot, StaticPaths) ->
 %%--------------------------------------------------------------------
 -spec start_dns() -> ok | {error, term()}.
 start_dns() ->
+    % todo: ensure dns is working - then delete
     {ok, DNSPort} = application:get_env(?APP_Name, dns_port),
     {ok, EdnsMaxUdpSize} = application:get_env(?APP_Name, edns_max_udp_size),
     {ok, TCPNumAcceptors} = application:get_env(?APP_Name, dns_tcp_acceptor_pool_size),
@@ -305,7 +296,7 @@ start_dns() ->
     % DNS config is loaded in start function
     OnFailureFun = fun() -> ?error("DNS Server failed to start!") end,
     ?info("Starting DNS server..."),
-    case dns_server:start(globalregistry_sup, DNSPort, dns_query_handler, EdnsMaxUdpSize, TCPNumAcceptors, TCPTImeout, OnFailureFun) of
+    case dns_server:start(globalregistry_sup, DNSPort, dns, EdnsMaxUdpSize, TCPNumAcceptors, TCPTImeout, OnFailureFun) of
         ok ->
             ok;
         Error ->
@@ -320,6 +311,7 @@ start_dns() ->
 %%--------------------------------------------------------------------
 -spec stop_dns() -> ok | {error, term()}.
 stop_dns() ->
+    % todo: ensure dns is working - then delete
     dns_server:stop(globalregistry_sup).
 
 %%--------------------------------------------------------------------

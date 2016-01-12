@@ -6,23 +6,24 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Plugin for DNS worker. Accepts urls according to op-worker requirements.
+%%% Plugin for DNS worker.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(dns_worker_plugin).
 -author("Michal Zmuda").
 
-- behavior(dns_worker_plugin_behaviour).
+-behavior(dns_worker_plugin_behaviour).
 
--export([parse_domain/1]).
+-export([resolve/3]).
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
-%% {@link dns_worker_plugin_behaviour} callback parse_domain/0.
+%% {@link dns_worker_plugin_behaviour} callback resolve/3.
 %% @end
 %%--------------------------------------------------------------------
--spec parse_domain(Domain :: string()) -> ok | refused | nx_domain.
+-spec resolve(Method :: atom(), Domain :: string(), LBAdvice :: term()) ->
+    dns_handler_behaviour:handler_reply().
 
-parse_domain(_) ->
-  ok.
+resolve(Method, Domain, LBAdvice) ->
+    % todo: account LB
+    dns_query_handler:Method(Domain).
