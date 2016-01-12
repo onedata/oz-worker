@@ -15,6 +15,4 @@
 -define(op_channel_endpoint, <<"/oneprovider">>).
 -define(op_channel_listener, op_channel).
 
--record(state, {providers = maps:new(), connections = maps:new()}).
-
 -endif.

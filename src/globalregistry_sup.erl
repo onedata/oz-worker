@@ -63,16 +63,9 @@ init([]) ->
 
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
 
-    Restart = permanent,
-    Shutdown = 2000,
-    Type = worker,
-
-    OpChannel = {?OpChannel, {op_channel, start_link, []},
-        Restart, Shutdown, Type, [op_channel]},
-
     Workers = cluster_worker_specs:main_worker_sup_spec(),
 
-    {ok, {SupFlags, [OpChannel, Workers]}}.
+    {ok, {SupFlags, [Workers]}}.
 
 %%%===================================================================
 %%% Internal functions

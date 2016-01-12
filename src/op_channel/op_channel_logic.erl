@@ -35,7 +35,7 @@
 %%--------------------------------------------------------------------
 -spec push(ProviderIds :: [binary()], Msg :: iolist() | binary()) -> ok.
 push(ProviderIds, Msg) ->
-    gen_server:cast(?OpChannel, {push, ProviderIds, Msg}).
+    worker_proxy:cast(?OpChannelWorker, {push, ProviderIds, Msg}).
 
 %%--------------------------------------------------------------------
 %% @doc Encodes message into protocol buffers frame and pushes it

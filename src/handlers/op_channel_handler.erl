@@ -58,7 +58,7 @@ websocket_init(ssl, Req, []) ->
     try
         {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
         {ok, Provider} = grpca:verify_provider(PeerCert),
-        gen_server:cast(?OpChannel, {add_connection, Provider, self()}),
+        worker_proxy:cast(?OpChannelWorker, {add_connection, Provider, self()}),
         {ok, Req, #state{provider = Provider}}
     catch
         _:Reason ->
