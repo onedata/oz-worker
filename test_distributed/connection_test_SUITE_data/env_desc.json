@@ -21,12 +21,28 @@
                         "cm_nodes": [
                             "cm"
                         ],
-                        "worker_num": 1
+                        "worker_num": 2
                     }
                 }
             },
             "globalregistry": {
                 "node1": {
+                    "vm.args": {
+                        "setcookie": "test_cookie"
+                    },
+                    "sys.config": {
+                        "cm_nodes": [
+                            "cm"
+                        ],
+                        "db_nodes": [
+                            "127.0.0.1:49161"
+                        ],
+                        "http_domain": {
+                            "string": "127.0.0.1"
+                        }
+                    }
+                },
+                "node2": {
                     "vm.args": {
                         "setcookie": "test_cookie"
                     },
