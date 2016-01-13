@@ -14,7 +14,10 @@
 
 -include("registered_names.hrl").
 -include("op_channel/op_channel.hrl").
+-include("datastore/datastore_types.hrl").
 -include_lib("ctool/include/logging.hrl").
+
+-define(STATE_KEY, <<"op_logic_state_key">>).
 
 -export([init/1, cleanup/0, handle/1]).
 
@@ -27,7 +30,8 @@
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
 
 init(_) ->
-    {ok, #{providers => #{}, connections => #{}}}.
+    op_logic_state:create(#document{key = ?STATE_KEY, value = #op_logic_state{providers = #{}, connections = #{}}}),
+    {ok, #{}}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -49,7 +53,7 @@ handle({add_connection, Provider, Connection}) ->
     Connections = state_get(connections),
 
     ?info("Provider ~p connected successfully.", [Provider]),
-    link(Connection),
+    link(Connection),% todo: this does not work as it is worker
 
     FinalConnections = case maps:find(Provider, Connections) of
                            {ok, ProviderConnections} -> [Connection | ProviderConnections];
@@ -73,7 +77,7 @@ handle({push, Providers, Msg}) ->
                    end, Providers),
     ok;
 
-handle({'EXIT', Connection, Reason}) ->
+handle({'EXIT', Connection, Reason}) -> % todo: this does not work as it is worker
     Providers = state_get(providers),
     Connections = state_get(connections),
     case maps:find(Connection, Providers) of
@@ -112,8 +116,15 @@ cleanup() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec state_put(Key :: term(), Value :: term()) -> ok.
-state_put(Key, Value) ->
-    worker_host:state_put(?MODULE, Key, Value).
+state_put(providers, Value) ->
+    {ok, #document{value = #op_logic_state{} = State} = Doc} = op_logic_state:get(?STATE_KEY),
+    {ok, _} = op_logic_state:save(Doc#document{value = State#op_logic_state{providers = Value}}),
+    ok;
+
+state_put(connections, Value) ->
+    {ok, #document{value = #op_logic_state{} = State} = Doc} = op_logic_state:get(?STATE_KEY),
+    {ok, _} = op_logic_state:save(Doc#document{value = State#op_logic_state{connections = Value}}),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -121,5 +132,9 @@ state_put(Key, Value) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec state_get(Key :: term()) -> Value :: term().
-state_get(Key) ->
-    worker_host:state_get(?MODULE, Key).
+state_get(providers) ->
+    {ok, #document{value = #op_logic_state{providers = Result}}} = op_logic_state:get(?STATE_KEY),
+    Result;
+state_get(connections) ->
+    {ok, #document{value = #op_logic_state{connections = Result}}} = op_logic_state:get(?STATE_KEY),
+    Result.
