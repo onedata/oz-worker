@@ -42,7 +42,8 @@
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = gen_uuid(),
     BinProviderId = str_utils:to_binary(ProviderId),
-    {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
+    [{_, {ok, ProviderCertPem, Serial}} | _] =
+        worker_proxy:multicall(grpca_worker, {sign_provider_req, BinProviderId, CSRBin}),
 
     Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
     provider:save(#document{key = BinProviderId, value = Provider}),
@@ -127,10 +128,10 @@ remove(ProviderId) ->
         space:save(SpaceDoc#document{value = SpaceNew}),
         op_channel_logic:space_modified(SpaceNew#space.providers, SpaceId, SpaceNew),
         op_channel_logic:space_removed([ProviderId], SpaceId)
-    end, Spaces),
+                  end, Spaces),
 
-    grpca:revoke(Serial),
-    case provider:delete(ProviderId) of
+    worker_proxy:multicast(grpca_worker, {revoke, Serial}),
+    case (provider:delete(ProviderId)) of
         ok -> true;
         _ -> flase
     end.
@@ -161,15 +162,15 @@ test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
                  end,
     test_connection(Rest, [{Url, ConnStatus} | Acc]);
 test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
-    ConnStatus = 
+    ConnStatus =
         case http_client:get(Url, [], <<>>, [insecure]) of
-                     {ok, 200, _, ServiceName} ->
-                         ok;
-                     Error ->
-                         ?debug("Checking connection to ~p failed with error: ~n~p",
-                             [Url, Error]),
-                         error
-                 end,
+            {ok, 200, _, ServiceName} ->
+                ok;
+            Error ->
+                ?debug("Checking connection to ~p failed with error: ~n~p",
+                    [Url, Error]),
+                error
+        end,
     test_connection(Rest, [{Url, ConnStatus} | Acc]);
 test_connection(_, _) ->
     {error, bad_data}.
@@ -234,5 +235,5 @@ gen_uuid() ->
     Time = M * 1000000000000 + S * 1000000 + N,
     TimeHex = string:right(integer_to_list(Time, 16), 14, $0),
     ?SEED,
-    Rand = [lists:nth(1, integer_to_list(?RND(16)-1, 16)) || _<- lists:seq(1, 18)],
+    Rand = [lists:nth(1, integer_to_list(?RND(16) - 1, 16)) || _ <- lists:seq(1, 18)],
     string:to_lower(string:concat(TimeHex, Rand)).
