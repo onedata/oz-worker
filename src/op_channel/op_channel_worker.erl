@@ -51,9 +51,7 @@ handle(healthcheck) ->
 handle({add_connection, Provider, Connection}) ->
     Providers = state_get(providers),
     Connections = state_get(connections),
-
     ?info("Provider ~p connected successfully.", [Provider]),
-    link(Connection),% todo: this does not work as it is worker
 
     FinalConnections = case maps:find(Provider, Connections) of
                            {ok, ProviderConnections} -> [Connection | ProviderConnections];
@@ -74,10 +72,10 @@ handle({push, Providers, Msg}) ->
             Other ->
                 ?warning("Cannot find provider ~p connections: ~p", [Provider, Other])
         end
-                   end, Providers),
+    end, Providers),
     ok;
 
-handle({'EXIT', Connection, Reason}) -> % todo: this does not work as it is worker
+handle({exit, Connection, Reason}) ->
     Providers = state_get(providers),
     Connections = state_get(connections),
     case maps:find(Connection, Providers) of

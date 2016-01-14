@@ -58,7 +58,7 @@ websocket_init(ssl, Req, []) ->
     try
         {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
         {ok, Provider} = grpca:verify_provider(PeerCert),
-        worker_proxy:cast(?OpChannelWorker, {add_connection, Provider, self()}),
+        worker_proxy:call(?OpChannelWorker, {add_connection, Provider, self()}),
         {ok, Req, #state{provider = Provider}}
     catch
         _:Reason ->
@@ -121,5 +121,7 @@ websocket_info(_Info, Req, State) ->
     {error, badencoding | badframe | closed | atom()},
     Req :: cowboy_req:req(),
     State :: any().
-websocket_terminate(_Reason, _Req, _State) ->
+websocket_terminate(Reason, _Req, _State) ->
+    ?error("\n\nOMG Connection ~p lost due to: ~p", [self(), Reason]),
+    worker_proxy:cast(?OpChannelWorker, {exit, self(), Reason}),
     ok.
