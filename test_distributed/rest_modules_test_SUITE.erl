@@ -810,7 +810,7 @@ set_space_privileges_test(Config) ->
     join_user_to_space(InvitationToken, UserReqParams2),
 
     SupportToken = get_space_support_token(SID, UserReqParams1),
-    R1 = support_space(SupportToken, ?SPACE_SIZE1, ProviderReqParams),
+    support_space(SupportToken, ?SPACE_SIZE1, ProviderReqParams),
 
     Users = [{UserId1, UserReqParams1}, {UserId2, UserReqParams2}, {UserId3, UserReqParams3}],
 
@@ -863,7 +863,7 @@ bad_request_test(Config) ->
         "/spaces/0/groups/0/privileges", "/spaces/0/providers",
         "/spaces/0/providers/token", "/spaces/0/providers/0"
     ],
-    {RestAddress, Headers, Options} = ProviderReqParams,
+    {RestAddress, Headers, _Options} = ProviderReqParams,
     %% Send requests without certs (no options)
     check_bad_requests(RequireCerts, get, <<"">>, {RestAddress, Headers, []}),
 
@@ -1496,11 +1496,11 @@ group_privilege_check(group_remove, Users, GID, _SID) ->
 group_privilege_check(group_leave_space, Users, GID, SID) ->
     [{_UserId1, UserReqParams1}, {UserId2, UserReqParams2} | _] = Users,
     InvitationToken = get_space_invitation_token(groups, SID, UserReqParams1),
-    R1 = join_group_to_space(InvitationToken, GID, UserReqParams1),
+    join_group_to_space(InvitationToken, GID, UserReqParams1),
     %% test if user2 lacks group_leaves_space privileges
     ?assertMatch({bad_response_code, _},
         check_status(group_leaves_space(GID, SID, UserReqParams2))),
-    R2 = set_group_privileges_of_user(GID, UserId2, [group_leave_space], UserReqParams1),
+    set_group_privileges_of_user(GID, UserId2, [group_leave_space], UserReqParams1),
     ?assertMatch(ok, check_status(group_leaves_space(GID, SID, UserReqParams2))),
     clean_group_privileges(GID, UserId2, UserReqParams1);
 
