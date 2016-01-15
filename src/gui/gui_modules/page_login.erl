@@ -15,9 +15,6 @@
 -include("registered_names.hrl").
 -include("gui/common.hrl").
 -include("auth_common.hrl").
--include("dao/dao_users.hrl").
--include("dao/dao_external.hrl").
--include_lib("dao/include/dao_helper.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 % n2o API

@@ -12,7 +12,7 @@
 -module(gr_test_utils).
 
 -include_lib("ctool/include/test/test_utils.hrl").
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 
 %% API
 -export([make_dir/2, cleanup/0]).

@@ -12,7 +12,7 @@
 
 -ifdef(TEST).
 
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================

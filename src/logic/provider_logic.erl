@@ -12,11 +12,9 @@
 -module(provider_logic).
 -author("Konrad Zemek").
 
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
 -include("registered_names.hrl").
-
--include_lib("dao/include/common.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -27,13 +25,34 @@
 -export([test_connection/1]).
 -export([get_default_provider_for_user/1]).
 
+%% Seeds pseudo-random number generator with current time and hashed node name. <br/>
+%% See {@link random:seed/3} and {@link erlang:now/0} for more details
+%% Copied from the "dao" project
+-define(SEED, begin
+    IsSeeded = get(proc_seeded),
+    if
+        IsSeeded =/= true ->
+            put(proc_seeded, true),
+            {A_SEED, B_SEED, C_SEED} = now(),
+            L_SEED = atom_to_list(node()),
+            {_, Sum_SEED} =  lists:foldl(fun(Elem_SEED, {N_SEED, Acc_SEED}) ->
+                {N_SEED * 137, Acc_SEED + Elem_SEED * N_SEED} end, {1, 0}, L_SEED),
+            random:seed(Sum_SEED*10000 + A_SEED, B_SEED, C_SEED);
+        true -> already_seeded
+    end
+end).
+
+%% Returns random positive number from range 1 .. N. This macro is simply shortcut to random:uniform(N)
+%% Copied from the "dao" project
+-define(RND(N), random:uniform(N)).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc Create a provider's account.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(ClientName :: binary(), URLs :: [binary()],
@@ -52,7 +71,7 @@ create(ClientName, URLs, RedirectionPoint, CSRBin) ->
 
 %%--------------------------------------------------------------------
 %% @doc Modify provider's details.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
@@ -71,7 +90,7 @@ modify(ProviderId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether a Provider exists.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(ProviderId :: binary()) ->
@@ -81,7 +100,7 @@ exists(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Get provider's details.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(ProviderId :: binary()) ->
@@ -102,7 +121,7 @@ get_data(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Get Spaces supported by the provider.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_spaces(ProviderId :: binary()) ->
@@ -113,7 +132,7 @@ get_spaces(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Remove provider's account.
-%% Throws exception when call to dao fails, or provider is already removed.
+%% Throws exception when call to the datastore fails, or provider is already removed.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove(ProviderId :: binary()) ->

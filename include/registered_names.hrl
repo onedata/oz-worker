@@ -15,9 +15,6 @@
 %% App name
 -define(APP_Name, globalregistry).
 
-%% Name of dao genserver
--define(Dao, dao_worker).
-
 %% Name of oneprovider channel worker
 -define(OpChannelWorker, op_channel_worker).
 

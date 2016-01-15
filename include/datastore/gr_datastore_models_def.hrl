@@ -12,6 +12,8 @@
 -ifndef(GR_DATASTORE_MODELS_HRL).
 -define(GR_DATASTORE_MODELS_HRL, 1).
 
+-include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
+
 %% Records of this type store a macaroons secret
 -record(onedata_auth, {
     secret :: binary(),
@@ -92,5 +94,12 @@
     % This allows to remember the provider which was selected for user, so DNS knows where to redirect
     default_provider = <<"">> :: binary()
 }).
+
+-type user_info() :: #onedata_user{}.
+-type provider_info() :: #provider{}.
+-type group_info() :: #user_group{}.
+-type space_info() :: #space{}.
+-type token_info() :: #token{}.
+-type auth_info() :: #onedata_auth{}.
 
 -endif.

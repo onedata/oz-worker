@@ -13,7 +13,7 @@
 -author("Krzysztof Trzepla").
 
 -include("registered_names.hrl").
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include_lib("prproto/include/gr_messages.hrl").
 -include_lib("prproto/include/gr_communication_protocol.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").

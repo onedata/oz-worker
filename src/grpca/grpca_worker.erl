@@ -6,7 +6,10 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% todo
+%%% As CA actions need to be performed on all GR nodes,
+%%% such actions are available through the worker interface.
+%%% (in order to benefit from multicalls).
+%%% todo: implement distributed CA properly
 %%% @end
 %%%-------------------------------------------------------------------
 -module(grpca_worker).

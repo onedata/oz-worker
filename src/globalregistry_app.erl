@@ -71,7 +71,6 @@ stop(_State) ->
     cowboy:stop_listener(?rest_listener),
     cowboy:stop_listener(?op_channel_listener),
     cowboy:stop_listener(?gui_https_listener),
-    stop_dns(),
     stop_rest(),
     test_node_starter:maybe_stop_cover(),
     ok.
@@ -280,39 +279,6 @@ static_dispatches(DocRoot, StaticPaths) ->
     _StaticDispatches = lists:map(fun(Dir) ->
         {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
     end, StaticPaths).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Starts the DNS server.
-%% @end
-%%--------------------------------------------------------------------
--spec start_dns() -> ok | {error, term()}.
-start_dns() ->
-    % todo: ensure dns is working - then delete
-    {ok, DNSPort} = application:get_env(?APP_Name, dns_port),
-    {ok, EdnsMaxUdpSize} = application:get_env(?APP_Name, edns_max_udp_size),
-    {ok, TCPNumAcceptors} = application:get_env(?APP_Name, dns_tcp_acceptor_pool_size),
-    {ok, TCPTImeout} = application:get_env(?APP_Name, dns_tcp_timeout),
-    % DNS config is loaded in start function
-    OnFailureFun = fun() -> ?error("DNS Server failed to start!") end,
-    ?info("Starting DNS server..."),
-    case dns_server:start(globalregistry_sup, DNSPort, dns, EdnsMaxUdpSize, TCPNumAcceptors, TCPTImeout, OnFailureFun) of
-        ok ->
-            ok;
-        Error ->
-            ?error("Cannot start DNS server - ~p", [Error]),
-            OnFailureFun()
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Stops the DNS server.
-%% @end
-%%--------------------------------------------------------------------
--spec stop_dns() -> ok | {error, term()}.
-stop_dns() ->
-    % todo: ensure dns is working - then delete
-    dns_server:stop(globalregistry_sup).
 
 %%--------------------------------------------------------------------
 %% @private

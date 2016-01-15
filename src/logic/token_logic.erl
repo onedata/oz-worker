@@ -13,7 +13,7 @@
 -author("Konrad Zemek").
 
 -include("registered_names.hrl").
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
 
 %% Atoms representing types of valid tokens.
@@ -34,7 +34,7 @@ space_support_token.
 
 %%--------------------------------------------------------------------
 %% @doc Checks if a given token is a valid macaroon of a given type.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(Token :: binary(), TokenType :: token_type()) ->
@@ -60,7 +60,7 @@ validate(Token, TokenType) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a macaroon token of a given type.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(TokenType :: token_type(), Resource :: {resource_type(), binary()}) ->
@@ -81,7 +81,7 @@ create(TokenType, {ResourceType, ResourceId}) ->
 
 %%--------------------------------------------------------------------
 %% @doc Consumes a token, returning associated resource.
-%% Throws exception when call to dao fails, or token doesn't exist in db.
+%% Throws exception when call to the datastore fails, or token doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
 -spec consume(Macaroon :: macaroon:macaroon()) ->

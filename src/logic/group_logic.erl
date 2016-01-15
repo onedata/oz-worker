@@ -12,7 +12,7 @@
 -module(group_logic).
 -author("Konrad Zemek").
 
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
 
 %% API
@@ -27,7 +27,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether a group exists.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(GroupId :: binary()) ->
@@ -38,7 +38,7 @@ exists(GroupId) ->
 %%--------------------------------------------------------------------
 %% @doc Returns whether the user identified by UserId is a member of the group.
 %% Shall return false in any other case (group doesn't exist, etc).
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_user(GroupId :: binary(), UserId :: binary()) ->
@@ -55,7 +55,7 @@ has_user(GroupId, UserId) ->
 %% @doc Returns whether the group's member identified by UserId has privilege
 %% in the group. Shall return false in any other case (group doesn't exist,
 %% user is not group's member, etc).
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_privilege(GroupId :: binary(), UserId :: binary(),
@@ -72,7 +72,7 @@ has_privilege(GroupId, UserId, Privilege) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a group for a user.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(UserId :: binary(), Name :: binary()) ->
@@ -95,7 +95,7 @@ create(UserId, Name) ->
 
 %%--------------------------------------------------------------------
 %% @doc Modifies group's data.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec modify(GroupId :: binary(), Name :: binary()) ->
@@ -113,7 +113,7 @@ modify(GroupId, Name) ->
 
 %%--------------------------------------------------------------------
 %% @doc Adds user to a group identified by a token.
-%% Throws exception when call to dao fails, or token/user/group_from_token
+%% Throws exception when call to the datastore fails, or token/user/group_from_token
 %% doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
@@ -143,7 +143,7 @@ join(UserId, Macaroon) ->
 
 %%--------------------------------------------------------------------
 %% @doc Sets privileges for a member of the group.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec set_privileges(GroupId :: binary(), UserId :: binary(),
@@ -159,7 +159,7 @@ set_privileges(GroupId, UserId, Privileges) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about the group.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(GroupId :: binary()) ->
@@ -173,7 +173,7 @@ get_data(GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about group's members.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_users(GroupId :: binary()) ->
@@ -185,7 +185,7 @@ get_users(GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about group's spaces.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_spaces(GroupId :: binary()) ->
@@ -196,7 +196,7 @@ get_spaces(GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns providers of user's spaces.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_providers(GroupId :: binary()) ->
@@ -211,7 +211,7 @@ get_providers(GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about group's member.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user(GroupId :: binary(), UserId :: binary()) ->
@@ -222,7 +222,7 @@ get_user(_GroupId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns list of group's member privileges.
-%% Throws exception when call to dao fails, or group/user doesn't exist.
+%% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_privileges(GroupId :: binary(), UserId :: binary()) ->
@@ -234,7 +234,7 @@ get_privileges(GroupId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Removes the group.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove(GroupId :: binary()) ->
@@ -270,7 +270,7 @@ remove(GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Removes user from the group.
-%% Throws exception when call to dao fails, or group/user doesn't exist.
+%% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_user(GroupId :: binary(), UserId :: binary()) ->
@@ -295,7 +295,7 @@ remove_user(GroupId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Removes the group if empty.
-%% Throws exception when call to dao fails, or group is already removed.
+%% Throws exception when call to the datastore fails, or group is already removed.
 %% @end
 %%--------------------------------------------------------------------
 -spec cleanup(GroupId :: binary()) -> boolean().

@@ -17,7 +17,7 @@
 
 %% model_behaviour callbacks
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
-  model_init/0, 'after'/5, before/4]).
+    model_init/0, 'after'/5, before/4]).
 
 %% API
 -export([get_auth_by_user_id/1]).
@@ -33,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec save(datastore:document()) -> {ok, datastore:ext_key()} | datastore:generic_error().
 save(Document) ->
-  datastore:save(?STORE_LEVEL, Document).
+    datastore:save(?STORE_LEVEL, Document).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -41,9 +41,9 @@ save(Document) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
-  {ok, datastore:ext_key()} | datastore:update_error().
+    {ok, datastore:ext_key()} | datastore:update_error().
 update(Key, Diff) ->
-  datastore:update(?STORE_LEVEL, ?MODULE, Key, Diff).
+    datastore:update(?STORE_LEVEL, ?MODULE, Key, Diff).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -52,7 +52,7 @@ update(Key, Diff) ->
 %%--------------------------------------------------------------------
 -spec create(datastore:document()) -> {ok, datastore:ext_key()} | datastore:create_error().
 create(Document) ->
-  datastore:create(?STORE_LEVEL, Document).
+    datastore:create(?STORE_LEVEL, Document).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -61,7 +61,7 @@ create(Document) ->
 %%--------------------------------------------------------------------
 -spec get(datastore:ext_key()) -> {ok, datastore:document()} | datastore:get_error().
 get(Key) ->
-  datastore:get(?STORE_LEVEL, ?MODULE, Key).
+    datastore:get(?STORE_LEVEL, ?MODULE, Key).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -70,7 +70,7 @@ get(Key) ->
 %%--------------------------------------------------------------------
 -spec delete(datastore:ext_key()) -> ok | datastore:generic_error().
 delete(Key) ->
-  datastore:delete(?STORE_LEVEL, ?MODULE, Key).
+    datastore:delete(?STORE_LEVEL, ?MODULE, Key).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -79,7 +79,7 @@ delete(Key) ->
 %%--------------------------------------------------------------------
 -spec exists(datastore:ext_key()) -> datastore:exists_return().
 exists(Key) ->
-  ?RESPONSE(datastore:exists(?STORE_LEVEL, ?MODULE, Key)).
+    ?RESPONSE(datastore:exists(?STORE_LEVEL, ?MODULE, Key)).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -89,7 +89,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-  ?MODEL_CONFIG(onedata_auth_bucket, [], ?GLOBAL_ONLY_LEVEL).
+    ?MODEL_CONFIG(onedata_auth_bucket, [], ?GLOBAL_ONLY_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -100,7 +100,7 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term(),
     ReturnValue :: term()) -> ok.
 'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
-  ok.
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -110,7 +110,7 @@ model_init() ->
 -spec before(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
-  ok.
+    ok.
 
 
 %%%===================================================================
@@ -124,12 +124,12 @@ before(_ModelName, _Method, _Level, _Context) ->
 %%--------------------------------------------------------------------
 -spec get_auth_by_user_id(UserId :: binary()) -> {ok, [binary()]} | no_return().
 get_auth_by_user_id(UserId) ->
-  Filter = fun
-             ('$end_of_table', Acc) ->
-               {abort, Acc};
-             (#document{value = #onedata_auth{user_id = UID}} = Doc, Acc) ->
-               {next, case UID of UserId -> [Doc | Acc]; _ -> Acc end};
-             (_, Acc) ->
-               {next, Acc}
-           end,
-  datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).
+    Filter = fun
+        ('$end_of_table', Acc) ->
+            {abort, Acc};
+        (#document{value = #onedata_auth{user_id = UID}} = Doc, Acc) ->
+            {next, case UID of UserId -> [Doc | Acc]; _ -> Acc end};
+        (_, Acc) ->
+            {next, Acc}
+    end,
+    datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).

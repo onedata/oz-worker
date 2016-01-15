@@ -15,7 +15,7 @@
 -include("auth_common.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
 
 -define(STATE_TOKEN, state_token).

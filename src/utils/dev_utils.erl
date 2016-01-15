@@ -42,7 +42,7 @@
 -module(dev_utils).
 
 -include_lib("ctool/include/logging.hrl").
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).
@@ -168,7 +168,7 @@ destroy_test_entities(Users, Groups, Spaces) ->
 
 %%--------------------------------------------------------------------
 %% @doc Create a provider's account with implicit UUID.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_with_uuid(ClientName :: binary(), URLs :: [binary()],
@@ -183,7 +183,7 @@ create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a user account with implicit UUID.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user_with_uuid(User :: #onedata_user{}, UUID :: binary()) -> {ok, UserId :: binary()}.
@@ -193,7 +193,7 @@ create_user_with_uuid(User, UUID) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a group for a user with implicit UUID.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group_with_uuid(UserId :: binary(), Name :: binary(), UUID :: binary()) ->
@@ -216,7 +216,7 @@ create_group_with_uuid(UserId, Name, UUID) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user or group with implicit UUID.
-%% Throws exception when call to dao fails, or given member doesn't exist.
+%% Throws exception when call to the datastore fails, or given member doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_with_uuid({user | group, Id :: binary()}, Name :: binary(), UUID :: binary()) ->
@@ -227,7 +227,7 @@ create_space_with_uuid(Member, Name, UUID) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user or group with implicit UUID, by a provider that will support it.
-%% Throws exception when call to dao fails, or token/member_from_token doesn't exist.
+%% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_with_uuid({provider, ProviderId :: binary()}, Name :: binary(),
@@ -241,7 +241,7 @@ create_space_with_uuid({provider, ProviderId}, Name, Token, Size, UUID) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user or a group with implicit UUID, with a preexisting provider.
-%% Throws exception when call to dao fails, or user/group doesn't exist.
+%% Throws exception when call to the datastore fails, or user/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_with_provider({user | group, Id :: binary()}, Name :: binary(), Providers :: [binary()],

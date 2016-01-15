@@ -14,7 +14,7 @@
 
 -include("registered_names.hrl").
 -include("op_channel/op_channel.hrl").
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(STATE_KEY, <<"op_logic_state_key">>).

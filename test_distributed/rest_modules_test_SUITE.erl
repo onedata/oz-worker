@@ -1726,16 +1726,16 @@ get_space_users(SID, ReqParams) ->
 get_user_info_from_space(SID, UID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
-    EncodedUID = binary_to_list(UID),
-    Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users/" ++ http_utils:url_encode(EncodedUID),
+    EncodedUID = binary_to_list(http_utils:url_encode(UID)),
+    Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users/" ++ EncodedUID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([userId, name], Response).
 
 delete_user_from_space(SID, UID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
-    EncodedUID = binary_to_list(UID),
-    Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users/" ++ http_utils:url_encode(EncodedUID),
+    EncodedUID = binary_to_list(http_utils:url_encode(UID)),
+    Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users/" ++ EncodedUID,
     do_request(Address, Headers, delete, [], Options).
 
 get_space_privileges(UserType, SID, ID, ReqParams) ->

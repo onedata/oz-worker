@@ -12,7 +12,6 @@
 -module(user_logic).
 -author("Konrad Zemek").
 
--include("datastore/datastore_types.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
 
 %% API
@@ -27,7 +26,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc Creates a user account.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(User :: #onedata_user{}) ->
@@ -205,7 +204,7 @@ merge(_UserId, _Macaroon) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns user details.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(UserId :: binary()) ->
@@ -219,7 +218,7 @@ get_data(UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns user's spaces.
-%% Throws exception when call to dao fails, or user doesn't exist, or his groups
+%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
@@ -236,7 +235,7 @@ get_spaces(UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns user's groups.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_groups(UserId :: binary()) ->
@@ -247,7 +246,7 @@ get_groups(UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns providers of user's spaces.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_providers(UserId :: binary()) ->
@@ -275,7 +274,7 @@ exists(Key) ->
 
 %%--------------------------------------------------------------------
 %% @doc Remove user's account.
-%% Throws exception when call to dao fails, or user is already deleted.
+%% Throws exception when call to the datastore fails, or user is already deleted.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove(UserId :: binary()) ->
@@ -310,7 +309,7 @@ remove(UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Retrieve user's default space ID.
-%% Throws exception when call to dao fails, or user doesn't exist, or his groups
+%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
@@ -323,7 +322,7 @@ get_default_space(UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Set user's default space ID.
-%% Throws exception when call to dao fails, or user doesn't exist, or his groups
+%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
@@ -352,10 +351,10 @@ set_default_space(UserId, SpaceId) ->
 %% @private
 %% @doc Returns a list of all spaces that a user belongs to, directly or through
 %% a group.
-%% Throws exception when call to dao fails, or user's groups don't exist.
+%% Throws exception when call to the datastore fails, or user's groups don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_all_spaces(Doc :: db_doc()) ->
+-spec get_all_spaces(Doc :: datastore:document()) ->
     ordsets:ordset(SpaceId :: binary()).
 get_all_spaces(#document{value = #onedata_user{} = User}) ->
     #onedata_user{spaces = UserSpaces, groups = Groups} = User,
@@ -375,11 +374,11 @@ get_all_spaces(#document{value = #onedata_user{} = User}) ->
 %% @doc Returns an effective default space id; i.e. validates and changes
 %% (if needed) the default space id set in the user doc. Returns the new, valid
 %% space id.
-%% Throws exception when call to dao fails, or user's groups don't exist.
+%% Throws exception when call to the datastore fails, or user's groups don't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec effective_default_space(AllUserSpaces :: ordsets:ordset(binary()),
-    UserDoc :: db_doc()) ->
+    UserDoc :: datastore:document()) ->
     EffectiveDefaultSpaceId :: binary() | undefined.
 effective_default_space(_, #document{value = #onedata_user{default_space = undefined}}) ->
     undefined;

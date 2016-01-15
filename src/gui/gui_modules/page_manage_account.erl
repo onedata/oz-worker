@@ -13,7 +13,7 @@
 -module(page_manage_account).
 
 -include_lib("ctool/include/logging.hrl").
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include("auth_common.hrl").
 -include("gui/common.hrl").
 

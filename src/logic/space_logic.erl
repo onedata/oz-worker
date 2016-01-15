@@ -12,7 +12,7 @@
 -module(space_logic).
 -author("Konrad Zemek").
 
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
 
 %% API
@@ -30,7 +30,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether a Space exists.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(SpaceId :: binary()) ->
@@ -41,7 +41,7 @@ exists(SpaceId) ->
 %%--------------------------------------------------------------------
 %% @doc Returns whether the provider identified by ProviderId supports the
 %% Space. Shall return false in any other case (Space doesn't exist, etc).
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_provider(SpaceId :: binary(), ProviderId :: binary()) ->
@@ -57,7 +57,7 @@ has_provider(SpaceId, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc Returns whether the user identified by UserId is a member of the Space.
 %% Shall return false in any other case (Space doesn't exist, etc).
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_user(SpaceId :: binary(), UserId :: binary()) ->
@@ -74,7 +74,7 @@ has_user(SpaceId, UserId) ->
 %% @doc Returns whether the user identified by UserId is a member of the Space,
 %% either directly or through a group.
 %% Shall return false in any other case (Space doesn't exist, etc).
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_effective_user(SpaceId :: binary(), UserId :: binary()) ->
@@ -101,7 +101,7 @@ has_effective_user(SpaceId, UserId) ->
 %%--------------------------------------------------------------------
 %% @doc Returns whether the group identified by GroupId is a member of the
 %% Space. Shall return false in any other case (Space doesn't exist, etc).
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_group(SpaceId :: binary(), GroupId :: binary()) ->
@@ -118,7 +118,7 @@ has_group(SpaceId, GroupId) ->
 %% @doc Returns whether the Space's user identified by UserId has privilege
 %% in the Space. Shall return false in any other case (Space doesn't exist,
 %% user is not Space's member, etc).
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_effective_privilege(SpaceId :: binary(), UserId :: binary(),
@@ -134,7 +134,7 @@ has_effective_privilege(SpaceId, UserId, Privilege) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user.
-%% Throws exception when call to dao fails, or given member doesn't exist.
+%% Throws exception when call to the datastore fails, or given member doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create({user | group, Id :: binary()}, Name :: binary()) ->
@@ -144,7 +144,7 @@ create(Member, Name) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user, by a provider that will support it.
-%% Throws exception when call to dao fails, or token/member_from_token doesn't exist.
+%% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create({provider, ProviderId :: binary()}, Name :: binary(),
@@ -156,7 +156,7 @@ create({provider, ProviderId}, Name, Macaroon, Size) ->
 
 %%--------------------------------------------------------------------
 %% @doc Modifies Space's data.
-%% Throws exception when call to dao fails, or space doesn't exist.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec modify(SpaceId :: binary(), Name :: binary()) ->
@@ -170,7 +170,7 @@ modify(SpaceId, Name) ->
 
 %%--------------------------------------------------------------------
 %% @doc Sets privileges for a member of the Space.
-%% Throws exception when call to dao fails, or space doesn't exist.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec set_privileges(SpaceId :: binary(), {user | group, Id :: binary()},
@@ -185,7 +185,7 @@ set_privileges(SpaceId, Member, Privileges) ->
 
 %%--------------------------------------------------------------------
 %% @doc Adds a new member to a Space identified by a token.
-%% Throws exception when call to dao fails, or member/token/space_from_token doesn't exist.
+%% Throws exception when call to the datastore fails, or member/token/space_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec join({group | user, Id :: binary()}, Macaroon :: macaroon:macaroon()) ->
@@ -241,7 +241,7 @@ join({group, GroupId}, Macaroon) ->
 
 %%--------------------------------------------------------------------
 %% @doc Adds a new supporting provider to a Space identified by a token.
-%% Throws exception when call to dao fails, or provider/token/space_from_token doesn't exist.
+%% Throws exception when call to the datastore fails, or provider/token/space_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec support(ProviderId :: binary(), Macaroon :: macaroon:macaroon(),
@@ -279,7 +279,7 @@ support(ProviderId, Macaroon, SupportedSize) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about the Space.
-%% Throws exception when call to dao fails, or space doesn't exist.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(SpaceId :: binary(), Client :: user | provider) ->
@@ -294,7 +294,7 @@ get_data(SpaceId, _Client) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's users.
-%% Throws exception when call to dao fails, or space doesn't exist.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_users(SpaceId :: binary()) ->
@@ -307,7 +307,7 @@ get_users(SpaceId) ->
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's users. The users may belong to the Space
 %% directly or indirectly through their groups.
-%% Throws exception when call to dao fails, or space doesn't exist.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_effective_users(SpaceId :: binary()) ->
@@ -329,7 +329,7 @@ get_effective_users(SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's groups.
-%% Throws exception when call to dao fails, or space doesn't exist.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_groups(SpaceId :: binary()) ->
@@ -341,7 +341,7 @@ get_groups(SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's providers.
-%% Throws exception when call to dao fails, or space doesn't exist.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_providers(SpaceId :: binary(), Client :: user | provider) ->
@@ -352,7 +352,7 @@ get_providers(SpaceId, _Client) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's user.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user(SpaceId :: binary(), Client :: user | provider,
@@ -364,7 +364,7 @@ get_user(_SpaceId, _Client, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's group.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group(SpaceId :: binary(), GroupId :: binary()) ->
@@ -375,7 +375,7 @@ get_group(_SpaceId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's provider.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_provider(SpaceId :: binary(), Client :: user | provider,
@@ -387,7 +387,7 @@ get_provider(_SpaceId, _Client, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns list of Space's member privileges.
-%% Throws exception when call to dao fails, or space doesn't exist.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_privileges(SpaceId :: binary(), {user | group, Id :: binary()}) ->
@@ -403,7 +403,7 @@ get_privileges(SpaceId, {group, GroupId}) ->
 
 %%--------------------------------------------------------------------
 %% @doc Removes the Space.
-%% Throws exception when call to dao fails, or space is already removed.
+%% Throws exception when call to the datastore fails, or space is already removed.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove(SpaceId :: binary()) ->
@@ -443,7 +443,7 @@ remove(SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Removes user from the Space.
-%% Throws exception when call to dao fails, or space/user doesn't exist.
+%% Throws exception when call to the datastore fails, or space/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_user(SpaceId :: binary(), UserId :: binary()) ->
@@ -469,7 +469,7 @@ remove_user(SpaceId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Removes group from the Space.
-%% Throws exception when call to dao fails, or space/group doesn't exist.
+%% Throws exception when call to the datastore fails, or space/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_group(SpaceId :: binary(), GroupId :: binary()) ->
@@ -492,7 +492,7 @@ remove_group(SpaceId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Removes provider from the Space.
-%% Throws exception when call to dao fails, or space/provider doesn't exist.
+%% Throws exception when call to the datastore fails, or space/provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_provider(SpaceId :: binary(), ProviderId :: binary()) ->
@@ -515,7 +515,7 @@ remove_provider(SpaceId, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user or a group, with a preexisting provider.
-%% Throws exception when call to dao fails, or user/group doesn't exist.
+%% Throws exception when call to the datastore fails, or user/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_with_provider({user | group, Id :: binary()}, Name :: binary(),
@@ -577,7 +577,7 @@ add_space_to_providers(SpaceId, [ProviderId | RestProviders]) ->
 
 %%--------------------------------------------------------------------
 %% @doc Removes the space if empty.
-%% Throws exception when call to dao fails, or space is already removed.
+%% Throws exception when call to the datastore fails, or space is already removed.
 %% @end
 %%--------------------------------------------------------------------
 -spec cleanup(SpaceId :: binary()) -> boolean() | no_return().
@@ -591,7 +591,7 @@ cleanup(SpaceId) ->
 %%--------------------------------------------------------------------
 %% @doc Retrieves effective user privileges taking into account any groups
 %% he is a member of that also are members of the Space.
-%% Throws exception when call to dao fails, or space/user doesn't exist.
+%% Throws exception when call to the datastore fails, or space/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_effective_privileges(SpaceId :: binary(), UserId :: binary()) ->

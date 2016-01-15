@@ -12,7 +12,7 @@
 
 -module(gr_gui_utils).
 -include("gui/common.hrl").
--include("datastore/datastore_types.hrl").
+-include("datastore/gr_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 % Functions to check for user's session
