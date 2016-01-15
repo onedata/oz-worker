@@ -93,16 +93,16 @@ space_support_test(Config) ->
 
     ?assertEqual(ok, gr_test_utils:support_space(Node1, ProviderId1, SpaceId1, 1)),
 
-    assert_received(Config, [Socket1], #'SpaceModified'{
+    assert_received(Config, [Socket1], [#'SpaceModified'{
         id = SpaceId1,
         name = SpaceName1,
         size = [#'SpaceModified.Size'{provider = ProviderId1, size = 1}],
         users = [UserId1],
         groups = [],
         providers = [ProviderId1]
-    }),
-
-    assert_received(Config, [Socket1], #'UserModified'{id = UserId1, spaces = [SpaceId1], groups = []}),
+    }, #'UserModified'{
+        id = UserId1, spaces = [SpaceId1], groups = []}
+    ]),
 
     assert_not_received([Socket1]),
 
@@ -111,25 +111,26 @@ space_support_test(Config) ->
     ?assertEqual(ok, gr_test_utils:join_group(Node1, UserId3, GroupId1)),
     ?assertEqual(ok, gr_test_utils:join_space(Node2, {group, GroupId1}, SpaceId1)),
 
-    assert_received(Config, [Socket1], #'SpaceModified'{
+    assert_received(Config, [Socket1], [#'SpaceModified'{
         id = SpaceId1,
         name = SpaceName1,
         size = [#'SpaceModified.Size'{provider = ProviderId1, size = 1}],
         users = [UserId1],
         groups = [GroupId1],
         providers = [ProviderId1]
-        }),
-
-    assert_received(Config, [Socket1], #'GroupModified'{id = GroupId1, name = GroupName1}),
-
-    assert_received(Config, [Socket1], #'UserModified'{id = UserId3, spaces = [], groups = [GroupId1]}),
-    assert_received(Config, [Socket1], #'UserModified'{id = UserId2, spaces = [], groups = [GroupId1]}),
+    }, #'GroupModified'{
+        id = GroupId1, name = GroupName1
+    }, #'UserModified'{
+        id = UserId3, spaces = [], groups = [GroupId1]
+    }, #'UserModified'{
+        id = UserId2, spaces = [], groups = [GroupId1]
+    }]),
 
     assert_not_received([Socket1]),
 
     ?assertEqual(ok, gr_test_utils:support_space(Node1, ProviderId2, SpaceId1, 2)),
 
-    assert_received(Config, [Socket1, Socket2], #'SpaceModified'{
+    SpaceModifiedTuple = #'SpaceModified'{
         id = SpaceId1,
         name = SpaceName1,
         size = [
@@ -139,14 +140,17 @@ space_support_test(Config) ->
         users = [UserId1],
         groups = [GroupId1],
         providers = [ProviderId2, ProviderId1]
-        }),
-
-    assert_received(Config, [Socket2], #'UserModified'{id = UserId1, spaces = [SpaceId1], groups = []}),
-
-    assert_received(Config, [Socket2], #'GroupModified'{id = GroupId1, name = GroupName1}),
-
-    assert_received(Config, [Socket2], #'UserModified'{id = UserId3, spaces = [], groups = [GroupId1]}),
-    assert_received(Config, [Socket2], #'UserModified'{id = UserId2, spaces = [], groups = [GroupId1]}),
+    },
+    assert_received(Config, [Socket1], SpaceModifiedTuple),
+    assert_received(Config, [Socket2], [SpaceModifiedTuple, #'UserModified'{
+        id = UserId1, spaces = [SpaceId1], groups = []
+    }, #'GroupModified'{
+        id = GroupId1, name = GroupName1
+    }, #'UserModified'{
+        id = UserId3, spaces = [], groups = [GroupId1]
+    }, #'UserModified'{
+        id = UserId2, spaces = [], groups = [GroupId1]
+    }]),
 
     assert_not_received([Socket1, Socket2]),
 
@@ -211,9 +215,12 @@ modification_test(Config) ->
 
     modify_groups(Node1, [{GroupId1, NewGroupName1}, {GroupId2, NewGroupName2}, {GroupId3, NewGroupName3}]),
 
-    assert_received(Config, [Socket1, Socket2, Socket3], #'GroupModified'{id = GroupId1, name = NewGroupName1}),
-    assert_received(Config, [Socket1, Socket2], #'GroupModified'{id = GroupId2, name = NewGroupName2}),
-    assert_received(Config, [Socket1], #'GroupModified'{id = GroupId3, name = NewGroupName3}),
+    G1Modified = #'GroupModified'{id = GroupId1, name = NewGroupName1},
+    G2Modified = #'GroupModified'{id = GroupId2, name = NewGroupName2},
+    G3Modified = #'GroupModified'{id = GroupId3, name = NewGroupName3},
+    assert_received(Config, [Socket1], [G1Modified, G2Modified, G3Modified]),
+    assert_received(Config, [Socket2], [G1Modified, G2Modified]),
+    assert_received(Config, [Socket3], [G1Modified]),
 
     assert_not_received([Socket1, Socket2, Socket3]),
 
@@ -223,7 +230,7 @@ modification_test(Config) ->
 
     modify_spaces(Node2, [{SpaceId1, NewSpaceName1}, {SpaceId2, NewSpaceName2}, {SpaceId3, NewSpaceName3}]),
 
-    assert_received(Config, [Socket1, Socket2, Socket3], #'SpaceModified'{
+    S1Modified = #'SpaceModified'{
         id = SpaceId1,
         name = NewSpaceName1,
         size = [
@@ -234,9 +241,8 @@ modification_test(Config) ->
         users = [],
         groups = [GroupId1],
         providers = [ProviderId3, ProviderId2, ProviderId1]
-    }),
-
-    assert_received(Config, [Socket1, Socket2], #'SpaceModified'{
+    },
+    S2Modified = #'SpaceModified'{
         id = SpaceId2,
         name = NewSpaceName2,
         size = [
@@ -246,9 +252,8 @@ modification_test(Config) ->
         users = [],
         groups = [GroupId2],
         providers = [ProviderId2, ProviderId1]
-    }),
-
-    assert_received(Config, [Socket1], #'SpaceModified'{
+    },
+    S3Modified = #'SpaceModified'{
         id = SpaceId3,
         name = NewSpaceName3,
         size = [
@@ -257,7 +262,11 @@ modification_test(Config) ->
         users = [],
         groups = [GroupId3],
         providers = [ProviderId1]
-    }),
+    },
+
+    assert_received(Config, [Socket1], [S1Modified, S2Modified, S3Modified]),
+    assert_received(Config, [Socket2], [S1Modified, S2Modified]),
+    assert_received(Config, [Socket3], [S1Modified]),
 
     assert_not_received([Socket1, Socket2, Socket3]),
 
@@ -293,12 +302,12 @@ removal_test(Config) ->
 
     remove_groups(Node2, [GroupId1]),
 
-    assert_received(Config, Sockets, #'UserModified'{id = UserId3, spaces = [], groups = []}),
-    assert_received(Config, Sockets, #'UserModified'{id = UserId2, spaces = [], groups = []}),
-
-    assert_received(Config, Sockets, #'SpaceRemoved'{id = SpaceId1}),
-
-    assert_received(Config, Sockets, #'GroupRemoved'{id = GroupId1}),
+    assert_received(Config, Sockets, [
+        #'UserModified'{id = UserId3, spaces = [], groups = []},
+        #'UserModified'{id = UserId2, spaces = [], groups = []},
+        #'SpaceRemoved'{id = SpaceId1},
+        #'GroupRemoved'{id = GroupId1}
+    ]),
 
     assert_not_received(Sockets),
 
@@ -421,17 +430,28 @@ assert_received(Sockets, Msg) ->
         ?assertEqual({ok, Msg}, wss_handler:recv(Socket))
     end, Sockets).
 
+assert_received(Config, Sockets, Msgs) when is_list(Msgs) ->
+    [Node | _] = ?config(gr_nodes, Config),
+    lists:foreach(fun(Socket) ->
+        Received = lists:map(fun(_) -> receive_and_encode(Node, Socket) end, Msgs),
+        ?assertEqual(lists:sort(Msgs), lists:sort(Received))
+    end, Sockets);
+
 assert_received(Config, Sockets, Msg) ->
     [Node | _] = ?config(gr_nodes, Config),
     lists:foreach(fun(Socket) ->
-        WSSReceiveAns = wss_handler:recv(Socket),
-        ?assertMatch({ok, _}, WSSReceiveAns),
-        {ok, Data} = WSSReceiveAns,
-        PbDecodeAns = rpc:call(Node, pb, decode, [gr_communication_protocol, 'Message', Data]),
-        ?assertMatch({ok, _}, PbDecodeAns),
-        {ok, #'Message'{message_decoder_name = Decoder, message_type = Type, input = Input}} = PbDecodeAns,
-        ?assertEqual({ok, Msg}, rpc:call(Node, pb, decode, [Decoder, Type, Input]))
+        ?assertEqual(Msg, receive_and_encode(Node, Socket))
     end, Sockets).
+
+receive_and_encode(Node, Socket) ->
+    WSSReceiveAns = wss_handler:recv(Socket),
+    ?assertMatch({ok, _}, WSSReceiveAns),
+    {ok, Data} = WSSReceiveAns,
+    PbDecodeAns = rpc:call(Node, pb, decode, [gr_communication_protocol, 'Message', Data]),
+    ?assertMatch({ok, _}, PbDecodeAns),
+    {ok, #'Message'{message_decoder_name = Decoder, message_type = Type, input = Input}} = PbDecodeAns,
+    {ok, Received} = rpc:call(Node, pb, decode, [Decoder, Type, Input]),
+    Received.
 
 
 assert_not_received(Sockets) ->
