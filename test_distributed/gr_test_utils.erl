@@ -32,7 +32,7 @@
 make_dir(Root, Dir) ->
     lists:foldl(fun(Leaf, Path) ->
         NewPath = filename:join(Path, Leaf),
-        catch file:make_dir(NewPath),
+            catch file:make_dir(NewPath),
         NewPath
     end, Root, filename:split(Dir)).
 
@@ -53,9 +53,9 @@ cleanup() ->
 %% @doc Creates provider in Global Registry.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider(Config :: term(), Name :: binary(), URLs :: [binary()], RedirectionPoint :: binary()) ->
+-spec create_provider(Node :: binary(), Name :: binary(), URLs :: [binary()], RedirectionPoint :: binary()) ->
     {ok, Id :: binary(), KeyFile :: string(), CertFile :: string()} | {error, Reason :: term()}.
-create_provider(Config, Name, URLs, RedirectionPoint) ->
+create_provider(Node, Name, URLs, RedirectionPoint) ->
     try
         {MegaSec, Sec, MiliSec} = erlang:now(),
         Prefix = lists:foldl(fun(Int, Acc) ->
@@ -66,7 +66,6 @@ create_provider(Config, Name, URLs, RedirectionPoint) ->
         os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
         os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
         {ok, CSR} = file:read_file(CSRFile),
-        [Node] = ?config(gr_nodes, Config),
         {ok, Id, Cert} = rpc:call(Node, provider_logic, create, [Name, URLs, RedirectionPoint, CSR]),
         file:write_file(CertFile, Cert),
         {ok, Id, KeyFile, CertFile}
@@ -79,11 +78,10 @@ create_provider(Config, Name, URLs, RedirectionPoint) ->
 %% @doc Creates space in Global Registry.
 %% @end
 %%--------------------------------------------------------------------
--spec create_space(Config :: term(), Member :: {user | group, Id :: binary()}, Name :: binary()) ->
+-spec create_space(Node :: binary(), Member :: {user | group, Id :: binary()}, Name :: binary()) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
-create_space(Config, Member, Name) ->
+create_space(Node, Member, Name) ->
     try
-        [Node] = ?config(gr_nodes, Config),
         rpc:call(Node, space_logic, create, [Member, Name])
     catch
         _:Reason ->
@@ -94,11 +92,10 @@ create_space(Config, Member, Name) ->
 %% @doc Creates user in Global Registry.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user(Config :: term(), User :: #onedata_user{}) ->
+-spec create_user(Node :: binary(), User :: #onedata_user{}) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
-create_user(Config, User) ->
+create_user(Node, User) ->
     try
-        [Node] = ?config(gr_nodes, Config),
         rpc:call(Node, user_logic, create, [User])
     catch
         _:Reason ->
@@ -109,11 +106,10 @@ create_user(Config, User) ->
 %% @doc Creates group in Global Registry.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group(Config :: term(), UserId :: binary(), Name :: binary()) ->
+-spec create_group(Node :: binary(), UserId :: binary(), Name :: binary()) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
-create_group(Config, UserId, Name) ->
+create_group(Node, UserId, Name) ->
     try
-        [Node] = ?config(gr_nodes, Config),
         rpc:call(Node, group_logic, create, [UserId, Name])
     catch
         _:Reason ->
@@ -124,11 +120,10 @@ create_group(Config, UserId, Name) ->
 %% @doc Adds user to group in Global Registry.
 %% @end
 %%--------------------------------------------------------------------
--spec join_group(Config :: term(), UserId :: binary(), GroupId :: binary()) ->
+-spec join_group(Node :: binary(), UserId :: binary(), GroupId :: binary()) ->
     ok | {error, Reason :: term()}.
-join_group(Config, UserId, GroupId) ->
+join_group(Node, UserId, GroupId) ->
     try
-        [Node] = ?config(gr_nodes, Config),
         rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(group_invite_token, {group, GroupId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
@@ -144,11 +139,10 @@ join_group(Config, UserId, GroupId) ->
 %% @doc Creates group in Global Registry.
 %% @end
 %%--------------------------------------------------------------------
--spec join_space(Config :: term(), {user | group, Id :: binary()}, SpaceId :: binary()) ->
+-spec join_space(Node :: binary(), {user | group, Id :: binary()}, SpaceId :: binary()) ->
     ok | {error, Reason :: term()}.
-join_space(Config, {user, UserId}, SpaceId) ->
+join_space(Node, {user, UserId}, SpaceId) ->
     try
-        [Node] = ?config(gr_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = rpc:call(Node, token_logic, create, [space_invite_user_token, {space, SpaceId}]),
             {ok, Macaroon} = macaroon:deserialize(Token),
@@ -160,9 +154,8 @@ join_space(Config, {user, UserId}, SpaceId) ->
             {error, Reason}
     end;
 
-join_space(Config, {group, GroupId}, SpaceId) ->
+join_space(Node, {group, GroupId}, SpaceId) ->
     try
-        [Node] = ?config(gr_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(space_invite_group_token, {space, SpaceId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
@@ -178,11 +171,10 @@ join_space(Config, {group, GroupId}, SpaceId) ->
 %% @doc Supports space by provider.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), ProviderId :: binary(), SpaceId :: binary(), Size :: non_neg_integer()) ->
+-spec support_space(Node :: binary(), ProviderId :: binary(), SpaceId :: binary(), Size :: non_neg_integer()) ->
     ok | {error, Reason :: term()}.
-support_space(Config, ProviderId, SpaceId, Size) ->
+support_space(Node, ProviderId, SpaceId, Size) ->
     try
-        [Node] = ?config(gr_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(space_support_token, {space, SpaceId}),
             {ok, Macaroon} = macaroon:deserialize(Token),

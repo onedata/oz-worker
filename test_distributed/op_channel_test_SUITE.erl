@@ -35,35 +35,41 @@ all() -> [connection_test, space_support_test, modification_test, removal_test].
 %% This test checks whether connections to providers are properly added and removed.
 %% Moreover it tests whether messages are pushed to providers.
 connection_test(Config) ->
+    [Node1, Node2] = ?config(gr_nodes, Config),
     [
         {ProviderId1, _, _},
         {ProviderId2, _, _},
         {ProviderId3, KeyFile3, CertFile3}
-    ] = Providers = create_providers(Config, 3, []),
+    ] = Providers = create_providers(Node1, 3, []),
 
-    [Socket1, Socket2, Socket3] = Sockets = connect_providers(Config, Providers),
+    [Socket1, Socket2, Socket3] = Sockets = connect_providers(Node1, Config, Providers),
 
     Msg = <<"test_message">>,
 
-    send_to_providers(Config, [ProviderId1, ProviderId2, ProviderId3], Msg),
+    send_to_providers(Node1, [ProviderId1, ProviderId2, ProviderId3], Msg),
     assert_received([Socket1, Socket2, Socket3], Msg),
 
-    send_to_providers(Config, [ProviderId1, ProviderId2], Msg),
+    send_to_providers(Node2, [ProviderId1], Msg),
+    send_to_providers(Node1, [ProviderId2, ProviderId3], Msg),
+    assert_received([Socket1, Socket2, Socket3], Msg),
+
+    send_to_providers(Node1, [ProviderId1, ProviderId2], Msg),
     assert_received([Socket1, Socket2], Msg),
     assert_not_received([Socket3]),
 
-    send_to_providers(Config, [ProviderId1], Msg),
+    send_to_providers(Node1, [ProviderId1], Msg),
     assert_received([Socket1], Msg),
     assert_not_received([Socket2, Socket3]),
 
     disconnect_providers([Socket3]),
 
-    send_to_providers(Config, [ProviderId1, ProviderId2, ProviderId3], Msg),
+    send_to_providers(Node1, [ProviderId1, ProviderId2, ProviderId3], Msg),
     assert_received([Socket1, Socket2], Msg),
     assert_not_received([Socket3]),
 
-    [NewSocket3] = connect_providers(Config, [{ProviderId3, KeyFile3, CertFile3}]),
-    send_to_providers(Config, [ProviderId1, ProviderId2, ProviderId3], Msg),
+    [NewSocket3] = connect_providers(Node1, Config, [{ProviderId3, KeyFile3, CertFile3}]),
+
+    send_to_providers(Node1, [ProviderId1, ProviderId2, ProviderId3], Msg),
     assert_received([Socket1, Socket2, NewSocket3], Msg),
 
     disconnect_providers(Sockets).
@@ -73,18 +79,19 @@ connection_test(Config) ->
 %% whether new provider gets to know about all users and groups belonging to
 %% newly supported space.
 space_support_test(Config) ->
+    [Node1, Node2] = ?config(gr_nodes, Config),
     [
         {ProviderId1, _, _},
         {ProviderId2, _, _}
-    ] = Providers = create_providers(Config, 2, []),
+    ] = Providers = create_providers(Node1, 2, []),
 
-    [Socket1, Socket2] = Sockets = connect_providers(Config, Providers),
+    [Socket1, Socket2] = Sockets = connect_providers(Node2, Config, Providers),
 
-    [UserId1, UserId2, UserId3] = create_users(Config, 3, []),
+    [UserId1, UserId2, UserId3] = create_users(Node1, 3, []),
 
-    [{SpaceId1, SpaceName1}] = create_spaces(Config, {user, UserId1}, 1, []),
+    [{SpaceId1, SpaceName1}] = create_spaces(Node2, {user, UserId1}, 1, []),
 
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node1, ProviderId1, SpaceId1, 1)),
 
     assert_received(Config, [Socket1], #'SpaceModified'{
         id = SpaceId1,
@@ -99,11 +106,10 @@ space_support_test(Config) ->
 
     assert_not_received([Socket1]),
 
-    [{GroupId1, GroupName1}] = create_groups(Config, UserId2, 1, []),
+    [{GroupId1, GroupName1}] = create_groups(Node2, UserId2, 1, []),
 
-    ?assertEqual(ok, gr_test_utils:join_group(Config, UserId3, GroupId1)),
-
-    ?assertEqual(ok, gr_test_utils:join_space(Config, {group, GroupId1}, SpaceId1)),
+    ?assertEqual(ok, gr_test_utils:join_group(Node1, UserId3, GroupId1)),
+    ?assertEqual(ok, gr_test_utils:join_space(Node2, {group, GroupId1}, SpaceId1)),
 
     assert_received(Config, [Socket1], #'SpaceModified'{
         id = SpaceId1,
@@ -112,7 +118,7 @@ space_support_test(Config) ->
         users = [UserId1],
         groups = [GroupId1],
         providers = [ProviderId1]
-    }),
+        }),
 
     assert_received(Config, [Socket1], #'GroupModified'{id = GroupId1, name = GroupName1}),
 
@@ -121,7 +127,7 @@ space_support_test(Config) ->
 
     assert_not_received([Socket1]),
 
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node1, ProviderId2, SpaceId1, 2)),
 
     assert_received(Config, [Socket1, Socket2], #'SpaceModified'{
         id = SpaceId1,
@@ -133,7 +139,7 @@ space_support_test(Config) ->
         users = [UserId1],
         groups = [GroupId1],
         providers = [ProviderId2, ProviderId1]
-    }),
+        }),
 
     assert_received(Config, [Socket2], #'UserModified'{id = UserId1, spaces = [SpaceId1], groups = []}),
 
@@ -144,7 +150,7 @@ space_support_test(Config) ->
 
     assert_not_received([Socket1, Socket2]),
 
-    unsupport_space(Config, [ProviderId1], SpaceId1),
+    unsupport_space(Node2, [ProviderId1], SpaceId1),
 
     assert_received(Config, [Socket1], #'SpaceRemoved'{id = SpaceId1}),
 
@@ -161,7 +167,7 @@ space_support_test(Config) ->
 
     assert_not_received([Socket1, Socket2]),
 
-    remove_providers(Config, [ProviderId2]),
+    remove_providers(Node1, [ProviderId2]),
 
     assert_received(Config, [Socket2], #'SpaceRemoved'{id = SpaceId1}),
 
@@ -171,38 +177,39 @@ space_support_test(Config) ->
 
 %% This test checks whether providers receive notifications about modifications of groups and spaces.
 modification_test(Config) ->
+    [Node1, Node2] = ?config(gr_nodes, Config),
     [
         {ProviderId1, _, _},
         {ProviderId2, _, _},
         {ProviderId3, _, _}
-    ] = Providers = create_providers(Config, 3, []),
+    ] = Providers = create_providers(Node2, 3, []),
 
-    [UserId1, UserId2, UserId3] = create_users(Config, 3, []),
+    [UserId1, UserId2, UserId3] = create_users(Node1, 3, []),
 
-    [{GroupId1, GroupName1}] = create_groups(Config, UserId1, 1, []),
-    [{GroupId2, GroupName2}] = create_groups(Config, UserId2, 1, []),
-    [{GroupId3, GroupName3}] = create_groups(Config, UserId3, 1, []),
+    [{GroupId1, GroupName1}] = create_groups(Node2, UserId1, 1, []),
+    [{GroupId2, GroupName2}] = create_groups(Node1, UserId2, 1, []),
+    [{GroupId3, GroupName3}] = create_groups(Node2, UserId3, 1, []),
 
-    [{SpaceId1, SpaceName1}] = create_spaces(Config, {group, GroupId1}, 1, []),
-    [{SpaceId2, SpaceName2}] = create_spaces(Config, {group, GroupId2}, 1, []),
-    [{SpaceId3, SpaceName3}] = create_spaces(Config, {group, GroupId3}, 1, []),
+    [{SpaceId1, SpaceName1}] = create_spaces(Node1, {group, GroupId1}, 1, []),
+    [{SpaceId2, SpaceName2}] = create_spaces(Node2, {group, GroupId2}, 1, []),
+    [{SpaceId3, SpaceName3}] = create_spaces(Node1, {group, GroupId3}, 1, []),
 
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId2, 1)),
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId3, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node2, ProviderId1, SpaceId1, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node1, ProviderId1, SpaceId2, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node2, ProviderId1, SpaceId3, 1)),
 
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId2, SpaceId2, 2)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node1, ProviderId2, SpaceId1, 2)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node2, ProviderId2, SpaceId2, 2)),
 
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId3, SpaceId1, 3)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node1, ProviderId3, SpaceId1, 3)),
 
-    [Socket1, Socket2, Socket3] = Sockets = connect_providers(Config, Providers),
+    [Socket1, Socket2, Socket3] = Sockets = connect_providers(Node2, Config, Providers),
 
     NewGroupName1 = <<GroupName1/binary, "_new">>,
     NewGroupName2 = <<GroupName2/binary, "_new">>,
     NewGroupName3 = <<GroupName3/binary, "_new">>,
 
-    modify_groups(Config, [{GroupId1, NewGroupName1}, {GroupId2, NewGroupName2}, {GroupId3, NewGroupName3}]),
+    modify_groups(Node1, [{GroupId1, NewGroupName1}, {GroupId2, NewGroupName2}, {GroupId3, NewGroupName3}]),
 
     assert_received(Config, [Socket1, Socket2, Socket3], #'GroupModified'{id = GroupId1, name = NewGroupName1}),
     assert_received(Config, [Socket1, Socket2], #'GroupModified'{id = GroupId2, name = NewGroupName2}),
@@ -214,7 +221,7 @@ modification_test(Config) ->
     NewSpaceName2 = <<SpaceName2/binary, "_new">>,
     NewSpaceName3 = <<SpaceName3/binary, "_new">>,
 
-    modify_spaces(Config, [{SpaceId1, NewSpaceName1}, {SpaceId2, NewSpaceName2}, {SpaceId3, NewSpaceName3}]),
+    modify_spaces(Node2, [{SpaceId1, NewSpaceName1}, {SpaceId2, NewSpaceName2}, {SpaceId3, NewSpaceName3}]),
 
     assert_received(Config, [Socket1, Socket2, Socket3], #'SpaceModified'{
         id = SpaceId1,
@@ -258,32 +265,33 @@ modification_test(Config) ->
 
 %% This test checks whether providers receive notifications about removal of groups and spaces.
 removal_test(Config) ->
+    [Node1, Node2] = ?config(gr_nodes, Config),
     [
         {ProviderId1, _, _},
         {ProviderId2, _, _}
-    ] = Providers = create_providers(Config, 2, []),
+    ] = Providers = create_providers(Node1, 2, []),
 
-    [UserId1, UserId2, UserId3] = create_users(Config, 3, []),
+    [UserId1, UserId2, UserId3] = create_users(Node2, 3, []),
 
-    [{GroupId1, _}] = create_groups(Config, UserId1, 1, []),
+    [{GroupId1, _}] = create_groups(Node1, UserId1, 1, []),
 
-    ?assertEqual(ok, gr_test_utils:join_group(Config, UserId2, GroupId1)),
-    ?assertEqual(ok, gr_test_utils:join_group(Config, UserId3, GroupId1)),
+    ?assertEqual(ok, gr_test_utils:join_group(Node2, UserId2, GroupId1)),
+    ?assertEqual(ok, gr_test_utils:join_group(Node1, UserId3, GroupId1)),
 
-    [{SpaceId1, _}] = create_spaces(Config, {group, GroupId1}, 1, []),
+    [{SpaceId1, _}] = create_spaces(Node2, {group, GroupId1}, 1, []),
 
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId1, SpaceId1, 1)),
-    ?assertEqual(ok, gr_test_utils:support_space(Config, ProviderId2, SpaceId1, 2)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node1, ProviderId1, SpaceId1, 1)),
+    ?assertEqual(ok, gr_test_utils:support_space(Node2, ProviderId2, SpaceId1, 2)),
 
-    [Socket1, Socket2] = Sockets = connect_providers(Config, Providers),
+    [Socket1, Socket2] = Sockets = connect_providers(Node1, Config, Providers),
 
-    remove_group_users(Config, [UserId1], GroupId1),
+    remove_group_users(Node2, [UserId1], GroupId1),
 
     assert_received(Config, [Socket1, Socket2], #'UserModified'{id = UserId1, spaces = [], groups = []}),
 
     assert_not_received(Sockets),
 
-    remove_groups(Config, [GroupId1]),
+    remove_groups(Node2, [GroupId1]),
 
     assert_received(Config, Sockets, #'UserModified'{id = UserId3, spaces = [], groups = []}),
     assert_received(Config, Sockets, #'UserModified'{id = UserId2, spaces = [], groups = []}),
@@ -303,7 +311,7 @@ removal_test(Config) ->
 init_per_suite(Config) ->
     % Needed for websocket_client
     application:start(ssl2),
-    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
+    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json"), [gr_test_utils]),
     NewConfig.
 
 end_per_suite(Config) ->
@@ -317,16 +325,15 @@ end_per_suite(Config) ->
 create_providers(_, 0, Providers) ->
     Providers;
 
-create_providers(Config, N, Providers) ->
-    CreateProviderAns = gr_test_utils:create_provider(Config, <<"provider", (integer_to_binary(N))/binary>>,
+create_providers(Node, N, Providers) ->
+    CreateProviderAns = gr_test_utils:create_provider(Node, <<"provider", (integer_to_binary(N))/binary>>,
         [<<"127.0.0.1">>], <<"https://127.0.0.1:443">>),
     ?assertMatch({ok, _, _, _}, CreateProviderAns),
     {ok, ProviderId, KeyFile, CertFile} = CreateProviderAns,
-    create_providers(Config, N - 1, [{ProviderId, KeyFile, CertFile} | Providers]).
+    create_providers(Node, N - 1, [{ProviderId, KeyFile, CertFile} | Providers]).
 
 
-remove_providers(Config, Providers) ->
-    [Node] = ?config(gr_nodes, Config),
+remove_providers(Node, Providers) ->
     lists:foreach(fun(Provider) ->
         ?assert(rpc:call(Node, provider_logic, remove, [Provider]))
     end, Providers).
@@ -335,40 +342,37 @@ remove_providers(Config, Providers) ->
 create_users(_, 0, Users) ->
     Users;
 
-create_users(Config, N, Users) ->
-    CreateUserAns = gr_test_utils:create_user(Config, #onedata_user{name = <<"user", (integer_to_binary(N))/binary>>}),
+create_users(Node, N, Users) ->
+    CreateUserAns = gr_test_utils:create_user(Node, #onedata_user{name = <<"user", (integer_to_binary(N))/binary>>}),
     ?assertMatch({ok, _}, CreateUserAns),
     {ok, UserId} = CreateUserAns,
-    create_users(Config, N - 1, [UserId | Users]).
+    create_users(Node, N - 1, [UserId | Users]).
 
 
 create_groups(_, _, 0, Groups) ->
     Groups;
 
-create_groups(Config, UserId, N, Groups) ->
+create_groups(Node, UserId, N, Groups) ->
     Name = <<"group", (integer_to_binary(N))/binary>>,
-    CreateGroupAns = gr_test_utils:create_group(Config, UserId, Name),
+    CreateGroupAns = gr_test_utils:create_group(Node, UserId, Name),
     ?assertMatch({ok, _}, CreateGroupAns),
     {ok, GroupId} = CreateGroupAns,
-    create_groups(Config, UserId, N - 1, [{GroupId, Name} | Groups]).
+    create_groups(Node, UserId, N - 1, [{GroupId, Name} | Groups]).
 
 
-modify_groups(Config, Groups) ->
-    [Node] = ?config(gr_nodes, Config),
+modify_groups(Node, Groups) ->
     lists:foreach(fun({GroupId, Name}) ->
         ?assertEqual(ok, rpc:call(Node, group_logic, modify, [GroupId, Name]))
     end, Groups).
 
 
-remove_groups(Config, Groups) ->
-    [Node] = ?config(gr_nodes, Config),
+remove_groups(Node, Groups) ->
     lists:foreach(fun(GroupId) ->
         ?assert(rpc:call(Node, group_logic, remove, [GroupId]))
     end, Groups).
 
 
-remove_group_users(Config, Users, GroupId) ->
-    [Node] = ?config(gr_nodes, Config),
+remove_group_users(Node, Users, GroupId) ->
     lists:foreach(fun(UserId) ->
         ?assert(rpc:call(Node, group_logic, remove_user, [GroupId, UserId]))
     end, Users).
@@ -377,31 +381,28 @@ remove_group_users(Config, Users, GroupId) ->
 create_spaces(_, _, 0, Spaces) ->
     Spaces;
 
-create_spaces(Config, Member, N, Spaces) ->
+create_spaces(Node, Member, N, Spaces) ->
     Name = <<"space", (integer_to_binary(N))/binary>>,
-    CreateSpaceAns = gr_test_utils:create_space(Config, Member, Name),
+    CreateSpaceAns = gr_test_utils:create_space(Node, Member, Name),
     ?assertMatch({ok, _}, CreateSpaceAns),
     {ok, SpaceId} = CreateSpaceAns,
-    create_spaces(Config, Member, N - 1, [{SpaceId, Name} | Spaces]).
+    create_spaces(Node, Member, N - 1, [{SpaceId, Name} | Spaces]).
 
 
-modify_spaces(Config, Spaces) ->
-    [Node] = ?config(gr_nodes, Config),
+modify_spaces(Node, Spaces) ->
     lists:foreach(fun({SpaceId, Name}) ->
         ?assertEqual(ok, rpc:call(Node, space_logic, modify, [SpaceId, Name]))
     end, Spaces).
 
 
-unsupport_space(Config, Providers, Space) ->
-    [Node] = ?config(gr_nodes, Config),
+unsupport_space(Node, Providers, Space) ->
     lists:foreach(fun(Provider) ->
         ?assert(rpc:call(Node, space_logic, remove_provider, [Space, Provider]))
     end, Providers).
 
 
-connect_providers(Config, Providers) ->
+connect_providers(Node, Config, Providers) ->
     lists:map(fun({_, KeyFile, CertFile}) ->
-        [Node] = ?config(gr_nodes, Config),
         CACertFile = ?config(grpcacert_file, Config),
         {ok, Port} = rpc:call(Node, application, get_env, [?APP_Name, op_channel_port]),
         WSSConnectAns = wss:connect(utils:get_host(Node), Port, [{keyfile, KeyFile}, {certfile, CertFile}, {cacertfile, CACertFile}]),
@@ -411,8 +412,7 @@ connect_providers(Config, Providers) ->
     end, Providers).
 
 
-send_to_providers(Config, ProviderIds, Msg) ->
-    [Node] = ?config(gr_nodes, Config),
+send_to_providers(Node, ProviderIds, Msg) ->
     rpc:call(Node, op_channel_logic, push, [ProviderIds, Msg]).
 
 
@@ -422,7 +422,7 @@ assert_received(Sockets, Msg) ->
     end, Sockets).
 
 assert_received(Config, Sockets, Msg) ->
-    [Node] = ?config(gr_nodes, Config),
+    [Node | _] = ?config(gr_nodes, Config),
     lists:foreach(fun(Socket) ->
         WSSReceiveAns = wss_handler:recv(Socket),
         ?assertMatch({ok, _}, WSSReceiveAns),
