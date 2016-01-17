@@ -83,7 +83,7 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     macaroon:serialize(M2).
 
 %%--------------------------------------------------------------------
-%% @doc Returns resource associated with token.
+%% @doc Returns token issuer.
 %% Throws exception when call to dao fails, or token doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------

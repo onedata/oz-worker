@@ -103,7 +103,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 UserList = proplists:get_value(<<"users">>, Props),
                 GroupList = proplists:get_value(<<"groups">>, Props),
                 ProviderList = proplists:get_value(<<"providers">>, Props),
-                {Member, UsersToAdd, GroupsToAdd} =
+                {{_, MemberId} = Member, UsersToAdd, GroupsToAdd} =
                     case GroupList of
                         [] -> {{user, hd(UserList)}, tl(UserList), []};
                         _ -> {{group, hd(GroupList)}, UserList, tl(GroupList)}
@@ -118,21 +118,21 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     fun(ProviderProps) ->
                         ProviderID = proplists:get_value(<<"provider">>, ProviderProps),
                         SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
-                        {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = Member}, space_support_token, {space, SpaceID}),
+                        {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = MemberId}, space_support_token, {space, SpaceID}),
                         {ok, SpaceToken} = macaroon:deserialize(SerializedSpaceToken),
                         space_logic:support(ProviderID, SpaceToken, SupportedSize)
                     end, ProviderList),
                 % Add all users to space
                 lists:foreach(
                     fun(UserID) ->
-                        {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = Member}, space_invite_user_token, {space, SpaceID}),
+                        {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = MemberId}, space_invite_user_token, {space, SpaceID}),
                         {ok, SpaceToken} = macaroon:deserialize(SerializedSpaceToken),
                         space_logic:join({user, UserID}, SpaceToken)
                     end, UsersToAdd),
                 % Add all groups to space
                 lists:foreach(
                     fun(GroupID) ->
-                        {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = Member}, space_invite_group_token, {space, SpaceID}),
+                        {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = MemberId}, space_invite_group_token, {space, SpaceID}),
                         {ok, SpaceToken} = macaroon:deserialize(SerializedSpaceToken),
                         space_logic:join({group, GroupID}, SpaceToken)
                     end, GroupsToAdd)
