@@ -14,6 +14,8 @@
 
 -behavior(dns_worker_plugin_behaviour).
 
+-include_lib("ctool/include/logging.hrl").
+
 -export([resolve/3]).
 
 %%--------------------------------------------------------------------
@@ -25,5 +27,4 @@
     dns_handler_behaviour:handler_reply().
 
 resolve(Method, Domain, LBAdvice) ->
-    % todo: account LB
-    dns_query_handler:Method(Domain).
+    dns_query_handler:Method(Domain, LBAdvice).

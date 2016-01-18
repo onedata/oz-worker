@@ -191,6 +191,13 @@ on_code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 -spec check_node_ip_address() -> IPV4Addr :: {A :: byte(), B :: byte(), C :: byte(), D :: byte()}.
 check_node_ip_address() ->
-    ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
-    {127, 0, 0, 1}.
+    case application:get_env(?APP_Name, external_ip, undefined) of
+        undefined ->
+            ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
+            {127, 0, 0, 1};
+        Ip ->
+            {ok, Address} = inet_parse:ipv4_address(atom_to_list(Ip)),
+            ?info("External IP: ~p", [Address]),
+            Address
+    end.
 
