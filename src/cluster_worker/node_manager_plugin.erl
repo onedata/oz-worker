@@ -30,7 +30,7 @@
 %%%===================================================================
 
 %% @doc
-%% List db nodes to be used by node manager.
+%% Returns the name of the application that bases on cluster worker.
 %% @end
 %%--------------------------------------------------------------------
 -spec app_name() -> {ok, Name :: atom()}.
@@ -186,7 +186,7 @@ on_code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% It assumes a 127.0.0.1 address and logs an alert.
+%% Get node IP. If there is no IP info in the env, then use 127.0.0.1.
 %% @end
 %%--------------------------------------------------------------------
 -spec check_node_ip_address() -> IPV4Addr :: {A :: byte(), B :: byte(), C :: byte(), D :: byte()}.
