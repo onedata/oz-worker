@@ -63,6 +63,9 @@ db_nodes() ->
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> node_manager:cluster_worker_listeners() ++ [
+    rest_listener,
+    op_listener,
+    gui_listener
 ].
 
 %%--------------------------------------------------------------------
