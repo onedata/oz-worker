@@ -47,6 +47,7 @@ routes() ->
         {<<"/provider/:pid">>, M, S#rstate{resource = nprovider, methods = [get]}},
         {<<"/provider/spaces/support">>, M, S#rstate{resource = ssupport, methods = [post]}},
         {<<"/provider/spaces/:sid">>, M, S#rstate{resource = space, methods = [get, delete]}},
+        {<<"/provider/token/:token">>, M, S#rstate{resource = token, methods = [get]}},
         {<<"/provider/test/check_my_ip">>, M, S#rstate{resource = ip, methods = [get], noauth = [get]}},
         {<<"/provider/test/check_my_ports">>, M, S#rstate{resource = ports, methods = [post], noauth = [post]}}
     ].
@@ -58,7 +59,7 @@ routes() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(Resource :: resource(), Method :: method(),
-    ProviderId :: binary() | undefined, Client :: client()) ->
+    ProviderId :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
 is_authorized(ip, get, _, _) ->
     true;
@@ -100,7 +101,7 @@ resource_exists(_, _, Req) ->
 %%--------------------------------------------------------------------
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
     ProviderId :: binary() | undefined, Data :: data(),
-    Client :: client(), Req :: cowboy_req:req()) ->
+    Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(provider_dev, post, _ProviderId, Data, _Client, Req) ->
     ClientName = rest_module_helper:assert_key(<<"clientName">>, Data, binary, Req),
@@ -163,7 +164,7 @@ accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec provide_resource(Resource :: provided_resource(), ProviderId :: binary() | undefined,
-    Client :: client(), Req :: cowboy_req:req()) ->
+    Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(provider, ProviderId, _Client, Req) ->
     {ok, Provider} = provider_logic:get_data(ProviderId),
@@ -183,7 +184,12 @@ provide_resource(space, _ProviderId, _Client, Req) ->
     {Space, Req2};
 provide_resource(ip, _ProviderId, _Client, Req) ->
     {{Ip, _Port}, Req2} = cowboy_req:peer(Req),
-    {list_to_binary(inet_parse:ntoa(Ip)), Req2}.
+    {list_to_binary(inet_parse:ntoa(Ip)), Req2};
+provide_resource(token, _UserId, _Client, Req) ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {token, Token} = lists:keyfind(token, 1, Bindings),
+    {ok, Issuer} = token_logic:get_issuer(Token),
+    {Issuer, Req2}.
 
 %%--------------------------------------------------------------------
 %% @doc Deletes the resource identified by the SpaceId parameter.

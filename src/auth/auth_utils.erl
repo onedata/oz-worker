@@ -12,6 +12,7 @@
 -module(auth_utils).
 
 -include_lib("ctool/include/logging.hrl").
+-include("handlers/rest_handler.hrl").
 -include("dao/dao_types.hrl").
 -include("auth_common.hrl").
 
@@ -106,7 +107,7 @@ validate_login() ->
                                                 % Create a default space for the user and generate a token to support it
                                                 {ok, SpaceID} = space_logic:create({user, UserId}, <<Name/binary, "'s space">>),
                                                 true = user_logic:set_default_space(UserId, SpaceID),
-                                                {ok, Token} = token_logic:create(space_support_token, {space, SpaceID}),
+                                                {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_support_token, {space, SpaceID}),
                                                 user_logic:modify(UserId, [{first_space_support_token, Token}]),
                                                 gui_ctx:create_session(),
                                                 gui_ctx:set_user_id(UserId),
