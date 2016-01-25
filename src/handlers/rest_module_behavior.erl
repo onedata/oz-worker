@@ -30,7 +30,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback is_authorized(Resource :: atom(), Method :: method(),
-    ResId :: binary() | undefined, Client :: client()) ->
+    ResId :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
 
 %%--------------------------------------------------------------------
@@ -55,7 +55,7 @@
 %%--------------------------------------------------------------------
 -callback accept_resource(Resource :: atom(), Method :: accept_method(),
     ResId :: binary() | undefined, Data :: data(),
-    Client :: client(), Req :: cowboy_req:req()) ->
+    Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 
 %%--------------------------------------------------------------------
@@ -65,7 +65,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback provide_resource(Resource :: atom(), ResId :: binary() | undefined,
-    Client :: client(), Req :: cowboy_req:req()) ->
+    Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 
 %%--------------------------------------------------------------------

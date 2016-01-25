@@ -63,7 +63,7 @@ routes() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(Resource :: resource(), Method :: method(),
-    SpaceId :: binary() | undefined, Client :: client()) ->
+    SpaceId :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
 is_authorized(_, _, _, #client{type = undefined}) ->
     false;
@@ -132,7 +132,7 @@ resource_exists(_, SpaceId, Req) ->
 %%--------------------------------------------------------------------
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
     SpaceId :: binary() | undefined, Data :: data(),
-    Client :: client(), Req :: cowboy_req:req()) ->
+    Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
@@ -182,7 +182,7 @@ accept_resource(gpriv, put, SpaceId, Data, _Client, Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec provide_resource(Resource :: provided_resource(), SpaceId :: binary() | undefined,
-    Client :: client(), Req :: cowboy_req:req()) ->
+    Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(space, SpaceId, #client{type = ClientType}, Req) ->
     {ok, Data} = space_logic:get_data(SpaceId, ClientType),
@@ -197,8 +197,8 @@ provide_resource(users, SpaceId, #client{type = user}, Req) ->
 provide_resource(users, SpaceId, #client{type = provider}, Req) ->
     {ok, Users} = space_logic:get_effective_users(SpaceId),
     {Users, Req};
-provide_resource(uinvite, SpaceId, _Client, Req) ->
-    {ok, Token} = token_logic:create(space_invite_user_token, {space, SpaceId}),
+provide_resource(uinvite, SpaceId, Client, Req) ->
+    {ok, Token} = token_logic:create(Client, space_invite_user_token, {space, SpaceId}),
     {[{token, Token}], Req};
 provide_resource(user, SpaceId, #client{type = ClientType}, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
@@ -217,8 +217,8 @@ provide_resource(upriv, SpaceId, _Client, Req) ->
 provide_resource(groups, SpaceId, _Client, Req) ->
     {ok, Groups} = space_logic:get_groups(SpaceId),
     {Groups, Req};
-provide_resource(ginvite, SpaceId, _Client, Req) ->
-    {ok, Token} = token_logic:create(space_invite_group_token, {space, SpaceId}),
+provide_resource(ginvite, SpaceId, Client, Req) ->
+    {ok, Token} = token_logic:create(Client, space_invite_group_token, {space, SpaceId}),
     {[{token, Token}], Req};
 provide_resource(group, SpaceId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
@@ -233,8 +233,8 @@ provide_resource(gpriv, SpaceId, _Client, Req) ->
 provide_resource(providers, SpaceId, #client{type = ClientType}, Req) ->
     {ok, Providers} = space_logic:get_providers(SpaceId, ClientType),
     {Providers, Req};
-provide_resource(pinvite, SpaceId, _Client, Req) ->
-    {ok, Token} = token_logic:create(space_support_token, {space, SpaceId}),
+provide_resource(pinvite, SpaceId, Client, Req) ->
+    {ok, Token} = token_logic:create(Client, space_support_token, {space, SpaceId}),
     {[{token, Token}], Req};
 provide_resource(provider, SpaceId, #client{type = ClientType}, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),

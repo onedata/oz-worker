@@ -14,7 +14,7 @@
 
 -include("registered_names.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("handlers/rest_handler.hrl").
 
 %% Atoms representing types of valid tokens.
 -type token_type() :: group_invite_token | space_create_token |
@@ -25,7 +25,7 @@ space_support_token.
 -type resource_type() :: user | group | space.
 
 %% API
--export([validate/2, create/2, consume/1]).
+-export([validate/2, create/3, get_issuer/1, consume/1]).
 -export_type([token_type/0, resource_type/0]).
 
 %%%===================================================================
@@ -63,11 +63,12 @@ validate(Token, TokenType) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create(TokenType :: token_type(), Resource :: {resource_type(), binary()}) ->
+-spec create(Issuer :: rest_handler:client(), TokenType :: token_type(),
+    Resource :: {resource_type(), binary()}) ->
     {ok, Token :: binary()} | {error, Reason :: any()}.
-create(TokenType, {ResourceType, ResourceId}) ->
+create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
-    TokenData = #token{secret = Secret,
+    TokenData = #token{secret = Secret, issuer = Issuer,
         resource = ResourceType, resource_id = ResourceId},
 
     {ok, Identifier} = token:save(#document{value = TokenData}),
@@ -78,6 +79,27 @@ create(TokenType, {ResourceType, ResourceId}) ->
         ["tokenType = ", atom_to_list(TokenType)]),
 
     macaroon:serialize(M2).
+
+%%--------------------------------------------------------------------
+%% @doc Returns token issuer.
+%% Throws exception when call to dao fails, or token doesn't exist in db.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_issuer(Token :: binary()) -> {ok, [proplists:property()]}.
+get_issuer(Token) ->
+    case macaroon:deserialize(Token) of
+        {ok, Macaroon} ->
+            {ok, Identifier} = macaroon:identifier(Macaroon),
+            {ok, TokenDoc} = token:get(Identifier),
+            #document{value = #token{
+                issuer = #client{type = ClientType, id = ClientId}
+            }} = TokenDoc,
+
+            {ok, [
+                {clientType, ClientType},
+                {clientId, ClientId}
+            ]}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Consumes a token, returning associated resource.

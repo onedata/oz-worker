@@ -58,7 +58,7 @@ routes() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(Resource :: resource(), Method :: method(),
-    GroupId :: binary() | undefined, Client :: client()) ->
+    GroupId :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
 is_authorized(_, _, _, #client{type = ClientType}) when ClientType =/= user ->
     false;
@@ -116,7 +116,7 @@ resource_exists(_, GroupId, Req) ->
 %%--------------------------------------------------------------------
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
     GroupId :: binary() | undefined, Data :: data(),
-    Client :: client(), Req :: cowboy_req:req()) ->
+    Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
@@ -157,7 +157,7 @@ accept_resource(sjoin, post, GroupId, Data, _Client, Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec provide_resource(Resource :: provided_resource(), GroupId :: binary() | undefined,
-    Client :: client(), Req :: cowboy_req:req()) ->
+    Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(group, GroupId, _Client, Req) ->
     {ok, Data} = group_logic:get_data(GroupId),
@@ -165,8 +165,8 @@ provide_resource(group, GroupId, _Client, Req) ->
 provide_resource(users, GroupId, _Client, Req) ->
     {ok, Users} = group_logic:get_users(GroupId),
     {Users, Req};
-provide_resource(uinvite, GroupId, _Client, Req) ->
-    {ok, Token} = token_logic:create(group_invite_token, {group, GroupId}),
+provide_resource(uinvite, GroupId, Client, Req) ->
+    {ok, Token} = token_logic:create(Client, group_invite_token, {group, GroupId}),
     {[{token, Token}], Req};
 provide_resource(user, GroupId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
@@ -181,8 +181,8 @@ provide_resource(upriv, GroupId, _Client, Req) ->
 provide_resource(spaces, GroupId, _Client, Req) ->
     {ok, Spaces} = group_logic:get_spaces(GroupId),
     {Spaces, Req};
-provide_resource(screate, GroupId, _Client, Req) ->
-    {ok, Token} = token_logic:create(space_create_token, {group, GroupId}),
+provide_resource(screate, GroupId, Client, Req) ->
+    {ok, Token} = token_logic:create(Client, space_create_token, {group, GroupId}),
     {[{token, Token}], Req};
 provide_resource(space, _GroupId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
