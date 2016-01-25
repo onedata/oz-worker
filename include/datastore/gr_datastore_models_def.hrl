@@ -13,6 +13,7 @@
 -define(GR_DATASTORE_MODELS_HRL, 1).
 
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
+-include("handlers/rest_handler.hrl").
 
 %% Records of this type store a macaroons secret
 -record(onedata_auth, {
@@ -55,7 +56,8 @@
 -record(token, {
     secret :: binary(),
     resource :: atom(),
-    resource_id :: binary()
+    resource_id :: binary(),
+    issuer :: rest_handler:client()
 }).
 
 % Value in DB meaning that alias is not set.

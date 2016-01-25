@@ -14,7 +14,6 @@
 
 -include("registered_names.hrl").
 -include("datastore/gr_datastore_models_def.hrl").
--include("handlers/rest_handler.hrl").
 
 %% Atoms representing types of valid tokens.
 -type token_type() :: group_invite_token | space_create_token |
