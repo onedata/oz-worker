@@ -58,9 +58,7 @@ cleanup() ->
     {ok, Id :: binary(), KeyFile :: string(), CertFile :: string()} | {error, Reason :: term()}.
 create_provider(Config, Name, URLs, RedirectionPoint) ->
     try
-        {MegaSec, Sec, MiliSec} = erlang:now(),
-        Prefix = lists:foldl(fun(Int, Acc) ->
-            Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
+        Prefix = "provider" ++ integer_to_list(erlang:system_time(micro_seconds)),
         KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
         CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
         CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),

@@ -210,8 +210,6 @@ invalidate_token(Identifier) when is_binary(Identifier) ->
 generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_state_tokens(),
     Token = list_to_binary(hex_utils:to_hex(crypto:rand_bytes(32))),
-    {M, S, N} = now(),
-    Time = M * 1000000000000 + S * 1000000 + N,
 
     StateInfo = [
         {module, HandlerModule},
@@ -225,7 +223,7 @@ generate_state_token(HandlerModule, ConnectAccount) ->
         {referer, erlang:get(referer)}
     ],
 
-    ets:insert(?STATE_TOKEN, {Token, Time, StateInfo}),
+    ets:insert(?STATE_TOKEN, {Token, erlang:system_time(micro_seconds), StateInfo}),
     Token.
 
 %%--------------------------------------------------------------------
@@ -249,8 +247,7 @@ lookup_state_token(Token) ->
 %%--------------------------------------------------------------------
 -spec clear_expired_state_tokens() -> ok.
 clear_expired_state_tokens() ->
-    {M, S, N} = now(),
-    Now = M * 1000000000000 + S * 1000000 + N,
+    Now = erlang:system_time(micro_seconds),
 
     ExpiredSessions = ets:select(?STATE_TOKEN, [{{'$1', '$2', '$3'}, [{'<', '$2', Now - (?STATE_TOKEN_EXPIRATION_SECS * 1000000)}], ['$_']}]),
     lists:foreach(
