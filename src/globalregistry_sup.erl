@@ -51,30 +51,47 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Args :: term()) ->
-    {ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
-        MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
-        [ChildSpec :: supervisor:child_spec()]
-    }} |
-    ignore.
+    {ok, {SupFlags :: supervisor:sup_flags(), [ChildSpec :: supervisor:child_spec()]}}.
 init([]) ->
-    RestartStrategy = one_for_one,
-    MaxRestarts = 1000,
-    MaxSecondsBetweenRestarts = 3600,
-
-    SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
-
-    Restart = permanent,
-    Shutdown = 2000,
-    Type = worker,
-
-    Dao = {?Dao, {dao_worker, start_link, []},
-        Restart, Shutdown, Type, [dao_worker]},
-
-    OpChannel = {?OpChannel, {op_channel, start_link, []},
-        Restart, Shutdown, Type, [op_channel]},
-
-    {ok, {SupFlags, [Dao, OpChannel]}}.
+    {ok, {#{strategy => one_for_one, intensity => 1000, period => 3600}, [
+        dao_spec(),
+        op_channel_spec()
+    ]}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns a worker child_spec for dao.
+%% @end
+%%--------------------------------------------------------------------
+-spec dao_spec() -> supervisor:child_spec().
+dao_spec() ->
+    #{
+        id => ?Dao,
+        start => {dao_worker, start_link, []},
+        restart => permanent,
+        shutdown => timer:seconds(2),
+        type => worker,
+        modules => [dao_worker]
+    }.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns a worker child_spec for provider channel.
+%% @end
+%%--------------------------------------------------------------------
+-spec op_channel_spec() -> supervisor:child_spec().
+op_channel_spec() ->
+    #{
+        id => ?OpChannel,
+        start => {op_channel, start_link, []},
+        restart => permanent,
+        shutdown => timer:seconds(2),
+        type => worker,
+        modules => [op_channel]
+    }.
