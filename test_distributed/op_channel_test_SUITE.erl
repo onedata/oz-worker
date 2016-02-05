@@ -19,14 +19,14 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
--include_lib("annotations/include/annotations.hrl").
+-include_lib("ctool/include/test/performance.hrl").
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([connection_test/1, space_support_test/1, modification_test/1, removal_test/1]).
 
--performance({test_cases, []}).
-all() -> [connection_test, space_support_test, modification_test, removal_test].
+all() -> ?ALL(
+    [connection_test, space_support_test, modification_test, removal_test]).
 
 %%%===================================================================
 %%% Test functions
