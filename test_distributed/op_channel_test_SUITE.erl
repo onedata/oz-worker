@@ -25,8 +25,9 @@
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([connection_test/1, space_support_test/1, modification_test/1, removal_test/1]).
 
-all() -> ?ALL(
-    [connection_test, space_support_test, modification_test, removal_test]).
+all() -> ?ALL([
+    connection_test, space_support_test, modification_test, removal_test
+]).
 
 %%%===================================================================
 %%% Test functions
