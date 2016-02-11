@@ -11,7 +11,7 @@
 
 {application, globalregistry, [
     {description, "Global registry of data."},
-    {vsn, git},
+    {vsn, "3.0.0"},
     {registered, [globalregistry_sup]},
     {applications, [
         kernel,
