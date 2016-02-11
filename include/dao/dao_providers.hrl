@@ -1,14 +1,13 @@
-%% ===================================================================
-%% @author Tomasz Lichon
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc Dao definitions for provider records
-%% @end
-%% ===================================================================
--author("Tomasz Lichon").
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc Dao definitions for provider records
+%%% @end
+%%%-------------------------------------------------------------------
 
 -ifndef(DAO_PROVIDERS_HRL).
 -define(DAO_PROVIDERS_HRL, 1).

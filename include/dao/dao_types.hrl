@@ -1,17 +1,17 @@
-%% ===================================================================
-%% @author Rafal Slota
-%% @copyright (C): 2013 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc DAO types definitions
-%% @end
-%% ===================================================================
--author("Rafal Slota").
+%%%-------------------------------------------------------------------
+%%% @author Rafal Slota
+%%% @copyright (C): 2013 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc DAO types definitions
+%%% @end
+%%%-------------------------------------------------------------------
 
 -ifndef(DAO_TYPES_HRL).
 -define(DAO_TYPES_HRL, 1).
+
 -include("dao/dao_auth.hrl").
 -include("dao/dao_users.hrl").
 -include("dao/dao_providers.hrl").
@@ -47,12 +47,8 @@
 -type token_info() :: #token{}.
 -type token_doc() :: #db_document{record :: #token{}}.
 
--type authorization_id() :: uuid().
--type authorization_info() :: #authorization{}.
--type authorization_doc() :: #db_document{record :: #authorization{}}.
-
--type access_id() :: uuid().
--type access_info() :: #access{}.
--type access_doc() :: #db_document{record :: #access{}}.
+-type auth_id() :: uuid().
+-type auth_info() :: #auth{}.
+-type auth_doc() :: #db_document{record :: #auth{}}.
 
 -endif.

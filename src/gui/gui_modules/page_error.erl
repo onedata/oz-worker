@@ -1,14 +1,14 @@
-%% ===================================================================
-%% @author Lukasz Opiola
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc: This file contains n2o website code.
-%% The page is displayed whenever an error occurs.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc: This file contains n2o website code.
+%%% The page is displayed whenever an error occurs.
+%%% @end
+%%%-------------------------------------------------------------------
 
 -module(page_error).
 
@@ -21,7 +21,8 @@
 -export([redirect_with_error/1]).
 
 %% Template points to the template file, which will be filled with content
-main() -> #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}.
+main() ->
+    #dtl{file = "bare", app = ?APP_Name, bindings = [{title, title()}, {body, body()}, {custom, <<"">>}]}.
 
 %% Page title
 title() -> <<"Error">>.
@@ -43,10 +44,9 @@ body() ->
 event(init) -> ok;
 event(terminate) -> ok.
 
-
 % This function causes a HTTP redirect to error page, which displays an error message.
 redirect_with_error(ErrorID) ->
-    gui_jq:redirect(<<"/error?id=", (gui_str:to_binary(ErrorID))/binary>>).
+    gui_jq:redirect(<<"/error?id=", (str_utils:to_binary(ErrorID))/binary>>).
 
 
 get_reason_and_description() ->

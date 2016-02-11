@@ -1,19 +1,18 @@
-%% ===================================================================
-%% @author Tomasz Lichon
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc Application main supervisor
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc Application main supervisor
+%%% @end
+%%%-------------------------------------------------------------------
 -module(globalregistry_sup).
 -author("Tomasz Lichon").
 
 -behaviour(supervisor).
 
-%% Includes
 -include("registered_names.hrl").
 
 %% API
@@ -28,49 +27,71 @@
 %%% API functions
 %%%===================================================================
 
-%% start_link/0
-%% ===================================================================
-%% @doc Starts the supervisor
--spec(start_link() ->
-	{ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-%% ===================================================================
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts the supervisor
+%% @end
+%%--------------------------------------------------------------------
+-spec start_link() ->
+    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
 start_link() ->
-	supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 %%%===================================================================
 %%% Supervisor callbacks
 %%%===================================================================
 
-%% init/1
-%% ===================================================================
+%%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Whenever a supervisor is started using supervisor:start_link/[2,3],
 %% this function is called by the new process to find out about
 %% restart strategy, maximum restart frequency and child
 %% specifications.
 %% @end
--spec(init(Args :: term()) ->
-	{ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
-		MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
-		[ChildSpec :: supervisor:child_spec()]
-	}} |
-	ignore).
-%% ===================================================================
+%%--------------------------------------------------------------------
+-spec init(Args :: term()) ->
+    {ok, {SupFlags :: supervisor:sup_flags(), [ChildSpec :: supervisor:child_spec()]}}.
 init([]) ->
-	RestartStrategy = one_for_one,
-	MaxRestarts = 1000,
-	MaxSecondsBetweenRestarts = 3600,
-
-	SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
-
-	Restart = permanent,
-	Shutdown = 2000,
-	Type = worker,
-
-	Dao = {?Dao, {dao_worker, start_link, []},
-		Restart, Shutdown, Type, [dao_worker]},
-	{ok, {SupFlags, [Dao]}}.
+    {ok, {#{strategy => one_for_one, intensity => 1000, period => 3600}, [
+        dao_spec(),
+        op_channel_spec()
+    ]}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns a worker child_spec for dao.
+%% @end
+%%--------------------------------------------------------------------
+-spec dao_spec() -> supervisor:child_spec().
+dao_spec() ->
+    #{
+        id => ?Dao,
+        start => {dao_worker, start_link, []},
+        restart => permanent,
+        shutdown => timer:seconds(2),
+        type => worker,
+        modules => [dao_worker]
+    }.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns a worker child_spec for provider channel.
+%% @end
+%%--------------------------------------------------------------------
+-spec op_channel_spec() -> supervisor:child_spec().
+op_channel_spec() ->
+    #{
+        id => ?OpChannel,
+        start => {op_channel, start_link, []},
+        restart => permanent,
+        shutdown => timer:seconds(2),
+        type => worker,
+        modules => [op_channel]
+    }.

@@ -1,80 +1,77 @@
-%% ===================================================================
-%% @author Tomasz Lichon
-%% @copyright (C): 2014 ACK CYFRONET AGH
-%% This software is released under the MIT license
-%% cited in 'LICENSE.txt'.
-%% @end
-%% ===================================================================
-%% @doc This module provides high level DB API for handling users documents.
-%% @end
-%% ===================================================================
+%%%-------------------------------------------------------------------
+%%% @author Tomasz Lichon
+%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc This module provides high level DB API for handling users documents.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(dao_users).
 -author("Tomasz Lichon").
 
-%% Includes
 -include_lib("ctool/include/logging.hrl").
 -include_lib("dao/include/dao_helper.hrl").
 -include("dao/dao_users.hrl").
 -include("dao/dao_types.hrl").
 -include("dao/dao_external.hrl").
 
-
 %% API
--export([save_user/1, remove_user/1, exist_user/1, get_user/1]).
+-export([save_user/1, remove_user/1, exist_user/1, get_user/1, get_all_users/0]).
 
-%% save_user/1
-%% ====================================================================
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
 %% @doc Saves user to DB. Argument should be either #user{} record
 %% (if you want to save it as new document) <br/>
 %% or #db_document{} that wraps #user{} if you want to update descriptor in DB. <br/>
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
+%%--------------------------------------------------------------------
 -spec save_user(User :: user_info() | user_doc()) -> {ok, user_id()} | {error, any()} | no_return().
-%% ====================================================================
 save_user(#user{} = User) ->
     save_user(#db_document{record = User});
 save_user(#db_document{record = #user{}, uuid = UUID} = UserDoc) when is_list(UUID) ->
     dao_external:set_db(?USERS_DB_NAME),
     dao_records:save_record(UserDoc).
 
-
-%% remove_user/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Removes user from DB
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
+%%--------------------------------------------------------------------
 -spec remove_user(UserId :: uuid()) ->
     ok | {error, any()} | no_return().
-%% ====================================================================
 remove_user(UserId) ->
     dao_external:set_db(?USERS_DB_NAME),
     dao_records:remove_record(UserId).
 
-%% exist_user/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Checks whether user exists in DB.
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
+%%--------------------------------------------------------------------
 -spec exist_user(UserId :: uuid()) -> {ok, true | false} | {error, any()}.
-%% ====================================================================
 exist_user(UserId) ->
     dao_external:set_db(?USERS_DB_NAME),
     dao_records:exist_record(UserId).
 
-%% get_user/1
-%% ====================================================================
+%%--------------------------------------------------------------------
 %% @doc Gets user from DB
 %% Non-error return value is always {ok, #db_document{record = #user}.
 %% See {@link dao_records:save_record/1} and {@link dao_records:get_record/1} for more details about #db_document{} wrapper.<br/>
 %% Should not be used directly, use {@link dao_worker:handle_call/3} instead (See {@link dao_worker:handle_call/3} for more details).
 %% @end
+%%--------------------------------------------------------------------
 -spec get_user(Key) -> {ok, user_doc()} | {error, any()} | no_return() when
     Key :: UserId :: binary() |
     {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
     {email, binary()} |
     {alias, binary()}.
-%% ====================================================================
 get_user(UUID) when is_list(UUID) ->
     dao_external:set_db(?USERS_DB_NAME),
     dao_records:get_record(UUID);
@@ -85,10 +82,10 @@ get_user({Key, Value}) ->
     {View, QueryArgs} = case Key of
                             connected_account_user_id ->
                                 {ProviderID0, UserID} = Value,
-                                ProviderID = utils:ensure_binary(ProviderID0),
+                                ProviderID = str_utils:to_binary(ProviderID0),
                                 {?USER_BY_CONNECTED_ACCOUNT_USER_ID_VIEW, #view_query_args{keys =
                                 [[
-                                    <<?RECORD_FIELD_ATOM_PREFIX, (utils:ensure_binary(ProviderID))/binary>>,
+                                    <<?RECORD_FIELD_ATOM_PREFIX, (str_utils:to_binary(ProviderID))/binary>>,
                                     <<?RECORD_FIELD_BINARY_PREFIX, UserID/binary>>
                                 ]], include_docs = true}};
 
@@ -125,3 +122,18 @@ get_user({Key, Value}) ->
             ?error("Invalid view response: ~p", [Other]),
             throw(invalid_data)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Gets all users from DB (that have at least one email address set).
+%% This function is used for development purposes, there appears to be no production use case.
+%% Should not be used directly, use {@link dao_worker:handle_call/3} instead
+%% (See {@link dao_worker:handle_call/3} for more details).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_users() -> {ok, [binary()]}.
+get_all_users() ->
+    dao_external:set_db(?USERS_DB_NAME),
+    {ok, #view_result{rows = AllRows}} = dao_records:list_records(?USER_BY_EMAIL_VIEW, #view_query_args{include_docs = true}),
+    UserIDs = [list_to_binary(Row#view_row.doc#db_document.uuid) || Row <- AllRows],
+    {ok, lists:usort(UserIDs)}.

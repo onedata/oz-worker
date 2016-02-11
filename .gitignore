@@ -1,7 +1,7 @@
 .idea
 globalregistry.iml
-*.beam
 
+src/gui/gui_static/common
 src/gui/gui_static/flatui
 src/gui/gui_static/fonts
 src/gui/gui_static/n2o
@@ -12,8 +12,13 @@ rel/globalregistry
 rel/resources/auth.config
 package
 
+*.iml
+*.sublime*
+*.beam
+*.pyc
+
 .eunit
 .dialyzer.plt
-test/results
+test/eunit_results
 test_distributed/logs
-variables-ct*
+test_distributed/cover_tmp.spec
