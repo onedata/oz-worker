@@ -25,7 +25,8 @@
 -export([users_crud_test/1, groups_crud_test/1, spaces_crud_test/1,
   providers_crud_test/1, tokens_crud_test/1]).
 %%test_bases
--export([users_crud_test_base/1, groups_crud_test_base/1, providers_crud_test_base/1, spaces_crud_test_base/1, tokens_crud_test_base/1]).
+-export([users_crud_test_base/1, groups_crud_test_base/1, providers_crud_test_base/1,
+    spaces_crud_test_base/1, tokens_crud_test_base/1]).
 
 %%%===================================================================
 %%% API functions
@@ -46,7 +47,6 @@ users_crud_test(Config) ->
             {repeats, ?REPEATS},
             {config, [{name, users_crud}]}
         ]).
-
 users_crud_test_base(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -84,7 +84,6 @@ groups_crud_test(Config) ->
             {repeats, ?REPEATS},
             {config, [{name, groups_crud}]}
         ]).
-
 groups_crud_test_base(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -122,7 +121,6 @@ providers_crud_test(Config) ->
             {repeats, ?REPEATS},
             {config, [{name, providers_crud}]}
         ]).
-
 providers_crud_test_base(Config) ->
       [Node] = ?config(gr_nodes, Config),
 
@@ -160,7 +158,6 @@ spaces_crud_test(Config) ->
             {repeats, ?REPEATS},
             {config, [{name, spaces_crud}]}
         ]).
-
 spaces_crud_test_base(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
@@ -199,7 +196,6 @@ tokens_crud_test(Config) ->
            {config, [{name, tokens_crud}]}
        ]
    ).
-
 tokens_crud_test_base(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
