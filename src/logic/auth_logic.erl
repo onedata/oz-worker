@@ -223,7 +223,7 @@ generate_state_token(HandlerModule, ConnectAccount) ->
         {referer, erlang:get(referer)}
     ],
 
-    ets:insert(?STATE_TOKEN, {Token, erlang:system_time(micro_seconds), StateInfo}),
+    ets:insert(?STATE_TOKEN, {Token, erlang:monotonic_time(seconds), StateInfo}),
     Token.
 
 %%--------------------------------------------------------------------
@@ -247,9 +247,9 @@ lookup_state_token(Token) ->
 %%--------------------------------------------------------------------
 -spec clear_expired_state_tokens() -> ok.
 clear_expired_state_tokens() ->
-    Now = erlang:system_time(micro_seconds),
+    Now = erlang:monotonic_time(seconds),
 
-    ExpiredSessions = ets:select(?STATE_TOKEN, [{{'$1', '$2', '$3'}, [{'<', '$2', Now - (?STATE_TOKEN_EXPIRATION_SECS * 1000000)}], ['$_']}]),
+    ExpiredSessions = ets:select(?STATE_TOKEN, [{{'$1', '$2', '$3'}, [{'<', '$2', Now - (?STATE_TOKEN_EXPIRATION_SECS)}], ['$_']}]),
     lists:foreach(
         fun({Token, Time, LoginInfo}) ->
             ets:delete_object(?STATE_TOKEN, {Token, Time, LoginInfo})
