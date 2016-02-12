@@ -13,6 +13,15 @@ deps:
 	@git submodule init
 	@git submodule update
 
+gui_dev:
+	./deps/gui/build_gui.sh dev
+
+gui_prod:
+	./deps/gui/build_gui.sh prod
+
+gui_doc:
+	jsdoc -c src/http/gui/.jsdoc.conf src/http/gui/app
+
 compile:
 	@./rebar compile
 

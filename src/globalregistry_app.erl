@@ -14,6 +14,7 @@
 -behaviour(application).
 
 -include_lib("ctool/include/logging.hrl").
+-include_lib("gui/include/gui.hrl").
 -include("rest_config.hrl").
 -include("gui_config.hrl").
 -include("registered_names.hrl").
@@ -46,7 +47,7 @@ start(_StartType, _StartArgs) ->
     dns_query_handler:load_config(),
     test_node_starter:maybe_start_cover(),
     activate_white_lists(),
-    case {start_rest(), start_op_channel(), start_n2o(), start_redirector()} of
+    case {start_rest(), start_op_channel(), start_gui(), start_redirector()} of
         {ok, ok, ok, ok} ->
             case globalregistry_sup:start_link() of
                 {ok, Pid} ->
@@ -213,8 +214,8 @@ start_op_channel() ->
 %% @private
 %% @doc Starts n2o server
 %%--------------------------------------------------------------------
--spec start_n2o() -> ok | {error, term()}.
-start_n2o() ->
+-spec start_gui() -> ok | {error, term()}.
+start_gui() ->
     try
         %% TODO for development
         %% This is needed for the redirection to provider to work, as
@@ -222,32 +223,40 @@ start_n2o() ->
         application:set_env(ctool, verify_server_cert, false),
 
         % Get gui config
+        {ok, DocRoot} = {ok, "data/gui_static"},
         {ok, GuiPort} = application:get_env(?APP_Name, gui_port),
-        {ok, GuiHttpsAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),
-        {ok, GuiSocketTimeout} = application:get_env(?APP_Name, gui_socket_timeout),
-        {ok, GuiMaxKeepalive} = application:get_env(?APP_Name, gui_max_keepalive),
+        {ok, GuiNbAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),
+        {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
+        {ok, MaxKeepAlive} = application:get_env(?APP_Name, gui_max_keepalive),
         % Get cert paths
-        {ok, GuiCaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
-        {ok, GuiCertFile} = application:get_env(?APP_Name, gui_cert_file),
-        {ok, GuiKeyFile} = application:get_env(?APP_Name, gui_key_file),
+        {ok, CaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
+        {ok, CertFile} = application:get_env(?APP_Name, gui_cert_file),
+        {ok, KeyFile} = application:get_env(?APP_Name, gui_key_file),
 
         GRHostname = dns_query_handler:get_canonical_hostname(),
 
         % Setup GUI dispatch opts for cowboy
         GUIDispatch = [
-            % Matching requests will be redirected to the same address without leading 'www.'
-            % Cowboy does not have a mechanism to match every hostname starting with 'www.'
-            % This will match hostnames with up to 8 segments
-            % e. g. www.seg2.seg3.seg4.seg5.seg6.seg7.com
-            {"www.:_[.:_[.:_[.:_[.:_[.:_[.:_]]]]]]", [{'_', https_redirect_handler, []}]},
+            % Matching requests will be redirected
+            % to the same address without leading 'www.'
+            % Cowboy does not have a mechanism to match
+            % every hostname starting with 'www.'
+            % This will match hostnames with up to 6 segments
+            % e. g. www.seg2.seg3.seg4.seg5.com
+            {"www.:_[.:_[.:_[.:_[.:_]]]]", [
+                % @todo use redirector_handler from cluster_worker
+                {'_', https_redirect_handler, []}
+            ]},
             % Redirect requests in form: alias.onedata.org
             {":alias." ++ GRHostname, [{'_', client_redirect_handler, []}]},
             % Proper requests are routed to handler modules
-            {'_', static_dispatches(?gui_static_root, ?static_paths) ++ [
+            % Proper requests are routed to handler modules
+            {'_', [
                 {<<"/google97a2428c78c25c27.html">>, cowboy_static,
                     {file, <<"resources/gui_static/google_analytics/google97a2428c78c25c27.html">>}},
-                {"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
-                {'_', n2o_cowboy, []}
+                {"/nagios/[...]", nagios_handler, []},
+                {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
+                {"/[...]", gui_static_handler, {dir, DocRoot}}
             ]}
         ],
 
@@ -257,23 +266,27 @@ start_n2o() ->
         % Initilize auth handler
         auth_config:load_auth_config(),
 
-        {ok, _} = cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
-            [
+        % Call gui init, which will call init on all modules that might need state.
+        gui:init(),
+        % Start the listener for web gui and nagios handler
+        ok = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
+            ranch_ssl2, [
+                {ip, {127, 0, 0, 1}},
                 {port, GuiPort},
-                {cacertfile, GuiCaCertFile},
-                {certfile, GuiCertFile},
-                {keyfile, GuiKeyFile},
+                {cacertfile, CaCertFile},
+                {certfile, CertFile},
+                {keyfile, KeyFile},
                 {ciphers, ssl:cipher_suites() -- weak_ciphers()},
                 {versions, ['tlsv1.2', 'tlsv1.1']}
-            ],
-            [
+            ], cowboy_protocol, [
                 {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
-                {max_keepalive, GuiMaxKeepalive},
-                {timeout, GuiSocketTimeout},
+                {max_keepalive, MaxKeepAlive},
+                {timeout, Timeout},
                 % On every request, add headers that improve security to the response
                 {onrequest, fun gui_utils:onrequest_adjust_headers/1}
             ]),
         ok
+
     catch
         _Type:Error ->
             ?error_stacktrace("Could not start gui, error: ~p", [Error]),
@@ -290,7 +303,7 @@ start_n2o() ->
 static_dispatches(DocRoot, StaticPaths) ->
     _StaticDispatches = lists:map(fun(Dir) ->
         {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
-    end, StaticPaths).
+                                  end, StaticPaths).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -367,11 +380,11 @@ stop_dns() ->
 activate_white_lists() ->
     lists:foreach(fun(Decoder) ->
         list_to_atom(atom_to_list(Decoder) ++ "_pb")
-    end, ?DecodersList),
+                  end, ?DecodersList),
 
     lists:foreach(fun(Message) ->
         {list_to_atom("decode_" ++ atom_to_list(Message)), list_to_atom("encode_" ++ atom_to_list(Message))}
-    end, ?MessagesWhiteList),
+                  end, ?MessagesWhiteList),
 
     ok.
 
