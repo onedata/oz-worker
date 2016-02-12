@@ -1,4 +1,4 @@
-.PHONY: test deps generate
+.PHONY: test deps generate test_gui
 
 BASE_DIR         = $(shell pwd)
 GIT_URL := $(shell git config --get remote.origin.url | sed -e 's/\(\/[^/]*\)$$//g')
@@ -6,7 +6,7 @@ GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgr
 ONEDATA_GIT_URL := $(shell if [ "${ONEDATA_GIT_URL}" = "" ]; then echo ${GIT_URL}; else echo ${ONEDATA_GIT_URL}; fi)
 export ONEDATA_GIT_URL
 
-all: rel
+all: test_rel
 
 deps:
 	@./rebar get-deps
@@ -25,8 +25,23 @@ gui_doc:
 compile:
 	@./rebar compile
 
-generate: deps compile
-	@./rebar generate
+## Generates a dev release
+generate_dev: deps compile gui_dev
+	# Move gui tmp dir away from sources, so as to prevent
+	# rebar from entering it during spec generation and crashing
+	mv src/http/gui/tmp /tmp/gui_tmp
+	./rebar generate $(OVERLAY_VARS)
+	# Bring back the tmp dir to its normal location
+	mv /tmp/gui_tmp src/http/gui/tmp
+
+## Generates a production release
+generate: deps compile gui_prod
+	# Move gui tmp dir away from sources, so as to prevent
+	# rebar from entering it during spec generation and crashing
+	mv src/http/gui/tmp /tmp/gui_tmp
+	./rebar generate $(OVERLAY_VARS)
+	# Bring back the tmp dir to its normal location
+	mv /tmp/gui_tmp src/http/gui/tmp
 
 clean:
 	@./rebar clean
@@ -66,6 +81,9 @@ eunit:
 ## Rename all tests in order to remove duplicated names (add _(++i) suffix to each test)
 	@for tout in `find test -name "TEST-*.xml"`; do awk '/testcase/{gsub("_[0-9]+\"", "_" ++i "\"")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
 
+test_gui:
+	cd test_gui && ember test
+	
 coverage:
 	$(BASE_DIR)/bamboos/docker/coverage.escript $(BASE_DIR)
 
@@ -74,6 +92,8 @@ coverage:
 ##
 
 rel: generate
+
+test_rel: generate_dev
 
 relclean:
 	rm -rf rel/globalregistry
