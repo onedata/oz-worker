@@ -15,8 +15,8 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
--include_lib("annotations/include/annotations.hrl").
 -include("dao/dao_users.hrl").
+-include_lib("ctool/include/test/performance.hrl").
 
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
 
@@ -66,9 +66,10 @@
     delete_provider_test/1, create_and_support_space_by_provider/1, get_supported_space_info_test/1,
     unsupport_space_test/1, provider_check_port_test/1, provider_check_ip_test/1,
     support_space_test/1, user_authorize_test/1, update_user_test/1, delete_user_test/1,
-    request_merging_users_test/1, create_space_for_user_test/1, set_user_default_space_test/1, last_user_leaves_space_test/1,
-    user_gets_space_info_test/1, invite_user_to_space_test/1, get_group_info_by_user_test/1,
-    last_user_leaves_group_test/1, non_last_user_leaves_group_test/1, group_invitation_test/1, create_group_test/1, update_group_test/1,
+    request_merging_users_test/1, create_space_for_user_test/1, set_user_default_space_test/1,
+    last_user_leaves_space_test/1, user_gets_space_info_test/1, invite_user_to_space_test/1,
+    get_group_info_by_user_test/1, last_user_leaves_group_test/1, non_last_user_leaves_group_test/1,
+    group_invitation_test/1, create_group_test/1, update_group_test/1,
     delete_group_test/1, create_group_for_user_test/1, invite_user_to_group_test/1,
     get_user_info_by_group_test/1, delete_user_from_group_test/1, get_group_privileges_test/1,
     set_group_privileges_test/1, group_creates_space_test/1, get_space_info_by_group_test/1,
@@ -78,21 +79,23 @@
     delete_user_from_space_test/1, get_groups_from_space_test/1, get_group_info_from_space_test/1,
     delete_group_from_space_test/1, get_providers_supporting_space_test/1,
     get_info_of_provider_supporting_space_test/1, delete_provider_supporting_space_test/1,
-    get_space_privileges_test/1, invite_group_to_space_test/1, not_last_group_leaves_space_test/1, not_last_user_leaves_space_test/1, bad_request_test/1, get_unsupported_space_info_test/1, set_space_privileges_test/1, set_non_existing_space_as_user_default_space_test/1, set_user_default_space_without_permission_test/1]).
+    get_space_privileges_test/1, invite_group_to_space_test/1, not_last_group_leaves_space_test/1,
+    not_last_user_leaves_space_test/1, bad_request_test/1, get_unsupported_space_info_test/1,
+    set_space_privileges_test/1, set_non_existing_space_as_user_default_space_test/1,
+    set_user_default_space_without_permission_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
--performance({test_cases, []}).
 all() ->
-    [
+    ?ALL([
         {group, provider_rest_module_test_group},
         {group, user_rest_module_test_group},
         {group, group_rest_module_test_group},
         {group, spaces_rest_module_test_group},
         bad_request_test
-    ].
+    ]).
 
 groups() ->
     [
