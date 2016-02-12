@@ -139,7 +139,7 @@ get_all_ids() ->
 %% @doc 
 %% @private
 %% Gets first user matching given criterion.
-%% todo: change implementation to something fast
+%% todo: change implementation to something fast (connected with VFS-1498)
 %% @end
 %%--------------------------------------------------------------------
 

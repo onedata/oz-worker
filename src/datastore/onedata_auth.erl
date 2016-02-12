@@ -119,7 +119,7 @@ before(_ModelName, _Method, _Level, _Context) ->
 
 %%--------------------------------------------------------------------
 %% @doc Gets auth from DB for a given user id.
-%% todo: change implementation to something fast
+%% todo: change implementation to something fast (connected with VFS-1498)
 %% @end
 %%--------------------------------------------------------------------
 -spec get_auth_by_user_id(UserId :: binary()) -> {ok, [binary()]} | no_return().

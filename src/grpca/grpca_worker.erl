@@ -9,7 +9,7 @@
 %%% As CA actions need to be performed on all GR nodes,
 %%% such actions are available through the worker interface.
 %%% (in order to benefit from multicalls).
-%%% todo: implement distributed CA properly
+%%% todo: implement distributed CA properly (connected with VFS-1499)
 %%% @end
 %%%-------------------------------------------------------------------
 -module(grpca_worker).
