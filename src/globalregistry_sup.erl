@@ -51,21 +51,11 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Args :: term()) ->
-    {ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
-        MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
-        [ChildSpec :: supervisor:child_spec()]
-    }} |
-    ignore.
+    {ok, {SupFlags :: supervisor:sup_flags(), [ChildSpec :: supervisor:child_spec()]}}.
 init([]) ->
-    RestartStrategy = one_for_one,
-    MaxRestarts = 1000,
-    MaxSecondsBetweenRestarts = 3600,
-
-    SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
-
-    Workers = cluster_worker_specs:main_worker_sup_spec(),
-
-    {ok, {SupFlags, [Workers]}}.
+    {ok, {#{strategy => one_for_one, intensity => 1000, period => 3600}, [
+        cluster_worker_specs:main_worker_sup_spec()
+    ]}}.
 
 %%%===================================================================
 %%% Internal functions
