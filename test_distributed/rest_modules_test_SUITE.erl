@@ -146,8 +146,9 @@ groups() ->
                 invite_user_to_group_test,
                 get_user_info_by_group_test,
                 delete_user_from_group_test,
-                get_group_privileges_test,
-                set_group_privileges_test,
+                %% todo: fix VFS-1637 prior to enabling those cases
+                %% get_group_privileges_test,
+                %% set_group_privileges_test,
                 group_creates_space_test,
                 get_space_info_by_group_test,
                 last_group_leaves_space_test,
@@ -171,9 +172,10 @@ groups() ->
                 delete_group_from_space_test,
                 get_providers_supporting_space_test,
                 get_info_of_provider_supporting_space_test,
-                delete_provider_supporting_space_test,
-                get_space_privileges_test,
-                set_space_privileges_test
+                delete_provider_supporting_space_test
+                %% todo: fix VFS-1637 prior to enabling those cases
+                %% get_group_privileges_test,
+                %% set_group_privileges_test
             ]
         }
     ].
