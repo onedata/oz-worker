@@ -15,7 +15,4 @@
 %% App name
 -define(APP_Name, globalregistry).
 
-%% Name of oneprovider channel worker
--define(OpChannelWorker, op_channel_worker).
-
 -endif.

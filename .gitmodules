@@ -1,6 +1,0 @@
-[submodule "onepanel"]
-	path = onepanel
-	url = ssh://git@git.plgrid.pl:7999/vfs/onepanel.git
-[submodule "bigcouchdb"]
-	path = bigcouchdb
-	url = ssh://git@git.plgrid.pl:7999/vfs/bigcouchdb.git

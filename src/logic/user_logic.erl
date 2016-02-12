@@ -177,7 +177,6 @@ modify(UserId, Proplist) ->
                         % Alias was changed, check for possible conflicts
                         try
                             {ok, NewUser} = get_user({alias, SetAlias}),
-                            op_channel_logic:user_modified(UserProviders, UserId, NewUser),
                             ok
                         catch
                             _:user_duplicated ->
@@ -293,18 +292,15 @@ remove(UserId) ->
 
     lists:foreach(fun(SpaceId) ->
         {ok, SpaceDoc} = space:get(SpaceId),
-        #document{value = #space{users = Users, providers = SpaceProviders} = Space} = SpaceDoc,
+        #document{value = #space{users = Users} = Space} = SpaceDoc,
         SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
         space:save(SpaceDoc#document{value = SpaceNew}),
-        space_logic:cleanup(SpaceId),
-
-        op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew)
+        space_logic:cleanup(SpaceId)
     end, Spaces),
 
     auth_logic:invalidate_token({user_id, UserId}),
 
     onedata_user:delete(UserId),
-    op_channel_logic:user_removed(UserProviders, UserId),
     true.
 
 %%--------------------------------------------------------------------
@@ -329,7 +325,6 @@ get_default_space(UserId) ->
 -spec set_default_space(UserId :: binary(), SpaceId :: binary()) ->
     true.
 set_default_space(UserId, SpaceId) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, Doc} = onedata_user:get(UserId),
     #document{value = User} = Doc,
 
@@ -339,7 +334,6 @@ set_default_space(UserId, SpaceId) ->
         true ->
             UpdatedUser = User#onedata_user{default_space = SpaceId},
             onedata_user:save(Doc#document{value = UpdatedUser}),
-            op_channel_logic:user_modified(UserProviders, UserId, UpdatedUser),
             true
     end.
 

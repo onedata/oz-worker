@@ -25,7 +25,6 @@
 %%--------------------------------------------------------------------
 -spec models() -> Models :: [model_behaviour:model_type()].
 models() -> [
-  op_logic_state,
   onedata_auth,
   onedata_user,
   provider,

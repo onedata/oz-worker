@@ -78,8 +78,6 @@ has_privilege(GroupId, UserId, Privilege) ->
 -spec create(UserId :: binary(), Name :: binary()) ->
     {ok, GroupId :: binary()}.
 create(UserId, Name) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-
     {ok, UserDoc} = onedata_user:get(UserId),
     #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
 
@@ -90,7 +88,6 @@ create(UserId, Name) ->
     UserNew = User#onedata_user{groups = [GroupId | Groups]},
     onedata_user:save(UserDoc#document{value = UserNew}),
 
-    op_channel_logic:user_modified(UserProviders, UserId, UserNew),
     {ok, GroupId}.
 
 %%--------------------------------------------------------------------
@@ -101,14 +98,11 @@ create(UserId, Name) ->
 -spec modify(GroupId :: binary(), Name :: binary()) ->
     ok.
 modify(GroupId, Name) ->
-    {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
-
     {ok, Doc} = user_group:get(GroupId),
     #document{value = #user_group{} = Group} = Doc,
     GroupNew = Group#user_group{name = Name},
     user_group:save(Doc#document{value = GroupNew}),
 
-    op_channel_logic:group_modified(GroupProviders, GroupId, GroupNew),
     ok.
 
 %%--------------------------------------------------------------------
@@ -120,7 +114,6 @@ modify(GroupId, Name) ->
 -spec join(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
     {ok, GroupId :: binary()}.
 join(UserId, Macaroon) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, {group, GroupId}} = token_logic:consume(Macaroon),
     case has_user(GroupId, UserId) of
         true -> ok;
@@ -135,9 +128,7 @@ join(UserId, Macaroon) ->
             UserNew = User#onedata_user{groups = [GroupId | Groups]},
 
             user_group:save(GroupDoc#document{value = GroupNew}),
-            onedata_user:save(UserDoc#document{value = UserNew}),
-
-            op_channel_logic:user_modified(UserProviders, UserId, UserNew)
+            onedata_user:save(UserDoc#document{value = UserNew})
     end,
     {ok, GroupId}.
 
@@ -240,32 +231,23 @@ get_privileges(GroupId, UserId) ->
 -spec remove(GroupId :: binary()) ->
     true.
 remove(GroupId) ->
-    {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
     {ok, #document{value = #user_group{users = Users, spaces = Spaces}}} = user_group:get(GroupId),
 
     lists:foreach(fun({UserId, _}) ->
         {ok, UserDoc} = onedata_user:get(UserId),
         #document{value = #onedata_user{groups = UGroups} = User} = UserDoc,
         NewUser = User#onedata_user{groups = lists:delete(GroupId, UGroups)},
-        onedata_user:save(UserDoc#document{value = NewUser}),
-
-        op_channel_logic:user_modified(GroupProviders, UserId, NewUser)
+        onedata_user:save(UserDoc#document{value = NewUser})
     end, Users),
 
     lists:foreach(fun(SpaceId) ->
         {ok, SpaceDoc} = space:get(SpaceId),
-        #document{value = #space{providers = SpaceProviders, groups = SGroups} = Space} = SpaceDoc,
+        #document{value = #space{groups = SGroups} = Space} = SpaceDoc,
         NewSpace = Space#space{groups = lists:keydelete(GroupId, 1, SGroups)},
-        space:save(SpaceDoc#document{value = NewSpace}),
-        case space_logic:cleanup(SpaceId) of
-            true -> ok;
-            false ->
-                op_channel_logic:space_modified(SpaceProviders, SpaceId, NewSpace)
-        end
+        space:save(SpaceDoc#document{value = NewSpace})
     end, Spaces),
 
     user_group:delete(GroupId),
-    op_channel_logic:group_removed(GroupProviders, GroupId),
     true.
 
 %%--------------------------------------------------------------------
@@ -276,8 +258,6 @@ remove(GroupId) ->
 -spec remove_user(GroupId :: binary(), UserId :: binary()) ->
     true.
 remove_user(GroupId, UserId) ->
-    {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
-
     {ok, UserDoc} = onedata_user:get(UserId),
     #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
     UserNew = User#onedata_user{groups = lists:delete(GroupId, Groups)},
@@ -290,7 +270,6 @@ remove_user(GroupId, UserId) ->
     user_group:save(GroupDoc#document{value = GroupNew}),
     cleanup(GroupId),
 
-    op_channel_logic:user_modified(GroupProviders, UserId, UserNew),
     true.
 
 %%--------------------------------------------------------------------

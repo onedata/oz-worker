@@ -72,7 +72,7 @@ start() ->
             % Proper requests are routed to handler modules
             {'_', static_dispatches(?gui_static_root, ?static_paths) ++ [
                 {<<"/google97a2428c78c25c27.html">>, cowboy_static,
-                    {file, <<"resources/gui_static/google_analytics/google97a2428c78c25c27.html">>}},
+                    {file, <<"data/gui_static/google_analytics/google97a2428c78c25c27.html">>}},
                 {"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
                 {'_', n2o_cowboy, []}
             ]}

@@ -47,5 +47,5 @@ fi
 # Replace auth.config
 cd $RUNNER_SCRIPT_DIR
 echo "Replacing auth.config"
-cp deps/onedev/auth.config rel/resources/auth.config
+cp deps/onedev/auth.config rel/data/auth.config
 exit 0

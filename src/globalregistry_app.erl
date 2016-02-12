@@ -18,7 +18,6 @@
 -include("gui_config.hrl").
 -include("registered_names.hrl").
 -include("messages_white_list.hrl").
--include("op_channel/op_channel.hrl").
 
 %% Application callbacks
 -export([start/2, stop/1]).

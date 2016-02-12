@@ -64,7 +64,6 @@ db_nodes() ->
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> node_manager:cluster_worker_listeners() ++ [
     rest_listener,
-    op_listener,
     gui_listener
 ].
 
@@ -76,7 +75,6 @@ listeners() -> node_manager:cluster_worker_listeners() ++ [
 %%--------------------------------------------------------------------
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() -> node_manager:cluster_worker_modules() ++ [
-    {op_channel_worker, []},
     {grpca_worker, []}
 ].
 

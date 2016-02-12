@@ -200,8 +200,6 @@ create_user_with_uuid(User, UUID) ->
 -spec create_group_with_uuid(UserId :: binary(), Name :: binary(), UUID :: binary()) ->
     {ok, GroupId :: binary()}.
 create_group_with_uuid(UserId, Name, UUID) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-
     {ok, UserDoc} = onedata_user:get(UserId),
     #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
 
@@ -211,7 +209,6 @@ create_group_with_uuid(UserId, Name, UUID) ->
     UserNew = User#onedata_user{groups = [GroupId | Groups]},
     onedata_user:save(UserDoc#document{value = UserNew}),
 
-    op_channel_logic:user_modified(UserProviders, UserId, UserNew),
     {ok, GroupId}.
 
 
@@ -258,12 +255,10 @@ create_space_with_provider({user, UserId}, Name, Providers, Size, UUID) ->
     UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
     onedata_user:save(UserDoc#document{value = UserNew}),
 
-    op_channel_logic:space_modified(Providers, SpaceId, Space),
-    op_channel_logic:user_modified(Providers, UserId, UserNew),
     {ok, SpaceId};
 create_space_with_provider({group, GroupId}, Name, Providers, Size, UUID) ->
     {ok, GroupDoc} = user_group:get(GroupId),
-    #document{value = #user_group{users = Users, spaces = Spaces} = Group} = GroupDoc,
+    #document{value = #user_group{spaces = Spaces} = Group} = GroupDoc,
 
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, size = Size, providers = Providers, groups = [{GroupId, Privileges}]},
@@ -271,10 +266,4 @@ create_space_with_provider({group, GroupId}, Name, Providers, Size, UUID) ->
     GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
     user_group:save(GroupDoc#document{value = GroupNew}),
 
-    op_channel_logic:space_modified(Providers, SpaceId, Space),
-    op_channel_logic:group_modified(Providers, GroupId, Group),
-    lists:foreach(fun({UserId, _}) ->
-      {ok, #document{value = User}} = onedata_user:get(UserId),
-      op_channel_logic:user_modified(Providers, UserId, User)
-    end, Users),
     {ok, SpaceId}.

@@ -8,6 +8,7 @@ src/gui/gui_static/n2o
 
 deps
 ebin
+cluster_manager
 rel/globalregistry
 rel/resources/auth.config
 package

@@ -144,10 +144,8 @@ remove(ProviderId) ->
         {ok, SpaceDoc} = space:get(SpaceId),
         #document{value = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
         SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers), size = proplists:delete(ProviderId, Size)},
-        space:save(SpaceDoc#document{value = SpaceNew}),
-        op_channel_logic:space_modified(SpaceNew#space.providers, SpaceId, SpaceNew),
-        op_channel_logic:space_removed([ProviderId], SpaceId)
-                  end, Spaces),
+        space:save(SpaceDoc#document{value = SpaceNew})
+    end, Spaces),
 
     worker_proxy:multicast(grpca_worker, {revoke, Serial}),
     case (provider:delete(ProviderId)) of

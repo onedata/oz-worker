@@ -21,12 +21,6 @@
     user_id :: binary()
 }).
 
-%% Records of this type store a macaroons secret
--record(op_logic_state, {
-    providers ::  #{term() => term()},
-    connections ::  #{term() => term()}
-}).
-
 %% This record defines a group of users, it has: name, list of users that belongs to it, list of spaces that are used by this group
 -record(user_group, {
     name :: binary(),

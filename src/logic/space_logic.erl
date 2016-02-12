@@ -162,10 +162,9 @@ create({provider, ProviderId}, Name, Macaroon, Size) ->
 -spec modify(SpaceId :: binary(), Name :: binary()) ->
     ok.
 modify(SpaceId, Name) ->
-    {ok, #document{value = #space{providers = SpaceProviders} = Space} = Doc} = space:get(SpaceId),
+    {ok, #document{value = Space} = Doc} = space:get(SpaceId),
     SpaceNew = Space#space{name = Name},
     space:save(Doc#document{value = SpaceNew}),
-    op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew),
     ok.
 
 %%--------------------------------------------------------------------
@@ -197,7 +196,7 @@ join({user, UserId}, Macaroon) ->
         false ->
             Privileges = privileges:space_user(),
             {ok, SpaceDoc} = space:get(SpaceId),
-            #document{value = #space{users = Users, providers = SpaceProviders} = Space} = SpaceDoc,
+            #document{value = #space{users = Users} = Space} = SpaceDoc,
             SpaceNew = Space#space{users = [{UserId, Privileges} | Users]},
 
             {ok, UserDoc} = onedata_user:get(UserId),
@@ -205,11 +204,7 @@ join({user, UserId}, Macaroon) ->
             UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
 
             space:save(SpaceDoc#document{value = SpaceNew}),
-            onedata_user:save(UserDoc#document{value = UserNew}),
-
-            op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew),
-            {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-            op_channel_logic:user_modified(UserProviders, UserId, UserNew)
+            onedata_user:save(UserDoc#document{value = UserNew})
     end,
     {ok, SpaceId};
 join({group, GroupId}, Macaroon) ->
@@ -219,23 +214,15 @@ join({group, GroupId}, Macaroon) ->
         false ->
             Privileges = privileges:space_user(),
             {ok, SpaceDoc} = space:get(SpaceId),
-            #document{value = #space{groups = Groups, providers = SpaceProviders} = Space} = SpaceDoc,
+            #document{value = #space{groups = Groups} = Space} = SpaceDoc,
             SpaceNew = Space#space{groups = [{GroupId, Privileges} | Groups]},
 
             {ok, GroupDoc} = user_group:get(GroupId),
-            #document{value = #user_group{users = Users, spaces = Spaces} = Group} = GroupDoc,
+            #document{value = #user_group{spaces = Spaces} = Group} = GroupDoc,
             GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
 
             space:save(SpaceDoc#document{value = SpaceNew}),
-            user_group:save(GroupDoc#document{value = GroupNew}),
-
-            op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew),
-            {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
-            op_channel_logic:group_modified(GroupProviders, GroupId, GroupNew),
-            lists:foreach(fun({UserId, _}) ->
-                {ok, #document{value = User}} = onedata_user:get(UserId),
-                op_channel_logic:user_modified(GroupProviders, UserId, User)
-            end, Users)
+            user_group:save(GroupDoc#document{value = GroupNew})
     end,
     {ok, SpaceId}.
 
@@ -253,26 +240,12 @@ support(ProviderId, Macaroon, SupportedSize) ->
         true -> ok;
         false ->
             {ok, SpaceDoc} = space:get(SpaceId),
-            #document{value = #space{size = Size, users = Users, groups = Groups, providers = Providers} = Space} = SpaceDoc,
+            #document{value = #space{size = Size, providers = Providers} = Space} = SpaceDoc,
             SpaceNew = Space#space{size = [{ProviderId, SupportedSize} | Size], providers = [ProviderId | Providers]},
 
             add_space_to_providers(SpaceId, [ProviderId]),
 
-            space:save(SpaceDoc#document{value = SpaceNew}),
-
-            op_channel_logic:space_modified([ProviderId | Providers], SpaceId, SpaceNew),
-            lists:foreach(fun({UserId, _}) ->
-                {ok, #document{value = User}} = onedata_user:get(UserId),
-                op_channel_logic:user_modified([ProviderId], UserId, User)
-            end, Users),
-            lists:foreach(fun({GroupId, _}) ->
-                {ok, #document{value = #user_group{users = GroupUsers} = Group}} = user_group:get(GroupId),
-                op_channel_logic:group_modified([ProviderId], GroupId, Group),
-                lists:foreach(fun({GroupUserId, _}) ->
-                    {ok, #document{value = User}} = onedata_user:get(GroupUserId),
-                    op_channel_logic:user_modified([ProviderId], GroupUserId, User)
-                end, GroupUsers)
-            end, Groups)
+            space:save(SpaceDoc#document{value = SpaceNew})
     end,
     {ok, SpaceId}.
 
@@ -416,9 +389,7 @@ remove(SpaceId) ->
         {ok, UserDoc} = onedata_user:get(UserId),
         #document{value = #onedata_user{spaces = USpaces} = User} = UserDoc,
         NewUser = User#onedata_user{spaces = lists:delete(SpaceId, USpaces)},
-        onedata_user:save(UserDoc#document{value = NewUser}),
-        {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-        op_channel_logic:user_modified(UserProviders, UserId, NewUser)
+        onedata_user:save(UserDoc#document{value = NewUser})
     end, Users),
 
     lists:foreach(fun({GroupId, _}) ->
@@ -435,7 +406,6 @@ remove(SpaceId) ->
         provider:save(ProviderDoc#document{value = NewProvider})
     end, Providers),
 
-    op_channel_logic:space_removed(Providers, SpaceId),
     case space:delete(SpaceId) of
         ok -> true;
         _ -> false
@@ -449,22 +419,18 @@ remove(SpaceId) ->
 -spec remove_user(SpaceId :: binary(), UserId :: binary()) ->
     true.
 remove_user(SpaceId, UserId) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-
     {ok, UserDoc} = onedata_user:get(UserId),
     #document{value = #onedata_user{spaces = Spaces} = User} = UserDoc,
     UserNew = User#onedata_user{spaces = lists:delete(SpaceId, Spaces)},
 
     {ok, SpaceDoc} = space:get(SpaceId),
-    #document{value = #space{users = Users, providers = SpaceProviders} = Space} = SpaceDoc,
+    #document{value = #space{users = Users} = Space} = SpaceDoc,
     SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
 
     onedata_user:save(UserDoc#document{value = UserNew}),
     space:save(SpaceDoc#document{value = SpaceNew}),
     cleanup(SpaceId),
 
-    op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew),
-    op_channel_logic:user_modified(UserProviders, UserId, UserNew),
     true.
 
 %%--------------------------------------------------------------------
@@ -480,14 +446,13 @@ remove_group(SpaceId, GroupId) ->
     GroupNew = Group#user_group{spaces = lists:delete(SpaceId, Spaces)},
 
     {ok, SpaceDoc} = space:get(SpaceId),
-    #document{value = #space{groups = Groups, providers = Providers} = Space} = SpaceDoc,
+    #document{value = #space{groups = Groups} = Space} = SpaceDoc,
     SpaceNew = Space#space{groups = lists:keydelete(GroupId, 1, Groups)},
 
     user_group:save(GroupDoc#document{value = GroupNew}),
     space:save(SpaceDoc#document{value = SpaceNew}),
     cleanup(SpaceId),
 
-    op_channel_logic:space_modified(Providers, SpaceId, SpaceNew),
     true.
 
 %%--------------------------------------------------------------------
@@ -509,8 +474,6 @@ remove_provider(SpaceId, ProviderId) ->
     provider:save(ProviderDoc#document{value = ProviderNew}),
     space:save(SpaceDoc#document{value = SpaceNew}),
 
-    op_channel_logic:space_modified(SpaceNew#space.providers, SpaceId, SpaceNew),
-    op_channel_logic:space_removed([ProviderId], SpaceId),
     true.
 
 %%--------------------------------------------------------------------
@@ -533,12 +496,10 @@ create_with_provider({user, UserId}, Name, Providers, Size) ->
 
     add_space_to_providers(SpaceId, Providers),
 
-    op_channel_logic:space_modified(Providers, SpaceId, Space),
-    op_channel_logic:user_modified(Providers, UserId, UserNew),
     {ok, SpaceId};
 create_with_provider({group, GroupId}, Name, Providers, Size) ->
     {ok, GroupDoc} = user_group:get(GroupId),
-    #document{value = #user_group{users = Users, spaces = Spaces} = Group} = GroupDoc,
+    #document{value = #user_group{spaces = Spaces} = Group} = GroupDoc,
 
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, size = Size, providers = Providers, groups = [{GroupId, Privileges}]},
@@ -549,12 +510,6 @@ create_with_provider({group, GroupId}, Name, Providers, Size) ->
 
     add_space_to_providers(SpaceId, Providers),
 
-    op_channel_logic:space_modified(Providers, SpaceId, Space),
-    op_channel_logic:group_modified(Providers, GroupId, Group),
-    lists:foreach(fun({UserId, _}) ->
-        {ok, #document{value = User}} = onedata_user:get(UserId),
-        op_channel_logic:user_modified(Providers, UserId, User)
-    end, Users),
     {ok, SpaceId}.
 
 

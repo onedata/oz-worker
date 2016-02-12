@@ -20,7 +20,7 @@
 % n2o API
 -export([main/0, event/1]).
 
--define(HOME_PAGE_FILE, "resources/HOMEPAGE_HEADER.html").
+-define(HOME_PAGE_FILE, "data/HOMEPAGE_HEADER.html").
 
 -define(ONEDATA_INFO, "http://slides.com/onedata/globalstorage#/").
 

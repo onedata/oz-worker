@@ -20,14 +20,14 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([rest_api_connection_test/1, datastore_connection_test/1, op_channel_connection_test/1]).
+-export([rest_api_connection_test/1, datastore_connection_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 -performance({test_cases, []}).
-all() -> [rest_api_connection_test, datastore_connection_test, op_channel_connection_test].
+all() -> [rest_api_connection_test, datastore_connection_test].
 
 rest_api_connection_test(Config) ->
     [Node1, Node2] = ?config(gr_nodes, Config),
@@ -41,11 +41,6 @@ datastore_connection_test(Config) ->
     [Node1, Node2] = ?config(gr_nodes, Config),
     ?assertEqual(pong, rpc:call(Node1, worker_proxy, call, [datastore_worker, ping])),
     ?assertEqual(pong, rpc:call(Node2, worker_proxy, call, [datastore_worker, ping])).
-
-op_channel_connection_test(Config) ->
-    [Node1, Node2] = ?config(gr_nodes, Config),
-    ?assertEqual(pong, rpc:call(Node1, worker_proxy, call, [op_channel_worker, ping])),
-    ?assertEqual(pong, rpc:call(Node2, worker_proxy, call, [op_channel_worker, ping])).
 
 %%%===================================================================
 %%% Setup/teardown functions
