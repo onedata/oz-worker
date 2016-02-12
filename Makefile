@@ -83,7 +83,7 @@ eunit:
 
 test_gui:
 	cd test_gui && ember test
-	
+
 coverage:
 	$(BASE_DIR)/bamboos/docker/coverage.escript $(BASE_DIR)
 
