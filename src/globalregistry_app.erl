@@ -260,16 +260,13 @@ start_gui() ->
             ]}
         ],
 
-        % Create ets tables and set envs needed by n2o
-        gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module, ?cowboy_bridge_module),
-
         % Initilize auth handler
         auth_config:load_auth_config(),
 
         % Call gui init, which will call init on all modules that might need state.
         gui:init(),
         % Start the listener for web gui and nagios handler
-        ok = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
+        {ok, _} = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
             ranch_ssl2, [
                 {ip, {127, 0, 0, 1}},
                 {port, GuiPort},
