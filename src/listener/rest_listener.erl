@@ -48,27 +48,27 @@ start() ->
         {ok, RestHttpsAcceptors} = application:get_env(?APP_Name, rest_https_acceptors),
 
         % Get cert paths
-        {ok, GrpCADir} = application:get_env(?APP_Name, grpca_dir),
-        {ok, GrpKeyFile} = application:get_env(?APP_Name, grpkey_file),
-        {ok, GrpCertFile} = application:get_env(?APP_Name, grpcert_file),
-        {ok, GrpCertDomain} = application:get_env(?APP_Name, http_domain),
+        {ok, ZoneCADir} = application:get_env(?APP_Name, zone_ca_dir),
+        {ok, ZoneKeyFile} = application:get_env(?APP_Name, zone_key_file),
+        {ok, ZoneCertFile} = application:get_env(?APP_Name, zone_cert_file),
+        {ok, ZoneCertDomain} = application:get_env(?APP_Name, http_domain),
 
         {ok, GuiCertFile} = application:get_env(?APP_Name, gui_cert_file),
         {ok, GuiKeyFile} = application:get_env(?APP_Name, gui_key_file),
         {ok, GuiCaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
 
-        grpca:start(GrpCADir, GrpCertFile, GrpKeyFile, GrpCertDomain),
+        zone_ca:start(ZoneCADir, ZoneCertFile, ZoneKeyFile, ZoneCertDomain),
         auth_logic:start(),
 
-        {ok, GrpCABin} = file:read_file(grpca:cacert_path(GrpCADir)),
-        [{_, GrpCADER, _} | _] = public_key:pem_decode(GrpCABin),
+        {ok, ZoneCABin} = file:read_file(zone_ca:cacert_path(ZoneCADir)),
+        [{_, ZoneCADER, _} | _] = public_key:pem_decode(ZoneCABin),
 
         {ok, GuiCABin} = file:read_file(GuiCaCertFile),
         [{_, GuiCADER, _} | _] = public_key:pem_decode(GuiCABin),
 
         Dispatch = cowboy_router:compile([
             {'_', lists:append([
-                [{<<"/crl.pem">>, cowboy_static, {file, filename:join(GrpCADir, "crl.pem")}}],
+                [{<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}}],
                 user_rest_module:routes(),
                 provider_rest_module:routes(),
                 spaces_rest_module:routes(),
@@ -83,7 +83,7 @@ start() ->
                 % we don't yet have a mechanism of distributing the CA cert.
                 {certfile, GuiCertFile},
                 {keyfile, GuiKeyFile},
-                {cacerts, [GuiCADER, GrpCADER]},
+                {cacerts, [GuiCADER, ZoneCADER]},
                 {verify, verify_peer},
                 {ciphers, ssl:cipher_suites() -- weak_ciphers()},
                 {versions, ['tlsv1.2', 'tlsv1.1']}

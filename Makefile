@@ -1,4 +1,4 @@
-REPO	        ?= globalregistry
+REPO	        ?= oz_worker
 
 # distro for package building (oneof: wily, fedora-23-x86_64)
 DISTRIBUTION    ?= none
@@ -6,7 +6,7 @@ export DISTRIBUTION
 
 PKG_REVISION    ?= $(shell git describe --tags --always)
 PKG_VERSION     ?= $(shell git describe --tags --always | tr - .)
-PKG_ID           = globalregistry-$(PKG_VERSION)
+PKG_ID           = oz_worker-$(PKG_VERSION)
 PKG_BUILD        = 1
 BASE_DIR         = $(shell pwd)
 ERLANG_BIN       = $(shell dirname $(shell which erl))
@@ -75,7 +75,7 @@ cm_rel:
 	make -C cluster_manager/ rel
 
 relclean:
-	rm -rf rel/globalregistry
+	rm -rf rel/oz_worker
 	rm -rf cluster_manager/rel/cluster_manager
 
 ##

@@ -12,7 +12,7 @@
 -module(client_redirect_handler).
 
 -include_lib("ctool/include/logging.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -export([init/3, handle/2, terminate/3]).
 

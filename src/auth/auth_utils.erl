@@ -12,7 +12,7 @@
 -module(auth_utils).
 
 -include_lib("ctool/include/logging.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 -include("auth_common.hrl").
 

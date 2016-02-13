@@ -38,7 +38,7 @@ body() ->
                         {ok, true} ->
                             {ok, UserIDs} = onedata_user:get_all_ids(),
                             #panel{style = <<"text-align: center; margin-bottom: 100px;">>, body = [
-                                #h2{body = <<"GlobalRegistry works in DEV MODE">>},
+                                #h2{body = <<"OneZone works in DEV MODE">>},
                                 #p{body = <<"You can use the menu below to login on user accounts, bypassing OpenID">>},
                                 #h5{body = <<"dev login:">>},
                                 lists:map(
@@ -109,7 +109,7 @@ login_panel() ->
                 #link{postback = show_copernicus_info, body = #image{image = "/images/copernicus.png",
                     style = <<"display: block; margin-left: auto; margin-right: auto; margin-top: 75px; width: 300px;">>}},
                 gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
-            ] ++ gr_gui_utils:logotype_footer(55)}
+            ] ++ oz_gui_utils:logotype_footer(55)}
     end.
 
 % content of HOMEPAGE_HEADER.html file

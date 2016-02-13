@@ -42,7 +42,7 @@
 -module(dev_utils).
 
 -include_lib("ctool/include/logging.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 
 %% API
@@ -176,7 +176,7 @@ destroy_test_entities(Users, Groups, Spaces) ->
     RedirectionPoint :: binary(), CSR :: binary(), UUID :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
-    {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(UUID, CSRBin),
+    {ok, ProviderCertPem, Serial} = zone_ca:sign_provider_req(UUID, CSRBin),
     Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
     provider:save(#document{key = binary:bin_to_list(UUID), value = Provider}),
     {ok, UUID, ProviderCertPem}.

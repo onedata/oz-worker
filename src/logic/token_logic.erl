@@ -13,7 +13,7 @@
 -author("Konrad Zemek").
 
 -include("registered_names.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% Atoms representing types of valid tokens.
 -type token_type() :: group_invite_token | space_create_token |

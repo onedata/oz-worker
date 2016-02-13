@@ -135,7 +135,7 @@ clear_expired_sessions() ->
 %%--------------------------------------------------------------------
 -spec get_cookie_ttl() -> integer() | no_return().
 get_cookie_ttl() ->
-    case application:get_env(globalregistry, gui_sessions_cookie_ttl) of
+    case application:get_env(oz_worker, gui_sessions_cookie_ttl) of
         {ok, Val} when is_integer(Val) ->
             Val;
         _ ->

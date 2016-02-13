@@ -5,12 +5,11 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc The main module implementing the logic behind Global Registry Provider
-%%% CA. This module's methods should be used to manipulate Providers'
-%%% certificates.
+%%% @doc The main module implementing the logic behind onezone CA.
+%%% This module's methods should be used to manipulate Providers' certificates.
 %%% @end
 %%%-------------------------------------------------------------------
--module(grpca).
+-module(zone_ca).
 -author("Konrad Zemek").
 
 -include("registered_names.hrl").
@@ -23,11 +22,11 @@
 -define(CAKEY_FILE, filename:join("private", "cakey.pem")).
 
 -record(dn, {commonName,
-    organizationalUnitName = "GRP",
+    organizationalUnitName = "onezone",
     organizationName = "onedata",
     localityName = "Krakow",
     countryName = "PL",
-    emailAddress = "grp@onedata.com"}).
+    emailAddress = "support@onedata.com"}).
 
 %% API
 -export([start/4, stop/0, sign_provider_req/2, loop/1, verify_provider/1,
@@ -42,11 +41,11 @@
 %%--------------------------------------------------------------------
 -spec cacert_path(CaDir :: string()) -> string().
 cacert_path(CaDir) ->
-    {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
+    {ok, CaDir} = application:get_env(?APP_Name, zone_ca_dir),
     filename:join(CaDir, ?CACERT_FILE).
 
 %%--------------------------------------------------------------------
-%% @doc Starts a GRPCA process which handles all CA duties.
+%% @doc Starts a zone CA process which handles all CA duties.
 %%--------------------------------------------------------------------
 -spec start(CaDir :: string(), CertPath :: string(), KeyPath :: string(),
     Domain :: string()) -> ok.
@@ -54,14 +53,14 @@ start(CADir, CertPath, KeyPath, Domain) ->
     case filelib:is_regular(CertPath) of
         true -> ok;
         false ->
-            generate_gr_cert(CADir, CertPath, KeyPath, Domain)
+            generate_oz_cert(CADir, CertPath, KeyPath, Domain)
     end,
     register(ca_loop, spawn(?MODULE, loop, [CADir])),
     ca_loop ! schedule_crl_gen,
     ok.
 
 %%--------------------------------------------------------------------
-%% @doc Stops the GRPCA process.
+%% @doc Stops the zone CA process.
 %%--------------------------------------------------------------------
 -spec stop() -> ok.
 stop() ->
@@ -70,7 +69,7 @@ stop() ->
 
 %%--------------------------------------------------------------------
 %% @doc Signs CSR from a provider, returning a new certificate.
-%% The CSR's DN will be overriden by the GRPCA; most importantly the
+%% The CSR's DN will be overridden by the zone CA; most importantly the
 %% Common Name will be set to the Provider's ID.
 %% @end
 %%--------------------------------------------------------------------
@@ -116,9 +115,9 @@ revoke(Serial) ->
 %%--------------------------------------------------------------------
 %% @doc Generates a certificate for Global Registry's interfaces.
 %%--------------------------------------------------------------------
--spec generate_gr_cert(CaDir :: string(), CertPath :: string(),
+-spec generate_oz_cert(CaDir :: string(), CertPath :: string(),
     KeyPath :: string(), Domain :: string()) -> ok.
-generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
+generate_oz_cert(CADir, CertPath, KeyPath, Domain) ->
     TmpDir = utils:mkdtemp(),
     CSRFile = random_filename(TmpDir),
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
@@ -154,7 +153,7 @@ generate_gr_cert(CADir, CertPath, KeyPath, Domain) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc The underlying implementation of {@link grpca:revoke/1}.
+%% @doc The underlying implementation of {@link zone_ca:revoke/1}.
 %%--------------------------------------------------------------------
 -spec revoke_imp(Serial :: binary(), CaDir :: string()) -> ok.
 revoke_imp(Serial, CaDir) ->
@@ -173,7 +172,7 @@ revoke_imp(Serial, CaDir) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc The underlying implementation of {@link grpca:sign_provider_req/2}.
+%% @doc The underlying implementation of {@link zone_ca:sign_provider_req/2}.
 %%--------------------------------------------------------------------
 -spec sign_provider_req_imp(ProviderId :: binary(), CSRPem :: binary(),
     CaDir :: string()) -> {ok, Pem :: binary(), Serial :: integer()}.
@@ -203,7 +202,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc The underlying implementation of {@link grpca:verify_provider_imp/1}.
+%% @doc The underlying implementation of {@link zone_ca:verify_provider_imp/1}.
 %%--------------------------------------------------------------------
 -spec verify_provider_imp(PeerCertDer :: public_key:der_encoded(),
     CaDir :: string()) -> {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: any()}}.
@@ -225,7 +224,7 @@ verify_provider_imp(PeerCertDer, CaDir) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc The underlying implementation of {@link grpca:gen_crl/0}.
+%% @doc The underlying implementation of {@link zone_ca:gen_crl/0}.
 %%--------------------------------------------------------------------
 -spec gen_crl_imp(CaDir :: string()) -> ok.
 gen_crl_imp(CaDir) ->
@@ -263,7 +262,7 @@ ca_config_file(TmpDir, CaDir) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Delegates a request from the API to the GRPCA process.
+%% @doc Delegates a request from the API to the zone CA process.
 %%--------------------------------------------------------------------
 -spec delegate(Request :: function(), Args :: list()) -> Response :: any().
 delegate(Request, Args) ->
@@ -277,7 +276,7 @@ delegate(Request, Args) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc The GRPCA process loop. @see start/4, @see stop/0 .
+%% @doc The zone CA process loop. @see start/4, @see stop/0 .
 %%--------------------------------------------------------------------
 -spec loop(CaDir :: string()) -> ok.
 loop(CaDir) ->
@@ -299,14 +298,14 @@ loop(CaDir) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Checks whether the certificate has been revoked by the GRPCA.
+%% @doc Checks whether the certificate has been revoked by the zone CA.
 %%--------------------------------------------------------------------
 -spec check_revoked(CaCertDer :: public_key:der_encoded(),
     CaCert :: #'OTPCertificate'{},
     PeerCert :: #'OTPCertificate'{}) ->
     valid | {bad_cert, Reason :: any()}.
 check_revoked(CaCertDer, CaCert, PeerCert) ->
-    {ok, CaDir} = application:get_env(?APP_Name, grpca_dir),
+    {ok, CaDir} = application:get_env(?APP_Name, zone_ca_dir),
 
     {ok, CRLPem} = file:read_file(filename:join(CaDir, "crl.pem")),
     [{'CertificateList', CRLDer, not_encrypted}] = public_key:pem_decode(CRLPem),
@@ -353,7 +352,7 @@ random_filename(TmpDir) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Returns a configuration for creating a CSR with given DN by the GRPCA.
+%% @doc Returns a configuration for creating a CSR with given DN by the zone CA.
 %%--------------------------------------------------------------------
 -spec req_cnf(DN :: #dn{}) -> Config :: iolist().
 req_cnf(DN) ->
@@ -392,7 +391,7 @@ req_cnf(DN) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Returns a configuration for the GRPCA.
+%% @doc Returns a configuration for the zone CA.
 %%--------------------------------------------------------------------
 -spec ca_cnf(CaDir :: string()) -> Config :: iolist().
 ca_cnf(CaDir) ->

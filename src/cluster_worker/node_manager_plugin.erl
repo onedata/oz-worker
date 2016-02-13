@@ -35,7 +35,7 @@
 %%--------------------------------------------------------------------
 -spec app_name() -> {ok, Name :: atom()}.
 app_name() ->
-    {ok, globalregistry}.
+    {ok, oz_worker}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -75,7 +75,7 @@ listeners() -> node_manager:cluster_worker_listeners() ++ [
 %%--------------------------------------------------------------------
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() -> node_manager:cluster_worker_modules() ++ [
-    {grpca_worker, []}
+    {zone_ca_worker, []}
 ].
 
 %%--------------------------------------------------------------------

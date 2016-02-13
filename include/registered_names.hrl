@@ -13,6 +13,6 @@
 -define(REGISTERED_NAMES_HRL, 1).
 
 %% App name
--define(APP_Name, globalregistry).
+-define(APP_Name, oz_worker).
 
 -endif.

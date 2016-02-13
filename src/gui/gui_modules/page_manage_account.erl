@@ -13,7 +13,7 @@
 -module(page_manage_account).
 
 -include_lib("ctool/include/logging.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("auth_common.hrl").
 -include("gui/common.hrl").
 
@@ -27,7 +27,7 @@
 
 %% Template points to the template file, which will be filled with content
 main() ->
-    case gr_gui_utils:maybe_redirect(true) of
+    case oz_gui_utils:maybe_redirect(true) of
         true ->
             #dtl{file = "bare", app = ?APP_Name, bindings = [{title, <<"">>}, {body, <<"">>}, {custom, <<"">>}]};
         false ->
@@ -40,7 +40,7 @@ title() -> <<"Manage account">>.
 %% This will be placed in the template instead of [[[page:body()]]] tag
 body() ->
     #panel{class = <<"page-container">>, body = [
-        gr_gui_utils:top_menu(manage_account_tab),
+        oz_gui_utils:top_menu(manage_account_tab),
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
             #panel{id = <<"main_table">>, body = main_table()},
@@ -298,7 +298,7 @@ provider_redirection_panel() ->
                 end, lists:usort(Providers))
             };
         _ ->
-            case gr_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
+            case oz_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
                 {ok, ProviderHostname, URL} ->
                     #panel{id = <<"redirection_panel">>, body = [
                         #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse">>,
@@ -331,7 +331,7 @@ event({action, Fun}) ->
     event({action, Fun, []});
 
 event({action, Fun, Args}) ->
-    gr_gui_utils:apply_or_redirect(?MODULE, Fun, Args).
+    oz_gui_utils:apply_or_redirect(?MODULE, Fun, Args).
 
 % Connects an oauth account to users account
 connect_account(Provider) ->
@@ -501,7 +501,7 @@ redirect_to_provider(ProviderHostname, URL) ->
 
 
 redirect_to_provider_dev(ProviderID) ->
-    {ok, ProviderHostname, URL} = gr_gui_utils:get_redirection_url_to_provider(ProviderID),
+    {ok, ProviderHostname, URL} = oz_gui_utils:get_redirection_url_to_provider(ProviderID),
     case http_client:get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, [], <<>>, [insecure]) of
         {ok, _, _, _} ->
             gui_jq:redirect(URL);

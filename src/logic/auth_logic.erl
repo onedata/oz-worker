@@ -15,14 +15,14 @@
 -include("auth_common.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("datastore/gr_datastore_models_def.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -define(STATE_TOKEN, state_token).
 -define(STATE_TOKEN_EXPIRATION_SECS, 60). %% @todo: config
 
 % String that will be placed in macaroons' location field
--define(MACAROONS_LOCATION, <<"globalregistry">>).
+-define(MACAROONS_LOCATION, <<"onezone">>).
 
 %% API
 -export([start/0, stop/0, get_redirection_uri/3, gen_token/1, gen_token/2, validate_token/5,
@@ -85,7 +85,7 @@ authenticate_user(Identifier) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns provider hostname and a full URI to which the user should be
-%% redirected from the global registry. The redirection is part of the OpenID
+%% redirected from the onezone. The redirection is part of the OpenID
 %% flow and the URI contains an Authorization token. The provider hostname
 %% is useful to check connectivity before redirecting.
 %% @end

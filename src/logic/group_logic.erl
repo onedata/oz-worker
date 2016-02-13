@@ -12,8 +12,8 @@
 -module(group_logic).
 -author("Konrad Zemek").
 
--include("datastore/gr_datastore_models_def.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([exists/1, has_user/2, has_privilege/3]).

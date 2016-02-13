@@ -8,7 +8,7 @@
 %%% @doc Application main supervisor
 %%% @end
 %%%-------------------------------------------------------------------
--module(globalregistry_sup).
+-module(oz_worker_sup).
 -author("Tomasz Lichon").
 
 -behaviour(supervisor).

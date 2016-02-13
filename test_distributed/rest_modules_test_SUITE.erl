@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc Integration tests of rest_modules in Global Registry
+%%% @doc Integration tests of rest_modules in onezone.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(rest_modules_test_SUITE).
@@ -16,7 +16,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("annotations/include/annotations.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
 
@@ -445,7 +445,7 @@ user_gets_space_info_test(Config) ->
 last_user_leaves_space_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
     UserReqParams = ?config(userReqParams, Config),
-    [Node1, Node2] = ?config(gr_nodes, Config),
+    [Node1, Node2] = ?config(oz_worker_nodes, Config),
 
     OtherRestAddress = ?config(otherRestAddress, Config),
     ProvParamsOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
@@ -1060,12 +1060,12 @@ init_per_suite(Config) ->
     application:start(ssl2),
     hackney:start(),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
-    [Node1, Node2] = ?config(gr_nodes, NewConfig),
-    GR_IP_1 = get_node_ip(Node1),
-    GR_IP_2 = get_node_ip(Node2),
+    [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
+    OZ_IP_1 = get_node_ip(Node1),
+    OZ_IP_2 = get_node_ip(Node2),
     RestPort = get_rest_port(Node1),
-    RestAddress = "https://" ++ GR_IP_1 ++ ":" ++ integer_to_list(RestPort),
-    OtherRestAddress = "https://" ++ GR_IP_2 ++ ":" ++ integer_to_list(RestPort),
+    RestAddress = "https://" ++ OZ_IP_1 ++ ":" ++ integer_to_list(RestPort),
+    OtherRestAddress = "https://" ++ OZ_IP_2 ++ ":" ++ integer_to_list(RestPort),
     [{otherRestAddress, OtherRestAddress} | [{restAddress, RestAddress} | NewConfig]].
 
 init_per_testcase(create_provider_test, Config) ->
@@ -1350,7 +1350,7 @@ authorize_user(UserId, ProviderId, ReqParams, Node) ->
     prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges).
 
 register_user(UserName, ProviderId, Config, ProviderReqParams) ->
-    [Node1, _] = ?config(gr_nodes, Config),
+    [Node1, _] = ?config(oz_worker_nodes, Config),
     UserId = create_user(UserName, Node1),
     NewHeaders = authorize_user(UserId, ProviderId, ProviderReqParams, Node1),
     UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),

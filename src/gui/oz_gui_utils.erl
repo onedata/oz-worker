@@ -6,13 +6,13 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc: This file contains useful functions commonly used in
-%%% globalregistry GUI modules.
+%%% oz_worker GUI modules.
 %%% @end
 %%%-------------------------------------------------------------------
 
--module(gr_gui_utils).
+-module(oz_gui_utils).
 -include("gui/common.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 % Functions to check for user's session

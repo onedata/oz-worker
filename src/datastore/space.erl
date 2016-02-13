@@ -12,7 +12,7 @@
 -author("Michal Zmuda").
 -behaviour(model_behaviour).
 
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
 %% model_behaviour callbacks

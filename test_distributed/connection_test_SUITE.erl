@@ -30,7 +30,7 @@
 all() -> [rest_api_connection_test, datastore_connection_test].
 
 rest_api_connection_test(Config) ->
-    [Node1, Node2] = ?config(gr_nodes, Config),
+    [Node1, Node2] = ?config(oz_worker_nodes, Config),
     {ok, RestPort} = rpc:call(Node1, application, get_env, [?APP_Name, rest_port]),
     URL1 = str_utils:format("https://~s:~B/provider/test/check_my_ip", [utils:get_host(Node1), RestPort]),
     URL2 = str_utils:format("https://~s:~B/provider/test/check_my_ip", [utils:get_host(Node2), RestPort]),
@@ -38,7 +38,7 @@ rest_api_connection_test(Config) ->
     ?assertMatch({ok, _, _, _}, http_client:get(URL2, [], <<>>, [insecure])).
 
 datastore_connection_test(Config) ->
-    [Node1, Node2] = ?config(gr_nodes, Config),
+    [Node1, Node2] = ?config(oz_worker_nodes, Config),
     ?assertEqual(pong, rpc:call(Node1, worker_proxy, call, [datastore_worker, ping])),
     ?assertEqual(pong, rpc:call(Node2, worker_proxy, call, [datastore_worker, ping])).
 

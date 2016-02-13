@@ -8,7 +8,7 @@
 %%% @doc Basic tests that check dns answers.
 %%% @end
 %%%-------------------------------------------------------------------
--module(gr_dns_test_SUITE).
+-module(oz_dns_test_SUITE).
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
@@ -31,7 +31,7 @@
 all() -> [get_all_ips_test].
 
 get_all_ips_test(Config) ->
-    [Node1, Node2] = ?config(gr_nodes, Config),
+    [Node1, Node2] = ?config(oz_worker_nodes, Config),
     DnsPort = get_dns_port(Node1),
     Node1Ip = get_dns_ip(Node1),
     Node2Ip = get_dns_ip(Node2),

@@ -12,7 +12,7 @@
 %%% todo: implement distributed CA properly (connected with VFS-1499)
 %%% @end
 %%%-------------------------------------------------------------------
--module(grpca_worker).
+-module(zone_ca_worker).
 -author("Michal Zmuda").
 
 -include_lib("ctool/include/logging.hrl").
@@ -46,10 +46,10 @@ handle(healthcheck) ->
     ok;
 
 handle({revoke, Serial}) ->
-    grpca:revoke(Serial);
+    zone_ca:revoke(Serial);
 
 handle({sign_provider_req, BinProviderId, CSRBin}) ->
-    grpca:sign_provider_req(BinProviderId, CSRBin).
+    zone_ca:sign_provider_req(BinProviderId, CSRBin).
 
 
 %%--------------------------------------------------------------------

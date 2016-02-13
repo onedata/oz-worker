@@ -10,7 +10,7 @@
 -module(user_rest_module).
 -author("Konrad Zemek").
 
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 
 -include_lib("ctool/include/logging.hrl").

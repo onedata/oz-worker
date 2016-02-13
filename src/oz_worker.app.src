@@ -9,10 +9,10 @@
 %% @end
 %% ===================================================================
 
-{application, globalregistry, [
+{application, oz_worker, [
     {description, "Global registry of data."},
     {vsn, "3.0.0"},
-    {registered, [globalregistry_sup]},
+    {registered, [oz_worker_sup]},
     {applications, [
         kernel,
         stdlib,
@@ -33,6 +33,6 @@
         web_client,
         cowboy
     ]},
-    {mod, {globalregistry_app, []}},
+    {mod, {oz_worker_app, []}},
     {env, []}
 ]}.

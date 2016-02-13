@@ -12,8 +12,8 @@
 -module(provider_logic).
 -author("Konrad Zemek").
 
--include("datastore/gr_datastore_models_def.hrl").
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -62,7 +62,7 @@ create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = gen_uuid(),
     BinProviderId = str_utils:to_binary(ProviderId),
     [{_, {ok, ProviderCertPem, Serial}} | _] =
-        worker_proxy:multicall(grpca_worker, {sign_provider_req, BinProviderId, CSRBin}),
+        worker_proxy:multicall(zone_ca_worker, {sign_provider_req, BinProviderId, CSRBin}),
 
     Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
     provider:save(#document{key = BinProviderId, value = Provider}),
@@ -147,7 +147,7 @@ remove(ProviderId) ->
         space:save(SpaceDoc#document{value = SpaceNew})
     end, Spaces),
 
-    worker_proxy:multicast(grpca_worker, {revoke, Serial}),
+    worker_proxy:multicast(zone_ca_worker, {revoke, Serial}),
     case (provider:delete(ProviderId)) of
         ok -> true;
         _ -> flase

@@ -12,7 +12,7 @@
 -module(user_logic).
 -author("Konrad Zemek").
 
--include("datastore/gr_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).

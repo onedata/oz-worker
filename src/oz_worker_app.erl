@@ -8,7 +8,7 @@
 %%% @doc Applicatin main app file
 %%% @end
 %%%-------------------------------------------------------------------
--module(globalregistry_app).
+-module(oz_worker_app).
 -author("Tomasz Lichon").
 
 -behaviour(application).
@@ -47,7 +47,7 @@ start(_StartType, _StartArgs) ->
     activate_white_lists(),
     case application:start(cluster_worker, permanent) of
         ok ->
-             globalregistry_sup:start_link();
+             oz_worker_sup:start_link();
         {error, Reason} ->
             {error, {cannot_start_worker_sup, Reason}}
     end.
@@ -62,7 +62,7 @@ start(_StartType, _StartArgs) ->
 -spec(stop(State :: term()) -> term()).
 stop(_State) ->
     auth_logic:stop(),
-    grpca:stop(),
+    zone_ca:stop(),
     test_node_starter:maybe_stop_cover(),
     ok.
 
