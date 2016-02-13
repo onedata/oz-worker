@@ -61,7 +61,7 @@ end).
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = gen_uuid(),
     BinProviderId = str_utils:to_binary(ProviderId),
-    [{_, {ok, ProviderCertPem, Serial}} | _] =
+    [{_, {ok, {ProviderCertPem, Serial}}} | _] =
         worker_proxy:multicall(zone_ca_worker, {sign_provider_req, BinProviderId, CSRBin}),
 
     Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},

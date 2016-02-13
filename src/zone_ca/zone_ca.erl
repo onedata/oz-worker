@@ -74,11 +74,11 @@ stop() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec sign_provider_req(ProviderId :: binary(), CSRPem :: binary()) ->
-    {ok, CertPem :: binary(), Serial :: binary()}.
+    {ok, {CertPem :: binary(), Serial :: binary()}}.
 sign_provider_req(ProviderId, CSRPem) ->
     case delegate(fun sign_provider_req_imp/3, [ProviderId, CSRPem]) of
         {ok, CertPem, Serial} when is_binary(CertPem), is_integer(Serial) ->
-            {ok, CertPem, integer_to_binary(Serial, 16)}
+            {ok, {CertPem, integer_to_binary(Serial, 16)}}
     end.
 
 %%--------------------------------------------------------------------

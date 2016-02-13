@@ -9,8 +9,8 @@ src/gui/gui_static/n2o
 deps
 ebin
 cluster_manager
-rel/globalregistry
-rel/resources/auth.config
+rel/oz_worker
+rel/data/auth.config
 package
 
 *.iml
