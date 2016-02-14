@@ -15,7 +15,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
--include_lib("annotations/include/annotations.hrl").
+-include_lib("ctool/include/test/performance.hrl").
 -include_lib("kernel/src/inet_dns.hrl").
 
 %% API
@@ -27,8 +27,7 @@
 %%% API functions
 %%%===================================================================
 
--performance({test_cases, []}).
-all() -> [get_all_ips_test].
+all() -> ?ALL([get_all_ips_test]).
 
 get_all_ips_test(Config) ->
     [Node1, Node2] = ?config(oz_worker_nodes, Config),

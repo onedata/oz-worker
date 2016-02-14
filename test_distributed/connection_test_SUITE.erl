@@ -15,7 +15,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
--include_lib("annotations/include/annotations.hrl").
+-include_lib("ctool/include/test/performance.hrl").
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
@@ -26,8 +26,7 @@
 %%% API functions
 %%%===================================================================
 
--performance({test_cases, []}).
-all() -> [rest_api_connection_test, datastore_connection_test].
+all() -> ?ALL([rest_api_connection_test, datastore_connection_test]).
 
 rest_api_connection_test(Config) ->
     [Node1, Node2] = ?config(oz_worker_nodes, Config),
