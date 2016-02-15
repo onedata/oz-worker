@@ -293,17 +293,6 @@ start_gui() ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Generates static file routing for cowboy.
-%% @end
-%%--------------------------------------------------------------------
--spec static_dispatches(DocRoot :: string(), StaticPaths :: [string()]) -> term().
-static_dispatches(DocRoot, StaticPaths) ->
-    _StaticDispatches = lists:map(fun(Dir) ->
-        {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
-                                  end, StaticPaths).
-
-%%--------------------------------------------------------------------
-%% @private
 %% @doc Starts a cowboy listener that will redirect all requests of http to https.
 %% @end
 %%--------------------------------------------------------------------
