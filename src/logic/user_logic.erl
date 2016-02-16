@@ -17,7 +17,7 @@
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
--export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
+-export([get_data/2, get_spaces/1, get_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
 -export([exists/1, remove/1]).
 
@@ -207,13 +207,26 @@ merge(_UserId, _Macaroon) ->
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(UserId :: binary()) ->
+-spec get_data(UserId :: binary(), Type :: provider | user) ->
     {ok, [proplists:property()]}.
-get_data(UserId) ->
+get_data(UserId, provider) ->
     #user{name = Name} = dao_adapter:user(UserId),
     {ok, [
         {userId, UserId},
         {name, Name}
+    ]};
+get_data(UserId, user) ->
+    #user{name = Name, connected_accounts = Connected_accounts, alias = Alias, email_list = Email_list}
+        = dao_adapter:user(UserId),
+    Connected_accounts_proplist = lists:map(
+        fun(Account) -> lists:zip(record_info(fields, oauth_account), tl(tuple_to_list(Account))) end,
+        Connected_accounts),
+    {ok, [
+        {userId, UserId},
+        {name, Name},
+        {connectedAccounts, Connected_accounts_proplist},
+        {alias, Alias},
+        {emailList, Email_list}
     ]}.
 
 %%--------------------------------------------------------------------

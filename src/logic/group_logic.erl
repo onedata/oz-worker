@@ -217,7 +217,7 @@ get_providers(GroupId) ->
     {ok, [proplists:property()]}.
 get_user(_GroupId, UserId) ->
     %% @todo: we don't want to give out every bit of data once clients have more data stored
-    user_logic:get_data(UserId).
+    user_logic:get_data(UserId, provider).
 
 %%--------------------------------------------------------------------
 %% @doc Returns list of group's member privileges.
