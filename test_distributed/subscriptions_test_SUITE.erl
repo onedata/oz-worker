@@ -33,6 +33,15 @@
         binary_to_integer(LastSeqInDb)
     end).
 
+-define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
+
+-define(URLS1, [<<"127.0.0.1">>]).
+-define(URLS2, [<<"127.0.0.2">>]).
+-define(REDIRECTION_POINT1, <<"https://127.0.0.1:443">>).
+-define(REDIRECTION_POINT2, <<"https://127.0.0.2:443">>).
+-define(CLIENT_NAME1, <<"provider1">>).
+-define(CLIENT_NAME2, <<"provider2">>).
+
 %%%===================================================================
 %%% API functions
 %%%===================================================================
@@ -41,12 +50,15 @@ all() -> ?ALL([space_changes_after_subscription, space_changes_before_subscripti
 
 space_changes_after_subscription(Config) ->
     [Node1, _] = ?config(oz_worker_nodes, Config),
-    ProviderID1 = <<"provider1">>,
-    ProviderID2 = <<"provider2">>,
+    [Address1, _] = ?config(restAddresses, Config),
+    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
+    {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
     First = ?getFirstSeq(Node1, Config),
 
-    subscribe(Node1, ProviderID1, 0, "endpoint1"),
-    subscribe(Node1, ProviderID2, 0, "endpoint2"),
+    subscribe(0, <<"endpoint1">>, SubscribeParams1),
+    subscribe(0, <<"endpoint2">>, SubscribeParams2),
 
     SpaceKey1 = <<"spacekey1">>,
     SpaceDoc1 = #document{key = SpaceKey1, value = #space{name = <<"space1">>, providers = [ProviderID1]}},
@@ -72,19 +84,22 @@ space_changes_after_subscription(Config) ->
     SpaceDoc6 = #document{key = SpaceKey6, value = #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}},
     ?assertEqual({ok, SpaceKey6}, rpc:call(Node1, space, save, [SpaceDoc6])),
 
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 1) ++ ",\"space\":{\"id\":\"spacekey1\",\"name\":\"space1\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint2", "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint2", "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 5) ++ ",\"space\":{\"id\":\"spacekey5\",\"name\":\"space5\",\"groups\":[\"g1\",\"g2\"],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 6) ++ ",\"space\":{\"id\":\"spacekey6\",\"name\":\"space6\",\"groups\":[],\"users\":[\"u1\",\"u2\"]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 1) ++ ",\"space\":{\"id\":\"spacekey1\",\"name\":\"space1\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint2">>, "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint2">>, "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 5) ++ ",\"space\":{\"id\":\"spacekey5\",\"name\":\"space5\",\"groups\":[\"g1\",\"g2\"],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 6) ++ ",\"space\":{\"id\":\"spacekey6\",\"name\":\"space6\",\"groups\":[],\"users\":[\"u1\",\"u2\"]}}"),
     ok.
 
 space_changes_before_subscription(Config) ->
     [Node1, _] = ?config(oz_worker_nodes, Config),
-    ProviderID1 = <<"provider1">>,
-    ProviderID2 = <<"provider2">>,
+    [Address1, _] = ?config(restAddresses, Config),
+    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
+    {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
     First = ?getFirstSeq(Node1, Config),
 
     SpaceKey1 = <<"spacekey1">>,
@@ -111,16 +126,16 @@ space_changes_before_subscription(Config) ->
     SpaceDoc6 = #document{key = SpaceKey6, value = #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}},
     ?assertEqual({ok, SpaceKey6}, rpc:call(Node1, space, save, [SpaceDoc6])),
 
-    subscribe(Node1, ProviderID1, 0, "endpoint1"),
-    subscribe(Node1, ProviderID2, 0, "endpoint2"),
+    subscribe(0, <<"endpoint1">>, SubscribeParams1),
+    subscribe(0, <<"endpoint2">>, SubscribeParams2),
 
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 1) ++ ",\"space\":{\"id\":\"spacekey1\",\"name\":\"space1\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint2", "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint2", "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 5) ++ ",\"space\":{\"id\":\"spacekey5\",\"name\":\"space5\",\"groups\":[\"g1\",\"g2\"],\"users\":[]}}"),
-    verify_sent(Node1, "endpoint1", "{\"seq\":" ++ integer_to_list(First + 6) ++ ",\"space\":{\"id\":\"spacekey6\",\"name\":\"space6\",\"groups\":[],\"users\":[\"u1\",\"u2\"]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 1) ++ ",\"space\":{\"id\":\"spacekey1\",\"name\":\"space1\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint2">>, "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint2">>, "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 5) ++ ",\"space\":{\"id\":\"spacekey5\",\"name\":\"space5\",\"groups\":[\"g1\",\"g2\"],\"users\":[]}}"),
+    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 6) ++ ",\"space\":{\"id\":\"spacekey6\",\"name\":\"space6\",\"groups\":[],\"users\":[\"u1\",\"u2\"]}}"),
     ok.
 
 
@@ -129,8 +144,17 @@ space_changes_before_subscription(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
+    application:start(ssl2),
+    hackney:start(),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
-    NewConfig.
+
+    [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
+    [OZ_IP_1, OZ_IP_2] = [rest_utils:get_node_ip(Node1), rest_utils:get_node_ip(Node2)],
+    RestPort = rest_utils:get_rest_port(Node1),
+    RestAddress1 = "https://" ++ OZ_IP_1 ++ ":" ++ integer_to_list(RestPort),
+    RestAddress2 = "https://" ++ OZ_IP_2 ++ ":" ++ integer_to_list(RestPort),
+    Addresses = [RestAddress1, RestAddress2],
+    [{restAddresses, Addresses} | NewConfig].
 
 init_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
@@ -140,10 +164,11 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, http_client),
-    ok.
+    test_utils:mock_unload(Nodes, http_client).
 
 end_per_suite(Config) ->
+    hackney:stop(),
+    application:stop(ssl2),
     test_node_starter:clean_environment(Config).
 
 
@@ -151,8 +176,15 @@ end_per_suite(Config) ->
 %%% Internal functions
 %%%===================================================================
 
-subscribe(Node1, ProviderID, LastSeen, Endpoint) ->
-    ?assertNotMatch({badrpc, _}, rpc:call(Node1, provider_subscriptions, renew, [ProviderID, LastSeen, Endpoint])).
+subscribe(LastSeen, Endpoint, SubscribeParams) ->
+    {Address, Headers, Options} = SubscribeParams,
+    Data = json_utils:encode([
+        {<<"last_seq">>, LastSeen},
+        {<<"endpoint">>, Endpoint}
+    ]),
+    RestAddress = Address ++ "/subscription",
+    Result = rest_utils:do_request(RestAddress, Headers, post, Data, Options),
+    ?assertEqual(204, rest_utils:get_response_status(Result)).
 
 verify_sent(Node, Endpoint, Body) ->
     verify_sent(Node, Endpoint, Body, 50).

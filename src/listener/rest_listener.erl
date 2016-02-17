@@ -69,6 +69,7 @@ start() ->
         Dispatch = cowboy_router:compile([
             {'_', lists:append([
                 [{<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}}],
+                subscriptions_rest_module:routes(),
                 user_rest_module:routes(),
                 provider_rest_module:routes(),
                 spaces_rest_module:routes(),

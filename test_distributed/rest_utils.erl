@@ -1,0 +1,128 @@
+%%%-------------------------------------------------------------------
+%%% @author Michal Zmuda
+%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% @end
+%%%-------------------------------------------------------------------
+-module(rest_utils).
+-author("Michal Zmuda").
+
+
+-include("registered_names.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/logging.hrl").
+
+-export([get_rest_port/1, get_node_ip/1, generate_cert_files/0, register_provider/4, do_request/3, check_status/1, get_response_status/1, do_request/4, do_request/5]).
+
+get_rest_port(Node) ->
+    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
+    RestPort.
+
+%% returns ip (as a string) of given node
+get_node_ip(Node) ->
+    CMD = "docker inspect --format '{{ .NetworkSettings.IPAddress }}'" ++ " " ++ utils:get_host(Node),
+    re:replace(os:cmd(CMD), "\\s+", "", [global, {return, list}]).
+
+
+register_provider(URLS, RedirectionPoint, ClientName, ReqParams) ->
+    {RestAddress, Headers, _Options} = ReqParams,
+    {KeyFile, CSRFile, CertFile} = generate_cert_files(),
+
+    {ok, CSR} = file:read_file(CSRFile),
+    Body = json_utils:encode([
+        {<<"urls">>, URLS},
+        {<<"csr">>, CSR},
+        {<<"redirectionPoint">>, RedirectionPoint},
+        {<<"clientName">>, ClientName}
+    ]),
+    % Add insecure option - we do not want the GR server cert to be checked.
+    hackney_pool:start_pool(noauth, [{timeout, 150000}, {max_connections, 100}]),
+    Response = do_request(RestAddress ++ "/provider", Headers, post, Body),
+    hackney_pool:stop_pool(noauth),
+    %% save cert
+    [Cert, ProviderId] = get_body_val([certificate, providerId], Response),
+    file:write_file(CertFile, Cert),
+    %% set request options for provider
+    Options = [{ssl_options, [{keyfile, KeyFile}, {certfile, CertFile}]}],
+    %% set request parametres for provider
+    ProviderReqParams = update_req_params(ReqParams, Options, options),
+    {ProviderId, ProviderReqParams}.
+
+
+generate_cert_files() ->
+    {MegaSec, Sec, MiliSec} = erlang:now(),
+    Prefix = lists:foldl(fun(Int, Acc) ->
+        Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
+    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
+    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
+    CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
+    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
+    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
+    {KeyFile, CSRFile, CertFile}.
+
+get_response_status(Response) ->
+    {ok, Status, _ResponseHeaders, _ResponseBody} = Response,
+    Status.
+
+get_response_headers(Response) ->
+    {ok, _Status, ResponseHeaders, _ResponseBody} = Response,
+    ResponseHeaders.
+
+get_response_body(Response) ->
+    {ok, _Status, _ResponseHeaders, ResponseBody} = Response,
+    ResponseBody.
+
+%% returns list of values from Response's body,
+%% returned list is ordered accordingly to keys in Keylist
+%% Keylist is list of atoms
+get_body_val(KeyList, Response) ->
+    case check_status(Response) of
+        {bad_response_code, Code} -> {request_error, Code};
+        _ -> JSONOutput = json_utils:decode(get_response_body(Response)),
+            [proplists:get_value(atom_to_binary(Key, latin1), JSONOutput) || Key <- KeyList]
+    end.
+
+get_header_val(Parameter, Response) ->
+    case check_status(Response) of
+        {bad_response_code, Code} -> {request_error, Code};
+        _ ->
+            case lists:keysearch(<<"location">>, 1, get_response_headers(Response)) of
+                {value, {_HeaderType, HeaderValue}} ->
+                    parse_http_param(Parameter, HeaderValue);
+                false -> parameter_not_in_header
+            end
+    end.
+
+parse_http_param(Parameter, HeaderValue) ->
+    [_, ParamVal] = binary:split(HeaderValue, <<"/", Parameter/binary, "/">>, [global]),
+    ParamVal.
+
+check_status(Response) ->
+    Status = get_response_status(Response),
+    case (Status >= 200) and (Status < 300) of
+        true -> ok;
+        _ -> {bad_response_code, Status}
+    end.
+
+%% returns list of values from responsebody
+do_request(Endpoint, Headers, Method) ->
+    do_request(Endpoint, Headers, Method, <<>>, []).
+do_request(Endpoint, Headers, Method, Body) ->
+    do_request(Endpoint, Headers, Method, Body, []).
+do_request(Endpoint, Headers, Method, Body, Options) ->
+    % Add insecure option - we do not want the GR server cert to be checked.
+    http_client:request(Method, Endpoint, Headers, Body, [insecure | Options]).
+
+update_req_params(ReqParams, NewParam, headers) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    {RestAddress, Headers ++ NewParam, Options};
+update_req_params(ReqParams, NewParam, options) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    {RestAddress, Headers, Options ++ NewParam};
+update_req_params(ReqParams, NewParam, address) ->
+    {_, Headers, Options} = ReqParams,
+    {NewParam, Headers, Options}.
