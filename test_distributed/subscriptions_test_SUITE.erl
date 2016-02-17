@@ -34,6 +34,7 @@
     end).
 
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
+-define(COMMUNICATION_WAIT, 500).
 
 -define(URLS1, [<<"127.0.0.1">>]).
 -define(URLS2, [<<"127.0.0.2">>]).
@@ -53,10 +54,12 @@ space_changes_after_subscription(Config) ->
     [Address1, _] = ?config(restAddresses, Config),
     RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
 
+    % given
     {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
     {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
     First = ?getFirstSeq(Node1, Config),
 
+    % when
     subscribe(0, <<"endpoint1">>, SubscribeParams1),
     subscribe(0, <<"endpoint2">>, SubscribeParams2),
 
@@ -84,13 +87,25 @@ space_changes_after_subscription(Config) ->
     SpaceDoc6 = #document{key = SpaceKey6, value = #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}},
     ?assertEqual({ok, SpaceKey6}, rpc:call(Node1, space, save, [SpaceDoc6])),
 
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 1) ++ ",\"space\":{\"id\":\"spacekey1\",\"name\":\"space1\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint2">>, "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint2">>, "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 5) ++ ",\"space\":{\"id\":\"spacekey5\",\"name\":\"space5\",\"groups\":[\"g1\",\"g2\"],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 6) ++ ",\"space\":{\"id\":\"spacekey6\",\"name\":\"space6\",\"groups\":[],\"users\":[\"u1\",\"u2\"]}}"),
+    % then
+    verify_communication(Node1, <<"endpoint1">>, [
+        space_msg(First + 1, SpaceDoc1),
+        space_msg(First + 2, SpaceDoc2),
+        space_msg(First + 4, SpaceDoc4),
+        space_msg(First + 5, SpaceDoc5),
+        space_msg(First + 6, SpaceDoc6)
+    ], [
+        space_msg(First + 3, SpaceDoc3)
+    ]),
+    verify_communication(Node1, <<"endpoint2">>, [
+        space_msg(First + 2, SpaceDoc2),
+        space_msg(First + 4, SpaceDoc4)
+    ], [
+        space_msg(First + 1, SpaceDoc1),
+        space_msg(First + 3, SpaceDoc3),
+        space_msg(First + 5, SpaceDoc5),
+        space_msg(First + 6, SpaceDoc6)
+    ]),
     ok.
 
 space_changes_before_subscription(Config) ->
@@ -98,10 +113,12 @@ space_changes_before_subscription(Config) ->
     [Address1, _] = ?config(restAddresses, Config),
     RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
 
+    % given
     {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
     {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
     First = ?getFirstSeq(Node1, Config),
 
+    % when
     SpaceKey1 = <<"spacekey1">>,
     SpaceDoc1 = #document{key = SpaceKey1, value = #space{name = <<"space1">>, providers = [ProviderID1]}},
     ?assertEqual({ok, SpaceKey1}, rpc:call(Node1, space, save, [SpaceDoc1])),
@@ -129,13 +146,25 @@ space_changes_before_subscription(Config) ->
     subscribe(0, <<"endpoint1">>, SubscribeParams1),
     subscribe(0, <<"endpoint2">>, SubscribeParams2),
 
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 1) ++ ",\"space\":{\"id\":\"spacekey1\",\"name\":\"space1\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint2">>, "{\"seq\":" ++ integer_to_list(First + 2) ++ ",\"space\":{\"id\":\"spacekey2\",\"name\":\"space2\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint2">>, "{\"seq\":" ++ integer_to_list(First + 4) ++ ",\"space\":{\"id\":\"spacekey4\",\"name\":\"space4\",\"groups\":[],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 5) ++ ",\"space\":{\"id\":\"spacekey5\",\"name\":\"space5\",\"groups\":[\"g1\",\"g2\"],\"users\":[]}}"),
-    verify_sent(Node1, <<"endpoint1">>, "{\"seq\":" ++ integer_to_list(First + 6) ++ ",\"space\":{\"id\":\"spacekey6\",\"name\":\"space6\",\"groups\":[],\"users\":[\"u1\",\"u2\"]}}"),
+    % then
+    verify_communication(Node1, <<"endpoint1">>, [
+        space_msg(First + 1, SpaceDoc1),
+        space_msg(First + 2, SpaceDoc2),
+        space_msg(First + 4, SpaceDoc4),
+        space_msg(First + 5, SpaceDoc5),
+        space_msg(First + 6, SpaceDoc6)
+    ], [
+        space_msg(First + 3, SpaceDoc3)
+    ]),
+    verify_communication(Node1, <<"endpoint2">>, [
+        space_msg(First + 2, SpaceDoc2),
+        space_msg(First + 4, SpaceDoc4)
+    ], [
+        space_msg(First + 1, SpaceDoc1),
+        space_msg(First + 3, SpaceDoc3),
+        space_msg(First + 5, SpaceDoc5),
+        space_msg(First + 6, SpaceDoc6)
+    ]),
     ok.
 
 
@@ -186,21 +215,33 @@ subscribe(LastSeen, Endpoint, SubscribeParams) ->
     Result = rest_utils:do_request(RestAddress, Headers, post, Data, Options),
     ?assertEqual(204, rest_utils:get_response_status(Result)).
 
-verify_sent(Node, Endpoint, Body) ->
-    verify_sent(Node, Endpoint, Body, 50).
-
-verify_sent(Node, Endpoint, Body, 0) ->
-    ?assert({error, timeout_for, Node, Endpoint, Body});
-
-verify_sent(Node, Endpoint, Body, Retries) ->
-    Result = mock_capture(Node, [first, http_client, post, [Endpoint, '_', list_to_binary(Body)], 3]),
-    case Result of
+verify_communication(Node, Endpoint, ExpectedMsgs, ForbiddenMsgs) ->
+    verify_communication(Node, Endpoint, ExpectedMsgs, ForbiddenMsgs, 1, 10).
+verify_communication(_, _, [], _, _, _) ->
+    ok;
+verify_communication(_, _, PresentBodies, _, _, 0) ->
+    ?assertMatch([], PresentBodies);
+verify_communication(Node, Endpoint, ExpectedMsgs, ForbiddenMsgs, Request, AllowedFailures) ->
+    Body = mock_capture(Node, [Request, http_client, post, [Endpoint, '_', '_'], 3]),
+    case Body of
         {badrpc, _} ->
-            timer:sleep(500),
-            verify_sent(Node, Endpoint, Body, Retries - 1);
+            timer:sleep(?COMMUNICATION_WAIT),
+            verify_communication(Node, Endpoint, ExpectedMsgs, ForbiddenMsgs, Request, AllowedFailures - 1);
         _ ->
-            ok
+            Data = json_utils:decode(Body),
+            lists:foreach(fun(Absent) -> ?assertNotMatch(Absent, Data) end, ForbiddenMsgs),
+            verify_communication(Node, Endpoint, ExpectedMsgs -- [Data], ForbiddenMsgs, Request + 1, 10)
     end.
+
+space_msg(Seq, SpaceDoc) ->
+    #document{key = ID, value = #space{name = Name, groups = Groups, users = Users}} = SpaceDoc,
+    space_msg(Seq, ID, Name, Groups, Users).
+
+space_msg(Seq, ID, Name, GroupIDs, UserIDs) ->
+    [
+        {<<"seq">>, Seq},
+        {<<"space">>, [{<<"id">>, ID}, {<<"name">>, Name}, {<<"groups">>, GroupIDs}, {<<"users">>, UserIDs}]}
+    ].
 
 mock_capture(Node, Args) ->
     rpc:call(Node, meck, capture, Args).
