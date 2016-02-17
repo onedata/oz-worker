@@ -158,6 +158,36 @@ space_changes_before_subscription(Config) ->
     ]),
     ok.
 
+node_for_subscription_changes(Config) ->
+    [Node1, Node2] = ?config(oz_worker_nodes, Config),
+    [Address1, Address2] = ?config(restAddresses, Config),
+    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
+
+    % given
+    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
+    SubscribeParams2 = rest_utils:update_req_params(SubscribeParams1, Address2, address),
+
+    % when
+    First = getFirstSeq(Node1),
+    subscribe(First, <<"endpoint1">>, SubscribeParams1),
+
+    SpaceKey1 = <<"spacekey1">>,
+    SpaceDoc1 = #document{key = SpaceKey1, value = #space{name = <<"space1">>, providers = [ProviderID1]}},
+    ?assertEqual({ok, SpaceKey1}, rpc:call(Node1, space, save, [SpaceDoc1])),
+
+    await_communication(Node1, <<"endpoint1">>, space_msg(SpaceDoc1)),
+    Later = getFirstSeq(Node1),
+    subscribe(Later, <<"endpoint1">>, SubscribeParams2),
+
+    SpaceKey2 = <<"spacekey2">>,
+    SpaceDoc2 = #document{key = SpaceKey2, value = #space{name = <<"space2">>, providers = [ProviderID1], groups = []}},
+    ?assertEqual({ok, SpaceKey2}, rpc:call(Node1, space, save, [SpaceDoc2])),
+
+    % then
+    verify_communication(Node1, <<"endpoint1">>, [space_msg(SpaceDoc1)], [space_msg(SpaceDoc2)]),
+    verify_communication(Node2, <<"endpoint1">>, [space_msg(SpaceDoc2)], [space_msg(SpaceDoc1)]),
+    ok.
+
 
 %%%===================================================================
 %%% Setup/teardown functions
