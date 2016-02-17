@@ -9,8 +9,10 @@ src/gui/gui_static/n2o
 deps
 ebin
 rel/globalregistry
+rel/globalregistry-*.rpm
 rel/resources/auth.config
 package
+package.tar.gz
 
 *.iml
 *.sublime*
