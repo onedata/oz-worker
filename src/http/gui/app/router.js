@@ -14,6 +14,8 @@ Router.map(function() {
   this.route('media');
   this.route('blog');
   this.route('login');
+  this.route('account');
+  this.route('logout');
 });
 
 export default Router;
