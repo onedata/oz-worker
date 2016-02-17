@@ -21,7 +21,10 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([space_changes_after_subscription/1, space_changes_before_subscription/1, node_for_subscription_changes/1]).
+-export([
+    space_changes_after_subscription/1, space_changes_before_subscription/1, node_for_subscription_changes/1,
+    subscription_expires_or_is_renewed/1
+]).
 
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
 -define(COMMUNICATION_WAIT, 500).
@@ -38,7 +41,10 @@
 %%% API functions
 %%%===================================================================
 
-all() -> ?ALL([space_changes_after_subscription, space_changes_before_subscription, node_for_subscription_changes]).
+all() -> ?ALL([
+    space_changes_after_subscription, space_changes_before_subscription, node_for_subscription_changes,
+    subscription_expires_or_is_renewed
+]).
 
 space_changes_after_subscription(Config) ->
     [Node1, _] = ?config(oz_worker_nodes, Config),
@@ -126,6 +132,69 @@ node_for_subscription_changes(Config) ->
     % then
     verify_communication(Node1, <<"endpoint1">>, [SpaceDoc1], [SpaceDoc2]),
     verify_communication(Node2, <<"endpoint1">>, [SpaceDoc2], [SpaceDoc1]),
+    ok.
+
+subscription_expires_or_is_renewed(Config) ->
+    [Node1, Node2] = ?config(oz_worker_nodes, Config),
+    [Address1, Address2] = ?config(restAddresses, Config),
+    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
+
+    MostOfTimeout = 8,
+    Timeout = 10,
+    MoreThanTimeout = 12,
+
+    % given
+    set_subscription_timeout(Node1, Timeout),
+    set_subscription_timeout(Node2, Timeout),
+    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
+    SubscribeParams2 = rest_utils:update_req_params(SubscribeParams1, Address2, address),
+
+    % when
+    %% subscribe
+    Seq1 = getFirstSeq(Node1),
+    subscribe(Seq1, <<"endpoint1">>, SubscribeParams1),
+    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1], groups = []}),
+
+    %% let it expire
+    await_communication(Node1, <<"endpoint1">>, SpaceDoc1),
+    timer:sleep(timer:seconds(MoreThanTimeout)),
+    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1], groups = []}),
+    % change could be reported after next subscription, so we need to sleep
+    % (awaiting is not possible as change isn't to be communicated)
+    timer:sleep(timer:seconds(10)),
+
+    %% subscribe anew
+    Seq3 = getFirstSeq(Node1),
+    subscribe(Seq3, <<"endpoint1">>, SubscribeParams1),
+    SpaceDoc3 = save(Node1, <<"spacekey3">>, #space{name = <<"space3">>, providers = [ProviderID1], groups = []}),
+
+    %% renew before expires
+    timer:sleep(timer:seconds(MostOfTimeout)),
+    Seq4 = getFirstSeq(Node1),
+    subscribe(Seq4, <<"endpoint1">>, SubscribeParams1),
+    SpaceDoc4 = save(Node1, <<"spacekey4">>, #space{name = <<"space4">>, providers = [ProviderID1], groups = []}),
+
+    %% again renew before expires
+    timer:sleep(timer:seconds(MostOfTimeout)),
+    Seq5 = getFirstSeq(Node1),
+    subscribe(Seq5, <<"endpoint1">>, SubscribeParams1),
+    SpaceDoc5 = save(Node1, <<"spacekey5">>, #space{name = <<"space5">>, providers = [ProviderID1], groups = []}),
+
+    %% renew at the other node before expires
+    timer:sleep(timer:seconds(MostOfTimeout)),
+    Seq6 = getFirstSeq(Node1),
+    subscribe(Seq6, <<"endpoint1">>, SubscribeParams2),
+    SpaceDoc6 = save(Node1, <<"spacekey6">>, #space{name = <<"space6">>, providers = [ProviderID1], groups = []}),
+
+    % then
+    verify_communication(Node1, <<"endpoint1">>,
+        [SpaceDoc1, SpaceDoc3, SpaceDoc4, SpaceDoc5],
+        [SpaceDoc2, SpaceDoc6]
+    ),
+    verify_communication(Node2, <<"endpoint1">>,
+        [SpaceDoc6],
+        [SpaceDoc1, SpaceDoc2, SpaceDoc3, SpaceDoc4, SpaceDoc5]
+    ),
     ok.
 
 
@@ -221,3 +290,6 @@ save(Node, Key, Value) ->
     Doc = #document{key = Key, value = Value},
     ?assertEqual({ok, Key}, rpc:call(Node, space, save, [Doc])),
     Doc.
+
+set_subscription_timeout(Node, Seconds) ->
+    ok = rpc:call(Node, application, set_env, [?APP_Name, subscription_ttl_seconds, Seconds]).

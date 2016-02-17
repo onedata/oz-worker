@@ -46,17 +46,13 @@ cleanup() ->
 %%%===================================================================
 
 add_subscription(ID, Callback) ->
-    TTL = get_ttl_seconds(),
+    TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
     ExpiresAt = now_seconds() + TTL,
     ?info("Adding subscription ~p", [{ID, Callback, ExpiresAt, TTL}]),
     worker_host:state_update(?MODULE, provider_callbacks, fun(Callbacks) ->
         maps:put(ID, {Callback, ExpiresAt}, Callbacks)
     end),
     ok.
-
-get_ttl_seconds() ->
-    HeartbeatInterval = application:get_env(?APP_Name, hartbeat_interval, 60),
-    HeartbeatInterval * 2.
 
 fetch_history(ProviderID, Callback, From) ->
     To = worker_host:state_get(?MODULE, last_seq),
