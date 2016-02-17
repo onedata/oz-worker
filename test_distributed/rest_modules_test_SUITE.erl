@@ -973,9 +973,7 @@ get_node_ip(Node) ->
     re:replace(os:cmd(CMD), "\\s+", "", [global, {return, list}]).
 
 generate_cert_files() ->
-    {MegaSec, Sec, MiliSec} = erlang:now(),
-    Prefix = lists:foldl(fun(Int, Acc) ->
-        Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
+    Prefix = "provider" ++ integer_to_list(erlang:system_time(micro_seconds)),
     KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
     CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
     CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
