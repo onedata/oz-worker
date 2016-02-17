@@ -27,7 +27,7 @@
 %% Convenience macros for defining routes.
 -define(LOGIN, #gui_route{
     requires_session = ?SESSION_NOT_LOGGED_IN,
-    html_file = undefined,
+    html_file = <<"login.html">>,
     page_backend = login_backend
 }).
 
