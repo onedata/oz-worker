@@ -16,7 +16,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([get_rest_port/1, get_node_ip/1, generate_cert_files/0, register_provider/4, do_request/3, check_status/1, get_response_status/1, do_request/4, do_request/5]).
+-export([get_rest_port/1, get_node_ip/1, generate_cert_files/0, register_provider/4, do_request/3, check_status/1, get_response_status/1, do_request/4, do_request/5, update_req_params/3]).
 
 get_rest_port(Node) ->
     {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),

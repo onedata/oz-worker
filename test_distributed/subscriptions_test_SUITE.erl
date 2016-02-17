@@ -21,20 +21,11 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([space_changes_after_subscription/1, space_changes_before_subscription/1]).
-
--define(getFirstSeq(W, Config),
-    begin
-        {_, LastSeqInDb, _} = ?assertMatch(
-            {ok, _, _},
-            rpc:call(W, couchdb_datastore_driver, db_run,
-                [couchbeam_changes, follow_once, [], 3])
-        ),
-        binary_to_integer(LastSeqInDb)
-    end).
+-export([space_changes_after_subscription/1, space_changes_before_subscription/1, node_for_subscription_changes/1]).
 
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
 -define(COMMUNICATION_WAIT, 500).
+-define(ALLOWED_FAILURES, 20).
 
 -define(URLS1, [<<"127.0.0.1">>]).
 -define(URLS2, [<<"127.0.0.2">>]).
@@ -47,7 +38,7 @@
 %%% API functions
 %%%===================================================================
 
-all() -> ?ALL([space_changes_after_subscription, space_changes_before_subscription]).
+all() -> ?ALL([space_changes_after_subscription, space_changes_before_subscription, node_for_subscription_changes]).
 
 space_changes_after_subscription(Config) ->
     [Node1, _] = ?config(oz_worker_nodes, Config),
@@ -57,11 +48,11 @@ space_changes_after_subscription(Config) ->
     % given
     {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
     {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
-    First = ?getFirstSeq(Node1, Config),
+    First = getFirstSeq(Node1),
 
     % when
-    subscribe(0, <<"endpoint1">>, SubscribeParams1),
-    subscribe(0, <<"endpoint2">>, SubscribeParams2),
+    subscribe(First, <<"endpoint1">>, SubscribeParams1),
+    subscribe(First, <<"endpoint2">>, SubscribeParams2),
 
     SpaceKey1 = <<"spacekey1">>,
     SpaceDoc1 = #document{key = SpaceKey1, value = #space{name = <<"space1">>, providers = [ProviderID1]}},
@@ -89,22 +80,22 @@ space_changes_after_subscription(Config) ->
 
     % then
     verify_communication(Node1, <<"endpoint1">>, [
-        space_msg(First + 1, SpaceDoc1),
-        space_msg(First + 2, SpaceDoc2),
-        space_msg(First + 4, SpaceDoc4),
-        space_msg(First + 5, SpaceDoc5),
-        space_msg(First + 6, SpaceDoc6)
+        space_msg(SpaceDoc1),
+        space_msg(SpaceDoc2),
+        space_msg(SpaceDoc4),
+        space_msg(SpaceDoc5),
+        space_msg(SpaceDoc6)
     ], [
-        space_msg(First + 3, SpaceDoc3)
+        space_msg(SpaceDoc3)
     ]),
     verify_communication(Node1, <<"endpoint2">>, [
-        space_msg(First + 2, SpaceDoc2),
-        space_msg(First + 4, SpaceDoc4)
+        space_msg(SpaceDoc2),
+        space_msg(SpaceDoc4)
     ], [
-        space_msg(First + 1, SpaceDoc1),
-        space_msg(First + 3, SpaceDoc3),
-        space_msg(First + 5, SpaceDoc5),
-        space_msg(First + 6, SpaceDoc6)
+        space_msg(SpaceDoc1),
+        space_msg(SpaceDoc3),
+        space_msg(SpaceDoc5),
+        space_msg(SpaceDoc6)
     ]),
     ok.
 
@@ -116,7 +107,7 @@ space_changes_before_subscription(Config) ->
     % given
     {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
     {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
-    First = ?getFirstSeq(Node1, Config),
+    First = getFirstSeq(Node1),
 
     % when
     SpaceKey1 = <<"spacekey1">>,
@@ -143,27 +134,27 @@ space_changes_before_subscription(Config) ->
     SpaceDoc6 = #document{key = SpaceKey6, value = #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}},
     ?assertEqual({ok, SpaceKey6}, rpc:call(Node1, space, save, [SpaceDoc6])),
 
-    subscribe(0, <<"endpoint1">>, SubscribeParams1),
-    subscribe(0, <<"endpoint2">>, SubscribeParams2),
+    subscribe(First, <<"endpoint1">>, SubscribeParams1),
+    subscribe(First, <<"endpoint2">>, SubscribeParams2),
 
     % then
     verify_communication(Node1, <<"endpoint1">>, [
-        space_msg(First + 1, SpaceDoc1),
-        space_msg(First + 2, SpaceDoc2),
-        space_msg(First + 4, SpaceDoc4),
-        space_msg(First + 5, SpaceDoc5),
-        space_msg(First + 6, SpaceDoc6)
+        space_msg(SpaceDoc1),
+        space_msg(SpaceDoc2),
+        space_msg(SpaceDoc4),
+        space_msg(SpaceDoc5),
+        space_msg(SpaceDoc6)
     ], [
-        space_msg(First + 3, SpaceDoc3)
+        space_msg(SpaceDoc3)
     ]),
     verify_communication(Node1, <<"endpoint2">>, [
-        space_msg(First + 2, SpaceDoc2),
-        space_msg(First + 4, SpaceDoc4)
+        space_msg(SpaceDoc2),
+        space_msg(SpaceDoc4)
     ], [
-        space_msg(First + 1, SpaceDoc1),
-        space_msg(First + 3, SpaceDoc3),
-        space_msg(First + 5, SpaceDoc5),
-        space_msg(First + 6, SpaceDoc6)
+        space_msg(SpaceDoc1),
+        space_msg(SpaceDoc3),
+        space_msg(SpaceDoc5),
+        space_msg(SpaceDoc6)
     ]),
     ok.
 
@@ -215,33 +206,41 @@ subscribe(LastSeen, Endpoint, SubscribeParams) ->
     Result = rest_utils:do_request(RestAddress, Headers, post, Data, Options),
     ?assertEqual(204, rest_utils:get_response_status(Result)).
 
-verify_communication(Node, Endpoint, ExpectedMsgs, ForbiddenMsgs) ->
-    verify_communication(Node, Endpoint, ExpectedMsgs, ForbiddenMsgs, 1, 10).
+await_communication(Node, Endpoint, ExpectedChange) ->
+    verify_communication(Node, Endpoint, [ExpectedChange], [], 1, ?ALLOWED_FAILURES).
+
+verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges) ->
+    verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges, 1, ?ALLOWED_FAILURES).
+
 verify_communication(_, _, [], _, _, _) ->
     ok;
 verify_communication(_, _, PresentBodies, _, _, 0) ->
     ?assertMatch([], PresentBodies);
-verify_communication(Node, Endpoint, ExpectedMsgs, ForbiddenMsgs, Request, AllowedFailures) ->
+verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges, Request, AllowedFailures) ->
     Body = mock_capture(Node, [Request, http_client, post, [Endpoint, '_', '_'], 3]),
     case Body of
         {badrpc, _} ->
             timer:sleep(?COMMUNICATION_WAIT),
-            verify_communication(Node, Endpoint, ExpectedMsgs, ForbiddenMsgs, Request, AllowedFailures - 1);
+            verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges, Request, AllowedFailures - 1);
         _ ->
             Data = json_utils:decode(Body),
-            lists:foreach(fun(Absent) -> ?assertNotMatch(Absent, Data) end, ForbiddenMsgs),
-            verify_communication(Node, Endpoint, ExpectedMsgs -- [Data], ForbiddenMsgs, Request + 1, 10)
+            ChangeData = lists:last(proplists:delete(<<"seq">>, Data)),
+            lists:foreach(fun(Forbidden) -> ?assertNotMatch(Forbidden, ChangeData) end, ForbiddenChanges),
+            Remaining = ExpectedChanges -- [ChangeData],
+            verify_communication(Node, Endpoint, Remaining, ForbiddenChanges, Request + 1, ?ALLOWED_FAILURES)
     end.
 
-space_msg(Seq, SpaceDoc) ->
+space_msg(SpaceDoc) ->
     #document{key = ID, value = #space{name = Name, groups = Groups, users = Users}} = SpaceDoc,
-    space_msg(Seq, ID, Name, Groups, Users).
-
-space_msg(Seq, ID, Name, GroupIDs, UserIDs) ->
-    [
-        {<<"seq">>, Seq},
-        {<<"space">>, [{<<"id">>, ID}, {<<"name">>, Name}, {<<"groups">>, GroupIDs}, {<<"users">>, UserIDs}]}
-    ].
+    {<<"space">>, [{<<"id">>, ID}, {<<"name">>, Name}, {<<"groups">>, Groups}, {<<"users">>, Users}]}.
 
 mock_capture(Node, Args) ->
     rpc:call(Node, meck, capture, Args).
+
+getFirstSeq(Node) ->
+    {_, LastSeqInDb, _} = ?assertMatch(
+        {ok, _, _},
+        rpc:call(Node, couchdb_datastore_driver, db_run,
+            [couchbeam_changes, follow_once, [], 3])
+    ),
+    binary_to_integer(LastSeqInDb).
