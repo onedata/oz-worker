@@ -54,49 +54,22 @@ space_changes_after_subscription(Config) ->
     subscribe(First, <<"endpoint1">>, SubscribeParams1),
     subscribe(First, <<"endpoint2">>, SubscribeParams2),
 
-    SpaceKey1 = <<"spacekey1">>,
-    SpaceDoc1 = #document{key = SpaceKey1, value = #space{name = <<"space1">>, providers = [ProviderID1]}},
-    ?assertEqual({ok, SpaceKey1}, rpc:call(Node1, space, save, [SpaceDoc1])),
-
-    SpaceKey2 = <<"spacekey2">>,
-    SpaceDoc2 = #document{key = SpaceKey2, value = #space{name = <<"space2">>, providers = [ProviderID1, ProviderID2]}},
-    ?assertEqual({ok, SpaceKey2}, rpc:call(Node1, space, save, [SpaceDoc2])),
-
-    SpaceKey3 = <<"spacekey3">>,
-    SpaceDoc3 = #document{key = SpaceKey3, value = #space{name = <<"space3">>, providers = []}},
-    ?assertEqual({ok, SpaceKey3}, rpc:call(Node1, space, save, [SpaceDoc3])),
-
-    SpaceKey4 = <<"spacekey4">>,
-    SpaceDoc4 = #document{key = SpaceKey4, value = #space{name = <<"space4">>, providers = [ProviderID1, ProviderID2]}},
-    ?assertEqual({ok, SpaceKey4}, rpc:call(Node1, space, save, [SpaceDoc4])),
-
-    SpaceKey5 = <<"spacekey5">>,
-    SpaceDoc5 = #document{key = SpaceKey5, value = #space{name = <<"space5">>, providers = [ProviderID1], groups = [<<"g1">>, <<"g2">>]}},
-    ?assertEqual({ok, SpaceKey5}, rpc:call(Node1, space, save, [SpaceDoc5])),
-
-    SpaceKey6 = <<"spacekey6">>,
-    SpaceDoc6 = #document{key = SpaceKey6, value = #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}},
-    ?assertEqual({ok, SpaceKey6}, rpc:call(Node1, space, save, [SpaceDoc6])),
+    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1]}),
+    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1, ProviderID2]}),
+    SpaceDoc3 = save(Node1, <<"spacekey3">>, #space{name = <<"space3">>, providers = []}),
+    SpaceDoc4 = save(Node1, <<"spacekey4">>, #space{name = <<"space4">>, providers = [ProviderID1, ProviderID2]}),
+    SpaceDoc5 = save(Node1, <<"spacekey5">>, #space{name = <<"space5">>, providers = [ProviderID1], groups = [<<"g1">>, <<"g2">>]}),
+    SpaceDoc6 = save(Node1, <<"spacekey6">>, #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}),
 
     % then
-    verify_communication(Node1, <<"endpoint1">>, [
-        space_msg(SpaceDoc1),
-        space_msg(SpaceDoc2),
-        space_msg(SpaceDoc4),
-        space_msg(SpaceDoc5),
-        space_msg(SpaceDoc6)
-    ], [
-        space_msg(SpaceDoc3)
-    ]),
-    verify_communication(Node1, <<"endpoint2">>, [
-        space_msg(SpaceDoc2),
-        space_msg(SpaceDoc4)
-    ], [
-        space_msg(SpaceDoc1),
-        space_msg(SpaceDoc3),
-        space_msg(SpaceDoc5),
-        space_msg(SpaceDoc6)
-    ]),
+    verify_communication(Node1, <<"endpoint1">>,
+        [SpaceDoc1, SpaceDoc2, SpaceDoc4, SpaceDoc5, SpaceDoc6],
+        [SpaceDoc3]
+    ),
+    verify_communication(Node1, <<"endpoint2">>,
+        [SpaceDoc2, SpaceDoc4],
+        [SpaceDoc1, SpaceDoc3, SpaceDoc5, SpaceDoc6]
+    ),
     ok.
 
 space_changes_before_subscription(Config) ->
@@ -110,52 +83,25 @@ space_changes_before_subscription(Config) ->
     First = getFirstSeq(Node1),
 
     % when
-    SpaceKey1 = <<"spacekey1">>,
-    SpaceDoc1 = #document{key = SpaceKey1, value = #space{name = <<"space1">>, providers = [ProviderID1]}},
-    ?assertEqual({ok, SpaceKey1}, rpc:call(Node1, space, save, [SpaceDoc1])),
-
-    SpaceKey2 = <<"spacekey2">>,
-    SpaceDoc2 = #document{key = SpaceKey2, value = #space{name = <<"space2">>, providers = [ProviderID1, ProviderID2]}},
-    ?assertEqual({ok, SpaceKey2}, rpc:call(Node1, space, save, [SpaceDoc2])),
-
-    SpaceKey3 = <<"spacekey3">>,
-    SpaceDoc3 = #document{key = SpaceKey3, value = #space{name = <<"space3">>, providers = []}},
-    ?assertEqual({ok, SpaceKey3}, rpc:call(Node1, space, save, [SpaceDoc3])),
-
-    SpaceKey4 = <<"spacekey4">>,
-    SpaceDoc4 = #document{key = SpaceKey4, value = #space{name = <<"space4">>, providers = [ProviderID1, ProviderID2]}},
-    ?assertEqual({ok, SpaceKey4}, rpc:call(Node1, space, save, [SpaceDoc4])),
-
-    SpaceKey5 = <<"spacekey5">>,
-    SpaceDoc5 = #document{key = SpaceKey5, value = #space{name = <<"space5">>, providers = [ProviderID1], groups = [<<"g1">>, <<"g2">>]}},
-    ?assertEqual({ok, SpaceKey5}, rpc:call(Node1, space, save, [SpaceDoc5])),
-
-    SpaceKey6 = <<"spacekey6">>,
-    SpaceDoc6 = #document{key = SpaceKey6, value = #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}},
-    ?assertEqual({ok, SpaceKey6}, rpc:call(Node1, space, save, [SpaceDoc6])),
+    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1]}),
+    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1, ProviderID2]}),
+    SpaceDoc3 = save(Node1, <<"spacekey3">>, #space{name = <<"space3">>, providers = []}),
+    SpaceDoc4 = save(Node1, <<"spacekey4">>, #space{name = <<"space4">>, providers = [ProviderID1, ProviderID2]}),
+    SpaceDoc5 = save(Node1, <<"spacekey5">>, #space{name = <<"space5">>, providers = [ProviderID1], groups = [<<"g1">>, <<"g2">>]}),
+    SpaceDoc6 = save(Node1, <<"spacekey6">>, #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}),
 
     subscribe(First, <<"endpoint1">>, SubscribeParams1),
     subscribe(First, <<"endpoint2">>, SubscribeParams2),
 
     % then
-    verify_communication(Node1, <<"endpoint1">>, [
-        space_msg(SpaceDoc1),
-        space_msg(SpaceDoc2),
-        space_msg(SpaceDoc4),
-        space_msg(SpaceDoc5),
-        space_msg(SpaceDoc6)
-    ], [
-        space_msg(SpaceDoc3)
-    ]),
-    verify_communication(Node1, <<"endpoint2">>, [
-        space_msg(SpaceDoc2),
-        space_msg(SpaceDoc4)
-    ], [
-        space_msg(SpaceDoc1),
-        space_msg(SpaceDoc3),
-        space_msg(SpaceDoc5),
-        space_msg(SpaceDoc6)
-    ]),
+    verify_communication(Node1, <<"endpoint1">>,
+        [SpaceDoc1, SpaceDoc2, SpaceDoc4, SpaceDoc5, SpaceDoc6],
+        [SpaceDoc3]
+    ),
+    verify_communication(Node1, <<"endpoint2">>,
+        [SpaceDoc2, SpaceDoc4],
+        [SpaceDoc1, SpaceDoc3, SpaceDoc5, SpaceDoc6]
+    ),
     ok.
 
 node_for_subscription_changes(Config) ->
@@ -170,22 +116,16 @@ node_for_subscription_changes(Config) ->
     % when
     First = getFirstSeq(Node1),
     subscribe(First, <<"endpoint1">>, SubscribeParams1),
+    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1], groups = []}),
 
-    SpaceKey1 = <<"spacekey1">>,
-    SpaceDoc1 = #document{key = SpaceKey1, value = #space{name = <<"space1">>, providers = [ProviderID1]}},
-    ?assertEqual({ok, SpaceKey1}, rpc:call(Node1, space, save, [SpaceDoc1])),
-
-    await_communication(Node1, <<"endpoint1">>, space_msg(SpaceDoc1)),
+    await_communication(Node1, <<"endpoint1">>, SpaceDoc1),
     Later = getFirstSeq(Node1),
     subscribe(Later, <<"endpoint1">>, SubscribeParams2),
-
-    SpaceKey2 = <<"spacekey2">>,
-    SpaceDoc2 = #document{key = SpaceKey2, value = #space{name = <<"space2">>, providers = [ProviderID1], groups = []}},
-    ?assertEqual({ok, SpaceKey2}, rpc:call(Node1, space, save, [SpaceDoc2])),
+    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1], groups = []}),
 
     % then
-    verify_communication(Node1, <<"endpoint1">>, [space_msg(SpaceDoc1)], [space_msg(SpaceDoc2)]),
-    verify_communication(Node2, <<"endpoint1">>, [space_msg(SpaceDoc2)], [space_msg(SpaceDoc1)]),
+    verify_communication(Node1, <<"endpoint1">>, [SpaceDoc1], [SpaceDoc2]),
+    verify_communication(Node2, <<"endpoint1">>, [SpaceDoc2], [SpaceDoc1]),
     ok.
 
 
@@ -236,11 +176,11 @@ subscribe(LastSeen, Endpoint, SubscribeParams) ->
     Result = rest_utils:do_request(RestAddress, Headers, post, Data, Options),
     ?assertEqual(204, rest_utils:get_response_status(Result)).
 
-await_communication(Node, Endpoint, ExpectedChange) ->
-    verify_communication(Node, Endpoint, [ExpectedChange], [], 1, ?ALLOWED_FAILURES).
+await_communication(Node, Endpoint, ExpectedDoc) ->
+    verify_communication(Node, Endpoint, [ExpectedDoc], []).
 
-verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges) ->
-    verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges, 1, ?ALLOWED_FAILURES).
+verify_communication(Node, Endpoint, ExpectedDocs, ForbiddenDocs) ->
+    verify_communication(Node, Endpoint, as_changes(ExpectedDocs), as_changes(ForbiddenDocs), 1, ?ALLOWED_FAILURES).
 
 verify_communication(_, _, [], _, _, _) ->
     ok;
@@ -260,8 +200,10 @@ verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges, Request,
             verify_communication(Node, Endpoint, Remaining, ForbiddenChanges, Request + 1, ?ALLOWED_FAILURES)
     end.
 
-space_msg(SpaceDoc) ->
-    #document{key = ID, value = #space{name = Name, groups = Groups, users = Users}} = SpaceDoc,
+as_changes(Docs) ->
+    lists:map(fun as_change/1, Docs).
+
+as_change(#document{key = ID, value = #space{name = Name, groups = Groups, users = Users}}) ->
     {<<"space">>, [{<<"id">>, ID}, {<<"name">>, Name}, {<<"groups">>, Groups}, {<<"users">>, Users}]}.
 
 mock_capture(Node, Args) ->
@@ -274,3 +216,8 @@ getFirstSeq(Node) ->
             [couchbeam_changes, follow_once, [], 3])
     ),
     binary_to_integer(LastSeqInDb).
+
+save(Node, Key, Value) ->
+    Doc = #document{key = Key, value = Value},
+    ?assertEqual({ok, Key}, rpc:call(Node, space, save, [Doc])),
+    Doc.
