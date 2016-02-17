@@ -343,7 +343,7 @@ get_provider_id(#'OTPCertificate'{} = Cert) ->
 %%--------------------------------------------------------------------
 -spec random_filename(TmpDir :: string()) -> string().
 random_filename(TmpDir) ->
-    FileName = hex_utils:to_hex(crypto:hash(sha, term_to_binary({make_ref(), now()}))),
+    FileName = hex_utils:to_hex(crypto:hash(sha, term_to_binary({make_ref(), erlang:timestamp()}))),
     filename:join(TmpDir, FileName).
 
 %%%===================================================================
