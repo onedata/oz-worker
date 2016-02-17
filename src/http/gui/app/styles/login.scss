@@ -1,0 +1,64 @@
+/*** login page ***/
+
+$color-login-github: #1E2325;
+$color-login-twitter: #6ED3F3;
+$color-login-google: #F1514F;
+$color-login-dropbox: #86D7F2;
+$color-login-facebook: #5B87C5;
+
+// TODO: create icons-font
+
+.login-icon-box {
+  display: inline-block;
+  height: 72px;
+  width: 72px;
+
+  &.github {
+    background: $color-login-github;
+    background: url(/assets/images/login-icons/github.png);
+  }
+  &.twitter {
+    background: $color-login-twitter;
+    background: url(/assets/images/login-icons/twitter.png);
+  }
+  &.google {
+    background: $color-login-google;
+    background: url(/assets/images/login-icons/google.png);
+  }
+  &.dropbox {
+    background: $color-login-dropbox;
+    background: url(/assets/images/login-icons/dropbox.png);
+  }
+  &.facebook {
+    background: $color-login-facebook;
+    background: url(/assets/images/login-icons/facebook.png);
+  }
+}
+
+.login-box-container {
+  height: 100%;
+}
+
+.login-buttons-container {
+  max-width: 700px;
+}
+
+.login-box {
+  padding-top: 100px;
+  padding-bottom: 90px;
+
+  border: 2px solid white;
+  background: rgba(100%, 100%, 100%, 0.25);
+
+  h1 {
+    text-align: center;
+    margin-bottom: 50px;
+  }
+  h2 {
+    text-align: center;
+    margin-top: 50px;
+    margin-bottom: 100px;
+  }
+}
+
+/*** ***/

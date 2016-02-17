@@ -1,0 +1,31 @@
+{{!-- <div class="owl-carousel-wrapper"> --}}
+<div class="row">
+  <div class="col-xs-1 align-right">
+    <div class="owl-carousel-arrows vcenter">
+			<button class="btn btn-primary prev">
+        <span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
+      </button>
+		</div>
+  </div>
+
+  <div class="col-xs-10">
+    <div class="owl-carousel manual">
+      {{#each supporters as |s|}}
+        <div class="img-box {{s.boxClasses}}" style="background-image: url({{s.image}});">
+        </div>
+      {{/each}}
+    </div>
+  </div>
+
+  <div class="col-xs-1 align-left">
+    <div class="owl-carousel-arrows vcenter">
+			<button class="btn btn-primary next">
+        <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
+      </button>
+		</div>
+  </div>
+</div>
+
+
+
+{{!-- </div> --}}

@@ -1,0 +1,172 @@
+/*** top navigation ***/
+.navbar {
+  background: none;
+  border-bottom: 2px solid rgba(100%, 100%, 100%, 0.1);
+
+  .navbar-brand {
+    position: absolute;
+    padding: 0;
+    padding-left: $panel-body-padding !important;
+  }
+
+  // pull-up top logo for better design
+  $pull-up-top-logo: 4px;
+
+  // top bar logo on tablet
+  .navbar-brand {
+    height: $top-height-collapsed;
+    padding-top: $top-padding-top-collapsed - $pull-up-top-logo;
+    img {
+      width: 150px;
+      height: auto;
+    }
+  }
+
+  // top bar logo on dekstop
+  @media screen and (min-width: $screen-md-min) {
+    .navbar-brand {
+      position: absolute;
+      height: $top-height;
+      padding-top: $top-padding-top - $pull-up-top-logo;
+    }
+  }
+
+  .navbar-collapse {
+    text-align: center;
+  }
+
+  @media (max-width: $grid-float-breakpoint) {
+    .navbar-collapse {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 300px;
+      z-index: 1000;
+
+      border-top: none;
+      padding-top: 60px;
+      padding-left: 36px;
+      text-align: left;
+      background: #2E2E2E;
+      box-shadow: none;
+
+      &.in {
+        bottom: 0;
+      }
+    }
+  }
+
+  // a collapsed button
+  .navbar-toggle {
+    z-index: 1001;
+    .icon-bar {
+      background-color: $top-font-color;
+    }
+
+    .nav-button-content {
+      width: 22px;
+      height: 22px;
+    }
+
+    .nav-button-x {
+      background-image: url('/assets/images/navbar-close.svg');
+      background-size: contain;
+    }
+
+    // hambuger visible, X invisible
+    .nav-button-hamburger {
+      display: block;
+    }
+    .nav-button-x {
+      display: none;
+    }
+
+    // when menu is opened
+    &:not(.collapsed) {
+      // hambuger invisible, X visible
+      .nav-button-hamburger {
+        display: none;
+      }
+      .nav-button-x {
+        display: block;
+      }
+    }
+  }
+
+  .navbar-nav {
+    display: inline-block;
+    float: none;
+    vertical-align: top;
+
+    li {
+      text-transform: uppercase;
+      font-size: $top-font-size;
+
+      a {
+        height: $top-height;
+        padding-top: $top-padding-top;
+        color: $top-font-color;
+
+        // TODO: bottom border floating on top of bottom line
+        &:hover, &:focus, &.active {
+          color: #fff;
+          background: none;
+          border-bottom: 3px solid $color-red-1;
+        }
+      }
+    }
+  }
+}
+
+
+
+
+.navbar-nav {
+  margin: ($navbar-padding-vertical / 2) (-$navbar-padding-horizontal);
+
+  > li > a {
+    padding-top:    10px;
+    padding-bottom: 10px;
+    line-height: $line-height-computed;
+  }
+
+  @media (max-width: $grid-float-breakpoint-max + 1) {
+    // Dropdowns get custom display when collapsed
+    .open .dropdown-menu {
+      position: static;
+      float: none;
+      width: auto;
+      margin-top: 0;
+      background-color: #2E2E2E;
+      border: 0;
+      box-shadow: none;
+      > li > a,
+      .dropdown-header {
+        padding: 5px 15px 5px 25px;
+      }
+      > li > a {
+        line-height: $line-height-computed;
+        &:hover,
+        &:focus {
+          background-image: none;
+        }
+      }
+    }
+  }
+
+  // Uncollapse the nav
+  @media (min-width: $grid-float-breakpoint) {
+    float: left;
+    margin: 0;
+
+    > li {
+      float: left;
+      > a {
+        padding-top:    $navbar-padding-vertical;
+        padding-bottom: $navbar-padding-vertical;
+      }
+    }
+  }
+}
+
+/*** ***/
