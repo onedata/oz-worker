@@ -19,6 +19,3 @@ testem.log
 # osx
 .DS_Store
 ._*
-
-# doc generated with jsdoc
-doc/

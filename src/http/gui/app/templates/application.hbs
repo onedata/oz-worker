@@ -1,18 +1,21 @@
-{{!-- The main layout --}}
+<div class="global-fog"></div>
 
-<div id="app">
-  <header>
-    {{top-bar}}
-  </header>
+<nav class="navbar navbar-onedata">
+  <div class="container">
+    <div class="navbar-header">
+      {{#link-to 'index' class="navbar-brand"}}
+        <img src="/assets/images/logo.svg" alt="onedata" />
+      {{/link-to}}
+      {{navbar-toggle}}
+      {{!-- TODO: logo color is too saturized --}}
 
-  <nav class="primary-sidebar">
-    <div class="sidebar-content">
-      {{main-menu mains=mains goToItem="goToItem"}}
     </div>
-  </nav>
+    <div id="navbar" class="collapse navbar-collapse">
+      {{main-menu}}
+    </div><!--/.nav-collapse -->
+  </div>
+</nav>
 
-  {{!-- The app main part (without top and left navigations) --}}
-  <section id="main-content">
-    {{outlet}}
-  </section>
+<div class="container-application">
+  {{outlet}}
 </div>
