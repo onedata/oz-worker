@@ -25,11 +25,6 @@
 -export([error_404_html_file/0, error_500_html_file/0]).
 
 %% Convenience macros for defining routes.
--define(LOGIN, #gui_route{
-    requires_session = ?SESSION_NOT_LOGGED_IN,
-    html_file = <<"login.html">>,
-    page_backend = login_backend
-}).
 
 -define(LOGOUT, #gui_route{
     requires_session = ?SESSION_LOGGED_IN,
@@ -38,13 +33,13 @@
 }).
 
 -define(VALIDATE_LOGIN, #gui_route{
-    requires_session = ?SESSION_ANY,
+    requires_session = ?SESSION_NOT_LOGGED_IN,
     html_file = undefined,
     page_backend = validate_login_backend
 }).
 
 -define(INDEX, #gui_route{
-    requires_session = ?SESSION_LOGGED_IN,
+    requires_session = ?SESSION_ANY,
     html_file = <<"index.html">>,
     page_backend = undefined
 }).
@@ -61,11 +56,9 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec route(Path :: binary()) -> #gui_route{}.
-route(<<"/login.html">>) -> ?LOGIN;
 route(<<"/logout.html">>) -> ?LOGOUT;
 route(<<"/validate_login.html">>) -> ?VALIDATE_LOGIN;
-route(<<"/">>) -> ?INDEX;
-route(<<"/index.html">>) -> ?INDEX.
+route(_) -> ?INDEX.
 
 
 %%--------------------------------------------------------------------
