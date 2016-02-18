@@ -71,7 +71,7 @@ authenticate_user(Identifier) ->
             Location = ?MACAROONS_LOCATION,
             {ok, M} = macaroon:create(Location, Secret, Identifier),
             {ok, M2} = macaroon:add_first_party_caveat(M,
-                ["time < ", integer_to_binary(utils:time() + ExpirationSecs)]),
+                ["time < ", integer_to_binary(erlang:system_time(seconds) + ExpirationSecs)]),
 
             case macaroon:serialize(M2) of
                 {ok, _} = Serialized -> Serialized;
@@ -165,7 +165,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 
             VerifyFun = fun
                 (<<"time < ", Integer/binary>>) ->
-                    utils:time() < binary_to_integer(Integer);
+                    erlang:system_time(seconds) < binary_to_integer(Integer);
                 (<<"method = ", Met/binary>>) ->
                     Method =:= Met;
                 (<<"rootResource in ", Resources/binary>>) ->
@@ -210,8 +210,6 @@ invalidate_token(Identifier) when is_binary(Identifier) ->
 generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_state_tokens(),
     Token = list_to_binary(hex_utils:to_hex(crypto:rand_bytes(32))),
-    {M, S, N} = now(),
-    Time = M * 1000000000000 + S * 1000000 + N,
 
     StateInfo = [
         {module, HandlerModule},
@@ -225,7 +223,7 @@ generate_state_token(HandlerModule, ConnectAccount) ->
         {referer, erlang:get(referer)}
     ],
 
-    ets:insert(?STATE_TOKEN, {Token, Time, StateInfo}),
+    ets:insert(?STATE_TOKEN, {Token, erlang:monotonic_time(seconds), StateInfo}),
     Token.
 
 %%--------------------------------------------------------------------
@@ -249,10 +247,9 @@ lookup_state_token(Token) ->
 %%--------------------------------------------------------------------
 -spec clear_expired_state_tokens() -> ok.
 clear_expired_state_tokens() ->
-    {M, S, N} = now(),
-    Now = M * 1000000000000 + S * 1000000 + N,
+    Now = erlang:monotonic_time(seconds),
 
-    ExpiredSessions = ets:select(?STATE_TOKEN, [{{'$1', '$2', '$3'}, [{'<', '$2', Now - (?STATE_TOKEN_EXPIRATION_SECS * 1000000)}], ['$_']}]),
+    ExpiredSessions = ets:select(?STATE_TOKEN, [{{'$1', '$2', '$3'}, [{'<', '$2', Now - (?STATE_TOKEN_EXPIRATION_SECS)}], ['$_']}]),
     lists:foreach(
         fun({Token, Time, LoginInfo}) ->
             ets:delete_object(?STATE_TOKEN, {Token, Time, LoginInfo})
@@ -274,7 +271,7 @@ clear_expired_state_tokens() ->
 create_macaroon(Secret, Identifier, Caveats) ->
     {ok, ExpirationSeconds} = application:get_env(?APP_Name,
         authorization_macaroon_expiration_seconds),
-    ExpirationTime = utils:time() + ExpirationSeconds,
+    ExpirationTime = erlang:system_time(seconds) + ExpirationSeconds,
 
     Location = ?MACAROONS_LOCATION,
 
