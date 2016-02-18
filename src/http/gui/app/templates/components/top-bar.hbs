@@ -1,0 +1,17 @@
+<div class="container">
+  <div class="navbar-header">
+    {{#link-to 'index' class="navbar-brand"}}
+      <img src="/assets/images/logo.svg" alt="onedata" />
+    {{/link-to}}
+    {{navbar-toggle}}
+    {{!-- TODO: logo color is too saturized --}}
+
+  </div>
+  <div id="navbar" class="collapse navbar-collapse">
+    {{main-menu}}
+  </div><!--/.nav-collapse -->
+  {{!-- TODO --}}
+  <div class="username" style="float: left;">
+    {{userName}}
+  </div>
+</div>

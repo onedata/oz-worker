@@ -1,20 +1,6 @@
 <div class="global-fog"></div>
 
-<nav class="navbar navbar-onedata">
-  <div class="container">
-    <div class="navbar-header">
-      {{#link-to 'index' class="navbar-brand"}}
-        <img src="/assets/images/logo.svg" alt="onedata" />
-      {{/link-to}}
-      {{navbar-toggle}}
-      {{!-- TODO: logo color is too saturized --}}
-
-    </div>
-    <div id="navbar" class="collapse navbar-collapse">
-      {{main-menu}}
-    </div><!--/.nav-collapse -->
-  </div>
-</nav>
+{{top-bar}}
 
 <div class="container-application">
   {{outlet}}
