@@ -81,7 +81,7 @@ package: rel rpmdirs
 	make -C onepanel rel CONFIG=config/globalregistry.config
 	./rel/rpm/create_rpm
 	mv rel/globalregistry-*.rpm package/fedora-23-x86_64/x86_64
-	tar -czf package.tar.gz package
+	tar -czf rpm.tar.gz package
 
 docker:
 	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \

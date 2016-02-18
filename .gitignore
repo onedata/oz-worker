@@ -13,6 +13,8 @@ rel/globalregistry-*.rpm
 rel/resources/auth.config
 package
 package.tar.gz
+dockerbuild-sha.txt
+dockerbuild-report.txt
 
 *.iml
 *.sublime*
