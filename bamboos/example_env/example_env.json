@@ -224,7 +224,7 @@
                         "setcookie": "cookie3"
                     },
                     "sys.config": {
-                        "globalregistry": {
+                        "oz_worker": {
                             "cm_nodes": [
                                 "cm"
                             ],
