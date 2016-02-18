@@ -12,10 +12,9 @@
 -module(provider_logic).
 -author("Konrad Zemek").
 
--include("dao/dao_types.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
-
--include_lib("dao/include/common.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -26,69 +25,92 @@
 -export([test_connection/1]).
 -export([get_default_provider_for_user/1]).
 
+%% Seeds pseudo-random number generator with current time and hashed node name. <br/>
+%% See {@link random:seed/3} and {@link erlang:now/0} for more details
+%% Copied from the "dao" project
+-define(SEED, begin
+    IsSeeded = get(proc_seeded),
+    if
+        IsSeeded =/= true ->
+            put(proc_seeded, true),
+            {A_SEED, B_SEED, C_SEED} = now(),
+            L_SEED = atom_to_list(node()),
+            {_, Sum_SEED} =  lists:foldl(fun(Elem_SEED, {N_SEED, Acc_SEED}) ->
+                {N_SEED * 137, Acc_SEED + Elem_SEED * N_SEED} end, {1, 0}, L_SEED),
+            random:seed(Sum_SEED*10000 + A_SEED, B_SEED, C_SEED);
+        true -> already_seeded
+    end
+end).
+
+%% Returns random positive number from range 1 .. N. This macro is simply shortcut to random:uniform(N)
+%% Copied from the "dao" project
+-define(RND(N), random:uniform(N)).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc Create a provider's account.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(ClientName :: binary(), URLs :: [binary()],
     RedirectionPoint :: binary(), CSR :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
-    ProviderId = dao_helper:gen_uuid(),
+    ProviderId = gen_uuid(),
     BinProviderId = str_utils:to_binary(ProviderId),
-    {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
-    dao_adapter:save(#db_document{uuid = ProviderId, record =
-    #provider{client_name = ClientName, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial}}),
+    [{_, {ok, {ProviderCertPem, Serial}}} | _] =
+        worker_proxy:multicall(zone_ca_worker, {sign_provider_req, BinProviderId, CSRBin}),
+
+    Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
+    provider:save(#document{key = BinProviderId, value = Provider}),
 
     {ok, BinProviderId, ProviderCertPem}.
 
 %%--------------------------------------------------------------------
 %% @doc Modify provider's details.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
     ok.
 modify(ProviderId, Data) ->
-    Doc = dao_adapter:provider_doc(ProviderId),
-    #db_document{record = Provider} = Doc,
+    {ok, Doc} = provider:get(ProviderId),
+    #document{value = Provider} = Doc,
 
     URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
     RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
     ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
 
     ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint, client_name = ClientName},
-    Res = dao_adapter:save(Doc#db_document{record = ProviderNew}),
+    provider:save(Doc#document{value = ProviderNew}),
     ok.
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether a Provider exists.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(ProviderId :: binary()) ->
     boolean().
 exists(ProviderId) ->
-    dao_adapter:provider_exists(ProviderId).
+    provider:exists(ProviderId).
 
 %%--------------------------------------------------------------------
 %% @doc Get provider's details.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_data(ProviderId) ->
-    #provider{
+    {ok, #document{value = #provider{
         client_name = ClientName,
         urls = URLs,
-        redirection_point = RedirectionPoint} = dao_adapter:provider(ProviderId),
+        redirection_point = RedirectionPoint
+    }}} = provider:get(ProviderId),
 
     {ok, [
         {clientName, ClientName},
@@ -99,36 +121,37 @@ get_data(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Get Spaces supported by the provider.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_spaces(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_spaces(ProviderId) ->
-    #provider{spaces = Spaces} = dao_adapter:provider(ProviderId),
+    {ok, #document{value = #provider{spaces = Spaces}}} = provider:get(ProviderId),
     {ok, [{spaces, Spaces}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Remove provider's account.
-%% Throws exception when call to dao fails, or provider is already removed.
+%% Throws exception when call to the datastore fails, or provider is already removed.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove(ProviderId :: binary()) ->
     true.
 remove(ProviderId) ->
-    #provider{spaces = Spaces, serial = Serial} = dao_adapter:provider(ProviderId),
+    {ok, #document{value = #provider{spaces = Spaces, serial = Serial}}} = provider:get(ProviderId),
 
     lists:foreach(fun(SpaceId) ->
-        SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #db_document{record = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
+        {ok, SpaceDoc} = space:get(SpaceId),
+        #document{value = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
         SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers), size = proplists:delete(ProviderId, Size)},
-        dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
-        op_channel_logic:space_modified(SpaceNew#space.providers, SpaceId, SpaceNew),
-        op_channel_logic:space_removed([ProviderId], SpaceId)
+        space:save(SpaceDoc#document{value = SpaceNew})
     end, Spaces),
 
-    grpca:revoke(Serial),
-    dao_adapter:provider_remove(ProviderId).
+    worker_proxy:multicast(zone_ca_worker, {revoke, Serial}),
+    case (provider:delete(ProviderId)) of
+        ok -> true;
+        _ -> flase
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Tests connection to given url.
@@ -156,15 +179,15 @@ test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
                  end,
     test_connection(Rest, [{Url, ConnStatus} | Acc]);
 test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
-    ConnStatus = 
+    ConnStatus =
         case http_client:get(Url, [], <<>>, [insecure]) of
-                     {ok, 200, _, ServiceName} ->
-                         ok;
-                     Error ->
-                         ?debug("Checking connection to ~p failed with error: ~n~p",
-                             [Url, Error]),
-                         error
-                 end,
+            {ok, 200, _, ServiceName} ->
+                ok;
+            Error ->
+                ?debug("Checking connection to ~p failed with error: ~n~p",
+                    [Url, Error]),
+                error
+        end,
     test_connection(Rest, [{Url, ConnStatus} | Acc]);
 test_connection(_, _) ->
     {error, bad_data}.
@@ -212,3 +235,22 @@ get_default_provider_for_user(UserID) ->
                     {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
             end
     end.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% --------------------------------------------------------------------
+%% @doc
+%% @private
+%% Generates UUID with CouchDBs 'utc_random' algorithm
+%% @end
+%% --------------------------------------------------------------------
+-spec gen_uuid() -> string().
+gen_uuid() ->
+    {M, S, N} = now(),
+    Time = M * 1000000000000 + S * 1000000 + N,
+    TimeHex = string:right(integer_to_list(Time, 16), 14, $0),
+    ?SEED,
+    Rand = [lists:nth(1, integer_to_list(?RND(16) - 1, 16)) || _ <- lists:seq(1, 18)],
+    string:to_lower(string:concat(TimeHex, Rand)).
