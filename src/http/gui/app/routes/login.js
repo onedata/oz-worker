@@ -8,10 +8,7 @@ export default LoginRoute.extend({
 
   actions: {
     authenticate() {
-      this.get('session')
-        .authenticate('authenticator:basic').catch((reason) => {
-          console.debug(`you shall NOT pass, because: ${reason}`);
-        });
+      window.alert('authentication moved to application route init');
     }
   }
 });
