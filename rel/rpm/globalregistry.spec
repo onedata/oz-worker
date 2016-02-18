@@ -71,7 +71,7 @@ requires: libwx_gtk2u_gl-2.8.so.0()(64bit) libwx_gtk2u_gl-2.8.so.0(WXU_2.8)(64bi
 requires: libwx_gtk2u_html-2.8.so.0()(64bit) libwx_gtk2u_html-2.8.so.0(WXU_2.8)(64bit)
 requires: libwx_gtk2u_stc-2.8.so.0()(64bit) libwx_gtk2u_stc-2.8.so.0(WXU_2.8)(64bit)
 requires: libwx_gtk2u_xrc-2.8.so.0()(64bit) libwx_gtk2u_xrc-2.8.so.0(WXU_2.8)(64bit)
-requires: libz.so.1()(64bit) libz.so.1(ZLIB_1.2.2)(64bit) rtld(GNU_HASH) protobuf
+requires: libz.so.1()(64bit) libz.so.1(ZLIB_1.2.2)(64bit) rtld(GNU_HASH) openssl protobuf
 
 %description
 globalregistry service - allows installation of globalregistry nodes.
