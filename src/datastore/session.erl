@@ -19,6 +19,11 @@
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
 
+
+-type memory() :: proplists:proplist().
+-export_type([memory/0]).
+
+
 %%%===================================================================
 %%% model_behaviour callbacks
 %%%===================================================================
@@ -28,44 +33,65 @@
 %% {@link model_behaviour} callback save/1.
 %% @end
 %%--------------------------------------------------------------------
--spec save(datastore:document()) -> {ok, datastore:ext_key()} | datastore:generic_error().
-save(Document) ->
-    datastore:save(?STORE_LEVEL, Document).
+-spec save(datastore:document()) -> {ok, datastore:key()} | datastore:generic_error().
+save(#document{value = Sess} = Document) ->
+    Timestamp = os:timestamp(),
+    datastore:save(?STORE_LEVEL, Document#document{value = Sess#session{
+        accessed = Timestamp
+    }}).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link model_behaviour} callback update/2.
 %% @end
 %%--------------------------------------------------------------------
--spec update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
-    {ok, datastore:ext_key()} | datastore:update_error().
-update(Key, Diff) ->
-    datastore:update(?STORE_LEVEL, ?MODULE, Key, Diff).
+-spec update(datastore:key(), Diff :: datastore:document_diff()) ->
+    {ok, datastore:key()} | datastore:update_error().
+update(Key, Diff) when is_map(Diff) ->
+    datastore:update(?STORE_LEVEL, ?MODULE, Key, Diff#{accessed => os:timestamp()});
+update(Key, Diff) when is_function(Diff) ->
+    NewDiff = fun(Sess) ->
+        case Diff(Sess) of
+            {ok, NewSess} -> {ok, NewSess#session{accessed = os:timestamp()}};
+            {error, Reason} -> {error, Reason}
+        end
+              end,
+    datastore:update(?STORE_LEVEL, ?MODULE, Key, NewDiff).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link model_behaviour} callback create/1.
 %% @end
 %%--------------------------------------------------------------------
--spec create(datastore:document()) -> {ok, datastore:ext_key()} | datastore:create_error().
-create(Document) ->
-    datastore:create(?STORE_LEVEL, Document).
+-spec create(datastore:document()) -> {ok, datastore:key()} | datastore:create_error().
+create(#document{value = Sess} = Document) ->
+    Timestamp = os:timestamp(),
+    datastore:create(?STORE_LEVEL, Document#document{value = Sess#session{
+        accessed = Timestamp
+    }}).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link model_behaviour} callback get/1.
+%% Sets access time to current time for user session and returns old value.
 %% @end
 %%--------------------------------------------------------------------
--spec get(datastore:ext_key()) -> {ok, datastore:document()} | datastore:get_error().
+-spec get(datastore:key()) -> {ok, datastore:document()} | datastore:get_error().
 get(Key) ->
-    datastore:get(?STORE_LEVEL, ?MODULE, Key).
+    case datastore:get(?STORE_LEVEL, ?MODULE, Key) of
+        {ok, Doc} ->
+            session:update(Key, #{}),
+            {ok, Doc};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link model_behaviour} callback delete/1.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(datastore:ext_key()) -> ok | datastore:generic_error().
+-spec delete(datastore:key()) -> ok | datastore:generic_error().
 delete(Key) ->
     datastore:delete(?STORE_LEVEL, ?MODULE, Key).
 
@@ -74,9 +100,15 @@ delete(Key) ->
 %% {@link model_behaviour} callback exists/1.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(datastore:ext_key()) -> datastore:exists_return().
+-spec exists(datastore:key()) -> datastore:exists_return().
 exists(Key) ->
-    ?RESPONSE(datastore:exists(?STORE_LEVEL, ?MODULE, Key)).
+    case ?RESPONSE(datastore:exists(?STORE_LEVEL, ?MODULE, Key)) of
+        true ->
+            update(Key, #{}),
+            true;
+        false ->
+            false
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -85,7 +117,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(space_bucket, [], ?GLOBALLY_CACHED_LEVEL).
+    ?MODEL_CONFIG(session_bucket, [], ?GLOBAL_ONLY_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc

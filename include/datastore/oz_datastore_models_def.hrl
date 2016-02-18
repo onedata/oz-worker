@@ -54,6 +54,13 @@
     issuer :: rest_handler:client()
 }).
 
+%% This record defines a token that can be used by user to do something
+-record(session, {
+    user_id :: onedata_user:id(),
+    memory :: session:memory(),
+    accessed :: erlang:timestamp()
+}).
+
 % Value in DB meaning that alias is not set.
 % Empty list, must be used as a list not binary so JS view will work correctly
 -define(EMPTY_ALIAS, "").
