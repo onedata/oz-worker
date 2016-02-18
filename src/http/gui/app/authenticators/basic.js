@@ -6,6 +6,7 @@ import Ember from 'ember';
 import Base from 'ember-simple-auth/authenticators/base';
 
 export default Base.extend({
+  session: Ember.inject.service('session'),
   server: Ember.inject.service('server'),
   authenticate(options) {
     console.debug('auth authenticate start');
@@ -13,8 +14,10 @@ export default Base.extend({
       this.get('server').callServer('sessionDetails', (response) => {
         console.debug('auth server response: ' + JSON.stringify(response));
         if (response.sessionDetails) {
+          this.get('session').set('opData', response);
           resolve(response);
         } else {
+          this.get('session').set('opData', null);
           reject(response);
         }
       });
@@ -31,6 +34,7 @@ export default Base.extend({
     console.debug('auth invalidate start');
     return new Ember.RSVP.Promise((resolve) => {
       // TODO
+      this.get('session').set('opData', null);
       resolve();
     });
   }

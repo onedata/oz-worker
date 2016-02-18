@@ -17,8 +17,14 @@ export default ApplicationRoute.extend({
   // TODO: invoked only when application is reloaded!
   initSession: function() {
     this.get('session')
-      .authenticate('authenticator:basic').catch((reason) => {
-        console.warn(`you shall NOT pass, because: ${reason}`);
-      });
+      .authenticate('authenticator:basic').then(
+        () => {
+          let data = this.get('session.data.authenticated');
+          console.debug('app route - init sesssion: ' + JSON.stringify(data));
+        },
+        (reason) => {
+          console.warn(`you shall NOT pass, because: ${reason}`);
+        }
+      );
   }.on('init')
 });
