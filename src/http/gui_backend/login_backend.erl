@@ -28,7 +28,7 @@ page_init() ->
         true ->
             ok;
         false ->
-            UserId = <<"u1">>,
+            UserId = <<"user1">>,
             {ok, _} = g_session:log_in([UserId])
     end,
     {redirect_relative, <<"/">>}.

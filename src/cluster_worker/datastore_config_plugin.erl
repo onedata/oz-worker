@@ -28,6 +28,7 @@ models() -> [
   onedata_auth,
   onedata_user,
   provider,
+  session,
   space,
   token,
   user_group
