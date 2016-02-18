@@ -6,4 +6,5 @@ fi
 
 sed -i s/onepanel@.*/onepanel@`hostname -f`/g /opt/globalregistry/nodes/onepanel/etc/vm.args;
 service onepanel start
-bash
+
+while true; do sleep 60; done
