@@ -1,8 +1,9 @@
 .PHONY: test deps generate
 
-DOCKER_REG_USER     ?= ""
-DOCKER_REG_PASSWORD ?= ""
-DOCKER_REG_EMAIL    ?= ""
+DOCKER_REG_USER        ?= ""
+DOCKER_REG_PASSWORD    ?= ""
+DOCKER_REG_EMAIL       ?= ""
+GLOBALREGISTRY_VERSION ?= $(shell git describe --tags --always | tr - .)
 
 BASE_DIR         = $(shell pwd)
 GIT_URL         := $(shell git config --get remote.origin.url | sed -e 's/\(\/[^/]*\)$$//g')
@@ -85,4 +86,6 @@ package: rel rpmdirs
 
 docker:
 	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \
-                         --email $(DOCKER_REG_EMAIL) --name globalregistry --publish --remove packaging
+                         --email $(DOCKER_REG_EMAIL) --name globalregistry \
+                         --build-arg VERSION=$(GLOBALREGISTRY_VERSION) \
+                         --publish --remove packaging
