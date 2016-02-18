@@ -12,11 +12,12 @@
 # Default-Start:	    3 4 5
 # Default-Stop:		    0 1 2 6
 # Short-Description:	globalregistry service
-# Description:	        Scalable global data registery.
+# Description:	        Scalable global data registry.
 ### END INIT INFO
 
 # Source function library.
-. /etc/rc.d/init.d/functions
+. /etc/init.d/functions
+_use_systemctl=0
 
 # Needed for erlexec to run
 export HOME=/
@@ -171,7 +172,7 @@ status_db() {
 }
 
 status_db_silent() {
-    status -p ${DB_PIDFILE} -l $(basename ${DB_LOCKFILE}) ${DB_NAME} 1>/dev/null 2>&1
+    status -p ${DB_PIDFILE} ${DB_NAME} 1>/dev/null 2>&1
 	STATUS=$?
 	return ${STATUS}
 }
