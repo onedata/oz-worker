@@ -4,10 +4,10 @@ export function initialize(instance) {
   // const applicationRoute = instance.container.lookup('route:application');
   const session = instance.container.lookup('service:session');
   session.on('authenticationSucceeded', () => {
-    window.alert('authentication succeeded!');
+    console.debug('authentication succeeded!');
   });
   session.on('invalidationSucceeded', () => {
-    window.alert('session has been invalidated!');
+    console.debug('session has been invalidated!');
   });
 }
 

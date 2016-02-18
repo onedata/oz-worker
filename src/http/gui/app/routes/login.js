@@ -10,7 +10,7 @@ export default LoginRoute.extend({
     authenticate() {
       this.get('session')
         .authenticate('authenticator:basic').catch((reason) => {
-          window.alert(`you shall NOT pass, because: ${reason}`);
+          console.debug(`you shall NOT pass, because: ${reason}`);
         });
     }
   }

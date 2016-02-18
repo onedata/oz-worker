@@ -5,19 +5,19 @@ import Base from 'ember-simple-auth/authenticators/base';
 
 export default Base.extend({
   restore(data) {
-    window.alert('auth restore');
+    console.debug('auth restore');
     return new Ember.RSVP.Promise((resolve/*, reject*/) => {
       resolve();
     });
   },
   authenticate(options) {
-    window.alert('auth authenticate');
+    console.debug('auth authenticate');
     return new Ember.RSVP.Promise((resolve) => {
       resolve('hello');
     });
   },
   invalidate(data) {
-    window.alert('auth invalidate');
+    console.debug('auth invalidate');
     return new Ember.RSVP.Promise((resolve) => {
       resolve();
     });

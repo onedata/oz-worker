@@ -1,5 +1,3 @@
-<a {{action 'authenticate'}}><h1>Authenticate</h1></a>
-
 <div class="container login-box-container">
   <div class="row row-centered">
     <div class="col-xs-9 col-centered login-box">
@@ -8,22 +6,22 @@
       <div class="container-fluid login-buttons-container">
         <div class="row row-centered">
           <div class="col-xs-2 col-centered">
-            <div class="login-icon-box github">
+            <div {{action 'authenticate'}} class="login-icon-box github">
             </div>
           </div>
-          <div class="col-xs-2 col-centered">
+          <div {{action 'authenticate'}} class="col-xs-2 col-centered">
             <div class="login-icon-box twitter">
             </div>
           </div>
-          <div class="col-xs-2 col-centered">
+          <div {{action 'authenticate'}} class="col-xs-2 col-centered">
             <div class="login-icon-box google">
             </div>
           </div>
-          <div class="col-xs-2 col-centered">
+          <div {{action 'authenticate'}} class="col-xs-2 col-centered">
             <div class="login-icon-box dropbox">
             </div>
           </div>
-          <div class="col-xs-2 col-centered">
+          <div {{action 'authenticate'}} class="col-xs-2 col-centered">
             <div class="login-icon-box facebook">
             </div>
           </div>

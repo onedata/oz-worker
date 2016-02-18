@@ -7,7 +7,9 @@ export default {
     support: 'support',
     media: 'media',
     blog: 'blog',
-    login: 'login'
+    account: 'account',
+    login: 'login',
+    logout: 'logout'
   },
   index: {
     atlas: {

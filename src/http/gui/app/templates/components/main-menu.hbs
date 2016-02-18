@@ -1,9 +1,11 @@
-{{#if session.isAuthenticated}}
-  <a>AUTH!</a>
-{{else}}
-  <a>NOT AUTH!</a>
-{{/if}}
-
 {{#each menuItems as |item|}}
-  {{main-menu-item linkTo=item.linkTo titleI18n=item.titleI18n}}
+  {{#if session.isAuthenticated}}
+    {{#if item.showAuthenticated}}
+      {{main-menu-item linkTo=item.linkTo titleI18n=item.titleI18n}}
+    {{/if}}
+  {{else}}
+    {{#if item.showUnauthenticated}}
+      {{main-menu-item linkTo=item.linkTo titleI18n=item.titleI18n}}
+    {{/if}}
+  {{/if}}
 {{/each}}

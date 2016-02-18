@@ -6,10 +6,10 @@ let ApplicationRoute = Ember.Route.extend(ApplicationRouteMixin);
 export default ApplicationRoute.extend({
   activate() {
     this.get('session').on('authenticationSucceeded', () => {
-      window.alert('authentication succeeded!');
+      console.debug('authentication succeeded!');
     });
     this.get('session').on('invalidationSucceeded', () => {
-      window.alert('session has been invalidated!');
+      console.debug('session has been invalidated!');
     });
   }
 });
