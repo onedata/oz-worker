@@ -121,12 +121,12 @@ get_providers(_Seq, Doc, space) ->
     #space{providers = SpaceProviders} = Value,
     SpaceProviders;
 
-get_providers(_Seq, Doc, user_group) ->
-    #document{key = ID} = Doc,
-    {ok, [{providers, GroupProviders}]} = group_logic:get_providers(ID),
-    GroupProviders;
+get_providers(_Seq, _Doc, user_group) ->
+    [];
 
-get_providers(_Seq, Doc, onedata_user) ->
-    #document{key = ID} = Doc,
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(ID),
-    UserProviders.
+get_providers(_Seq, _Doc, onedata_user) ->
+    [];
+
+get_providers(_Seq, _Doc, _Type) ->
+    [].
+
