@@ -17,8 +17,7 @@ export default Ember.Service.extend({
    * the server.
    */
   callServer: function (key, thenFun) {
-    thenFun({sessionDetails: {userName: 'someuser'}});
-    // TODO - stubbed
-    // this.get('store').adapterFor('application').callback('global', key).then(thenFun);
+    //thenFun({sessionDetails: {userName: 'someuser'}});
+    this.get('store').adapterFor('application').callback('global', key).then(thenFun);
   }
 });

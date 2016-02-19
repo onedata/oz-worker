@@ -23,5 +23,9 @@
 %% API
 -export([callback/2]).
 
-callback(<<"userName">>, _) ->
-    {ok, <<"Zbyszek">>}.
+callback(<<"sessionDetails">>, _) ->
+    {ok, [
+        {<<"sessionDetails">>, [
+            {<<"userName">>, <<"zbyszek">>}
+        ]}
+    ]}.
