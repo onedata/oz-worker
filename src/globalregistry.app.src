@@ -11,7 +11,7 @@
 
 {application, globalregistry, [
     {description, "Global registry of data."},
-    {vsn, "3.0.0"},
+    {vsn, "3.0.0-alpha"},
     {registered, [globalregistry_sup]},
     {applications, [
         kernel,
