@@ -17,26 +17,37 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
--include_lib("annotations/include/annotations.hrl").
+-include_lib("ctool/include/test/performance.hrl").
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
--export([users_crud_test/1, groups_crud_test/1, spaces_crud_test/1, providers_crud_test/1, tokens_crud_test/1]).
+%%tests
+-export([users_crud_test/1, groups_crud_test/1, spaces_crud_test/1,
+  providers_crud_test/1, tokens_crud_test/1]).
+%%test_bases
+-export([users_crud_test_base/1, groups_crud_test_base/1, providers_crud_test_base/1,
+    spaces_crud_test_base/1, tokens_crud_test_base/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
+-define(TEST_CASES, [
+    users_crud_test, groups_crud_test, spaces_crud_test,
+    providers_crud_test, tokens_crud_test
+]).
+
 all() ->
-    [users_crud_test, groups_crud_test, spaces_crud_test, providers_crud_test, tokens_crud_test].
+    ?ALL(?TEST_CASES, ?TEST_CASES).
 
 -define(REPEATS, 100).
 
--performance([
-    {repeats, ?REPEATS},
-    {config, [{name, users_crud}]}
-]).
 users_crud_test(Config) ->
+    ?PERFORMANCE(Config, [
+            {repeats, ?REPEATS},
+            {config, [{name, users_crud}]}
+        ]).
+users_crud_test_base(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
     % Data
@@ -68,11 +79,12 @@ users_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_users, get_user, [UserId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
--performance([
-    {repeats, ?REPEATS},
-    {config, [{name, groups_crud}]}
-]).
 groups_crud_test(Config) ->
+    ?PERFORMANCE(Config, [
+            {repeats, ?REPEATS},
+            {config, [{name, groups_crud}]}
+        ]).
+groups_crud_test_base(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
     % Data
@@ -104,47 +116,49 @@ groups_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_groups, get_group, [GroupId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
--performance([
-    {repeats, ?REPEATS},
-    {config, [{name, providers_crud}]}
-]).
 providers_crud_test(Config) ->
-    [Node] = ?config(gr_nodes, Config),
+    ?PERFORMANCE(Config, [
+            {repeats, ?REPEATS},
+            {config, [{name, providers_crud}]}
+        ]).
+providers_crud_test_base(Config) ->
+      [Node] = ?config(gr_nodes, Config),
 
-    % Data
-    Provider = #provider{redirection_point = <<"http://redirpoi.nt">>, urls = [<<"1.1.1.1">>], spaces = [<<"uuid1">>, <<"uuid2">>]},
-    UpdatedProvider = Provider#provider{urls = [<<"2.2.2.2">>]},
+      % Data
+      Provider = #provider{redirection_point = <<"http://redirpoi.nt">>, urls = [<<"1.1.1.1">>], spaces = [<<"uuid1">>, <<"uuid2">>]},
+      UpdatedProvider = Provider#provider{urls = [<<"2.2.2.2">>]},
 
-    % Create
-    {AnsC1, ProviderId} = rpc:call(Node, dao_lib, apply, [dao_providers, save_provider, [Provider], 1]),
-    ?assertEqual(ok, AnsC1),
-    AnsC2 = rpc:call(Node, dao_lib, apply, [dao_providers, exist_provider, [ProviderId], 1]),
-    ?assertEqual({ok, true}, AnsC2),
+      % Create
+      {AnsC1, ProviderId} = rpc:call(Node, dao_lib, apply, [dao_providers, save_provider, [Provider], 1]),
+      ?assertEqual(ok, AnsC1),
+      AnsC2 = rpc:call(Node, dao_lib, apply, [dao_providers, exist_provider, [ProviderId], 1]),
+      ?assertEqual({ok, true}, AnsC2),
 
-    % Read
-    AnsR1 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
-    ?assertMatch({ok, #db_document{uuid = ProviderId, record = Provider}}, AnsR1),
+      % Read
+      AnsR1 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
+      ?assertMatch({ok, #db_document{uuid = ProviderId, record = Provider}}, AnsR1),
 
-    % Update
-    {AnsU1, UpdatedProviderId} = rpc:call(Node, dao_lib, apply, [dao_providers, save_provider, [#db_document{record = UpdatedProvider, uuid = ProviderId, force_update = true}], 1]),
-    ?assertEqual(ok, AnsU1),
-    ?assertEqual(ProviderId, UpdatedProviderId),
-    AnsU2 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
-    ?assertMatch({ok, #db_document{uuid = ProviderId, record = UpdatedProvider}}, AnsU2),
+      % Update
+      {AnsU1, UpdatedProviderId} = rpc:call(Node, dao_lib, apply, [dao_providers, save_provider, [#db_document{record = UpdatedProvider, uuid = ProviderId, force_update = true}], 1]),
+      ?assertEqual(ok, AnsU1),
+      ?assertEqual(ProviderId, UpdatedProviderId),
+      AnsU2 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
+      ?assertMatch({ok, #db_document{uuid = ProviderId, record = UpdatedProvider}}, AnsU2),
 
-    % Delete
-    AnsD1 = rpc:call(Node, dao_lib, apply, [dao_providers, remove_provider, [ProviderId], 1]),
-    ?assertEqual(ok, AnsD1),
-    AnsD2 = rpc:call(Node, dao_lib, apply, [dao_providers, exist_provider, [ProviderId], 1]),
-    ?assertEqual({ok, false}, AnsD2),
-    AnsD3 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
-    ?assertEqual({error, {not_found, deleted}}, AnsD3).
+      % Delete
+      AnsD1 = rpc:call(Node, dao_lib, apply, [dao_providers, remove_provider, [ProviderId], 1]),
+      ?assertEqual(ok, AnsD1),
+      AnsD2 = rpc:call(Node, dao_lib, apply, [dao_providers, exist_provider, [ProviderId], 1]),
+      ?assertEqual({ok, false}, AnsD2),
+      AnsD3 = rpc:call(Node, dao_lib, apply, [dao_providers, get_provider, [ProviderId], 1]),
+      ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
--performance([
-    {repeats, ?REPEATS},
-    {config, [{name, spaces_crud}]}
-]).
 spaces_crud_test(Config) ->
+    ?PERFORMANCE(Config, [
+            {repeats, ?REPEATS},
+            {config, [{name, spaces_crud}]}
+        ]).
+spaces_crud_test_base(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
     % Data
@@ -176,11 +190,13 @@ spaces_crud_test(Config) ->
     AnsD3 = rpc:call(Node, dao_lib, apply, [dao_spaces, get_space, [SpaceId], 1]),
     ?assertEqual({error, {not_found, deleted}}, AnsD3).
 
--performance([
-    {repeats, ?REPEATS},
-    {config, [{name, tokens_crud}]}
-]).
 tokens_crud_test(Config) ->
+   ?PERFORMANCE(Config, [
+           {repeats, ?REPEATS},
+           {config, [{name, tokens_crud}]}
+       ]
+   ).
+tokens_crud_test_base(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
     % Data

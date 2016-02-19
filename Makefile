@@ -1,8 +1,13 @@
 .PHONY: test deps generate
 
+DOCKER_REG_USER        ?= ""
+DOCKER_REG_PASSWORD    ?= ""
+DOCKER_REG_EMAIL       ?= ""
+GLOBALREGISTRY_VERSION ?= $(shell git describe --tags --always | tr - .)
+
 BASE_DIR         = $(shell pwd)
-GIT_URL := $(shell git config --get remote.origin.url | sed -e 's/\(\/[^/]*\)$$//g')
-GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgrid.pl:7999/vfs'; else echo ${GIT_URL}; fi)
+GIT_URL         := $(shell git config --get remote.origin.url | sed -e 's/\(\/[^/]*\)$$//g')
+GIT_URL         := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgrid.pl:7999/vfs'; else echo ${GIT_URL}; fi)
 ONEDATA_GIT_URL := $(shell if [ "${ONEDATA_GIT_URL}" = "" ]; then echo ${GIT_URL}; else echo ${ONEDATA_GIT_URL}; fi)
 export ONEDATA_GIT_URL
 
@@ -69,6 +74,18 @@ rel: generate
 relclean:
 	rm -rf rel/globalregistry
 
-rpm: rel
+rpmdirs:
+	rm -rf package
+	mkdir -p package/fedora-23-x86_64/x86_64
+
+package: rel rpmdirs
 	make -C onepanel rel CONFIG=config/globalregistry.config
 	./rel/rpm/create_rpm
+	mv rel/globalregistry-*.rpm package/fedora-23-x86_64/x86_64
+	tar -czf rpm.tar.gz package
+
+docker:
+	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \
+                         --email $(DOCKER_REG_EMAIL) --name globalregistry \
+                         --build-arg VERSION=$(GLOBALREGISTRY_VERSION) \
+                         --publish --remove packaging

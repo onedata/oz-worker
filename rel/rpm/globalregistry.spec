@@ -38,7 +38,40 @@ BuildArch: %{arch}
 
 # Disable auto dependency recognition and list required deps explicitely
 AutoReqProv: no
-requires: /bin/bash /bin/sh /usr/bin/env ld-linux-x86-64.so.2()(64bit) ld-linux-x86-64.so.2(GLIBC_2.3)(64bit)
+requires: /bin/sh botan ld-linux-x86-64.so.2()(64bit) ld-linux-x86-64.so.2(GLIBC_2.3)(64bit)
+requires: libGL.so.1()(64bit) libGLU.so.1()(64bit) libc.so.6()(64bit)
+requires: libc.so.6(GLIBC_2.10)(64bit) libc.so.6(GLIBC_2.11)(64bit)
+requires: libc.so.6(GLIBC_2.14)(64bit) libc.so.6(GLIBC_2.15)(64bit)
+requires: libc.so.6(GLIBC_2.2.5)(64bit) libc.so.6(GLIBC_2.3)(64bit)
+requires: libc.so.6(GLIBC_2.3.2)(64bit) libc.so.6(GLIBC_2.3.4)(64bit)
+requires: libc.so.6(GLIBC_2.4)(64bit) libc.so.6(GLIBC_2.7)(64bit)
+requires: libc.so.6(GLIBC_2.8)(64bit) libc.so.6(GLIBC_2.9)(64bit)
+requires: libcrypto.so.10()(64bit) libcrypto.so.10(OPENSSL_1.0.1_EC)(64bit)
+requires: libcrypto.so.10(OPENSSL_1.0.2)(64bit) libcrypto.so.10(libcrypto.so.10)(64bit)
+requires: libdl.so.2()(64bit) libdl.so.2(GLIBC_2.2.5)(64bit) libgcc_s.so.1()(64bit)
+requires: libgcc_s.so.1(GCC_3.0)(64bit) libm.so.6()(64bit) libm.so.6(GLIBC_2.2.5)(64bit)
+requires: libpthread.so.0()(64bit) libpthread.so.0(GLIBC_2.12)(64bit)
+requires: libpthread.so.0(GLIBC_2.2.5)(64bit) libpthread.so.0(GLIBC_2.3.2)(64bit)
+requires: librt.so.1()(64bit) librt.so.1(GLIBC_2.2.5)(64bit) libsodium.so.13()(64bit)
+requires: libstdc++.so.6()(64bit) libstdc++.so.6(CXXABI_1.3)(64bit)
+requires: libstdc++.so.6(CXXABI_1.3.1)(64bit) libstdc++.so.6(CXXABI_1.3.3)(64bit)
+requires: libstdc++.so.6(CXXABI_1.3.7)(64bit) libstdc++.so.6(CXXABI_1.3.9)(64bit)
+requires: libstdc++.so.6(GLIBCXX_3.4)(64bit) libstdc++.so.6(GLIBCXX_3.4.11)(64bit)
+requires: libstdc++.so.6(GLIBCXX_3.4.14)(64bit) libstdc++.so.6(GLIBCXX_3.4.15)(64bit)
+requires: libstdc++.so.6(GLIBCXX_3.4.17)(64bit) libstdc++.so.6(GLIBCXX_3.4.18)(64bit)
+requires: libstdc++.so.6(GLIBCXX_3.4.19)(64bit) libstdc++.so.6(GLIBCXX_3.4.21)(64bit)
+requires: libsystemd.so.0()(64bit) libsystemd.so.0(LIBSYSTEMD_209)(64bit)
+requires: libtinfo.so.5()(64bit) libutil.so.1()(64bit) libutil.so.1(GLIBC_2.2.5)(64bit)
+requires: libwx_baseu-2.8.so.0()(64bit) libwx_baseu-2.8.so.0(WXU_2.8)(64bit)
+requires: libwx_baseu_xml-2.8.so.0()(64bit) libwx_gtk2u_adv-2.8.so.0()(64bit)
+requires: libwx_gtk2u_adv-2.8.so.0(WXU_2.8)(64bit) libwx_gtk2u_aui-2.8.so.0()(64bit)
+requires: libwx_gtk2u_aui-2.8.so.0(WXU_2.8)(64bit) libwx_gtk2u_aui-2.8.so.0(WXU_2.8.5)(64bit)
+requires: libwx_gtk2u_core-2.8.so.0()(64bit) libwx_gtk2u_core-2.8.so.0(WXU_2.8)(64bit)
+requires: libwx_gtk2u_gl-2.8.so.0()(64bit) libwx_gtk2u_gl-2.8.so.0(WXU_2.8)(64bit)
+requires: libwx_gtk2u_html-2.8.so.0()(64bit) libwx_gtk2u_html-2.8.so.0(WXU_2.8)(64bit)
+requires: libwx_gtk2u_stc-2.8.so.0()(64bit) libwx_gtk2u_stc-2.8.so.0(WXU_2.8)(64bit)
+requires: libwx_gtk2u_xrc-2.8.so.0()(64bit) libwx_gtk2u_xrc-2.8.so.0(WXU_2.8)(64bit)
+requires: libz.so.1()(64bit) libz.so.1(ZLIB_1.2.2)(64bit) rtld(GNU_HASH) openssl protobuf
 
 %description
 globalregistry service - allows installation of globalregistry nodes.
