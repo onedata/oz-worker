@@ -25,17 +25,15 @@ init(_Args) ->
     timer:sleep(timer:seconds(2)),% todo wait for couchdb
     process_flag(trap_exit, true),
 
-    CacheMaxSize = cache_size_limit(),
-    ?info("Cache max size ~p", [CacheMaxSize]),
-
     CurrentSeq = last_seq(),
     ?info("Starting changes stream using changes from ~p", [CurrentSeq]),
     start_changes_stream(CurrentSeq),
 
+    {StateKey, StateVal} = changes_cache:state_entry(),
     {ok, #{
         provider_callbacks => #{},
-        cache => gb_trees:empty(),
-        user_to_provider => #{}
+        user_to_provider => #{},
+        StateKey => StateVal
     }}.
 
 
@@ -61,21 +59,6 @@ cleanup() ->
 %%% Internal functions
 %%%===================================================================
 
-update_cache(Seq, Doc, Type) ->
-    worker_host:state_update(?MODULE, cache, fun(Cache) ->
-        UpdatedCache = gb_trees:insert(Seq, {Doc, Type}, Cache),
-        Size = gb_trees:size(Cache),
-        Limit = cache_size_limit(),
-        case Size > Limit of
-            true ->
-                {_, _, FinalCache} = gb_trees:take_smallest(UpdatedCache),
-                FinalCache;
-            false ->
-                ?warning("Cache not saturated - size ~p of ~p", [Size, Limit]),
-                UpdatedCache
-        end
-    end).
-
 add_subscription(ID, Callback) ->
     TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
     ExpiresAt = now_seconds() + TTL,
@@ -86,8 +69,8 @@ add_subscription(ID, Callback) ->
     ok.
 
 fetch_history(ProviderID, Callback, From) ->
-    NewestCached = newest_cached_seq(),
-    OldestCached = oldest_cached_seq(),
+    NewestCached = changes_cache:newest_seq(),
+    OldestCached = changes_cache:oldest_seq(),
     ?info("Fetching from cache; {provider:~p, from:~p, cache_start:~p, cache_end:~p}",
         [ProviderID, From, OldestCached, NewestCached]),
 
@@ -103,13 +86,9 @@ fetch_history(ProviderID, Callback, From) ->
 
 
 fetch_from_cache(From, To, ProviderID, Callback) ->
-    Cache = worker_host:state_get(?MODULE, cache),
-    CachedList = gb_trees:values(Cache),
-    Shifted = lists:dropwhile(fun({Seq, _}) -> Seq < From end, CachedList),
-    Trimmed = lists:takewhile(fun({Seq, _}) -> Seq =< To end, Shifted),
     lists:foreach(fun({Seq, {Doc, Type}}) ->
         handle_change(Seq, Doc, Type, #{ProviderID => {Callback, infinity}})
-    end, Trimmed).
+    end, changes_cache:slice(From, To)).
 
 fetch_from_db(From, To, ProviderID, Callback) ->
     couchdb_datastore_driver:changes_start_link(fun
@@ -119,20 +98,20 @@ fetch_from_db(From, To, ProviderID, Callback) ->
 
 -spec common_change_callback(Seq :: non_neg_integer(), datastore:document() | stream_ended, model_behaviour:model_type() | undefined) -> ok.
 common_change_callback(_Seq, stream_ended, _Type) ->
-    CurrentSeq = newest_cached_seq(),
+    CurrentSeq = changes_cache:newest_seq(),
     ?error("Changes stream broken - restarting at ~p", [CurrentSeq]),
     start_changes_stream(CurrentSeq),
     ok;
 
 common_change_callback(Seq, Doc, Type) ->
     cleanup_expired_callbacks(),
-    update_cache(Seq, Doc, Type),
+    changes_cache:put(Seq, Doc, Type),
     Callbacks = worker_host:state_get(?MODULE, provider_callbacks),
     handle_change(Seq, Doc, Type, Callbacks).
 
 handle_change(Seq, Doc, Type, Callbacks) ->
     NoOp = fun(_Seq, _Doc, _Type) -> ok end,
-    Providers = get_providers(Seq, Doc, Type),
+    Providers = subscribers:providers(Seq, Doc, Type),
     ?info("Dispatching {seq=~p, doc=~p, type=~p} to ~p having ~p", [Seq, Doc, Type, Providers, Callbacks]),
 
     lists:foreach(fun(Provider) ->
@@ -149,9 +128,6 @@ cleanup_expired_callbacks() ->
     end),
     ok.
 
-cache_size_limit() ->
-    application:get_env(?APP_Name, subscription_cache_size, 100).
-
 now_seconds() ->
     erlang:system_time(seconds).
 
@@ -167,33 +143,3 @@ last_seq() ->
     catch
         E:R -> ?error("Last sequence number unknown (assuming 1) due to ~p:~p", [E, R]), 1
     end.
-
-newest_cached_seq() ->
-    Cache = worker_host:state_get(?MODULE, cache),
-    case gb_trees:is_empty(Cache) of
-        true -> cache_empty;
-        false -> {Seq, _} = gb_trees:largest(Cache), Seq
-    end.
-
-oldest_cached_seq() ->
-    Cache = worker_host:state_get(?MODULE, cache),
-    case gb_trees:is_empty(Cache) of
-        true -> cache_empty;
-        false -> {Seq, _} = gb_trees:smallest(Cache), Seq
-    end.
-
-
-get_providers(_Seq, Doc, space) ->
-    #document{value = Value} = Doc,
-    #space{providers = SpaceProviders} = Value,
-    SpaceProviders;
-
-get_providers(_Seq, _Doc, user_group) ->
-    [];
-
-get_providers(_Seq, _Doc, onedata_user) ->
-    [];
-
-get_providers(_Seq, _Doc, _Type) ->
-    [].
-
