@@ -12,22 +12,34 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([providers/3]).
+-define(KEY, provider_callbacks).
+-define(WORKER_NAME, subscriptions).
 
-providers(_Seq, Doc, space) ->
-    #document{value = Value} = Doc,
-    #space{providers = SpaceProviders} = Value,
-    SpaceProviders;
+-export([state_entry/0, cleanup/0, add/2, callbacks/0]).
 
-providers(_Seq, _Doc, user_group) ->
-    [];
+state_entry() ->
+    {?KEY, #{}}.
 
-providers(_Seq, _Doc, onedata_user) ->
-    [];
+callbacks() ->
+    State = worker_host:state_get(?WORKER_NAME, ?KEY),
+    maps:map(fun(_, {Callback, _}) -> Callback end, State).
 
-providers(_Seq, _Doc, _Type) ->
-    [].
+cleanup() ->
+    worker_host:state_update(?WORKER_NAME, ?KEY, fun(Callbacks) ->
+        Now = now_seconds(),
+        maps:filter(fun(_ID, {_Callback, ExpiresAt}) ->
+            Now < ExpiresAt
+        end, Callbacks)
+    end).
 
+add(ProviderID, Callback) ->
+    TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
+    ExpiresAt = now_seconds() + TTL,
+    worker_host:state_update(?WORKER_NAME, ?KEY, fun(Callbacks) ->
+        maps:put(ProviderID, {Callback, ExpiresAt}, Callbacks)
+    end).
+
+now_seconds() ->
+    erlang:system_time(seconds).

@@ -29,11 +29,13 @@ init(_Args) ->
     ?info("Starting changes stream using changes from ~p", [CurrentSeq]),
     start_changes_stream(CurrentSeq),
 
-    {StateKey, StateVal} = changes_cache:state_entry(),
+    {CacheKey, CacheVal} = changes_cache:state_entry(),
+    {SubKey, SubVal} = subscribers:state_entry(),
+
     {ok, #{
-        provider_callbacks => #{},
         user_to_provider => #{},
-        StateKey => StateVal
+        CacheKey => CacheVal,
+        SubKey => SubVal
     }}.
 
 
@@ -45,7 +47,7 @@ handle(healthcheck) ->
 
 handle({provider_subscribe, ProviderID, Callback, From}) ->
     ?info("Request ~p", [{provider_subscribe, ProviderID, Callback, From}]),
-    add_subscription(ProviderID, Callback),
+    subscribers:add(ProviderID, Callback),
     fetch_history(ProviderID, Callback, From);
 
 handle(_Request) ->
@@ -58,15 +60,6 @@ cleanup() ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-add_subscription(ID, Callback) ->
-    TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
-    ExpiresAt = now_seconds() + TTL,
-    ?info("Adding subscription ~p", [{ID, Callback, ExpiresAt, TTL}]),
-    worker_host:state_update(?MODULE, provider_callbacks, fun(Callbacks) ->
-        maps:put(ID, {Callback, ExpiresAt}, Callbacks)
-    end),
-    ok.
 
 fetch_history(ProviderID, Callback, From) ->
     NewestCached = changes_cache:newest_seq(),
@@ -104,32 +97,20 @@ common_change_callback(_Seq, stream_ended, _Type) ->
     ok;
 
 common_change_callback(Seq, Doc, Type) ->
-    cleanup_expired_callbacks(),
+    subscribers:cleanup(),
     changes_cache:put(Seq, Doc, Type),
-    Callbacks = worker_host:state_get(?MODULE, provider_callbacks),
+    Callbacks = subscribers:callbacks(),
     handle_change(Seq, Doc, Type, Callbacks).
 
 handle_change(Seq, Doc, Type, Callbacks) ->
     NoOp = fun(_Seq, _Doc, _Type) -> ok end,
-    Providers = subscribers:providers(Seq, Doc, Type),
+    Providers = allowed:providers(Seq, Doc, Type),
     ?info("Dispatching {seq=~p, doc=~p, type=~p} to ~p having ~p", [Seq, Doc, Type, Providers, Callbacks]),
 
     lists:foreach(fun(Provider) ->
-        {Callback, _} = maps:get(Provider, Callbacks, NoOp),
+        Callback = maps:get(Provider, Callbacks, NoOp),
         spawn(fun() -> Callback(Seq, Doc, Type) end)
     end, Providers).
-
-cleanup_expired_callbacks() ->
-    worker_host:state_update(?MODULE, provider_callbacks, fun(Callbacks) ->
-        Now = now_seconds(),
-        maps:filter(fun(_ID, {_Callback, ExpiresAt}) ->
-            Now < ExpiresAt
-        end, Callbacks)
-    end),
-    ok.
-
-now_seconds() ->
-    erlang:system_time(seconds).
 
 -spec start_changes_stream(Seq :: non_neg_integer()) -> no_return().
 start_changes_stream(StartSeq) ->
