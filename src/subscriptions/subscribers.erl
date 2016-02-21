@@ -15,7 +15,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -define(KEY, provider_callbacks).
--define(WORKER_NAME, subscriptions).
+-define(WORKER_NAME, subscriptions_worker).
 
 -export([state_entry/0, cleanup/0, add/2, callbacks/0]).
 

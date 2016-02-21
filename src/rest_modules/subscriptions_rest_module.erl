@@ -78,7 +78,7 @@ resource_exists(_, _, Req) ->
 accept_resource(subscription, post, _ID, Data, #client{type = provider, id = ProviderId}, Req) ->
     LastSeen = proplists:get_value(<<"last_seq">>, Data),
     Endpoint = proplists:get_value(<<"endpoint">>, Data),
-    provider_subscriptions:renew(ProviderId, LastSeen, Endpoint),
+    subscriptions:renew(ProviderId, LastSeen, Endpoint),
     {true, Req};
 accept_resource(_, _, _, _, _, Req) ->
     {true, Req}.

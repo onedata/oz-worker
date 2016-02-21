@@ -15,7 +15,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -define(KEY, cache).
--define(WORKER_NAME, subscriptions).
+-define(WORKER_NAME, subscriptions_worker).
 
 -export([put/3, slice/2, newest_seq/0, oldest_seq/0, state_entry/0]).
 
