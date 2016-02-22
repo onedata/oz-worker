@@ -4,10 +4,11 @@
   .owl-carousel {
     .owl-item {
       .img-box {
-        height: 100px;
+        height: 64px;
         width: 100%;
         background-repeat: no-repeat;
         background-position: center;
+        background-size: contain;
 
         // for images that are too wide
         &.background-contain {
@@ -20,7 +21,8 @@
   .owl-carousel-arrows {
     text-align: center;
 
-    button {
+    a {
+      display: inline-block;
       color: #CACACA;
       background-color: transparent;
       border: none;
@@ -31,6 +33,8 @@
       }
       &:hover, &:focus {
         color: $color-grey-1 !important;
+        cursor: pointer;
+        cursor: hand;
       }
       &:active {
         color: #484848 !important;

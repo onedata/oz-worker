@@ -1,7 +1,8 @@
 import Ember from 'ember';
 
-let logoFor = function(name) {
-  return `/assets/images/index/logo-${name}.png`;
+let logoFor = function(name, format) {
+  format = (format || 'svg');
+  return `/assets/images/index/logo-${name}.${format}`;
 };
 
 export default Ember.Component.extend({
@@ -24,11 +25,11 @@ export default Ember.Component.extend({
     },
     {
       link: '#',
-      image: logoFor('indigo')
+      image: logoFor('indigo', 'png')
     },
     {
       link: '#',
-      image: logoFor('plgrid')
+      image: logoFor('plgrid', 'png')
     },
     {
       link: '#',
@@ -61,9 +62,9 @@ export default Ember.Component.extend({
     });
 
     this.$().find('.owl-carousel-arrows').height(owl.height());
+
     let prevButton = this.$().find('.prev');
     let nextButton = this.$().find('.next');
-
     [prevButton, nextButton].forEach((button) => {
       button.css('margin-top', owl.height()/2 - button.height()/2);
     });
