@@ -1,3 +1,16 @@
+$container-min-padding: 10px;
+
+@import "bootstrap-config";
+
+@mixin respond-to($media) {
+  @if $media == "screen-xs" {
+    @media only screen and (max-width: $screen-xs-max) { @content; }
+  }
+  @else {
+    @media only screen and (min-width: $screen-xs-min) { @content; }
+  }
+}
+
 $top-font-color: #bfbfbf;
 $top-height: 70px;
 $top-height-collapsed: 60px;
@@ -6,14 +19,12 @@ $top-padding-top: ($top-height / 2) - ($top-font-size / 2);
 $top-padding-top-collapsed: ($top-height-collapsed / 2) - ($top-font-size / 2);
 
 $body-padding: 30px;
+$body-font-size-xs: 12pt;
 $body-font-size: 14pt;
 
 $title-font: 'Myriad Pro Semibold';
 $body-font: 'Open Sans';
 
-$container-min-padding: 10px;
-
-@import "bootstrap-config";
 @import "colors";
 @import "fonts";
 @import "owl-carousel";
@@ -91,21 +102,39 @@ html {
     padding: 0;
     margin: 0;
 
-    font-size: $body-font-size;
+    @include respond-to(screen-xs) {
+      font-size: $body-font-size-xs;
+    }
+
+    @include respond-to(screen-non-xs) {
+      font-size: $body-font-size;
+    }
 
     color: #fff;
     background: transparent;
 
     h1 {
       font-family: 'Myriad Pro Semibold', 'Open Sans', sans-serif;
-      font-size: $body-font-size * 2.3;
+
+      @include respond-to(screen-xs) {
+        font-size: $body-font-size-xs * 2.3;
+      }
+      @include respond-to(screen-non-xs) {
+        font-size: $body-font-size * 2.3;
+      }
+
       text-transform: uppercase;
       letter-spacing: 0.1em;
     }
 
     h2 {
       font-family: 'Myriad Pro Semibold', 'Open Sans', sans-serif;
-      font-size: $body-font-size * 1.5;
+      @include respond-to(screen-xs) {
+        font-size: $body-font-size-xs * 1.5;
+      }
+      @include respond-to(screen-non-xs) {
+        font-size: $body-font-size * 1.5;
+      }
       font-weight: normal;
     }
   }
