@@ -2,6 +2,7 @@
 .navbar {
   background: none;
   border-bottom: 2px solid rgba(100%, 100%, 100%, 0.1);
+  height: $top-height-collapsed;
 
   .navbar-brand {
     position: absolute;
@@ -22,8 +23,10 @@
     }
   }
 
-  // top bar logo on dekstop
+  // dekstop
   @media screen and (min-width: $screen-md-min) {
+    height: $top-height;
+
     .navbar-brand {
       position: absolute;
       height: $top-height;
@@ -41,7 +44,8 @@
       top: 0;
       right: 0;
       width: 300px;
-      z-index: 1000;
+      // on top of standard collapse button
+      z-index: 1002;
 
       border-top: none;
       padding-top: 60px;
@@ -51,7 +55,7 @@
       box-shadow: none;
 
       &.in {
-        bottom: 0;
+        height: 100%;
       }
     }
   }
@@ -123,7 +127,7 @@
             padding: 0;
             margin-left: -15px;
             margin-right: -15px;
-            padding-top: 1px;
+            margin-top: -2px;
           }
         }
       }

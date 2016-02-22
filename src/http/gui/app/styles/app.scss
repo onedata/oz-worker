@@ -1,6 +1,6 @@
 $top-font-color: #bfbfbf;
 $top-height: 70px;
-$top-height-collapsed: 50px;
+$top-height-collapsed: 60px;
 $top-font-size: 11pt;
 $top-padding-top: ($top-height / 2) - ($top-font-size / 2);
 $top-padding-top-collapsed: ($top-height-collapsed / 2) - ($top-font-size / 2);
@@ -40,7 +40,13 @@ html, body {
   &.active {
     z-index: 999;
     background: rgba(41, 41, 41, 0.6);
-    transition: background 0.5s;
+    // the same as collapsing animation
+    transition: background 0.35s;
+
+    // fog should be always hidden if desktop view
+    @media (min-width: $grid-float-breakpoint) {
+      display: none;
+    }
   }
 }
 
@@ -49,7 +55,14 @@ img {
   max-width: 100%;
 }
 
+
 // some small classes to quick change any element
+
+.top-right-fixed {
+  position: fixed;
+  top: 0;
+  right: 0;
+}
 .align-left {
   text-align: left;
 }

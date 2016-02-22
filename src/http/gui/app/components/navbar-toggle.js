@@ -3,6 +3,17 @@ import Ember from 'ember';
 export default Ember.Component.extend({
   clickHandlers: [],
 
+  /** If enabled and menu is collapsed - show "open menu" button */
+  enableOpenMenuButton: true,
+
+  /** If enabled and menu is uncollapsed (toggled) - show "close menu" button */
+  enableCloseMenuButton: true,
+
+  classNameBindings: ['top-right-fixed'],
+  'top-right-fixed': function() {
+    return this.get('topRight');
+  }.property('topRight'),
+
   /**
    * Add a function to invoke when top menu button is clicked
    * The handler will be invoked with one argument: instance of this component.

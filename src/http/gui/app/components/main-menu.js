@@ -29,5 +29,6 @@ export default Ember.Component.extend({
     });
 
     this.set('menuItems', menuItems);
-  }.on('init')
+  }.on('init'),
+
 });

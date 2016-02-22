@@ -32,6 +32,7 @@ module.exports = function(defaults) {
   app.import("bower_components/owl-carousel/owl-carousel/owl.transitions.css");
 
   app.import("bower_components/bind-first/release/jquery.bind-first-0.2.3.min.js");
+  app.import("bower_components/jquery-mousewheel/jquery.mousewheel.min.js");
 
   return app.toTree();
 };
