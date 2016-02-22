@@ -35,7 +35,7 @@
     text-align: center;
   }
 
-  @media (max-width: $grid-float-breakpoint) {
+  @media (max-width: $grid-float-breakpoint-max) {
     .navbar-collapse {
       position: fixed;
       top: 0;
@@ -130,7 +130,7 @@
     line-height: $line-height-computed;
   }
 
-  @media (max-width: $grid-float-breakpoint-max + 1) {
+  @media (max-width: $grid-float-breakpoint-max) {
     // Dropdowns get custom display when collapsed
     .open .dropdown-menu {
       position: static;
