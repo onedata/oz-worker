@@ -16,7 +16,7 @@ Router.map(function() {
     });
   });
 
-  this.route('onezone');
+  this.route('onezone', function() {});
 });
 
 export default Router;

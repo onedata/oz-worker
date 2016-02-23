@@ -1,5 +1,6 @@
 $onezone-sidebar-width: 380px;
 $onezone-top-bar-height: 80px;
+$onezone-content-padding: 15px;
 
 // TODO: move to colors.scss
 $color-onezone-sidebar-bg: #3D3D3D;
@@ -9,8 +10,7 @@ $color-onezone-fog-base: #8294b1;
 // TODO: own experimental alpha
 $color-onezone-fog: rgba($color-onezone-fog-base, 0.8);
 
-$onezone-fog-z: 999;
-$onezone-above-fog-z: $onezone-fog-z + 10;
+$onezone-fog-z: 0;
 
 .onezone-fog {
   position: fixed;
@@ -23,14 +23,17 @@ $onezone-above-fog-z: $onezone-fog-z + 10;
 }
 
 .onezone-container-application {
-  z-index: $onezone-above-fog-z;
-  padding-left: $onezone-sidebar-width;
-  padding-top: $onezone-top-bar-height;
+  position: relative;
+  z-index: $onezone-fog-z + 1;
+  padding-bottom: $onezone-content-padding;
+  padding-right: $onezone-content-padding;
+  padding-left: $onezone-sidebar-width + $onezone-content-padding;
+  padding-top: $onezone-top-bar-height + $onezone-content-padding;
 }
 
 .onezone-top-bar {
   position: fixed;
-  z-index: $onezone-above-fog-z;
+  z-index: $onezone-fog-z + 2;
   top: 0;
   left: $onezone-sidebar-width;
   right: 0;
@@ -61,7 +64,7 @@ $onezone-above-fog-z: $onezone-fog-z + 10;
 
 .onezone-sidebar {
   position: fixed;
-  z-index: $onezone-above-fog-z;
+  z-index: $onezone-fog-z + 2;
   top: 0;
   bottom: 0;
   left: 0;
@@ -85,6 +88,12 @@ $onezone-above-fog-z: $onezone-fog-z + 10;
       background-size: contain;
     }
 
+  }
+
+  .accordion-container {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .accordion {
@@ -118,6 +127,18 @@ $onezone-above-fog-z: $onezone-fog-z + 10;
             background-position: center center;
             background-repeat: no-repeat;
             background-size: contain;
+
+            @include vendor-prefix(transform, rotate(0));
+
+            transition: all 0.35s ease;
+          }
+
+          &[aria-expanded="true"] {
+            .arrow-down {
+              @include vendor-prefix(transform, rotate(-180deg));
+
+              transition: all 0.35s ease;
+            }
           }
 
           &:hover {

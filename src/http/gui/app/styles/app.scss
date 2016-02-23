@@ -11,6 +11,14 @@ $container-min-padding: 10px;
   }
 }
 
+@mixin vendor-prefix($name, $argument) {
+  -webkit-#{$name}: #{$argument};
+  -ms-#{$name}: #{$argument};
+  -moz-#{$name}: #{$argument};
+  -o-#{$name}: #{$argument};
+  #{$name}: #{$argument};
+}
+
 $top-font-color: #bfbfbf;
 $top-height: 70px;
 $top-height-collapsed: 60px;
