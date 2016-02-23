@@ -8,23 +8,30 @@ export default Ember.Component.extend({
   setupMenuItems: function() {
     let itemNames = [
       'get-started', 'documentation', 'community', 'download', 'support',
-      'media', 'blog', 'account', 'login', 'logout'
+      'media', 'blog', 'login', 'logout'
     ];
 
     let menuItems = itemNames.map((name) => {
       return {
-        linkTo: name,
+        linkTo: `home.${name}`,
         titleI18n: `application.${snakeToCamel(name)}`,
         showAuthenticated: true,
         showUnauthenticated: true,
       };
     });
 
-    menuItems.filter((i) => i.linkTo === 'account' || i.linkTo === 'logout').forEach((i) => {
+    menuItems.push({
+      linkTo: 'onezone',
+      titleI18n: `application.${snakeToCamel('account')}`,
+      showAuthenticated: true,
+      showUnauthenticated: false,
+    });
+
+    menuItems.filter((i) => i.linkTo === 'home.logout').forEach((i) => {
       i.showUnauthenticated = false;
     });
 
-    menuItems.filter((i) => i.linkTo === 'login').forEach((i) => {
+    menuItems.filter((i) => i.linkTo === 'home.login').forEach((i) => {
       i.showAuthenticated = false;
     });
 

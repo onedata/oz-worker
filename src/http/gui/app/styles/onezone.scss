@@ -1,0 +1,135 @@
+$onezone-sidebar-width: 380px;
+$onezone-top-bar-height: 80px;
+
+// TODO: move to colors.scss
+$color-onezone-sidebar-bg: #3D3D3D;
+$color-onezone-sidebar-separator: #515151;
+$color-onezone-top-bar-bg: rgba($color-onezone-sidebar-bg, 0.4);
+$color-onezone-fog-base: #8294b1;
+// TODO: own experimental alpha
+$color-onezone-fog: rgba($color-onezone-fog-base, 0.8);
+
+$onezone-fog-z: 999;
+$onezone-above-fog-z: $onezone-fog-z + 10;
+
+.onezone-fog {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: $onezone-fog-z;
+  background-color: $color-onezone-fog;
+}
+
+.onezone-container-application {
+  z-index: $onezone-above-fog-z;
+  padding-left: $onezone-sidebar-width;
+  padding-top: $onezone-top-bar-height;
+}
+
+.onezone-top-bar {
+  position: fixed;
+  z-index: $onezone-above-fog-z;
+  top: 0;
+  left: $onezone-sidebar-width;
+  right: 0;
+  height: $onezone-top-bar-height;
+  line-height: $onezone-top-bar-height;
+  background: $color-onezone-top-bar-bg;
+
+  .container-fluid {
+    padding-left: 42px;
+    padding-right: 42px;
+
+    .title {
+      text-transform: uppercase;
+      h1 {
+        padding: 0;
+        margin: 0;
+        line-height: inherit;
+        font-size: 1em;
+      }
+    }
+
+    .hints {
+      text-transform: uppercase;
+      font-size: 0.7em;
+    }
+  }
+}
+
+.onezone-sidebar {
+  position: fixed;
+  z-index: $onezone-above-fog-z;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: $onezone-sidebar-width;
+  background: $color-onezone-sidebar-bg;
+
+  $onezone-accordion-heading-height: 75px;
+
+  .brand {
+    height: $onezone-top-bar-height;
+    padding-left: 10px;
+    padding-top: 25px;
+    padding-bottom: 25px;
+
+    .logo {
+      height: 100%;
+      width: 100%;
+      background-image: url('/assets/images/logo.svg');
+      background-repeat: no-repeat;
+      background-position: left center;
+      background-size: contain;
+    }
+
+  }
+
+  .accordion {
+    .accordion-group {
+      border-top: $color-onezone-sidebar-separator 2px solid;
+
+      .accordion-heading {
+        text-transform: uppercase;
+        border-bottom: $color-onezone-sidebar-separator 2px solid;
+
+        .accordion-toggle {
+          display: block;
+          height: $onezone-accordion-heading-height;
+          line-height: $onezone-accordion-heading-height;
+          padding-left: 10px;
+          padding-right: 24px;
+          color: white;
+
+          h1 {
+            display: inline-block;
+            font-size: 1em;
+          }
+
+          .arrow-down {
+            display: inline-block;
+            float: right;
+            width: 20px;
+            height: 100%;
+            height: $onezone-accordion-heading-height;
+            background-image: url('/assets/images/onezone/arrowdown.svg');
+            background-position: center center;
+            background-repeat: no-repeat;
+            background-size: contain;
+          }
+
+          &:hover {
+            text-decoration: none;
+            background-color: rgba(255, 255, 255, 0.1);
+          }
+        }
+      }
+
+      .accordion-inner {
+        padding: 10px;
+      }
+    }
+  }
+}

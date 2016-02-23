@@ -6,16 +6,17 @@ const Router = Ember.Router.extend({
 });
 
 Router.map(function() {
-  this.route('get-started');
-  this.route('documentation');
-  this.route('community');
-  this.route('download');
-  this.route('support');
-  this.route('media');
-  this.route('blog');
-  this.route('login');
-  this.route('account');
-  this.route('logout');
+  this.route('home', function() {
+    [
+      'get-started', 'documentation', 'community',
+      'download', 'support', 'media', 'blog',
+      'login', 'account', 'logout'
+    ].forEach((homepagePage) => {
+      this.route(homepagePage);
+    });
+  });
+
+  this.route('onezone');
 });
 
 export default Router;

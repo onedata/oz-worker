@@ -18,8 +18,12 @@ module.exports = function(environment) {
       // when it is created
     },
 
-    'simple-auth': {
-      session: 'session:custom'
+    // see: https://ember-simple-auth.com/api/classes/Configuration.html
+    'ember-simple-auth': {
+      session: 'session:custom',
+      authenticationRoute: 'home.login',
+      routeAfterAuthentication: 'onezone',
+      routeIfAlreadyAuthenticated: 'home'
     }
   };
 

@@ -1,4 +1,7 @@
 import Ember from 'ember';
 import AuthenticatedRouteMixin from 'ember-simple-auth/mixins/authenticated-route-mixin';
 
-export default Ember.Route.extend(AuthenticatedRouteMixin);
+let OnezoneRoute = Ember.Route.extend(AuthenticatedRouteMixin);
+
+export default OnezoneRoute.extend({
+});

@@ -81,5 +81,16 @@ export default {
   login: {
     boxTitle: 'login',
     boxSubtitle: 'Login with your social account'
+  },
+  onezone: {
+    sidebar: {
+      connectHead: 'connect your accounts',
+      manageSpacesHead: 'manage data spaces',
+      filesHead: 'go to your files'
+    },
+    topBar: {
+      manageProviders: 'manage providers',
+      enableHints: 'enable hints'
+    }
   }
 };
