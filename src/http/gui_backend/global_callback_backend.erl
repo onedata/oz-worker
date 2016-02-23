@@ -10,7 +10,6 @@
 %%% It is used to handle callbacks from the client - such requests that do not
 %%% correspond to underlying models. For example -
 %%% 'give me the name of current user'.
-%%% THIS IS A PROTOTYPE AND AN EXAMPLE OF IMPLEMENTATION.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(global_callback_backend).

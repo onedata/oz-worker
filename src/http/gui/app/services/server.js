@@ -13,11 +13,19 @@ export default Ember.Service.extend({
   store: Ember.inject.service('store'),
 
   /**
+   * Informs the websocket adapter that a session restoring is anticipated,
+   * and when sessionDetails come from the server, the promise is resolved
+   * rather than new authentication is performed.
+   */
+  tryToRestoreSession: function () {
+    return this.get('store').adapterFor('application').tryToRestoreSession();
+  },
+
+  /**
    * Sends a callback to the server. thenFun is evaluated on response from
    * the server.
    */
   callServer: function (key, thenFun) {
-    //thenFun({sessionDetails: {userName: 'someuser'}});
     this.get('store').adapterFor('application').callback('global', key).then(thenFun);
   }
 });

@@ -41,6 +41,7 @@
 
 -define(INDEX, #gui_route{
     requires_session = ?SESSION_ANY,
+    websocket = ?SESSION_ANY,
     html_file = <<"index.html">>,
     page_backend = undefined
 }).
