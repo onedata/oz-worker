@@ -11,67 +11,36 @@
 ## @end
 ## ===================================================================
 
-# RPM package version
 VERSION=`git describe --tags --always | tr - .`
+BASEDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+BUILDDIR=${BASEDIR}/build
+DISTRIBUTION=fedora-23-x86_64
 
-# Path, where rpm building will take place
-RPM_BUILD_DIRECTORY=/tmp/globalregistry_rpmbuild
+mkdir -p ${BUILDDIR}
+sed "s/@version@/$VERSION/g" ${BASEDIR}/globalregistry.spec > ${BUILDDIR}/globalregistry.spec
 
-# Bigcouch release submodule
-BIGCOUCH_RELEASE_DIRECTORY=`git rev-parse --show-toplevel`/bigcouchdb/database_node
 
-# Onepanel release submodule
-ONEPANEL_RELEASE_DIRECTORY=`git rev-parse --show-toplevel`/onepanel/rel_globalregistry/onepanel
+cd ${BUILDDIR}
+git clone --depth 1 ssh://git@git.plgrid.pl:7999/vfs/globalregistry.git globalregistry-${VERSION}
+cd globalregistry-${VERSION}
+git submodule init
+git submodule update
+${BASEDIR}/../../make.py deps
+cd onepanel
+git submodule init
+git submodule update
+${BASEDIR}/../../make.py deps
+cd ${BUILDDIR}
+tar -czf globalregistry-${VERSION}.tar.gz globalregistry-${VERSION}
+rm -rf globalregistry-${VERSION}
 
-##############################
-# Exit on any failure
-set -e
+${BASEDIR}/../../make.py -i onedata/rpm_builder --group mock --privileged \
+                             -s ${BUILDDIR} -c mock --root ${DISTRIBUTION} \
+                             --buildsrpm --spec ${BUILDDIR}/globalregistry.spec \
+                             --sources ${BUILDDIR}/globalregistry-${VERSION}.tar.gz \
+                             --resultdir=${BUILDDIR}
 
-# Enter script directory
-RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
-cd ${RUNNER_SCRIPT_DIR}
-
-# Check if globalregistry_node release exists
-if [[ ! -d "../globalregistry" ]]; then
-  	echo "Generate a release first."
-fi
-
-# Prepare empty build directory
-rm -rf ${RPM_BUILD_DIRECTORY}
-mkdir -p ${RPM_BUILD_DIRECTORY}
-cd ${RPM_BUILD_DIRECTORY}
-
-# Create required directory structure
-mkdir -p BUILD RPMS SOURCES SPECS SRPMS tmp
-
-# Copy spec file and set version
-cp ${RUNNER_SCRIPT_DIR}/globalregistry.spec SPECS/
-sed -i -e s/"{{version}}"/"${VERSION}"/g SPECS/globalregistry.spec
-
-# Attach globalregistry release
-mkdir -p ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry/files/globalregistry_node
-cp ${RUNNER_SCRIPT_DIR}/install_rpm ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry
-cp ${RUNNER_SCRIPT_DIR}/globalregistry_init_d ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry
-cp -R ${RUNNER_SCRIPT_DIR}/../scripts ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry
-cp -R ${RUNNER_SCRIPT_DIR}/../globalregistry/* ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry/files/globalregistry_node
-
-# Attach bigcouch release
-mkdir -p ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry/files/database_node
-cp -R ${BIGCOUCH_RELEASE_DIRECTORY}/*  ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry/files/database_node
-
-# Attach onepanel release
-mkdir -p ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry/files/onepanel_node
-cp -R ${ONEPANEL_RELEASE_DIRECTORY}/*  ${RPM_BUILD_DIRECTORY}/SOURCES/globalregistry/files/onepanel_node
-
-cd ${RPM_BUILD_DIRECTORY}/SOURCES
-tar zcf globalregistry.tar.gz globalregistry
-
-# Launch rpmbuild
-cd ${RPM_BUILD_DIRECTORY}
-rpmbuild -ba SPECS/globalregistry.spec
-
-# Move created RPM to releases directory
-mv -f ${RPM_BUILD_DIRECTORY}/RPMS/x86_64/* ${RUNNER_SCRIPT_DIR}/..
-
-# Clean up
-rm -rf ${RPM_BUILD_DIRECTORY}
+${BASEDIR}/../../make.py -i onedata/rpm_builder --group mock --privileged \
+                             -s ${BUILDDIR} -c mock --root ${DISTRIBUTION} \
+                             --rebuild ${BUILDDIR}/globalregistry-${VERSION}-*.src.rpm \
+                             --resultdir=${BUILDDIR}

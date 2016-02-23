@@ -76,16 +76,16 @@ relclean:
 
 rpmdirs:
 	rm -rf package
-	mkdir -p package/fedora-23-x86_64/x86_64
+	mkdir -p package/fedora-23-x86_64/SRPMS package/fedora-23-x86_64/x86_64
 
-package: rel rpmdirs
-	make -C onepanel rel CONFIG=config/globalregistry.config
+package: rpmdirs
 	./rel/rpm/create_rpm
-	mv rel/globalregistry-*.rpm package/fedora-23-x86_64/x86_64
+	mv rel/rpm/build/globalregistry-$(GLOBALREGISTRY_VERSION)*.src.rpm package/fedora-23-x86_64/SRPMS
+	mv rel/rpm/build/globalregistry-$(GLOBALREGISTRY_VERSION)*.rpm package/fedora-23-x86_64/x86_64
 	tar -czf rpm.tar.gz package
 
 docker:
 	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \
-                         --email $(DOCKER_REG_EMAIL) --name globalregistry \
-                         --build-arg VERSION=$(GLOBALREGISTRY_VERSION) \
-                         --publish --remove packaging
+                     --email $(DOCKER_REG_EMAIL) --name globalregistry \
+                     --build-arg VERSION=$(GLOBALREGISTRY_VERSION) \
+                     --publish --remove packaging
