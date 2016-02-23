@@ -1,14 +1,19 @@
+import Ember from 'ember';
 import PageBase from './_page-base';
 import UnauthenticatedRouteMixin from 'ember-simple-auth/mixins/unauthenticated-route-mixin';
 
 let LoginRoute = PageBase.extend(UnauthenticatedRouteMixin);
 
 export default LoginRoute.extend({
+  server: Ember.inject.service('server'),
+
   name: 'login',
 
   actions: {
-    authenticate() {
-      window.alert('authentication moved to application route init');
+    authenticate(provider) {
+      this.get('server').publicRPC('getLoginEndpoint', provider, (answer) => {
+        window.alert(answer);
+      });
     }
   }
 });

@@ -20,7 +20,7 @@
 
 -include_lib("gui/include/gui.hrl").
 
--export([route/1, data_backend/1, callback_backend/1]).
+-export([route/1, data_backend/2, callback_backend/2]).
 -export([login_page_path/0, default_page_path/0]).
 -export([error_404_html_file/0, error_500_html_file/0]).
 
@@ -69,9 +69,9 @@ route(_) -> ?INDEX.
 %% will be called for models synchronization over websocket.
 %% @end
 %%--------------------------------------------------------------------
--spec data_backend(Identifier :: binary()) -> HandlerModule :: module().
-data_backend(<<"file">>) -> file_data_backend;
-data_backend(<<"fileContent">>) -> file_data_backend.
+-spec data_backend(HasSession :: boolean(), Identifier :: binary()) -> HandlerModule :: module().
+data_backend(true, <<"file">>) -> file_data_backend;
+data_backend(true, <<"fileContent">>) -> file_data_backend.
 
 
 %%--------------------------------------------------------------------
@@ -80,8 +80,10 @@ data_backend(<<"fileContent">>) -> file_data_backend.
 %% will be called to handle calls from the GUI that do not regard models.
 %% @end
 %%--------------------------------------------------------------------
--spec callback_backend(Identifier :: binary()) -> HandlerModule :: module().
-callback_backend(<<"global">>) -> global_callback_backend.
+-spec callback_backend(HasSession :: boolean(), Identifier :: binary()) ->
+    HandlerModule :: module().
+callback_backend(true, <<"private">>) -> private_callback_backend;
+callback_backend(false, <<"public">>) -> public_callback_backend.
 
 
 %%--------------------------------------------------------------------

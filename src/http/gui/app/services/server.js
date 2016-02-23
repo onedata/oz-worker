@@ -22,10 +22,21 @@ export default Ember.Service.extend({
   },
 
   /**
-   * Sends a callback to the server. thenFun is evaluated on response from
-   * the server.
+   * Sends an RPC call to the server for a publicly available resource.
+   * thenFun is evaluated on response from the server.
    */
-  callServer: function (key, thenFun) {
-    this.get('store').adapterFor('application').callback('global', key).then(thenFun);
+  publicRPC: function (operation, data, thenFun) {
+    this.get('store').adapterFor('application')
+      .callback('public', operation, data).then(thenFun);
+  },
+
+  /**
+   * Sends an RPC call to the server for a resource that is restricted to
+   * logged in clients.
+   * thenFun is evaluated on response from the server.
+   */
+  privateRPC: function (operation, data, thenFun) {
+    this.get('store').adapterFor('application')
+      .callback('private', operation, data).then(thenFun);
   }
 });

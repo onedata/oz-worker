@@ -17,12 +17,14 @@ export default Base.extend({
       resolve();
     });
   },
+
   restore(data) {
     // Inform the websocket adapter that we anticipate session restoring.
     return this.get('server').tryToRestoreSession();
   },
+
   invalidate(data) {
-    console.debug('auth invalidate start');
+    console.debug('auth invalidate start ');
     return new Ember.RSVP.Promise((resolve) => {
       // TODO
       this.get('session').set('opData', null);

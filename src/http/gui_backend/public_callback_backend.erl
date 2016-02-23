@@ -12,7 +12,7 @@
 %%% 'give me the name of current user'.
 %%% @end
 %%%-------------------------------------------------------------------
--module(global_callback_backend).
+-module(public_callback_backend).
 -author("Lukasz Opiola").
 
 -compile([export_all]).
@@ -22,9 +22,6 @@
 %% API
 -export([callback/2]).
 
-callback(<<"sessionDetails">>, _) ->
-    {ok, [
-        {<<"sessionDetails">>, [
-            {<<"userName">>, <<"zbyszek">>}
-        ]}
-    ]}.
+callback(<<"getLoginEndpoint">>, Provider) ->
+    ?dump(Provider),
+    {ok, <<"https://google.com">>}.

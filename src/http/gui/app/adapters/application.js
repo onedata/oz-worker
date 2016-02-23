@@ -36,6 +36,7 @@ export default DS.RESTAdapter.extend({
   session: Ember.inject.service('session'),
   //
   sessionRestoreResolve: null,
+  sessionRestoreReject: null,
 
   // Promises that will be resolved when response comes
   promises: new Map(),
@@ -48,10 +49,11 @@ export default DS.RESTAdapter.extend({
   /** If this is called, session data from websocket will resolve session
    * restoration rather than run authenticate. */
   tryToRestoreSession: function () {
-    return new Ember.RSVP.Promise((resolve/*, reject*/) => {
+    return new Ember.RSVP.Promise((resolve, reject) => {
       // This promise will be resolved whenever sessionDetails are sent
       // from the server over websocket.
       this.set('sessionRestoreResolve', resolve);
+      this.set('sessionRestoreReject', reject);
     });
   },
 
@@ -329,6 +331,7 @@ export default DS.RESTAdapter.extend({
         console.log("SESSION RESTORED");
         resolveFunction();
         this.set('sessionRestoreResolve', null);
+        this.set('sessionRestoreReject', null);
       } else {
         console.log("SESSION CREATED");
         this.get('session').authenticate('authenticator:basic');
@@ -344,11 +347,20 @@ export default DS.RESTAdapter.extend({
     // window.alert('WebSocket error, see console for details.');
     console.error(`WebSocket connection error, event data: ` + event.data);
 
+    // Reject session restoration as no websocket connection is active
+    let rejectFunction = this.get('sessionRestoreReject');
+    if (rejectFunction) {
+      console.log("SESSION REJECTED");
+      rejectFunction();
+      this.set('sessionRestoreResolve', null);
+      this.set('sessionRestoreReject', null);
+    }
 
     adapter.promises.forEach(function (promise) {
       console.log('promise.error -> ' + promise);
       promise.error();
     });
+    adapter.promises.clear();
   },
 
   /**
@@ -382,7 +394,8 @@ export default DS.RESTAdapter.extend({
         msgType: CALLBACK_REQ,
         uuid: uuid,
         resourceType: type,
-        operation: operation
+        operation: operation,
+        data: data
       };
 
       console.log('JSON payload: ' + JSON.stringify(payload));
