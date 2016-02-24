@@ -58,8 +58,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec route(Path :: binary()) -> #gui_route{}.
-route(<<"/logout.html">>) -> ?LOGOUT;
-route(<<"/validate_login.html">>) -> ?VALIDATE_LOGIN;
+route(<<"/do_logout">>) -> ?LOGOUT;
+route(<<"/validate_login">>) -> ?VALIDATE_LOGIN;
 route(_) -> ?INDEX.
 
 

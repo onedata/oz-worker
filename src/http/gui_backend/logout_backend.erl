@@ -11,7 +11,7 @@
 %%% THIS IS A PROTOTYPE AND AN EXAMPLE OF IMPLEMENTATION.
 %%% @end
 %%%-------------------------------------------------------------------
--module(validate_login_backend).
+-module(logout_backend).
 -author("Lukasz Opiola").
 -behaviour(page_backend_behaviour).
 
@@ -24,14 +24,6 @@
 
 
 page_init() ->
-    case auth_utils:validate_login() of
-        {redirect, URL} ->
-            ?info("User ~p logged in", [g_session:get_user_id()]);
-%%            gui_jq:redirect(URL);
-        new_user ->
-            ?info("User ~p logged in for the first time", [g_session:get_user_id()]),
-            ok;
-        {error, ErrorID} ->
-            ?info("Error: ~p", [ErrorID])
-    end,
+    g_session:log_out(),
+    ?dump({logout, g_session:get_session_id()}),
     {redirect_relative, <<"/">>}.
