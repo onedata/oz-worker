@@ -50,7 +50,7 @@ start() ->
         application:set_env(ctool, verify_server_cert, false),
 
         % Get gui config
-        {ok, DocRoot} = {ok, "data/gui_static"},
+        {ok, DocRoot} = application:get_env(?APP_Name, gui_static_files_root),
         GuiPort = port(),
         {ok, GuiNbAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),
         {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
