@@ -11,9 +11,10 @@ export default LoginRoute.extend({
 
   actions: {
     authenticate(provider) {
-      this.get('server').publicRPC('getLoginEndpoint', provider, (answer) => {
-        window.location = answer;
-      });
+      this.get('session').authenticate('authenticator:basic');
+      // this.get('server').publicRPC('getLoginEndpoint', provider, (answer) => {
+      //   window.location = answer;
+      // });
     }
   }
 });
