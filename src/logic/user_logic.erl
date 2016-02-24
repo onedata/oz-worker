@@ -58,10 +58,9 @@ get_user(Key) ->
 get_user_doc(Key) ->
     try
         case is_binary(Key) of
-            true -> {ok, #document{value = #onedata_user{}} = UserDoc} = onedata_user:get(Key);
-            false -> {ok, #document{value = #onedata_user{}} = UserDoc} = onedata_user:get_by_criterion(Key)
-        end,
-        {ok, UserDoc}
+            true -> onedata_user:get(Key);
+            false -> onedata_user:get_by_criterion(Key)
+        end
     catch
         T:M ->
             {error, {T, M}}
@@ -77,7 +76,6 @@ get_user_doc(Key) ->
     ok | {error, disallowed_prefix | invalid_alias | alias_occupied | alias_conflict | any()}.
 modify(UserId, Proplist) ->
     try
-        {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
         {ok, #document{value = User} = Doc} = onedata_user:get(UserId),
         #onedata_user{
             name = Name,
@@ -128,25 +126,25 @@ modify(UserId, Proplist) ->
         end,
 
         SetAlias = case proplists:get_value(alias, Proplist) of
-                       undefined ->
-                           Alias;
-                       NewAlias ->
-                           case DisallowedPrefix(NewAlias) of
-                               true ->
-                                   {error, disallowed_prefix};
-                               false ->
-                                   case InvalidAlias(NewAlias) of
-                                       true ->
-                                           {error, invalid_alias};
-                                       false ->
-                                           case AliasOccupied(NewAlias) of
-                                               true ->
-                                                   {error, alias_occupied};
-                                               _ -> NewAlias
-                                           end
-                                   end
-                           end
-                   end,
+            undefined ->
+                Alias;
+            NewAlias ->
+                case DisallowedPrefix(NewAlias) of
+                    true ->
+                        {error, disallowed_prefix};
+                    false ->
+                        case InvalidAlias(NewAlias) of
+                            true ->
+                                {error, invalid_alias};
+                            false ->
+                                case AliasOccupied(NewAlias) of
+                                    true ->
+                                        {error, alias_occupied};
+                                    _ -> NewAlias
+                                end
+                        end
+                end
+        end,
 
         case SetAlias of
             {error, Reason} ->
@@ -279,27 +277,21 @@ exists(Key) ->
 -spec remove(UserId :: binary()) ->
     true.
 remove(UserId) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, #document{value = #onedata_user{groups = Groups, spaces = Spaces}}} = onedata_user:get(UserId),
-
     lists:foreach(fun(GroupId) ->
-        {ok, GroupDoc} = user_group:get(GroupId),
-        #document{value = #user_group{users = Users} = Group} = GroupDoc,
-        GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
-        user_group:save(GroupDoc#document{value = GroupNew}),
+        {ok, _} = user_group:update(GroupId, fun(Group) ->
+            #user_group{users = Users} = Group,
+            {ok, Group#user_group{users = lists:keydelete(UserId, 1, Users)}}
+        end),
         group_logic:cleanup(GroupId)
     end, Groups),
-
     lists:foreach(fun(SpaceId) ->
-        {ok, SpaceDoc} = space:get(SpaceId),
-        #document{value = #space{users = Users} = Space} = SpaceDoc,
-        SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
-        space:save(SpaceDoc#document{value = SpaceNew}),
-        space_logic:cleanup(SpaceId)
+        {ok, _} = space:update(SpaceId, fun(Space) ->
+            #space{users = Users} = Space,
+            {ok, Space#space{users = lists:keydelete(UserId, 1, Users)}}
+        end)
     end, Spaces),
-
     auth_logic:invalidate_token({user_id, UserId}),
-
     onedata_user:delete(UserId),
     true.
 
@@ -326,14 +318,13 @@ get_default_space(UserId) ->
     true.
 set_default_space(UserId, SpaceId) ->
     {ok, Doc} = onedata_user:get(UserId),
-    #document{value = User} = Doc,
-
     AllUserSpaces = get_all_spaces(Doc),
     case ordsets:is_element(SpaceId, AllUserSpaces) of
         false -> false;
         true ->
-            UpdatedUser = User#onedata_user{default_space = SpaceId},
-            onedata_user:save(Doc#document{value = UpdatedUser}),
+            {ok, _} = onedata_user:update(UserId, fun(User) ->
+                {ok, User#onedata_user{default_space = SpaceId}}
+            end),
             true
     end.
 

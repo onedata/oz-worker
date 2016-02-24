@@ -22,7 +22,7 @@ export ONEDATA_GIT_URL
 
 .PHONY: deps test package
 
-all: rel
+all: test_rel
 
 ##
 ## Rebar targets

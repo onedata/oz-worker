@@ -25,27 +25,6 @@
 -export([test_connection/1]).
 -export([get_default_provider_for_user/1]).
 
-%% Seeds pseudo-random number generator with current time and hashed node name. <br/>
-%% See {@link random:seed/3} and {@link erlang:now/0} for more details
-%% Copied from the "dao" project
--define(SEED, begin
-    IsSeeded = get(proc_seeded),
-    if
-        IsSeeded =/= true ->
-            put(proc_seeded, true),
-            {A_SEED, B_SEED, C_SEED} = now(),
-            L_SEED = atom_to_list(node()),
-            {_, Sum_SEED} =  lists:foldl(fun(Elem_SEED, {N_SEED, Acc_SEED}) ->
-                {N_SEED * 137, Acc_SEED + Elem_SEED * N_SEED} end, {1, 0}, L_SEED),
-            random:seed(Sum_SEED*10000 + A_SEED, B_SEED, C_SEED);
-        true -> already_seeded
-    end
-end).
-
-%% Returns random positive number from range 1 .. N. This macro is simply shortcut to random:uniform(N)
-%% Copied from the "dao" project
--define(RND(N), random:uniform(N)).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -77,15 +56,16 @@ create(ClientName, URLs, RedirectionPoint, CSRBin) ->
 -spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
     ok.
 modify(ProviderId, Data) ->
-    {ok, Doc} = provider:get(ProviderId),
-    #document{value = Provider} = Doc,
-
-    URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
-    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
-    ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
-
-    ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint, client_name = ClientName},
-    provider:save(Doc#document{value = ProviderNew}),
+    {ok, _} = provider:update(ProviderId, fun(Provider) ->
+        URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
+        RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
+        ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
+        {ok, Provider#provider{
+            urls = URLs,
+            redirection_point = RedirectionPoint,
+            client_name = ClientName
+        }}
+    end),
     ok.
 
 %%--------------------------------------------------------------------
@@ -141,10 +121,13 @@ remove(ProviderId) ->
     {ok, #document{value = #provider{spaces = Spaces, serial = Serial}}} = provider:get(ProviderId),
 
     lists:foreach(fun(SpaceId) ->
-        {ok, SpaceDoc} = space:get(SpaceId),
-        #document{value = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
-        SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers), size = proplists:delete(ProviderId, Size)},
-        space:save(SpaceDoc#document{value = SpaceNew})
+        {ok, _} = space:update(SpaceId, fun(Space) ->
+            #space{providers = Providers, size = Size} = Space,
+            {ok, Space#space{
+                providers = lists:delete(ProviderId, Providers),
+                size = proplists:delete(ProviderId, Size)
+            }}
+        end)
     end, Spaces),
 
     worker_proxy:multicast(zone_ca_worker, {revoke, Serial}),
@@ -174,9 +157,9 @@ test_connection([], Acc) ->
     {ok, lists:reverse(Acc)};
 test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
     ConnStatus = case http_client:get(Url, [], <<>>, [insecure]) of
-                     {ok, 200, _, _} -> ok;
-                     _ -> error
-                 end,
+        {ok, 200, _, _} -> ok;
+        _ -> error
+    end,
     test_connection(Rest, [{Url, ConnStatus} | Acc]);
 test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
     ConnStatus =
@@ -251,6 +234,5 @@ gen_uuid() ->
     {M, S, N} = now(),
     Time = M * 1000000000000 + S * 1000000 + N,
     TimeHex = string:right(integer_to_list(Time, 16), 14, $0),
-    ?SEED,
-    Rand = [lists:nth(1, integer_to_list(?RND(16) - 1, 16)) || _ <- lists:seq(1, 18)],
+    Rand = [lists:nth(1, integer_to_list(crypto:rand_uniform(1, 16) - 1, 16)) || _ <- lists:seq(1, 18)],
     string:to_lower(string:concat(TimeHex, Rand)).
