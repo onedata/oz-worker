@@ -24,4 +24,6 @@
 
 callback(<<"getLoginEndpoint">>, Provider) ->
     ?dump(Provider),
-    {ok, <<"https://google.com">>}.
+    HandlerModule = auth_config:get_provider_module(Provider),
+    {ok, URL} = HandlerModule:get_redirect_url(false),
+    {ok, URL}.
