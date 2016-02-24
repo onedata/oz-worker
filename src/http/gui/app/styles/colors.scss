@@ -18,3 +18,13 @@ $color-azure: #5094E4;
 $color-pale-yellow: #FDCD58;
 $color-yellow: #F6A500;
 $color-green: #4DC249;
+
+// TODO: all colors as classes - use functions
+
+.color-red-1 {
+  color: $color-red-1;
+}
+
+.color-white {
+  color: white;
+}

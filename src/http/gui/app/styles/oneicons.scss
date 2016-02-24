@@ -1,0 +1,281 @@
+$icomoon-font-path: "/assets/fonts/oneicons" !default;
+
+$oneicon-arrow-down: "\e900";
+$oneicon-arrow-right: "\e901";
+$oneicon-checkbox-check: "\e902";
+$oneicon-checkbox-x: "\e903";
+$oneicon-collection-create: "\e904";
+$oneicon-copy: "\e905";
+$oneicon-cut: "\e906";
+$oneicon-file: "\e907";
+$oneicon-folder-new: "\e908";
+$oneicon-folder: "\e909";
+$oneicon-group-invite: "\e90a";
+$oneicon-group: "\e90b";
+$oneicon-inbox: "\e90c";
+$oneicon-join: "\e90d";
+$oneicon-lock: "\e90e";
+$oneicon-menu-collection: "\e90f";
+$oneicon-menu-data: "\e910";
+$oneicon-menu-group: "\e911";
+$oneicon-menu-links: "\e912";
+$oneicon-menu-recent: "\e913";
+$oneicon-menu-token: "\e914";
+$oneicon-move-down: "\e915";
+$oneicon-move-up: "\e916";
+$oneicon-provider: "\e917";
+$oneicon-remove: "\e918";
+$oneicon-rename: "\e919";
+$oneicon-search: "\e91a";
+$oneicon-share: "\e91b";
+$oneicon-space-add: "\e91c";
+$oneicon-space-default: "\e91d";
+$oneicon-space-empty: "\e91e";
+$oneicon-space-leave: "\e91f";
+$oneicon-space: "\e920";
+$oneicon-star: "\e921";
+$oneicon-support-get: "\e922";
+$oneicon-trash: "\e923";
+$oneicon-upload: "\e924";
+$oneicon-user-add: "\e925";
+$oneicon-user-profile: "\e926";
+$oneicon-user: "\e927";
+$oneicon-view-grid: "\e928";
+$oneicon-view-list: "\e929";
+
+@font-face {
+    font-family: 'oneicons';
+    src:    url('#{$icomoon-font-path}/oneicons.eot?iwvky6');
+    src:    url('#{$icomoon-font-path}/oneicons.eot?iwvky6#iefix') format('embedded-opentype'),
+        url('#{$icomoon-font-path}/oneicons.ttf?iwvky6') format('truetype'),
+        url('#{$icomoon-font-path}/oneicons.woff?iwvky6') format('woff'),
+        url('#{$icomoon-font-path}/oneicons.svg?iwvky6#oneicons') format('svg');
+    font-weight: normal;
+    font-style: normal;
+}
+
+[class^="oneicon-"], [class*=" oneicon-"] {
+    /* use !important to prevent issues with browser extensions that change fonts */
+    font-family: 'oneicons' !important;
+    speak: none;
+    font-style: normal;
+    font-weight: normal;
+    font-variant: normal;
+    text-transform: none;
+    line-height: 1;
+
+    /* Better Font Rendering =========== */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.oneicon-arrow-down {
+    &:before {
+        content: $oneicon-arrow-down;
+    }
+}
+.oneicon-arrow-right {
+    &:before {
+        content: $oneicon-arrow-right;
+    }
+}
+.oneicon-checkbox-check {
+    &:before {
+        content: $oneicon-checkbox-check;
+    }
+}
+.oneicon-checkbox-x {
+    &:before {
+        content: $oneicon-checkbox-x;
+    }
+}
+.oneicon-collection-create {
+    &:before {
+        content: $oneicon-collection-create;
+    }
+}
+.oneicon-copy {
+    &:before {
+        content: $oneicon-copy;
+    }
+}
+.oneicon-cut {
+    &:before {
+        content: $oneicon-cut;
+    }
+}
+.oneicon-file {
+    &:before {
+        content: $oneicon-file;
+    }
+}
+.oneicon-folder-new {
+    &:before {
+        content: $oneicon-folder-new;
+    }
+}
+.oneicon-folder {
+    &:before {
+        content: $oneicon-folder;
+    }
+}
+.oneicon-group-invite {
+    &:before {
+        content: $oneicon-group-invite;
+    }
+}
+.oneicon-group {
+    &:before {
+        content: $oneicon-group;
+    }
+}
+.oneicon-inbox {
+    &:before {
+        content: $oneicon-inbox;
+    }
+}
+.oneicon-join {
+    &:before {
+        content: $oneicon-join;
+    }
+}
+.oneicon-lock {
+    &:before {
+        content: $oneicon-lock;
+    }
+}
+.oneicon-menu-collection {
+    &:before {
+        content: $oneicon-menu-collection;
+    }
+}
+.oneicon-menu-data {
+    &:before {
+        content: $oneicon-menu-data;
+    }
+}
+.oneicon-menu-group {
+    &:before {
+        content: $oneicon-menu-group;
+    }
+}
+.oneicon-menu-links {
+    &:before {
+        content: $oneicon-menu-links;
+    }
+}
+.oneicon-menu-recent {
+    &:before {
+        content: $oneicon-menu-recent;
+    }
+}
+.oneicon-menu-token {
+    &:before {
+        content: $oneicon-menu-token;
+    }
+}
+.oneicon-move-down {
+    &:before {
+        content: $oneicon-move-down;
+    }
+}
+.oneicon-move-up {
+    &:before {
+        content: $oneicon-move-up;
+    }
+}
+.oneicon-provider {
+    &:before {
+        content: $oneicon-provider;
+    }
+}
+.oneicon-remove {
+    &:before {
+        content: $oneicon-remove;
+    }
+}
+.oneicon-rename {
+    &:before {
+        content: $oneicon-rename;
+    }
+}
+.oneicon-search {
+    &:before {
+        content: $oneicon-search;
+    }
+}
+.oneicon-share {
+    &:before {
+        content: $oneicon-share;
+    }
+}
+.oneicon-space-add {
+    &:before {
+        content: $oneicon-space-add;
+    }
+}
+.oneicon-space-default {
+    &:before {
+        content: $oneicon-space-default;
+    }
+}
+.oneicon-space-empty {
+    &:before {
+        content: $oneicon-space-empty;
+    }
+}
+.oneicon-space-leave {
+    &:before {
+        content: $oneicon-space-leave;
+    }
+}
+.oneicon-space {
+    &:before {
+        content: $oneicon-space;
+    }
+}
+.oneicon-star {
+    &:before {
+        content: $oneicon-star;
+    }
+}
+.oneicon-support-get {
+    &:before {
+        content: $oneicon-support-get;
+    }
+}
+.oneicon-trash {
+    &:before {
+        content: $oneicon-trash;
+    }
+}
+.oneicon-upload {
+    &:before {
+        content: $oneicon-upload;
+    }
+}
+.oneicon-user-add {
+    &:before {
+        content: $oneicon-user-add;
+    }
+}
+.oneicon-user-profile {
+    &:before {
+        content: $oneicon-user-profile;
+    }
+}
+.oneicon-user {
+    &:before {
+        content: $oneicon-user;
+    }
+}
+.oneicon-view-grid {
+    &:before {
+        content: $oneicon-view-grid;
+    }
+}
+.oneicon-view-list {
+    &:before {
+        content: $oneicon-view-list;
+    }
+}

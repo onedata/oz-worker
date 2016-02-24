@@ -121,9 +121,8 @@ $onezone-fog-z: 0;
             display: inline-block;
             float: right;
             width: 20px;
-            height: 100%;
             height: $onezone-accordion-heading-height;
-            background-image: url('/assets/images/onezone/arrowdown.svg');
+            background-image: url('/assets/images/onezone/arrow-down.svg');
             background-position: center center;
             background-repeat: no-repeat;
             background-size: contain;
@@ -149,8 +148,57 @@ $onezone-fog-z: 0;
       }
 
       .accordion-inner {
-        padding: 10px;
+        padding: 0px;
       }
+    }
+  }
+
+  .accounts-list {
+    ul {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+
+      li {
+        padding: 0 10px;
+        margin: 0;
+
+        &:hover {
+          background-color: rgba(255, 255, 255, 0.1);
+        }
+      }
+    }
+  }
+
+  .account-item, .account-add {
+    $onezone-account-item-height: $onezone-accordion-heading-height * 0.75;
+
+    display: block;
+    height: $onezone-account-item-height;
+    line-height: $onezone-account-item-height;
+    padding-left: 10px;
+    padding-right: 24px;
+    color: white;
+
+    .account-icon {
+      display: inline-block;
+      float: left;
+      width: 32px;
+      height: $onezone-account-item-height;
+      margin-right: 20px;
+      background-position: center center;
+      background-repeat: no-repeat;
+      background-size: contain;
+
+      @include vendor-prefix(transform, rotate(0));
+
+      transition: all 0.35s ease;
+    }
+
+    // TODO: max width to prevent overflow or use table-cell
+    .account-label {
+      display: inline-block;
+      font-size: 0.8em;
     }
   }
 }

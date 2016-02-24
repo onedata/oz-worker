@@ -1,0 +1,10 @@
+<ul class="accordion-content">
+  {{#each accountsSorted as |account|}}
+    <li>
+      {{account-item type=account.type label=account.label accepted=account.accepted}}
+    </li>
+  {{/each}}
+  <li>
+    {{account-add}}
+  </li>
+</ul>
