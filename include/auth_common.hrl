@@ -16,7 +16,7 @@
 -define(auth_config_file_path, "data/auth.config").
 
 % Endpoint for OpenID / OAuth validation
--define(local_auth_endpoint, "/validate_login").
+-define(local_auth_endpoint, "/validate_login.html").
 
 % Endpoint for redirects to providers
 -define(provider_auth_endpoint, "/validate_login.html").

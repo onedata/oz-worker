@@ -34,7 +34,7 @@
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 get_redirect_url(ConnectAccount) ->
     try
-        HostName = http_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
+        HostName = http_utils:fully_qualified_url(g_ctx:get_requested_hostname()),
         RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_logic:generate_state_token(?MODULE, ConnectAccount))/binary>>,
 
         ParamsProplist = [
@@ -72,7 +72,7 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist = gui_ctx:get_request_params(),
+        ParamsProplist = g_ctx:get_url_params(),
         % Make sure received endpoint is really the PLGrid endpoint
         ReceivedEndpoint = proplists:get_value(<<"openid.op_endpoint">>, ParamsProplist),
         true = (plgrid_endpoint() =:= ReceivedEndpoint),

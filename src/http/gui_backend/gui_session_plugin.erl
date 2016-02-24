@@ -23,7 +23,7 @@
 
 %% session_logic_behaviour API
 -export([init/0, cleanup/0]).
--export([create_session/1, update_session/2, lookup_session/1]).
+-export([create_session/2, update_session/2, lookup_session/1]).
 -export([delete_session/1]).
 -export([get_cookie_ttl/0]).
 
@@ -57,10 +57,9 @@ cleanup() ->
 %% {@link gui_session_plugin_behaviour} callback create_session/1.
 %% @end
 %%--------------------------------------------------------------------
--spec create_session(CustomArgs) ->
-    {ok, SessionId} | {error, term()} when
-    CustomArgs :: [term()], SessionId :: binary().
-create_session([UserId]) ->
+-spec create_session(UserId :: term(), CustomArgs :: [term()]) ->
+    {ok, SessionId :: binary()} | {error, term()}.
+create_session(UserId, _CustomArgs) ->
     SessId = datastore_utils:gen_uuid(),
     Sess = #session{user_id = UserId},
     case session:create(#document{key = SessId, value = Sess}) of
@@ -88,13 +87,12 @@ update_session(SessionId, Memory) ->
     end.
 
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link gui_session_plugin_behaviour} callback lookup_session/1.
 %% @end
 %%--------------------------------------------------------------------
--spec lookup_session(SessionId :: binary()) -> {ok, Memory} | undefined
+-spec lookup_session(SessionId :: binary() | undefined) -> {ok, Memory} | undefined
     when Memory :: [{Key :: binary(), Value :: binary}].
 lookup_session(SessionId) ->
     case SessionId of
