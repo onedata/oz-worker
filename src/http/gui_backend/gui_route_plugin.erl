@@ -36,7 +36,7 @@
     requires_session = ?SESSION_NOT_LOGGED_IN,
     html_file = undefined,
 %%    page_backend = validate_login_backend
-    page_backend = login_backend
+    page_backend = validate_login_backend
 }).
 
 -define(INDEX, #gui_route{
@@ -58,8 +58,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec route(Path :: binary()) -> #gui_route{}.
-route(<<"/logout.html">>) -> ?LOGOUT;
-route(<<"/validate_login.html">>) -> ?VALIDATE_LOGIN;
+route(<<"/do_logout">>) -> ?LOGOUT;
+route(<<"/validate_login">>) -> ?VALIDATE_LOGIN;
 route(_) -> ?INDEX.
 
 
@@ -94,7 +94,7 @@ callback_backend(false, <<"public">>) -> public_callback_backend.
 %%--------------------------------------------------------------------
 -spec login_page_path() -> Path :: binary().
 login_page_path() ->
-    <<"/login.html">>.
+    <<"/login">>.
 
 
 %%--------------------------------------------------------------------

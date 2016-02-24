@@ -119,7 +119,6 @@ homepage_header() ->
         {error, _Error} -> <<"">>
     end.
 
-
 event(init) ->
     ok;
 
