@@ -163,7 +163,7 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
                                    throw({silent_error, Req2})
                            end,
 
-                ProviderId = case grpca:verify_provider(PeerCert) of
+                ProviderId = case zone_ca:verify_provider(PeerCert) of
                                  {ok, ProviderId1} -> ProviderId1;
                                  {error, {bad_cert, Reason}} ->
                                      ?warning("Attempted authentication with "

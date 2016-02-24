@@ -17,6 +17,8 @@
 
 -include_lib("gui/include/gui.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
+-include("registered_names.hrl").
 
 
 %% session_logic_behaviour API
@@ -25,8 +27,6 @@
 -export([delete_session/1]).
 -export([get_cookie_ttl/0]).
 
-% ETS name for cookies
--define(SESSION_ETS, cookies_ember).
 
 %%%===================================================================
 %%% API functions
@@ -39,8 +39,6 @@
 %%--------------------------------------------------------------------
 -spec init() -> ok.
 init() ->
-    % Ets table needed for session storing.
-    ets:new(?SESSION_ETS, [named_table, public, set, {read_concurrency, true}]),
     ok.
 
 
@@ -51,7 +49,6 @@ init() ->
 %%--------------------------------------------------------------------
 -spec cleanup() -> ok.
 cleanup() ->
-    ets:delete(?SESSION_ETS),
     ok.
 
 
@@ -63,9 +60,15 @@ cleanup() ->
 -spec create_session(CustomArgs) ->
     {ok, SessionId} | {error, term()} when
     CustomArgs :: [term()], SessionId :: binary().
-create_session(_CustomArgs) ->
-    {error, not_implemented}.
-
+create_session([UserId]) ->
+    SessId = datastore_utils:gen_uuid(),
+    Sess = #session{user_id = UserId},
+    case session:create(#document{key = SessId, value = Sess}) of
+        {ok, SessId} ->
+            {ok, SessId};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -76,8 +79,13 @@ create_session(_CustomArgs) ->
 -spec update_session(SessionId, Memory) -> ok | {error, term()}
     when SessionId :: binary(),
     Memory :: [{Key :: binary(), Value :: binary}].
-update_session(_SessionId, _Memory) ->
-    {error, not_implemented}.
+update_session(SessionId, Memory) ->
+    case session:update(SessionId, #{memory => Memory}) of
+        {ok, _} ->
+            ok;
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 
@@ -88,8 +96,18 @@ update_session(_SessionId, _Memory) ->
 %%--------------------------------------------------------------------
 -spec lookup_session(SessionId :: binary()) -> {ok, Memory} | undefined
     when Memory :: [{Key :: binary(), Value :: binary}].
-lookup_session(_SessionId) ->
-    undefined.
+lookup_session(SessionId) ->
+    case SessionId of
+        undefined ->
+            undefined;
+        _ ->
+            case session:get(SessionId) of
+                {ok, #document{value = #session{memory = Memory}}} ->
+                    {ok, Memory};
+                _ ->
+                    undefined
+            end
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -98,8 +116,16 @@ lookup_session(_SessionId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_session(SessionId :: binary()) -> ok | {error, term()}.
-delete_session(_SessionId) ->
-    {error, not_implemented}.
+delete_session(SessionId) ->
+    case SessionId of
+        undefined ->
+            ok;
+        _ ->
+            case session:delete(SessionId) of
+                ok -> ok;
+                {error, _} = Error -> Error
+            end
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -109,4 +135,9 @@ delete_session(_SessionId) ->
 %%--------------------------------------------------------------------
 -spec get_cookie_ttl() -> integer() | {error, term()}.
 get_cookie_ttl() ->
-    {ok, 1}.
+    case application:get_env(?APP_Name, gui_cookie_ttl) of
+        {ok, Val} when is_integer(Val) ->
+            Val;
+        _ ->
+            {error, missing_env}
+    end.

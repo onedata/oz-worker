@@ -13,10 +13,7 @@
 -author("Konrad Zemek").
 
 -include("registered_names.hrl").
--include("handlers/rest_handler.hrl").
--include("dao/dao_types.hrl").
-
--define(DB(Function, Arg), dao_lib:apply(dao_tokens, Function, [Arg], 1)).
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% Atoms representing types of valid tokens.
 -type token_type() :: group_invite_token | space_create_token |
@@ -36,7 +33,7 @@ space_support_token.
 
 %%--------------------------------------------------------------------
 %% @doc Checks if a given token is a valid macaroon of a given type.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(Token :: binary(), TokenType :: token_type()) ->
@@ -46,9 +43,9 @@ validate(Token, TokenType) ->
         {error, _} -> false;
         {ok, M} ->
             {ok, Id} = macaroon:identifier(M),
-            case ?DB(get_token, Id) of
+            case token:get(Id) of
                 {error, _} -> false;
-                {ok, #db_document{record = #token{secret = Secret}}} ->
+                {ok, #document{value = #token{secret = Secret}}} ->
                     {ok, V} = macaroon_verifier:create(),
                     ok = macaroon_verifier:satisfy_exact(V,
                         ["tokenType = ", atom_to_list(TokenType)]),
@@ -62,7 +59,7 @@ validate(Token, TokenType) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a macaroon token of a given type.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Issuer :: rest_handler:client(), TokenType :: token_type(),
@@ -73,7 +70,7 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     TokenData = #token{secret = Secret, issuer = Issuer,
         resource = ResourceType, resource_id = ResourceId},
 
-    {ok, Identifier} = ?DB(save_token, TokenData),
+    {ok, Identifier} = token:save(#document{value = TokenData}),
 
     % @todo expiration time
     {ok, M1} = macaroon:create("registry", Secret, Identifier),
@@ -92,8 +89,8 @@ get_issuer(Token) ->
     case macaroon:deserialize(Token) of
         {ok, Macaroon} ->
             {ok, Identifier} = macaroon:identifier(Macaroon),
-            {ok, TokenDoc} = ?DB(get_token, Identifier),
-            #db_document{record = #token{
+            {ok, TokenDoc} = token:get(Identifier),
+            #document{value = #token{
                 issuer = #client{type = ClientType, id = ClientId}
             }} = TokenDoc,
 
@@ -105,17 +102,17 @@ get_issuer(Token) ->
 
 %%--------------------------------------------------------------------
 %% @doc Consumes a token, returning associated resource.
-%% Throws exception when call to dao fails, or token doesn't exist in db.
+%% Throws exception when call to the datastore fails, or token doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
 -spec consume(Macaroon :: macaroon:macaroon()) ->
     {ok, {resource_type(), binary()}}.
 consume(M) ->
     {ok, Identifier} = macaroon:identifier(M),
-    {ok, TokenDoc} = ?DB(get_token, Identifier),
-    #db_document{record = #token{resource = ResourceType,
+    {ok, TokenDoc} = token:get(Identifier),
+    #document{value = #token{resource = ResourceType,
         resource_id = ResourceId}} = TokenDoc,
 
-    ok = ?DB(remove_token, Identifier),
+    ok = token:delete(Identifier),
     {ok, {ResourceType, ResourceId}}.
 

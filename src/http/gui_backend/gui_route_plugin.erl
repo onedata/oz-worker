@@ -20,16 +20,11 @@
 
 -include_lib("gui/include/gui.hrl").
 
--export([route/1, data_backend/1, callback_backend/1]).
+-export([route/1, data_backend/2, callback_backend/2]).
 -export([login_page_path/0, default_page_path/0]).
 -export([error_404_html_file/0, error_500_html_file/0]).
 
 %% Convenience macros for defining routes.
--define(LOGIN, #gui_route{
-    requires_session = ?SESSION_NOT_LOGGED_IN,
-    html_file = <<"login.html">>,
-    page_backend = login_backend
-}).
 
 -define(LOGOUT, #gui_route{
     requires_session = ?SESSION_LOGGED_IN,
@@ -38,13 +33,15 @@
 }).
 
 -define(VALIDATE_LOGIN, #gui_route{
-    requires_session = ?SESSION_ANY,
+    requires_session = ?SESSION_NOT_LOGGED_IN,
     html_file = undefined,
-    page_backend = validate_login_backend
+%%    page_backend = validate_login_backend
+    page_backend = login_backend
 }).
 
 -define(INDEX, #gui_route{
-    requires_session = ?SESSION_LOGGED_IN,
+    requires_session = ?SESSION_ANY,
+    websocket = ?SESSION_ANY,
     html_file = <<"index.html">>,
     page_backend = undefined
 }).
@@ -61,11 +58,9 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec route(Path :: binary()) -> #gui_route{}.
-route(<<"/login.html">>) -> ?LOGIN;
 route(<<"/logout.html">>) -> ?LOGOUT;
 route(<<"/validate_login.html">>) -> ?VALIDATE_LOGIN;
-route(<<"/">>) -> ?INDEX;
-route(<<"/index.html">>) -> ?INDEX.
+route(_) -> ?INDEX.
 
 
 %%--------------------------------------------------------------------
@@ -74,9 +69,9 @@ route(<<"/index.html">>) -> ?INDEX.
 %% will be called for models synchronization over websocket.
 %% @end
 %%--------------------------------------------------------------------
--spec data_backend(Identifier :: binary()) -> HandlerModule :: module().
-data_backend(<<"file">>) -> file_data_backend;
-data_backend(<<"fileContent">>) -> file_data_backend.
+-spec data_backend(HasSession :: boolean(), Identifier :: binary()) -> HandlerModule :: module().
+data_backend(true, <<"file">>) -> file_data_backend;
+data_backend(true, <<"fileContent">>) -> file_data_backend.
 
 
 %%--------------------------------------------------------------------
@@ -85,8 +80,10 @@ data_backend(<<"fileContent">>) -> file_data_backend.
 %% will be called to handle calls from the GUI that do not regard models.
 %% @end
 %%--------------------------------------------------------------------
--spec callback_backend(Identifier :: binary()) -> HandlerModule :: module().
-callback_backend(<<"global">>) -> global_callback_backend.
+-spec callback_backend(HasSession :: boolean(), Identifier :: binary()) ->
+    HandlerModule :: module().
+callback_backend(true, <<"private">>) -> private_callback_backend;
+callback_backend(false, <<"public">>) -> public_callback_backend.
 
 
 %%--------------------------------------------------------------------

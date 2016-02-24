@@ -8,7 +8,7 @@ Brings up a set of oneprovider worker nodes. They can create separate clusters.
 import os
 import subprocess
 import sys
-from . import common, docker, worker, globalregistry, gui_livereload
+from . import common, docker, worker, gui_livereload
 
 DOCKER_BINDIR_PATH = '/root/build'
 
@@ -19,28 +19,35 @@ def up(image, bindir, dns_server, uid, config_path, logdir=None):
 
 
 class ProviderWorkerConfigurator:
-    def tweak_config(self, cfg, uid):
+    def tweak_config(self, cfg, instance, uid):
         sys_config = cfg['nodes']['node']['sys.config'][self.app_name()]
-        if 'global_registry_domain' in sys_config:
-            gr_hostname = globalregistry.gr_domain(
-                sys_config['global_registry_domain'], uid)
-            sys_config['global_registry_domain'] = gr_hostname
+        if 'zone_domain' in sys_config:
+            oz_hostname = worker.cluster_domain(sys_config['zone_domain'], uid)
+            sys_config['zone_domain'] = oz_hostname
         return cfg
+
+    def additional_commands(self, bindir, config, domain, worker_ips):
+        return ''
 
     def configure_started_instance(self, bindir, instance, config,
                                    container_ids, output):
         this_config = config[self.domains_attribute()][instance]
         # Check if gui_livereload is enabled in env and turn it on
         if 'gui_livereload' in this_config:
-            if this_config['gui_livereload']:
-                print 'Starting GUI livereload for provider {0}.'.format(
-                    instance)
+            mode = this_config['gui_livereload']
+            if mode == 'watch' or mode == 'poll':
+                print '''\
+Starting GUI livereload
+    provider: {0}
+    mode:     {1}'''.format(
+                    instance, mode)
                 for container_id in container_ids:
                     gui_livereload.run(
                         container_id,
                         os.path.join(bindir, 'rel/gui.config'),
                         DOCKER_BINDIR_PATH,
-                        '/root/bin/node')
+                        '/root/bin/node',
+                        mode=mode)
         if 'os_config' in this_config:
             os_config = this_config['os_config']
             create_storages(config['os_configs'][os_config]['storages'],
@@ -50,7 +57,7 @@ class ProviderWorkerConfigurator:
     def extra_volumes(self, config, bindir):
         storage_volumes = [common.volume_for_storage(s) for s in config[
             'os_config']['storages']] if 'os_config' in config else []
-        # Check if gui_livereload is enabled in env and add required storages
+        # Check if gui_livereload is enabled in env and add required volumes
         if 'gui_livereload' in config:
             if config['gui_livereload']:
                 storage_volumes += gui_livereload.required_volumes(

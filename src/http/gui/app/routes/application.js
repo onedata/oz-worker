@@ -1,9 +1,11 @@
 import Ember from 'ember';
-import ApplicationRouteMixin from 'ember-simple-auth/mixins/application-route-mixin';
+//import ApplicationRouteMixin from 'ember-simple-auth/mixins/application-route-mixin';
 
-let ApplicationRoute = Ember.Route.extend(ApplicationRouteMixin);
+//let ApplicationRoute = Ember.Route.extend(ApplicationRouteMixin);
 
-export default ApplicationRoute.extend({
+export default Ember.Route.extend({
+  store: Ember.inject.service('store'),
+
   activate() {
     // examples on registering additional session events handlers
     this.get('session').on('authenticationSucceeded', () => {
@@ -14,10 +16,25 @@ export default ApplicationRoute.extend({
     });
   },
 
-
-
-  // TODO: invoked only when application is reloaded!
-  initSession: function() {
-    console.debug('authentication moved to login route action');
+  initAdapter: function () {
+    this.get('store').adapterFor('application').init();
   }.on('init')
+
+
+  //// TODO: invoked only when application is reloaded!
+  //initSession: function () {
+  //  let authenticated = this.get('session').get('isAuthenticated');
+  //  if (!authenticated) {
+  //    this.get('session')
+  //      .authenticate('authenticator:basic').then(
+  //      () => {
+  //        let data = this.get('session.data.authenticated');
+  //        console.debug('app route - init sesssion: ' + JSON.stringify(data));
+  //      },
+  //      (reason) => {
+  //        console.warn(`you shall NOT pass, because: ${reason}`);
+  //      }
+  //    );
+  //  }
+  //}.on('init')
 });

@@ -18,19 +18,17 @@ module.exports = function(environment) {
       // when it is created
     },
 
-    // see: https://ember-simple-auth.com/api/classes/Configuration.html
     'ember-simple-auth': {
       session: 'session:custom',
       authenticationRoute: 'home.login',
-      routeAfterAuthentication: 'onezone',
       routeIfAlreadyAuthenticated: 'home'
     }
   };
 
   if (environment === 'development') {
     // ENV.APP.LOG_RESOLVER = true;
-    // ENV.APP.LOG_ACTIVE_GENERATION = true;
-    // ENV.APP.LOG_TRANSITIONS = true;
+     ENV.APP.LOG_ACTIVE_GENERATION = true;
+     ENV.APP.LOG_TRANSITIONS = true;
     // ENV.APP.LOG_TRANSITIONS_INTERNAL = true;
     // ENV.APP.LOG_VIEW_LOOKUPS = true;
   }

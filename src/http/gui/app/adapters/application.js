@@ -6,7 +6,7 @@
  * @author Łukasz Opioła
  * @copyright (C) 2016 ACK CYFRONET AGH
  * @license This software is released under the MIT license cited in 'LICENSE.txt'.
-*/
+ */
 
 import Ember from 'ember';
 import DS from 'ember-data';
@@ -27,17 +27,36 @@ var PULL_RESP = 'pullResp';
 var PULL_REQ = 'pullReq';
 var CALLBACK_REQ = 'callbackReq';
 var CALLBACK_RESP = 'callbackResp';
+var SESSION_RESP = 'sessionResp';
 //var PULL_RESULT = "result";
 //var MSG_TYPE_PUSH_UPDATED = "pushUpdated";
 //var MSG_TYPE_PUSH_DELETED = "pushDeleted";
 
 export default DS.RESTAdapter.extend({
+  session: Ember.inject.service('session'),
+  //
+  sessionRestoreResolve: null,
+  sessionRestoreReject: null,
+
   // Promises that will be resolved when response comes
-  promises: {},
+  promises: new Map(),
   // The WebSocket
   socket: null,
   // Queue of messages before the socket is open
   beforeOpenQueue: [],
+
+
+  /** If this is called, session data from websocket will resolve session
+   * restoration rather than run authenticate. */
+  tryToRestoreSession: function () {
+    return new Ember.RSVP.Promise((resolve, reject) => {
+      // This promise will be resolved whenever sessionDetails are sent
+      // from the server over websocket.
+      this.set('sessionRestoreResolve', resolve);
+      this.set('sessionRestoreReject', reject);
+    });
+  },
+
 
   /** Initialize connection */
   init: function () {
@@ -194,12 +213,12 @@ export default DS.RESTAdapter.extend({
       var error = function (json) {
         Ember.run(null, reject, json);
       };
-      adapter.promises[uuid] = {
+      adapter.promises.set(uuid, {
         success: success,
         error: error,
         type: type,
         operation: operation
-      };
+      });
 
       var payload = {
         msgType: PULL_REQ,
@@ -211,6 +230,9 @@ export default DS.RESTAdapter.extend({
       };
 
       console.log('JSON payload: ' + JSON.stringify(payload));
+      console.log('wtf');
+      console.log(adapter.promises);
+      console.log('wtf2');
       if (adapter.socket.readyState === 1) {
         adapter.socket.send(JSON.stringify(payload));
       }
@@ -276,7 +298,7 @@ export default DS.RESTAdapter.extend({
     var json = JSON.parse(event.data);
     if (json.msgType === PULL_RESP) {
       if (json.result === 'ok') {
-        callback = adapter.promises[json.uuid];
+        callback = adapter.promises.get(json.uuid);
         console.log('success: ' + json.data);
         // TODO VFS-1508: sometimes, the callback is undefined - debug
         var transformed_data = adapter.transformResponse(json.data,
@@ -284,9 +306,9 @@ export default DS.RESTAdapter.extend({
         callback.success(transformed_data);
       } else {
         console.log('error: ' + json.data);
-        adapter.promises[json.uuid].error(json.data);
+        adapter.promises.get(json.uuid).error(json.data);
       }
-      delete adapter.promises[json.uuid];
+      adapter.promises.delete(json.uuid);
       // TODO @todo implement on generic data type
       //} else if (json.msgType == MSG_TYPE_PUSH_UPDATED) {
       //    App.File.store.pushPayload('file', {
@@ -300,16 +322,45 @@ export default DS.RESTAdapter.extend({
       //        });
       //    }
     } else if (json.msgType === CALLBACK_RESP) {
-      callback = adapter.promises[json.uuid];
+      callback = adapter.promises.get(json.uuid);
       callback.success(json.data);
+    } else if (json.msgType === SESSION_RESP) {
+      console.log(json.data);
+      let resolveFunction = this.get('sessionRestoreResolve');
+      if (resolveFunction) {
+        console.log("SESSION RESTORED");
+        resolveFunction();
+        this.set('sessionRestoreResolve', null);
+        this.set('sessionRestoreReject', null);
+      } else {
+        console.log("SESSION CREATED");
+        this.get('session').authenticate('authenticator:basic');
+      }
+      this.get('session').set('opData', json.data);
     }
   },
 
   /** WebSocket onerror callback */
   error: function (event) {
+    var adapter = this;
     // TODO @todo better error handling
     // window.alert('WebSocket error, see console for details.');
-    console.error(`WebSocket error, event data: ` + event.data);
+    console.error(`WebSocket connection error, event data: ` + event.data);
+
+    // Reject session restoration as no websocket connection is active
+    let rejectFunction = this.get('sessionRestoreReject');
+    if (rejectFunction) {
+      console.log("SESSION REJECTED");
+      rejectFunction();
+      this.set('sessionRestoreResolve', null);
+      this.set('sessionRestoreReject', null);
+    }
+
+    adapter.promises.forEach(function (promise) {
+      console.log('promise.error -> ' + promise);
+      promise.error();
+    });
+    adapter.promises.clear();
   },
 
   /**
@@ -332,18 +383,19 @@ export default DS.RESTAdapter.extend({
       var error = function (json) {
         Ember.run(null, reject, json);
       };
-      adapter.promises[uuid] = {
+      adapter.promises.set(uuid, {
         success: success,
         error: error,
         type: type,
         operation: operation
-      };
+      });
 
       var payload = {
         msgType: CALLBACK_REQ,
         uuid: uuid,
         resourceType: type,
-        operation: operation
+        operation: operation,
+        data: data
       };
 
       console.log('JSON payload: ' + JSON.stringify(payload));

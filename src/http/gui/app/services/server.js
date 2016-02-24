@@ -13,12 +13,30 @@ export default Ember.Service.extend({
   store: Ember.inject.service('store'),
 
   /**
-   * Sends a callback to the server. thenFun is evaluated on response from
-   * the server.
+   * Informs the websocket adapter that a session restoring is anticipated,
+   * and when sessionDetails come from the server, the promise is resolved
+   * rather than new authentication is performed.
    */
-  callServer: function (key, thenFun) {
-    thenFun({sessionDetails: {userName: 'someuser'}});
-    // TODO - stubbed
-    // this.get('store').adapterFor('application').callback('global', key).then(thenFun);
+  tryToRestoreSession: function () {
+    return this.get('store').adapterFor('application').tryToRestoreSession();
+  },
+
+  /**
+   * Sends an RPC call to the server for a publicly available resource.
+   * thenFun is evaluated on response from the server.
+   */
+  publicRPC: function (operation, data, thenFun) {
+    this.get('store').adapterFor('application')
+      .callback('public', operation, data).then(thenFun);
+  },
+
+  /**
+   * Sends an RPC call to the server for a resource that is restricted to
+   * logged in clients.
+   * thenFun is evaluated on response from the server.
+   */
+  privateRPC: function (operation, data, thenFun) {
+    this.get('store').adapterFor('application')
+      .callback('private', operation, data).then(thenFun);
   }
 });

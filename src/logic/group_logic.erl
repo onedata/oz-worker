@@ -12,7 +12,8 @@
 -module(group_logic).
 -author("Konrad Zemek").
 
--include("dao/dao_types.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([exists/1, has_user/2, has_privilege/3]).
@@ -26,18 +27,18 @@
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether a group exists.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(GroupId :: binary()) ->
     boolean().
 exists(GroupId) ->
-    dao_adapter:group_exists(GroupId).
+    user_group:exists(GroupId).
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether the user identified by UserId is a member of the group.
 %% Shall return false in any other case (group doesn't exist, etc).
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_user(GroupId :: binary(), UserId :: binary()) ->
@@ -46,7 +47,7 @@ has_user(GroupId, UserId) ->
     case exists(GroupId) of
         false -> false;
         true ->
-            #user_group{users = Users} = dao_adapter:group(GroupId),
+            {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
             lists:keymember(UserId, 1, Users)
     end.
 
@@ -54,7 +55,7 @@ has_user(GroupId, UserId) ->
 %% @doc Returns whether the group's member identified by UserId has privilege
 %% in the group. Shall return false in any other case (group doesn't exist,
 %% user is not group's member, etc).
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_privilege(GroupId :: binary(), UserId :: binary(),
@@ -64,107 +65,98 @@ has_privilege(GroupId, UserId, Privilege) ->
     case has_user(GroupId, UserId) of
         false -> false;
         true ->
-            #user_group{users = Users} = dao_adapter:group(GroupId),
+            {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
             {_, Privileges} = lists:keyfind(UserId, 1, Users),
             lists:member(Privilege, Privileges)
     end.
 
 %%--------------------------------------------------------------------
 %% @doc Creates a group for a user.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(UserId :: binary(), Name :: binary()) ->
     {ok, GroupId :: binary()}.
 create(UserId, Name) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-
-    UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #user{groups = Groups} = User} = UserDoc,
+    {ok, UserDoc} = onedata_user:get(UserId),
+    #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
 
     Privileges = privileges:group_admin(),
     Group = #user_group{name = Name, users = [{UserId, Privileges}]},
-    GroupId = dao_adapter:save(Group),
+    {ok, GroupId} = user_group:save(#document{value = Group}),
 
-    UserNew = User#user{groups = [GroupId | Groups]},
-    dao_adapter:save(UserDoc#db_document{record = UserNew}),
+    UserNew = User#onedata_user{groups = [GroupId | Groups]},
+    onedata_user:save(UserDoc#document{value = UserNew}),
 
-    op_channel_logic:user_modified(UserProviders, UserId, UserNew),
     {ok, GroupId}.
 
 %%--------------------------------------------------------------------
 %% @doc Modifies group's data.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec modify(GroupId :: binary(), Name :: binary()) ->
     ok.
 modify(GroupId, Name) ->
-    {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
-
-    Doc = dao_adapter:group_doc(GroupId),
-    #db_document{record = #user_group{} = Group} = Doc,
+    {ok, Doc} = user_group:get(GroupId),
+    #document{value = #user_group{} = Group} = Doc,
     GroupNew = Group#user_group{name = Name},
-    dao_adapter:save(Doc#db_document{record = GroupNew}),
+    user_group:save(Doc#document{value = GroupNew}),
 
-    op_channel_logic:group_modified(GroupProviders, GroupId, GroupNew),
     ok.
 
 %%--------------------------------------------------------------------
 %% @doc Adds user to a group identified by a token.
-%% Throws exception when call to dao fails, or token/user/group_from_token
+%% Throws exception when call to the datastore fails, or token/user/group_from_token
 %% doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
 -spec join(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
     {ok, GroupId :: binary()}.
 join(UserId, Macaroon) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, {group, GroupId}} = token_logic:consume(Macaroon),
     case has_user(GroupId, UserId) of
         true -> ok;
         false ->
             Privileges = privileges:group_user(),
-            GroupDoc = dao_adapter:group_doc(GroupId),
-            #db_document{record = #user_group{users = Users} = Group} = GroupDoc,
+            {ok, GroupDoc} = user_group:get(GroupId),
+            #document{value = #user_group{users = Users} = Group} = GroupDoc,
             GroupNew = Group#user_group{users = [{UserId, Privileges} | Users]},
 
-            UserDoc = dao_adapter:user_doc(UserId),
-            #db_document{record = #user{groups = Groups} = User} = UserDoc,
-            UserNew = User#user{groups = [GroupId | Groups]},
+            {ok, UserDoc} = onedata_user:get(UserId),
+            #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
+            UserNew = User#onedata_user{groups = [GroupId | Groups]},
 
-            dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
-            dao_adapter:save(UserDoc#db_document{record = UserNew}),
-
-            op_channel_logic:user_modified(UserProviders, UserId, UserNew)
+            user_group:save(GroupDoc#document{value = GroupNew}),
+            onedata_user:save(UserDoc#document{value = UserNew})
     end,
     {ok, GroupId}.
 
 %%--------------------------------------------------------------------
 %% @doc Sets privileges for a member of the group.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec set_privileges(GroupId :: binary(), UserId :: binary(),
     Privileges :: [privileges:group_privilege()]) ->
     ok.
 set_privileges(GroupId, UserId, Privileges) ->
-    Doc = dao_adapter:group_doc(GroupId),
-    #db_document{record = #user_group{users = Users} = Group} = Doc,
+    {ok, Doc} = user_group:get(GroupId),
+    #document{value = #user_group{users = Users} = Group} = Doc,
     UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, Privileges}),
     GroupNew = Group#user_group{users = UsersNew},
-    dao_adapter:save(Doc#db_document{record = GroupNew}),
+    user_group:save(Doc#document{value = GroupNew}),
     ok.
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about the group.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_data(GroupId) ->
-    #user_group{name = Name} = dao_adapter:group(GroupId),
+    {ok, #document{value = #user_group{name = Name}}} = user_group:get(GroupId),
     {ok, [
         {groupId, GroupId},
         {name, Name}
@@ -172,45 +164,45 @@ get_data(GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about group's members.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_users(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_users(GroupId) ->
-    #user_group{users = UserTuples} = dao_adapter:group(GroupId),
+    {ok, #document{value = #user_group{users = UserTuples}}} = user_group:get(GroupId),
     {Users, _} = lists:unzip(UserTuples),
     {ok, [{users, Users}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about group's spaces.
-%% Throws exception when call to dao fails, or group doesn't exist.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_spaces(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_spaces(GroupId) ->
-    #user_group{spaces = Spaces} = dao_adapter:group(GroupId),
+    {ok, #document{value = #user_group{spaces = Spaces}}} = user_group:get(GroupId),
     {ok, [{spaces, Spaces}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns providers of user's spaces.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_providers(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_providers(GroupId) ->
-    #db_document{record = #user_group{spaces = Spaces}} = dao_adapter:group_doc(GroupId),
+    {ok, #document{value = #user_group{spaces = Spaces}}} = user_group:get(GroupId),
     GroupProviders = lists:foldl(fun(Space, Providers) ->
-        #space{providers = SpaceProviders} = dao_adapter:space(Space),
+        {ok, #document{value = #space{providers = SpaceProviders}}} = space:get(Space),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)
     end, ordsets:new(), Spaces),
     {ok, [{providers, GroupProviders}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about group's member.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user(GroupId :: binary(), UserId :: binary()) ->
@@ -221,86 +213,74 @@ get_user(_GroupId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Returns list of group's member privileges.
-%% Throws exception when call to dao fails, or group/user doesn't exist.
+%% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_privileges(GroupId :: binary(), UserId :: binary()) ->
     {ok, [privileges:group_privilege()]}.
 get_privileges(GroupId, UserId) ->
-    #user_group{users = UserTuples} = dao_adapter:group(GroupId),
+    {ok, #document{value = #user_group{users = UserTuples}}} = user_group:get(GroupId),
     {_, Privileges} = lists:keyfind(UserId, 1, UserTuples),
     {ok, Privileges}.
 
 %%--------------------------------------------------------------------
 %% @doc Removes the group.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove(GroupId :: binary()) ->
     true.
 remove(GroupId) ->
-    {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
-    Group = dao_adapter:group(GroupId),
-    #user_group{users = Users, spaces = Spaces} = Group,
+    {ok, #document{value = #user_group{users = Users, spaces = Spaces}}} = user_group:get(GroupId),
 
     lists:foreach(fun({UserId, _}) ->
-        UserDoc = dao_adapter:user_doc(UserId),
-        #db_document{record = #user{groups = UGroups} = User} = UserDoc,
-        NewUser = User#user{groups = lists:delete(GroupId, UGroups)},
-        dao_adapter:save(UserDoc#db_document{record = NewUser}),
-
-        op_channel_logic:user_modified(GroupProviders, UserId, NewUser)
+        {ok, UserDoc} = onedata_user:get(UserId),
+        #document{value = #onedata_user{groups = UGroups} = User} = UserDoc,
+        NewUser = User#onedata_user{groups = lists:delete(GroupId, UGroups)},
+        onedata_user:save(UserDoc#document{value = NewUser})
     end, Users),
 
     lists:foreach(fun(SpaceId) ->
-        SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #db_document{record = #space{providers = SpaceProviders, groups = SGroups} = Space} = SpaceDoc,
+        {ok, SpaceDoc} = space:get(SpaceId),
+        #document{value = #space{groups = SGroups} = Space} = SpaceDoc,
         NewSpace = Space#space{groups = lists:keydelete(GroupId, 1, SGroups)},
-        dao_adapter:save(SpaceDoc#db_document{record = NewSpace}),
-        case space_logic:cleanup(SpaceId) of
-            true -> ok;
-            false ->
-                op_channel_logic:space_modified(SpaceProviders, SpaceId, NewSpace)
-        end
+        space:save(SpaceDoc#document{value = NewSpace})
     end, Spaces),
 
-    dao_adapter:group_remove(GroupId),
-    op_channel_logic:group_removed(GroupProviders, GroupId),
+    user_group:delete(GroupId),
     true.
 
 %%--------------------------------------------------------------------
 %% @doc Removes user from the group.
-%% Throws exception when call to dao fails, or group/user doesn't exist.
+%% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_user(GroupId :: binary(), UserId :: binary()) ->
     true.
 remove_user(GroupId, UserId) ->
-    {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
+    {ok, UserDoc} = onedata_user:get(UserId),
+    #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
+    UserNew = User#onedata_user{groups = lists:delete(GroupId, Groups)},
 
-    UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #user{groups = Groups} = User} = UserDoc,
-    UserNew = User#user{groups = lists:delete(GroupId, Groups)},
-
-    GroupDoc = dao_adapter:group_doc(GroupId),
-    #db_document{record = #user_group{users = Users} = Group} = GroupDoc,
+    {ok, GroupDoc} = user_group:get(GroupId),
+    #document{value = #user_group{users = Users} = Group} = GroupDoc,
     GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
 
-    dao_adapter:save(UserDoc#db_document{record = UserNew}),
-    dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
+    onedata_user:save(UserDoc#document{value = UserNew}),
+    user_group:save(GroupDoc#document{value = GroupNew}),
     cleanup(GroupId),
 
-    op_channel_logic:user_modified(GroupProviders, UserId, UserNew),
     true.
 
 %%--------------------------------------------------------------------
 %% @doc Removes the group if empty.
-%% Throws exception when call to dao fails, or group is already removed.
+%% Throws exception when call to the datastore fails, or group is already removed.
 %% @end
 %%--------------------------------------------------------------------
 -spec cleanup(GroupId :: binary()) -> boolean().
 cleanup(GroupId) ->
-    case dao_adapter:group(GroupId) of
+    {ok, #document{value = Group}} = user_group:get(GroupId),
+    case Group of
         #user_group{users = []} -> remove(GroupId);
         _ -> false
     end.
