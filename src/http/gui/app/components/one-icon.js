@@ -1,10 +1,19 @@
 import Ember from 'ember';
 
 export default Ember.Component.extend({
-  classNameBindings: ['icon-name', 'color'],
-  iconName: 'oneicon-checkbox-x',
-  color: function() {
-    let colorClass = this.get('colorClass');
-    return colorClass ? `color-${this.get('colorClass')}` : '';
-  }.bind('colorClass')
+  tagName: 'span',
+  classNameBindings: ['iconClass', 'colorClass'],
+
+  iconClass: function() {
+    return `oneicon-${this.get('icon')}`;
+  }.property('icon'),
+
+  colorClass: function() {
+    let color = this.get('color');
+    return color ? `color-${this.get('color')}` : '';
+  }.property('color'),
+
+  // defaults
+  icon: 'checkbox-x',
+  color: ''
 });

@@ -1,0 +1,36 @@
+<div class="spaces-accordion-group">
+  <div class="spaces-accordion-heading">
+    <a class="spaces-accordion-toggle" data-toggle="collapse" href="#collapse-space-{{space.id}}">
+      <div class="space-icon">
+        <span class="oneicon-space"></span>
+      </div>
+      <div class="space-header">
+        {{space.name}}
+      </div>
+      <div class="providers-count">
+        <div class="icon">
+          {{one-icon icon="provider"}}
+        </div>
+        <div class="label">
+          {{space.providers.length}}
+        </div>
+      </div>
+      {{!-- <div class="space-icon"></div>
+      <div class="space-header">{{space.name}}</div>
+      <div class="providers-count">
+        {{one-icon iconName='provider' colorClass='white'}}
+        <span>{{providersCount}}</span>
+      </div> --}}
+    </a>
+  </div>
+  <div id="collapse-space-{{space.id}}" class="accordion-body collapse">
+    <div class="accordion-inner">
+      <ul>
+        {{#each space.providers as |p|}}
+          <li>{{p.name}}</li>
+        {{/each}}
+        <li class='get-support'>{{t 'onezone.spacesAccordionItem.getSupport'}}</li>
+      </ul>
+    </div>
+  </div>
+</div>

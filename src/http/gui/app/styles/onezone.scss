@@ -96,21 +96,22 @@ $onezone-fog-z: 0;
     overflow-x: hidden;
   }
 
-  .accordion {
-    .accordion-group {
+  .main-accordion {
+    .main-accordion-group {
       border-top: $color-onezone-sidebar-separator 2px solid;
 
-      .accordion-heading {
+      .main-accordion-heading {
         text-transform: uppercase;
         border-bottom: $color-onezone-sidebar-separator 2px solid;
 
-        .accordion-toggle {
+        .main-accordion-toggle {
           display: block;
           height: $onezone-accordion-heading-height;
           line-height: $onezone-accordion-heading-height;
           padding-left: 10px;
           padding-right: 24px;
           color: white;
+          clear: both;
 
           h1 {
             display: inline-block;
@@ -166,6 +167,56 @@ $onezone-fog-z: 0;
         &:hover {
           background-color: rgba(255, 255, 255, 0.1);
         }
+      }
+    }
+  }
+
+  .spaces-accordion {
+    color: white;
+    .spaces-accordion-group {
+      .spaces-accordion-heading {
+        $spaces-item-height: 35px;
+        height: $spaces-item-height;
+        line-height: $spaces-item-height;
+        .spaces-accordion-toggle {
+          display: table;
+          width: 100%;
+          height: $spaces-item-height;
+          line-height: $spaces-item-height;
+          padding-left: 10px;
+          padding-right: 24px;
+          color: white;
+          clear: both;
+
+          text-decoration: none !important;
+
+          .space-icon {
+            display: table-cell;
+            width: 30px;
+          }
+          .space-header {
+            display: table-cell;
+            padding-left: 8px;
+            line-height: $spaces-item-height;
+            text-transform: none;
+            font-size: 0.8em;
+          }
+          .providers-count {
+            display: table-cell;
+            width: 50px;
+            overflow-x: hidden;
+            .icon {
+              display: table-cell;
+              font-size: 0.8em;
+            }
+            .label {
+              display: table-cell;
+              vertical-align: middle;
+              font-size: 0.6em;
+            }
+          }
+        }
+
       }
     }
   }

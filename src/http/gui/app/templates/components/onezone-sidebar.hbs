@@ -7,10 +7,10 @@
 <div class="accordion-container">
   {{!-- TODO: use bs-accordion (Ember component) --}}
   {{!-- add class "collapse in" to uncollapse by default --}}
-  <div class="accordion">
-    <div class="accordion-group">
-      <div class="accordion-heading">
-        <a class="accordion-toggle" data-toggle="collapse" href="#collapse-connect">
+  <div class="main-accordion">
+    <div class="main-accordion-group">
+      <div class="main-accordion-heading">
+        <a class="main-accordion-toggle" data-toggle="collapse" href="#collapse-connect">
           <h1>{{t 'onezone.sidebar.connectHead'}}</h1>
           <div class="arrow-down"></div>
         </a>
@@ -21,33 +21,22 @@
         </div>
       </div>
     </div>
-    <div class="accordion-group">
-      <div class="accordion-heading">
-        <a class="accordion-toggle" data-toggle="collapse" href="#collapse-spaces">
+    <div class="main-accordion-group">
+      <div class="main-accordion-heading">
+        <a class="main-accordion-toggle" data-toggle="collapse" href="#collapse-spaces">
           <h1>{{t 'onezone.sidebar.manageSpacesHead'}}</h1>
           <div class="arrow-down"></div>
         </a>
       </div>
       <div id="collapse-spaces" class="accordion-body collapse">
         <div class="accordion-inner">
-          {{#each spaces as |s|}}
-            <ul>
-              <li>
-                {{s.name}}
-                <ul>
-                  {{#each s.providers as |p|}}
-                    <li>{{p.name}}</li>
-                  {{/each}}
-                </ul>
-              </li>
-            </ul>
-          {{/each}}
+          {{spaces-accordion spaces=spaces}}
         </div>
       </div>
     </div>
-    <div class="accordion-group">
-      <div class="accordion-heading">
-        <a class="accordion-toggle" data-toggle="collapse" href="#collapse-files">
+    <div class="main-accordion-group">
+      <div class="main-accordion-heading">
+        <a class="main-accordion-toggle" data-toggle="collapse" href="#collapse-files">
           <h1>{{t 'onezone.sidebar.filesHead'}}</h1>
           <div class="arrow-down"></div>
         </a>

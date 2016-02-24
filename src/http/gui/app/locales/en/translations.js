@@ -91,6 +91,9 @@ export default {
     topBar: {
       manageProviders: 'manage providers',
       enableHints: 'enable hints'
+    },
+    spacesAccordionItem: {
+      getSupport: 'Get support'
     }
   }
 };
