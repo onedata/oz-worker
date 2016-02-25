@@ -46,6 +46,7 @@
     page_backend = undefined
 }).
 
+
 %% ====================================================================
 %% API
 %% ====================================================================
@@ -60,6 +61,8 @@
 -spec route(Path :: binary()) -> #gui_route{}.
 route(<<"/do_logout">>) -> ?LOGOUT;
 route(<<"/validate_login">>) -> ?VALIDATE_LOGIN;
+route(<<"/">>) -> ?INDEX;
+route(<<"/index.html">>) -> ?INDEX;
 route(_) -> ?INDEX.
 
 

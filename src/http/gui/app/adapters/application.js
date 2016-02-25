@@ -230,9 +230,6 @@ export default DS.RESTAdapter.extend({
       };
 
       console.log('JSON payload: ' + JSON.stringify(payload));
-      console.log('wtf');
-      console.log(adapter.promises);
-      console.log('wtf2');
       if (adapter.socket.readyState === 1) {
         adapter.socket.send(JSON.stringify(payload));
       }
@@ -257,11 +254,11 @@ export default DS.RESTAdapter.extend({
     var adapter = this;
 
     var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    var querystring = window.location.pathname + window.location.search;
+    //var querystring = window.location.pathname + window.location.search;
     var host = window.location.hostname;
     var port = window.location.port;
 
-    var url = protocol + host + (port === '' ? '' : ':' + port) + '/ws' + querystring;
+    var url = protocol + host + (port === '' ? '' : ':' + port) + '/ws/'; // + querystring;
     console.log('Connecting: ' + url);
 
     if (adapter.socket === null) {
