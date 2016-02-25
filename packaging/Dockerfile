@@ -4,6 +4,10 @@ MAINTAINER Krzysztof Trzepla <krzysztof.trzepla@gmail.com>
 # Build arguments
 ARG VERSION=""
 
+# Get the image up to date
+RUN dnf -y upgrade && \
+    dnf clean all
+
 # Add onedata repository
 RUN dnf install -y curl && \
     curl http://onedata-dev-packages.cloud.plgrid.pl/yum/onedata_fedora_23.repo > \
