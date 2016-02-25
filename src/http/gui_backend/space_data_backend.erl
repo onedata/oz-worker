@@ -25,7 +25,7 @@
 
 %% Convenience macro to log a debug level log dumping given variable.
 -define(log_debug(_Arg),
-    ?debug("~s", [str_utils:format("SPACE_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
+    ?alert("~s", [str_utils:format("SPACE_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
 ).
 
 
@@ -43,26 +43,23 @@ find_query(<<"space">>, _Data) ->
 
 %% Called when ember asks for all files
 find_all(<<"space">>) ->
-    Res = [
-        [
-            {<<"id">>, <<"s1">>},
-            {<<"name">>, <<"Cyfronet Data">>},
-            {<<"isDefault">>, true},
-            {<<"providers">>, [<<"p1">>, <<"p2">>]}
-        ],
-        [
-            {<<"id">>, <<"s2">>},
-            {<<"name">>, <<"Documentation">>},
-            {<<"isDefault">>, false},
-            {<<"providers">>, [<<"p1">>]}
-        ],
-        [
-            {<<"id">>, <<"s3">>},
-            {<<"name">>, <<"My Data">>},
-            {<<"isDefault">>, false},
-            {<<"providers">>, [<<"p1">>, <<"p2">>, <<"p3">>]}
-        ]
-    ],
+    UserId = g_session:get_user_id(),
+    {ok, Res} = user_logic:get_spaces(UserId),
+    Spaces = proplists:get_value(spaces, Res),
+    Default = proplists:get_value(default, Res),
+    Res = lists:map(
+        fun(SpaceId) ->
+            {ok, SpaceData} = space_logic:get_data(SpaceId, provider),
+            Name = proplists:get_value(name, SpaceData),
+            {ok, [{providers, Providers}]} =
+                space_logic:get_providers(SpaceId, provider),
+            [
+                {<<"id">>, <<"s1">>},
+                {<<"name">>, Name},
+                {<<"isDefault">>, SpaceId =:= Default},
+                {<<"providers">>, Providers}
+            ]
+        end, Spaces),
     {ok, Res}.
 
 

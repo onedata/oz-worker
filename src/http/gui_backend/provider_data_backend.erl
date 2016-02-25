@@ -43,6 +43,20 @@ find_query(<<"provider">>, _Data) ->
 
 %% Called when ember asks for all files
 find_all(<<"provider">>) ->
+    UserId = g_session:get_user_id(),
+    {ok, [{providers, Providers}]} = user_logic:get_providers(UserId),
+    Res = lists:map(
+        fun(ProviderId) ->
+
+        [
+            {<<"id">>, ProviderId},
+            {<<"name">>, Name},
+            {<<"isDefault">>, SpaceId =:= Default},
+            {<<"providers">>, Providers}
+        ]
+
+        end, Providers),
+
     Res = [
         [
             {<<"id">>, <<"p1">>},
