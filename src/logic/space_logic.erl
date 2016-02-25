@@ -162,9 +162,9 @@ create({provider, ProviderId}, Name, Macaroon, Size) ->
 -spec modify(SpaceId :: binary(), Name :: binary()) ->
     ok.
 modify(SpaceId, Name) ->
-    {ok, #document{value = Space} = Doc} = space:get(SpaceId),
-    SpaceNew = Space#space{name = Name},
-    space:save(Doc#document{value = SpaceNew}),
+    {ok, _} = space:update(SpaceId, fun(Space) ->
+        {ok, Space#space{name = Name}}
+    end),
     ok.
 
 %%--------------------------------------------------------------------
@@ -176,10 +176,11 @@ modify(SpaceId, Name) ->
     Privileges :: [privileges:space_privilege()]) ->
     ok.
 set_privileges(SpaceId, Member, Privileges) ->
-    {ok, #document{value = Space} = Doc} = space:get(SpaceId),
-    PrivilegesNew = ordsets:from_list(Privileges),
-    SpaceNew = set_privileges_aux(Space, Member, PrivilegesNew),
-    space:save(Doc#document{value = SpaceNew}),
+    {ok, _} = space:update(SpaceId, fun(Space) ->
+        PrivilegesNew = ordsets:from_list(Privileges),
+        SpaceNew = set_privileges_aux(Space, Member, PrivilegesNew),
+        {ok, SpaceNew}
+    end),
     ok.
 
 %%--------------------------------------------------------------------
@@ -194,17 +195,15 @@ join({user, UserId}, Macaroon) ->
     case has_user(SpaceId, UserId) of
         true -> ok;
         false ->
-            Privileges = privileges:space_user(),
-            {ok, SpaceDoc} = space:get(SpaceId),
-            #document{value = #space{users = Users} = Space} = SpaceDoc,
-            SpaceNew = Space#space{users = [{UserId, Privileges} | Users]},
-
-            {ok, UserDoc} = onedata_user:get(UserId),
-            #document{value = #onedata_user{spaces = Spaces} = User} = UserDoc,
-            UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
-
-            space:save(SpaceDoc#document{value = SpaceNew}),
-            onedata_user:save(UserDoc#document{value = UserNew})
+            {ok, _} = space:update(SpaceId, fun(Space) ->
+                Privileges = privileges:space_user(),
+                #space{users = Users} = Space,
+                {ok, Space#space{users = [{UserId, Privileges} | Users]}}
+            end),
+            {ok, _} = onedata_user:update(UserId, fun(User) ->
+                #onedata_user{spaces = USpaces} = User,
+                {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
+            end)
     end,
     {ok, SpaceId};
 join({group, GroupId}, Macaroon) ->
@@ -237,13 +236,14 @@ support(ProviderId, Macaroon, SupportedSize) ->
     case has_provider(SpaceId, ProviderId) of
         true -> ok;
         false ->
-            {ok, SpaceDoc} = space:get(SpaceId),
-            #document{value = #space{size = Size, providers = Providers} = Space} = SpaceDoc,
-            SpaceNew = Space#space{size = [{ProviderId, SupportedSize} | Size], providers = [ProviderId | Providers]},
-
-            add_space_to_providers(SpaceId, [ProviderId]),
-
-            space:save(SpaceDoc#document{value = SpaceNew})
+            {ok, _} = space:update(SpaceId, fun(Space) ->
+                #space{size = Size, providers = Providers} = Space,
+                {ok, Space#space{
+                    size = [{ProviderId, SupportedSize} | Size],
+                    providers = [ProviderId | Providers]
+                }}
+            end),
+            add_space_to_providers(SpaceId, [ProviderId])
     end,
     {ok, SpaceId}.
 
