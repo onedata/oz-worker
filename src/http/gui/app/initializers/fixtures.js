@@ -23,20 +23,20 @@ function clearStore(store, successCallback) {
 }
 
 export function initialize(container /*, application */) {
-  let store = container.lookup('service:store');
-
-  clearStore(store, () => {
-   let providers = ['Amazon', 'Dropbox', 'Google', 'HBP Cyfronet'];
-   providers = providers.map((name, i) => store.createRecord('provider', {id: i+1, name: name}));
-   providers[0].isWorking = false;
-   providers[3].isDefault = true;
-   providers.forEach(s => s.save());
-
-   let spaces = ['Cyfronet data', 'Documentation', 'My data'];
-   spaces = spaces.map((name, i) => store.createRecord('space', {id: i+1, name: name}));
-   spaces[2].get('providers').pushObjects(providers);
-   spaces.forEach(s => s.save());
-  });
+  //let store = container.lookup('service:store');
+  //
+  //clearStore(store, () => {
+  // let providers = ['Amazon', 'Dropbox', 'Google', 'HBP Cyfronet'];
+  // providers = providers.map((name, i) => store.createRecord('provider', {id: i+1, name: name}));
+  // providers[0].isWorking = false;
+  // providers[3].isDefault = true;
+  // providers.forEach(s => s.save());
+  //
+  // let spaces = ['Cyfronet data', 'Documentation', 'My data'];
+  // spaces = spaces.map((name, i) => store.createRecord('space', {id: i+1, name: name}));
+  // spaces[2].get('providers').pushObjects(providers);
+  // spaces.forEach(s => s.save());
+  //});
 }
 
 export default {

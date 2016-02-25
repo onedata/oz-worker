@@ -75,25 +75,25 @@ export default DS.RESTAdapter.extend({
   /** Called when ember store wants to find a record */
   find: function (store, type, id, record) {
     this.logToConsole(FIND, [store, type, id, record]);
-    return this.asyncRequest(FIND, type.typeKey, id);
+    return this.asyncRequest(FIND, type.modelName, id);
   },
 
   /** Called when ember store wants to find all records of a type */
   findAll: function (store, type, sinceToken) {
     this.logToConsole(FIND_ALL, [store, type, sinceToken]);
-    return this.asyncRequest(FIND_ALL, type.typeKey, null, sinceToken);
+    return this.asyncRequest(FIND_ALL, type.modelName, null, sinceToken);
   },
 
   /** Called when ember store wants to find all records that match a query */
   findQuery: function (store, type, query) {
     this.logToConsole(FIND_QUERY, [store, type, query]);
-    return this.asyncRequest(FIND_QUERY, type.typeKey, null, query);
+    return this.asyncRequest(FIND_QUERY, type.modelName, null, query);
   },
 
   /** Called when ember store wants to find multiple records by id */
   findMany: function (store, type, ids, records) {
     this.logToConsole(FIND_MANY, [store, type, ids, records]);
-    return this.asyncRequest(FIND_MANY, type.typeKey, null, ids);
+    return this.asyncRequest(FIND_MANY, type.modelName, null, ids);
   },
 
   /** @todo is this needed? **/
@@ -112,26 +112,26 @@ export default DS.RESTAdapter.extend({
   createRecord: function (store, type, record) {
     this.logToConsole(CREATE_RECORD, [store, type, record]);
     var data = {};
-    var serializer = store.serializerFor(type.typeKey);
+    var serializer = store.serializerFor(type.modelName);
     serializer.serializeIntoHash(data, type, record, {includeId: true});
-    return this.asyncRequest(CREATE_RECORD, type.typeKey, null, data);
+    return this.asyncRequest(CREATE_RECORD, type.modelName, null, data);
   },
 
   /** Called when ember store wants to update a record */
   updateRecord: function (store, type, record) {
     this.logToConsole(UPDATE_RECORD, [store, type, record]);
     var data = {};
-    var serializer = store.serializerFor(type.typeKey);
+    var serializer = store.serializerFor(type.modelName);
     serializer.serializeIntoHash(data, type, record, {includeId: true});
     var id = Ember.get(record, 'id');
-    return this.asyncRequest(UPDATE_RECORD, type.typeKey, id, data);
+    return this.asyncRequest(UPDATE_RECORD, type.modelName, id, data);
   },
 
   /** Called when ember store wants to delete a record */
   deleteRecord: function (store, type, record) {
     this.logToConsole(DELETE_RECORD, [store, type, record]);
     var id = Ember.get(record, 'id');
-    return this.asyncRequest(DELETE_RECORD, type.typeKey, id);
+    return this.asyncRequest(DELETE_RECORD, type.modelName, id);
   },
 
   /** @todo is this needed? */
