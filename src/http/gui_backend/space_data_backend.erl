@@ -46,15 +46,21 @@ find_all(<<"space">>) ->
     Res = [
         [
             {<<"id">>, <<"s1">>},
-            {<<"name">>, <<"s1">>},
+            {<<"name">>, <<"Cyfronet Data">>},
             {<<"isDefault">>, true},
             {<<"providers">>, [<<"p1">>, <<"p2">>]}
         ],
         [
             {<<"id">>, <<"s2">>},
-            {<<"name">>, <<"s2">>},
+            {<<"name">>, <<"Documentation">>},
             {<<"isDefault">>, false},
-            {<<"providers">>, [<<"p1">>, <<"p2">>]}
+            {<<"providers">>, [<<"p1">>]}
+        ],
+        [
+            {<<"id">>, <<"s3">>},
+            {<<"name">>, <<"My Data">>},
+            {<<"isDefault">>, false},
+            {<<"providers">>, [<<"p1">>, <<"p2">>, <<"p3">>]}
         ]
     ],
     {ok, Res}.
