@@ -1,3 +1,4 @@
+import Ember from 'ember';
 import PageBase from './_page-base';
 import UnauthenticatedRouteMixin from 'ember-simple-auth/mixins/unauthenticated-route-mixin';
 
