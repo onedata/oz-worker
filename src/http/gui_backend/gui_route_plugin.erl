@@ -73,8 +73,8 @@ route(_) -> ?INDEX.
 %% @end
 %%--------------------------------------------------------------------
 -spec data_backend(HasSession :: boolean(), Identifier :: binary()) -> HandlerModule :: module().
-data_backend(true, <<"file">>) -> file_data_backend;
-data_backend(true, <<"fileContent">>) -> file_data_backend.
+data_backend(true, <<"space">>) -> space_data_backend;
+data_backend(true, <<"provider">>) -> provider_data_backend.
 
 
 %%--------------------------------------------------------------------

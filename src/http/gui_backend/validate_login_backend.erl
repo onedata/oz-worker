@@ -25,7 +25,7 @@
 
 page_init() ->
     case auth_utils:validate_login() of
-        {redirect, URL} ->
+        {redirect, _URL} ->
             ?info("User ~p logged in", [g_session:get_user_id()]);
 %%            gui_jq:redirect(URL);
         new_user ->
