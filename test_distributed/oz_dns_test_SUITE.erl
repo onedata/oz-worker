@@ -81,7 +81,7 @@ end_per_suite(Config) ->
 %%%===================================================================
 
 get_dns_port(Node) ->
-    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, dns_port]),
+    {ok, RestPort} = rpc:call(Node, application, get_env, [?CLUSTER_WORKER_NAME, dns_port]),
     RestPort.
 
 get_dns_ip(Node) ->

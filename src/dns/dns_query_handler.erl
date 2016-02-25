@@ -146,7 +146,7 @@ get_canonical_hostname() ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_a(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_a(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_a(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -170,7 +170,7 @@ handle_a(DomainNotNormalized, LBAdvice) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_ns(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_ns(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_ns(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -198,7 +198,7 @@ handle_ns(DomainNotNormalized, LBAdvice) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_cname(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_cname(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_cname(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -213,7 +213,7 @@ handle_cname(DomainNotNormalized, _) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_mx(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_mx(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_mx(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -241,7 +241,7 @@ handle_mx(DomainNotNormalized, LBAdvice) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_soa(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_soa(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_soa(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -271,7 +271,7 @@ handle_soa(DomainNotNormalized, LBAdvice) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_wks(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_wks(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_wks(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -286,7 +286,7 @@ handle_wks(DomainNotNormalized, _) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_ptr(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_ptr(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_ptr(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -301,7 +301,7 @@ handle_ptr(DomainNotNormalized, _) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_hinfo(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_hinfo(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_hinfo(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -316,7 +316,7 @@ handle_hinfo(DomainNotNormalized, _) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_minfo(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_minfo(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_minfo(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -331,7 +331,7 @@ handle_minfo(DomainNotNormalized, _) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_txt(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_handler_behaviour:handler_reply().
+-spec handle_txt(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
 handle_txt(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
@@ -405,7 +405,7 @@ parse_domain(DomainArg) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}) ->
-    dns_handler_behaviour:handler_reply().
+    dns_worker_plugin_behaviour:handler_reply().
 handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
     try
         Prefix = list_to_binary(PrefixStr),
@@ -468,7 +468,7 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
 %% in authority section of DNS response.
 %% @end
 %%--------------------------------------------------------------------
--spec answer_with_soa(Domain :: string(), DNSZone :: #dns_zone{}) -> dns_handler_behaviour:handler_reply().
+-spec answer_with_soa(Domain :: string(), DNSZone :: #dns_zone{}) -> dns_worker_plugin_behaviour:handler_reply().
 answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, authority = Authority, ttl_soa = TTL}) ->
     ReplyType = case proplists:get_value(Domain, IPAddresses, undefined) of
         undefined ->

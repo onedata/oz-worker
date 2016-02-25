@@ -1,0 +1,211 @@
+#!/bin/sh
+
+# chkconfig: 2345 80 30
+# description: onepanel service
+
+### BEGIN INIT INFO
+# Provides:		        globalregistry
+# Required-Start:	    $local_fs $remote_fs $network $time
+# Required-Stop:	    $local_fs $remote_fs $network $time
+# Should-Start:		    $syslog
+# Should-Stop:		    $syslog
+# Default-Start:	    3 4 5
+# Default-Stop:		    0 1 2 6
+# Short-Description:	globalregistry service
+# Description:	        Scalable global data registry.
+### END INIT INFO
+
+# Source function library.
+. /etc/init.d/functions
+_use_systemctl=0
+
+# Needed for erlexec to run
+export HOME=/
+
+GR_NAME=globalregistry
+GR_LOCKFILE=/var/lock/subsys/${GR_NAME}
+GR_DEAMON=/opt/globalregistry/nodes/globalregistry/bin/${GR_NAME}
+
+DB_NAME=bigcouch
+DB_LOCKFILE=/var/lock/subsys/${DB_NAME}
+DB_PIDDIR=/var/run/${DB_NAME}
+DB_PIDFILE=${DB_PIDDIR}/${DB_NAME}.pid
+DB_DEAMON=/opt/bigcouch/bin/${DB_NAME}
+
+ULIMITS_FILE=/opt/globalregistry/scripts/ulimits.cfg
+PROCESSES_LIMIT=`cat ${ULIMITS_FILE} 2>/dev/null || echo \{open_files, \"65535\"\}.`
+PROCESSES_LIMIT=`echo ${PROCESSES_LIMIT} | awk -F'"' '{ print $2 }'`
+OPEN_FILES_LIMIT=`cat ${ULIMITS_FILE} 2>/dev/null || echo \{process_limit,\"65535\"\}.`
+OPEN_FILES_LIMIT=`echo ${OPEN_FILES_LIMIT} | awk -F'"' '{ print $2 }'`
+
+start() {
+	start_db ; RETVAL1=$?
+	start_globalregistry ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
+stop() {
+	stop_globalregistry ; RETVAL1=$?
+	stop_db ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
+restart() {
+	stop ; RETVAL1=$?
+	start ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
+start_globalregistry() {
+    status_globalregistry_silent ; STATUS=$?
+	if [ ${STATUS} -ne 0 ]; then
+		echo -n $"Starting ${GR_NAME}: "
+		ulimit -u ${PROCESSES_LIMIT}
+		ulimit -n ${OPEN_FILES_LIMIT}
+	    ${GR_DEAMON} start 1>/dev/null 2>&1 ; RETVAL=$?
+        if [ ${RETVAL} -eq 0 ]; then
+            touch ${GR_LOCKFILE}
+            success
+        else
+            failure
+        fi
+        echo
+	    return ${RETVAL}
+	fi
+}
+
+stop_globalregistry() {
+    status_globalregistry_silent ; STATUS=$?
+	if [ ${STATUS} -eq 0 ]; then
+	    echo -n $"Stopping ${GR_NAME}: "
+	    ${GR_DEAMON} stop 1>/dev/null 2>&1 ; RETVAL=$?
+        if [ ${RETVAL} -eq 0 ]; then
+            rm -f ${GR_LOCKFILE}
+            success
+        else
+            failure
+        fi
+        echo
+	    return ${RETVAL}
+	fi
+}
+
+restart_globalregistry() {
+    stop_globalregistry ; RETVAL1=$?
+	start_globalregistry ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
+status_globalregistry() {
+    status_globalregistry_silent ; STATUS=$?
+    echo -n $"${GR_NAME}: "
+	if [ ${STATUS} -eq 0 ]; then
+        echo "running"
+	    return 0
+	else
+		echo "not running"
+		return 3
+	fi
+}
+
+status_globalregistry_silent() {
+    ${GR_DEAMON} ping 1>/dev/null 2>&1
+	STATUS=$?
+    return ${STATUS}
+}
+
+start_db() {
+	status_db_silent ; STATUS=$?
+	if [ ${STATUS} -ne 0 ]; then
+		echo -n $"Starting database: "
+		ulimit -u ${PROCESSES_LIMIT}
+		ulimit -n ${OPEN_FILES_LIMIT}
+	 	nohup ${DB_DEAMON} start 1>/dev/null 2>&1 &
+		RETVAL=$?
+		PID=$!
+        if [ ${RETVAL} -eq 0 ]; then
+            touch ${DB_LOCKFILE}
+            mkdir -p ${DB_PIDDIR}
+            echo -n ${PID} > ${DB_PIDFILE}
+            success
+        else
+            failure
+        fi
+        echo
+	    return ${RETVAL}
+	fi
+}
+
+stop_db() {
+	status_db_silent ; STATUS=$?
+	if [ ${STATUS} -eq 0 ]; then
+		echo -n $"Stopping database: "
+		PID=`cat ${DB_PIDFILE}`
+	    kill ${PID} 1>/dev/null 2>&1 ; RETVAL=$?
+        if [ ${RETVAL} -eq 0 ]; then
+            rm -f ${DB_LOCKFILE} ${DB_PIDFILE}
+            success
+        else
+            failure
+        fi
+        echo
+	return ${RETVAL}
+	fi
+}
+
+restart_db() {
+    stop_db ; RETVAL1=$?
+	start_db ; RETVAL2=$?
+	return `[ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]`
+}
+
+status_db() {
+    status_db_silent ; STATUS=$?
+    echo -n $"database: "
+	if [ ${STATUS} -eq 0 ]; then
+        echo "running"
+	    return 0
+	else
+		echo "not running"
+		return 3
+	fi
+}
+
+status_db_silent() {
+    status -p ${DB_PIDFILE} ${DB_NAME} 1>/dev/null 2>&1
+	STATUS=$?
+	return ${STATUS}
+}
+
+case "$1" in
+    start|stop)
+        $1
+        ;;
+
+    restart|force-reload)
+        restart
+        ;;
+
+    status)
+        status_globalregistry ; RETVAL1=$?
+        status_db ; RETVAL2=$?
+        [ ${RETVAL1} -eq 0 -a ${RETVAL2} -eq 0 ]
+        ;;
+        
+    start_globalregistry|stop_globalregistry|restart_globalregistry|status_globalregistry)
+        $1
+        ;;
+	    
+	start_db|stop_db|restart_db|status_db)
+        $1
+        ;;
+
+    *)
+	    echo "Usage: $0 {start|stop|restart|force-reload|status|"\
+	                    "start_db|stop_db|restart_db|status_db|"\
+	                    "start_globalregistry|stop_globalregistry|restart_globalregistry|status_globalregistry}"
+	    exit 2
+	    ;;
+esac
+
+exit $?

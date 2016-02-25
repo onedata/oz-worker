@@ -14,5 +14,6 @@
 
 %% App name
 -define(APP_Name, oz_worker).
+-define(CLUSTER_WORKER_NAME, cluster_worker).
 
 -endif.
