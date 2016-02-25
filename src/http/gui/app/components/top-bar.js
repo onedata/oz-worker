@@ -30,6 +30,7 @@ export default Ember.Component.extend({
       event.preventDefault();
     });
 
+    // use only one toggle button
     let toggleButton = $('.navbar-toggle')[0];
 
     $('.global-fog').click(function() {
@@ -38,8 +39,10 @@ export default Ember.Component.extend({
       }
     });
 
+    // this should be the same code as in navbar-toggle...
+    // maybe TODO: create: showMenu and hideMenu functions
     $('#navbar a').click(function() {
-      toggleButton.click();
+      $('.global-fog').removeClass('active');
     });
   }
 });
