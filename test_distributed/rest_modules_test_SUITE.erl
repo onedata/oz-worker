@@ -98,7 +98,7 @@ all() ->
         %% {group, user_rest_module_test_group},
         %% {group, group_rest_module_test_group},
         %% {group, spaces_rest_module_test_group},
-        bad_request_test
+        %% bad_request_test
     ]).
 
 groups() ->
