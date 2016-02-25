@@ -69,10 +69,9 @@ cd %{SOURCES}
 ./install_rpm %{buildroot} %{_prefix}
 
 %post
-sh %{_prefix}/scripts/onepanel_setup %{_prefix}
 chkconfig --add globalregistry
 chkconfig --add onepanel
-service onepanel start
+%{_prefix}/scripts/onepanel_setup %{_prefix}
 ln -sf %{_prefix}/scripts/onepanel_admin /usr/bin/onepanel_admin
 
 %preun

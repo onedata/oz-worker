@@ -3,7 +3,8 @@
 DOCKER_REG_USER        ?= ""
 DOCKER_REG_PASSWORD    ?= ""
 DOCKER_REG_EMAIL       ?= ""
-GLOBALREGISTRY_VERSION ?= $(shell git describe --tags --always | tr - .)
+PKG_VERSION            ?= $(shell git describe --tags --always | tr - .)
+PKG_ID                  = globalregistry-$(PKG_VERSION)
 
 BASE_DIR         = $(shell pwd)
 GIT_URL         := $(shell git config --get remote.origin.url | sed -e 's/\(\/[^/]*\)$$//g')
@@ -80,12 +81,12 @@ rpmdirs:
 
 package: rpmdirs
 	./rel/rpm/create_rpm
-	mv rel/rpm/build/globalregistry-$(GLOBALREGISTRY_VERSION)*.src.rpm package/fedora-23-x86_64/SRPMS
-	mv rel/rpm/build/globalregistry-$(GLOBALREGISTRY_VERSION)*.rpm package/fedora-23-x86_64/x86_64
+	mv rel/rpm/build/$(PKG_ID)*.src.rpm package/fedora-23-x86_64/SRPMS
+	mv rel/rpm/build/$(PKG_ID)*.rpm package/fedora-23-x86_64/x86_64
 	tar -czf rpm.tar.gz package
 
 docker:
 	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \
                      --email $(DOCKER_REG_EMAIL) --name globalregistry \
-                     --build-arg VERSION=$(GLOBALREGISTRY_VERSION) \
+                     --build-arg VERSION=$(PKG_VERSION) \
                      --publish --remove packaging

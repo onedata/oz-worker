@@ -3,6 +3,7 @@ MAINTAINER Krzysztof Trzepla <krzysztof.trzepla@gmail.com>
 
 # Build arguments
 ARG VERSION=""
+ARG ONEPANEL_AUTOSTART=false
 
 # Add onedata repository
 RUN dnf install -y curl && \
