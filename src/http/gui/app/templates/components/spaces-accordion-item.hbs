@@ -1,8 +1,12 @@
-<div class="spaces-accordion-group">
-  <div class="spaces-accordion-heading">
-    <a class="spaces-accordion-toggle" data-toggle="collapse" href="#collapse-space-{{space.id}}">
+<div class="accordion-group spaces-accordion-group">
+  <div class="accordion-heading spaces-accordion-heading">
+    <a class="accordion-toggle spaces-accordion-toggle" data-toggle="collapse" href="#collapse-space-{{space.id}}">
       <div class="space-icon">
-        <span class="oneicon-space"></span>
+        {{#if space.isDefault}}
+          {{one-icon icon='space-default'}}
+        {{else}}
+          {{one-icon icon='space'}}
+        {{/if}}
       </div>
       <div class="space-header">
         {{space.name}}
@@ -15,21 +19,34 @@
           {{space.providers.length}}
         </div>
       </div>
-      {{!-- <div class="space-icon"></div>
-      <div class="space-header">{{space.name}}</div>
-      <div class="providers-count">
-        {{one-icon iconName='provider' colorClass='white'}}
-        <span>{{providersCount}}</span>
-      </div> --}}
     </a>
   </div>
-  <div id="collapse-space-{{space.id}}" class="accordion-body collapse">
+  <div id="collapse-space-{{space.id}}" class="accordion-body spaces-accordion-body sidebar-list collapse">
     <div class="accordion-inner">
       <ul>
         {{#each space.providers as |p|}}
-          <li>{{p.name}}</li>
+          <li>
+            <div class="icon">
+              {{#if p.isDefault}}
+                {{one-icon icon="provider-default"}}
+              {{else}}
+                {{one-icon icon="provider"}}
+              {{/if}}
+            </div>
+            <div class="label">
+              {{p.name}}
+            </div>
+          </li>
         {{/each}}
-        <li class='get-support'>{{t 'onezone.spacesAccordionItem.getSupport'}}</li>
+        <li class='get-support'>
+          <div class="icon">
+            {{one-icon}}
+            {{!-- {{one-icon icon="add"}} --}}
+          </div>
+          <div class="label">
+            {{t 'onezone.spacesAccordionItem.getSupport'}}
+          </div>
+        </li>
       </ul>
     </div>
   </div>

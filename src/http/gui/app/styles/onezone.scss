@@ -3,12 +3,14 @@ $onezone-top-bar-height: 80px;
 $onezone-content-padding: 15px;
 
 // TODO: move to colors.scss
-$color-onezone-sidebar-bg: #3D3D3D;
+$color-onezone-sidebar-bg: #434343;
 $color-onezone-sidebar-separator: #515151;
 $color-onezone-top-bar-bg: rgba($color-onezone-sidebar-bg, 0.4);
 $color-onezone-fog-base: #8294b1;
 // TODO: own experimental alpha
 $color-onezone-fog: rgba($color-onezone-fog-base, 0.8);
+
+$color-button: #57A1E2;
 
 $onezone-fog-z: 0;
 
@@ -96,20 +98,42 @@ $onezone-fog-z: 0;
     overflow-x: hidden;
   }
 
-  .main-accordion {
-    .main-accordion-group {
+  // generic styles for accordions
+  .accordion {
+    .accordion-group {
       border-top: $color-onezone-sidebar-separator 2px solid;
 
-      .main-accordion-heading {
-        text-transform: uppercase;
-        border-bottom: $color-onezone-sidebar-separator 2px solid;
-
-        .main-accordion-toggle {
+      .accordion-heading {
+        .accordion-toggle {
           display: block;
-          height: $onezone-accordion-heading-height;
-          line-height: $onezone-accordion-heading-height;
           padding-left: 10px;
           padding-right: 24px;
+          color: white;
+          clear: both;
+
+          text-decoration: none !important;
+
+          &:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+          }
+        }
+      }
+
+      .accordion-inner {
+        padding: 0px;
+      }
+    }
+  }
+
+  // specific styles for main-accoridion, see also .accordion styles
+  .main-accordion {
+    .main-accordion-group {
+      .main-accordion-heading {
+        text-transform: uppercase;
+
+        .main-accordion-toggle {
+          height: $onezone-accordion-heading-height;
+          line-height: $onezone-accordion-heading-height;
           color: white;
           clear: both;
 
@@ -148,13 +172,28 @@ $onezone-fog-z: 0;
         }
       }
 
+      .main-accordion-body {
+        // TODO should heading have separator or only some free space?
+        // border-bottom: $color-onezone-sidebar-separator 2px solid;
+      }
+
       .accordion-inner {
         padding: 0px;
       }
     }
   }
 
+  // component
   .accounts-list {
+    li {
+      &:first-of-type {
+        margin-top: 15px;
+      }
+    }
+  }
+
+  // generic class
+  .sidebar-list {
     ul {
       list-style-type: none;
       padding: 0;
@@ -163,6 +202,7 @@ $onezone-fog-z: 0;
       li {
         padding: 0 10px;
         margin: 0;
+        cursor: pointer; cursor: hand;
 
         &:hover {
           background-color: rgba(255, 255, 255, 0.1);
@@ -171,13 +211,27 @@ $onezone-fog-z: 0;
     }
   }
 
+  // specific styles for spaces-accordion, see also .accordion styles
   .spaces-accordion {
     color: white;
+    .one-icon {
+      font-size: 15pt;
+    }
+
+    .spaces-accordion-item {
+      &:first-of-type {
+        margin-top: 20px;
+      }
+    }
+
     .spaces-accordion-group {
+      border: none;
+
       .spaces-accordion-heading {
         $spaces-item-height: 35px;
         height: $spaces-item-height;
         line-height: $spaces-item-height;
+
         .spaces-accordion-toggle {
           display: table;
           width: 100%;
@@ -189,6 +243,15 @@ $onezone-fog-z: 0;
           clear: both;
 
           text-decoration: none !important;
+          background-color: #3A3A3A;
+
+          &.create-new {
+            margin-top: 20px;
+            margin-bottom: 20px;
+            background-color: transparent;
+          }
+
+          &.crate-new-text {}
 
           .space-icon {
             display: table-cell;
@@ -198,6 +261,7 @@ $onezone-fog-z: 0;
             display: table-cell;
             padding-left: 8px;
             line-height: $spaces-item-height;
+            vertical-align: middle;
             text-transform: none;
             font-size: 0.8em;
           }
@@ -207,7 +271,9 @@ $onezone-fog-z: 0;
             overflow-x: hidden;
             .icon {
               display: table-cell;
-              font-size: 0.8em;
+              .one-icon {
+                font-size: 0.9em;
+              }
             }
             .label {
               display: table-cell;
@@ -217,6 +283,35 @@ $onezone-fog-z: 0;
           }
         }
 
+      }
+
+      .spaces-accordion-body {
+        background-color: #3E3E3E;
+
+        ul {
+          li {
+            display: table;
+            padding-left: 70px;
+            padding-top: 8px;
+            padding-bottom: 8px;
+            width: 100%;
+            .icon {
+              display: table-cell;
+              width: 32px;
+            }
+            .label {
+              display: table-cell;
+              vertical-align: middle;
+              text-align: left;
+            }
+          }
+        }
+
+        .get-support {
+          font-family: "Lato";
+          font-weight: 100;
+          font-style: italic;
+        }
       }
     }
   }

@@ -92,6 +92,12 @@ export default {
       manageProviders: 'manage providers',
       enableHints: 'enable hints'
     },
+    spacesAccordion: {
+      createNewSpace: 'Create new space',
+      createNewSpaceText: 'You can also become a provider yourself and support ' +
+        'your own space.',
+      readMore: 'Read more'
+    },
     spacesAccordionItem: {
       getSupport: 'Get support'
     }

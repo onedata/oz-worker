@@ -1,7 +1,7 @@
 import Ember from 'ember';
 
 export default Ember.Component.extend({
-  classNames: ['accounts-list', 'accordion-content'],
+  classNames: ['accounts-list', 'accordion-content', 'sidebar-list'],
   accounts: [
     {
       type: 'google',
