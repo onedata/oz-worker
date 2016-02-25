@@ -38,15 +38,15 @@
     RedirectionPoint :: binary(), CSR :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
-    ProviderId = gen_uuid(),
-    BinProviderId = str_utils:to_binary(ProviderId),
-    [{_, {ok, {ProviderCertPem, Serial}}} | _] =
-        worker_proxy:multicall(zone_ca_worker, {sign_provider_req, BinProviderId, CSRBin}),
+    ProviderId = datastore_utils:gen_uuid(),
+    [{_, {ok, {ProviderCertPem, Serial}}} | _] = worker_proxy:multicall(
+        zone_ca_worker, {sign_provider_req, ProviderId, CSRBin}),
 
-    Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
-    provider:save(#document{key = BinProviderId, value = Provider}),
+    Provider = #provider{client_name = ClientName, urls = URLs,
+        redirection_point = RedirectionPoint, serial = Serial},
+    provider:save(#document{key = ProviderId, value = Provider}),
 
-    {ok, BinProviderId, ProviderCertPem}.
+    {ok, ProviderId, ProviderCertPem}.
 
 %%--------------------------------------------------------------------
 %% @doc Modify provider's details.
@@ -218,21 +218,3 @@ get_default_provider_for_user(UserID) ->
                     {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
             end
     end.
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%% --------------------------------------------------------------------
-%% @doc
-%% @private
-%% Generates UUID with CouchDBs 'utc_random' algorithm
-%% @end
-%% --------------------------------------------------------------------
--spec gen_uuid() -> string().
-gen_uuid() ->
-    {M, S, N} = now(),
-    Time = M * 1000000000000 + S * 1000000 + N,
-    TimeHex = string:right(integer_to_list(Time, 16), 14, $0),
-    Rand = [lists:nth(1, integer_to_list(crypto:rand_uniform(1, 16) - 1, 16)) || _ <- lists:seq(1, 18)],
-    string:to_lower(string:concat(TimeHex, Rand)).
