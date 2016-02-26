@@ -43,6 +43,7 @@ $body-font: 'Open Sans';
 @import "onezone";
 
 html, body {
+  height: 100%;
   font-family: $body-font !important;
 }
 

@@ -51,6 +51,14 @@ $color-provider-not-working: #D86669;
   padding-right: $onezone-content-padding;
   padding-left: $onezone-sidebar-width + $onezone-content-padding;
   padding-top: $onezone-top-bar-height + $onezone-content-padding;
+
+  .onezone-atlas {
+    height: 100%;
+    background-image: url("/assets/images/onezone/onezone-atlas.svg");
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+  }
 }
 
 .onezone-top-bar {
