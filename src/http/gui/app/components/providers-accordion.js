@@ -15,6 +15,6 @@ export default Ember.Component.extend({
       hide: function( elem ) {
         elem.slideUp( 100 );
       }
-    })
+    });
   }
 });

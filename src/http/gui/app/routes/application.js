@@ -19,22 +19,4 @@ export default Ember.Route.extend({
   initAdapter: function () {
     this.get('store').adapterFor('application').init();
   }.on('init')
-
-
-  //// TODO: invoked only when application is reloaded!
-  //initSession: function () {
-  //  let authenticated = this.get('session').get('isAuthenticated');
-  //  if (!authenticated) {
-  //    this.get('session')
-  //      .authenticate('authenticator:basic').then(
-  //      () => {
-  //        let data = this.get('session.data.authenticated');
-  //        console.debug('app route - init sesssion: ' + JSON.stringify(data));
-  //      },
-  //      (reason) => {
-  //        console.warn(`you shall NOT pass, because: ${reason}`);
-  //      }
-  //    );
-  //  }
-  //}.on('init')
 });

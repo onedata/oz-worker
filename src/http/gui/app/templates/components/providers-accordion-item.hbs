@@ -4,11 +4,7 @@
     <div class="accordion-heading providers-accordion-heading">
       <a class="accordion-toggle providers-accordion-toggle" data-toggle="collapse" href="#collapse-provider-{{provider.id}}">
         <div class="provider-icon">
-          {{#if provider.isDefault}}
-            {{one-icon icon='provider-default'}}
-          {{else}}
-            {{one-icon icon='provider'}}
-          {{/if}}
+          {{one-icon icon=iconName color=iconColor}}
         </div>
         <div class="provider-header">
           {{provider.name}}

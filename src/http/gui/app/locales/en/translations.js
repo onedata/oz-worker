@@ -8,6 +8,7 @@ export default {
     media: 'media',
     blog: 'blog',
     account: 'account',
+    onezone: 'providers',
     login: 'login',
     logout: 'logout'
   },
