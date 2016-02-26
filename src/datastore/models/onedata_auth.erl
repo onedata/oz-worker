@@ -122,7 +122,7 @@ before(_ModelName, _Method, _Level, _Context) ->
 %% todo: change implementation to something fast (connected with VFS-1498)
 %% @end
 %%--------------------------------------------------------------------
--spec get_auth_by_user_id(UserId :: binary()) -> {ok, [binary()]} | no_return().
+-spec get_auth_by_user_id(UserId :: binary()) -> {ok, [#document{}]}.
 get_auth_by_user_id(UserId) ->
     Filter = fun
         ('$end_of_table', Acc) ->
