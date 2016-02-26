@@ -36,6 +36,27 @@ $color-onezone-search: #2A2A2A;
   background-color: $color-button;
 }
 
+$search-box-height: 36px;
+
+// TODO: search icon color on hover
+.c-search {
+  input {
+    height: $search-box-height;
+    color: white;
+    background-color: $color-onezone-search;
+    border: none;
+  }
+  button {
+    height: $search-box-height;
+    font-size: 1.3em;
+    color: white;
+    background-color: $color-onezone-search;
+    border: none;
+  }
+}
+
+
+
 .onezone-fog {
   position: fixed;
   top: 0;
