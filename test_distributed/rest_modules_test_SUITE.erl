@@ -90,15 +90,11 @@
 
 all() ->
     ?ALL([
-        %% todo: fix VFS-1637 prior to enabling those cases
-        %% todo: any rest test has chance of failing due to timeout
-        %% todo: timeout is caused by random messages sen by some nif
-        %% todo: root of problems probably lies in macaroons nif
-        %% {group, provider_rest_module_test_group},
-        %% {group, user_rest_module_test_group},
-        %% {group, group_rest_module_test_group},
-        %% {group, spaces_rest_module_test_group},
-        %% bad_request_test
+        {group, provider_rest_module_test_group},
+        {group, user_rest_module_test_group},
+        {group, group_rest_module_test_group},
+        {group, spaces_rest_module_test_group},
+        bad_request_test
     ]).
 
 groups() ->
