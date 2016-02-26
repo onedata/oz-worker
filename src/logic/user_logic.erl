@@ -87,7 +87,8 @@ modify(UserId, Proplist) ->
             default_space = DefaultSpace,
             % TODO mock
             first_space_support_token = FSST,
-            default_provider = DefaultProvider
+            default_provider = DefaultProvider,
+            chosen_provider = ChosenProvider
         } = User,
 
         % Check if alias was requested to be modified and if it is allowed
@@ -161,7 +162,8 @@ modify(UserId, Proplist) ->
                     default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
                     % TODO mock
                     first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST),
-                    default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider)},
+                    default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider),
+                    chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider)},
                 DocNew = Doc#document{value = NewUser},
                 onedata_user:save(DocNew),
                 case SetAlias of

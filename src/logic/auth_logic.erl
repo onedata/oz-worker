@@ -96,7 +96,7 @@ get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
     Token = gen_token(UserId, ProviderId),
     _Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
     {ok, #onedata_user{alias = Alias}} = user_logic:get_user(UserId),
-    ok = user_logic:modify(UserId, [{default_provider, ProviderId}]),
+    ok = user_logic:modify(UserId, [{chosen_provider, ProviderId}]),
     _Prefix = case Alias of
                   ?EMPTY_ALIAS ->
                       <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;

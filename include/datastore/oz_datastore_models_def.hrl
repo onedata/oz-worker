@@ -93,9 +93,11 @@
     groups = [] :: [GroupId :: binary()],
     % TODO this is a mock
     first_space_support_token = <<"">> :: binary(),
-    % TODO temporary solution
     % This allows to remember the provider which was selected for user, so DNS knows where to redirect
-    default_provider = <<"">> :: binary()
+    default_provider = <<"">> :: binary(),
+    % This allows to remember the to which provider user is being redirected.
+    % It is needed in DNS so it knows where to redirect
+    chosen_provider = <<"">> :: binary()
 }).
 
 -type user_info() :: #onedata_user{}.

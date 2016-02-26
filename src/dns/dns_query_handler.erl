@@ -421,7 +421,7 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                 end
         end,
         case GetUserResult of
-            {ok, #document{key = UserID, value = #onedata_user{default_provider = DefaultProvider}}} ->
+            {ok, #document{key = UserID, value = #onedata_user{chosen_provider = DefaultProvider}}} ->
                 % If default provider is not known, set it.
                 DataProplist =
                     try
@@ -429,8 +429,8 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                         Data
                     catch _:_ ->
                         {ok, NewDefProv} =
-                            provider_logic:get_default_provider_for_user(UserID),
-                        ok = user_logic:modify(UserID, [{default_provider, NewDefProv}]),
+                            provider_logic:choose_provider_for_user(UserID),
+                        ok = user_logic:modify(UserID, [{chosen_provider, NewDefProv}]),
                         {ok, Data2} = provider_logic:get_data(NewDefProv),
                         Data2
                     end,
@@ -514,7 +514,7 @@ account_lb(IPAddrList, LBAdvice) ->
 %%                                 end
 %%                         end,
 %%         case GetUserResult of
-%%             {ok, #user{default_provider = DefaulfProvider}} ->
+%%             {ok, #user{chosen_provider = DefaulfProvider}} ->
 %%                 {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
 %%                 URLs = proplists:get_value(urls, DataProplist),
 %%                 IPAddrList = [begin {ok, IP} = inet_parse:ipv4_address(binary_to_list(IPBin)), IP end || IPBin <- URLs],

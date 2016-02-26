@@ -23,7 +23,7 @@
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
 -export([test_connection/1]).
--export([get_default_provider_for_user/1]).
+-export([choose_provider_for_user/1]).
 
 %%%===================================================================
 %%% API
@@ -184,9 +184,9 @@ test_connection(_, _) ->
 %% one of them will be chosen randomly.
 %% @end
 %%--------------------------------------------------------------------
--spec get_default_provider_for_user(Referer :: binary() | undefined) ->
+-spec choose_provider_for_user(Referer :: binary() | undefined) ->
     {ok, ProviderID :: binary()} | {error, no_provider}.
-get_default_provider_for_user(UserID) ->
+choose_provider_for_user(UserID) ->
     % Check if the user has a default space and if it is supported.
     {ok, [{spaces, Spaces}, {default, DefaultSpace}]} =
         user_logic:get_spaces(UserID),
