@@ -65,7 +65,6 @@ compile:
 ##
 ## Generates a dev release
 generate_dev: deps compile gui_dev
-	# Move gui tmp dir away from sources, so as to prevent
 	# Remove gui tmp dir
 	rm -rf src/http/gui/tmp
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
@@ -74,14 +73,11 @@ generate_dev: deps compile gui_dev
 
 ## Generates a production release
 generate: deps compile gui_prod
-	# Move gui tmp dir away from sources, so as to prevent
-	# rebar from entering it during spec generation and crashing
-	mv src/http/gui/tmp /tmp/gui_tmp
+	# Remove gui tmp dir
+	rm -rf src/http/gui/tmp
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
 	./rebar generate
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
-	# Bring back the tmp dir to its normal location
-	mv /tmp/gui_tmp src/http/gui/tmp
 
 clean:
 	./rebar clean

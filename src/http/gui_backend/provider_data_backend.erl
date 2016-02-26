@@ -47,39 +47,15 @@ find_all(<<"provider">>) ->
     {ok, [{providers, Providers}]} = user_logic:get_providers(UserId),
     Res = lists:map(
         fun(ProviderId) ->
-
-        [
-            {<<"id">>, ProviderId},
-            {<<"name">>, Name},
-            {<<"isDefault">>, SpaceId =:= Default},
-            {<<"providers">>, Providers}
-        ]
-
+            {ok, ProviderData} = provider_logic:get_data(ProviderId),
+            Name = proplists:get_value(clientName, ProviderData),
+            [
+                {<<"id">>, ProviderId},
+                {<<"name">>, Name},
+                {<<"isDefault">>, false},
+                {<<"spaces">>, []}
+            ]
         end, Providers),
-
-    Res = [
-        [
-            {<<"id">>, <<"p1">>},
-            {<<"name">>, <<"Amazon">>},
-            {<<"isDefault">>, true},
-            {<<"isWorking">>, false},
-            {<<"providers">>, [<<"s1">>, <<"s2">>, <<"s3">>]}
-        ],
-        [
-            {<<"id">>, <<"p2">>},
-            {<<"name">>, <<"HBP Cyfronet">>},
-            {<<"isDefault">>, false},
-            {<<"isWorking">>, true},
-            {<<"providers">>, [<<"s1">>, <<"s3">>]}
-        ],
-        [
-            {<<"id">>, <<"p3">>},
-            {<<"name">>, <<"Google">>},
-            {<<"isDefault">>, false},
-            {<<"isWorking">>, true},
-            {<<"providers">>, [<<"s3">>]}
-        ]
-    ],
     {ok, Res}.
 
 

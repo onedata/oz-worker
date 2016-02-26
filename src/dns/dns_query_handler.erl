@@ -531,7 +531,7 @@ account_lb(IPAddrList, LBAdvice) ->
 %%
 %%
 %% % TODO this is a temporary solution, returns GR's NS addresses
-%% return_gr_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}) ->
+%% return_oz_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}) ->
 %%     {ok,
 %%             [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
 %%             lists:flatten([begin

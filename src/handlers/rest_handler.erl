@@ -228,7 +228,7 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
 resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {Method, Req2} = cowboy_req:method(Req),
     case Method of
-    %% Global Registry REST API always creates new resource on POST
+    %% OneZone REST API always creates new resource on POST
         <<"POST">> -> {false, Req2, State};
         _ ->
             {ResId, Req3} = get_res_id(Req2, State),
