@@ -3,6 +3,7 @@ MAINTAINER Krzysztof Trzepla <krzysztof.trzepla@gmail.com>
 
 # Build arguments
 ARG VERSION=""
+ARG ONEPANEL_AUTOSTART=false
 
 # Get the image up to date
 RUN dnf -y upgrade && \

@@ -11,36 +11,38 @@
 ## @end
 ## ===================================================================
 
-VERSION=`git describe --tags --always | tr - .`
-BASEDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-BUILDDIR=${BASEDIR}/build
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+BASE_DIR=${SCRIPT_DIR}/../..
+BUILD_DIR=${SCRIPT_DIR}/build
+
+cd ${BASE_DIR}
+
+REPOSITORY=ssh://git@git.plgrid.pl:7999/vfs/globalregistry.git
+BRANCH=`git rev-parse --abbrev-ref HEAD`
+PKG_VERSION=`git describe --tags --always | tr - .`
+PKG_ID=globalregistry-${PKG_VERSION}
 DISTRIBUTION=fedora-23-x86_64
 
-mkdir -p ${BUILDDIR}
-sed "s/@version@/$VERSION/g" ${BASEDIR}/globalregistry.spec > ${BUILDDIR}/globalregistry.spec
+mkdir -p ${BUILD_DIR}
+sed "s/@version@/$PKG_VERSION/g" ${SCRIPT_DIR}/globalregistry.spec > ${BUILD_DIR}/globalregistry.spec
 
+cd ${BUILD_DIR}
+git clone --depth 1 -b ${BRANCH} ${REPOSITORY} ${PKG_ID}
 
-cd ${BUILDDIR}
-git clone --depth 1 ssh://git@git.plgrid.pl:7999/vfs/globalregistry.git globalregistry-${VERSION}
-cd globalregistry-${VERSION}
-git submodule init
-git submodule update
-${BASEDIR}/../../make.py deps
-cd onepanel
-git submodule init
-git submodule update
-${BASEDIR}/../../make.py deps
-cd ${BUILDDIR}
-tar -czf globalregistry-${VERSION}.tar.gz globalregistry-${VERSION}
-rm -rf globalregistry-${VERSION}
+cd ${BASE_DIR}
+./make.py -C ${BUILD_DIR}/${PKG_ID} deps
+./make.py -C ${BUILD_DIR}/${PKG_ID}/onepanel deps
 
-${BASEDIR}/../../make.py -i onedata/rpm_builder --group mock --privileged \
-                             -s ${BUILDDIR} -c mock --root ${DISTRIBUTION} \
-                             --buildsrpm --spec ${BUILDDIR}/globalregistry.spec \
-                             --sources ${BUILDDIR}/globalregistry-${VERSION}.tar.gz \
-                             --resultdir=${BUILDDIR}
+cd ${BUILD_DIR}
+tar -czf ${PKG_ID}.tar.gz ${PKG_ID}
+rm -rf ${PKG_ID}
 
-${BASEDIR}/../../make.py -i onedata/rpm_builder --group mock --privileged \
-                             -s ${BUILDDIR} -c mock --root ${DISTRIBUTION} \
-                             --rebuild ${BUILDDIR}/globalregistry-${VERSION}-*.src.rpm \
-                             --resultdir=${BUILDDIR}
+cd ${BASE_DIR}
+./make.py -i onedata/rpm_builder --group mock --privileged \
+          -s ${BUILD_DIR} -c mock --root ${DISTRIBUTION} \
+          --buildsrpm --spec ${BUILD_DIR}/globalregistry.spec \
+          --sources ${PKG_ID}.tar.gz --resultdir=${BUILD_DIR}
+
+./make.py -i onedata/rpm_builder --group mock --privileged \
+          -s ${BUILD_DIR} -c mock --root ${DISTRIBUTION} \
+          --rebuild ${PKG_ID}-*.src.rpm --resultdir=${BUILD_DIR}
