@@ -92,6 +92,11 @@ export default {
       manageProviders: 'manage providers',
       enableHints: 'enable hints'
     },
+    accountsList: {
+    },
+    accountAdd: {
+      connectNewAccount: 'Connect new account'
+    },
     spacesAccordion: {
       createNewSpace: 'Create new space',
       createNewSpaceText: 'You can also become a provider yourself and support ' +
@@ -100,6 +105,11 @@ export default {
     },
     spacesAccordionItem: {
       getSupport: 'Get support'
+    },
+    providersAccordion: {
+      chooseProvider: 'Choose Provider'
+    },
+    providersAccordionItem: {
     }
   }
 };

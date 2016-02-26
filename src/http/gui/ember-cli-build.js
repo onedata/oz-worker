@@ -33,6 +33,7 @@ module.exports = function(defaults) {
 
   app.import("bower_components/bind-first/release/jquery.bind-first-0.2.3.min.js");
   app.import("bower_components/jquery-mousewheel/jquery.mousewheel.min.js");
+  app.import("bower_components/jquery-searchable/dist/jquery.searchable-1.1.0.min.js");
 
   return app.toTree();
 };

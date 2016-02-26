@@ -6,10 +6,6 @@ export default Ember.Component.extend({
 
   classNames: ['spaces-accordion-item'],
 
-  providersCount: function() {
-    return this.get('providers').get('length');
-  }.property('space'),
-
   providers: function() {
     return this.get('space').get('providers');
   }.property('space')

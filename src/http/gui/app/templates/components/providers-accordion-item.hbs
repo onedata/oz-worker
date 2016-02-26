@@ -1,0 +1,56 @@
+<!-- TODO: class list-group-item -->
+<div class="accordion-group providers-accordion-group">
+  <div class="item">
+    <div class="accordion-heading providers-accordion-heading">
+      <a class="accordion-toggle providers-accordion-toggle" data-toggle="collapse" href="#collapse-provider-{{provider.id}}">
+        <div class="provider-icon">
+          {{#if provider.isDefault}}
+            {{one-icon icon='provider-default'}}
+          {{else}}
+            {{one-icon icon='provider'}}
+          {{/if}}
+        </div>
+        <div class="provider-header">
+          {{provider.name}}
+        </div>
+        <div class="spaces-count">
+          <div class="icon">
+            {{one-icon icon="space"}}
+          </div>
+          <div class="label">
+            {{provider.spaces.length}}
+          </div>
+        </div>
+      </a>
+    </div>
+    <div id="collapse-provider-{{provider.id}}" class="accordion-body providers-accordion-body sidebar-list collapse">
+      <div class="accordion-inner">
+        <ul>
+          {{#each provider.spaces as |s|}}
+            <li>
+              <div class="icon">
+                {{#if s.isDefault}}
+                  {{one-icon icon="space-default"}}
+                {{else}}
+                  {{one-icon icon="space"}}
+                {{/if}}
+              </div>
+              <div class="label">
+                {{s.name}}
+              </div>
+            </li>
+          {{/each}}
+          <li class='get-support'>
+            <div class="icon">
+              {{one-icon}}
+              {{!-- {{one-icon icon="add"}} --}}
+            </div>
+            <div class="label">
+              {{t 'onezone.spacesAccordionItem.getSupport'}}
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>

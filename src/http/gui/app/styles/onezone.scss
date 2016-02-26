@@ -2,6 +2,9 @@ $onezone-sidebar-width: 380px;
 $onezone-top-bar-height: 80px;
 $onezone-content-padding: 15px;
 
+$onezone-fog-z: 0;
+
+// TODO: http://alistapart.com/article/dry-ing-out-your-sass-mixins
 // TODO: move to colors.scss
 $color-onezone-sidebar-bg: #434343;
 $color-onezone-sidebar-separator: #515151;
@@ -10,9 +13,26 @@ $color-onezone-fog-base: #8294b1;
 // TODO: own experimental alpha
 $color-onezone-fog: rgba($color-onezone-fog-base, 0.8);
 
-$color-button: #57A1E2;
+$color-button: #5094E4;
+$color-provider-working: #6ACB94;
+$color-provider-not-working: #D86669;
 
-$onezone-fog-z: 0;
+.color-provider-working {
+  color: $color-provider-working;
+}
+
+.color-provider-not-working {
+  color: $color-provider-working;
+}
+
+
+.btn-primary {
+  padding: 15px 30px;
+  text-transform: uppercase;
+  font-size: 0.7em;
+  border-color: transparent !important;
+  background-color: $color-button;
+}
 
 .onezone-fog {
   position: fixed;
@@ -64,6 +84,7 @@ $onezone-fog-z: 0;
   }
 }
 
+// component
 .onezone-sidebar {
   position: fixed;
   z-index: $onezone-fog-z + 2;
@@ -92,6 +113,16 @@ $onezone-fog-z: 0;
 
   }
 
+  .sidebar-row {
+    display: block;
+    padding-left: 10px;
+    padding-right: 24px;
+    color: white;
+    clear: both;
+
+    text-decoration: none !important;
+  }
+
   .accordion-container {
     height: 100%;
     overflow-y: auto;
@@ -104,6 +135,7 @@ $onezone-fog-z: 0;
       border-top: $color-onezone-sidebar-separator 2px solid;
 
       .accordion-heading {
+        // TODO: elements can use sidebar-row class
         .accordion-toggle {
           display: block;
           padding-left: 10px;
@@ -212,27 +244,28 @@ $onezone-fog-z: 0;
   }
 
   // specific styles for spaces-accordion, see also .accordion styles
-  .spaces-accordion {
+  // TODO: shared classes
+  .providers-accordion, .spaces-accordion {
     color: white;
     .one-icon {
       font-size: 15pt;
     }
 
-    .spaces-accordion-item {
+    .providers-accordion-item, .spaces-accordion-item {
       &:first-of-type {
         margin-top: 20px;
       }
     }
 
-    .spaces-accordion-group {
+    .providers-accordion-group, .spaces-accordion-group {
       border: none;
 
-      .spaces-accordion-heading {
+      .providers-accordion-heading, .spaces-accordion-heading {
         $spaces-item-height: 35px;
         height: $spaces-item-height;
         line-height: $spaces-item-height;
 
-        .spaces-accordion-toggle {
+        .providers-accordion-toggle, .spaces-accordion-toggle {
           display: table;
           width: 100%;
           height: $spaces-item-height;
@@ -253,11 +286,11 @@ $onezone-fog-z: 0;
 
           &.crate-new-text {}
 
-          .space-icon {
+          .provider-icon, .space-icon {
             display: table-cell;
             width: 30px;
           }
-          .space-header {
+          .provider-header, .space-header {
             display: table-cell;
             padding-left: 8px;
             line-height: $spaces-item-height;
@@ -265,6 +298,8 @@ $onezone-fog-z: 0;
             text-transform: none;
             font-size: 0.8em;
           }
+
+          // for space
           .providers-count {
             display: table-cell;
             width: 50px;
@@ -278,6 +313,31 @@ $onezone-fog-z: 0;
             .label {
               display: table-cell;
               vertical-align: middle;
+              font-size: 0.6em;
+            }
+          }
+
+          // for provider
+          .spaces-count {
+            display: table-cell;
+            width: 50px;
+            overflow-x: hidden;
+            .icon {
+              position: absolute;
+              .one-icon {
+                font-size: 1.1em;
+              }
+            }
+            .label {
+              position: absolute;
+              display: table-cell;
+              vertical-align: middle;
+              height: 35px;
+              line-height: 35px;
+              width: 30px;
+              text-align: center;
+              padding: 0;
+              color: #3A3A3A;
               font-size: 0.6em;
             }
           }
@@ -308,13 +368,26 @@ $onezone-fog-z: 0;
         }
 
         .get-support {
-          font-family: "Lato";
+          font-family: "Lato", sans-serif;
           font-weight: 100;
           font-style: italic;
         }
       }
     }
   }
+
+  // some other styles for spaces sidebar part
+  .space-add-text-row {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    font-size: 0.8em;
+  }
+
+  .space-add-read-more-row {
+    margin: 20px 0;
+  }
+
+
 
   .account-item, .account-add {
     $onezone-account-item-height: $onezone-accordion-heading-height * 0.75;

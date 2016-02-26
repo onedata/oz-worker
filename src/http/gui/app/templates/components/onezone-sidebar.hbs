@@ -41,20 +41,10 @@
           <div class="arrow-down"></div>
         </a>
       </div>
-      <div id="collapse-files" class="accordion-body main-accordion-body collapse">
+      <!-- TODO collapse in -->
+      <div id="collapse-files" class="accordion-body main-accordion-body collapse in">
         <div class="accordion-inner">
-          {{#each providers as |p|}}
-            <ul>
-              <li>
-                {{p.name}}
-                <ul>
-                  {{#each p.spaces as |s|}}
-                    <li>{{s.name}}</li>
-                  {{/each}}
-                </ul>
-              </li>
-            </ul>
-          {{/each}}
+          {{providers-accordion providers=providers}}
         </div>
       </div>
     </div>
