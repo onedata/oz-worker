@@ -44,17 +44,18 @@ find_query(<<"space">>, _Data) ->
 %% Called when ember asks for all files
 find_all(<<"space">>) ->
     UserId = g_session:get_user_id(),
-    {ok, Res} = user_logic:get_spaces(UserId),
-    Spaces = proplists:get_value(spaces, Res),
-    Default = proplists:get_value(default, Res),
+    {ok, GetSpaces} = user_logic:get_spaces(UserId),
+    Spaces = proplists:get_value(spaces, GetSpaces),
+    Default = proplists:get_value(default, GetSpaces),
     Res = lists:map(
         fun(SpaceId) ->
+            ?dump(SpaceId),
             {ok, SpaceData} = space_logic:get_data(SpaceId, provider),
             Name = proplists:get_value(name, SpaceData),
             {ok, [{providers, Providers}]} =
                 space_logic:get_providers(SpaceId, provider),
             [
-                {<<"id">>, <<"s1">>},
+                {<<"id">>, SpaceId},
                 {<<"name">>, Name},
                 {<<"isDefault">>, SpaceId =:= Default},
                 {<<"providers">>, Providers}
