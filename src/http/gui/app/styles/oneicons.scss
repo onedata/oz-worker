@@ -1,55 +1,63 @@
-$icomoon-font-path: "/assets/fonts/oneicons" !default;
+$icomoon-font-path: "/assets/fonts/oneicons";
 
-$oneicon-arrow-down: "\e900";
-$oneicon-arrow-right: "\e901";
-$oneicon-checkbox-check: "\e902";
-$oneicon-checkbox-x: "\e903";
-$oneicon-collection-create: "\e904";
-$oneicon-copy: "\e905";
-$oneicon-cut: "\e906";
-$oneicon-file: "\e907";
-$oneicon-folder-new: "\e908";
-$oneicon-folder: "\e909";
-$oneicon-group-invite: "\e90a";
-$oneicon-group: "\e90b";
-$oneicon-inbox: "\e90c";
-$oneicon-join: "\e90d";
-$oneicon-lock: "\e90e";
-$oneicon-menu-collection: "\e90f";
-$oneicon-menu-data: "\e910";
-$oneicon-menu-group: "\e911";
-$oneicon-menu-links: "\e912";
-$oneicon-menu-recent: "\e913";
-$oneicon-menu-token: "\e914";
-$oneicon-move-down: "\e915";
-$oneicon-move-up: "\e916";
-$oneicon-provider: "\e917";
-$oneicon-remove: "\e918";
-$oneicon-rename: "\e919";
-$oneicon-search: "\e91a";
-$oneicon-share: "\e91b";
-$oneicon-space-add: "\e91c";
-$oneicon-space-default: "\e91d";
-$oneicon-space-empty: "\e91e";
-$oneicon-space-leave: "\e91f";
-$oneicon-space: "\e920";
-$oneicon-star: "\e921";
-$oneicon-support-get: "\e922";
-$oneicon-trash: "\e923";
-$oneicon-upload: "\e924";
-$oneicon-user-add: "\e925";
-$oneicon-user-profile: "\e926";
-$oneicon-user: "\e927";
-$oneicon-view-grid: "\e928";
-$oneicon-view-list: "\e929";
+$oneicon-star-empty: "\e900";
+$oneicon-add: "\e901";
+$oneicon-arrow-down: "\e902";
+$oneicon-arrow-right: "\e903";
+$oneicon-checkbox-check: "\e904";
+$oneicon-checkbox-x: "\e905";
+$oneicon-collection-create: "\e906";
+$oneicon-copy: "\e907";
+$oneicon-cut: "\e908";
+$oneicon-file: "\e909";
+$oneicon-folder-new: "\e90a";
+$oneicon-folder: "\e90b";
+$oneicon-group-invite: "\e90c";
+$oneicon-group: "\e90d";
+$oneicon-inbox: "\e90e";
+$oneicon-join: "\e90f";
+$oneicon-lock: "\e910";
+$oneicon-menu-collection: "\e911";
+$oneicon-menu-data: "\e912";
+$oneicon-menu-group: "\e913";
+$oneicon-menu-links: "\e914";
+$oneicon-menu-recent: "\e915";
+$oneicon-menu-token: "\e916";
+$oneicon-move-down: "\e917";
+$oneicon-move-up: "\e918";
+$oneicon-provider-default: "\e919";
+$oneicon-provider: "\e91a";
+$oneicon-remove: "\e91b";
+$oneicon-rename: "\e91c";
+$oneicon-search: "\e91d";
+$oneicon-share: "\e91e";
+$oneicon-social-dropbox: "\e91f";
+$oneicon-social-fb: "\e920";
+$oneicon-social-github: "\e921";
+$oneicon-social-google: "\e922";
+$oneicon-social-twitter: "\e923";
+$oneicon-space-add: "\e924";
+$oneicon-space-default: "\e925";
+$oneicon-space-empty: "\e926";
+$oneicon-space-leave: "\e927";
+$oneicon-space: "\e928";
+$oneicon-star: "\e929";
+$oneicon-support-get: "\e92a";
+$oneicon-trash: "\e92b";
+$oneicon-upload: "\e92c";
+$oneicon-user-add: "\e92d";
+$oneicon-user-profile: "\e92e";
+$oneicon-user: "\e92f";
+$oneicon-view-grid: "\e930";
+$oneicon-view-list: "\e931";
 
 @font-face {
     font-family: 'oneicons';
-    src:    url('#{$icomoon-font-path}/oneicons.eot?iwvky6');
-    src:    url('#{$icomoon-font-path}/oneicons.eot?iwvky6#iefix') format('embedded-opentype'),
-        url('#{$icomoon-font-path}/oneicons.ttf?iwvky6') format('truetype'),
-        url('#{$icomoon-font-path}/oneicons.woff?iwvky6') format('woff'),
-        url('#{$icomoon-font-path}/oneicons.svg?iwvky6#oneicons') format('svg');
+    src:    url('#{$icomoon-font-path}/oneicons.eot?y4k314');
+    src:    url('#{$icomoon-font-path}/oneicons.eot?y4k314#iefix') format('embedded-opentype'),
+        url('#{$icomoon-font-path}/oneicons.ttf?y4k314') format('truetype'),
+        url('#{$icomoon-font-path}/oneicons.woff?y4k314') format('woff'),
+        url('#{$icomoon-font-path}/oneicons.svg?y4k314#oneicons') format('svg');
     font-weight: normal;
     font-style: normal;
 }
@@ -69,6 +77,16 @@ $oneicon-view-list: "\e929";
     -moz-osx-font-smoothing: grayscale;
 }
 
+.oneicon-star-empty {
+    &:before {
+        content: $oneicon-star-empty;
+    }
+}
+.oneicon-add {
+    &:before {
+        content: $oneicon-add;
+    }
+}
 .oneicon-arrow-down {
     &:before {
         content: $oneicon-arrow-down;
@@ -184,6 +202,11 @@ $oneicon-view-list: "\e929";
         content: $oneicon-move-up;
     }
 }
+.oneicon-provider-default {
+    &:before {
+        content: $oneicon-provider-default;
+    }
+}
 .oneicon-provider {
     &:before {
         content: $oneicon-provider;
@@ -207,6 +230,31 @@ $oneicon-view-list: "\e929";
 .oneicon-share {
     &:before {
         content: $oneicon-share;
+    }
+}
+.oneicon-social-dropbox {
+    &:before {
+        content: $oneicon-social-dropbox;
+    }
+}
+.oneicon-social-fb {
+    &:before {
+        content: $oneicon-social-fb;
+    }
+}
+.oneicon-social-github {
+    &:before {
+        content: $oneicon-social-github;
+    }
+}
+.oneicon-social-google {
+    &:before {
+        content: $oneicon-social-google;
+    }
+}
+.oneicon-social-twitter {
+    &:before {
+        content: $oneicon-social-twitter;
     }
 }
 .oneicon-space-add {

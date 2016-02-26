@@ -17,12 +17,14 @@ $color-button: #5094E4;
 $color-provider-working: #6ACB94;
 $color-provider-not-working: #D86669;
 
+$color-onezone-search: #2A2A2A;
+
 .color-provider-working {
   color: $color-provider-working;
 }
 
 .color-provider-not-working {
-  color: $color-provider-working;
+  color: $color-provider-not-working;
 }
 
 
@@ -328,6 +330,7 @@ $color-provider-not-working: #D86669;
           // for provider
           .spaces-count {
             display: table-cell;
+            position: relative;
             width: 50px;
             overflow-x: hidden;
             .icon {
@@ -353,7 +356,7 @@ $color-provider-not-working: #D86669;
 
       }
 
-      .spaces-accordion-body {
+      .providers-accordion-body, .spaces-accordion-body {
         background-color: #3E3E3E;
 
         ul {
@@ -379,6 +382,10 @@ $color-provider-not-working: #D86669;
           font-family: "Lato", sans-serif;
           font-weight: 100;
           font-style: italic;
+
+          .icon {
+            text-align: center;
+          }
         }
       }
     }
@@ -413,6 +420,7 @@ $color-provider-not-working: #D86669;
       width: 32px;
       height: $onezone-account-item-height;
       margin-right: 20px;
+      text-align: center;
       background-position: center center;
       background-repeat: no-repeat;
       background-size: contain;
@@ -425,7 +433,14 @@ $color-provider-not-working: #D86669;
     // TODO: max width to prevent overflow or use table-cell
     .account-label {
       display: inline-block;
+
       font-size: 0.8em;
+
+      &.connect-new {
+        font-family: 'Lato', sans-serif;
+        font-weight: 100;
+        font-style: italic;
+      }
     }
   }
 }
