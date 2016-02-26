@@ -74,6 +74,7 @@ route(_) -> ?INDEX.
 %%--------------------------------------------------------------------
 -spec data_backend(HasSession :: boolean(), Identifier :: binary()) -> HandlerModule :: module().
 data_backend(true, <<"space">>) -> space_data_backend;
+data_backend(true, <<"auth-account">>) -> auth_account_data_backend;
 data_backend(true, <<"provider">>) -> provider_data_backend.
 
 

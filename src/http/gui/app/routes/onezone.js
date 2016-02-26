@@ -8,7 +8,8 @@ export default OnezoneRoute.extend({
   model() {
     return {
       providers: this.store.findAll('provider'),
-      spaces: this.store.findAll('space')
+      spaces: this.store.findAll('space'),
+      authAccounts: this.store.findAll('auth-account')
     };
   }
 });
