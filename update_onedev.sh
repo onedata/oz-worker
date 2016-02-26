@@ -16,9 +16,9 @@
 
 # Enter the script directory
 RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
-cd $RUNNER_SCRIPT_DIR
+cd ${RUNNER_SCRIPT_DIR}
 
-echo "Trying to clone/update Onedev repository..."
+echo -n "Trying to clone/update onedev repository..."
 mkdir -p deps
 cd deps
 
@@ -28,24 +28,28 @@ if [ ! -d "onedev/.git" ]; then
     git clone ssh://git@git.plgrid.pl:7999/vfs/onedev.git
     if [ $? -eq 0 ]; then
         # The repo was cloned, update to the newest version.
-        echo "OK"
+        echo -e "\t[  OK  ]"
         cd onedev
         git checkout develop
         git pull
     else
         # The repo was not cloned, skip
-        echo "Failed, skipping."
+        echo -e "\t[FAILED]"
+        echo "Replacing auth.config with auth.config.example."
+        cd ${RUNNER_SCRIPT_DIR}
+        cp rel/data/auth.config.example rel/data/auth.config
         exit 0
     fi
 else
     # The repo was not cloned, but it already exists. Update to the newest version.
+    echo -e "\t[  OK  ]"
     cd onedev
     git checkout develop
     git pull
 fi
 
 # Replace auth.config
-cd $RUNNER_SCRIPT_DIR
-echo "Replacing auth.config"
+cd ${RUNNER_SCRIPT_DIR}
+echo "Replacing auth.config."
 cp deps/onedev/auth.config rel/data/auth.config
 exit 0

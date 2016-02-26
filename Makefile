@@ -14,6 +14,10 @@ REBAR           ?= $(BASE_DIR)/rebar
 PKG_VARS_CONFIG  = pkg.vars.config
 OVERLAY_VARS    ?=
 
+DOCKER_REG_USER        ?= ""
+DOCKER_REG_PASSWORD    ?= ""
+DOCKER_REG_EMAIL       ?= ""
+
 BASE_DIR         = $(shell pwd)
 GIT_URL := $(shell git config --get remote.origin.url | sed -e 's/\(\/[^/]*\)$$//g')
 GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgrid.pl:7999/vfs'; else echo ${GIT_URL}; fi)
@@ -22,7 +26,7 @@ export ONEDATA_GIT_URL
 
 .PHONY: deps test package
 
-all: rel
+all: test_rel
 
 ##
 ## Rebar targets
@@ -148,3 +152,9 @@ package: check_distribution package/$(PKG_ID).tar.gz
 
 pkgclean:
 	rm -rf package
+
+docker:
+	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \
+                     --email $(DOCKER_REG_EMAIL) --name oz_worker \
+                     --build-arg VERSION=$(PKG_VERSION) \
+                     --publish --remove packaging

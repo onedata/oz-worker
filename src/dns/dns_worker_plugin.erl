@@ -24,7 +24,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec resolve(Method :: atom(), Domain :: string(), LBAdvice :: term()) ->
-    dns_handler_behaviour:handler_reply().
+    dns_worker_plugin_behaviour:handler_reply().
 
 resolve(Method, Domain, LBAdvice) ->
     dns_query_handler:Method(Domain, LBAdvice).
