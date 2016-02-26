@@ -1212,7 +1212,7 @@ do_request(Endpoint, Headers, Method, Body, Options) ->
 
 get_macaroon_id(Token) ->
     {ok, Macaroon} = macaroon:deserialize(Token),
-    {ok, [{_, Identifier}]} = macaroon:third_party_caveats(Macaroon),
+    [{_, Identifier}] = macaroon:third_party_caveats(Macaroon),
     Identifier.
 
 prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
@@ -1220,7 +1220,7 @@ prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
     BoundMacaroons = lists:map(
         fun(SrlzdDischMacaroon) ->
             {ok, DM} = macaroon:deserialize(SrlzdDischMacaroon),
-            {ok, BDM} = macaroon:prepare_for_request(Macaroon, DM),
+            BDM = macaroon:prepare_for_request(Macaroon, DM),
             {ok, SBDM} = macaroon:serialize(BDM),
             SBDM
         end, [str_utils:to_binary(SerializedDischarges)]),
