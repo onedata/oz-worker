@@ -90,15 +90,11 @@
 
 all() ->
     ?ALL([
-        %% todo: fix VFS-1637 prior to enabling those cases
-        %% todo: any rest test has chance of failing due to timeout
-        %% todo: timeout is caused by random messages sen by some nif
-        %% todo: root of problems probably lies in macaroons nif
-        %% {group, provider_rest_module_test_group},
-        %% {group, user_rest_module_test_group},
-        %% {group, group_rest_module_test_group},
-        %% {group, spaces_rest_module_test_group},
-        %% bad_request_test
+        {group, provider_rest_module_test_group},
+        {group, user_rest_module_test_group},
+        {group, group_rest_module_test_group},
+        {group, spaces_rest_module_test_group},
+        bad_request_test
     ]).
 
 groups() ->
@@ -1212,7 +1208,7 @@ do_request(Endpoint, Headers, Method, Body, Options) ->
 
 get_macaroon_id(Token) ->
     {ok, Macaroon} = macaroon:deserialize(Token),
-    {ok, [{_, Identifier}]} = macaroon:third_party_caveats(Macaroon),
+    [{_, Identifier}] = macaroon:third_party_caveats(Macaroon),
     Identifier.
 
 prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
@@ -1220,7 +1216,7 @@ prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
     BoundMacaroons = lists:map(
         fun(SrlzdDischMacaroon) ->
             {ok, DM} = macaroon:deserialize(SrlzdDischMacaroon),
-            {ok, BDM} = macaroon:prepare_for_request(Macaroon, DM),
+            BDM = macaroon:prepare_for_request(Macaroon, DM),
             {ok, SBDM} = macaroon:serialize(BDM),
             SBDM
         end, [str_utils:to_binary(SerializedDischarges)]),

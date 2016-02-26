@@ -14,6 +14,7 @@
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% Atoms representing types of valid tokens.
 -type token_type() :: group_invite_token | space_create_token |
@@ -42,17 +43,19 @@ validate(Token, TokenType) ->
     case macaroon:deserialize(Token) of
         {error, _} -> false;
         {ok, M} ->
-            {ok, Id} = macaroon:identifier(M),
+            Id = macaroon:identifier(M),
             case token:get(Id) of
                 {error, _} -> false;
                 {ok, #document{value = #token{secret = Secret}}} ->
-                    {ok, V} = macaroon_verifier:create(),
-                    ok = macaroon_verifier:satisfy_exact(V,
+                    V = macaroon_verifier:create(),
+                    V1 = macaroon_verifier:satisfy_exact(V,
                         ["tokenType = ", atom_to_list(TokenType)]),
 
-                    case macaroon_verifier:verify(V, M, Secret) of
+                    case macaroon_verifier:verify(V1, M, Secret) of
                         ok -> {true, M};
-                        _ -> false
+                        {error, Reason} ->
+                            ?info("Bad macaroon ~p: ~p", [Id, Reason]),
+                            false
                     end
             end
     end.
@@ -73,32 +76,31 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     {ok, Identifier} = token:save(#document{value = TokenData}),
 
     % @todo expiration time
-    {ok, M1} = macaroon:create("registry", Secret, Identifier),
-    {ok, M2} = macaroon:add_first_party_caveat(M1,
+    M1 = macaroon:create("registry", Secret, Identifier),
+    M2 = macaroon:add_first_party_caveat(M1,
         ["tokenType = ", atom_to_list(TokenType)]),
 
     macaroon:serialize(M2).
 
 %%--------------------------------------------------------------------
 %% @doc Returns token issuer.
-%% Throws exception when call to dao fails, or token doesn't exist in db.
+%% Throws exception when the token is invalid, a call to dao fails,
+%% or token doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_issuer(Token :: binary()) -> {ok, [proplists:property()]}.
 get_issuer(Token) ->
-    case macaroon:deserialize(Token) of
-        {ok, Macaroon} ->
-            {ok, Identifier} = macaroon:identifier(Macaroon),
-            {ok, TokenDoc} = token:get(Identifier),
-            #document{value = #token{
-                issuer = #client{type = ClientType, id = ClientId}
-            }} = TokenDoc,
+    {ok, Macaroon} = macaroon:deserialize(Token),
+    Identifier = macaroon:identifier(Macaroon),
+    {ok, TokenDoc} = token:get(Identifier),
+    #document{value = #token{
+        issuer = #client{type = ClientType, id = ClientId}
+    }} = TokenDoc,
 
-            {ok, [
-                {clientType, ClientType},
-                {clientId, ClientId}
-            ]}
-    end.
+    {ok, [
+        {clientType, ClientType},
+        {clientId, ClientId}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc Consumes a token, returning associated resource.
@@ -108,7 +110,7 @@ get_issuer(Token) ->
 -spec consume(Macaroon :: macaroon:macaroon()) ->
     {ok, {resource_type(), binary()}}.
 consume(M) ->
-    {ok, Identifier} = macaroon:identifier(M),
+    Identifier = macaroon:identifier(M),
     {ok, TokenDoc} = token:get(Identifier),
     #document{value = #token{resource = ResourceType,
         resource_id = ResourceId}} = TokenDoc,
