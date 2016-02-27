@@ -24,7 +24,7 @@
 -export([
     space_changes_after_subscription/1, space_changes_before_subscription/1, node_for_subscription_changes/1,
     subscription_expires_or_is_renewed/1
-]).
+    , change_bridge_restarts/1]).
 
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
 -define(COMMUNICATION_WAIT, 500).
@@ -42,9 +42,26 @@
 %%%===================================================================
 
 all() -> ?ALL([
-    space_changes_after_subscription, space_changes_before_subscription, node_for_subscription_changes,
+    change_bridge_restarts, space_changes_after_subscription,
+    space_changes_before_subscription, node_for_subscription_changes,
     subscription_expires_or_is_renewed
 ]).
+
+change_bridge_restarts(_Config) ->
+    ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
+
+    gen_server:cast({global, changes_bridge}, stop),
+    timer:sleep(200),
+    ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
+
+    gen_server:cast({global, changes_bridge}, stop),
+    timer:sleep(200),
+    ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
+
+    gen_server:cast({global, changes_bridge}, stop),
+    timer:sleep(200),
+    ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
+    ok.
 
 space_changes_after_subscription(Config) ->
     [Node1, _] = ?config(oz_worker_nodes, Config),
@@ -218,7 +235,8 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_new(Nodes, http_client),
-    test_utils:mock_expect(Nodes, http_client, post, fun(_Address, _Options, _Body) -> ok end),
+    test_utils:mock_expect(Nodes, http_client, post, fun(_Address, _Options, _Body) ->
+        ok end),
     Config.
 
 end_per_testcase(_, Config) ->
@@ -264,7 +282,8 @@ verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges, Request,
         _ ->
             Data = json_utils:decode(Body),
             ChangeData = lists:last(proplists:delete(<<"seq">>, Data)),
-            lists:foreach(fun(Forbidden) -> ?assertNotMatch(Forbidden, ChangeData) end, ForbiddenChanges),
+            lists:foreach(fun(Forbidden) ->
+                ?assertNotMatch(Forbidden, ChangeData) end, ForbiddenChanges),
             Remaining = ExpectedChanges -- [ChangeData],
             verify_communication(Node, Endpoint, Remaining, ForbiddenChanges, Request + 1, ?ALLOWED_FAILURES)
     end.

@@ -45,6 +45,11 @@ handle(healthcheck) ->
         _ -> {error, couchbeam_not_reachible}
     end;
 
+handle({handle_change, Seq, Doc, Type}) ->
+    subscribers:cleanup(),
+    Callbacks = subscribers:callbacks(),
+    handle_change(Seq, Doc, Type, Callbacks);
+
 handle({provider_subscribe, ProviderID, Callback, From}) ->
     ?info("Request ~p", [{provider_subscribe, ProviderID, Callback, From}]),
     subscribers:add(ProviderID, Callback),
