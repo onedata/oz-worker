@@ -11,6 +11,7 @@ ebin
 rel/globalregistry
 rel/globalregistry-*.rpm
 rel/resources/auth.config
+rel/rpm/build
 package
 package.tar.gz
 dockerbuild-sha.txt
