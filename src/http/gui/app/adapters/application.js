@@ -163,24 +163,22 @@ export default DS.RESTAdapter.extend({
    * by ember.
    */
   transformResponse: function (json, type, operation) {
-    var records_name = Ember.String.pluralize(
-      Ember.String.camelize(type));
     var result = {};
     switch (operation) {
       case FIND:
-        result[records_name] = json;
+        result[type] = json;
         return result;
 
       case FIND_ALL:
-        result[records_name] = json;
+        result[type] = json;
         return result;
 
       case FIND_QUERY:
-        result[records_name] = json;
+        result[type] = json;
         return result;
 
       case FIND_MANY:
-        result[records_name] = json;
+        result[type] = json;
         return result;
 
       case CREATE_RECORD:
