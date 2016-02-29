@@ -103,6 +103,7 @@ validate_login() ->
                                                 {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_support_token, {space, SpaceID}),
                                                 user_logic:modify(UserId, [{first_space_support_token, Token}]),
                                                 g_session:log_in(UserId),
+                                                g_session:put_value(firstLogin, true),
                                                 new_user
                                         end
                                 end;

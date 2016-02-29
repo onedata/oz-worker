@@ -16,6 +16,7 @@
 
 -compile([export_all]).
 
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -25,7 +26,7 @@
 
 %% Convenience macro to log a debug level log dumping given variable.
 -define(log_debug(_Arg),
-    ?debug("~s", [str_utils:format("AUTHORIZER_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
+    ?alert("~s", [str_utils:format("AUTHORIZER_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
 ).
 
 
@@ -43,23 +44,28 @@ find_query(<<"authorizer">>, _Data) ->
 
 %% Called when ember asks for all files
 find_all(<<"authorizer">>) ->
-    Res = [
-        [
-            {<<"id">>, <<"a1">>},
-            {<<"type">>, <<"google">>},
-            {<<"email">>, <<"liput@gmail.com">>}
-        ],
-        [
-            {<<"id">>, <<"a2">>},
-            {<<"type">>, <<"dropbox">>},
-            {<<"email">>, <<"liputdb@gmail.com">>}
-        ],
-        [
-            {<<"id">>, <<"a3">>},
-            {<<"type">>, <<"facebook">>},
-            {<<"email">>, <<"liputfb@gmail.com">>}
-        ]
-    ],
+    {ok, #document{value = #onedata_user{connected_accounts = OAuthAccounts}}} =
+        onedata_user:get(g_session:get_user_id()),
+    % One connected account can have multiple email addresses - create
+    % a separate authorizer record for every
+    Res = lists:foldl(
+        fun(OAuthAccount, Acc) ->
+            #oauth_account{
+                provider_id = Provider,
+                email_list = Emails,
+                user_id = UserId} = OAuthAccount,
+            ProviderBin = str_utils:to_binary(Provider),
+            AccId = <<ProviderBin/binary, "#", UserId/binary>>,
+            Accounts = lists:map(
+                fun(Email) ->
+                    [
+                        {<<"id">>, AccId},
+                        {<<"type">>, ProviderBin},
+                        {<<"email">>, Email}
+                    ]
+                end, Emails),
+            Accounts ++ Acc
+        end, [], OAuthAccounts),
     {ok, Res}.
 
 
