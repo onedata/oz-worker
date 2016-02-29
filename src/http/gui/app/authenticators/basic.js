@@ -10,6 +10,7 @@ export default Base.extend({
   server: Ember.inject.service('server'),
 
   authenticate(options) {
+    console.debug('auth authenticate start ');
     return new Ember.RSVP.Promise((resolve/*, reject*/) => {
       // Just resolve the promise - this is called from websocket handler
       // when the server has sent sessionDetails to the client, which means

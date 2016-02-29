@@ -17,16 +17,22 @@
 
 -compile([export_all]).
 
+-include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([callback/2]).
 
 callback(<<"getLoginEndpoint">>, ProviderBin) ->
-    Provider = provider_to_provider_id(ProviderBin),
-    HandlerModule = auth_config:get_provider_module(Provider),
-    {ok, URL} = HandlerModule:get_redirect_url(false),
-    {ok, URL}.
+    case application:get_env(?APP_Name, dev_mode) of
+        {ok, true} ->
+            {ok, <<"/dev_login">>};
+        _ ->
+            Provider = provider_to_provider_id(ProviderBin),
+            HandlerModule = auth_config:get_provider_module(Provider),
+            {ok, URL} = HandlerModule:get_redirect_url(false),
+            {ok, URL}
+    end.
 
 
 provider_to_provider_id(<<"github">>) -> github;

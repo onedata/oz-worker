@@ -18,7 +18,9 @@
 -author("Lukasz Opiola").
 -behaviour(gui_route_plugin_behaviour).
 
+-include("gui/common.hrl").
 -include_lib("gui/include/gui.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -export([route/1, data_backend/2, callback_backend/2]).
 -export([login_page_path/0, default_page_path/0]).
@@ -35,7 +37,6 @@
 -define(VALIDATE_LOGIN, #gui_route{
     requires_session = ?SESSION_NOT_LOGGED_IN,
     html_file = undefined,
-%%    page_backend = validate_login_backend
     page_backend = validate_login_backend
 }).
 
@@ -44,6 +45,18 @@
     websocket = ?SESSION_ANY,
     html_file = <<"index.html">>,
     page_backend = undefined
+}).
+
+-define(DEV_LOGIN, #gui_route{
+    requires_session = ?SESSION_ANY,
+    html_file = undefined,
+    page_backend = dev_login_backend
+}).
+
+-define(VALIDATE_DEV_LOGIN, #gui_route{
+    requires_session = ?SESSION_ANY,
+    html_file = undefined,
+    page_backend = validate_dev_login_backend
 }).
 
 
@@ -61,6 +74,20 @@
 -spec route(Path :: binary()) -> #gui_route{}.
 route(<<"/do_logout">>) -> ?LOGOUT;
 route(<<"/validate_login">>) -> ?VALIDATE_LOGIN;
+route(<<"/dev_login">>) ->
+    case application:get_env(?APP_Name, dev_mode) of
+        {ok, true} ->
+            ?DEV_LOGIN;
+        _ ->
+            ?INDEX
+    end;
+route(<<"/validate_dev_login">>) ->
+    case application:get_env(?APP_Name, dev_mode) of
+        {ok, true} ->
+            ?VALIDATE_DEV_LOGIN;
+        _ ->
+            ?INDEX
+    end;
 route(<<"/">>) -> ?INDEX;
 route(<<"/index.html">>) -> ?INDEX;
 route(_) -> ?INDEX.
