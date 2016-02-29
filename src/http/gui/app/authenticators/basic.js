@@ -20,6 +20,7 @@ export default Base.extend({
 
   restore(data) {
     // Inform the websocket adapter that we anticipate session restoring.
+    console.debug('auth restore start ');
     return this.get('server').tryToRestoreSession();
   },
 

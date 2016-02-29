@@ -98,11 +98,9 @@ create(UserId, Name) ->
 -spec modify(GroupId :: binary(), Name :: binary()) ->
     ok.
 modify(GroupId, Name) ->
-    {ok, Doc} = user_group:get(GroupId),
-    #document{value = #user_group{} = Group} = Doc,
-    GroupNew = Group#user_group{name = Name},
-    user_group:save(Doc#document{value = GroupNew}),
-
+    {ok, _} = user_group:update(GroupId, fun(Group) ->
+        {ok, Group#user_group{name = Name}}
+    end),
     ok.
 
 %%--------------------------------------------------------------------
@@ -119,16 +117,14 @@ join(UserId, Macaroon) ->
         true -> ok;
         false ->
             Privileges = privileges:group_user(),
-            {ok, GroupDoc} = user_group:get(GroupId),
-            #document{value = #user_group{users = Users} = Group} = GroupDoc,
-            GroupNew = Group#user_group{users = [{UserId, Privileges} | Users]},
-
-            {ok, UserDoc} = onedata_user:get(UserId),
-            #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
-            UserNew = User#onedata_user{groups = [GroupId | Groups]},
-
-            user_group:save(GroupDoc#document{value = GroupNew}),
-            onedata_user:save(UserDoc#document{value = UserNew})
+            {ok, _} = user_group:update(GroupId, fun(Group) ->
+                #user_group{users = Users} = Group,
+                {ok, Group#user_group{users = [{UserId, Privileges} | Users]}}
+            end),
+            {ok, _} = onedata_user:update(UserId, fun(User) ->
+                #onedata_user{groups = Groups} = User,
+                {ok, User#onedata_user{groups = [GroupId | Groups]}}
+            end)
     end,
     {ok, GroupId}.
 
@@ -141,11 +137,11 @@ join(UserId, Macaroon) ->
     Privileges :: [privileges:group_privilege()]) ->
     ok.
 set_privileges(GroupId, UserId, Privileges) ->
-    {ok, Doc} = user_group:get(GroupId),
-    #document{value = #user_group{users = Users} = Group} = Doc,
-    UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, Privileges}),
-    GroupNew = Group#user_group{users = UsersNew},
-    user_group:save(Doc#document{value = GroupNew}),
+    {ok, _} = user_group:update(GroupId, fun(Group) ->
+        #user_group{users = Users} = Group,
+        UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, Privileges}),
+        {ok, Group#user_group{users = UsersNew}}
+    end),
     ok.
 
 %%--------------------------------------------------------------------
@@ -232,21 +228,18 @@ get_privileges(GroupId, UserId) ->
     true.
 remove(GroupId) ->
     {ok, #document{value = #user_group{users = Users, spaces = Spaces}}} = user_group:get(GroupId),
-
     lists:foreach(fun({UserId, _}) ->
-        {ok, UserDoc} = onedata_user:get(UserId),
-        #document{value = #onedata_user{groups = UGroups} = User} = UserDoc,
-        NewUser = User#onedata_user{groups = lists:delete(GroupId, UGroups)},
-        onedata_user:save(UserDoc#document{value = NewUser})
+        {ok, _} = onedata_user:update(UserId, fun(User) ->
+            #onedata_user{groups = Groups} = User,
+            {ok, User#onedata_user{groups = lists:delete(GroupId, Groups)}}
+        end)
     end, Users),
-
     lists:foreach(fun(SpaceId) ->
-        {ok, SpaceDoc} = space:get(SpaceId),
-        #document{value = #space{groups = SGroups} = Space} = SpaceDoc,
-        NewSpace = Space#space{groups = lists:keydelete(GroupId, 1, SGroups)},
-        space:save(SpaceDoc#document{value = NewSpace})
+        {ok, _} = space:update(SpaceId, fun(Space) ->
+            #space{groups = SGroups} = Space,
+            {ok, Space#space{groups = lists:keydelete(GroupId, 1, SGroups)}}
+        end)
     end, Spaces),
-
     user_group:delete(GroupId),
     true.
 
@@ -258,18 +251,15 @@ remove(GroupId) ->
 -spec remove_user(GroupId :: binary(), UserId :: binary()) ->
     true.
 remove_user(GroupId, UserId) ->
-    {ok, UserDoc} = onedata_user:get(UserId),
-    #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
-    UserNew = User#onedata_user{groups = lists:delete(GroupId, Groups)},
-
-    {ok, GroupDoc} = user_group:get(GroupId),
-    #document{value = #user_group{users = Users} = Group} = GroupDoc,
-    GroupNew = Group#user_group{users = lists:keydelete(UserId, 1, Users)},
-
-    onedata_user:save(UserDoc#document{value = UserNew}),
-    user_group:save(GroupDoc#document{value = GroupNew}),
+    {ok, _} = user_group:update(GroupId, fun(Group) ->
+        #user_group{users = Users} = Group,
+        {ok, Group#user_group{users = lists:keydelete(UserId, 1, Users)}}
+    end),
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        #onedata_user{groups = Groups} = User,
+        {ok, User#onedata_user{groups = lists:delete(GroupId, Groups)}}
+    end),
     cleanup(GroupId),
-
     true.
 
 %%--------------------------------------------------------------------

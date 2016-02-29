@@ -162,9 +162,9 @@ create({provider, ProviderId}, Name, Macaroon, Size) ->
 -spec modify(SpaceId :: binary(), Name :: binary()) ->
     ok.
 modify(SpaceId, Name) ->
-    {ok, #document{value = Space} = Doc} = space:get(SpaceId),
-    SpaceNew = Space#space{name = Name},
-    space:save(Doc#document{value = SpaceNew}),
+    {ok, _} = space:update(SpaceId, fun(Space) ->
+        {ok, Space#space{name = Name}}
+    end),
     ok.
 
 %%--------------------------------------------------------------------
@@ -176,10 +176,11 @@ modify(SpaceId, Name) ->
     Privileges :: [privileges:space_privilege()]) ->
     ok.
 set_privileges(SpaceId, Member, Privileges) ->
-    {ok, #document{value = Space} = Doc} = space:get(SpaceId),
-    PrivilegesNew = ordsets:from_list(Privileges),
-    SpaceNew = set_privileges_aux(Space, Member, PrivilegesNew),
-    space:save(Doc#document{value = SpaceNew}),
+    {ok, _} = space:update(SpaceId, fun(Space) ->
+        PrivilegesNew = ordsets:from_list(Privileges),
+        SpaceNew = set_privileges_aux(Space, Member, PrivilegesNew),
+        {ok, SpaceNew}
+    end),
     ok.
 
 %%--------------------------------------------------------------------
@@ -194,17 +195,15 @@ join({user, UserId}, Macaroon) ->
     case has_user(SpaceId, UserId) of
         true -> ok;
         false ->
-            Privileges = privileges:space_user(),
-            {ok, SpaceDoc} = space:get(SpaceId),
-            #document{value = #space{users = Users} = Space} = SpaceDoc,
-            SpaceNew = Space#space{users = [{UserId, Privileges} | Users]},
-
-            {ok, UserDoc} = onedata_user:get(UserId),
-            #document{value = #onedata_user{spaces = Spaces} = User} = UserDoc,
-            UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
-
-            space:save(SpaceDoc#document{value = SpaceNew}),
-            onedata_user:save(UserDoc#document{value = UserNew})
+            {ok, _} = space:update(SpaceId, fun(Space) ->
+                Privileges = privileges:space_user(),
+                #space{users = Users} = Space,
+                {ok, Space#space{users = [{UserId, Privileges} | Users]}}
+            end),
+            {ok, _} = onedata_user:update(UserId, fun(User) ->
+                #onedata_user{spaces = USpaces} = User,
+                {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
+            end)
     end,
     {ok, SpaceId};
 join({group, GroupId}, Macaroon) ->
@@ -213,16 +212,14 @@ join({group, GroupId}, Macaroon) ->
         true -> ok;
         false ->
             Privileges = privileges:space_user(),
-            {ok, SpaceDoc} = space:get(SpaceId),
-            #document{value = #space{groups = Groups} = Space} = SpaceDoc,
-            SpaceNew = Space#space{groups = [{GroupId, Privileges} | Groups]},
-
-            {ok, GroupDoc} = user_group:get(GroupId),
-            #document{value = #user_group{spaces = Spaces} = Group} = GroupDoc,
-            GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
-
-            space:save(SpaceDoc#document{value = SpaceNew}),
-            user_group:save(GroupDoc#document{value = GroupNew})
+            {ok, _} = space:update(SpaceId, fun(Space) ->
+                #space{groups = Groups} = Space,
+                {ok, Space#space{groups = [{GroupId, Privileges} | Groups]}}
+            end),
+            {ok, _} = user_group:update(GroupId, fun(Group) ->
+                #user_group{spaces = Spaces} = Group,
+                {ok, Group#user_group{spaces = [SpaceId | Spaces]}}
+            end)
     end,
     {ok, SpaceId}.
 
@@ -239,13 +236,14 @@ support(ProviderId, Macaroon, SupportedSize) ->
     case has_provider(SpaceId, ProviderId) of
         true -> ok;
         false ->
-            {ok, SpaceDoc} = space:get(SpaceId),
-            #document{value = #space{size = Size, providers = Providers} = Space} = SpaceDoc,
-            SpaceNew = Space#space{size = [{ProviderId, SupportedSize} | Size], providers = [ProviderId | Providers]},
-
-            add_space_to_providers(SpaceId, [ProviderId]),
-
-            space:save(SpaceDoc#document{value = SpaceNew})
+            {ok, _} = space:update(SpaceId, fun(Space) ->
+                #space{size = Size, providers = Providers} = Space,
+                {ok, Space#space{
+                    size = [{ProviderId, SupportedSize} | Size],
+                    providers = [ProviderId | Providers]
+                }}
+            end),
+            add_space_to_providers(SpaceId, [ProviderId])
     end,
     {ok, SpaceId}.
 
@@ -386,24 +384,24 @@ remove(SpaceId) ->
     #space{users = Users, groups = Groups, providers = Providers} = Space,
 
     lists:foreach(fun({UserId, _}) ->
-        {ok, UserDoc} = onedata_user:get(UserId),
-        #document{value = #onedata_user{spaces = USpaces} = User} = UserDoc,
-        NewUser = User#onedata_user{spaces = lists:delete(SpaceId, USpaces)},
-        onedata_user:save(UserDoc#document{value = NewUser})
+        {ok, _} = onedata_user:update(UserId, fun(User) ->
+            #onedata_user{spaces = USpaces} = User,
+            {ok, User#onedata_user{spaces = lists:delete(SpaceId, USpaces)}}
+        end)
     end, Users),
 
     lists:foreach(fun({GroupId, _}) ->
-        {ok, GroupDoc} = user_group:get(GroupId),
-        #document{value = #user_group{spaces = GSpaces} = Group} = GroupDoc,
-        NewGroup = Group#user_group{spaces = lists:delete(SpaceId, GSpaces)},
-        user_group:save(GroupDoc#document{value = NewGroup})
+        {ok, _} = user_group:update(GroupId, fun(Group) ->
+            #user_group{spaces = GSpaces} = Group,
+            {ok, Group#user_group{spaces = lists:delete(SpaceId, GSpaces)}}
+        end)
     end, Groups),
 
     lists:foreach(fun(ProviderId) ->
-        {ok, ProviderDoc} = provider:get(ProviderId),
-        #document{value = #provider{spaces = PSpaces} = Provider} = ProviderDoc,
-        NewProvider = Provider#provider{spaces = lists:delete(SpaceId, PSpaces)},
-        provider:save(ProviderDoc#document{value = NewProvider})
+        {ok, _} = provider:update(ProviderId, fun(Provider) ->
+            #provider{spaces = PSpaces} = Provider,
+            {ok, Provider#provider{spaces = lists:delete(SpaceId, PSpaces)}}
+        end)
     end, Providers),
 
     case space:delete(SpaceId) of
@@ -419,18 +417,15 @@ remove(SpaceId) ->
 -spec remove_user(SpaceId :: binary(), UserId :: binary()) ->
     true.
 remove_user(SpaceId, UserId) ->
-    {ok, UserDoc} = onedata_user:get(UserId),
-    #document{value = #onedata_user{spaces = Spaces} = User} = UserDoc,
-    UserNew = User#onedata_user{spaces = lists:delete(SpaceId, Spaces)},
-
-    {ok, SpaceDoc} = space:get(SpaceId),
-    #document{value = #space{users = Users} = Space} = SpaceDoc,
-    SpaceNew = Space#space{users = lists:keydelete(UserId, 1, Users)},
-
-    onedata_user:save(UserDoc#document{value = UserNew}),
-    space:save(SpaceDoc#document{value = SpaceNew}),
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        #onedata_user{spaces = USpaces} = User,
+        {ok, User#onedata_user{spaces = lists:delete(SpaceId, USpaces)}}
+    end),
+    {ok, _} = space:update(SpaceId, fun(Space) ->
+        #space{users = Users} = Space,
+        {ok, Space#space{users = lists:keydelete(UserId, 1, Users)}}
+    end),
     cleanup(SpaceId),
-
     true.
 
 %%--------------------------------------------------------------------
@@ -441,18 +436,15 @@ remove_user(SpaceId, UserId) ->
 -spec remove_group(SpaceId :: binary(), GroupId :: binary()) ->
     true.
 remove_group(SpaceId, GroupId) ->
-    {ok, GroupDoc} = user_group:get(GroupId),
-    #document{value = #user_group{spaces = Spaces} = Group} = GroupDoc,
-    GroupNew = Group#user_group{spaces = lists:delete(SpaceId, Spaces)},
-
-    {ok, SpaceDoc} = space:get(SpaceId),
-    #document{value = #space{groups = Groups} = Space} = SpaceDoc,
-    SpaceNew = Space#space{groups = lists:keydelete(GroupId, 1, Groups)},
-
-    user_group:save(GroupDoc#document{value = GroupNew}),
-    space:save(SpaceDoc#document{value = SpaceNew}),
+    {ok, _} = user_group:update(GroupId, fun(Group) ->
+        #user_group{spaces = Spaces} = Group,
+        {ok, Group#user_group{spaces = lists:delete(SpaceId, Spaces)}}
+    end),
+    {ok, _} = space:update(SpaceId, fun(Space) ->
+        #space{groups = Groups} = Space,
+        {ok, Space#space{groups = lists:keydelete(GroupId, 1, Groups)}}
+    end),
     cleanup(SpaceId),
-
     true.
 
 %%--------------------------------------------------------------------
@@ -463,17 +455,17 @@ remove_group(SpaceId, GroupId) ->
 -spec remove_provider(SpaceId :: binary(), ProviderId :: binary()) ->
     true.
 remove_provider(SpaceId, ProviderId) ->
-    {ok, ProviderDoc} = provider:get(ProviderId),
-    #document{value = #provider{spaces = Spaces} = Provider} = ProviderDoc,
-    ProviderNew = Provider#provider{spaces = lists:delete(SpaceId, Spaces)},
-
-    {ok, SpaceDoc} = space:get(SpaceId),
-    #document{value = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
-    SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers), size = proplists:delete(ProviderId, Size)},
-
-    provider:save(ProviderDoc#document{value = ProviderNew}),
-    space:save(SpaceDoc#document{value = SpaceNew}),
-
+    {ok, _} = provider:update(ProviderId, fun(Provider) ->
+        #provider{spaces = Spaces} = Provider,
+        {ok, Provider#provider{spaces = lists:delete(SpaceId, Spaces)}}
+    end),
+    {ok, _} = space:update(SpaceId, fun(Space) ->
+        #space{providers = Providers, size = Size} = Space,
+        {ok, Space#space{
+            providers = lists:delete(ProviderId, Providers),
+            size = proplists:delete(ProviderId, Size)
+        }}
+    end),
     true.
 
 %%--------------------------------------------------------------------
@@ -485,31 +477,29 @@ remove_provider(SpaceId, ProviderId) ->
     Providers :: [binary()], Size :: [{Provider :: binary(), ProvidedSize :: pos_integer()}]) ->
     {ok, SpaceId :: binary()}.
 create_with_provider({user, UserId}, Name, Providers, Size) ->
-    {ok, UserDoc} = onedata_user:get(UserId),
-    #document{value = #onedata_user{spaces = Spaces} = User} = UserDoc,
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, size = Size, providers = Providers, users = [{UserId, Privileges}]},
-    {ok, SpaceId} = space:save(#document{value = Space}),
 
-    UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
-    onedata_user:save(UserDoc#document{value = UserNew}),
+    {ok, SpaceId} = space:save(#document{value = Space}),
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        #onedata_user{spaces = USpaces} = User,
+        {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
+    end),
 
     add_space_to_providers(SpaceId, Providers),
-
     {ok, SpaceId};
-create_with_provider({group, GroupId}, Name, Providers, Size) ->
-    {ok, GroupDoc} = user_group:get(GroupId),
-    #document{value = #user_group{spaces = Spaces} = Group} = GroupDoc,
 
+create_with_provider({group, GroupId}, Name, Providers, Size) ->
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, size = Size, providers = Providers, groups = [{GroupId, Privileges}]},
     {ok, SpaceId} = space:save(#document{value = Space}),
 
-    GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
-    user_group:save(GroupDoc#document{value = GroupNew}),
+    {ok, _} = user_group:update(GroupId, fun(Group) ->
+        #user_group{spaces = Spaces} = Group,
+        {ok, Group#user_group{spaces = [SpaceId | Spaces]}}
+    end),
 
     add_space_to_providers(SpaceId, Providers),
-
     {ok, SpaceId}.
 
 
@@ -521,12 +511,10 @@ create_with_provider({group, GroupId}, Name, Providers, Size) ->
         -> ok.
 add_space_to_providers(_SpaceId, []) -> ok;
 add_space_to_providers(SpaceId, [ProviderId | RestProviders]) ->
-    {ok, ProviderDoc} = provider:get(ProviderId),
-
-    #document{value = #provider{spaces = PSpaces} = Provider} = ProviderDoc,
-    ProviderNew = Provider#provider{spaces = [SpaceId | PSpaces]},
-    provider:save(ProviderDoc#document{value = ProviderNew}),
-
+    {ok, _} = provider:update(ProviderId, fun(Provider) ->
+        #provider{spaces = Spaces} = Provider,
+        {ok, Provider#provider{spaces = [SpaceId | Spaces]}}
+    end),
     add_space_to_providers(SpaceId, RestProviders).
 
 

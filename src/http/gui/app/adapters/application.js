@@ -28,6 +28,7 @@ var PULL_REQ = 'pullReq';
 var CALLBACK_REQ = 'callbackReq';
 var CALLBACK_RESP = 'callbackResp';
 var SESSION_RESP = 'sessionResp';
+var NO_SESSION_RESP = 'noSessionResp';
 //var PULL_RESULT = "result";
 //var MSG_TYPE_PUSH_UPDATED = "pushUpdated";
 //var MSG_TYPE_PUSH_DELETED = "pushDeleted";
@@ -162,25 +163,22 @@ export default DS.RESTAdapter.extend({
    * by ember.
    */
   transformResponse: function (json, type, operation) {
-    // var records_name = Ember.String.pluralize(type);
-    let records_name = type;
-      // Ember.String.camelize(type));
     var result = {};
     switch (operation) {
       case FIND:
-        result[records_name] = json;
+        result[type] = json;
         return result;
 
       case FIND_ALL:
-        result[records_name] = json;
+        result[type] = json;
         return result;
 
       case FIND_QUERY:
-        result[records_name] = json;
+        result[type] = json;
         return result;
 
       case FIND_MANY:
-        result[records_name] = json;
+        result[type] = json;
         return result;
 
       case CREATE_RECORD:
@@ -324,6 +322,15 @@ export default DS.RESTAdapter.extend({
     } else if (json.msgType === CALLBACK_RESP) {
       callback = adapter.promises.get(json.uuid);
       callback.success(json.data);
+    } else if (json.msgType === NO_SESSION_RESP) {
+      // Reject session restoration as the websocket connection has no session
+      let rejectFunction = this.get('sessionRestoreReject');
+      if (rejectFunction) {
+        console.log("SESSION REJECTED");
+        rejectFunction();
+        this.set('sessionRestoreResolve', null);
+        this.set('sessionRestoreReject', null);
+      }
     } else if (json.msgType === SESSION_RESP) {
       console.log(json.data);
       let resolveFunction = this.get('sessionRestoreResolve');

@@ -77,7 +77,8 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     default_space = DefaultSpace,
                     groups = [],
                     first_space_support_token = <<"">>,
-                    default_provider = <<"">>
+                    default_provider = <<"">>,
+                    chosen_provider = <<"">>
                 },
                 {ok, UserID} = create_user_with_uuid(UserInfo, UserID)
             end, Users),
@@ -178,7 +179,7 @@ destroy_test_entities(Users, Groups, Spaces) ->
 create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
     {ok, {ProviderCertPem, Serial}} = zone_ca:sign_provider_req(UUID, CSRBin),
     Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
-    provider:save(#document{key = binary:bin_to_list(UUID), value = Provider}),
+    provider:save(#document{key = UUID, value = Provider}),
     {ok, UUID, ProviderCertPem}.
 
 

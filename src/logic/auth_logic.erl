@@ -69,8 +69,8 @@ authenticate_user(Identifier) ->
                 authentication_macaroon_expiration_seconds),
 
             Location = ?MACAROONS_LOCATION,
-            {ok, M} = macaroon:create(Location, Secret, Identifier),
-            {ok, M2} = macaroon:add_first_party_caveat(M,
+            M = macaroon:create(Location, Secret, Identifier),
+            M2 = macaroon:add_first_party_caveat(M,
                 ["time < ", integer_to_binary(erlang:system_time(seconds) + ExpirationSecs)]),
 
             case macaroon:serialize(M2) of
@@ -96,7 +96,7 @@ get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
     Token = gen_token(UserId, ProviderId),
     _Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
     {ok, #onedata_user{alias = Alias}} = user_logic:get_user(UserId),
-    ok = user_logic:modify(UserId, [{default_provider, ProviderId}]),
+    ok = user_logic:modify(UserId, [{chosen_provider, ProviderId}]),
     _Prefix = case Alias of
                   ?EMPTY_ALIAS ->
                       <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
@@ -122,9 +122,10 @@ get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
 gen_token(UserId) ->
     Secret = generate_secret(),
     Caveats = [],%["method = GET", "rootResource in spaces,user"],
-    {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{secret = Secret, user_id = UserId}}),
+    {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{
+        secret = Secret, user_id = UserId}}),
     Identifier = binary_to_list(IdentifierBinary),
-    {ok, M} = create_macaroon(Secret, str_utils:to_binary(Identifier), Caveats),
+    M = create_macaroon(Secret, str_utils:to_binary(Identifier), Caveats),
     {ok, Token} = macaroon:serialize(M),
     Token.
 
@@ -136,15 +137,17 @@ gen_token(UserId) ->
 gen_token(UserId, ProviderId) ->
     Secret = generate_secret(),
     Location = ?MACAROONS_LOCATION,
-    {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{secret = Secret, user_id = UserId}}),
+    {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{
+        secret = Secret, user_id = UserId}}),
     Identifier = binary_to_list(IdentifierBinary),
-    {ok, M} = create_macaroon(Secret, str_utils:to_binary(Identifier),
-        [["providerId = ", ProviderId]]),
+    M = create_macaroon(Secret, str_utils:to_binary(Identifier), [[
+        "providerId = ", ProviderId]]),
 
     CaveatKey = generate_secret(),
-    {ok, CaveatIdBinary} = onedata_auth:save(#document{value = #onedata_auth{secret = CaveatKey, user_id = UserId}}),
+    {ok, CaveatIdBinary} = onedata_auth:save(#document{value = #onedata_auth{
+        secret = CaveatKey, user_id = UserId}}),
     CaveatId = binary_to_list(CaveatIdBinary),
-    {ok, M2} = macaroon:add_third_party_caveat(M, Location, CaveatKey, CaveatId),
+    M2 = macaroon:add_third_party_caveat(M, Location, CaveatKey, CaveatId),
     {ok, Token} = macaroon:serialize(M2),
     Token.
 
@@ -158,10 +161,10 @@ gen_token(UserId, ProviderId) ->
     RootResource :: atom()) ->
     {ok, UserId :: binary()} | {error, Reason :: any()}.
 validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) ->
-    {ok, Identifier} = macaroon:identifier(Macaroon),
+    Identifier = macaroon:identifier(Macaroon),
     case onedata_auth:get(Identifier) of
         {ok, #document{value = #onedata_auth{secret = Secret, user_id = UserId}}} ->
-            {ok, V} = macaroon_verifier:create(),
+            V = macaroon_verifier:create(),
 
             VerifyFun = fun
                 (<<"time < ", Integer/binary>>) ->
@@ -177,8 +180,8 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
                     false
             end,
 
-            macaroon_verifier:satisfy_general(V, VerifyFun),
-            case macaroon_verifier:verify(V, Macaroon, Secret, DischargeMacaroons) of
+            V1 = macaroon_verifier:satisfy_general(V, VerifyFun),
+            case macaroon_verifier:verify(V1, Macaroon, Secret, DischargeMacaroons) of
                 ok -> {ok, UserId};
                 {error, Reason} -> {error, Reason}
             end;
@@ -267,7 +270,7 @@ clear_expired_state_tokens() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_macaroon(Secret :: iodata(), Identifier :: iodata(),
-    Caveats :: [iodata()]) -> {ok, macaroon:macaroon()}.
+    Caveats :: [iodata()]) -> macaroon:macaroon().
 create_macaroon(Secret, Identifier, Caveats) ->
     {ok, ExpirationSeconds} = application:get_env(?APP_Name,
         authorization_macaroon_expiration_seconds),
@@ -275,14 +278,12 @@ create_macaroon(Secret, Identifier, Caveats) ->
 
     Location = ?MACAROONS_LOCATION,
 
-    {ok, M} = lists:foldl(
-        fun(Caveat, {ok, Macaroon}) ->
+    lists:foldl(
+        fun(Caveat, Macaroon) ->
             macaroon:add_first_party_caveat(Macaroon, Caveat)
         end,
         macaroon:create(Location, Secret, Identifier),
-        [["time < ", integer_to_binary(ExpirationTime)] | Caveats]),
-
-    {ok, M}.
+        [["time < ", integer_to_binary(ExpirationTime)] | Caveats]).
 
 %%--------------------------------------------------------------------
 %% @private

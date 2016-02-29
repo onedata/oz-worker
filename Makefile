@@ -14,6 +14,10 @@ REBAR           ?= $(BASE_DIR)/rebar
 PKG_VARS_CONFIG  = pkg.vars.config
 OVERLAY_VARS    ?=
 
+DOCKER_REG_USER        ?= ""
+DOCKER_REG_PASSWORD    ?= ""
+DOCKER_REG_EMAIL       ?= ""
+
 BASE_DIR         = $(shell pwd)
 GIT_URL := $(shell git config --get remote.origin.url | sed -e 's/\(\/[^/]*\)$$//g')
 GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgrid.pl:7999/vfs'; else echo ${GIT_URL}; fi)
@@ -65,7 +69,6 @@ compile:
 ##
 ## Generates a dev release
 generate_dev: deps compile gui_dev
-	# Move gui tmp dir away from sources, so as to prevent
 	# Remove gui tmp dir
 	rm -rf src/http/gui/tmp
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
@@ -74,14 +77,11 @@ generate_dev: deps compile gui_dev
 
 ## Generates a production release
 generate: deps compile gui_prod
-	# Move gui tmp dir away from sources, so as to prevent
-	# rebar from entering it during spec generation and crashing
-	mv src/http/gui/tmp /tmp/gui_tmp
+	# Remove gui tmp dir
+	rm -rf src/http/gui/tmp
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
 	./rebar generate
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
-	# Bring back the tmp dir to its normal location
-	mv /tmp/gui_tmp src/http/gui/tmp
 
 clean:
 	./rebar clean
@@ -178,3 +178,9 @@ package: check_distribution package/$(PKG_ID).tar.gz
 
 pkgclean:
 	rm -rf package
+
+docker:
+	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \
+                     --email $(DOCKER_REG_EMAIL) --name oz_worker \
+                     --build-arg VERSION=$(PKG_VERSION) \
+                     --publish --remove packaging

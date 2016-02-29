@@ -104,7 +104,7 @@ get_redirection_url_to_provider(Referer) ->
         {ProviderID, ProviderData} = case RefererData of
                                          undefined ->
                                              % If referer isn't recognizable, look for any provider
-                                             case provider_logic:get_default_provider_for_user(UserID) of
+                                             case provider_logic:choose_provider_for_user(UserID) of
                                                  {error, no_provider} ->
                                                      {undefined, undefined};
                                                  {ok, ProvID} ->

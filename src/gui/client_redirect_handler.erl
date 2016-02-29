@@ -48,7 +48,7 @@ handle(Req, State) ->
                                         user_logic:get_user_doc(Alias)
                                 end
                         end,
-        {ok, #document{value = #onedata_user{default_provider = DefaultProvider}}} = GetUserResult,
+        {ok, #document{value = #onedata_user{chosen_provider = DefaultProvider}}} = GetUserResult,
         {ok, DataProplist} = provider_logic:get_data(DefaultProvider),
         RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
         {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(str_utils:to_list(RedPoint)),

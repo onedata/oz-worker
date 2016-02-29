@@ -25,6 +25,7 @@
 callback(<<"sessionDetails">>, _) ->
     {ok, [
         {<<"sessionDetails">>, [
-            {<<"userName">>, <<"zbyszek">>}
+            {<<"userName">>, <<"zbyszek">>},
+            {<<"firstLogin">>, true}
         ]}
     ]}.
