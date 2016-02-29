@@ -17,15 +17,19 @@
 
 -compile([export_all]).
 
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([callback/2]).
 
 callback(<<"sessionDetails">>, _) ->
-    {ok, [
-        {<<"sessionDetails">>, [
-            {<<"userName">>, <<"zbyszek">>},
-            {<<"firstLogin">>, true}
-        ]}
-    ]}.
+    {ok, #document{value = #onedata_user{name = Name}}} =
+        onedata_user:get(g_session:get_user_id()),
+    FirstLogin = g_session:get_value(firstLogin, false),
+    Res = [{<<"sessionDetails">>, [
+        {<<"userName">>, Name},
+        {<<"firstLogin">>, FirstLogin}
+    ]}],
+    ?alert("~p", [Res]),
+    {ok, Res}.
