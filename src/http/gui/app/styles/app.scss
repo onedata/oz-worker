@@ -163,3 +163,15 @@ html {
     margin-right:-4px;
 }
 /*** ***/
+
+.xs-left {
+  @include respond-to(screen-xs) {
+    text-align: left !important;
+  }
+}
+
+.xs-right {
+  @include respond-to(screen-xs) {
+    text-align: right !important;
+  }
+}

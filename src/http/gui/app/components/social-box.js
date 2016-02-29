@@ -7,11 +7,21 @@ export default Ember.Component.extend({
   /** Href for link when clicked */
   link: '',
 
+  iconName: function() {
+    return `social-${this.get('type')}`;
+  }.property('type'),
+
   hasLink: function() {
     let link = this.get('link');
     return link && link.length !== 0;
   }.property('link'),
 
   tagName: 'div',
-  classNames: ['social-box-component']
+  classNames: ['social-box-component'],
+
+  actions: {
+    authenticate() {
+      this.sendAction('action', this.get('type'));
+    }
+  }
 });

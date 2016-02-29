@@ -5,24 +5,18 @@
       <h2>{{t 'login.boxSubtitle'}}</h2>
       <div class="container-fluid login-buttons-container">
         <div class="row row-centered">
-          <div class="col-xs-2 col-centered">
-            <div {{action 'authenticate' 'github'}} class="login-icon-box github">
+          <div class="col-xs-8 col-centered">
+            <div class="col-xs-6 col-sm-3 col-centered xs-right">
+              {{social-box type='plgrid' action='authenticate'}}
             </div>
-          </div>
-          <div {{action 'authenticate' 'plgrid'}} class="col-xs-2 col-centered">
-            <div class="login-icon-box twitter">
+            <div class="col-xs-6 col-sm-3 col-centered xs-left">
+              {{social-box type='github' action='authenticate'}}
             </div>
-          </div>
-          <div {{action 'authenticate' 'google'}} class="col-xs-2 col-centered">
-            <div class="login-icon-box google">
+            <div class="col-xs-6 col-sm-3 col-centered xs-right">
+              {{social-box type='facebook' action='authenticate'}}
             </div>
-          </div>
-          <div {{action 'authenticate' 'dropbox'}} class="col-xs-2 col-centered">
-            <div class="login-icon-box dropbox">
-            </div>
-          </div>
-          <div {{action 'authenticate' 'facebook'}} class="col-xs-2 col-centered">
-            <div class="login-icon-box facebook">
+            <div class="col-xs-6 col-sm-3 col-centered xs-left">
+              {{social-box type='google' action='authenticate'}}
             </div>
           </div>
         </div>

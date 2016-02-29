@@ -2,6 +2,7 @@
 
 $color-login-github: #1E2325;
 $color-login-twitter: #6ED3F3;
+$color-login-plgrid: #026381;
 $color-login-google: #F1514F;
 $color-login-dropbox: #86D7F2;
 $color-login-facebook: #5B87C5;
@@ -12,26 +13,31 @@ $color-login-facebook: #5B87C5;
   display: inline-block;
   height: 72px;
   width: 72px;
+  // pull down
+  padding-top: 2px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  text-align: center;
+  line-height: 72px;
+  font-size: 42px;
+  color: white !important;
+  text-decoration: none !important;
+  cursor: pointer; cursor: hand;
 
   &.github {
-    background: $color-login-github;
-    background: url(/assets/images/login-icons/github.png);
+    background-color: $color-login-github;
   }
-  &.twitter {
-    background: $color-login-twitter;
-    background: url(/assets/images/login-icons/twitter.png);
+  &.plgrid {
+    background-color: $color-login-plgrid;
   }
   &.google {
-    background: $color-login-google;
-    background: url(/assets/images/login-icons/google.png);
+    background-color: $color-login-google;
   }
   &.dropbox {
-    background: $color-login-dropbox;
-    background: url(/assets/images/login-icons/dropbox.png);
+    background-color: $color-login-dropbox;
   }
   &.facebook {
-    background: $color-login-facebook;
-    background: url(/assets/images/login-icons/facebook.png);
+    background-color: $color-login-facebook;
   }
 }
 
