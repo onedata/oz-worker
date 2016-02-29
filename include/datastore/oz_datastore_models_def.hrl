@@ -15,6 +15,16 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 
+-define(SUBSCRIPTIONS_STATE_KEY, <<"current_state">>).
+-record(subscriptions_state, {
+    cache :: gb_trees:tree()
+}).
+
+-record(provider_subscription, {
+    callback :: term(),
+    expires :: pos_integer()
+}).
+
 %% Records of this type store a macaroons secret
 -record(onedata_auth, {
     secret :: binary(),

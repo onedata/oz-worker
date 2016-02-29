@@ -12,34 +12,47 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(KEY, provider_callbacks).
 -define(WORKER_NAME, subscriptions_worker).
 
--export([state_entry/0, cleanup/0, add/2, callbacks/0]).
+-export([add/2, callbacks/0, initialize/0]).
 
-state_entry() ->
-    {?KEY, #{}}.
+initialize() ->
+    try
+        {ok, ?SUBSCRIPTIONS_STATE_KEY} = subscriptions_state:create(#document{
+            key = ?SUBSCRIPTIONS_STATE_KEY,
+            value = #subscriptions_state{cache = gb_trees:empty()}
+        })
+    catch
+        E:R -> ?info("State not created (may be already present) ~p:~p", [E, R])
+    end.
 
 callbacks() ->
-    State = worker_host:state_get(?WORKER_NAME, ?KEY),
-    maps:map(fun(_, {Callback, _}) -> Callback end, State).
+    State = get_subscriptions(),
 
-cleanup() ->
-    worker_host:state_update(?WORKER_NAME, ?KEY, fun(Callbacks) ->
-        Now = now_seconds(),
-        maps:filter(fun(_ID, {_Callback, ExpiresAt}) ->
-            Now < ExpiresAt
-        end, Callbacks)
-    end).
+    maps:from_list(lists:map(fun(Doc) ->
+        #document{
+            key = P,
+            value = #provider_subscription{callback = C, expires = E}} = Doc,
+        {P, {C,E}}
+    end, State)).
 
 add(ProviderID, Callback) ->
     TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
     ExpiresAt = now_seconds() + TTL,
-    worker_host:state_update(?WORKER_NAME, ?KEY, fun(Callbacks) ->
-        maps:put(ProviderID, {Callback, ExpiresAt}, Callbacks)
-    end).
+    {ok, ProviderID} = provider_subscription:save(#document{
+        key = ProviderID,
+        value = #provider_subscription{
+            callback = Callback,
+            expires = ExpiresAt
+        }
+    }).
 
 now_seconds() ->
     erlang:system_time(seconds).
+
+get_subscriptions() ->
+    provider_subscription:non_expired().

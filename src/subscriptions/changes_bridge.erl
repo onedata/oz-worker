@@ -16,7 +16,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([start_link/0]).
+-export([start_link/0, common_change_callback/3]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -43,16 +43,15 @@
 -spec(start_link() ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link() ->
-    global:trans({?MODULE, ?MODULE}, fun() ->
-        case global:whereis_name(?MODULE) of
-            undefined ->
-                gen_server:start_link({global, ?MODULE}, ?MODULE, [], []);
-            Pid ->
-                link(Pid),
-                ?info("Changes bridge already started ~p", [Pid]),
-                {ok, Pid}
-        end
-    end).
+    case gen_server:start_link({global, ?MODULE}, ?MODULE, [], []) of
+        {ok, Pid} ->
+            {ok, Pid};
+        {error, {already_started, Pid}} ->
+            link(Pid),
+            ?info("Changes bridge already started ~p", [Pid]),
+            {ok, Pid};
+        Else -> Else
+    end.
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -73,7 +72,11 @@ start_link() ->
     {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore).
 init([]) ->
-    ?info("Started changes bridge ~p", [self()]),
+    ?info("Starting changes bridge ~p", [self()]),
+    process_flag(trap_exit, true),
+    spawn(fun() ->
+        gen_server:cast({global,?MODULE}, start_changes_stream)
+    end),
     {ok, #state{}}.
 
 %%--------------------------------------------------------------------
@@ -92,6 +95,7 @@ init([]) ->
     {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
     {stop, Reason :: term(), NewState :: #state{}}).
 handle_call(_Request, _From, State) ->
+    ?log_bad_request(_Request),
     {reply, ok, State}.
 
 %%--------------------------------------------------------------------
@@ -105,10 +109,24 @@ handle_call(_Request, _From, State) ->
     {noreply, NewState :: #state{}} |
     {noreply, NewState :: #state{}, timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: #state{}}).
+handle_cast(start_changes_stream, State) ->
+    try
+        CurrentSeq = last_seq(),
+        ?info("Starting changes stream using changes from ~p", [CurrentSeq]),
+        start_changes_stream(CurrentSeq),
+        {noreply, State}
+    catch E:R ->
+        ?info("Changes stream failed to start ~p:~p", [E, R]),
+        {stop, changes_stream_not_available, State}
+    end;
+handle_cast({stop, Reason}, State) ->
+    ?info("Stopping changes bridge ~p due to ~p", [self(), Reason]),
+    {stop, Reason, State};
 handle_cast(stop, State) ->
     ?info("Stopping changes bridge ~p", [self()]),
     {stop, normal, State};
 handle_cast(_Request, State) ->
+    ?log_bad_request(_Request),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -126,6 +144,7 @@ handle_cast(_Request, State) ->
     {noreply, NewState :: #state{}, timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: #state{}}).
 handle_info(_Info, State) ->
+    ?log_bad_request(_Info),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -165,13 +184,9 @@ code_change(_OldVsn, State, _Extra) ->
 
 -spec common_change_callback(Seq :: non_neg_integer(), datastore:document() | stream_ended, model_behaviour:model_type() | undefined) -> ok.
 common_change_callback(_Seq, stream_ended, _Type) ->
-    CurrentSeq = changes_cache:newest_seq(),
-    ?error("Changes stream broken - restarting at ~p", [CurrentSeq]),
-    start_changes_stream(CurrentSeq),
-    ok;
+    gen_server:cast(?MODULE, {stop, stream_ended});
 
 common_change_callback(Seq, Doc, Type) ->
-    changes_cache:put(Seq, Doc, Type),
     worker_proxy:cast(subscriptions_worker, {handle_change, Seq, Doc, Type}).
 
 

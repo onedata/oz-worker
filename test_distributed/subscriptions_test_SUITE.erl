@@ -64,7 +64,7 @@ change_bridge_restarts(_Config) ->
     ok.
 
 space_changes_after_subscription(Config) ->
-    [Node1, _] = ?config(oz_worker_nodes, Config),
+    Nodes = [Node1, _] = ?config(oz_worker_nodes, Config),
     [Address1, _] = ?config(restAddresses, Config),
     RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
 
@@ -85,18 +85,13 @@ space_changes_after_subscription(Config) ->
     SpaceDoc6 = save(Node1, <<"spacekey6">>, #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}),
 
     % then
-    verify_communication(Node1, <<"endpoint1">>,
+    verify_messages(Nodes, <<"endpoint1">>,
         [SpaceDoc1, SpaceDoc2, SpaceDoc4, SpaceDoc5, SpaceDoc6],
-        [SpaceDoc3]
-    ),
-    verify_communication(Node1, <<"endpoint2">>,
-        [SpaceDoc2, SpaceDoc4],
-        [SpaceDoc1, SpaceDoc3, SpaceDoc5, SpaceDoc6]
-    ),
-    ok.
+        [SpaceDoc3],
+        10).
 
 space_changes_before_subscription(Config) ->
-    [Node1, _] = ?config(oz_worker_nodes, Config),
+    Nodes = [Node1, _] = ?config(oz_worker_nodes, Config),
     [Address1, _] = ?config(restAddresses, Config),
     RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
 
@@ -117,18 +112,13 @@ space_changes_before_subscription(Config) ->
     subscribe(First, <<"endpoint2">>, SubscribeParams2),
 
     % then
-    verify_communication(Node1, <<"endpoint1">>,
+    verify_messages(Nodes, <<"endpoint1">>,
         [SpaceDoc1, SpaceDoc2, SpaceDoc4, SpaceDoc5, SpaceDoc6],
-        [SpaceDoc3]
-    ),
-    verify_communication(Node1, <<"endpoint2">>,
-        [SpaceDoc2, SpaceDoc4],
-        [SpaceDoc1, SpaceDoc3, SpaceDoc5, SpaceDoc6]
-    ),
-    ok.
+        [SpaceDoc3],
+        10).
 
 node_for_subscription_changes(Config) ->
-    [Node1, Node2] = ?config(oz_worker_nodes, Config),
+    Nodes = [Node1, Node2] = ?config(oz_worker_nodes, Config),
     [Address1, Address2] = ?config(restAddresses, Config),
     RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
 
@@ -141,18 +131,17 @@ node_for_subscription_changes(Config) ->
     subscribe(First, <<"endpoint1">>, SubscribeParams1),
     SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1], groups = []}),
 
-    await_communication(Node1, <<"endpoint1">>, SpaceDoc1),
+    await_messages(Nodes, <<"endpoint1">>, SpaceDoc1),
     Later = getFirstSeq(Node1),
     subscribe(Later, <<"endpoint1">>, SubscribeParams2),
     SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1], groups = []}),
 
     % then
-    verify_communication(Node1, <<"endpoint1">>, [SpaceDoc1], [SpaceDoc2]),
-    verify_communication(Node2, <<"endpoint1">>, [SpaceDoc2], [SpaceDoc1]),
+    verify_messages(Nodes, <<"endpoint1">>, [SpaceDoc1, SpaceDoc2], [], 10),
     ok.
 
 subscription_expires_or_is_renewed(Config) ->
-    [Node1, Node2] = ?config(oz_worker_nodes, Config),
+    Nodes = [Node1, Node2] = ?config(oz_worker_nodes, Config),
     [Address1, Address2] = ?config(restAddresses, Config),
     RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
 
@@ -173,7 +162,7 @@ subscription_expires_or_is_renewed(Config) ->
     SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1], groups = []}),
 
     %% let it expire
-    await_communication(Node1, <<"endpoint1">>, SpaceDoc1),
+    await_messages(Nodes, <<"endpoint1">>, SpaceDoc1),
     timer:sleep(timer:seconds(MoreThanTimeout)),
     SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1], groups = []}),
     % change could be reported after next subscription, so we need to sleep
@@ -204,14 +193,10 @@ subscription_expires_or_is_renewed(Config) ->
     SpaceDoc6 = save(Node1, <<"spacekey6">>, #space{name = <<"space6">>, providers = [ProviderID1], groups = []}),
 
     % then
-    verify_communication(Node1, <<"endpoint1">>,
-        [SpaceDoc1, SpaceDoc3, SpaceDoc4, SpaceDoc5],
-        [SpaceDoc2, SpaceDoc6]
-    ),
-    verify_communication(Node2, <<"endpoint1">>,
-        [SpaceDoc6],
-        [SpaceDoc1, SpaceDoc2, SpaceDoc3, SpaceDoc4, SpaceDoc5]
-    ),
+    verify_messages(Nodes, <<"endpoint1">>,
+        [SpaceDoc1, SpaceDoc3, SpaceDoc4, SpaceDoc5, SpaceDoc6],
+        [SpaceDoc2],
+        10),
     ok.
 
 
@@ -263,29 +248,58 @@ subscribe(LastSeen, Endpoint, SubscribeParams) ->
     Result = rest_utils:do_request(RestAddress, Headers, post, Data, Options),
     ?assertEqual(204, rest_utils:get_response_status(Result)).
 
-await_communication(Node, Endpoint, ExpectedDoc) ->
-    verify_communication(Node, Endpoint, [ExpectedDoc], []).
+await_messages(Nodes, Endpoint, ExpectedDoc) ->
+    verify_messages(Nodes, Endpoint, [ExpectedDoc], [], 10).
 
-verify_communication(Node, Endpoint, ExpectedDocs, ForbiddenDocs) ->
-    verify_communication(Node, Endpoint, as_changes(ExpectedDocs), as_changes(ForbiddenDocs), 1, ?ALLOWED_FAILURES).
+verify_messages(Nodes, Endpoint, Expected, Forbidden, Retries) ->
+    NodeContexts = lists:map(fun(Node) -> {Node, 1, Retries} end, Nodes),
+    verify_messages(NodeContexts, Endpoint, as_changes(Expected), as_changes(Forbidden)).
+verify_messages(_, _, [], _) -> ok;
+verify_messages(NodeContexts, Endpoint, Expected, Forbidden) ->
+    {Messages, NewContexts} = get_messages(Endpoint, NodeContexts),
 
-verify_communication(_, _, [], _, _, _) ->
-    ok;
-verify_communication(_, _, PresentBodies, _, _, 0) ->
-    ?assertMatch([], PresentBodies);
-verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges, Request, AllowedFailures) ->
-    Body = mock_capture(Node, [Request, http_client, post, [Endpoint, '_', '_'], 3]),
+
+    AnyUnavailable = lists:member(not_present, Messages),
+    case AnyUnavailable of
+        true -> timer:sleep(?COMMUNICATION_WAIT);
+        false ->
+            Depleted = lists:all(fun
+                (retries_depleted) -> true;
+                (_) -> false
+            end, Messages),
+            case Depleted of
+                true -> ?assertEqual([], Expected);
+                false -> ok
+            end
+    end,
+
+    lists:foreach(fun(M) -> lists:foreach(fun(F) ->
+        ?assertNotEqual(M, F)
+    end, Forbidden) end, Messages),
+
+    verify_messages(NewContexts, Endpoint, Expected--Messages, Forbidden).
+
+get_messages(Endpoint, NodeContexts) ->
+    Results = lists:map(fun
+        ({_, _, 0} = Ctx) -> {retries_depleted, Ctx};
+        ({Node, Number, RetriesLeft}) ->
+            Message = get_message(Endpoint, Node, Number),
+            case Message of
+                not_present -> {not_present, {Node, Number, RetriesLeft - 1}};
+                _ -> {Message, {Node, Number + 1, RetriesLeft}}
+            end
+    end, NodeContexts),
+    lists:unzip(Results).
+
+get_message(Endpoint, Node, Number) ->
+    Body = mock_capture(Node, [Number, http_client, post, [Endpoint, '_', '_'], 3]),
     case Body of
         {badrpc, _} ->
-            timer:sleep(?COMMUNICATION_WAIT),
-            verify_communication(Node, Endpoint, ExpectedChanges, ForbiddenChanges, Request, AllowedFailures - 1);
+            not_present;
         _ ->
             Data = json_utils:decode(Body),
-            ChangeData = lists:last(proplists:delete(<<"seq">>, Data)),
-            lists:foreach(fun(Forbidden) ->
-                ?assertNotMatch(Forbidden, ChangeData) end, ForbiddenChanges),
-            Remaining = ExpectedChanges -- [ChangeData],
-            verify_communication(Node, Endpoint, Remaining, ForbiddenChanges, Request + 1, ?ALLOWED_FAILURES)
+%%            ct:print("~p", [[Node, Number, Data]]),
+            lists:last(proplists:delete(<<"seq">>, Data))
     end.
 
 as_changes(Docs) ->

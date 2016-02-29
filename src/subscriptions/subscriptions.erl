@@ -32,7 +32,8 @@ get_callback(Endpoint) ->
             _ -> spawn(fun() ->
                 Message = json_utils:encode(Contents),
                 ?info("Sending ~p", [[Endpoint, Contents]]),
-                http_client:post(Endpoint, [{async, once}], Message)
+                http_client:post(Endpoint, [{async, once}], Message),
+                ?info("Sent ~p", [[Endpoint, Contents]])
             end)
         end
     end.
