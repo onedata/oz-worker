@@ -1,9 +1,5 @@
 import Ember from 'ember';
 
-let accountIconPath = function(type) {
-  return `/assets/images/onezone/account-${type}.svg`;
-};
-
 /**
   Properties:
   - label: string
@@ -12,7 +8,7 @@ let accountIconPath = function(type) {
 */
 export default Ember.Component.extend({
   classNames: ['account-item'],
-  typeIcon: function() {
-    return accountIconPath(this.get('type'));
+  iconName: function() {
+    return `social-${this.get('type')}`;
   }.property('type')
 });

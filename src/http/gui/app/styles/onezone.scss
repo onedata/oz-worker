@@ -489,7 +489,7 @@ $search-box-height: 36px;
   .account-item, .account-add {
     $onezone-account-item-height: $onezone-accordion-heading-height * 0.75;
 
-    display: block;
+    display: table;
     height: $onezone-account-item-height;
     line-height: $onezone-account-item-height;
     padding-left: 10px;
@@ -497,24 +497,57 @@ $search-box-height: 36px;
     color: white;
 
     .account-icon {
-      display: inline-block;
-      float: left;
+      position: relative;
+      display: table-cell;
       width: 32px;
       height: $onezone-account-item-height;
-      margin-right: 20px;
+      // pull down the circle
+      padding-top: 12px;
       text-align: center;
-      background-position: center center;
-      background-repeat: no-repeat;
-      background-size: contain;
 
       @include vendor-prefix(transform, rotate(0));
 
-      transition: all 0.35s ease;
+      &.account-add-icon {
+        font-size: 28px;
+      }
+
+      .circle {
+        position: absolute;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        &.google {
+          background-color: $color-login-google !important;
+        }
+        &.plgrid {
+          background-color: $color-login-plgrid !important;
+        }
+        &.dropbox {
+          background-color: $color-login-dropbox !important;
+        }
+        &.facebook {
+          background-color: $color-login-facebook !important;
+        }
+      }
+      .icon {
+        position: absolute;
+        display: table-cell;
+        vertical-align: middle;
+        height: 35px;
+        line-height: 35px;
+        width: 32px;
+        text-align: center;
+        padding: 0;
+        color: white;
+        font-size: 1em;
+        background-color: none !important;
+      }
     }
 
     // TODO: max width to prevent overflow or use table-cell
     .account-label {
-      display: inline-block;
+      display: table-cell;
+      padding-left: 20px;
 
       font-size: 0.8em;
 
