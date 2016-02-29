@@ -17,7 +17,8 @@ export default {
       subtitle: 'Global data access solution for science',
       text: 'Have the best of both worlds! Perform heavy computations on huge datasets. ' +
               'Access your data in a dropbox-like fashion regardless of its location. ' +
-              'Publish and share your results with public or closed communities.'
+              'Publish and share your results with public or closed communities.',
+      getStarted: 'Get started'
     },
     whatIs: {
       title: 'What is onedata?',

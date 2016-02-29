@@ -4,16 +4,23 @@
     <div class="container">
       <div class="row">
         <div class="col-md-4 col-left-atlas">
-          <p>
-            <img class="logo" src="/assets/images/logo.svg" />
-            <h1>{{t 'index.atlas.subtitle' tagName='h1'}}</h1>
-            {{t 'index.atlas.text'}}
-          </p>
+          {{!-- each div is a row here --}}
+          <div>
+            <p>
+              <img class="logo" src="/assets/images/logo.svg" />
+              <h1>{{t 'index.atlas.subtitle' tagName='h1'}}</h1>
+              {{t 'index.atlas.text'}}
+            </p>
+          </div>
+          <div class="row-get-started-button">
+            {{#link-to 'home.get-started' class="btn btn-index"}}
+              {{t 'index.atlas.getStarted'}}
+            {{/link-to}}
+          </div>
         </div>
         <div class="col-md-8">
           <img class="onedata-atlas" src="/assets/images/index/onedata-atlas.svg" />
         </div>
-    {{!-- TODO: get started button --}}
     {{!-- TODO: social icons --}}
       </div>
     </div>
@@ -31,7 +38,6 @@
         <div class="col-md-8 col-md-pull-4">
           <img class="what-is-onedata" src="/assets/images/index/what-is-onedata.svg" />
         </div>
-    {{!-- TODO: get started button --}}
     {{!-- TODO: social icons --}}
       </div>
     </div>

@@ -41,8 +41,12 @@ export default Ember.Component.extend({
 
     // this should be the same code as in navbar-toggle...
     // maybe TODO: create: showMenu and hideMenu functions
-    $('#navbar a').click(function() {
-      $('.global-fog').removeClass('active');
+    $('#navbar a').not('.dropdown-toggle').click(function() {
+      // TODO: make a util which will add test element if it does not exists
+      let isMobile = $('#desktop-test').is(':hidden');
+      if (isMobile) {
+        toggleButton.click();
+      }
     });
   }
 });
