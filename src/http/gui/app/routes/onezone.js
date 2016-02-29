@@ -6,10 +6,11 @@ let OnezoneRoute = Ember.Route.extend({});
 
 export default OnezoneRoute.extend({
   model() {
-    return {
+    let data = {
       providers: this.store.findAll('provider'),
       spaces: this.store.findAll('space'),
-      authAccounts: this.store.findAll('auth-account')
+      authorizers: this.store.findAll('authorizer')
     };
+    return data;
   }
 });

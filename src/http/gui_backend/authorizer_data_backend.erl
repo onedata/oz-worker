@@ -11,7 +11,7 @@
 %%% THIS IS A PROTOTYPE AND AN EXAMPLE OF IMPLEMENTATION.
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_account_data_backend).
+-module(authorizer_data_backend).
 -author("Lukasz Opiola").
 
 -compile([export_all]).
@@ -25,7 +25,7 @@
 
 %% Convenience macro to log a debug level log dumping given variable.
 -define(log_debug(_Arg),
-    ?debug("~s", [str_utils:format("SPACE_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
+    ?debug("~s", [str_utils:format("AUTHORIZER_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
 ).
 
 
@@ -35,14 +35,14 @@ init() ->
     ok.
 
 
-find(<<"auth-account">>, [_SpaceId]) ->
+find(<<"authorizer">>, [_AuthorizerId]) ->
     {error, not_iplemented}.
 
-find_query(<<"auth-account">>, _Data) ->
+find_query(<<"authorizer">>, _Data) ->
     {error, not_iplemented}.
 
 %% Called when ember asks for all files
-find_all(<<"auth-account">>) ->
+find_all(<<"authorizer">>) ->
     Res = [
         [
             {<<"id">>, <<"a1">>},
@@ -64,13 +64,13 @@ find_all(<<"auth-account">>) ->
 
 
 %% Called when ember asks to create a record
-create_record(<<"auth-account">>, _Data) ->
+create_record(<<"authorizer">>, _Data) ->
     {error, not_iplemented}.
 
 %% Called when ember asks to update a record
-update_record(<<"auth-account">>, _Id, _Data) ->
+update_record(<<"authorizer">>, _Id, _Data) ->
     {error, not_iplemented}.
 
 %% Called when ember asks to delete a record
-delete_record(<<"auth-account">>, _Id) ->
+delete_record(<<"authorizer">>, _Id) ->
     {error, not_iplemented}.

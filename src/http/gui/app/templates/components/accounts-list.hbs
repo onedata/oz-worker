@@ -1,7 +1,7 @@
 <ul class="accordion-content">
-  {{#each accountsSorted as |account|}}
+  {{#each authorizers as |account|}}
     <li>
-      {{account-item type=account.type label=account.label accepted=account.accepted}}
+      {{account-item type=account.type label=account.email accepted=account.accepted}}
     </li>
   {{/each}}
   <li>

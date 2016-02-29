@@ -1,6 +1,6 @@
 import { moduleForModel, test } from 'ember-qunit';
 
-moduleForModel('auth-account', 'Unit | Model | auth account', {
+moduleForModel('authorizer', 'Unit | Model | auth account', {
   // Specify the other units that are required for this test.
   needs: []
 });

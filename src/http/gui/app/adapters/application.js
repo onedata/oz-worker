@@ -162,8 +162,9 @@ export default DS.RESTAdapter.extend({
    * by ember.
    */
   transformResponse: function (json, type, operation) {
-    var records_name = Ember.String.pluralize(
-      Ember.String.camelize(type));
+    // var records_name = Ember.String.pluralize(type);
+    let records_name = type;
+      // Ember.String.camelize(type));
     var result = {};
     switch (operation) {
       case FIND:
@@ -296,10 +297,12 @@ export default DS.RESTAdapter.extend({
     if (json.msgType === PULL_RESP) {
       if (json.result === 'ok') {
         callback = adapter.promises.get(json.uuid);
-        console.log('success: ' + json.data);
+
         // TODO VFS-1508: sometimes, the callback is undefined - debug
         var transformed_data = adapter.transformResponse(json.data,
           callback.type, callback.operation);
+        console.log('success: ' + JSON.stringify(transformed_data));
+
         callback.success(transformed_data);
       } else {
         console.log('error: ' + json.data);
