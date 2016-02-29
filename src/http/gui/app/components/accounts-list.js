@@ -8,6 +8,5 @@ export default Ember.Component.extend({
   //   return authorizers && authorizers.sort((a, b) => a.type < b.type);
   // }.property('authorizers')
   initAuth: function() {
-    debugger;
   }.observes('authorizers')
 });
