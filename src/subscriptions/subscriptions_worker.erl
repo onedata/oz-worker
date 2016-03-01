@@ -17,22 +17,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([init/1, handle/1, cleanup/0, push_updates/2]).
-
--record(outbox, {
-    timer :: timer:tref(),
-    buffer :: [term()]
-}).
-
-
-push_updates(Provider, Endpoint) ->
-    worker_host:state_update(?MODULE, {msg_buffer, Provider}, fun
-        (Outbox = #outbox{buffer = Buffer}) ->
-            Messages = json_utils:encode({array, Buffer}),
-            ?info("Pushing ~p to ~p", [Messages, Endpoint]),
-            http_client:post(Endpoint, [{async, once}], Messages),
-            Outbox#outbox{buffer = [], timer = undefined}
-    end).
+-export([init/1, handle/1, cleanup/0]).
 
 -spec init(Args :: term()) ->
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
@@ -61,10 +46,12 @@ handle({handle_change, Seq, Doc, Type}) ->
     Subscriptions = subscriptions:as_map(),
     handle_change(Seq, Doc, Type, Subscriptions);
 
-handle({provider_subscribe, ProviderID, Endpoint, LastSeenSeq}) ->
-    ?info("Request ~p", [{provider_subscribe, ProviderID, Endpoint, LastSeenSeq}]),
+handle({subscribe_provider, ProviderID, Endpoint, LastSeenSeq}) ->
     subscriptions:put(ProviderID, Endpoint, LastSeenSeq),
     fetch_history(ProviderID, Endpoint, LastSeenSeq);
+
+handle({subscribe_client, ClientID, ProviderID, TTL}) ->
+    subscriptions:put_client(ClientID, ProviderID, TTL);
 
 handle(_Request) ->
     ?log_bad_request(_Request).
@@ -111,22 +98,36 @@ fetch_from_db(From, To, Subscriptions) ->
     end, From, To).
 
 handle_change(Seq, Doc, Type, Subscriptions) ->
-    NoOp = fun(_Seq, _Doc, _Type) -> ok end,
-    Providers = allowed:providers(Seq, Doc, Type),
-    ?info("Dispatching {seq=~p, doc=~p, type=~p} to ~p having ~p", [Seq, Doc, Type, Providers, Subscriptions]),
     Message = translator:get_msg(Seq, Doc, Type),
+    Entitled = get_entitled_subscriptions(Seq, Doc, Type, Subscriptions),
 
-    NodeToSubscriptions = lists:foldr(fun(Provider, Acc) ->
-        Subscription = maps:get(Provider, Subscriptions, {NoOp, infinity}),
+    NodeToSubscriptions = lists:foldr(fun(Subscription, Acc) ->
         Node = Subscription#provider_subscription.node,
         dict:append(Node, Subscription, Acc)
-    end, dict:new(), Providers),
-    ?info("NodeToSubscriptions  ~p \n ~p", [dict:to_list(NodeToSubscriptions), Subscriptions]),
+    end, dict:new(), Entitled),
 
     lists:foreach(fun({Node, Subscriptions}) ->
-        ?info("Dispatching ~p to ~p having ~p", [Message, Node, Subscriptions]),
         worker_proxy:cast({?MODULE, Node}, {send_update, Subscriptions, Message})
     end, dict:to_list(NodeToSubscriptions)).
+
+get_entitled_subscriptions(Seq, Doc, Type, Subscriptions) ->
+    Clients = allowed:clients(Seq, Doc, Type),
+    Providers = allowed:providers(Seq, Doc, Type),
+
+    Now = erlang:system_time(seconds),
+    lists:filter(fun(Subscription) ->
+        Provider = Subscription#provider_subscription.provider,
+        IsMentioned = lists:member(Provider, Providers),
+        case IsMentioned of
+            true -> true;
+            false ->
+                ProviderClients = Subscription#provider_subscription.clients,
+                lists:any(fun(C) ->
+                    ExpiresAt = maps:get(C, ProviderClients, Now),
+                    ExpiresAt > Now
+                end, Clients)
+        end
+    end, maps:values(Subscriptions)).
 
 -spec last_seq() -> non_neg_integer().
 last_seq() ->

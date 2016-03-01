@@ -18,7 +18,7 @@
 -define(KEY, provider_callbacks).
 -define(WORKER_NAME, subscriptions_worker).
 
--export([as_map/0, put/3]).
+-export([as_map/0, put/3, put_client/3]).
 
 
 as_map() ->
@@ -28,17 +28,34 @@ as_map() ->
 put(ProviderID, Endpoint, LastSeenSeq) ->
     TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
     ExpiresAt = now_seconds() + TTL,
-    {ok, ProviderID} = provider_subscription:save(#document{
-        key = ProviderID,
-        value = #provider_subscription{
+
+    provider_subscription:create_or_update(
+        #document{key = ProviderID, value = #provider_subscription{
             provider = ProviderID,
-            node = node(),
             endpoint = Endpoint,
-            seq = LastSeenSeq,
             clients = #{},
-            expires = ExpiresAt
-        }
-    }).
+            node = node(),
+            expires = ExpiresAt,
+            seq = LastSeenSeq
+        }}, fun(Record) -> {ok, Record#provider_subscription{
+            node = node(),
+            expires = ExpiresAt,
+            seq = LastSeenSeq
+        }}
+        end).
+
+put_client(ClientID, ProviderID, TTL) ->
+    ExpiresAt = now_seconds() + TTL,
+    {ok, ProviderID} = provider_subscription:update(ProviderID, fun
+        (undefined) ->
+            ?error("Not registered provider is declared by a provider"),
+            {error, provider_id_not_registered};
+        (Record) ->
+            Clients = Record#provider_subscription.clients,
+            {ok, Record#provider_subscription{
+                clients = maps:put(ClientID, ExpiresAt, Clients)
+            }}
+    end).
 
 now_seconds() ->
     erlang:system_time(seconds).

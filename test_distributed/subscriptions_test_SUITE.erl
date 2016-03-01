@@ -21,10 +21,12 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([
-    space_changes_after_subscription/1, space_changes_before_subscription/1, node_for_subscription_changes/1,
-    subscription_expires_or_is_renewed/1
-    , change_bridge_restarts/1]).
+-export([space_changes_after_subscription/1,
+    space_changes_before_subscription/1,
+    node_for_subscription_changes/1,
+    subscription_expires_or_is_renewed/1,
+    change_bridge_restarts/1,
+    space_changes_after_client_subscription/1]).
 
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
 -define(COMMUNICATION_WAIT, 500).
@@ -36,6 +38,9 @@
 -define(REDIRECTION_POINT2, <<"https://127.0.0.2:443">>).
 -define(CLIENT_NAME1, <<"provider1">>).
 -define(CLIENT_NAME2, <<"provider2">>).
+-define(USER_NAME1, <<"user1">>).
+-define(USER_NAME2, <<"user2">>).
+-define(USER_NAME3, <<"user3">>).
 
 %%%===================================================================
 %%% API functions
@@ -44,7 +49,7 @@
 all() -> ?ALL([
     change_bridge_restarts, space_changes_after_subscription,
     space_changes_before_subscription, node_for_subscription_changes,
-    subscription_expires_or_is_renewed
+    subscription_expires_or_is_renewed, space_changes_after_client_subscription
 ]).
 
 change_bridge_restarts(_Config) ->
@@ -119,6 +124,40 @@ space_changes_before_subscription(Config) ->
     verify_messages(Nodes, <<"endpoint1">>,
         [SpaceDoc1, SpaceDoc2, SpaceDoc4, SpaceDoc5, SpaceDoc6],
         [SpaceDoc3],
+        10).
+
+space_changes_after_client_subscription(Config) ->
+    Nodes = [Node1, _] = ?config(oz_worker_nodes, Config),
+    [Address1, _] = ?config(restAddresses, Config),
+    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
+
+    % given
+    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
+    {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
+    {ClientID1, SubscribeParams3} = rest_utils:register_user(?USER_NAME1, ProviderID1, Node1, SubscribeParams1),
+    {ClientID2, SubscribeParams4} = rest_utils:register_user(?USER_NAME2, ProviderID1, Node1, SubscribeParams1),
+    {ClientID3, SubscribeParams5} = rest_utils:register_user(?USER_NAME3, ProviderID2, Node1, SubscribeParams2),
+    First = getFirstSeq(Node1),
+
+    % when
+    subscribe(First, <<"endpoint1">>, SubscribeParams1),
+    subscribe(First, <<"endpoint2">>, SubscribeParams2),
+    subscribe_client(ProviderID1, 120, SubscribeParams3),
+    subscribe_client(ProviderID1, 120, SubscribeParams4),
+    subscribe_client(ProviderID2, 120, SubscribeParams5),
+
+    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [], users = [{ClientID1, []}, {ClientID2, []}]}),
+    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [], users = [{ClientID2, []}, {ClientID3, []}]}),
+    SpaceDoc3 = save(Node1, <<"spacekey3">>, #space{name = <<"space3">>, providers = [], users = [{ClientID3, []}]}),
+
+    % then
+    verify_messages(Nodes, <<"endpoint1">>,
+        [SpaceDoc1, SpaceDoc2],
+        [SpaceDoc3],
+        10),
+    verify_messages(Nodes, <<"endpoint2">>,
+        [SpaceDoc2, SpaceDoc3],
+        [SpaceDoc1],
         10).
 
 node_for_subscription_changes(Config) ->
@@ -247,6 +286,16 @@ subscribe(LastSeen, Endpoint, SubscribeParams) ->
     Data = json_utils:encode([
         {<<"last_seq">>, LastSeen},
         {<<"endpoint">>, Endpoint}
+    ]),
+    RestAddress = Address ++ "/subscription",
+    Result = rest_utils:do_request(RestAddress, Headers, post, Data, Options),
+    ?assertEqual(204, rest_utils:get_response_status(Result)).
+
+subscribe_client(ProviderID, TTL, SubscribeParams) ->
+    {Address, Headers, Options} = SubscribeParams,
+    Data = json_utils:encode([
+        {<<"ttl_seconds">>, TTL},
+        {<<"provider">>, ProviderID}
     ]),
     RestAddress = Address ++ "/subscription",
     Result = rest_utils:do_request(RestAddress, Headers, post, Data, Options),

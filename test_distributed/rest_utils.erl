@@ -13,10 +13,36 @@
 
 
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([get_rest_port/1, get_node_ip/1, generate_cert_files/0, register_provider/4, do_request/3, check_status/1, get_response_status/1, do_request/4, do_request/5, update_req_params/3]).
+-export([get_rest_port/1, get_node_ip/1, generate_cert_files/0, register_provider/4, do_request/3, check_status/1, get_response_status/1, do_request/4, do_request/5, update_req_params/3, register_user/4]).
+
+
+register_user(UserName, ProviderId, Node, ProviderReqParams) ->
+    UserId = create_user(UserName, Node),
+    NewHeaders = authorize_user(UserId, ProviderId, ProviderReqParams, Node),
+    UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
+    {UserId, UserReqParams}.
+
+create_user(UserName, Node) ->
+    {ok, UserId} = rpc:call(Node, user_logic, create, [#onedata_user{name = UserName}]),
+    UserId.
+
+%% this function authorizes users
+%% is sends request to endpoint /user/authorize
+%% then it parses macaroons from response
+%% and returns headers updated with these macaroons
+%% headers are needed to confirm that user is authorized
+authorize_user(UserId, ProviderId, ReqParams, Node) ->
+    SerializedMacaroon = rpc:call(Node, auth_logic, gen_token, [UserId, ProviderId]),
+    {RestAddress, Headers, _Options} = ReqParams,
+    Identifier = get_macaroon_id(SerializedMacaroon),
+    Body = json_utils:encode([{<<"identifier">>, Identifier}]),
+    Resp = do_request(RestAddress ++ "/user/authorize", Headers, post, Body),
+    SerializedDischarges = get_response_body(Resp),
+    prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges).
 
 get_rest_port(Node) ->
     {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
@@ -107,6 +133,28 @@ check_status(Response) ->
         true -> ok;
         _ -> {bad_response_code, Status}
     end.
+
+get_macaroon_id(Token) ->
+    {ok, Macaroon} = macaroon:deserialize(Token),
+    [{_, Identifier}] = macaroon:third_party_caveats(Macaroon),
+    Identifier.
+
+prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
+    {ok, Macaroon} = macaroon:deserialize(SerializedMacaroon),
+    BoundMacaroons = lists:map(
+        fun(SrlzdDischMacaroon) ->
+            {ok, DM} = macaroon:deserialize(SrlzdDischMacaroon),
+            BDM = macaroon:prepare_for_request(Macaroon, DM),
+            {ok, SBDM} = macaroon:serialize(BDM),
+            SBDM
+        end, [str_utils:to_binary(SerializedDischarges)]),
+    % Bound discharge macaroons are sent in one header,
+    % separated by spaces.
+    BoundMacaroonsValue = str_utils:join_binary(BoundMacaroons, <<" ">>),
+    [
+        {<<"macaroon">>, SerializedMacaroon},
+        {<<"discharge-macaroons">>, BoundMacaroonsValue}
+    ].
 
 %% returns list of values from responsebody
 do_request(Endpoint, Headers, Method) ->

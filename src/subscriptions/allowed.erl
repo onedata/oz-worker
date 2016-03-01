@@ -15,7 +15,14 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([providers/3]).
+-export([providers/3, clients/3]).
+
+clients(_Seq, Doc, space) ->
+    {ok, [{users, Users}]} = space_logic:get_effective_users(Doc#document.key),
+    Users;
+
+clients(_Seq, _Doc, _Type) ->
+    [].
 
 providers(_Seq, Doc, space) ->
     #document{value = Value} = Doc,

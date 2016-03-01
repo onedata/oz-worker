@@ -16,7 +16,10 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 %% model_behaviour callbacks
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4, non_expired/0]).
+    model_init/0, 'after'/5, before/4]).
+
+%% API
+-export([non_expired/0, create_or_update/2]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -112,6 +115,17 @@ before(_ModelName, _Method, _Level, _Context) ->
 %%% API callbacks
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates document with using ID from document. If such object does not exist,
+%% it initialises the object with the document.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_or_update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
+    {ok, datastore:ext_key()} | datastore:update_error().
+create_or_update(Doc, Diff) ->
+    datastore:create_or_update(?STORE_LEVEL, Doc, Diff).
+
 non_expired() ->
     Now = erlang:system_time(seconds),
     Filter = fun
@@ -125,5 +139,5 @@ non_expired() ->
         (_, Acc) ->
             {next, Acc}
     end,
-    LOL = {ok, Result} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
+    {ok, Result} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
     Result.
