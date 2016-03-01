@@ -15,11 +15,33 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([renew/3]).
+-define(KEY, provider_callbacks).
+-define(WORKER_NAME, subscriptions_worker).
 
--spec renew(ProviderID :: binary(), LastSeenSeq :: non_neg_integer(), Endpoint :: binary()) -> no_return().
-renew(ProviderID, LastSeenSeq, Endpoint) ->
-    ?info("Adding subscription ~p", [[ProviderID, LastSeenSeq, Endpoint]]),
-    worker_proxy:call({subscriptions_worker, node()}, {provider_subscribe, ProviderID, Endpoint, LastSeenSeq}).
+-export([as_map/0, put/3]).
 
 
+as_map() ->
+    maps:from_list(lists:map(fun(#document{key = P, value = V}) -> {P, V}
+    end, get_subscriptions())).
+
+put(ProviderID, Endpoint, LastSeenSeq) ->
+    TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
+    ExpiresAt = now_seconds() + TTL,
+    {ok, ProviderID} = provider_subscription:save(#document{
+        key = ProviderID,
+        value = #provider_subscription{
+            provider = ProviderID,
+            node = node(),
+            endpoint = Endpoint,
+            seq = LastSeenSeq,
+            clients = #{},
+            expires = ExpiresAt
+        }
+    }).
+
+now_seconds() ->
+    erlang:system_time(seconds).
+
+get_subscriptions() ->
+    provider_subscription:non_expired().

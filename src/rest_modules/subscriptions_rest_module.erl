@@ -75,10 +75,11 @@ resource_exists(_, _, Req) ->
     ID :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
-accept_resource(subscription, post, _ID, Data, #client{type = provider, id = ProviderId}, Req) ->
+accept_resource(subscription, post, _ID, Data, #client{type = provider, id = ProviderID}, Req) ->
     LastSeen = proplists:get_value(<<"last_seq">>, Data),
     Endpoint = proplists:get_value(<<"endpoint">>, Data),
-    subscriptions:renew(ProviderId, LastSeen, Endpoint),
+    worker_proxy:call({subscriptions_worker, node()},
+        {provider_subscribe, ProviderID, Endpoint, LastSeen}),
     {true, Req};
 accept_resource(_, _, _, _, _, Req) ->
     {true, Req}.

@@ -88,6 +88,10 @@ space_changes_after_subscription(Config) ->
     verify_messages(Nodes, <<"endpoint1">>,
         [SpaceDoc1, SpaceDoc2, SpaceDoc4, SpaceDoc5, SpaceDoc6],
         [SpaceDoc3],
+        10),
+    verify_messages(Nodes, <<"endpoint2">>,
+        [SpaceDoc2, SpaceDoc4],
+        [SpaceDoc1, SpaceDoc3, SpaceDoc5, SpaceDoc6],
         10).
 
 space_changes_before_subscription(Config) ->
@@ -283,23 +287,25 @@ get_messages(Endpoint, NodeContexts) ->
     Results = lists:map(fun
         ({_, _, 0} = Ctx) -> {retries_depleted, Ctx};
         ({Node, Number, RetriesLeft}) ->
-            Message = get_message(Endpoint, Node, Number),
-            case Message of
-                not_present -> {not_present, {Node, Number, RetriesLeft - 1}};
-                _ -> {Message, {Node, Number + 1, RetriesLeft}}
+            Messages = get_messages(Endpoint, Node, Number),
+            case Messages of
+                not_present -> {[not_present], {Node, Number, RetriesLeft - 1}};
+                _ -> {Messages, {Node, Number + 1, RetriesLeft}}
             end
     end, NodeContexts),
-    lists:unzip(Results).
+    {Messages, Contexts} = lists:unzip(Results),
+    {lists:append(Messages), Contexts}.
 
-get_message(Endpoint, Node, Number) ->
+get_messages(Endpoint, Node, Number) ->
     Body = mock_capture(Node, [Number, http_client, post, [Endpoint, '_', '_'], 3]),
     case Body of
         {badrpc, _} ->
             not_present;
         _ ->
             Data = json_utils:decode(Body),
-%%            ct:print("~p", [[Node, Number, Data]]),
-            lists:last(proplists:delete(<<"seq">>, Data))
+            lists:map(fun(Messages) ->
+                lists:last(proplists:delete(<<"seq">>, Messages))
+            end, Data)
     end.
 
 as_changes(Docs) ->

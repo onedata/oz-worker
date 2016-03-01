@@ -22,6 +22,7 @@
 
 -record(provider_subscription, {
     node :: node(),
+    provider :: binary(),
     endpoint :: binary(),
     seq :: pos_integer(),
     expires :: pos_integer(),

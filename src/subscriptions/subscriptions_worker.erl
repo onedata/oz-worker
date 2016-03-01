@@ -17,7 +17,22 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([init/1, handle/1, cleanup/0]).
+-export([init/1, handle/1, cleanup/0, push_updates/2]).
+
+-record(outbox, {
+    timer :: timer:tref(),
+    buffer :: [term()]
+}).
+
+
+push_updates(Provider, Endpoint) ->
+    worker_host:state_update(?MODULE, {msg_buffer, Provider}, fun
+        (Outbox = #outbox{buffer = Buffer}) ->
+            Messages = json_utils:encode({array, Buffer}),
+            ?info("Pushing ~p to ~p", [Messages, Endpoint]),
+            http_client:post(Endpoint, [{async, once}], Messages),
+            Outbox#outbox{buffer = [], timer = undefined}
+    end).
 
 -spec init(Args :: term()) ->
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
@@ -36,22 +51,32 @@ handle(healthcheck) ->
 handle({send_update, ProviderSubscriptions, Message}) ->
     ?info("Sending ~p", [[ProviderSubscriptions, Message]]),
     lists:foreach(fun(Subscription) ->
-        ?info("Subscription ~p", [[Subscription, Message]]),
-        spawn(fun() ->
-            #provider_subscription{endpoint = Endpoint} = Subscription,
-            ?info("Sending ~p", [[Endpoint, Message]]),
-            http_client:post(Endpoint, [{async, once}], Message)
+        Provider = Subscription#provider_subscription.provider,
+        Endpoint = Subscription#provider_subscription.endpoint,
+        TTL = application:get_env(?APP_Name, subscriptions_buffer_millis, 1000),
+
+        worker_host:state_update(?MODULE, {msg_buffer, Provider}, fun
+            (undefined) ->
+                {ok, TRef} = timer:apply_after(TTL, ?MODULE, push_updates, [Provider, Endpoint]),
+                #outbox{timer = TRef, buffer = [Message]};
+            (Outbox = #outbox{buffer = Buffer, timer = undefined}) ->
+                ?info("Outbox ~p", [Outbox]),
+                {ok, TRef} = timer:apply_after(TTL, ?MODULE, push_updates, [Provider, Endpoint]),
+                Outbox#outbox{buffer = [Message | Buffer], timer = TRef};
+            (Outbox = #outbox{buffer = Buffer}) ->
+                ?info("Outbox ~p", [Outbox]),
+                Outbox#outbox{buffer = [Message | Buffer]}
         end)
     end, ProviderSubscriptions);
 
 handle({handle_change, Seq, Doc, Type}) ->
     changes_cache:put(Seq, Doc, Type),
-    Subscriptions = subscribers:subscriptions_map(),
+    Subscriptions = subscriptions:as_map(),
     handle_change(Seq, Doc, Type, Subscriptions);
 
 handle({provider_subscribe, ProviderID, Endpoint, LastSeenSeq}) ->
     ?info("Request ~p", [{provider_subscribe, ProviderID, Endpoint, LastSeenSeq}]),
-    subscribers:add(ProviderID, Endpoint, LastSeenSeq),
+    subscriptions:put(ProviderID, Endpoint, LastSeenSeq),
     fetch_history(ProviderID, Endpoint, LastSeenSeq);
 
 handle(_Request) ->
@@ -72,7 +97,8 @@ fetch_history(ProviderID, Endpoint, LastSeenSeq) ->
         [ProviderID, LastSeenSeq, OldestCached, NewestCached]),
 
     Subscriptions = #{ProviderID => #provider_subscription{
-        endpoint = Endpoint, node = node(), expires = infinity, clients = #{}
+        provider = ProviderID, endpoint = Endpoint, node = node(),
+        expires = infinity, clients = #{}
     }},
     case {OldestCached, LastSeenSeq >= OldestCached} of
         {cache_empty, _} ->
@@ -101,7 +127,7 @@ handle_change(Seq, Doc, Type, Subscriptions) ->
     NoOp = fun(_Seq, _Doc, _Type) -> ok end,
     Providers = allowed:providers(Seq, Doc, Type),
     ?info("Dispatching {seq=~p, doc=~p, type=~p} to ~p having ~p", [Seq, Doc, Type, Providers, Subscriptions]),
-    Message = json_utils:encode(translator:get_msg(Seq, Doc, Type)),
+    Message = translator:get_msg(Seq, Doc, Type),
 
     NodeToSubscriptions = lists:foldr(fun(Provider, Acc) ->
         Subscription = maps:get(Provider, Subscriptions, {NoOp, infinity}),
