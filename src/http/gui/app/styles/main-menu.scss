@@ -34,10 +34,16 @@ $dropdown-radius: 6px;
       height: $top-height;
       padding-top: $top-padding-top - $pull-up-top-logo;
     }
+
+    .account-menu {
+      position: absolute;
+      right: 0;
+    }
   }
 
   .navbar-collapse {
     text-align: center;
+    position: relative;
   }
 
   @media (max-width: $grid-float-breakpoint-max) {
