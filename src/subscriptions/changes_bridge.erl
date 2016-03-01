@@ -117,6 +117,7 @@ handle_cast(start_changes_stream, State) ->
         {noreply, State}
     catch E:R ->
         ?info("Changes stream failed to start ~p:~p", [E, R]),
+        timer:sleep(2000),
         {stop, changes_stream_not_available, State}
     end;
 handle_cast({stop, Reason}, State) ->

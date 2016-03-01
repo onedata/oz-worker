@@ -21,8 +21,11 @@
 }).
 
 -record(provider_subscription, {
-    callback :: term(),
-    expires :: pos_integer()
+    node :: node(),
+    endpoint :: binary(),
+    seq :: pos_integer(),
+    expires :: pos_integer(),
+    clients :: #{binary() => pos_integer()}
 }).
 
 %% Records of this type store a macaroons secret

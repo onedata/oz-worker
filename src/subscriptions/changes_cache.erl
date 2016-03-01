@@ -18,7 +18,18 @@
 -define(KEY, cache).
 -define(WORKER_NAME, subscriptions_worker).
 
--export([put/3, slice/2, newest_seq/0, oldest_seq/0]).
+-export([put/3, slice/2, newest_seq/0, oldest_seq/0, initialize/0]).
+
+
+initialize() ->
+    try
+        {ok, ?SUBSCRIPTIONS_STATE_KEY} = subscriptions_state:create(#document{
+            key = ?SUBSCRIPTIONS_STATE_KEY,
+            value = #subscriptions_state{cache = gb_trees:empty()}
+        })
+    catch
+        E:R -> ?info("State not created (may be already present) ~p:~p", [E, R])
+    end.
 
 put(Seq, Doc, Type) ->
     {ok, _} = subscriptions_state:update(?SUBSCRIPTIONS_STATE_KEY, fun(State) ->

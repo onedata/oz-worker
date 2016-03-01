@@ -19,21 +19,7 @@
 
 -spec renew(ProviderID :: binary(), LastSeenSeq :: non_neg_integer(), Endpoint :: binary()) -> no_return().
 renew(ProviderID, LastSeenSeq, Endpoint) ->
-    Dispatcher = get_callback(Endpoint),
-    ?info("Adding subscription ~p", [[ProviderID, LastSeenSeq, Endpoint, Dispatcher]]),
-    worker_proxy:call(subscriptions_worker, {provider_subscribe, ProviderID, Dispatcher, LastSeenSeq}).
+    ?info("Adding subscription ~p", [[ProviderID, LastSeenSeq, Endpoint]]),
+    worker_proxy:call({subscriptions_worker, node()}, {provider_subscribe, ProviderID, Endpoint, LastSeenSeq}).
 
 
-get_callback(Endpoint) ->
-    fun(Seq, Doc, Type) ->
-        Contents = translator:get_msg(Seq, Doc, Type),
-        case Contents of
-            [] -> ok;
-            _ -> spawn(fun() ->
-                Message = json_utils:encode(Contents),
-                ?info("Sending ~p", [[Endpoint, Contents]]),
-                http_client:post(Endpoint, [{async, once}], Message),
-                ?info("Sent ~p", [[Endpoint, Contents]])
-            end)
-        end
-    end.

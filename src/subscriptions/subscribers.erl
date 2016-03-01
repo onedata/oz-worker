@@ -18,35 +18,23 @@
 -define(KEY, provider_callbacks).
 -define(WORKER_NAME, subscriptions_worker).
 
--export([add/2, callbacks/0, initialize/0]).
+-export([subscriptions_map/0, add/3]).
 
-initialize() ->
-    try
-        {ok, ?SUBSCRIPTIONS_STATE_KEY} = subscriptions_state:create(#document{
-            key = ?SUBSCRIPTIONS_STATE_KEY,
-            value = #subscriptions_state{cache = gb_trees:empty()}
-        })
-    catch
-        E:R -> ?info("State not created (may be already present) ~p:~p", [E, R])
-    end.
 
-callbacks() ->
-    State = get_subscriptions(),
+subscriptions_map() ->
+    maps:from_list(lists:map(fun(#document{key = P, value = V}) -> {P, V}
+    end, get_subscriptions())).
 
-    maps:from_list(lists:map(fun(Doc) ->
-        #document{
-            key = P,
-            value = #provider_subscription{callback = C, expires = E}} = Doc,
-        {P, {C,E}}
-    end, State)).
-
-add(ProviderID, Callback) ->
+add(ProviderID, Endpoint, LastSeenSeq) ->
     TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
     ExpiresAt = now_seconds() + TTL,
     {ok, ProviderID} = provider_subscription:save(#document{
         key = ProviderID,
         value = #provider_subscription{
-            callback = Callback,
+            node = node(),
+            endpoint = Endpoint,
+            seq = LastSeenSeq,
+            clients = #{},
             expires = ExpiresAt
         }
     }).

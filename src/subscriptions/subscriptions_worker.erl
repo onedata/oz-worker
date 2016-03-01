@@ -23,25 +23,36 @@
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
 init(_Args) ->
     process_flag(trap_exit, true),
-    subscribers:initialize(),
+    changes_cache:initialize(),
     {ok, #{}}.
 
 
 handle(healthcheck) ->
     case couchdb_datastore_driver:db_run(couchbeam_changes, follow_once, [], 30) of
         {ok, _, _} -> ok;
-        _ -> {error, couchbeam_not_reachible}
+        _ -> {error, couchbeam_not_reachable}
     end;
+
+handle({send_update, ProviderSubscriptions, Message}) ->
+    ?info("Sending ~p", [[ProviderSubscriptions, Message]]),
+    lists:foreach(fun(Subscription) ->
+        ?info("Subscription ~p", [[Subscription, Message]]),
+        spawn(fun() ->
+            #provider_subscription{endpoint = Endpoint} = Subscription,
+            ?info("Sending ~p", [[Endpoint, Message]]),
+            http_client:post(Endpoint, [{async, once}], Message)
+        end)
+    end, ProviderSubscriptions);
 
 handle({handle_change, Seq, Doc, Type}) ->
     changes_cache:put(Seq, Doc, Type),
-    Callbacks = subscribers:callbacks(),
-    handle_change(Seq, Doc, Type, Callbacks);
+    Subscriptions = subscribers:subscriptions_map(),
+    handle_change(Seq, Doc, Type, Subscriptions);
 
-handle({provider_subscribe, ProviderID, Callback, From}) ->
-    ?info("Request ~p", [{provider_subscribe, ProviderID, Callback, From}]),
-    subscribers:add(ProviderID, Callback),
-    fetch_history(ProviderID, Callback, From);
+handle({provider_subscribe, ProviderID, Endpoint, LastSeenSeq}) ->
+    ?info("Request ~p", [{provider_subscribe, ProviderID, Endpoint, LastSeenSeq}]),
+    subscribers:add(ProviderID, Endpoint, LastSeenSeq),
+    fetch_history(ProviderID, Endpoint, LastSeenSeq);
 
 handle(_Request) ->
     ?log_bad_request(_Request).
@@ -54,47 +65,55 @@ cleanup() ->
 %%% Internal functions
 %%%===================================================================
 
-fetch_history(ProviderID, Callback, From) ->
+fetch_history(ProviderID, Endpoint, LastSeenSeq) ->
     NewestCached = changes_cache:newest_seq(),
     OldestCached = changes_cache:oldest_seq(),
     ?info("Fetching from cache; {provider:~p, from:~p, cache_start:~p, cache_end:~p}",
-        [ProviderID, From, OldestCached, NewestCached]),
+        [ProviderID, LastSeenSeq, OldestCached, NewestCached]),
 
-    case {OldestCached, From >= OldestCached} of
+    Subscriptions = #{ProviderID => #provider_subscription{
+        endpoint = Endpoint, node = node(), expires = infinity, clients = #{}
+    }},
+    case {OldestCached, LastSeenSeq >= OldestCached} of
         {cache_empty, _} ->
-            fetch_from_db(From, last_seq(), ProviderID, Callback);
+            fetch_from_db(LastSeenSeq, last_seq(), Subscriptions);
         {_, true} ->
-            fetch_from_cache(From, NewestCached, ProviderID, Callback);
+            fetch_from_cache(LastSeenSeq, NewestCached, Subscriptions);
         {_, false} ->
-            fetch_from_cache(From, NewestCached, ProviderID, Callback),
-            fetch_from_db(From, OldestCached - 1, ProviderID, Callback)
+            fetch_from_cache(LastSeenSeq, NewestCached, Subscriptions),
+            fetch_from_db(LastSeenSeq, OldestCached - 1, Subscriptions)
     end.
 
 
-fetch_from_cache(From, To, ProviderID, Callback) ->
+fetch_from_cache(From, To, Subscriptions) ->
     lists:foreach(fun({Seq, {Doc, Type}}) ->
-        handle_change(Seq, Doc, Type, #{ProviderID => {Callback, infinity}})
+        handle_change(Seq, Doc, Type, Subscriptions)
     end, changes_cache:slice(From, To)).
 
-fetch_from_db(From, To, ProviderID, Callback) ->
+fetch_from_db(From, To, Subscriptions) ->
     couchdb_datastore_driver:changes_start_link(fun
         (_Seq, stream_ended, _Type) -> ok;
         (Seq, Doc, Type) ->
-            handle_change(Seq, Doc, Type, #{ProviderID => {Callback, infinity}})
+            handle_change(Seq, Doc, Type, Subscriptions)
     end, From, To).
 
-handle_change(Seq, Doc, Type, Callbacks) ->
+handle_change(Seq, Doc, Type, Subscriptions) ->
     NoOp = fun(_Seq, _Doc, _Type) -> ok end,
     Providers = allowed:providers(Seq, Doc, Type),
-    ?info("Dispatching {seq=~p, doc=~p, type=~p} to ~p having ~p", [Seq, Doc, Type, Providers, Callbacks]),
+    ?info("Dispatching {seq=~p, doc=~p, type=~p} to ~p having ~p", [Seq, Doc, Type, Providers, Subscriptions]),
+    Message = json_utils:encode(translator:get_msg(Seq, Doc, Type)),
 
-    lists:foreach(fun(Provider) ->
-        {Callback, _} = maps:get(Provider, Callbacks, {NoOp, infinity}),
-        ?info("Spawning {seq=~p, doc=~p, type=~p} to ~p via ~p", [Seq, Doc, Type, Provider, Callback]),
-        spawn(fun() ->
-            Callback(Seq, Doc, Type)
-        end)
-    end, Providers).
+    NodeToSubscriptions = lists:foldr(fun(Provider, Acc) ->
+        Subscription = maps:get(Provider, Subscriptions, {NoOp, infinity}),
+        Node = Subscription#provider_subscription.node,
+        dict:append(Node, Subscription, Acc)
+    end, dict:new(), Providers),
+    ?info("NodeToSubscriptions  ~p \n ~p", [dict:to_list(NodeToSubscriptions), Subscriptions]),
+
+    lists:foreach(fun({Node, Subscriptions}) ->
+        ?info("Dispatching ~p to ~p having ~p", [Message, Node, Subscriptions]),
+        worker_proxy:cast({?MODULE, Node}, {send_update, Subscriptions, Message})
+    end, dict:to_list(NodeToSubscriptions)).
 
 -spec last_seq() -> non_neg_integer().
 last_seq() ->
