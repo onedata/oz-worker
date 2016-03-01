@@ -1,3 +1,5 @@
+$dropdown-radius: 6px;
+
 /*** top navigation ***/
 .navbar {
   background: none;
@@ -149,12 +151,54 @@
     .dropdown-menu {
       font-size: inherit;
       // TODO: mobile menu color variable
-      background-color: #2E2E2E;
-      padding: 10px;
+      background-color: $color-dropdown-menu-bg;
+      padding: 0;
 
       .divider {
         // TODO: same as menu bottom line color
         background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      &:before {
+        position: absolute;
+        top: -7px;
+        right: 10px;
+        display: inline-block;
+        border-right: 7px solid transparent;
+        border-bottom: 7px solid #ccc;
+        border-left: 7px solid transparent;
+        border-bottom-color: #2B3037;
+        content: '';
+      }
+
+      > li:not(.divider) {
+        &:first-child {
+          border-top-left-radius: $dropdown-radius;
+          border-top-right-radius: $dropdown-radius;
+        }
+
+        &:last-child {
+          border-bottom-left-radius: $dropdown-radius;
+          border-bottom-right-radius: $dropdown-radius;
+        }
+
+        > a {
+          color: $top-font-color !important;
+          padding: 10px;
+          &:hover {
+            color: white !important;
+            background-color: transparent !important;
+          }
+        }
+
+        &:hover {
+          background-color: $color-dropdown-menu-bg-hover;
+        }
+      }
+
+      > .divider {
+        padding: 0;
+        margin: 0;
       }
     }
 
@@ -170,7 +214,7 @@
     }
 
     .dropdown-menu {
-      border-radius: 0 !important;
+      border-radius: $dropdown-radius !important;
 
       a {
         text-decoration: none !important;
