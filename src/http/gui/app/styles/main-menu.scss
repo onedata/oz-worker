@@ -102,12 +102,12 @@
     float: none;
     vertical-align: top;
 
-    li {
+    > li {
       text-transform: uppercase;
       font-size: $top-font-size;
       background: transparent;
 
-      a {
+      > a {
         height: $top-height;
         padding-top: $top-padding-top;
         color: $top-font-color;
@@ -133,6 +133,78 @@
         }
       }
     }
+
+    .account-dropdown {
+      .account-icon {
+        position: absolute;
+        // pull up icon
+        margin-top: -2px;
+        font-size: 1.6em;
+      }
+      .account-label {
+        padding-left: 32px;
+      }
+    }
+
+    .dropdown-menu {
+      font-size: inherit;
+      // TODO: mobile menu color variable
+      background-color: #2E2E2E;
+      padding: 10px;
+
+      .divider {
+        // TODO: same as menu bottom line color
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+    }
+
+    // Open dropdowns
+    .open > a {
+      &,
+      &:hover,
+      &:focus {
+        color: white;
+        background-color: transparent !important;
+        border-color: transparent;
+      }
+    }
+
+    .dropdown-menu {
+      border-radius: 0 !important;
+
+      a {
+        text-decoration: none !important;
+        &:hover {
+          &::after {
+            content: none;
+          }
+        }
+      }
+    }
+
+    @media (max-width: $grid-float-breakpoint-max) {
+      // Dropdowns get custom display when collapsed
+      .open .dropdown-menu {
+        position: static;
+        float: none;
+        width: auto;
+        margin-top: 0;
+        background-color: #2E2E2E;
+        border: 0;
+        box-shadow: none;
+        > li > a,
+        .dropdown-header {
+          padding: 5px 15px 5px 25px;
+        }
+        > li > a {
+          line-height: $line-height-computed;
+          &:hover,
+          &:focus {
+            background-image: none;
+          }
+        }
+      }
+    }
   }
 }
 
@@ -140,99 +212,8 @@
 
 
 .navbar-nav {
-  margin: ($navbar-padding-vertical / 2) (-$navbar-padding-horizontal);
 
-  > li > a {
-    padding-top:    10px;
-    padding-bottom: 10px;
-    line-height: $line-height-computed;
-  }
 
-  .account-dropdown {
-    .account-icon {
-      position: absolute;
-      // pull up icon
-      margin-top: -2px;
-      font-size: 1.6em;
-    }
-    .account-label {
-      padding-left: 32px;
-    }
-  }
-
-  .dropdown-menu {
-    font-size: inherit;
-    // TODO: mobile menu color variable
-    background-color: #2E2E2E;
-    padding: 10px;
-
-    .divider {
-      // TODO: same as menu bottom line color
-      background-color: rgba(255, 255, 255, 0.1);
-    }
-  }
-
-  // Open dropdowns
-  .open > a {
-    &,
-    &:hover,
-    &:focus {
-      color: white;
-      background-color: transparent !important;
-      border-color: transparent;
-    }
-  }
-
-  .dropdown-menu {
-    border-radius: 0 !important;
-
-    a {
-      text-decoration: none !important;
-      &:hover {
-        &::after {
-          content: none;
-        }
-      }
-    }
-  }
-
-  @media (max-width: $grid-float-breakpoint-max) {
-    // Dropdowns get custom display when collapsed
-    .open .dropdown-menu {
-      position: static;
-      float: none;
-      width: auto;
-      margin-top: 0;
-      background-color: #2E2E2E;
-      border: 0;
-      box-shadow: none;
-      > li > a,
-      .dropdown-header {
-        padding: 5px 15px 5px 25px;
-      }
-      > li > a {
-        line-height: $line-height-computed;
-        &:hover,
-        &:focus {
-          background-image: none;
-        }
-      }
-    }
-  }
-
-  // Uncollapse the nav
-  @media (min-width: $grid-float-breakpoint) {
-    float: left;
-    margin: 0;
-
-    > li {
-      float: left;
-      > a {
-        padding-top:    $navbar-padding-vertical;
-        padding-bottom: $navbar-padding-vertical;
-      }
-    }
-  }
 }
 
 /*** ***/
