@@ -285,7 +285,7 @@ verify_messages(NodeContexts, Endpoint, Expected, Forbidden) ->
 
 get_messages(Endpoint, NodeContexts) ->
     Results = lists:map(fun
-        ({_, _, 0} = Ctx) -> {retries_depleted, Ctx};
+        ({_, _, 0} = Ctx) -> {[retries_depleted], Ctx};
         ({Node, Number, RetriesLeft}) ->
             Messages = get_messages(Endpoint, Node, Number),
             case Messages of

@@ -53,20 +53,7 @@ handle({send_update, ProviderSubscriptions, Message}) ->
     lists:foreach(fun(Subscription) ->
         Provider = Subscription#provider_subscription.provider,
         Endpoint = Subscription#provider_subscription.endpoint,
-        TTL = application:get_env(?APP_Name, subscriptions_buffer_millis, 1000),
-
-        worker_host:state_update(?MODULE, {msg_buffer, Provider}, fun
-            (undefined) ->
-                {ok, TRef} = timer:apply_after(TTL, ?MODULE, push_updates, [Provider, Endpoint]),
-                #outbox{timer = TRef, buffer = [Message]};
-            (Outbox = #outbox{buffer = Buffer, timer = undefined}) ->
-                ?info("Outbox ~p", [Outbox]),
-                {ok, TRef} = timer:apply_after(TTL, ?MODULE, push_updates, [Provider, Endpoint]),
-                Outbox#outbox{buffer = [Message | Buffer], timer = TRef};
-            (Outbox = #outbox{buffer = Buffer}) ->
-                ?info("Outbox ~p", [Outbox]),
-                Outbox#outbox{buffer = [Message | Buffer]}
-        end)
+        outbox:put(Provider, Endpoint, Message)
     end, ProviderSubscriptions);
 
 handle({handle_change, Seq, Doc, Type}) ->
