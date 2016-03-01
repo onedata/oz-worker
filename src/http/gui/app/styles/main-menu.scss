@@ -155,6 +155,10 @@ $dropdown-radius: 6px;
     }
 
     .dropdown-menu {
+      position: absolute;
+      left: auto;
+      right: 0;
+      min-width: 150px;
       font-size: inherit;
       // TODO: mobile menu color variable
       background-color: $color-dropdown-menu-bg;
