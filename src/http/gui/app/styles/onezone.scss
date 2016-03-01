@@ -217,6 +217,7 @@ $search-box-height: 36px;
     position: absolute;
     top: 80px;
     bottom: 0;
+    // overflow: visible;
     overflow-y: auto;
     overflow-x: hidden;
   }
@@ -558,4 +559,24 @@ $search-box-height: 36px;
       }
     }
   }
+}
+
+.side-dropdown {
+  a {
+    color: white !important;
+    text-decoration: none !important;
+  }
+  .side-dropdown-toggle {
+    .side-dropdown-menu {
+
+    }
+  }
+}
+
+.floater {
+  position: fixed !important;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
 }

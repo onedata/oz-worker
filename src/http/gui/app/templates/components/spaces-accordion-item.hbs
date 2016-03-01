@@ -39,11 +39,18 @@
           </li>
         {{/each}}
         <li class='get-support'>
-          <div class="icon">
-            {{one-icon icon="add"}}
-          </div>
-          <div class="label">
-            {{t 'onezone.spacesAccordionItem.getSupport'}}
+          <div class="dropdown side-dropdown">
+            <a href="#" class="dropdown-toggle side-dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+              <div class="icon">
+                {{one-icon icon="add"}}
+              </div>
+              <div class="label">
+                {{t 'onezone.spacesAccordionItem.getSupport'}}
+              </div>
+            </a>
+            <div class="dropdown-menu dropdown-menu-right floater">
+              {{input value=cachedSupportToken}}
+            </div>
           </div>
         </li>
       </ul>
