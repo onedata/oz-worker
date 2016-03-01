@@ -38,5 +38,13 @@ export default Ember.Service.extend({
   privateRPC: function (operation, data, thenFun) {
     this.get('store').adapterFor('application')
       .callback('private', operation, data).then(thenFun);
+  },
+
+  /*** Helper methods ***/
+
+  /**
+  */
+  getSupportToken(spaceId) {
+    this.privateRPC('getSupportToken', {spaceId: spaceId});
   }
 });

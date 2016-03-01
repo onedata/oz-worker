@@ -65,8 +65,9 @@ find_all(<<"space">>) ->
 
 
 %% Called when ember asks to create a record
-create_record(<<"space">>, _Data) ->
-    {error, not_iplemented}.
+create_record(<<"space">>, Data) ->
+    ?dump(Data),
+    {ok, [{<<"id">>, <<"123123123">>} | Data] }.
 
 %% Called when ember asks to update a record
 update_record(<<"space">>, _Id, _Data) ->

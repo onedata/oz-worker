@@ -32,4 +32,9 @@ callback(<<"sessionDetails">>, _) ->
         {<<"firstLogin">>, FirstLogin}
     ]}],
     ?alert("~p", [Res]),
-    {ok, Res}.
+    {ok, Res};
+
+
+callback(<<"getSupportToken">>, Data) ->
+    ?dump(Data),
+    {ok, <<"ads789f6ads789r623487g523guy45aegsyf87adstyf">>}.
