@@ -217,6 +217,7 @@ $search-box-height: 36px;
     position: absolute;
     top: 80px;
     bottom: 0;
+    width: 100%;
     // overflow: visible;
     overflow-y: auto;
     overflow-x: hidden;
@@ -240,6 +241,10 @@ $search-box-height: 36px;
 
           &:hover {
             background-color: rgba(255, 255, 255, 0.1) !important;
+
+            .star-empty {
+              color: white !important;
+            }
           }
         }
       }
@@ -371,6 +376,10 @@ $search-box-height: 36px;
           text-decoration: none !important;
           background-color: #3A3A3A;
 
+          .go-to-provider {
+            cursor: pointer; cursor: hand;
+          }
+
           &.create-new {
             margin-top: 20px;
             margin-bottom: 20px;
@@ -410,12 +419,25 @@ $search-box-height: 36px;
             }
           }
 
+          .star-toggle {
+            display: table-cell;
+            width: 40px;
+            cursor: pointer; cursor: hand;
+
+            .star-empty {
+              color: transparent;
+            }
+          }
+
           // for provider
           .spaces-count {
             display: table-cell;
             position: relative;
             width: 50px;
             overflow-x: hidden;
+            cursor: pointer; cursor: hand;
+            @include vendor-prefix(user-select, none);
+
             .icon {
               position: absolute;
               .one-icon {

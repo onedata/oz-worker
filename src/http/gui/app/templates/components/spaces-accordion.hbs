@@ -6,12 +6,17 @@
   {{!-- faking the accordion group... this should be separate class --}}
   <div class="accordion-group spaces-accordion-group">
     <div class="accordion-heading spaces-accordion-heading">
-      <a class="accordion-toggle spaces-accordion-toggle create-new" href="#collapse-space-add">
+      <a class="accordion-toggle spaces-accordion-toggle create-new"
+        {{action 'startCreateNewSpace'}}>
         <div class="space-icon">
           {{one-icon icon='space-add'}}
         </div>
         <div class="space-header">
-          {{t 'onezone.spacesAccordion.createNewSpace'}}
+          {{#if createNewSpaceEditing}}
+            {{input action='endCreateNewSpace'}}
+          {{else}}
+            {{t 'onezone.spacesAccordion.createNewSpace'}}
+          {{/if}}
         </div>
       </a>
     </div>

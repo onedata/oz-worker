@@ -150,7 +150,10 @@ html {
   padding: $body-padding;
 }
 
-/*** centered columns styles ***/
+/*** Some additional helper CSS classes ***/
+
+// centered columns styles
+
 .row-centered {
     text-align:center;
 }
@@ -162,7 +165,8 @@ html {
     /* inline-block space fix */
     margin-right:-4px;
 }
-/*** ***/
+
+// Conditional alignment
 
 .xs-left {
   @include respond-to(screen-xs) {
@@ -174,6 +178,10 @@ html {
   @include respond-to(screen-xs) {
     text-align: right !important;
   }
+}
+
+.hover-visible:not(:hover) {
+  display: none;
 }
 
 // Buttons
@@ -197,6 +205,11 @@ html {
   background-color: #EF3C40;
 }
 
+// TODO: real style for various contexts
+input {
+  font-family: 'Open Sans';
+  color: black;
+}
 
 // TODO: move to separate file
 
@@ -209,11 +222,6 @@ $dropdown-triangle-width: 20px;
   background-color: $color-dropdown-menu-bg;
   border-radius: $dropdown-radius !important;
   border-color: transparent;
-
-  input {
-    font-family: 'Open Sans';
-    color: black;
-  }
 
   &.dropdown-menu-down {
     left: auto;

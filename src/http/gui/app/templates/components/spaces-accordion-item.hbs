@@ -39,6 +39,8 @@
           </li>
         {{/each}}
         <li class='get-support'>
+          {{!-- TODO: create some dropdown component, which does not close on click --}}
+          {{!-- TODO: like this: http://stackoverflow.com/questions/25089297/twitter-bootstrap-avoid-dropdown-menu-close-on-click-inside --}}
           <div class="dropdown side-dropdown">
             <a href="#" class="dropdown-toggle side-dropdown-toggle"
               data-toggle="dropdown" role="button" aria-haspopup="true"
@@ -53,7 +55,7 @@
             <div class="dropdown-menu dropdown-menu-right floater">
               {{!-- TODO: style and copy button --}}
               {{!-- TODO: loading icon --}}
-              {{input value=supportToken}}
+              {{input value=supportToken readonly=true}}
             </div>
           </div>
         </li>

@@ -4,5 +4,7 @@ export default DS.Model.extend({
   name: DS.attr('string'),
   isWorking: DS.attr('boolean', {defaultValue: false}),
   isDefault: DS.attr('boolean', {defaultValue: false}),
-  spaces: DS.hasMany('space', {async: true})
+  spaces: DS.hasMany('space', {async: true}),
+
+  url: 'http://example.com'
 });

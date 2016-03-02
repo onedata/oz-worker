@@ -2,14 +2,25 @@
 <div class="accordion-group providers-accordion-group">
   <div class="item">
     <div class="accordion-heading providers-accordion-heading">
-      <a class="accordion-toggle providers-accordion-toggle" data-toggle="collapse" href="#collapse-provider-{{provider.id}}">
-        <div class="provider-icon">
-          {{one-icon icon=iconName color=iconColor}}
+      <a class="accordion-toggle providers-accordion-toggle">
+        <div class="go-to-provider" {{action "goToProvider"}}>
+          <div class="provider-icon">
+            {{one-icon icon=iconName color=iconColor}}
+          </div>
+          <div class="provider-header">
+            {{provider.name}}
+          </div>
         </div>
-        <div class="provider-header">
-          {{provider.name}}
+        <div class="star-toggle" {{action "toggleDefault"}}>
+          {{#if provider.isDefault}}
+            {{one-icon icon="star"}}
+          {{else}}
+            <div class="star-empty">
+              {{one-icon icon="star-empty"}}
+            </div>
+          {{/if}}
         </div>
-        <div class="spaces-count">
+        <div class="spaces-count" data-toggle="collapse" href="#collapse-provider-{{provider.id}}">
           <div class="icon">
             {{one-icon icon="space"}}
           </div>
@@ -36,14 +47,6 @@
               </div>
             </li>
           {{/each}}
-          <li class='get-support'>
-            <div class="icon">
-              {{one-icon icon="add"}}
-            </div>
-            <div class="label">
-              {{t 'onezone.spacesAccordionItem.getSupport'}}
-            </div>
-          </li>
         </ul>
       </div>
     </div>

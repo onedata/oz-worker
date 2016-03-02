@@ -32,6 +32,7 @@ export default Ember.Component.extend({
   },
 
   actions: {
+      // TODO: this action should not be invoked when there is currently opened other token
       getNewSupportToken: function() {
         let space = this.get('space');
         if (space) {
