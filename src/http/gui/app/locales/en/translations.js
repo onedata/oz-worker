@@ -89,6 +89,21 @@ export default {
       noneProviders: {
         title: 'None of your providers does not work',
         text: 'Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.'
+      },
+      getSupport: {
+        title: 'Get support',
+        text: 'Currently, none of your spaces are supported by any provider. ' +
+                'Click here to check again. In order to gain access to your files, ' +
+                'you must find a provider willing to support your spaces. Below is a ' +
+                'token that you should give to the provider.'
+      },
+      firstLogin: {
+        title: 'First login',
+        p1: 'You have successfully logged in and an account for you has been created.',
+        p2: 'You will be now redirected to profile maganement, where you can fill out ' +
+              'some information about yourself and connect another accounts to your profile.',
+        p3: 'We have created a default space for you. You will need to find a provider ' +
+              'to support it before you can store files.'
       }
     },
     sidebar: {
