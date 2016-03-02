@@ -210,6 +210,11 @@ $dropdown-triangle-width: 20px;
   border-radius: $dropdown-radius !important;
   border-color: transparent;
 
+  input {
+    font-family: 'Open Sans';
+    color: black;
+  }
+
   &.dropdown-menu-down {
     left: auto;
     right: 0;

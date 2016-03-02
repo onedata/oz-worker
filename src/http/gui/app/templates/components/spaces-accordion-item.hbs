@@ -40,7 +40,9 @@
         {{/each}}
         <li class='get-support'>
           <div class="dropdown side-dropdown">
-            <a href="#" class="dropdown-toggle side-dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+            <a href="#" class="dropdown-toggle side-dropdown-toggle"
+              data-toggle="dropdown" role="button" aria-haspopup="true"
+              aria-expanded="false" {{action 'getNewSupportToken'}}>
               <div class="icon">
                 {{one-icon icon="add"}}
               </div>
@@ -49,7 +51,9 @@
               </div>
             </a>
             <div class="dropdown-menu dropdown-menu-right floater">
-              {{input value=cachedSupportToken}}
+              {{!-- TODO: style and copy button --}}
+              {{!-- TODO: loading icon --}}
+              {{input value=supportToken}}
             </div>
           </div>
         </li>

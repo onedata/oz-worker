@@ -42,9 +42,12 @@ export default Ember.Service.extend({
 
   /*** Helper methods ***/
 
+  // TODO: proper jsdoc
   /**
+    Fetch token for provider and run callback with it.
+    @param callback {function} callback(token)
   */
-  getSupportToken(spaceId) {
-    this.privateRPC('getSupportToken', {spaceId: spaceId});
+  getSupportToken(spaceId, callback) {
+    this.privateRPC('getSupportToken', {spaceId: spaceId}, callback);
   }
 });

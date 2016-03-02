@@ -1,6 +1,8 @@
 import Ember from 'ember';
 
 export default Ember.Component.extend({
+  server: Ember.inject.service('server'),
+
   /** Should be injected */
   space: null,
 
@@ -10,20 +12,37 @@ export default Ember.Component.extend({
     return this.get('space').get('providers');
   }.property('space'),
 
-  cachedSupportToken: null,
+  supportToken: null,
 
   // TODO: maybe this code should be moved somewhere else... (make more global)
   didInsertElement() {
-    let floater = $('.floater');
+    $('.floater').each(function() {
+      let ft = $(this);
 
-    let changePos = function() {
-      let offset = floater.parent().offset();
-      let left = `${parseInt(offset.left) + floater.parent().width()}px`;
-      let top = offset.top;
-      floater.css({left: left, top: top});
-    };
+      let changePos = function() {
+        let offset = ft.parent().offset();
+        let left = `${parseInt(offset.left) + ft.parent().width()}px`;
+        let top = offset.top;
+        ft.css({left: left, top: top});
+      };
 
-    floater.parent().on('mouseover', changePos);
-    $('.accordion-container').on('scroll', changePos);
+      ft.parent().on('mouseover', changePos);
+      $('.accordion-container').on('scroll', changePos);
+    });
+  },
+
+  actions: {
+      getNewSupportToken: function() {
+        let space = this.get('space');
+        if (space) {
+          this.get('server').getSupportToken(space.id, (token) => {
+            // TODO: only debug, should be removed in future
+            console.debug('Fetched new support token: ' + token);
+            this.set('supportToken', token);
+          });
+        } else {
+          console.warn('Tried to get new support token, but no space is assigned to item');
+        }
+      },
   }
 });
