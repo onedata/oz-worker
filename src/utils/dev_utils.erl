@@ -261,6 +261,8 @@ create_space_with_provider({user, UserId}, Name, Providers, Size, UUID) ->
     UserNew = User#user{spaces = [SpaceId | Spaces]},
     dao_adapter:save(UserDoc#db_document{record = UserNew}),
 
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+
     op_channel_logic:space_modified(Providers, SpaceId, Space),
     op_channel_logic:user_modified(Providers, UserId, UserNew),
     {ok, SpaceId};
@@ -274,9 +276,11 @@ create_space_with_provider({group, GroupId}, Name, Providers, Size, UUID) ->
     GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
     dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
 
-    op_channel_logic:space_modified(Providers, SpaceId, Space),
-    op_channel_logic:group_modified(Providers, GroupId, Group),
     lists:foreach(fun({UserId, _}) ->
+        user_logic:set_space_name_mapping(UserId, SpaceId, Name),
         op_channel_logic:user_modified(Providers, UserId, dao_adapter:user(UserId))
     end, Users),
+
+    op_channel_logic:space_modified(Providers, SpaceId, Space),
+    op_channel_logic:group_modified(Providers, GroupId, Group),
     {ok, SpaceId}.

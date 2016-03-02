@@ -18,7 +18,7 @@
 %% API
 -export([make_dir/2, cleanup/0]).
 -export([create_provider/4, create_space/3, create_user/2, create_group/3]).
--export([join_group/3, join_space/3, support_space/4]).
+-export([join_group/3, join_space/3, leave_space/3, support_space/4]).
 
 %%%===================================================================
 %%% API functions
@@ -140,7 +140,7 @@ join_group(Config, UserId, GroupId) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Creates group in Global Registry.
+%% @doc Joins space as a user or a group.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_space(Config :: term(), {user | group, Id :: binary()}, SpaceId :: binary()) ->
@@ -149,7 +149,7 @@ join_space(Config, {user, UserId}, SpaceId) ->
     try
         [Node] = ?config(gr_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
-            {ok, Token} = rpc:call(Node, token_logic, create, [space_invite_user_token, {space, SpaceId}]),
+            {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_invite_user_token, {space, SpaceId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
             space_logic:join({user, UserId}, Macaroon)
         end, []]),
@@ -168,6 +168,30 @@ join_space(Config, {group, GroupId}, SpaceId) ->
             space_logic:join({group, GroupId}, Macaroon)
         end, []]),
         ok
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Leaves space as a user or a group.
+%% @end
+%%--------------------------------------------------------------------
+-spec leave_space(Config :: term(), {user | group, Id :: binary()}, SpaceId :: binary()) ->
+    ok | {error, Reason :: term()}.
+leave_space(Config, {user, UserId}, SpaceId) ->
+    try
+        [Node] = ?config(gr_nodes, Config),
+        rpc:call(Node, space_logic, remove_user, [SpaceId, UserId])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end;
+
+leave_space(Config, {group, GroupId}, SpaceId) ->
+    try
+        [Node] = ?config(gr_nodes, Config),
+        rpc:call(Node, space_logic, remove_group, [SpaceId, GroupId])
     catch
         _:Reason ->
             {error, Reason}

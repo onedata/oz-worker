@@ -305,7 +305,7 @@ init_per_suite(Config) ->
     % Needed for websocket_client
     application:start(ssl2),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
-    timer:sleep(60000), % TODO add nagios to GR and delete sleep
+    timer:sleep(10000), % TODO add nagios to GR and delete sleep
     NewConfig.
 
 end_per_suite(Config) ->
@@ -390,7 +390,7 @@ create_spaces(Config, Member, N, Spaces) ->
 modify_spaces(Config, Spaces) ->
     [Node] = ?config(gr_nodes, Config),
     lists:foreach(fun({SpaceId, Name}) ->
-        ?assertEqual(ok, rpc:call(Node, space_logic, modify, [SpaceId, Name]))
+        ?assertEqual(ok, rpc:call(Node, space_logic, modify, [SpaceId, provider, Name]))
     end, Spaces).
 
 

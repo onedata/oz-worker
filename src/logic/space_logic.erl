@@ -19,7 +19,7 @@
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
     has_effective_privilege/3]).
--export([create/2, create/4, modify/2, set_privileges/3, join/2, support/3]).
+-export([create/2, create/4, modify/3, set_privileges/3, join/2, support/3]).
 -export([get_data/2, get_users/1, get_effective_users/1, get_groups/1,
     get_providers/2, get_user/3, get_group/2, get_provider/3, get_privileges/2,
     get_effective_privileges/2]).
@@ -160,9 +160,12 @@ create({provider, ProviderId}, Name, Macaroon, Size) ->
 %% Throws exception when call to dao fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(SpaceId :: binary(), Name :: binary()) ->
-    ok.
-modify(SpaceId, Name) ->
+-spec modify(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider,
+    Name :: binary()) -> ok.
+modify(SpaceId, {user, UserId}, Name) ->
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+    ok;
+modify(SpaceId, provider, Name) ->
     #db_document{record = #space{providers = SpaceProviders} = Space}
         = Doc = dao_adapter:space_doc(SpaceId),
     SpaceNew = Space#space{name = Name},
@@ -199,7 +202,9 @@ join({user, UserId}, Macaroon) ->
         false ->
             Privileges = privileges:space_user(),
             SpaceDoc = dao_adapter:space_doc(SpaceId),
-            #db_document{record = #space{users = Users, providers = SpaceProviders} = Space} = SpaceDoc,
+            #db_document{record = #space{
+                name = Name, users = Users, providers = SpaceProviders
+            } = Space} = SpaceDoc,
             SpaceNew = Space#space{users = [{UserId, Privileges} | Users]},
 
             UserDoc = dao_adapter:user_doc(UserId),
@@ -208,6 +213,8 @@ join({user, UserId}, Macaroon) ->
 
             dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
             dao_adapter:save(UserDoc#db_document{record = UserNew}),
+
+            user_logic:set_space_name_mapping(UserId, SpaceId, Name),
 
             op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew),
             {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
@@ -221,7 +228,9 @@ join({group, GroupId}, Macaroon) ->
         false ->
             Privileges = privileges:space_user(),
             SpaceDoc = dao_adapter:space_doc(SpaceId),
-            #db_document{record = #space{groups = Groups, providers = SpaceProviders} = Space} = SpaceDoc,
+            #db_document{record = #space{
+                name = Name, groups = Groups, providers = SpaceProviders
+            } = Space} = SpaceDoc,
             SpaceNew = Space#space{groups = [{GroupId, Privileges} | Groups]},
 
             GroupDoc = dao_adapter:group_doc(GroupId),
@@ -230,6 +239,10 @@ join({group, GroupId}, Macaroon) ->
 
             dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
             dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
+
+            lists:foreach(fun({UserId, _}) ->
+                user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+            end, Users),
 
             op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew),
             {ok, [{providers, GroupProviders}]} = group_logic:get_providers(GroupId),
@@ -281,9 +294,16 @@ support(ProviderId, Macaroon, SupportedSize) ->
 %% Throws exception when call to dao fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(SpaceId :: binary(), Client :: user | provider) ->
+-spec get_data(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider) ->
     {ok, [proplists:property()]}.
-get_data(SpaceId, _Client) ->
+get_data(SpaceId, {user, UserId}) ->
+    #user{space_names = SpaceNames} = dao_adapter:user(UserId),
+    {SpaceId, Name} = lists:keyfind(SpaceId, 1, SpaceNames),
+    {ok, [
+        {spaceId, SpaceId},
+        {name, Name}
+    ]};
+get_data(SpaceId, provider) ->
     #space{name = Name, size = Size} = dao_adapter:space(SpaceId),
     {ok, [
         {spaceId, SpaceId},
@@ -412,12 +432,14 @@ remove(SpaceId) ->
     #space{users = Users, groups = Groups, providers = Providers} = Space,
 
     lists:foreach(fun({UserId, _}) ->
-        UserDoc = dao_adapter:user_doc(UserId),
-        #db_document{record = #user{spaces = USpaces} = User} = UserDoc,
-        NewUser = User#user{spaces = lists:delete(SpaceId, USpaces)},
-        dao_adapter:save(UserDoc#db_document{record = NewUser}),
-        {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-        op_channel_logic:user_modified(UserProviders, UserId, NewUser)
+        case user_logic:clean_space_name_mapping(UserId, SpaceId) of
+            true ->
+                User = dao_adapter:user(UserId),
+                {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
+                op_channel_logic:user_modified(UserProviders, UserId, User);
+            false ->
+                ok
+        end
     end, Users),
 
     lists:foreach(fun({GroupId, _}) ->
@@ -457,6 +479,8 @@ remove_user(SpaceId, UserId) ->
 
     dao_adapter:save(UserDoc#db_document{record = UserNew}),
     dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
+
+    user_logic:clean_space_name_mapping(UserId, SpaceId),
     cleanup(SpaceId),
 
     op_channel_logic:space_modified(SpaceProviders, SpaceId, SpaceNew),
@@ -472,7 +496,7 @@ remove_user(SpaceId, UserId) ->
     true.
 remove_group(SpaceId, GroupId) ->
     GroupDoc = dao_adapter:group_doc(GroupId),
-    #db_document{record = #user_group{spaces = Spaces} = Group} = GroupDoc,
+    #db_document{record = #user_group{users = Users, spaces = Spaces} = Group} = GroupDoc,
     GroupNew = Group#user_group{spaces = lists:delete(SpaceId, Spaces)},
 
     SpaceDoc = dao_adapter:space_doc(SpaceId),
@@ -481,6 +505,10 @@ remove_group(SpaceId, GroupId) ->
 
     dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
     dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
+
+    lists:foreach(fun({UserId, _}) ->
+        user_logic:clean_space_name_mapping(UserId, SpaceId)
+    end, Users),
     cleanup(SpaceId),
 
     op_channel_logic:space_modified(Providers, SpaceId, SpaceNew),
@@ -529,6 +557,7 @@ create_with_provider({user, UserId}, Name, Providers, Size) ->
     dao_adapter:save(UserDoc#db_document{record = UserNew}),
 
     add_space_to_providers(SpaceId, Providers),
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
 
     op_channel_logic:space_modified(Providers, SpaceId, Space),
     op_channel_logic:user_modified(Providers, UserId, UserNew),
@@ -544,13 +573,15 @@ create_with_provider({group, GroupId}, Name, Providers, Size) ->
     GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
     dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
 
+    lists:foreach(fun({UserId, _}) ->
+        user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+        op_channel_logic:user_modified(Providers, UserId, dao_adapter:user(UserId))
+    end, Users),
+
     add_space_to_providers(SpaceId, Providers),
 
     op_channel_logic:space_modified(Providers, SpaceId, Space),
     op_channel_logic:group_modified(Providers, GroupId, Group),
-    lists:foreach(fun({UserId, _}) ->
-        op_channel_logic:user_modified(Providers, UserId, dao_adapter:user(UserId))
-    end, Users),
     {ok, SpaceId}.
 
 

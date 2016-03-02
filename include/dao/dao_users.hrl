@@ -40,6 +40,7 @@
     email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],
     spaces = [] :: [SpaceId :: binary()],
+    space_names = [] :: [{SpaceId :: binary(), SpaceName :: binary()}],
     default_space :: binary() | undefined,
     groups = [] :: [GroupId :: binary()],
     % TODO this is a mock

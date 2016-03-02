@@ -15,11 +15,14 @@
 -include_lib("ctool/include/logging.hrl").
 -include("dao/dao_types.hrl").
 
+-define(MIN_SUFFIX_HASH_LEN, 6).
+
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
 -export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
 -export([exists/1, remove/1]).
+-export([set_space_name_mapping/3, clean_space_name_mapping/2]).
 
 %%%===================================================================
 %%% API functions
@@ -153,7 +156,7 @@ modify(UserId, Proplist) ->
                 % Alias not allowed, return error
                 {error, Reason};
             _ ->
-                NewUser = #user{
+                NewUser = User#user{
                     name = proplists:get_value(name, Proplist, Name),
                     alias = SetAlias,
                     email_list = proplists:get_value(email_list, Proplist, Emails),
@@ -327,7 +330,7 @@ get_default_space(UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec set_default_space(UserId :: binary(), SpaceId :: binary()) ->
-    true.
+    boolean().
 set_default_space(UserId, SpaceId) ->
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     Doc = dao_adapter:user_doc(UserId),
@@ -340,6 +343,63 @@ set_default_space(UserId, SpaceId) ->
             UpdatedUser = User#user{default_space = SpaceId},
             dao_adapter:save(Doc#db_document{record = UpdatedUser}),
             op_channel_logic:user_modified(UserProviders, UserId, UpdatedUser),
+            true
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Sets name of a space, so that it is unique for the user. If user already
+%% is a member of another space with provided name, a '#' character and prefix
+%% of space ID it prepended to the name, so that the new name is unique and the
+%% prefix of a space ID satisfies minimal length.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_space_name_mapping(UserId :: binary(), SpaceId :: binary(),
+    SpaceName :: binary()) -> ok.
+set_space_name_mapping(UserId, SpaceId, SpaceName) ->
+    SpaceNameLen = size(SpaceName),
+    UniqueSpaceName = <<SpaceName/binary, "#", SpaceId/binary>>,
+
+    UserDoc = dao_adapter:user_doc(UserId),
+    #db_document{record = #user{space_names = SpaceNames} = User} = UserDoc,
+
+    {ShortestUniquePrefLen, FilteredSpaces} = lists:foldl(fun
+        ({Id, _}, {UniquePrefLen, SpacesAcc}) when Id == SpaceId ->
+            {UniquePrefLen, SpacesAcc};
+        ({_, Name} = Space, {UniquePrefLen, SpacesAcc}) ->
+            PrefLen = binary:longest_common_prefix([UniqueSpaceName, Name]),
+            {max(PrefLen + 1, UniquePrefLen), [Space | SpacesAcc]}
+    end, {SpaceNameLen, []}, SpaceNames),
+
+    ShortestUniqueSpaceName = case ShortestUniquePrefLen == SpaceNameLen of
+        true ->
+            SpaceName;
+        false ->
+            ValidUniquePrefLen = min(max(ShortestUniquePrefLen,
+                SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
+                size(UniqueSpaceName)),
+            <<UniqueSpaceName:(ValidUniquePrefLen)/binary>>
+    end,
+
+    NewUser = User#user{space_names = [{SpaceId, ShortestUniqueSpaceName} | FilteredSpaces]},
+    dao_adapter:save(UserDoc#db_document{record = NewUser}),
+    ok.
+
+%%--------------------------------------------------------------------
+%% @doc Removes space name mapping if user does not effectively belongs to the space.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec clean_space_name_mapping(UserId :: binary(), SpaceId :: binary()) -> boolean().
+clean_space_name_mapping(UserId, SpaceId) ->
+    case space_logic:has_effective_user(SpaceId, UserId) of
+        true ->
+            false;
+        false ->
+            UserDoc = dao_adapter:user_doc(UserId),
+            #db_document{record = #user{space_names = SpaceNames} = User} = UserDoc,
+            NewUser = User#user{space_names = lists:keydelete(SpaceId, 1, SpaceNames)},
+            dao_adapter:save(UserDoc#db_document{record = NewUser}),
             true
     end.
 
