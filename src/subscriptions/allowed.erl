@@ -15,26 +15,39 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([providers/3, clients/3]).
+-export([providers/3]).
 
-clients(_Seq, Doc, space) ->
-    {ok, [{users, Users}]} = space_logic:get_effective_users(Doc#document.key),
-    Users;
-
-clients(_Seq, _Doc, _Type) ->
-    [].
-
-providers(_Seq, Doc, space) ->
-    #document{value = Value} = Doc,
+providers(Doc, space, Filter) ->
+    #document{value = Value, key = SpaceID} = Doc,
     #space{providers = SpaceProviders} = Value,
-    SpaceProviders;
+    {ok, UserSubscriptions} = user_subscription:non_expired(),
 
-providers(_Seq, _Doc, user_group) ->
+    UserProviders = lists:filtermap(fun(#document{value = Value}) ->
+        #user_subscription{user = User, provider = Provider} = Value,
+        case Filter(Provider) of
+            false -> false;
+            true ->
+                {ok, Set} = space_logic:get_effective_privileges(SpaceID, User),
+                case ordsets:size(Set) > 0 of
+                    true -> {true, Provider};
+                    false -> false
+                end
+        end
+    end, UserSubscriptions),
+    SpaceProviders ++ UserProviders;
+
+providers(Doc, user_group, _Filter) ->
     [];
 
-providers(_Seq, _Doc, onedata_user) ->
-    [];
+providers(Doc, onedata_user, _Filter) ->
+    Now = erlang:system_time(seconds),
+    #document{key = UserID} = Doc,
+    case user_subscription:get(UserID) of
+        {ok, #document{value = #user_subscription{
+            expires = E, provider = P}}} when Now < E -> [P];
+        _ -> []
+    end;
 
-providers(_Seq, _Doc, _Type) ->
+providers(_Doc, _Type, _ProviderFilterFun) ->
     [].
 

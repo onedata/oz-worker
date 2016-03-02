@@ -18,12 +18,10 @@
 -define(KEY, provider_callbacks).
 -define(WORKER_NAME, subscriptions_worker).
 
--export([as_map/0, put/3, put_client/3]).
+-export([put/3, put_user/3, find/1]).
 
-
-as_map() ->
-    maps:from_list(lists:map(fun(#document{key = P, value = V}) -> {P, V}
-    end, get_subscriptions())).
+find(ID) ->
+    provider_subscription:get(ID).
 
 put(ProviderID, Endpoint, LastSeenSeq) ->
     TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
@@ -33,7 +31,6 @@ put(ProviderID, Endpoint, LastSeenSeq) ->
         #document{key = ProviderID, value = #provider_subscription{
             provider = ProviderID,
             endpoint = Endpoint,
-            clients = #{},
             node = node(),
             expires = ExpiresAt,
             seq = LastSeenSeq
@@ -44,21 +41,21 @@ put(ProviderID, Endpoint, LastSeenSeq) ->
         }}
         end).
 
-put_client(ClientID, ProviderID, TTL) ->
+put_user(UserID, ProviderID, TTL) ->
     ExpiresAt = now_seconds() + TTL,
-    {ok, ProviderID} = provider_subscription:update(ProviderID, fun
-        (undefined) ->
-            ?error("Not registered provider is declared by a provider"),
-            {error, provider_id_not_registered};
-        (Record) ->
-            Clients = Record#provider_subscription.clients,
-            {ok, Record#provider_subscription{
-                clients = maps:put(ClientID, ExpiresAt, Clients)
-            }}
-    end).
+    user_subscription:create_or_update(
+        #document{key = UserID, value = #user_subscription{
+            provider = ProviderID,
+            expires = ExpiresAt,
+            user = UserID
+        }}, fun(Record) -> {ok, Record#provider_subscription{
+            provider = ProviderID,
+            expires = ExpiresAt
+        }}
+        end).
 
 now_seconds() ->
     erlang:system_time(seconds).
 
 get_subscriptions() ->
-    provider_subscription:non_expired().
+    {ok, S} = provider_subscription:non_expired(), S.

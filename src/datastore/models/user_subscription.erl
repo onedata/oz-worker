@@ -8,7 +8,7 @@
 %%% @doc
 %%% @end
 %%%-------------------------------------------------------------------
--module(provider_subscription).
+-module(user_subscription).
 -author("Michal Zmuda").
 -behaviour(model_behaviour).
 
@@ -131,7 +131,7 @@ non_expired() ->
     Filter = fun
         ('$end_of_table', Acc) ->
             {abort, Acc};
-        (#document{value = #provider_subscription{expires = Seconds}} = Doc, Acc) ->
+        (#document{value = #user_subscription{expires = Seconds}} = Doc, Acc) ->
             case Now < Seconds of
                 true -> {next, [Doc | Acc]};
                 false -> {next, Acc}

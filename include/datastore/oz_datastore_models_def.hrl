@@ -25,8 +25,13 @@
     provider :: binary(),
     endpoint :: binary(),
     seq :: pos_integer(),
-    expires :: pos_integer(),
-    clients :: #{binary() => pos_integer()}
+    expires :: pos_integer()
+}).
+
+-record(user_subscription, {
+    user :: binary(),
+    provider :: binary(),
+    expires :: pos_integer()
 }).
 
 %% Records of this type store a macaroons secret

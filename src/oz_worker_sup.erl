@@ -69,6 +69,6 @@ changes_bridge_spec() ->
         start => {changes_bridge, start_link, []},
         restart => permanent,
         shutdown => infinity,
-        type => supervisor,
+        type => worker,
         modules => [changes_bridge]
     }.

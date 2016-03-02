@@ -43,15 +43,14 @@ handle({send_update, ProviderSubscriptions, Message}) ->
 
 handle({handle_change, Seq, Doc, Type}) ->
     changes_cache:put(Seq, Doc, Type),
-    Subscriptions = subscriptions:as_map(),
-    handle_change(Seq, Doc, Type, Subscriptions);
+    handle_change(Seq, Doc, Type, fun(_) -> true end);
 
 handle({subscribe_provider, ProviderID, Endpoint, LastSeenSeq}) ->
     subscriptions:put(ProviderID, Endpoint, LastSeenSeq),
     fetch_history(ProviderID, Endpoint, LastSeenSeq);
 
 handle({subscribe_client, ClientID, ProviderID, TTL}) ->
-    subscriptions:put_client(ClientID, ProviderID, TTL);
+    subscriptions:put_user(ClientID, ProviderID, TTL);
 
 handle(_Request) ->
     ?log_bad_request(_Request).
@@ -70,36 +69,33 @@ fetch_history(ProviderID, Endpoint, LastSeenSeq) ->
     ?info("Fetching from cache; {provider:~p, from:~p, cache_start:~p, cache_end:~p}",
         [ProviderID, LastSeenSeq, OldestCached, NewestCached]),
 
-    Subscriptions = #{ProviderID => #provider_subscription{
-        provider = ProviderID, endpoint = Endpoint, node = node(),
-        expires = infinity, clients = #{}
-    }},
+    Filter = fun(P) -> P =:= ProviderID end,
     case {OldestCached, LastSeenSeq >= OldestCached} of
         {cache_empty, _} ->
-            fetch_from_db(LastSeenSeq, last_seq(), Subscriptions);
+            fetch_from_db(LastSeenSeq, last_seq(), Filter);
         {_, true} ->
-            fetch_from_cache(LastSeenSeq, NewestCached, Subscriptions);
+            fetch_from_cache(LastSeenSeq, NewestCached, Filter);
         {_, false} ->
-            fetch_from_cache(LastSeenSeq, NewestCached, Subscriptions),
-            fetch_from_db(LastSeenSeq, OldestCached - 1, Subscriptions)
+            fetch_from_cache(LastSeenSeq, NewestCached, Filter),
+            fetch_from_db(LastSeenSeq, OldestCached - 1, Filter)
     end.
 
 
-fetch_from_cache(From, To, Subscriptions) ->
+fetch_from_cache(From, To, Filter) ->
     lists:foreach(fun({Seq, {Doc, Type}}) ->
-        handle_change(Seq, Doc, Type, Subscriptions)
+        handle_change(Seq, Doc, Type, Filter)
     end, changes_cache:slice(From, To)).
 
-fetch_from_db(From, To, Subscriptions) ->
+fetch_from_db(From, To, Filter) ->
     couchdb_datastore_driver:changes_start_link(fun
         (_Seq, stream_ended, _Type) -> ok;
         (Seq, Doc, Type) ->
-            handle_change(Seq, Doc, Type, Subscriptions)
+            handle_change(Seq, Doc, Type, Filter)
     end, From, To).
 
-handle_change(Seq, Doc, Type, Subscriptions) ->
+handle_change(Seq, Doc, Type, Filter) ->
     Message = translator:get_msg(Seq, Doc, Type),
-    Entitled = get_entitled_subscriptions(Seq, Doc, Type, Subscriptions),
+    Entitled = get_entitled_subscriptions(Doc, Type, Filter),
 
     NodeToSubscriptions = lists:foldr(fun(Subscription, Acc) ->
         Node = Subscription#provider_subscription.node,
@@ -110,24 +106,20 @@ handle_change(Seq, Doc, Type, Subscriptions) ->
         worker_proxy:cast({?MODULE, Node}, {send_update, Subscriptions, Message})
     end, dict:to_list(NodeToSubscriptions)).
 
-get_entitled_subscriptions(Seq, Doc, Type, Subscriptions) ->
-    Clients = allowed:clients(Seq, Doc, Type),
-    Providers = allowed:providers(Seq, Doc, Type),
-
+get_entitled_subscriptions(Doc, Type, Filter) ->
+    Providers = allowed:providers(Doc, Type, Filter),
     Now = erlang:system_time(seconds),
-    lists:filter(fun(Subscription) ->
-        Provider = Subscription#provider_subscription.provider,
-        IsMentioned = lists:member(Provider, Providers),
-        case IsMentioned of
-            true -> true;
-            false ->
-                ProviderClients = Subscription#provider_subscription.clients,
-                lists:any(fun(C) ->
-                    ExpiresAt = maps:get(C, ProviderClients, Now),
-                    ExpiresAt > Now
-                end, Clients)
+
+    Subscriptions = lists:map(fun(Provider) ->
+        case subscriptions:find(Provider) of
+            {ok, #document{value = Val = #provider_subscription{expires = E}}}
+                when E > Now -> Val;
+            _ -> no_active_subscription
         end
-    end, maps:values(Subscriptions)).
+    end, Providers),
+
+    lists:filter(fun(X) -> X =/= no_active_subscription end, Subscriptions).
+
 
 -spec last_seq() -> non_neg_integer().
 last_seq() ->
