@@ -23,21 +23,21 @@ export default Ember.Service.extend({
 
   /**
    * Sends an RPC call to the server for a publicly available resource.
-   * thenFun is evaluated on response from the server.
+   * onSuccess is evaluated on response from the server.
    */
-  publicRPC: function (operation, data, thenFun) {
+  publicRPC: function (operation, data, onSuccess, onFailure) {
     this.get('store').adapterFor('application')
-      .callback('public', operation, data).then(thenFun);
+      .callback('public', operation, data).then(onSuccess, onFailure);
   },
 
   /**
    * Sends an RPC call to the server for a resource that is restricted to
    * logged in clients.
-   * thenFun is evaluated on response from the server.
+   * onSuccess is evaluated on response from the server.
    */
-  privateRPC: function (operation, data, thenFun) {
+  privateRPC: function (operation, data, onSuccess, onFailure) {
     this.get('store').adapterFor('application')
-      .callback('private', operation, data).then(thenFun);
+      .callback('private', operation, data).then(onSuccess, onFailure);
   },
 
   /*** Helper methods ***/
@@ -47,7 +47,11 @@ export default Ember.Service.extend({
     Fetch token for provider and run callback with it.
     @param callback {function} callback(token)
   */
-  getSupportToken(spaceId, callback) {
-    this.privateRPC('getSupportToken', {spaceId: spaceId}, callback);
+  getSupportToken(spaceId, success, failure) {
+    this.privateRPC('getSupportToken', {spaceId: spaceId}, success, failure);
+  },
+
+  getProviderRedirectURL(providerId, callback) {
+    this.privateRPC('getRedirectURL', {providerId: providerId}, callback);
   }
 });

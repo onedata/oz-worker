@@ -2,6 +2,7 @@ import Ember from 'ember';
 
 export default Ember.Component.extend({
   store: Ember.inject.service('store'),
+  server: Ember.inject.service('server'),
 
   /** Should be injected */
   provider: null,
@@ -22,7 +23,11 @@ export default Ember.Component.extend({
     /** Redirects to OneProvider using url from provider model */
     goToProvider() {
       let provider = this.get('provider');
-      window.location = provider.url;
+      if (provider) {
+        this.get('server').getProviderRedirectURL(provider.get('id'), (url) => {
+          window.location = url;
+        });
+      }
     },
 
     /** Set the provider as default, unsetting other providers */

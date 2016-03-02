@@ -37,4 +37,9 @@ callback(<<"sessionDetails">>, _) ->
 
 callback(<<"getSupportToken">>, Data) ->
     ?dump(Data),
-    {ok, <<"ads789f6ads789r623487g523guy45aegsyf87adstyf">>}.
+    {ok, <<"ads789f6ads789r623487g523guy45aegsyf87adstyf">>};
+
+
+callback(<<"getRedirectURL">>, Data) ->
+    ?dump(Data),
+    {ok, <<"https://google.com">>}.

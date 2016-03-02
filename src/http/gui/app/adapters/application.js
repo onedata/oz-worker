@@ -370,6 +370,7 @@ export default DS.RESTAdapter.extend({
     adapter.promises.clear();
   },
 
+  // TODO: when there is internal server error (eg. operation is invalid), then success is invoked
   /**
    * Calls back to the server. Useful for getting information like
    * user name etc. from the server or performing some operation that
