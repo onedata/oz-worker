@@ -25,7 +25,6 @@
 -export([init/0, cleanup/0]).
 -export([create_session/2, update_session/2, lookup_session/1]).
 -export([delete_session/1]).
--export([get_session_details/1]).
 -export([get_cookie_ttl/0]).
 
 

@@ -10,6 +10,6 @@ export default Ember.Route.extend(AuthenticatedRouteMixin, {
       providers: this.store.findAll('provider'),
       spaces: this.store.findAll('space'),
       authorizers: this.store.findAll('authorizer')
-    }
+    };
   }
 });
