@@ -35,7 +35,6 @@ export default Ember.Service.extend({
    */
 
   publicRPC: function (operation, data) {
-    debugger;
     return this.get('adapter').RPC('public', operation, data);
   },
 

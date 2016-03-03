@@ -55,7 +55,8 @@ find_all(<<"authorizer">>) ->
                 email_list = Emails,
                 user_id = UserId} = OAuthAccount,
             ProviderBin = str_utils:to_binary(Provider),
-            AccId = <<ProviderBin/binary, "#", UserId/binary>>,
+            UserIdBin = str_utils:to_binary(UserId),
+            AccId = <<ProviderBin/binary, "#", UserIdBin/binary>>,
             Accounts = lists:map(
                 fun(Email) ->
                     [
