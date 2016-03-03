@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 3.0.0-alpha2
+
+* VFS-1665 Pull in Macaroons.
+
+
 ### 3.0.0-alpha
 
 * VFS-1622 Add openssl to package requirements.
