@@ -10,5 +10,9 @@ export default Ember.Component.extend({
   classNames: ['account-item'],
   iconName: function() {
     return `social-${this.get('type')}`;
-  }.property('type')
+  }.property('type'),
+
+  click() {
+    this.sendAction('action', this.get('type'));
+  }
 });

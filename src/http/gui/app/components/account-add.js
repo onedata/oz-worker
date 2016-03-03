@@ -12,6 +12,23 @@ export default Ember.Component.extend({
     $('.accordion-container').on('scroll', updater);
   },
 
+  generateAuthProviders: function() {
+    let authProviders = [
+      ['google', 'Google+'],
+      ['facebook', 'Facebook'],
+      ['github', 'GitHub'],
+      ['dropbox', 'Dropbox'],
+      ['plgrid', 'PLGrid OpenID']
+    ].map((item) => {
+      return {
+        type: item[0],
+        label: `Connect by ${item[1]}`
+      };
+    });
+
+    this.set('authProviders', authProviders);
+  }.on('init'),
+
   actions: {
     connectNewAccount(providerName) {
       this.get('onezoneServer').getConnectAccountEndpoint(providerName).then((url) => {
@@ -23,26 +40,12 @@ export default Ember.Component.extend({
 
 
 
-// <div class="dropdown side-dropdown">
-//   <a href="#" class="dropdown-toggle side-dropdown-toggle"
-//     data-toggle="dropdown" role="button" aria-haspopup="true"
-//     aria-expanded="false" {{action 'getNewSupportToken'}}>
-//     <div class="account-icon account-add-icon">
-//       {{one-icon icon='add'}}
-//     </div>
-//     <div class="account-label connect-new">
-//       {{t 'onezone.accountAdd.connectNewAccount'}}
-//     </div>
-//   </a>
-//   <div class="dropdown-menu dropdown-menu-right floater account-add-popup">
-//     {{!-- TODO: style and copy button --}}
-//     {{!-- TODO: loading icon --}}
-//     <strong>ROTFL</strong>
-//     {{account-item type='google' label='connect by google'}}
-//     {{account-item type='facebook' label='connect by google'}}
-//     {{account-item type='github' label='connect by google'}}
-//     {{account-item type='google' label='connect by google'}}
-//     {{account-item type='google' label='connect by google'}}
-//     {{account-item type='google' label='connect by google'}}
+
+// <a {{action "connectNewAccount" "github"}}>
+//   <div class="account-icon account-add-icon">
+//     {{one-icon icon='add'}}
 //   </div>
-// </div>
+//   <div class="account-label connect-new">
+//     {{t 'onezone.accountAdd.connectNewAccount'}}
+//   </div>
+// </a>
