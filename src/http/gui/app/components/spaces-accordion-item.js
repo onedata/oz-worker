@@ -12,7 +12,6 @@ export default Ember.Component.extend({
 
   supportToken: null,
 
-  // TODO: maybe this code should be moved somewhere else... (make more global)
   didInsertElement() {
     this.$().find('.floater').each(function() {
       let ft = $(this);
@@ -28,7 +27,7 @@ export default Ember.Component.extend({
       getNewSupportToken: function() {
         let space = this.get('space');
         if (space) {
-          this.get('server').getSupportToken(space.get('id'), (token) => {
+          this.get('server').getSupportToken(space.get('id')).then((token) => {
             // TODO: only debug, should be removed in future
             console.debug('Fetched new support token: ' + token);
             this.set('supportToken', token);

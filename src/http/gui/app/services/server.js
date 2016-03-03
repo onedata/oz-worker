@@ -11,33 +11,31 @@ import Ember from 'ember';
 
 export default Ember.Service.extend({
   store: Ember.inject.service('store'),
+  adapter: function () {
+    return this.get('store').adapterFor('application');
+  }.property(),
 
   /**
-   * Informs the websocket adapter that a session restoring is anticipated,
-   * and when sessionDetails come from the server, the promise is resolved
-   * rather than new authentication is performed.
+   * Returns a promise that will be resolved only when a websocket connection
+   * is successfully created and the server responds with session details.
+   * When this is called in application router init, it ensures that
+   * WS connection and session are active before the page renders
    */
+  initWebSocketAndSession: function () {
+    return this.get('adapter').initWebSocketAndSession();
+  },
+
   tryToRestoreSession: function () {
-    return this.get('store').adapterFor('application').tryToRestoreSession();
+    return this.get('adapter').tryToRestoreSession();
   },
 
   /**
    * Sends an RPC call to the server for a publicly available resource.
    * onSuccess is evaluated on response from the server.
    */
-  publicRPC: function (operation, data, onSuccess, onFailure) {
-    this.get('store').adapterFor('application')
-      .callback('public', operation, data).then(onSuccess, onFailure);
-  },
 
-  /**
-   * Sends an RPC call to the server for a resource that is restricted to
-   * logged in clients.
-   * onSuccess is evaluated on response from the server.
-   */
-  privateRPC: function (operation, data, onSuccess, onFailure) {
-    this.get('store').adapterFor('application')
-      .callback('private', operation, data).then(onSuccess, onFailure);
+  publicRPC: function (operation, data) {
+    return this.get('adapter').RPC('public', operation, data);
   },
 
   /*** Helper methods ***/
@@ -47,11 +45,20 @@ export default Ember.Service.extend({
     Fetch token for provider and run callback with it.
     @param callback {function} callback(token)
   */
-  getSupportToken(spaceId, success, failure) {
-    this.privateRPC('getSupportToken', {spaceId: spaceId}, success, failure);
+  getSupportToken(spaceId) {
+    return this.privateRPC('getSupportToken', {spaceId: spaceId});
   },
 
-  getProviderRedirectURL(providerId, callback) {
-    this.privateRPC('getRedirectURL', {providerId: providerId}, callback);
+  getProviderRedirectURL(providerId) {
+    return this.privateRPC('getRedirectURL', {providerId: providerId});
+  },
+
+  /**
+   * Sends an RPC call to the server for a resource that is restricted to
+   * logged in clients.
+   * onSuccess is evaluated on response from the server.
+   */
+  privateRPC: function (operation, data) {
+    return this.get('adapter').RPC('private', operation, data);
   }
 });

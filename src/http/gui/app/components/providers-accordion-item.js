@@ -35,7 +35,7 @@ export default Ember.Component.extend({
     goToProvider() {
       let provider = this.get('provider');
       if (provider) {
-        this.get('server').getProviderRedirectURL(provider.get('id'), (url) => {
+        this.get('server').getProviderRedirectURL(provider.get('id')).then((url) => {
           window.location = url;
         });
       }
