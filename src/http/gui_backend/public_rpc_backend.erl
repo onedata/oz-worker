@@ -14,6 +14,7 @@
 %%%-------------------------------------------------------------------
 -module(public_rpc_backend).
 -author("Lukasz Opiola").
+-behaviour(rpc_backend_behaviour).
 
 -compile([export_all]).
 
@@ -21,9 +22,9 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([callback/2]).
+-export([handle/2]).
 
-callback(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
+handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     case application:get_env(?APP_Name, dev_mode) of
         {ok, true} ->
             {ok, <<"/dev_login">>};

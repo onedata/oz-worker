@@ -14,6 +14,7 @@
 %%%-------------------------------------------------------------------
 -module(private_rpc_backend).
 -author("Lukasz Opiola").
+-behaviour(rpc_backend_behaviour).
 
 -compile([export_all]).
 
@@ -21,9 +22,9 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([callback/2, get_session_details/1]).
+-export([handle/2]).
 
-callback(<<"sessionDetails">>, _) ->
+handle(<<"sessionDetails">>, _) ->
     {ok, #document{value = #onedata_user{name = Name}}} =
         onedata_user:get(g_session:get_user_id()),
     FirstLogin = g_session:get_value(firstLogin, false),
@@ -34,13 +35,13 @@ callback(<<"sessionDetails">>, _) ->
     ?alert("~p", [Res]),
     {ok, Res};
 
-callback(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
+handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     Provider = provider_to_provider_id(ProviderBin),
     HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
     {ok, URL};
 
-callback(<<"getSupportToken">>, [{<<"spaceId">>, SpaceId}]) ->
+handle(<<"getSupportToken">>, [{<<"spaceId">>, SpaceId}]) ->
     ?dump({getSupportToken, SpaceId}),
     Client = #client{type = user, id = g_session:get_user_id()},
     {ok, Token} = token_logic:create(
@@ -48,7 +49,7 @@ callback(<<"getSupportToken">>, [{<<"spaceId">>, SpaceId}]) ->
     ?dump(Token),
     {ok, Token};
 
-callback(<<"getRedirectURL">>, Data) ->
+handle(<<"getRedirectURL">>, Data) ->
     ?dump(Data),
     {ok, <<"https://google.com">>}.
 
