@@ -43,15 +43,7 @@
 -spec(start_link() ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link() ->
-    case gen_server:start_link({global, ?MODULE}, ?MODULE, [], []) of
-        {ok, Pid} ->
-            {ok, Pid};
-        {error, {already_started, Pid}} ->
-            link(Pid),
-            ?info("Changes bridge already started ~p", [Pid]),
-            {ok, Pid};
-        Else -> Else
-    end.
+    gen_server:start_link(?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -73,11 +65,32 @@ start_link() ->
     {stop, Reason :: term()} | ignore).
 init([]) ->
     ?info("Starting changes bridge ~p", [self()]),
-    process_flag(trap_exit, true),
-    spawn(fun() ->
-        gen_server:cast({global,?MODULE}, start_changes_stream)
-    end),
-    {ok, #state{}}.
+    % todo: find better way to create singleton worker (maybe gproc)
+    case global:whereis_name(?MODULE) of
+        undefined ->
+            ?info("No leader detected");
+        Pid ->
+            ?info("Leader ~p detected", [Pid]),
+            erlang:monitor(process, Pid),
+            receive
+                {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
+                    ?info("Detected leader failure")
+            after
+                timer:minutes(1) ->
+                    ?info("Scheduled takeover")
+            end
+    end,
+    global:trans({?MODULE, node()}, fun() ->
+        case global:register_name(?MODULE, self()) of
+            yes ->
+                ?info("Becoming a leader"),
+                gen_server:cast({global, ?MODULE}, start_changes_stream),
+                {ok, #state{}};
+            no ->
+                ?info("Unsuccessful leader takeover"),
+                {stop, unsuccessful_takeover}
+        end
+    end).
 
 %%--------------------------------------------------------------------
 %% @private
