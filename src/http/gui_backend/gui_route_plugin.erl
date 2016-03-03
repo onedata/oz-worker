@@ -35,7 +35,7 @@
 }).
 
 -define(VALIDATE_LOGIN, #gui_route{
-    requires_session = ?SESSION_NOT_LOGGED_IN,
+    requires_session = ?SESSION_ANY,  % Can be used to log in or connect account
     html_file = undefined,
     page_backend = validate_login_backend
 }).

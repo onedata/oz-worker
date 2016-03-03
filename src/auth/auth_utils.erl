@@ -109,6 +109,7 @@ validate_login() ->
                                 end;
 
                             true ->
+                                ?dump(connectlol),
                                 % Account adding flow
                                 % Check if this account isn't connected to other profile
                                 case user_logic:get_user({connected_account_user_id, {ProviderID, UserID}}) of
