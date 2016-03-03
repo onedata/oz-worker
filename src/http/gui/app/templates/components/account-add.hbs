@@ -1,6 +1,8 @@
-<div class="account-icon account-add-icon">
-  {{one-icon icon='add'}}
-</div>
-<div class="account-label connect-new">
-  {{t 'onezone.accountAdd.connectNewAccount'}}
-</div>
+<a {{action "connectNewAccount" "github"}}>
+  <div class="account-icon account-add-icon">
+    {{one-icon icon='add'}}
+  </div>
+  <div class="account-label connect-new">
+    {{t 'onezone.accountAdd.connectNewAccount'}}
+  </div>
+</a>

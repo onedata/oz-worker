@@ -28,5 +28,14 @@ export default Ember.Service.extend({
   */
   getLoginEndpoint(providerName) {
     return this.get('server').publicRPC('getLoginEndpoint', {provider: providerName});
+  },
+
+  /**
+    Fetch URL to authenticator endpoint
+    @param {string} providerName One of login providers, eg. google, dropbox
+    @returns {RSVP.Promise}
+  */
+  getConnectAccountEndpoint(providerName) {
+    return this.get('server').privateRPC('getConnectAccountEndpoint', {provider: providerName});
   }
 });
