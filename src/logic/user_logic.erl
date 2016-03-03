@@ -17,7 +17,7 @@
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
 -export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
--export([get_default_space/1, set_default_space/2]).
+-export([get_default_space/1, set_default_space/2, set_default_provider/2]).
 -export([exists/1, remove/1]).
 
 %%%===================================================================
@@ -322,10 +322,31 @@ set_default_space(UserId, SpaceId) ->
     {ok, Doc} = onedata_user:get(UserId),
     AllUserSpaces = get_all_spaces(Doc),
     case ordsets:is_element(SpaceId, AllUserSpaces) of
-        false -> false;
+        false ->
+            false;
         true ->
             {ok, _} = onedata_user:update(UserId, fun(User) ->
                 {ok, User#onedata_user{default_space = SpaceId}}
+            end),
+            true
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Set user's default space ID.
+%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
+%% don't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_default_provider(UserId :: binary(), ProviderId :: binary()) ->
+    true.
+set_default_provider(UserId, ProviderId) ->
+    {ok, [{providers, AllUserProviders}]} = get_providers(UserId),
+    case ordsets:is_element(ProviderId, AllUserProviders) of
+        false ->
+            false;
+        true ->
+            {ok, _} = onedata_user:update(UserId, fun(User) ->
+                {ok, User#onedata_user{default_provider = ProviderId}}
             end),
             true
     end.

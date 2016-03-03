@@ -16,6 +16,7 @@
 
 -compile([export_all]).
 
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -35,8 +36,28 @@ init() ->
     ok.
 
 
-find(<<"provider">>, [_SpaceId]) ->
-    {error, not_iplemented}.
+find(<<"provider">>, ProviderIds) ->
+    UserId = g_session:get_user_id(),
+    Res = lists:map(
+        fun(ProviderId) ->
+            {ok, ProviderData} = provider_logic:get_data(ProviderId),
+            Name = proplists:get_value(clientName, ProviderData),
+            IsWorking = provider_logic:check_provider_connectivity(ProviderId),
+            {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
+            {ok, #document{
+                value = #onedata_user{
+                    default_provider = DefaultProvider
+                }
+            }} = user_logic:get_user_doc(UserId),
+            [
+                {<<"id">>, ProviderId},
+                {<<"name">>, Name},
+                {<<"isDefault">>, ProviderId =:= DefaultProvider},
+                {<<"isWorking">>, IsWorking},
+                {<<"spaces">>, Spaces}
+            ]
+        end, ProviderIds),
+    {ok, Res}.
 
 find_query(<<"provider">>, _Data) ->
     {error, not_iplemented}.
@@ -44,19 +65,8 @@ find_query(<<"provider">>, _Data) ->
 %% Called when ember asks for all files
 find_all(<<"provider">>) ->
     UserId = g_session:get_user_id(),
-    {ok, [{providers, Providers}]} = user_logic:get_providers(UserId),
-    Res = lists:map(
-        fun(ProviderId) ->
-            {ok, ProviderData} = provider_logic:get_data(ProviderId),
-            Name = proplists:get_value(clientName, ProviderData),
-            [
-                {<<"id">>, ProviderId},
-                {<<"name">>, Name},
-                {<<"isDefault">>, false},
-                {<<"spaces">>, []}
-            ]
-        end, Providers),
-    {ok, Res}.
+    {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
+    {ok, _Res} = find(<<"provider">>, ProviderIds).
 
 
 %% Called when ember asks to create a record
@@ -64,8 +74,17 @@ create_record(<<"provider">>, _Data) ->
     {error, not_iplemented}.
 
 %% Called when ember asks to update a record
-update_record(<<"provider">>, _Id, _Data) ->
-    {error, not_iplemented}.
+update_record(<<"provider">>, ProviderId, Data) ->
+    ?dump({ProviderId, Data}),
+    UserId = g_session:get_user_id(),
+    IsDefault = proplists:get_value(<<"isDefault">>, Data),
+    case IsDefault of
+        true ->
+            user_logic:set_default_provider(UserId, ProviderId);
+        false ->
+            ok
+    end,
+    ok.
 
 %% Called when ember asks to delete a record
 delete_record(<<"provider">>, _Id) ->

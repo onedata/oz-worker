@@ -18,6 +18,9 @@
 % Relative suffix of GUI address, leading to privacy policy page
 -define(privacy_policy_url, "/privacy_policy").
 
+% Endpoint at oneprovider to get its ID
+-define(provider_id_endpoint, "/get_provider_id").
+
 % Relative suffix of GUI address, leading to page with info about providers
 -define(become_a_provider_url, "/become_a_provider").
 

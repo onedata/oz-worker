@@ -36,21 +36,12 @@ init() ->
     ok.
 
 
-find(<<"space">>, [_SpaceId]) ->
-    {error, not_iplemented}.
-
-find_query(<<"space">>, _Data) ->
-    {error, not_iplemented}.
-
-%% Called when ember asks for all files
-find_all(<<"space">>) ->
+find(<<"space">>, SpaceIds) ->
     UserId = g_session:get_user_id(),
     {ok, GetSpaces} = user_logic:get_spaces(UserId),
-    Spaces = proplists:get_value(spaces, GetSpaces),
     Default = proplists:get_value(default, GetSpaces),
     Res = lists:map(
         fun(SpaceId) ->
-            ?dump(SpaceId),
             {ok, SpaceData} = space_logic:get_data(SpaceId, provider),
             Name = proplists:get_value(name, SpaceData),
             {ok, [{providers, Providers}]} =
@@ -61,8 +52,18 @@ find_all(<<"space">>) ->
                 {<<"isDefault">>, SpaceId =:= Default},
                 {<<"providers">>, Providers}
             ]
-        end, Spaces),
+        end, SpaceIds),
     {ok, Res}.
+
+find_query(<<"space">>, _Data) ->
+    {error, not_iplemented}.
+
+%% Called when ember asks for all files
+find_all(<<"space">>) ->
+    UserId = g_session:get_user_id(),
+    {ok, GetSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, GetSpaces),
+    {ok, _Res} = find(<<"space">>, SpaceIds).
 
 
 %% Called when ember asks to create a record
