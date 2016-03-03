@@ -87,11 +87,13 @@ fetch_from_cache(From, To, Filter) ->
     end, changes_cache:slice(From, To)).
 
 fetch_from_db(From, To, Filter) ->
-    couchdb_datastore_driver:changes_start_link(fun
-        (_Seq, stream_ended, _Type) -> ok;
-        (Seq, Doc, Type) ->
-            handle_change(Seq, Doc, Type, Filter)
-    end, From, To).
+    spawn(fun() ->
+        couchdb_datastore_driver:changes_start_link(fun
+            (_Seq, stream_ended, _Type) -> ok;
+            (Seq, Doc, Type) ->
+                handle_change(Seq, Doc, Type, Filter)
+        end, From, To)
+    end).
 
 handle_change(Seq, Doc, Type, Filter) ->
     Message = translator:get_msg(Seq, Doc, Type),

@@ -28,7 +28,9 @@ push(Provider, Endpoint) ->
     worker_host:state_update(?WORKER_MODULE, {msg_buffer, Provider}, fun
         (Outbox = #outbox{buffer = Buffer}) ->
             Messages = json_utils:encode({array, Buffer}),
-            http_client:post(Endpoint, [{async, once}], Messages),
+            Headers = [{<<"content-type">>, <<"application/json">>}],
+            Options = [{async, once}, insecure], %% todo provider cert verified
+            http_client:post(Endpoint, Headers, Messages, Options),
             Outbox#outbox{buffer = [], timer = undefined}
     end).
 

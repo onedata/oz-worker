@@ -49,7 +49,7 @@ put(Seq, Doc, Type) ->
 
 slice(From, To) ->
     Cache = get_cache(),
-    CachedList = gb_trees:values(Cache),
+    CachedList = gb_trees:to_list(Cache),
     Shifted = lists:dropwhile(fun({Seq, _}) -> Seq < From end, CachedList),
     lists:takewhile(fun({Seq, _}) -> Seq =< To end, Shifted).
 
