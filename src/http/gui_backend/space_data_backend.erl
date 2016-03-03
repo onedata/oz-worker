@@ -16,6 +16,7 @@
 
 -compile([export_all]).
 
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -67,11 +68,28 @@ find_all(<<"space">>) ->
 %% Called when ember asks to create a record
 create_record(<<"space">>, Data) ->
     ?dump(Data),
-    {ok, [{<<"id">>, <<"123123123">>} | Data] }.
+    Name = proplists:get_value(<<"name">>, Data),
+    {ok, SpaceId} = space_logic:create({user, g_session:get_user_id()}, Name),
+    NewSpaceData = [
+        {<<"id">>, SpaceId},
+        {<<"name">>, Name},
+        {<<"isDefault">>, false},
+        {<<"providers">>, []}
+    ],
+    {ok, NewSpaceData}.
 
 %% Called when ember asks to update a record
-update_record(<<"space">>, _Id, _Data) ->
-    {error, not_iplemented}.
+update_record(<<"space">>, SpaceId, Data) ->
+    ?dump({SpaceId, Data}),
+    UserId = g_session:get_user_id(),
+    IsDefault = proplists:get_value(<<"isDefault">>, Data),
+    case IsDefault of
+        true ->
+            user_logic:set_default_space(UserId, SpaceId);
+        false ->
+            ok
+    end,
+    ok.
 
 %% Called when ember asks to delete a record
 delete_record(<<"space">>, _Id) ->

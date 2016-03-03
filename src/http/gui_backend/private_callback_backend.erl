@@ -34,15 +34,19 @@ callback(<<"sessionDetails">>, _) ->
     ?alert("~p", [Res]),
     {ok, Res};
 
-callback(<<"getConnectAccountEndpoint">>, {<<"provider">>, ProviderBin}) ->
+callback(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     Provider = provider_to_provider_id(ProviderBin),
     HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
     {ok, URL};
 
-callback(<<"getSupportToken">>, Data) ->
-    ?dump(Data),
-    {ok, <<"ads789f6ads789r623487g523guy45aegsyf87adstyf">>};
+callback(<<"getSupportToken">>, [{<<"spaceId">>, SpaceId}]) ->
+    ?dump({getSupportToken, SpaceId}),
+    Client = #client{type = user, id = g_session:get_user_id()},
+    {ok, Token} = token_logic:create(
+        Client, space_support_token, {space, SpaceId}),
+    ?dump(Token),
+    {ok, Token};
 
 callback(<<"getRedirectURL">>, Data) ->
     ?dump(Data),
@@ -54,3 +58,4 @@ provider_to_provider_id(<<"plgrid">>) -> plgrid;
 provider_to_provider_id(<<"google">>) -> google;
 provider_to_provider_id(<<"dropbox">>) -> dropbox;
 provider_to_provider_id(<<"facebook">>) -> facebook.
+

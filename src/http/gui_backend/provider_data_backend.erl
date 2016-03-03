@@ -25,7 +25,7 @@
 
 %% Convenience macro to log a debug level log dumping given variable.
 -define(log_debug(_Arg),
-    ?debug("~s", [str_utils:format("SPACE_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
+    ?debug("~s", [str_utils:format("PROVIDER_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
 ).
 
 
