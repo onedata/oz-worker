@@ -25,8 +25,8 @@
     space_changes_before_subscription/1,
     node_for_subscription_changes/1,
     subscription_expires_or_is_renewed/1,
-    change_bridge_restarts/1,
-    space_changes_after_user_subscription/1]).
+    change_bridge_restarts/1
+]).
 
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
 -define(COMMUNICATION_WAIT, 500).
@@ -49,7 +49,7 @@
 all() -> ?ALL([
     change_bridge_restarts, space_changes_after_subscription,
     space_changes_before_subscription, node_for_subscription_changes,
-    subscription_expires_or_is_renewed, space_changes_after_user_subscription
+    subscription_expires_or_is_renewed
 ]).
 
 change_bridge_restarts(_Config) ->
@@ -124,42 +124,6 @@ space_changes_before_subscription(Config) ->
     verify_messages(Nodes, <<"endpoint1">>,
         [SpaceDoc1, SpaceDoc2, SpaceDoc4, SpaceDoc5, SpaceDoc6],
         [SpaceDoc3],
-        10).
-
-space_changes_after_user_subscription(Config) ->
-    Nodes = [Node1, _] = ?config(oz_worker_nodes, Config),
-    [Address1, _] = ?config(restAddresses, Config),
-    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
-
-    % given
-    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
-    {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
-    {UserID1, _} = rest_utils:register_user(?USER_NAME1, ProviderID1, Node1, SubscribeParams1),
-    {UserID2, _} = rest_utils:register_user(?USER_NAME2, ProviderID1, Node1, SubscribeParams1),
-    {UserID3, _} = rest_utils:register_user(?USER_NAME3, ProviderID2, Node1, SubscribeParams2),
-    First = getFirstSeq(Node1),
-
-    % when
-    subscribe(First, <<"endpoint1">>, SubscribeParams1),
-    subscribe(First, <<"endpoint2">>, SubscribeParams2),
-    subscribe_user(UserID1, Node1, infinity, ProviderID1),
-    subscribe_user(UserID2, Node1, infinity, ProviderID1),
-    subscribe_user(UserID3, Node1, infinity, ProviderID2),
-
-    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [], users = [{UserID1, [x]}, {UserID2, [y]}]}),
-    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [], users = [{UserID2, [x]}, {UserID3, [y]}]}),
-    SpaceDoc3 = save(Node1, <<"spacekey3">>, #space{name = <<"space3">>, providers = [], users = [{UserID3, [x]}]}),
-    SpaceDoc4 = save(Node1, <<"spacekey4">>, #space{name = <<"space4">>, providers = [], users = []}),
-    SpaceDoc5 = save(Node1, <<"spacekey5">>, #space{name = <<"space5">>, providers = [], users = [{UserID1, []}]}),
-
-    % then
-    verify_messages(Nodes, <<"endpoint1">>,
-        [SpaceDoc1, SpaceDoc2],
-        [SpaceDoc3, SpaceDoc4, SpaceDoc5],
-        10),
-    verify_messages(Nodes, <<"endpoint2">>,
-        [SpaceDoc2, SpaceDoc3],
-        [SpaceDoc1, SpaceDoc4, SpaceDoc5],
         10).
 
 node_for_subscription_changes(Config) ->
@@ -293,11 +257,6 @@ subscribe(LastSeen, Endpoint, SubscribeParams) ->
     Result = rest_utils:do_request(RestAddress, Headers, post, Data, Options),
     ?assertEqual(204, rest_utils:get_response_status(Result)).
 
-subscribe_user(UserID, Node, Expires, ProviderID) ->
-    Doc = #document{key = UserID, value = #user_subscription{
-        expires = Expires, provider = ProviderID, user = UserID}},
-    ?assertMatch({ok, UserID}, rpc:call(Node, user_subscription, save, [Doc])).
-
 await_messages(Nodes, Endpoint, ExpectedDoc) ->
     verify_messages(Nodes, Endpoint, [ExpectedDoc], [], 10).
 
@@ -349,6 +308,7 @@ get_messages(Endpoint, Node, Number) ->
             not_present;
         _ ->
             Data = json_utils:decode(Body),
+            ct:print("~p", [Data]),
             lists:map(fun(Messages) ->
                 lists:last(proplists:delete(<<"seq">>, Messages))
             end, Data)
@@ -357,7 +317,7 @@ get_messages(Endpoint, Node, Number) ->
 as_changes(Docs) ->
     lists:map(fun as_change/1, Docs).
 
-as_change(#document{key = ID, value = #space{name = Name, groups = Groups, users = Users}}= D) ->
+as_change(#document{key = ID, value = #space{name = Name, groups = Groups, users = Users}} = D) ->
     [Msg] = json_utils:decode(json_utils:encode([{space, [
         {id, ID},
         {name, Name},

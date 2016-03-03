@@ -51,8 +51,6 @@ routes() ->
     boolean().
 is_authorized(subscription, post, _Id, #client{type = provider, id = _ID}) ->
     true;
-is_authorized(subscription, post, _Id, #client{type = user, id = _ID}) ->
-    true;
 is_authorized(_R, _M, _ID, _C) ->
     ?error("Unexpected request ~p", [[_R, _M, _ID, _C]]),
     false.
@@ -83,12 +81,6 @@ accept_resource(subscription, post, _ID, Data, #client{type = provider, id = Pro
     Endpoint = proplists:get_value(<<"endpoint">>, Data),
     worker_proxy:call({subscriptions_worker, node()},
         {subscribe_provider, ProviderID, Endpoint, LastSeen}),
-    {true, Req};
-accept_resource(subscription, post, _ID, Data, #client{type = user, id = ClientID}, Req) ->
-    ProviderID = proplists:get_value(<<"provider">>, Data),
-    TTL = proplists:get_value(<<"ttl_seconds">>, Data, 300),
-    worker_proxy:call(subscriptions_worker,
-        {subscribe_client, ClientID, ProviderID, TTL}),
     {true, Req};
 accept_resource(_, _, _, _, _, Req) ->
     {true, Req}.

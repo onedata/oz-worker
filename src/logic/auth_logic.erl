@@ -182,7 +182,9 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 
             V1 = macaroon_verifier:satisfy_general(V, VerifyFun),
             case macaroon_verifier:verify(V1, Macaroon, Secret, DischargeMacaroons) of
-                ok -> {ok, UserId};
+                ok ->
+                    subscriptions_worker:subscribe_user(UserId, ProviderId),
+                    {ok, UserId};
                 {error, Reason} -> {error, Reason}
             end;
 

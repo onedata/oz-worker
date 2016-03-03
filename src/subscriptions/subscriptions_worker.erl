@@ -17,7 +17,11 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([init/1, handle/1, cleanup/0]).
+-export([init/1, handle/1, cleanup/0, subscribe_user/2]).
+
+subscribe_user(UserID, ProviderID) ->
+    TTL = application:get_env(?APP_Name, client_subscription_ttl_seconds, 300),
+    worker_proxy:cast(?MODULE, {subscribe_user, UserID, ProviderID, TTL}).
 
 -spec init(Args :: term()) ->
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
@@ -49,8 +53,8 @@ handle({subscribe_provider, ProviderID, Endpoint, LastSeenSeq}) ->
     subscriptions:put(ProviderID, Endpoint, LastSeenSeq),
     fetch_history(ProviderID, Endpoint, LastSeenSeq);
 
-handle({subscribe_client, ClientID, ProviderID, TTL}) ->
-    subscriptions:put_user(ClientID, ProviderID, TTL);
+handle({subscribe_user, UserID, ProviderID, TTL}) ->
+    subscriptions:put_user(UserID, ProviderID, TTL);
 
 handle(_Request) ->
     ?log_bad_request(_Request).

@@ -48,7 +48,7 @@ put_user(UserID, ProviderID, TTL) ->
             provider = ProviderID,
             expires = ExpiresAt,
             user = UserID
-        }}, fun(Record) -> {ok, Record#provider_subscription{
+        }}, fun(Record) -> {ok, Record#user_subscription{
             provider = ProviderID,
             expires = ExpiresAt
         }}
