@@ -491,6 +491,18 @@ $search-box-height: 36px;
           .icon {
             text-align: center;
           }
+
+          // TODO: make dynamic
+          .token-popup {
+            width: 640px;
+
+            input {
+              width: 100%;
+              border: none;
+              background-color: inherit;
+              color: white;
+            }
+          }
         }
       }
     }
