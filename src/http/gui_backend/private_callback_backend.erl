@@ -34,7 +34,7 @@ callback(<<"sessionDetails">>, _) ->
     ?alert("~p", [Res]),
     {ok, Res};
 
-callback(<<"getConnectAccountEndpoint">>, {<<"provider">>, ProviderBin}) ->
+callback(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     Provider = provider_to_provider_id(ProviderBin),
     HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
