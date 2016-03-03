@@ -130,7 +130,8 @@ export default {
       getSupport: 'Get support'
     },
     providersAccordion: {
-      chooseProvider: 'Choose Provider'
+      chooseProvider: 'Choose Provider',
+      noProviders: 'No providers, get support first.'
     },
     providersAccordionItem: {
     }

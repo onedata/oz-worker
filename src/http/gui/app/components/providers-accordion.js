@@ -4,6 +4,11 @@ import Ember from 'ember';
 export default Ember.Component.extend({
   classNames: ['providers-accordion', 'accordion-content'],
 
+  noProviders: function() {
+    let providers = this.get('providers');
+    return providers.get('length') === 0;
+  }.property('providers'),
+
   didInsertElement() {
     this.$().find('#providers-list').searchable({
       searchField: '#providers-list-search',
