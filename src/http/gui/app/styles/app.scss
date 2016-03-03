@@ -180,6 +180,13 @@ html {
   }
 }
 
+.xs-center {
+  @include respond-to(screen-xs) {
+    text-align: center !important;
+  }
+}
+
+
 .hover-visible:not(:hover) {
   display: none;
 }
