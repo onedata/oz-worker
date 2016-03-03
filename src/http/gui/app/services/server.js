@@ -35,22 +35,8 @@ export default Ember.Service.extend({
    */
 
   publicRPC: function (operation, data) {
+    debugger;
     return this.get('adapter').RPC('public', operation, data);
-  },
-
-  /*** Helper methods ***/
-
-  // TODO: proper jsdoc
-  /**
-    Fetch token for provider and run callback with it.
-    @param callback {function} callback(token)
-  */
-  getSupportToken(spaceId) {
-    return this.privateRPC('getSupportToken', {spaceId: spaceId});
-  },
-
-  getProviderRedirectURL(providerId) {
-    return this.privateRPC('getRedirectURL', {providerId: providerId});
   },
 
   /**

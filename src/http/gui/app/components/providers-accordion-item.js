@@ -3,7 +3,7 @@ import bindFloater from '../utils/bind-floater';
 
 export default Ember.Component.extend({
   store: Ember.inject.service('store'),
-  server: Ember.inject.service('server'),
+  onezoneServer: Ember.inject.service('onezoneServer'),
 
   /** Should be injected */
   provider: null,
@@ -35,25 +35,28 @@ export default Ember.Component.extend({
     goToProvider() {
       let provider = this.get('provider');
       if (provider) {
-        this.get('server').getProviderRedirectURL(provider.get('id')).then((url) => {
+        this.get('onezoneServer').getProviderRedirectURL(provider.get('id')).then((url) => {
           window.location = url;
         });
       }
     },
 
-    /** Set the provider as default, unsetting other providers */
+    /** Set or unset the provider as default (can unset other providers) */
     toggleDefault() {
       let store = this.get('store');
-      // TODO: use query?
-      // there should be only one default provider, but for safety...
-      let defaultProviders = store.peekAll('provider').filterBy('isDefault', true);
-      defaultProviders.toArray().forEach((p) => {
-        p.set('isDefault', false);
-        p.save();
-      });
-
       let provider = this.get('provider');
-      provider.set('isDefault', true);
+      if (provider.get('isDefault')) {
+        provider.set('isDefault', false);
+      } else {
+        // TODO: use query?
+        // there should be only one default provider, but for safety...
+        let defaultProviders = store.peekAll('provider').filterBy('isDefault', true);
+        defaultProviders.toArray().forEach((p) => {
+          p.set('isDefault', false);
+          p.save();
+        });
+        provider.set('isDefault', true);
+      }
       provider.save();
     }
   }

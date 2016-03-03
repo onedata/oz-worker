@@ -3,7 +3,7 @@ import bindFloater from '../utils/bind-floater';
 
 export default Ember.Component.extend({
   store: Ember.inject.service('store'),
-  server: Ember.inject.service('server'),
+  onezoneServer: Ember.inject.service('onezoneServer'),
 
   /** Should be injected */
   space: null,
@@ -27,7 +27,7 @@ export default Ember.Component.extend({
       getNewSupportToken: function() {
         let space = this.get('space');
         if (space) {
-          this.get('server').getSupportToken(space.get('id')).then((token) => {
+          this.get('onezoneServer').getSupportToken(space.get('id')).then((token) => {
             // TODO: only debug, should be removed in future
             console.debug('Fetched new support token: ' + token);
             this.set('supportToken', token);

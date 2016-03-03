@@ -5,18 +5,15 @@ import UnauthenticatedRouteMixin from 'ember-simple-auth/mixins/unauthenticated-
 let LoginRoute = PageBase.extend(UnauthenticatedRouteMixin);
 
 export default LoginRoute.extend({
-  server: Ember.inject.service('server'),
+  onezoneServer: Ember.inject.service('onezoneServer'),
 
   name: 'login',
 
   actions: {
-    authenticate(provider) {
-      this.get('server')
-      .publicRPC('getLoginEndpoint', {provider: provider})
-      .then(
-        (answer) => {
-          window.location = answer;
-        });
+    authenticate(providerName) {
+      this.get('onezoneServer').getLoginEndpoint(providerName).then((url) => {
+        window.location = url;
+      });
     }
   }
 });
