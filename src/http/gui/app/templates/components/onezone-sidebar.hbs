@@ -15,7 +15,7 @@
           <div class="arrow-down"></div>
         </a>
       </div>
-      <div id="collapse-connect" class="accordion-body main-accordion-body collapse">
+      <div id="collapse-connect" class="accordion-body main-accordion-body collapse {{if expandAccounts 'in' ''}}">
         <div class="accordion-inner">
           {{accounts-list authorizers=authorizers}}
         </div>

@@ -21,7 +21,8 @@ module.exports = function(environment) {
     'ember-simple-auth': {
       session: 'session:custom',
       authenticationRoute: 'home.login',
-      routeIfAlreadyAuthenticated: 'home'
+      routeAfterAuthentication: 'onezone',
+      routeIfAlreadyAuthenticated: 'onezone'
     }
   };
 

@@ -97,10 +97,17 @@ export default DS.RESTAdapter.extend({
         }
       } else {
         console.log("SESSION INVALID");
+        let sessionRestoreRejectFun = this.get('sessionRestoreReject');
+        if (sessionRestoreRejectFun) {
+          sessionRestoreRejectFun();
+        }
       }
       let resolveFunction = this.get('sessionInitResolve');
       resolveFunction();
       this.set('sessionInitResolve', null);
+      this.set('sessionInitReject', null);
+      this.set('sessionRestoreResolve', null);
+      this.set('sessionRestoreReject', null);
     });
   },
 

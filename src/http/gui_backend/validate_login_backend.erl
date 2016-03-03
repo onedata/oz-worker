@@ -25,13 +25,14 @@
 
 page_init() ->
     case auth_utils:validate_login() of
-        {redirect, _URL} ->
-            ?info("User ~p logged in", [g_session:get_user_id()]);
+        {redirect, URL} ->
+            ?info("User ~p logged in", [g_session:get_user_id()]),
+            {redirect_relative, URL};
 %%            gui_jq:redirect(URL);
         new_user ->
             ?info("User ~p logged in for the first time", [g_session:get_user_id()]),
-            ok;
+            {redirect_relative, <<"/#/onezone">>};
         {error, ErrorID} ->
-            ?info("Error: ~p", [ErrorID])
-    end,
-    {redirect_relative, <<"/">>}.
+            ?info("Error: ~p", [ErrorID]),
+            {redirect_relative, <<"/">>}
+    end.

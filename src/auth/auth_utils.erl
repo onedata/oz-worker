@@ -129,7 +129,7 @@ validate_login() ->
                                                 {ok, #onedata_user{} = UserRecord} = user_logic:get_user(UserId),
                                                 ModificationProplist = merge_connected_accounts(OAuthAccount, UserRecord),
                                                 user_logic:modify(UserId, ModificationProplist),
-                                                {redirect, <<"/manage_account">>}
+                                                {redirect, <<"/#/onezone?expand_accounts=true">>}
                                         end
                                 end
                         end,
