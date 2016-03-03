@@ -34,12 +34,23 @@ callback(<<"sessionDetails">>, _) ->
     ?alert("~p", [Res]),
     {ok, Res};
 
+callback(<<"getConnectAccountEndpoint">>, {<<"provider">>, ProviderBin}) ->
+    Provider = provider_to_provider_id(ProviderBin),
+    HandlerModule = auth_config:get_provider_module(Provider),
+    {ok, URL} = HandlerModule:get_redirect_url(true),
+    {ok, URL};
 
 callback(<<"getSupportToken">>, Data) ->
     ?dump(Data),
     {ok, <<"ads789f6ads789r623487g523guy45aegsyf87adstyf">>};
 
-
 callback(<<"getRedirectURL">>, Data) ->
     ?dump(Data),
     {ok, <<"https://google.com">>}.
+
+
+provider_to_provider_id(<<"github">>) -> github;
+provider_to_provider_id(<<"plgrid">>) -> plgrid;
+provider_to_provider_id(<<"google">>) -> google;
+provider_to_provider_id(<<"dropbox">>) -> dropbox;
+provider_to_provider_id(<<"facebook">>) -> facebook.

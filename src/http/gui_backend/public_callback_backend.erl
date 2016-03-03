@@ -23,7 +23,7 @@
 %% API
 -export([callback/2]).
 
-callback(<<"getLoginEndpoint">>, ProviderBin) ->
+callback(<<"getLoginEndpoint">>, {<<"provider">>, ProviderBin}) ->
     case application:get_env(?APP_Name, dev_mode) of
         {ok, true} ->
             {ok, <<"/dev_login">>};

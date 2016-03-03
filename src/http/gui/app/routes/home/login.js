@@ -11,7 +11,9 @@ export default LoginRoute.extend({
 
   actions: {
     authenticate(provider) {
-      this.get('server').publicRPC('getLoginEndpoint', provider).then(
+      this.get('server')
+      .publicRPC('getLoginEndpoint', {provider: provider})
+      .then(
         (answer) => {
           window.location = answer;
         });
