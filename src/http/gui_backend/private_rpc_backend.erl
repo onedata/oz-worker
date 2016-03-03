@@ -12,7 +12,7 @@
 %%% 'give me the name of current user'.
 %%% @end
 %%%-------------------------------------------------------------------
--module(private_callback_backend).
+-module(private_rpc_backend).
 -author("Lukasz Opiola").
 
 -compile([export_all]).
@@ -21,7 +21,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([callback/2]).
+-export([callback/2, get_session_details/1]).
 
 callback(<<"sessionDetails">>, _) ->
     {ok, #document{value = #onedata_user{name = Name}}} =

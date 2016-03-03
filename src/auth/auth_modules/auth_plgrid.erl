@@ -133,7 +133,7 @@ validate_login() ->
 
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = Login,
+            user_id = str_utils:to_binary(Login),
             login = Login,
             email_list = Emails,
             name = Name

@@ -75,11 +75,11 @@
 %% This record defines user's account info
 %% received from an openid / oauth provider
 -record(oauth_account, {
-    provider_id = undefined,
-    user_id = <<"">>,
-    login = <<"">>,
-    name = <<"">>,
-    email_list = []
+    provider_id = undefined :: atom(),
+    user_id = <<"">> :: binary(),
+    login = <<"">> :: binary(),
+    name = <<"">> :: binary(),
+    email_list = [] :: [binary()]
 }).
 
 %% This record defines a user and is handled as a database document

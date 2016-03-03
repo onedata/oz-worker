@@ -90,7 +90,7 @@ validate_login() ->
         UserInfoProplist = json_utils:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = UserID,
+            user_id = str_utils:to_binary(UserID),
             email_list = lists:flatten([proplists:get_value(<<"email">>, UserInfoProplist, [])]),
             name = proplists:get_value(<<"display_name">>, UserInfoProplist, <<"">>),
             login = proplists:get_value(<<"login">>, UserInfoProplist, <<"">>)

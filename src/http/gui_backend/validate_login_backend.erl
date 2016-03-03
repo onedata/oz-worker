@@ -28,7 +28,6 @@ page_init() ->
         {redirect, URL} ->
             ?info("User ~p logged in", [g_session:get_user_id()]),
             {redirect_relative, URL};
-%%            gui_jq:redirect(URL);
         new_user ->
             ?info("User ~p logged in for the first time", [g_session:get_user_id()]),
             {redirect_relative, <<"/#/onezone">>};

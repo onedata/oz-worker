@@ -87,7 +87,8 @@ validate_login() ->
         JSONProplist = json_utils:decode(Response2),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = proplists:get_value(<<"sub">>, JSONProplist, <<"">>),
+            user_id = str_utils:to_binary(
+                proplists:get_value(<<"sub">>, JSONProplist, <<"">>)),
             email_list = extract_emails(JSONProplist),
             name = proplists:get_value(<<"name">>, JSONProplist, <<"">>)
         },

@@ -12,7 +12,7 @@
 %%% 'give me the name of current user'.
 %%% @end
 %%%-------------------------------------------------------------------
--module(public_callback_backend).
+-module(public_rpc_backend).
 -author("Lukasz Opiola").
 
 -compile([export_all]).
