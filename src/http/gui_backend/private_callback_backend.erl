@@ -27,9 +27,9 @@ callback(<<"sessionDetails">>, _) ->
     {ok, #document{value = #onedata_user{name = Name}}} =
         onedata_user:get(g_session:get_user_id()),
     FirstLogin = g_session:get_value(firstLogin, false),
-    Res = [{<<"sessionDetails">>, [
+    Res = [
         {<<"userName">>, Name},
         {<<"firstLogin">>, FirstLogin}
-    ]}],
+    ],
     ?alert("~p", [Res]),
     {ok, Res}.

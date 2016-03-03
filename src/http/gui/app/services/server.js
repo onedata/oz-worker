@@ -11,23 +11,30 @@ import Ember from 'ember';
 
 export default Ember.Service.extend({
   store: Ember.inject.service('store'),
+  adapter: function () {
+    return this.get('store').adapterFor('application');
+  }.property(),
 
   /**
-   * Informs the websocket adapter that a session restoring is anticipated,
-   * and when sessionDetails come from the server, the promise is resolved
-   * rather than new authentication is performed.
+   * Returns a promise that will be resolved only when a websocket connection
+   * is successfully created and the server responds with session details.
+   * When this is called in application router init, it ensures that
+   * WS connection and session are active before the page renders
    */
+  initWebSocketAndSession: function () {
+    return this.get('adapter').initWebSocketAndSession();
+  },
+
   tryToRestoreSession: function () {
-    return this.get('store').adapterFor('application').tryToRestoreSession();
+    return this.get('adapter').tryToRestoreSession();
   },
 
   /**
    * Sends an RPC call to the server for a publicly available resource.
    * thenFun is evaluated on response from the server.
    */
-  publicRPC: function (operation, data, thenFun) {
-    this.get('store').adapterFor('application')
-      .callback('public', operation, data).then(thenFun);
+  publicRPC: function (operation, data) {
+    return this.get('adapter').RPC('public', operation, data);
   },
 
   /**
@@ -35,8 +42,7 @@ export default Ember.Service.extend({
    * logged in clients.
    * thenFun is evaluated on response from the server.
    */
-  privateRPC: function (operation, data, thenFun) {
-    this.get('store').adapterFor('application')
-      .callback('private', operation, data).then(thenFun);
+  privateRPC: function (operation, data) {
+    return this.get('adapter').RPC('private', operation, data);
   }
 });

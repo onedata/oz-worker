@@ -22,22 +22,27 @@ var FIND_BELONGS_TO = 'findBelongsTo';
 var CREATE_RECORD = 'createRecord';
 var UPDATE_RECORD = 'updateRecord';
 var DELETE_RECORD = 'deleteRecord';
-
 var PULL_RESP = 'pullResp';
 var PULL_REQ = 'pullReq';
-var CALLBACK_REQ = 'callbackReq';
-var CALLBACK_RESP = 'callbackResp';
-var SESSION_RESP = 'sessionResp';
-var NO_SESSION_RESP = 'noSessionResp';
+
+var RPC_REQ = 'RPCReq';
+var RPC_RESP = 'RPCResp';
+
+
+var RESOURCE_TYPE_SESSION = 'session';
 //var PULL_RESULT = "result";
 //var MSG_TYPE_PUSH_UPDATED = "pushUpdated";
 //var MSG_TYPE_PUSH_DELETED = "pushDeleted";
 
 export default DS.RESTAdapter.extend({
   session: Ember.inject.service('session'),
-  //
+
+  // Session handling
+  sessionInitResolve: null,
+  sessionInitReject: null,
   sessionRestoreResolve: null,
   sessionRestoreReject: null,
+  sessionValid: null,
 
   // Promises that will be resolved when response comes
   promises: new Map(),
@@ -46,29 +51,67 @@ export default DS.RESTAdapter.extend({
   // Queue of messages before the socket is open
   beforeOpenQueue: [],
 
+  /** If this is called, session data from websocket will resolve session
+   * restoration rather than run authenticate. */
+  initWebSocketAndSession: function () {
+    this.initializeSocket();
+    return new Ember.RSVP.Promise((resolve, reject) => {
+      // This promise will be resolved when WS connection is established
+      // and session details are sent via WS.
+      this.set('sessionInitResolve', resolve);
+      this.set('sessionInitReject', reject);
+    });
+  },
 
   /** If this is called, session data from websocket will resolve session
    * restoration rather than run authenticate. */
   tryToRestoreSession: function () {
     return new Ember.RSVP.Promise((resolve, reject) => {
-      // This promise will be resolved whenever sessionDetails are sent
-      // from the server over websocket.
-      this.set('sessionRestoreResolve', resolve);
-      this.set('sessionRestoreReject', reject);
+      console.log('tryToRestoreSession, sessionValid = ', this.get('sessionValid'));
+      if (this.get('sessionValid') === true) {
+        resolve();
+      } else {
+        // This promise will be resolved when WS connection is established
+        // and session details are sent via WS.
+        this.set('sessionRestoreResolve', resolve);
+        this.set('sessionRestoreReject', reject);
+      }
+    });
+  },
+
+  resolveSession: function () {
+    // Request session data
+    this.logToConsole('resolveSession');
+    this.RPC(RESOURCE_TYPE_SESSION, 'get').then((data) => {
+      console.log("RESOLVE SESSION REQ");
+      console.log('data: ' + JSON.stringify(data));
+      if (data.sessionValid === true) {
+        this.get('session').set('opData', data);
+        let sessionRestoreResolveFun = this.get('sessionRestoreResolve');
+        if (sessionRestoreResolveFun) {
+          console.log("SESSION VALID, RESTORED");
+          sessionRestoreResolveFun();
+        } else {
+          console.log("SESSION VALID, AUTHENTICATED");
+          this.get('session').authenticate('authenticator:basic');
+        }
+      } else {
+        console.log("SESSION INVALID");
+      }
+      let resolveFunction = this.get('sessionInitResolve');
+      resolveFunction();
+      this.set('sessionInitResolve', null);
     });
   },
 
 
-  /** Initialize connection */
-  init: function () {
-    this.initializeSocket();
-  },
-
   /** Developer function - for logging/debugging */
   logToConsole: function (fun_name, fun_params) {
     console.log(fun_name + '(');
-    for (var i = 0; i < fun_params.length; i++) {
-      console.log('    ' + String(fun_params[i]));
+    if (fun_params) {
+      for (var i = 0; i < fun_params.length; i++) {
+        console.log('    ' + String(fun_params[i]));
+      }
     }
     console.log(')');
   },
@@ -248,7 +291,7 @@ export default DS.RESTAdapter.extend({
     });
   },
 
-  /** Initializes the WebScoket */
+  /** Initializes the WebSocket */
   initializeSocket: function () {
     var adapter = this;
 
@@ -278,6 +321,8 @@ export default DS.RESTAdapter.extend({
   open: function () {
     var adapter = this;
 
+    adapter.resolveSession();
+
     if (adapter.beforeOpenQueue.length > 0) {
       adapter.beforeOpenQueue.forEach(function (payload) {
         adapter.socket.send(JSON.stringify(payload));
@@ -289,24 +334,23 @@ export default DS.RESTAdapter.extend({
   /** WebScoket onmessage callback, resolves promises with received replies. */
   message: function (event) {
     var adapter = this;
-    var callback;
+    var promise;
     console.log('received: ' + event.data);
     var json = JSON.parse(event.data);
     if (json.msgType === PULL_RESP) {
       if (json.result === 'ok') {
-        callback = adapter.promises.get(json.uuid);
+        promise = adapter.promises.get(json.uuid);
 
         // TODO VFS-1508: sometimes, the callback is undefined - debug
         var transformed_data = adapter.transformResponse(json.data,
-          callback.type, callback.operation);
+          promise.type, promise.operation);
         console.log('success: ' + JSON.stringify(transformed_data));
 
-        callback.success(transformed_data);
+        promise.success(transformed_data);
       } else {
         console.log('error: ' + json.data);
         adapter.promises.get(json.uuid).error(json.data);
       }
-      adapter.promises.delete(json.uuid);
       // TODO @todo implement on generic data type
       //} else if (json.msgType == MSG_TYPE_PUSH_UPDATED) {
       //    App.File.store.pushPayload('file', {
@@ -319,32 +363,27 @@ export default DS.RESTAdapter.extend({
       //            App.File.store.unloadRecord(post);
       //        });
       //    }
-    } else if (json.msgType === CALLBACK_RESP) {
-      callback = adapter.promises.get(json.uuid);
-      callback.success(json.data);
-    } else if (json.msgType === NO_SESSION_RESP) {
-      // Reject session restoration as the websocket connection has no session
-      let rejectFunction = this.get('sessionRestoreReject');
-      if (rejectFunction) {
-        console.log("SESSION REJECTED");
-        rejectFunction();
-        this.set('sessionRestoreResolve', null);
-        this.set('sessionRestoreReject', null);
-      }
-    } else if (json.msgType === SESSION_RESP) {
-      console.log(json.data);
-      let resolveFunction = this.get('sessionRestoreResolve');
-      if (resolveFunction) {
-        console.log("SESSION RESTORED");
-        resolveFunction();
-        this.set('sessionRestoreResolve', null);
-        this.set('sessionRestoreReject', null);
-      } else {
-        console.log("SESSION CREATED");
-        this.get('session').authenticate('authenticator:basic');
-      }
-      this.get('session').set('opData', json.data);
+    } else if (json.msgType === RPC_RESP) {
+      promise = adapter.promises.get(json.uuid);
+      //if (json.type === RESOURCE_TYPE_SESSION) {
+      //  console.log('json.data: ' + json.data);
+      //  let resolveFunction = this.get('sessionInitResolve');
+      //  if (json.data.session) {
+      //    console.log("SESSION VALID");
+      //    this.get('session').authenticate('authenticator:basic');
+      //    this.get('session').set('opData', json.data);
+      //    resolveFunction();
+      //  } else {
+      //    console.log("SESSION INVALID");
+      //    resolveFunction();
+      //  }
+      //  this.set('sessionInitResolve', null);
+      //  this.set('sessionInitReject', null);
+      //} else {
+      promise.success(json.data);
+      //}
     }
+    adapter.promises.delete(json.uuid);
   },
 
   /** WebSocket onerror callback */
@@ -378,9 +417,9 @@ export default DS.RESTAdapter.extend({
    * @param {string} operation - function identifier
    * @param {object} data - json data
    */
-  callback: function (type, operation, data) {
+  RPC: function (type, operation, data) {
     var adapter = this;
-    adapter.logToConsole('callback', [type, operation, data]);
+    adapter.logToConsole('RPC', [type, operation, data]);
     var uuid = adapter.generateUuid();
 
     return new Ember.RSVP.Promise(function (resolve, reject) {
@@ -398,7 +437,7 @@ export default DS.RESTAdapter.extend({
       });
 
       var payload = {
-        msgType: CALLBACK_REQ,
+        msgType: RPC_REQ,
         uuid: uuid,
         resourceType: type,
         operation: operation,
@@ -414,5 +453,4 @@ export default DS.RESTAdapter.extend({
       }
     });
   }
-
 });

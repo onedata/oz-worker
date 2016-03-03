@@ -4,7 +4,8 @@ import Ember from 'ember';
 //let ApplicationRoute = Ember.Route.extend(ApplicationRouteMixin);
 
 export default Ember.Route.extend({
-  store: Ember.inject.service('store'),
+  server: Ember.inject.service('server'),
+  session: Ember.inject.service('session'),
 
   activate() {
     // examples on registering additional session events handlers
@@ -16,7 +17,13 @@ export default Ember.Route.extend({
     });
   },
 
-  initAdapter: function () {
-    this.get('store').adapterFor('application').init();
+  initSession: function () {
+    // @todo This returns a promise. We should display a loading page here
+    // and transition to proper page on promise resolve.
+    this.get('server').initWebSocketAndSession().then(
+      () => {
+        console.log('initWebSocketAndSession resolved');
+      }
+    );
   }.on('init')
 });
