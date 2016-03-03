@@ -1,4 +1,5 @@
 import Ember from 'ember';
+import bindFloater from '../utils/bind-floater';
 
 export default Ember.Component.extend({
   store: Ember.inject.service('store'),
@@ -18,6 +19,16 @@ export default Ember.Component.extend({
   }.property('provider.isWorking'),
 
   classNames: ['providers-accordion-item'],
+
+  didInsertElement() {
+    this.$().find('.floater').each(function() {
+      let ft = $(this);
+      let updatePosition = bindFloater(ft);
+      ft.parent().on('mouseover', updatePosition);
+      // TODO: performance - better all updatePositions in one fun
+      $('.accordion-container').on('scroll', updatePosition);
+    });
+  },
 
   actions: {
     /** Redirects to OneProvider using url from provider model */

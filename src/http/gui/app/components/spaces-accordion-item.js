@@ -1,4 +1,5 @@
 import Ember from 'ember';
+import bindFloater from '../utils/bind-floater';
 
 export default Ember.Component.extend({
   store: Ember.inject.service('store'),
@@ -13,18 +14,12 @@ export default Ember.Component.extend({
 
   // TODO: maybe this code should be moved somewhere else... (make more global)
   didInsertElement() {
-    $('.floater').each(function() {
+    this.$().find('.floater').each(function() {
       let ft = $(this);
-
-      let changePos = function() {
-        let offset = ft.parent().offset();
-        let left = `${parseInt(offset.left) + ft.parent().width()}px`;
-        let top = offset.top;
-        ft.css({left: left, top: top});
-      };
-
-      ft.parent().on('mouseover', changePos);
-      $('.accordion-container').on('scroll', changePos);
+      let updatePosition = bindFloater(ft);
+      ft.parent().on('mouseover', updatePosition);
+      // TODO: performance - better all updatePositions in one fun
+      $('.accordion-container').on('scroll', updatePosition);
     });
   },
 
