@@ -5,6 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
+%%% Handles requests connected with providers subscriptions.
 %%% @doc
 %%%-------------------------------------------------------------------
 -module(subscriptions_rest_module).

@@ -6,6 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This worker resolves recipients for given updates, and sends updates.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(subscriptions_worker).
@@ -17,20 +18,50 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([init/1, handle/1, cleanup/0, subscribe_user/2]).
+%% worker_plugin_behaviour callbacks
+-export([init/1, handle/1, cleanup/0]).
 
+%% API
+-export([subscribe_user/2]).
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts the server but does not registers it yet.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec subscribe_user(UserID :: term(), ProviderID :: term()) -> no_return().
 subscribe_user(UserID, ProviderID) ->
     TTL = application:get_env(?APP_Name, client_subscription_ttl_seconds, 300),
     worker_proxy:cast(?MODULE, {subscribe_user, UserID, ProviderID, TTL}).
 
+%%%===================================================================
+%%% gen_server callbacks
+%%%===================================================================
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Initialises the worker and ensures cache is available.
+%% @end
+%%--------------------------------------------------------------------
 -spec init(Args :: term()) ->
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
 init(_Args) ->
     process_flag(trap_exit, true),
-    changes_cache:initialize(),
+    changes_cache:ensure_initialised(),
     {ok, #{}}.
 
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Initialises the worker and ensures cache is available.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle(Request :: term()) -> ok | {error, Reason :: term()} | no_return().
 handle(healthcheck) ->
     case couchdb_datastore_driver:db_run(couchbeam_changes, follow_once, [], 30) of
         {ok, _, _} -> ok;
@@ -42,6 +73,8 @@ handle({send_update, ProviderSubscriptions, Message}) ->
     lists:foreach(fun(Subscription) ->
         Provider = Subscription#provider_subscription.provider,
         Endpoint = Subscription#provider_subscription.endpoint,
+
+        ?info("Putting ~p", [[Provider, Endpoint, Message]]), %todo
         outbox:put(Provider, Endpoint, Message)
     end, ProviderSubscriptions);
 
@@ -51,7 +84,7 @@ handle({handle_change, Seq, Doc, Type}) ->
 
 handle({subscribe_provider, ProviderID, Endpoint, LastSeenSeq}) ->
     subscriptions:put(ProviderID, Endpoint, LastSeenSeq),
-    fetch_history(ProviderID, Endpoint, LastSeenSeq);
+    fetch_history(ProviderID, LastSeenSeq);
 
 handle({subscribe_user, UserID, ProviderID, TTL}) ->
     subscriptions:put_user(UserID, ProviderID, TTL);
@@ -59,6 +92,11 @@ handle({subscribe_user, UserID, ProviderID, TTL}) ->
 handle(_Request) ->
     ?log_bad_request(_Request).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Cleans up the worker.
+%% @end
+%%--------------------------------------------------------------------
 -spec cleanup() -> ok | {error, Reason :: term()}.
 cleanup() ->
     ok.
@@ -67,21 +105,15 @@ cleanup() ->
 %%% Internal functions
 %%%===================================================================
 
-fetch_history(ProviderID, Endpoint, LastSeenSeq) ->
-    NewestCached = changes_cache:newest_seq(),
-    OldestCached = changes_cache:oldest_seq(),
-    ?info("Fetching from cache; {provider:~p, from:~p, cache_start:~p, cache_end:~p}",
-        [ProviderID, LastSeenSeq, OldestCached, NewestCached]),
-
+fetch_history(ProviderID, LastSeenSeq) ->
     Filter = fun(P) -> P =:= ProviderID end,
-    case {OldestCached, LastSeenSeq >= OldestCached} of
-        {cache_empty, _} ->
-            fetch_from_db(LastSeenSeq, last_seq(), Filter);
-        {_, true} ->
-            fetch_from_cache(LastSeenSeq, NewestCached, Filter);
-        {_, false} ->
-            fetch_from_cache(LastSeenSeq, NewestCached, Filter),
-            fetch_from_db(LastSeenSeq, OldestCached - 1, Filter)
+    case {changes_cache:newest_seq(), changes_cache:oldest_seq()} of
+        {{ok, _Newest}, {ok, _Oldest}} when LastSeenSeq >= _Oldest ->
+            fetch_from_cache(LastSeenSeq, _Newest, Filter);
+        {{ok, _Newest}, {ok, _Oldest}} ->
+            fetch_from_cache(LastSeenSeq, _Newest, Filter),
+            fetch_from_db(LastSeenSeq, _Oldest - 1, Filter);
+        _ -> fetch_from_db(LastSeenSeq, last_seq(), Filter)
     end.
 
 

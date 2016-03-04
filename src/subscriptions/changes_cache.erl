@@ -6,22 +6,31 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This module provides simple cache for document updates.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(changes_cache).
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
+-include("subscriptions/subscriptions.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(KEY, cache).
--define(WORKER_NAME, subscriptions_worker).
 
--export([put/3, slice/2, newest_seq/0, oldest_seq/0, initialize/0]).
+-export([put/3, slice/2, newest_seq/0, oldest_seq/0, ensure_initialised/0]).
 
+-type seq() :: pos_integer().
 
-initialize() ->
+%%--------------------------------------------------------------------
+%% @doc
+%% Ensures state is operable after this function returns.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec ensure_initialised() -> no_return().
+ensure_initialised() ->
     try
         {ok, ?SUBSCRIPTIONS_STATE_KEY} = subscriptions_state:create(#document{
             key = ?SUBSCRIPTIONS_STATE_KEY,
@@ -31,10 +40,19 @@ initialize() ->
         E:R -> ?info("State not created (may be already present) ~p:~p", [E, R])
     end.
 
-put(Seq, Doc, Type) ->
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Ensures element is in cache if it should be included.
+%% Cache size limit is guaranteed.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec put(Seq :: seq(), Doc :: #document{}, Model :: atom()) -> no_return().
+put(Seq, Doc, Model) ->
     {ok, _} = subscriptions_state:update(?SUBSCRIPTIONS_STATE_KEY, fun(State) ->
         Cache = State#subscriptions_state.cache,
-        UpdatedCache = gb_trees:enter(Seq, {Doc, Type}, Cache),
+        UpdatedCache = gb_trees:enter(Seq, {Doc, Model}, Cache),
         Size = gb_trees:size(Cache),
         Limit = size_limit(),
         case Size > Limit of
@@ -47,29 +65,73 @@ put(Seq, Doc, Type) ->
         end
     end).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns ordered changes using given range.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec slice(From :: seq(), To :: seq()) ->
+    [{Seq :: seq(), {Doc :: datastore:document(), Model :: atom()}}].
 slice(From, To) ->
     Cache = get_cache(),
     CachedList = gb_trees:to_list(Cache),
     Shifted = lists:dropwhile(fun({Seq, _}) -> Seq < From end, CachedList),
     lists:takewhile(fun({Seq, _}) -> Seq =< To end, Shifted).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns ordered changes using given range.
+%% @end
+%%--------------------------------------------------------------------
+
 size_limit() ->
     application:get_env(?APP_Name, subscription_cache_size, 100).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns largest sequence number in cache.
+%% @end
+%%--------------------------------------------------------------------
+-spec newest_seq() -> {ok, seq()} | {error, cache_empty}.
 newest_seq() ->
     Cache = get_cache(),
     case gb_trees:is_empty(Cache) of
-        true -> cache_empty;
-        false -> {Seq, _} = gb_trees:largest(Cache), Seq
+        true -> {error, cache_empty};
+        false ->
+            {Seq, _} = gb_trees:largest(Cache),
+            {ok, Seq}
     end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns smallest sequence number in cache.
+%% @end
+%%--------------------------------------------------------------------
+-spec oldest_seq() -> {ok, seq()} | {error, cache_empty}.
 oldest_seq() ->
     Cache = get_cache(),
     case gb_trees:is_empty(Cache) of
-        true -> cache_empty;
-        false -> {Seq, _} = gb_trees:smallest(Cache), Seq
+        true ->
+            {error, cache_empty};
+        false ->
+            {Seq, _} = gb_trees:smallest(Cache),
+            {ok, Seq}
     end.
 
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Fetches cache from datastore (mnesia).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cache() -> gb_trees:tree().
 get_cache() ->
     {ok, Doc} = subscriptions_state:get(?SUBSCRIPTIONS_STATE_KEY),
     #document{value = #subscriptions_state{cache = Cache}} = Doc,

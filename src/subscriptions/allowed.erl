@@ -6,6 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This module resolves which providers are eligible for receiving updates.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(allowed).
@@ -16,6 +17,15 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([providers/3]).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns providers eligible for receiving given update.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec providers(Doc :: datastore:document(), Model :: atom(),
+    fun((ProviderID :: term())-> boolean())) -> [ProviderID :: term()].
 
 providers(Doc, space, Filter) ->
     #document{value = Value, key = SpaceID} = Doc,
@@ -36,7 +46,7 @@ providers(Doc, space, Filter) ->
     end, UserSubscriptions),
     SpaceProviders ++ UserProviders;
 
-providers(Doc, user_group, _Filter) ->
+providers(_Doc, user_group, _Filter) ->
     [];
 
 providers(Doc, onedata_user, _Filter) ->

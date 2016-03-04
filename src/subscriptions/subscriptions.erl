@@ -6,6 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% Manages subscriptions of providers and users.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(subscriptions).
@@ -20,9 +21,22 @@
 
 -export([put/3, put_user/3, find/1]).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Fetches provider subscription from datastore (mnesia).
+%% @end
+%%--------------------------------------------------------------------
+-spec find(ID :: term()) -> {ok, datastore:document()} | {error, Reason :: term()}.
 find(ID) ->
     provider_subscription:get(ID).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds provider subscription.
+%% @end
+%%--------------------------------------------------------------------
+-spec put(ProviderID :: term(), Endpoint :: binary(), LastSeq :: pos_integer())
+        -> no_return().
 put(ProviderID, Endpoint, LastSeenSeq) ->
     TTL = application:get_env(?APP_Name, subscription_ttl_seconds, 120),
     ExpiresAt = now_seconds() + TTL,
@@ -41,6 +55,14 @@ put(ProviderID, Endpoint, LastSeenSeq) ->
         }}
         end).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds user subscription.
+%% @end
+%%--------------------------------------------------------------------
+-spec put_user(UserID :: term(), ProviderID :: term(), TTL :: pos_integer())
+        -> no_return().
 put_user(UserID, ProviderID, TTL) ->
     ExpiresAt = now_seconds() + TTL,
     user_subscription:create_or_update(
@@ -54,8 +76,10 @@ put_user(UserID, ProviderID, TTL) ->
         }}
         end).
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+-spec now_seconds() -> pos_integer().
 now_seconds() ->
     erlang:system_time(seconds).
-
-get_subscriptions() ->
-    {ok, S} = provider_subscription:non_expired(), S.

@@ -13,22 +13,16 @@
 
 -behaviour(gen_server).
 
+-include("registered_names.hrl").
+-include("subscriptions/subscriptions.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([start_link/0, common_change_callback/3]).
+-export([start_link/0, change_callback/3]).
 
 %% gen_server callbacks
--export([init/1,
-    handle_call/3,
-    handle_cast/2,
-    handle_info/2,
-    terminate/2,
-    code_change/3]).
-
--define(SERVER, ?MODULE).
-
--record(state, {}).
+-export([init/1, handle_call/3, handle_cast/2,
+    handle_info/2, terminate/2, code_change/3]).
 
 %%%===================================================================
 %%% API
@@ -36,14 +30,28 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Starts the server
-%%
+%% Starts the server but does not registers it yet.
 %% @end
 %%--------------------------------------------------------------------
 -spec(start_link() ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link() ->
     gen_server:start_link(?MODULE, [], []).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Handles changes & dispatches them to be processed.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec change_callback(Seq :: non_neg_integer(), datastore:document() | stream_ended,
+    model_behaviour:model_type() | undefined) -> ok.
+
+change_callback(_Seq, stream_ended, _Type) ->
+    gen_server:cast(?MODULE, {stop, stream_ended});
+
+change_callback(Seq, Doc, Type) ->
+    worker_proxy:cast(?SUBSCRIPTIONS_WORKER_NAME, {handle_change, Seq, Doc, Type}).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -53,44 +61,21 @@ start_link() ->
 %% @private
 %% @doc
 %% Initializes the server
-%%
-%% @spec init(Args) -> {ok, State} |
-%%                     {ok, State, Timeout} |
-%%                     ignore |
-%%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
 -spec(init(Args :: term()) ->
-    {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
+    {ok, State :: #{}} | {ok, State :: #{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore).
 init([]) ->
-    ?info("Starting changes bridge ~p", [self()]),
-    % todo: find better way to create singleton worker (maybe gproc)
-    case global:whereis_name(?MODULE) of
-        undefined ->
-            ?info("No leader detected");
-        Pid ->
-            ?info("Leader ~p detected", [Pid]),
-            erlang:monitor(process, Pid),
-            receive
-                {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
-                    ?info("Detected leader failure")
-            after
-                timer:minutes(1) ->
-                    ?info("Scheduled takeover")
-            end
-    end,
-    global:trans({?MODULE, node()}, fun() ->
-        case global:register_name(?MODULE, self()) of
-            yes ->
-                ?info("Becoming a leader"),
-                gen_server:cast({global, ?MODULE}, start_changes_stream),
-                {ok, #state{}};
-            no ->
-                ?info("Unsuccessful leader takeover"),
-                {stop, unsuccessful_takeover}
-        end
-    end).
+    % todo: find better way to create singleton gen_server
+    % todo: both functions below may cause undesired behaviour
+    await_for_name_possibly_free(),
+    case register_name_or_exit() of
+        ok ->
+            gen_server:cast({global, ?MODULE}, start_changes_stream),
+            {ok, #{}};
+        {error, Reason} -> {stop, Reason}
+    end.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -100,13 +85,13 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
-    State :: #state{}) ->
-    {reply, Reply :: term(), NewState :: #state{}} |
-    {reply, Reply :: term(), NewState :: #state{}, timeout() | hibernate} |
-    {noreply, NewState :: #state{}} |
-    {noreply, NewState :: #state{}, timeout() | hibernate} |
-    {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
-    {stop, Reason :: term(), NewState :: #state{}}).
+    State :: #{}) ->
+    {reply, Reply :: term(), NewState :: #{}} |
+    {reply, Reply :: term(), NewState :: #{}, timeout() | hibernate} |
+    {noreply, NewState :: #{}} |
+    {noreply, NewState :: #{}, timeout() | hibernate} |
+    {stop, Reason :: term(), Reply :: term(), NewState :: #{}} |
+    {stop, Reason :: term(), NewState :: #{}}).
 handle_call(_Request, _From, State) ->
     ?log_bad_request(_Request),
     {reply, ok, State}.
@@ -115,16 +100,15 @@ handle_call(_Request, _From, State) ->
 %% @private
 %% @doc
 %% Handling cast messages
-%%
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_cast(Request :: term(), State :: #state{}) ->
-    {noreply, NewState :: #state{}} |
-    {noreply, NewState :: #state{}, timeout() | hibernate} |
-    {stop, Reason :: term(), NewState :: #state{}}).
+-spec(handle_cast(Request :: term(), State :: #{}) ->
+    {noreply, NewState :: #{}} |
+    {noreply, NewState :: #{}, timeout() | hibernate} |
+    {stop, Reason :: term(), NewState :: #{}}).
 handle_cast(start_changes_stream, State) ->
     try
-        CurrentSeq = last_seq(),
+        {ok, CurrentSeq} = fetch_last_seq(),
         ?info("Starting changes stream using changes from ~p", [CurrentSeq]),
         start_changes_stream(CurrentSeq),
         {noreply, State}
@@ -146,34 +130,25 @@ handle_cast(_Request, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Handling all non call/cast messages
-%%
-%% @spec handle_info(Info, State) -> {noreply, State} |
-%%                                   {noreply, State, Timeout} |
-%%                                   {stop, Reason, State}
+%% Handling all non call/cast messages.
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_info(Info :: timeout() | term(), State :: #state{}) ->
-    {noreply, NewState :: #state{}} |
-    {noreply, NewState :: #state{}, timeout() | hibernate} |
-    {stop, Reason :: term(), NewState :: #state{}}).
+-spec(handle_info(Info :: timeout() | term(), State :: #{}) ->
+    {noreply, NewState :: #{}} |
+    {noreply, NewState :: #{}, timeout() | hibernate} |
+    {stop, Reason :: term(), NewState :: #{}}).
 handle_info(_Info, State) ->
-    ?log_bad_request(_Info),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% This function is called by a gen_server when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any
-%% necessary cleaning up. When it returns, the gen_server terminates
-%% with Reason. The return value is ignored.
-%%
-%% @spec terminate(Reason, State) -> void()
+%% terminate.
 %% @end
 %%--------------------------------------------------------------------
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
-    State :: #state{}) -> term()).
+    State :: #{}) -> term()).
 terminate(_Reason, _State) ->
     ?info("Changes bridge  terminates ~p", [self()]),
     ok.
@@ -182,13 +157,11 @@ terminate(_Reason, _State) ->
 %% @private
 %% @doc
 %% Convert process state when code is changed
-%%
-%% @spec code_change(OldVsn, State, Extra) -> {ok, NewState}
 %% @end
 %%--------------------------------------------------------------------
--spec(code_change(OldVsn :: term() | {down, term()}, State :: #state{},
+-spec(code_change(OldVsn :: term() | {down, term()}, State :: #{},
     Extra :: term()) ->
-    {ok, NewState :: #state{}} | {error, Reason :: term()}).
+    {ok, NewState :: #{}} | {error, Reason :: term()}).
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -196,25 +169,81 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
--spec common_change_callback(Seq :: non_neg_integer(), datastore:document() | stream_ended, model_behaviour:model_type() | undefined) -> ok.
-common_change_callback(_Seq, stream_ended, _Type) ->
-    gen_server:cast(?MODULE, {stop, stream_ended});
-
-common_change_callback(Seq, Doc, Type) ->
-    worker_proxy:cast(subscriptions_worker, {handle_change, Seq, Doc, Type}).
-
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Initialize changes stream, which starts from given sequence number.
+%% @end
+%%--------------------------------------------------------------------
 
 -spec start_changes_stream(Seq :: non_neg_integer()) -> no_return().
-start_changes_stream(StartSeq) ->
-    couchdb_datastore_driver:changes_start_link(fun common_change_callback/3, StartSeq, infinity).
+start_changes_stream(Start) ->
+    couchdb_datastore_driver:changes_start_link(fun change_callback/3, Start, infinity).
 
--spec last_seq() -> non_neg_integer().
-last_seq() ->
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Get latest sequence number from datastore.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec fetch_last_seq() -> {ok, non_neg_integer()}| {error, term()}.
+fetch_last_seq() ->
     try
-        {ok, LastSeq, _} = couchdb_datastore_driver:db_run(couchbeam_changes, follow_once, [], 30),
-        binary_to_integer(LastSeq)
+        {ok, LastSeq, _} = couchdb_datastore_driver:db_run(couchbeam_changes,
+            follow_once, [], 30),
+        {ok, binary_to_integer(LastSeq)}
     catch
         E:R ->
-            ?error("Last sequence number unknown (assuming 1) due to ~p:~p", [E, R]),
-            1
+            ?error_stacktrace("Last sequence unavailable as ~p:~p", [E, R]),
+            {error, {E, R}}
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Attempts to register a name. When it fails, bridge should be restarted.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec register_name_or_exit() -> ok | {error, Reason :: term()}.
+register_name_or_exit() ->
+    global:trans({?MODULE, node()}, fun() ->
+        case global:register_name(?MODULE, self()) of
+            yes ->
+                ?info("Becoming a leader"),
+                ok;
+            no ->
+                ?info("Unsuccessful leader takeover"),
+                {error, unsuccessful_takeover}
+        end
+    end).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Awaits until global name *may* be available. There remains slight
+%% risk of missing name becoming available - to overcome that waiting
+%% time is limited.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec await_for_name_possibly_free() -> no_return().
+await_for_name_possibly_free() ->
+    WaitLimit = application:get_env(?APP_Name,
+        changes_bridge_await_limit, timer:minutes(5)),
+
+    case global:whereis_name(?MODULE) of
+        undefined ->
+            ?info("No leader detected");
+        Pid ->
+            ?info("Leader ~p detected", [Pid]),
+            erlang:monitor(process, Pid),
+            receive
+                {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
+                    ?info("Detected leader failure")
+            after
+                WaitLimit ->
+                    ?info("Scheduled takeover")
+            end
     end.

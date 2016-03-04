@@ -15,7 +15,6 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 
--define(SUBSCRIPTIONS_STATE_KEY, <<"current_state">>).
 -record(subscriptions_state, {
     cache :: gb_trees:tree()
 }).

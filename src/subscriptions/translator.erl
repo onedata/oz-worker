@@ -6,6 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% Translates documents to structures required by the provider.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(translator).
@@ -16,6 +17,14 @@
 
 -export([get_msg/3]).
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% Translates documents to structures required by the provider.
+%%% Those structures are serializable to json.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec get_msg(Seq :: pos_integer(), Doc :: datastore:document(), Model :: atom())
+        -> term().
 
 get_msg(Seq, Doc, space) ->
     #document{value = Value, key = ID} = Doc,
@@ -38,8 +47,13 @@ get_msg(Seq, Doc, onedata_user) ->
         {space_ids, Spaces},
         {group_ids, Groups}
     ]}];
-get_msg(_Seq, _Doc, _Type) ->
+get_msg(_Seq, _Doc, _Model) ->
     [].
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+-spec revs_prop(Doc :: datastore:document()) -> term().
 revs_prop(Doc) ->
     {revs, element(2, Doc#document.rev)}.
