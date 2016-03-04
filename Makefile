@@ -72,7 +72,7 @@ generate_dev: deps compile gui_dev
 	# Remove gui tmp dir
 	rm -rf src/http/gui/tmp
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
-	./rebar generate
+	./rebar generate $(OVERLAY_VARS)
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
 
 ## Generates a production release
@@ -80,7 +80,7 @@ generate: deps compile gui_prod
 	# Remove gui tmp dir
 	rm -rf src/http/gui/tmp
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
-	./rebar generate
+	./rebar generate $(OVERLAY_VARS)
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
 
 clean:
@@ -167,7 +167,7 @@ package/$(PKG_ID).tar.gz: deps
 	     echo "$${vsn}" > $${dep}/priv/vsn.git; \
 	     sed -i'' "s/{vsn,\\s*git}/{vsn, \"$${vsn}\"}/" $${dep}/src/*.app.src 2>/dev/null || true; \
 	done
-	#find package/$(PKG_ID) -depth -name ".git" -not -path '*/cluster_worker/*' -exec rm -rf {} \;
+	find package/$(PKG_ID) -depth -name ".git" -not -path '*/cluster_worker/*' -exec rm -rf {} \;
 	tar -C package -czf package/$(PKG_ID).tar.gz $(PKG_ID)
 
 dist: package/$(PKG_ID).tar.gz

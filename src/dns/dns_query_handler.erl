@@ -22,8 +22,6 @@
 -export([handle_a/2, handle_ns/2, handle_cname/2, handle_soa/2, handle_wks/2,
     handle_ptr/2, handle_hinfo/2, handle_minfo/2, handle_mx/2, handle_txt/2]).
 
--define(DEFAULT_DNS_CONFIG_LOCATION, "data/dns.config").
-
 %% Alias of all available GR workers
 -define(ALL_WORKERS, "ALL").
 
@@ -61,7 +59,8 @@
 %%--------------------------------------------------------------------
 -spec load_config() -> ok | no_return().
 load_config() ->
-    load_config(?DEFAULT_DNS_CONFIG_LOCATION).
+    {ok, ConfigFile} = application:get_env(cluster_worker, dns_config_file),
+    load_config(ConfigFile).
 
 
 %%--------------------------------------------------------------------
