@@ -17,6 +17,9 @@
 -author("Michal Zmuda").
 
 -include_lib("ctool/include/logging.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
+
+-define(KEY, <<"current_state">>).
 
 -export([init/1, cleanup/0, handle/1]).
 
@@ -105,13 +108,19 @@ call_dedicated_node(Fun, Req) ->
 %%--------------------------------------------------------------------
 -spec get_dedicated_node() -> {ok, node()} | {error, Reason :: term()}.
 get_dedicated_node() ->
-    case worker_host:state_get(?MODULE, dedicated_node) of
-        {ok, Node} -> {ok, Node};
-        {error, _} ->
+    case zone_ca_state:get(?KEY) of
+        {ok, #document{value = #zone_ca_state{dedicated_node = {ok, _Node}}}} ->
+            {ok, _Node};
+        _ ->
             SelectResult = select_dedicated_node(),
-            worker_host:state_update(?MODULE, dedicated_node, fun
-                ({error, _}) -> SelectResult;
-                ({ok, _Node}) -> {ok, _Node}
+            zone_ca_state:create_or_update(#document{
+                key = ?KEY,
+                value = #zone_ca_state{dedicated_node = SelectResult}
+            }, fun
+                (State = #zone_ca_state{dedicated_node = {error, _}}) ->
+                    {ok, State#zone_ca_state{dedicated_node = SelectResult}};
+                (State = #zone_ca_state{dedicated_node = {ok, _Node}}) ->
+                    {ok, State}
             end),
             SelectResult
     end.

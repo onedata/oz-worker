@@ -25,6 +25,7 @@
 %%--------------------------------------------------------------------
 -spec models() -> Models :: [model_behaviour:model_type()].
 models() -> [
+  zone_ca_state,
   onedata_auth,
   onedata_user,
   provider,
