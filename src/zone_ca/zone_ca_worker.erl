@@ -105,11 +105,16 @@ call_dedicated_node(Fun, Req) ->
 %%--------------------------------------------------------------------
 -spec get_dedicated_node() -> {ok, node()} | {error, Reason :: term()}.
 get_dedicated_node() ->
-    worker_host:state_update(?MODULE, dedicated_node, fun
-        ({error, _}) -> select_dedicated_node();
-        ({ok, _Node}) -> {ok, _Node}
-    end),
-    worker_host:state_get(?MODULE, dedicated_node).
+    case worker_host:state_get(?MODULE, dedicated_node) of
+        {ok, Node} -> {ok, Node};
+        {error, _} ->
+            SelectResult = select_dedicated_node(),
+            worker_host:state_update(?MODULE, dedicated_node, fun
+                ({error, _}) -> SelectResult;
+                ({ok, _Node}) -> {ok, _Node}
+            end),
+            SelectResult
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
