@@ -663,10 +663,12 @@ $search-box-height: 36px;
 }
 
 // TODO: hacks
-.navbar-nav {
-  margin: 0 !important;
-  float: right !important;
-  .dropdown-menu {
-    position: absolute !important;
+.navbar-onezone {
+  .navbar-nav {
+    margin: 0 !important;
+    float: right !important;
+    .dropdown-menu {
+      position: absolute !important;
+    }
   }
 }
