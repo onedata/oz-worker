@@ -186,6 +186,12 @@ $search-box-height: 36px;
 
   $onezone-accordion-heading-height: 75px;
 
+  input {
+    border: none;
+    background-color: inherit;
+    color: white;
+  }
+
   .brand {
     height: $onezone-top-bar-height;
     padding-left: 10px;
@@ -343,27 +349,72 @@ $search-box-height: 36px;
 
   // specific styles for spaces-accordion, see also .accordion styles
   // TODO: shared classes
-  .providers-accordion, .spaces-accordion {
+  // TODO: tokens-* is fake - it should be non-accordion class that joins:
+  //    .tokens-accordion .tokens-accordion-item .tokens-accordion-group
+  //    .tokens-accordion-heading .tokens-accordion-toggle
+  //    inside there should be classes: token-icon, token-header, select-button,
+  //    .trash-button
+
+  $spaces-item-height: 35px;
+
+  .tokens-accordion-toggle {
+    // TODO: pull up, because for unknow reasons, its too high
+    margin-top: 2px;
+
+    .token-icon {
+      display: table-cell;
+      width: 30px;
+      line-height: $spaces-item-height;
+    }
+    .token-header {
+      display: table-cell;
+      padding-left: 15px;
+      padding-right: 15px;
+      text-transform: none;
+      font-size: 0.8em;
+      line-height: $spaces-item-height;
+
+      input {
+        width: 100%;
+        padding: 0;
+        margin: 0;
+        line-height: $spaces-item-height;
+      }
+    }
+    .select-button {
+      display: table-cell;
+      width: 32px;
+      line-height: $spaces-item-height;
+      cursor: pointer; cursor: hand;
+    }
+    .trash-button {
+      display: table-cell;
+      width: 32px;
+      line-height: $spaces-item-height;
+      cursor: pointer; cursor: hand;
+    }
+  }
+
+  .providers-accordion, .spaces-accordion, .tokens-accordion {
     color: white;
     .one-icon {
       font-size: 15pt;
     }
 
-    .providers-accordion-item, .spaces-accordion-item {
+    .providers-accordion-item, .spaces-accordion-item, .tokens-accordion-item {
       &:first-of-type {
         margin-top: 20px;
       }
     }
 
-    .providers-accordion-group, .spaces-accordion-group {
+    .providers-accordion-group, .spaces-accordion-group, .tokens-accordion-group {
       border: none;
 
-      .providers-accordion-heading, .spaces-accordion-heading {
-        $spaces-item-height: 35px;
+      .providers-accordion-heading, .spaces-accordion-heading, .tokens-accordion-heading {
         height: $spaces-item-height;
         line-height: $spaces-item-height;
 
-        .providers-accordion-toggle, .spaces-accordion-toggle {
+        .providers-accordion-toggle, .spaces-accordion-toggle, .tokens-accordion-toggle {
           display: table;
           width: 100%;
           height: $spaces-item-height;
@@ -458,7 +509,6 @@ $search-box-height: 36px;
             }
           }
         }
-
       }
 
       .providers-accordion-body, .spaces-accordion-body {
@@ -498,9 +548,6 @@ $search-box-height: 36px;
 
             input {
               width: 100%;
-              border: none;
-              background-color: inherit;
-              color: white;
             }
           }
         }

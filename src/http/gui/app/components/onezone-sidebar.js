@@ -7,6 +7,8 @@ export default Ember.Component.extend({
   spaces: null,
   /** AuthAccounts list should be injected */
   authAccounts: null,
+  /** Tokens list sholud be injected (from model) */
+  tokens: null,
 
   // didInsertElement() {
   //   let box = $('.accordion-container');
