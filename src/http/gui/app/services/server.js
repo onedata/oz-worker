@@ -25,8 +25,17 @@ export default Ember.Service.extend({
     return this.get('adapter').initWebSocketAndSession();
   },
 
+  initializeWebSocket: function (onOpen, onError) {
+    return this.get('adapter').initializeWebSocket(onOpen, onError);
+  },
+
+
   tryToRestoreSession: function () {
     return this.get('adapter').tryToRestoreSession();
+  },
+
+  sessionRPC: function () {
+    return this.get('adapter').RPC('session', 'get');
   },
 
   /**

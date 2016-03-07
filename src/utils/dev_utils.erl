@@ -84,8 +84,8 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     default_space = DefaultSpace,
                     groups = [],
                     first_space_support_token = <<"">>,
-                    default_provider = <<"">>,
-                    chosen_provider = <<"">>
+                    default_provider = undefined,
+                    chosen_provider = undefined
                 },
                 {ok, UserID} = create_user_with_uuid(UserInfo, UserID)
             end, Users),

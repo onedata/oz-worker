@@ -25,8 +25,8 @@
 -define(MACAROONS_LOCATION, <<"onezone">>).
 
 %% API
--export([start/0, stop/0, get_redirection_uri/3, gen_token/1, gen_token/2, validate_token/5,
-    authenticate_user/1, invalidate_token/1]).
+-export([start/0, stop/0, get_redirection_uri/2, gen_token/1, gen_token/2,
+    validate_token/5, authenticate_user/1, invalidate_token/1]).
 
 %% Handling state tokens
 -export([generate_state_token/2, lookup_state_token/1,
@@ -90,19 +90,19 @@ authenticate_user(Identifier) ->
 %% is useful to check connectivity before redirecting.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirection_uri(UserId :: binary(), ProviderId :: binary(), ProviderGUIPort :: integer()) ->
+-spec get_redirection_uri(UserId :: binary(), ProviderId :: binary()) ->
     {ok, RedirectionUri :: binary()}.
-get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
+get_redirection_uri(UserId, ProviderId) ->
     Token = gen_token(UserId, ProviderId),
     _Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
     {ok, #onedata_user{alias = Alias}} = user_logic:get_user(UserId),
     ok = user_logic:modify(UserId, [{chosen_provider, ProviderId}]),
     _Prefix = case Alias of
-                  ?EMPTY_ALIAS ->
-                      <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
-                  _ ->
-                      Alias
-              end,
+        ?EMPTY_ALIAS ->
+            <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
+        _ ->
+            Alias
+    end,
     % TODO return IP address rather than alias.onedata.org
     % It shall be used normally when we have a possibility to
     % resolve domains on developer's host systems (so their web browsers can connect).
@@ -110,7 +110,13 @@ get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
     % whose address must be fed to system's resolv.conf.
     {ok, PData} = provider_logic:get_data(ProviderId),
     [RedirectionIP | _] = proplists:get_value(urls, PData),
-    {ok, <<"https://", RedirectionIP/binary, ?provider_auth_endpoint, "?code=", Token/binary>>}.
+    RedirectionPoint = proplists:get_value(redirectionPoint, PData),
+    {ok, {_Scheme, _UserInfo, _HostStr, Port, _Path, _Query}} =
+        http_uri:parse(str_utils:to_list(RedirectionPoint)),
+    URL = str_utils:format_bin("https://~s:~B~s?code=~s", [
+        RedirectionIP, Port, ?provider_auth_endpoint, Token
+    ]),
+    {ok, URL}.
 
 %% {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
 %% ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
@@ -197,7 +203,8 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 -spec invalidate_token({user_id, binary()} | binary()) -> ok.
 invalidate_token({user_id, UserId}) ->
     {ok, AuthDocs} = onedata_auth:get_auth_by_user_id(UserId),
-    lists:foreach(fun(#document{key = AuthId}) -> invalidate_token(AuthId) end, AuthDocs),
+    lists:foreach(fun(#document{key = AuthId}) ->
+        invalidate_token(AuthId) end, AuthDocs),
     ok;
 invalidate_token(Identifier) when is_binary(Identifier) ->
     onedata_auth:delete(Identifier),
@@ -294,4 +301,4 @@ create_macaroon(Secret, Identifier, Caveats) ->
 -spec generate_secret() -> binary().
 generate_secret() ->
     BinSecret = crypto:rand_bytes(macaroon:suggested_secret_length()),
-    << <<Y>> ||<<X:4>> <= BinSecret, Y <- integer_to_list(X,16) >>.
+    <<<<Y>> || <<X:4>> <= BinSecret, Y <- integer_to_list(X, 16)>>.

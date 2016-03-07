@@ -29,20 +29,14 @@ var RPC_REQ = 'RPCReq';
 var RPC_RESP = 'RPCResp';
 
 
-var RESOURCE_TYPE_SESSION = 'session';
 //var PULL_RESULT = "result";
 //var MSG_TYPE_PUSH_UPDATED = "pushUpdated";
 //var MSG_TYPE_PUSH_DELETED = "pushDeleted";
 
 export default DS.RESTAdapter.extend({
-  session: Ember.inject.service('session'),
-
-  // Session handling
-  sessionInitResolve: null,
-  sessionInitReject: null,
-  sessionRestoreResolve: null,
-  sessionRestoreReject: null,
-  sessionValid: null,
+  initialized: false,
+  onOpenCallback: null,
+  onErrorCallback: null,
 
   // Promises that will be resolved when response comes
   promises: new Map(),
@@ -51,63 +45,20 @@ export default DS.RESTAdapter.extend({
   // Queue of messages before the socket is open
   beforeOpenQueue: [],
 
+  /** Called automatically on adapter init. */
+  init: function () {
+    this.initializeWebSocket();
+  },
+
   /** If this is called, session data from websocket will resolve session
    * restoration rather than run authenticate. */
   initWebSocketAndSession: function () {
-    this.initializeSocket();
+    this.initializeWebSocket();
     return new Ember.RSVP.Promise((resolve, reject) => {
       // This promise will be resolved when WS connection is established
       // and session details are sent via WS.
       this.set('sessionInitResolve', resolve);
       this.set('sessionInitReject', reject);
-    });
-  },
-
-  /** If this is called, session data from websocket will resolve session
-   * restoration rather than run authenticate. */
-  tryToRestoreSession: function () {
-    return new Ember.RSVP.Promise((resolve, reject) => {
-      console.log('tryToRestoreSession, sessionValid = ', this.get('sessionValid'));
-      if (this.get('sessionValid') === true) {
-        resolve();
-      } else {
-        // This promise will be resolved when WS connection is established
-        // and session details are sent via WS.
-        this.set('sessionRestoreResolve', resolve);
-        this.set('sessionRestoreReject', reject);
-      }
-    });
-  },
-
-  resolveSession: function () {
-    // Request session data
-    this.logToConsole('resolveSession');
-    this.RPC(RESOURCE_TYPE_SESSION, 'get').then((data) => {
-      console.log("RESOLVE SESSION REQ");
-      console.log('data: ' + JSON.stringify(data));
-      if (data.sessionValid === true) {
-        this.get('session').set('opData', data);
-        let sessionRestoreResolveFun = this.get('sessionRestoreResolve');
-        if (sessionRestoreResolveFun) {
-          console.log("SESSION VALID, RESTORED");
-          sessionRestoreResolveFun();
-        } else {
-          console.log("SESSION VALID, AUTHENTICATED");
-          this.get('session').authenticate('authenticator:basic');
-        }
-      } else {
-        console.log("SESSION INVALID");
-        let sessionRestoreRejectFun = this.get('sessionRestoreReject');
-        if (sessionRestoreRejectFun) {
-          sessionRestoreRejectFun();
-        }
-      }
-      let resolveFunction = this.get('sessionInitResolve');
-      resolveFunction();
-      this.set('sessionInitResolve', null);
-      this.set('sessionInitReject', null);
-      this.set('sessionRestoreResolve', null);
-      this.set('sessionRestoreReject', null);
     });
   },
 
@@ -299,28 +250,38 @@ export default DS.RESTAdapter.extend({
   },
 
   /** Initializes the WebSocket */
-  initializeSocket: function () {
-    var adapter = this;
+  initializeWebSocket: function (onOpen, onError) {
+    // Register callbacks even if WebScoket is already being initialized.
+    if (onOpen) {
+      this.set('onOpenCallback', onOpen);
+    }
+    if (onError) {
+      this.set('onErrorCallback', onError);
+    }
+    if (this.get('initialized') === false) {
+      this.set('initialized', true);
+      var adapter = this;
 
-    var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    //var querystring = window.location.pathname + window.location.search;
-    var host = window.location.hostname;
-    var port = window.location.port;
+      var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      //var querystring = window.location.pathname + window.location.search;
+      var host = window.location.hostname;
+      var port = window.location.port;
 
-    var url = protocol + host + (port === '' ? '' : ':' + port) + '/ws/'; // + querystring;
-    console.log('Connecting: ' + url);
+      var url = protocol + host + (port === '' ? '' : ':' + port) + '/ws/'; // + querystring;
+      console.log('Connecting: ' + url);
 
-    if (adapter.socket === null) {
-      adapter.socket = new WebSocket(url);
-      adapter.socket.onopen = function (event) {
-        adapter.open.apply(adapter, [event]);
-      };
-      adapter.socket.onmessage = function (event) {
-        adapter.message.apply(adapter, [event]);
-      };
-      adapter.socket.onerror = function (event) {
-        adapter.error.apply(adapter, [event]);
-      };
+      if (adapter.socket === null) {
+        adapter.socket = new WebSocket(url);
+        adapter.socket.onopen = function (event) {
+          adapter.open.apply(adapter, [event]);
+        };
+        adapter.socket.onmessage = function (event) {
+          adapter.message.apply(adapter, [event]);
+        };
+        adapter.socket.onerror = function (event) {
+          adapter.error.apply(adapter, [event]);
+        };
+      }
     }
   },
 
@@ -328,7 +289,10 @@ export default DS.RESTAdapter.extend({
   open: function () {
     var adapter = this;
 
-    adapter.resolveSession();
+    let onOpen = this.get('onOpenCallback');
+    if (onOpen) {
+      onOpen();
+    }
 
     if (adapter.beforeOpenQueue.length > 0) {
       adapter.beforeOpenQueue.forEach(function (payload) {
@@ -372,23 +336,7 @@ export default DS.RESTAdapter.extend({
       //    }
     } else if (json.msgType === RPC_RESP) {
       promise = adapter.promises.get(json.uuid);
-      //if (json.type === RESOURCE_TYPE_SESSION) {
-      //  console.log('json.data: ' + json.data);
-      //  let resolveFunction = this.get('sessionInitResolve');
-      //  if (json.data.session) {
-      //    console.log("SESSION VALID");
-      //    this.get('session').authenticate('authenticator:basic');
-      //    this.get('session').set('opData', json.data);
-      //    resolveFunction();
-      //  } else {
-      //    console.log("SESSION INVALID");
-      //    resolveFunction();
-      //  }
-      //  this.set('sessionInitResolve', null);
-      //  this.set('sessionInitReject', null);
-      //} else {
       promise.success(json.data);
-      //}
     }
     adapter.promises.delete(json.uuid);
   },
@@ -400,13 +348,9 @@ export default DS.RESTAdapter.extend({
     // window.alert('WebSocket error, see console for details.');
     console.error(`WebSocket connection error, event data: ` + event.data);
 
-    // Reject session restoration as no websocket connection is active
-    let rejectFunction = this.get('sessionRestoreReject');
-    if (rejectFunction) {
-      console.log("SESSION REJECTED");
-      rejectFunction();
-      this.set('sessionRestoreResolve', null);
-      this.set('sessionRestoreReject', null);
+    let onError = this.get('onErrorCallback');
+    if (onError) {
+      onError();
     }
 
     adapter.promises.forEach(function (promise) {

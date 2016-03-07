@@ -51,12 +51,8 @@ handle(<<"getSupportToken">>, [{<<"spaceId">>, SpaceId}]) ->
 
 handle(<<"getRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     UserId = g_session:get_user_id(),
-    {ok, ProviderData} = provider_logic:get_data(ProviderId),
-    RedirectionPoint = proplists:get_value(redirectionPoint, ProviderData),
-    {ok, {_Scheme, _UserInfo, _HostStr, Port, _Path, _Query}} =
-        http_uri:parse(str_utils:to_list(RedirectionPoint)),
     % @todo check if provider is online, if not push update of model
-    {ok, _RedURI} = auth_logic:get_redirection_uri(UserId, ProviderId, Port).
+    auth_logic:get_redirection_uri(UserId, ProviderId).
 
 
 provider_to_provider_id(<<"github">>) -> github;

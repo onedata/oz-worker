@@ -17,7 +17,8 @@
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
 -export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
--export([get_default_space/1, set_default_space/2, set_default_provider/2]).
+-export([get_default_space/1, set_default_space/2]).
+-export([get_default_provider/1, set_default_provider/2]).
 -export([exists/1, remove/1]).
 
 %%%===================================================================
@@ -330,6 +331,18 @@ set_default_space(UserId, SpaceId) ->
             end),
             true
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Retrieves user's default provider (or returns undefined).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_default_provider(UserId :: binary()) ->
+    {ok, ProviderId :: binary() | undefined}.
+get_default_provider(UserId) ->
+    {ok, #onedata_user{default_provider = DefProv}} = get_user(UserId),
+    {ok, DefProv}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Set user's default space ID.

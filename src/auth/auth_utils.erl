@@ -15,6 +15,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 -include("auth_common.hrl").
+-include("gui/common.hrl").
 
 %% API
 % Convenience functions
@@ -129,7 +130,7 @@ validate_login() ->
                                                 {ok, #onedata_user{} = UserRecord} = user_logic:get_user(UserId),
                                                 ModificationProplist = merge_connected_accounts(OAuthAccount, UserRecord),
                                                 user_logic:modify(UserId, ModificationProplist),
-                                                {redirect, <<"/#/onezone?expand_accounts=true">>}
+                                                {redirect, <<?page_after_login, "?expand_accounts=true">>}
                                         end
                                 end
                         end,

@@ -17,6 +17,7 @@
 
 -compile([export_all]).
 
+-include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -26,10 +27,20 @@
 page_init() ->
     case auth_utils:validate_login() of
         {redirect, URL} ->
-            ?info("User ~p logged in", [g_session:get_user_id()]),
-            {redirect_relative, URL};
+            UserId = g_session:get_user_id(),
+            ?info("User ~p logged in", [UserId]),
+            case user_logic:get_default_provider(UserId) of
+                {ok, undefined} ->
+                    {redirect_relative, URL};
+                {ok, ProvId} ->
+                    ?debug("Automatically redirecting user `~s` "
+                    "to default provider `~s`", [UserId, ProvId]),
+                    ProvURL = auth_logic:get_redirection_uri(UserId, ProvId),
+                    {redirect_relative, ProvURL}
+            end;
         new_user ->
-            ?info("User ~p logged in for the first time", [g_session:get_user_id()]),
+            UserId = g_session:get_user_id(),
+            ?info("User ~p logged in for the first time", [UserId]),
             {redirect_relative, <<"/#/onezone">>};
         {error, ErrorID} ->
             ?info("Error: ~p", [ErrorID]),

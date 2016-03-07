@@ -122,8 +122,7 @@ get_redirection_url_to_provider(Referer) ->
                 {error, no_provider};
             _ ->
                 RedirectionPoint = proplists:get_value(redirectionPoint, ProviderData),
-                {ok, {_Scheme, _UserInfo, _HostStr, Port, _Path, _Query}} = http_uri:parse(str_utils:to_list(RedirectionPoint)),
-                {ok, RedirectURI} = auth_logic:get_redirection_uri(UserID, ProviderID, Port),
+                {ok, RedirectURI} = auth_logic:get_redirection_uri(UserID, ProviderID),
                 {ok, RedirectionPoint, RedirectURI}
         end
     catch T:M ->

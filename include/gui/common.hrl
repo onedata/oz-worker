@@ -24,9 +24,13 @@
 % Relative suffix of GUI address, leading to page with info about providers
 -define(become_a_provider_url, "/become_a_provider").
 
+% @todo remove
 % Endpoint at oneprovider to check connectivity. Checks the index
 % page of provider if it responds.
 -define(provider_connection_check_endpoint, "/").
+
+% URL (relative) to redirect to after login.
+-define(page_after_login, "/#/onezone").
 
 % Macros used as ids of errors that can appear on GUI pages
 -define(error_internal_server_error, "internal_server_error").

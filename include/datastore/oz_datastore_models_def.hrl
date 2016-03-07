@@ -94,10 +94,10 @@
     % TODO this is a mock
     first_space_support_token = <<"">> :: binary(),
     % This allows to remember the provider which was selected for user, so DNS knows where to redirect
-    default_provider = <<"">> :: binary(),
+    default_provider = undefined :: binary() | undefined,
     % This allows to remember the to which provider user is being redirected.
     % It is needed in DNS so it knows where to redirect
-    chosen_provider = <<"">> :: binary()
+    chosen_provider = undefined :: binary() | undefined
 }).
 
 -type user_info() :: #onedata_user{}.
