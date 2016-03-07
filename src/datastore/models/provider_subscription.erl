@@ -19,7 +19,7 @@
     model_init/0, 'after'/5, before/4]).
 
 %% API
--export([non_expired/0, create_or_update/2]).
+-export([create_or_update/2]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -125,18 +125,3 @@ before(_ModelName, _Method, _Level, _Context) ->
     {ok, datastore:ext_key()} | datastore:update_error().
 create_or_update(Doc, Diff) ->
     datastore:create_or_update(?STORE_LEVEL, Doc, Diff).
-
-non_expired() ->
-    Now = erlang:system_time(seconds),
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #provider_subscription{expires = Seconds}} = Doc, Acc) ->
-            case Now < Seconds of
-                true -> {next, [Doc | Acc]};
-                false -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).

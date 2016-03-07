@@ -21,8 +21,6 @@
 
 -export([put/3, slice/2, newest_seq/0, oldest_seq/0, ensure_initialised/0]).
 
--type seq() :: pos_integer().
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Ensures state is operable after this function returns.

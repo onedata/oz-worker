@@ -21,23 +21,10 @@
 %% worker_plugin_behaviour callbacks
 -export([init/1, handle/1, cleanup/0]).
 
-%% API
--export([subscribe_user/2]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Starts the server but does not registers it yet.
-%% @end
-%%--------------------------------------------------------------------
-
--spec subscribe_user(UserID :: term(), ProviderID :: term()) -> no_return().
-subscribe_user(UserID, ProviderID) ->
-    TTL = application:get_env(?APP_Name, client_subscription_ttl_seconds, 300),
-    worker_proxy:cast(?MODULE, {subscribe_user, UserID, ProviderID, TTL}).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -68,26 +55,19 @@ handle(healthcheck) ->
         _ -> {error, couchbeam_not_reachable}
     end;
 
-handle({send_update, ProviderSubscriptions, Message}) ->
-    ?info("Sending ~p", [[ProviderSubscriptions, Message]]),
-    lists:foreach(fun(Subscription) ->
-        Provider = Subscription#provider_subscription.provider,
-        Endpoint = Subscription#provider_subscription.endpoint,
-
-        ?info("Putting ~p", [[Provider, Endpoint, Message]]), %todo
-        outbox:put(Provider, Endpoint, Message)
-    end, ProviderSubscriptions);
-
 handle({handle_change, Seq, Doc, Type}) ->
     changes_cache:put(Seq, Doc, Type),
     handle_change(Seq, Doc, Type, fun(_) -> true end);
 
-handle({subscribe_provider, ProviderID, Endpoint, LastSeenSeq}) ->
-    subscriptions:put(ProviderID, Endpoint, LastSeenSeq),
-    fetch_history(ProviderID, LastSeenSeq);
+handle({add_connection, ProviderID, Connection}) ->
+    subscriptions:add_connection(ProviderID, Connection);
 
-handle({subscribe_user, UserID, ProviderID, TTL}) ->
-    subscriptions:put_user(UserID, ProviderID, TTL);
+handle({remove_connection, ProviderID, Connection}) ->
+    subscriptions:remove_connection(ProviderID, Connection);
+
+handle({update_missing_seq, ProviderID, ResumeAt, Missing}) ->
+    subscriptions:update_missing_seq(ProviderID, ResumeAt, Missing),
+    fetch_history(ProviderID, ResumeAt, Missing);
 
 handle(_Request) ->
     ?log_bad_request(_Request).
@@ -105,15 +85,16 @@ cleanup() ->
 %%% Internal functions
 %%%===================================================================
 
-fetch_history(ProviderID, LastSeenSeq) ->
+fetch_history(ProviderID, ResumeAt, Missing) ->
+    [SmallestMissing | _] = lists:append(Missing, [ResumeAt]),
     Filter = fun(P) -> P =:= ProviderID end,
     case {changes_cache:newest_seq(), changes_cache:oldest_seq()} of
-        {{ok, _Newest}, {ok, _Oldest}} when LastSeenSeq >= _Oldest ->
-            fetch_from_cache(LastSeenSeq, _Newest, Filter);
+        {{ok, _Newest}, {ok, _Oldest}} when SmallestMissing >= _Oldest ->
+            fetch_from_cache(SmallestMissing, _Newest, Filter);
         {{ok, _Newest}, {ok, _Oldest}} ->
-            fetch_from_cache(LastSeenSeq, _Newest, Filter),
-            fetch_from_db(LastSeenSeq, _Oldest - 1, Filter);
-        _ -> fetch_from_db(LastSeenSeq, last_seq(), Filter)
+            fetch_from_cache(SmallestMissing, _Newest, Filter),
+            fetch_from_db(SmallestMissing, _Oldest - 1, Filter);
+        _ -> fetch_from_db(SmallestMissing, last_seq(), Filter)
     end.
 
 
@@ -135,28 +116,22 @@ handle_change(Seq, Doc, Type, Filter) ->
     Message = translator:get_msg(Seq, Doc, Type),
     Entitled = get_entitled_subscriptions(Doc, Type, Filter),
 
-    NodeToSubscriptions = lists:foldr(fun(Subscription, Acc) ->
-        Node = Subscription#provider_subscription.node,
-        dict:append(Node, Subscription, Acc)
-    end, dict:new(), Entitled),
-
-    lists:foreach(fun({Node, Subscriptions}) ->
-        worker_proxy:cast({?MODULE, Node}, {send_update, Subscriptions, Message})
-    end, dict:to_list(NodeToSubscriptions)).
+    lists:foreach(fun(Subscription) ->
+        [Conn | _] = Subscription#provider_subscription.connections,
+        Messages = json_utils:encode({array, [Message]}),
+        ?info("Pushing ~p ~p", [Conn, Messages]),
+        Conn ! {push, Messages}
+    end, Entitled).
 
 get_entitled_subscriptions(Doc, Type, Filter) ->
     Providers = allowed:providers(Doc, Type, Filter),
-    Now = erlang:system_time(seconds),
 
-    Subscriptions = lists:map(fun(Provider) ->
-        case subscriptions:find(Provider) of
-            {ok, #document{value = Val = #provider_subscription{expires = E}}}
-                when E > Now -> Val;
-            _ -> no_active_subscription
+    lists:filtermap(fun(Provider) ->
+        case subscriptions:subscription(Provider) of
+            {ok, #document{value = Val}} -> {true, Val};
+            _ -> false
         end
-    end, Providers),
-
-    lists:filter(fun(X) -> X =/= no_active_subscription end, Subscriptions).
+    end, Providers).
 
 
 -spec last_seq() -> non_neg_integer().
