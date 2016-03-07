@@ -69,6 +69,9 @@ handle({update_missing_seq, ProviderID, ResumeAt, Missing}) ->
     subscriptions:update_missing_seq(ProviderID, ResumeAt, Missing),
     fetch_history(ProviderID, ResumeAt, Missing);
 
+handle({update_users, ProviderID, Users}) ->
+    subscriptions:update_users(ProviderID, Users);%todo fetch data for new users
+
 handle(_Request) ->
     ?log_bad_request(_Request).
 

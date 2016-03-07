@@ -28,7 +28,7 @@ add_connection(ProviderID, HandlerPid) ->
         }
     }, fun(Subscription) ->
         Extended = [HandlerPid | Subscription#provider_subscription.connections],
-        Subscription#provider_subscription{connections = Extended}
+        {ok, Subscription#provider_subscription{connections = Extended}}
     end).
 
 remove_expired_connections(ProviderID) ->
@@ -49,7 +49,7 @@ remove_connection(ProviderID, HandlerPid) ->
     }, fun(Subscription) ->
         Connections = Subscription#provider_subscription.connections,
         Filtered = [E || E <- Connections, E =/= HandlerPid],
-        Subscription#provider_subscription{connections = Filtered}
+        {ok, Subscription#provider_subscription{connections = Filtered}}
     end).
 
 subscription(ProviderID) ->
@@ -60,7 +60,7 @@ update_users(ProviderID, Users) ->
         provider_subscription:get(ProviderID),
 
     {ok, _} = provider_subscription:update(ProviderID, fun(Subscription) ->
-        Subscription#provider_subscription{users = ordsets:from_list(Users)}
+        {ok, Subscription#provider_subscription{users = ordsets:from_list(Users)}}
     end),
 
     ordsets:subtract(Users, Current).
@@ -72,10 +72,10 @@ update_missing_seq(ProviderID, ResumeAt, Missing) ->
             missing = Missing,
             resume_at = ResumeAt
         }
-    }, fun(Subscription) -> Subscription#provider_subscription{
+    }, fun(Subscription) -> {ok, Subscription#provider_subscription{
         missing = Missing,
         resume_at = ResumeAt
-    } end).
+    }} end).
 
 subscribed(ProviderID, Seq) ->
     {ok, #document{value = #provider_subscription{

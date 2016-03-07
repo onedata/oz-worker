@@ -58,7 +58,7 @@ init(_Protocol, _Req, _Opts) ->
 websocket_init(ssl, Req, []) ->
     try
         Provider = get_provider(Req),
-        gen_server:cast(?SUBSCRIPTIONS_WORKER_NAME, {add_connection, Provider, self()}),
+        worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME, {add_connection, Provider, self()}),
         {ok, Req, #state{provider = Provider}}
     catch
         _:Reason ->
@@ -83,7 +83,18 @@ websocket_init(_TransportName, Req, _Opts) ->
     State :: any(),
     OutFrame :: cowboy_websocket:frame().
 websocket_handle({binary, Data}, Req, State) ->
-    ?dump(Data),
+    ?info("Received ~p", [Data]),
+
+    JSON = json_utils:decode(Data),
+    ResumeAt = proplists:get_value(<<"resume_at">>, JSON),
+    Missing = proplists:get_value(<<"missing">>, JSON),
+    Users = proplists:get_value(<<"users">>, JSON),
+
+    ProviderID = get_provider(Req),
+    worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME,
+        {update_missing_seq, ProviderID, ResumeAt, Missing}),
+    worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME,
+        {update_users, ProviderID, Users}),
     {ok, Req, State};
 
 websocket_handle(_InFrame, Req, State) ->
@@ -123,10 +134,10 @@ websocket_info(_Info, Req, State) ->
     State :: any().
 websocket_terminate(_Reason, _Req, _State) ->
     Provider = get_provider(_Req),
-    gen_server:cast(?SUBSCRIPTIONS_WORKER_NAME, {remove_connection, Provider, self()}),
+    worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME, {remove_connection, Provider, self()}),
     ok.
 
 get_provider(Req) ->
     {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
-    {ok, Provider} = zone_ca:verify_provider(PeerCert),
+    {ok, Provider} = zone_ca:verify_provider(PeerCert), % todo fix
     Provider.
