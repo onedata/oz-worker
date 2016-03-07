@@ -661,3 +661,12 @@ $search-box-height: 36px;
   bottom: auto;
   left: auto;
 }
+
+// TODO: hacks
+.navbar-nav {
+  margin: 0 !important;
+  float: right !important;
+  .dropdown-menu {
+    position: absolute !important;
+  }
+}
