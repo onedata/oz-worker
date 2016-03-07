@@ -10,7 +10,7 @@
 %%% todo: implement distributed CA properly (connected with VFS-1499)
 %%% @end
 %%%-------------------------------------------------------------------
--module(zone_ca_state).
+-module(ozpca_state).
 -author("Michal Zmuda").
 -behaviour(model_behaviour).
 
@@ -88,7 +88,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(zone_ca_bucket, [], ?GLOBAL_ONLY_LEVEL).
+    ?MODEL_CONFIG(ozpca_bucket, [], ?GLOBAL_ONLY_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc

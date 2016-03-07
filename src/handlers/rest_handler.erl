@@ -163,7 +163,7 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
                         throw({silent_error, Req2})
                 end,
 
-                ProviderId = case worker_proxy:call(zone_ca_worker,
+                ProviderId = case worker_proxy:call(ozpca_worker,
                     {verify_provider, PeerCert}) of
                     {ok, ProviderId1} -> ProviderId1;
                     {error, {bad_cert, Reason}} ->

@@ -17,7 +17,7 @@
 
 %% Stores CA dedicated node
 %% todo: implement distributed CA properly (connected with VFS-1499)
--record(zone_ca_state, {
+-record(ozpca_state, {
     dedicated_node :: {ok, node()} | {error, Reason :: term()}
 }).
 

@@ -13,7 +13,7 @@
 %%% todo: implement distributed CA properly (connected with VFS-1499)
 %%% @end
 %%%-------------------------------------------------------------------
--module(zone_ca_worker).
+-module(ozpca_worker).
 -author("Michal Zmuda").
 
 -include_lib("ctool/include/logging.hrl").
@@ -53,14 +53,14 @@ handle(healthcheck) ->
     end;
 
 handle({verify_provider, PeerCert} = Req) ->
-    call_dedicated_node(fun() -> zone_ca:verify_provider(PeerCert) end, Req);
+    call_dedicated_node(fun() -> ozpca:verify_provider(PeerCert) end, Req);
 
 handle({revoke, Serial} = Req) ->
-    call_dedicated_node(fun() -> zone_ca:revoke(Serial) end, Req);
+    call_dedicated_node(fun() -> ozpca:revoke(Serial) end, Req);
 
 handle({sign_provider_req, BinProviderId, CSRBin} = Req) ->
     call_dedicated_node(fun() ->
-        zone_ca:sign_provider_req(BinProviderId, CSRBin)
+        ozpca:sign_provider_req(BinProviderId, CSRBin)
     end, Req).
 
 
@@ -108,18 +108,18 @@ call_dedicated_node(Fun, Req) ->
 %%--------------------------------------------------------------------
 -spec get_dedicated_node() -> {ok, node()} | {error, Reason :: term()}.
 get_dedicated_node() ->
-    case zone_ca_state:get(?KEY) of
-        {ok, #document{value = #zone_ca_state{dedicated_node = {ok, _Node}}}} ->
+    case ozpca_state:get(?KEY) of
+        {ok, #document{value = #ozpca_state{dedicated_node = {ok, _Node}}}} ->
             {ok, _Node};
         _ ->
             SelectResult = select_dedicated_node(),
-            zone_ca_state:create_or_update(#document{
+            ozpca_state:create_or_update(#document{
                 key = ?KEY,
-                value = #zone_ca_state{dedicated_node = SelectResult}
+                value = #ozpca_state{dedicated_node = SelectResult}
             }, fun
-                (State = #zone_ca_state{dedicated_node = {error, _}}) ->
-                    {ok, State#zone_ca_state{dedicated_node = SelectResult}};
-                (State = #zone_ca_state{dedicated_node = {ok, _Node}}) ->
+                (State = #ozpca_state{dedicated_node = {error, _}}) ->
+                    {ok, State#ozpca_state{dedicated_node = SelectResult}};
+                (State = #ozpca_state{dedicated_node = {ok, _Node}}) ->
                     {ok, State}
             end),
             SelectResult

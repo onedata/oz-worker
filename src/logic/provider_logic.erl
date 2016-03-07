@@ -39,7 +39,7 @@
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
     ProviderId = datastore_utils:gen_uuid(),
-    {ok, {ProviderCertPem, Serial}} = worker_proxy:call(zone_ca_worker,
+    {ok, {ProviderCertPem, Serial}} = worker_proxy:call(ozpca_worker,
         {sign_provider_req, ProviderId, CSRBin}),
 
     Provider = #provider{client_name = ClientName, urls = URLs,
@@ -130,7 +130,7 @@ remove(ProviderId) ->
         end)
     end, Spaces),
 
-    worker_proxy:call(zone_ca_worker, {revoke, Serial}),
+    worker_proxy:call(ozpca_worker, {revoke, Serial}),
     case (provider:delete(ProviderId)) of
         ok -> true;
         _ -> flase
