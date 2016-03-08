@@ -32,7 +32,6 @@
 
 init() ->
     ?log_debug({websocket_init, g_session:get_session_id()}),
-%%    {ok, _Pid} = data_backend:async_process(fun() -> async_loop() end),
     ok.
 
 
