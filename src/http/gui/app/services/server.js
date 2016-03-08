@@ -30,7 +30,7 @@ export default Ember.Service.extend({
    * Returns a promise that will be called with received data.
    */
   sessionRPC: function () {
-    return this.get('adapter').RPC('session', 'get');
+    return this.get('adapter').RPC('session');
   },
 
   /**

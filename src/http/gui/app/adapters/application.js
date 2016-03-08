@@ -1,8 +1,7 @@
 /**
- * A default adapter of application - Oneprovide WebSocket
  * Custom adapter that handles model synchronization between client and server
  * using a websocket connection.
- * @module adapters/base/websocket-oneprovider
+ * @module adapters/application
  * @author Łukasz Opioła
  * @copyright (C) 2016 ACK CYFRONET AGH
  * @license This software is released under the MIT license cited in 'LICENSE.txt'.
@@ -11,27 +10,50 @@
 import Ember from 'ember';
 import DS from 'ember-data';
 
-// Interface between WebSocket Adapter client and server. Corresponding
-// interface is located in gui_ws_handler.erl.
-let FIND = 'find';
-let FIND_ALL = 'findAll';
-let FIND_QUERY = 'findQuery';
-let FIND_MANY = 'findMany';
-let FIND_HAS_MANY = 'findHasMany';
-let FIND_BELONGS_TO = 'findBelongsTo';
-let CREATE_RECORD = 'createRecord';
-let UPDATE_RECORD = 'updateRecord';
-let DELETE_RECORD = 'deleteRecord';
-let FETCH_RESP = 'fetchResp';
-let FETCH_REQ = 'fetchReq';
+/** -------------------------------------------------------------------
+ * Interface between client and server
+ * Corresponding interface is located in gui_ws_handler.erl.
+ * ------------------------------------------------------------------- */
+// Path where WS server is hosted
+let WS_ENDPOINT = '/ws/';
 
-let RPC_REQ = 'RPCReq';
-let RPC_RESP = 'RPCResp';
+// All out-coming JSONs have the following structure (opt = optional field)
+// {
+//   uuid
+//   msgType
+//   resourceType
+//   operation
+//   resourceIds (opt)
+//   data (opt)
+// }
+// All in-coming JSONs have the following structure (opt = optional field)
+// {
+//   uuid (opt, not used in push messages)
+//   msgType
+//   result
+//   data (opt)
+// }
 
-
-//let PULL_RESULT = "result";
-//let MSG_TYPE_PUSH_UPDATED = "pushUpdated";
-//let MSG_TYPE_PUSH_DELETED = "pushDeleted";
+// Message types, identified by `msgType` key
+let TYPE_MODEL_REQ = 'modelReq';
+let TYPE_MODEL_RESP = 'modelResp';
+let TYPE_MODEL_UPD_PUSH = 'modelPushUpdated';
+let TYPE_MODEL_DEL_PUSH = 'modelPushDeleted';
+let TYPE_RPC_REQ = 'RPCReq';
+let TYPE_RPC_RESP = 'RPCResp';
+// Operations on model, identified by `operation` key
+let OP_FIND = 'find';
+let OP_FIND_ALL = 'findAll';
+let OP_FIND_QUERY = 'findQuery';
+let OP_FIND_MANY = 'findMany';
+let OP_FIND_HAS_MANY = 'findHasMany';
+let OP_FIND_BELONGS_TO = 'findBelongsTo';
+let OP_CREATE_RECORD = 'createRecord';
+let OP_UPDATE_RECORD = 'updateRecord';
+let OP_DELETE_RECORD = 'deleteRecord';
+// Operation results, identified by `result` key
+let RESULT_OK = 'ok';
+let RESULT_ERROR = 'error';
 
 export default DS.RESTAdapter.extend({
   initialized: false,
@@ -68,11 +90,10 @@ export default DS.RESTAdapter.extend({
       let adapter = this;
 
       let protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-      //let querystring = window.location.pathname + window.location.search;
       let host = window.location.hostname;
       let port = window.location.port;
 
-      let url = protocol + host + (port === '' ? '' : ':' + port) + '/ws/'; // + querystring;
+      let url = protocol + host + (port === '' ? '' : ':' + port) + WS_ENDPOINT;
       console.log('Connecting: ' + url);
 
       if (adapter.socket === null) {
@@ -113,64 +134,64 @@ export default DS.RESTAdapter.extend({
 
   /** Called when ember store wants to find a record */
   find(store, type, id, record) {
-    this.logToConsole(FIND, [store, type, id, record]);
-    return this.asyncRequest(FIND, type.modelName, id);
+    this.logToConsole(OP_FIND, [store, type, id, record]);
+    return this.asyncRequest(OP_FIND, type.modelName, id);
   },
 
   /** Called when ember store wants to find all records of a type */
   findAll(store, type, sinceToken) {
-    this.logToConsole(FIND_ALL, [store, type, sinceToken]);
-    return this.asyncRequest(FIND_ALL, type.modelName, null, sinceToken);
+    this.logToConsole(OP_FIND_ALL, [store, type, sinceToken]);
+    return this.asyncRequest(OP_FIND_ALL, type.modelName, null, sinceToken);
   },
 
   /** Called when ember store wants to find all records that match a query */
   findQuery(store, type, query) {
-    this.logToConsole(FIND_QUERY, [store, type, query]);
-    return this.asyncRequest(FIND_QUERY, type.modelName, null, query);
+    this.logToConsole(OP_FIND_QUERY, [store, type, query]);
+    return this.asyncRequest(OP_FIND_QUERY, type.modelName, null, query);
   },
 
   /** Called when ember store wants to find multiple records by id */
   findMany(store, type, ids, records) {
-    this.logToConsole(FIND_MANY, [store, type, ids, records]);
-    return this.asyncRequest(FIND_MANY, type.modelName, null, ids);
+    this.logToConsole(OP_FIND_MANY, [store, type, ids, records]);
+    return this.asyncRequest(OP_FIND_MANY, type.modelName, null, ids);
   },
 
   /** @todo is this needed? **/
   findHasMany(store, record, url, relationship) {
-    this.logToConsole(FIND_HAS_MANY, [store, record, url, relationship]);
+    this.logToConsole(OP_FIND_HAS_MANY, [store, record, url, relationship]);
     return 'not_implemented';
   },
 
   /** @todo is this needed? */
   findBelongsTo(store, record, url, relationship) {
-    this.logToConsole(FIND_BELONGS_TO, [store, record, url, relationship]);
+    this.logToConsole(OP_FIND_BELONGS_TO, [store, record, url, relationship]);
     return 'not_implemented';
   },
 
   /** Called when ember store wants to create a record */
   createRecord(store, type, record) {
-    this.logToConsole(CREATE_RECORD, [store, type, record]);
+    this.logToConsole(OP_CREATE_RECORD, [store, type, record]);
     let data = {};
     let serializer = store.serializerFor(type.modelName);
     serializer.serializeIntoHash(data, type, record, {includeId: true});
-    return this.asyncRequest(CREATE_RECORD, type.modelName, null, data);
+    return this.asyncRequest(OP_CREATE_RECORD, type.modelName, null, data);
   },
 
   /** Called when ember store wants to update a record */
   updateRecord(store, type, record) {
-    this.logToConsole(UPDATE_RECORD, [store, type, record]);
+    this.logToConsole(OP_UPDATE_RECORD, [store, type, record]);
     let data = {};
     let serializer = store.serializerFor(type.modelName);
     serializer.serializeIntoHash(data, type, record, {includeId: true});
     let id = Ember.get(record, 'id');
-    return this.asyncRequest(UPDATE_RECORD, type.modelName, id, data);
+    return this.asyncRequest(OP_UPDATE_RECORD, type.modelName, id, data);
   },
 
   /** Called when ember store wants to delete a record */
   deleteRecord(store, type, record) {
-    this.logToConsole(DELETE_RECORD, [store, type, record]);
+    this.logToConsole(OP_DELETE_RECORD, [store, type, record]);
     let id = Ember.get(record, 'id');
-    return this.asyncRequest(DELETE_RECORD, type.modelName, id);
+    return this.asyncRequest(OP_DELETE_RECORD, type.modelName, id);
   },
 
   /** @todo is this needed? */
@@ -194,7 +215,7 @@ export default DS.RESTAdapter.extend({
   RPC(type, operation, data) {
     this.logToConsole('RPC', [type, operation, data]);
     let payload = {
-      msgType: RPC_REQ,
+      msgType: TYPE_RPC_REQ,
       resourceType: type,
       operation: operation,
       data: data
@@ -219,7 +240,7 @@ export default DS.RESTAdapter.extend({
       data = null;
     }
     let payload = {
-      msgType: FETCH_REQ,
+      msgType: TYPE_MODEL_REQ,
       resourceType: type,
       operation: operation,
       resourceIds: ids,
@@ -274,10 +295,10 @@ export default DS.RESTAdapter.extend({
    */
   transformRequest(json, type, operation) {
     switch (operation) {
-      case UPDATE_RECORD:
+      case OP_UPDATE_RECORD:
         return json[type];
 
-      case CREATE_RECORD:
+      case OP_CREATE_RECORD:
         return json[type];
 
       default:
@@ -292,23 +313,23 @@ export default DS.RESTAdapter.extend({
   transformResponse(json, type, operation) {
     let result = {};
     switch (operation) {
-      case FIND:
+      case OP_FIND:
         result[type] = json;
         return result;
 
-      case FIND_ALL:
+      case OP_FIND_ALL:
         result[type] = json;
         return result;
 
-      case FIND_QUERY:
+      case OP_FIND_QUERY:
         result[type] = json;
         return result;
 
-      case FIND_MANY:
+      case OP_FIND_MANY:
         result[type] = json;
         return result;
 
-      case CREATE_RECORD:
+      case OP_CREATE_RECORD:
         result[type] = json;
         return result;
 
@@ -351,39 +372,43 @@ export default DS.RESTAdapter.extend({
     console.log('received: ' + event.data);
     let json = JSON.parse(event.data);
     // Received a response to data fetch
-    if (json.msgType === FETCH_RESP) {
+    if (json.msgType === TYPE_MODEL_RESP) {
       promise = adapter.promises.get(json.uuid);
-      if (json.result === 'ok') {
+      if (json.result === RESULT_OK) {
         // TODO VFS-1508: sometimes, the callback is undefined - debug
         let transformed_data = adapter.transformResponse(json.data,
           promise.type, promise.operation);
         console.log('FETCH_RESP success: ' + JSON.stringify(transformed_data));
 
         promise.success(transformed_data);
-      } else {
+      } else if (json.result === RESULT_ERROR) {
         console.log('FETCH_RESP error: ' + json.data);
         promise.error(json.data);
+      } else {
+        console.log('Unknown operation result: ' + json.result);
       }
       // TODO @todo implement on generic data type
-      //} else if (json.msgType == MSG_TYPE_PUSH_UPDATED) {
+      //} else if (json.msgType == TYPE_MODEL_UPD_PUSH) {
       //    App.File.store.pushPayload('file', {
       //        file: json.data
       //    })
-      //} else if (json.msgType == MSG_TYPE_PUSH_DELETED) {
+      //} else if (json.msgType == TYPE_MODEL_DEL_PUSH) {
       //    let record_id;
       //    for (record_id in json.data) {
       //        App.File.store.find('file', record_id).then(function (post) {
       //            App.File.store.unloadRecord(post);
       //        });
       //    }
-    } else if (json.msgType === RPC_RESP) {
+    } else if (json.msgType === TYPE_RPC_RESP) {
       promise = adapter.promises.get(json.uuid);
-      if (json.result === 'ok') {
+      if (json.result === RESULT_OK) {
         console.log('RPC_RESP success: ' + JSON.stringify(json.data));
         promise.success(json.data);
-      } else {
+      } else if (json.result === RESULT_ERROR) {
         console.log('RPC_RESP error: ' + JSON.stringify(json.data));
         promise.error(json.data);
+      } else {
+        console.log('Unknown operation result: ' + json.result);
       }
     }
     adapter.promises.delete(json.uuid);
@@ -391,9 +416,7 @@ export default DS.RESTAdapter.extend({
 
   /** WebSocket onerror callback */
   error(event) {
-    let adapter = this;
-    // TODO @todo better error handling
-    // window.alert('WebSocket error, see console for details.');
+    // TODO @todo better error handling, maybe reconnection attempts?
     console.error(`WebSocket connection error, event data: ` + event.data);
 
     let onError = this.get('onErrorCallback');
@@ -401,10 +424,10 @@ export default DS.RESTAdapter.extend({
       onError();
     }
 
-    adapter.promises.forEach(function (promise) {
-      console.log('promise.error -> ' + promise);
-      promise.error();
-    });
-    adapter.promises.clear();
+    //this.promises.forEach(function (promise) {
+    //  console.log('promise.error -> ' + promise);
+    //  promise.error();
+    //});
+    //this.promises.clear();
   }
 });
