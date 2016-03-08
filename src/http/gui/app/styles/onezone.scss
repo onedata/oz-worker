@@ -590,6 +590,8 @@ $search-box-height: 36px;
       @include vendor-prefix(transform, rotate(0));
 
       &.account-add-icon {
+        // add account does not need pulling down...
+        padding-top: 0;
         font-size: 28px;
       }
 
@@ -628,6 +630,7 @@ $search-box-height: 36px;
 
     // TODO: max width to prevent overflow or use table-cell
     .account-label {
+      vertical-align: middle;
       display: table-cell;
       padding-left: 20px;
 
