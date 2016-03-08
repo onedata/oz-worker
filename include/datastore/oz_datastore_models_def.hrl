@@ -28,12 +28,6 @@
     users = [] :: [binary()]
 }).
 
--record(user_subscription, {
-    user :: binary(),
-    provider :: binary(),
-    expires :: pos_integer()
-}).
-
 %% Records of this type store a macaroons secret
 -record(onedata_auth, {
     secret :: binary(),

@@ -43,17 +43,17 @@ push(ID, PushFun) ->
 %%--------------------------------------------------------------------
 put(ID, PushFun, Message) ->
     Now = erlang:system_time(),
-    TimerTTL = application:get_env(?APP_Name, subscription_batch_ttl, 2000),
+    TimerTTL = batch_ttl(),
     TimerExpires = Now + TimerTTL,
 
-    ?info("Putting ~p", [[ID, Message, Now, TimerTTL, PushFun]]),
     worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
         (undefined) ->
             TRef = setup_timer(ID, PushFun),
             #outbox{buffer = [Message],
                 timer = TRef, timer_expires = TimerExpires};
         (Outbox = #outbox{buffer = Buffer, timer = OldTimer, timer_expires =
-        OldExpires}) when OldTimer =:= undefined; OldExpires < Now ->
+        % timer expires after twice the ttl
+        OldExpires}) when OldTimer =:= undefined; OldExpires < (Now - TimerTTL) ->
             TRef = setup_timer(ID, PushFun),
             Outbox#outbox{buffer = [Message | Buffer],
                 timer = TRef, timer_expires = TimerExpires};
@@ -72,6 +72,9 @@ put(ID, PushFun, Message) ->
 %% @end
 %%--------------------------------------------------------------------
 setup_timer(ID, PushFun) ->
-    TTL = application:get_env(?APP_Name, subscriptions_buffer_millis, 1000),
-    {ok, TRef} = timer:apply_after(TTL, ?MODULE, push, [ID, PushFun]),
+    {ok, TRef} = timer:apply_after(batch_ttl(), ?MODULE, push, [ID, PushFun]),
     TRef.
+
+batch_ttl() ->
+    {ok, TTL} = application:get_env(?APP_Name, subscription_batch_ttl),
+    TTL.

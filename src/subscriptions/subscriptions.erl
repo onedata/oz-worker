@@ -82,12 +82,8 @@ update_missing_seq(ProviderID, ResumeAt, Missing) ->
         resume_at = ResumeAt
     }} end).
 
-subscribed(ProviderID, Seq) ->
-    {ok, #document{value = #provider_subscription{
-        missing = Missing,
-        resume_at = ResumeAt
-    }}} = provider_subscription:get(ProviderID),
-
+subscribed(Subscription, Seq) ->
+    #provider_subscription{missing = Missing, resume_at = ResumeAt} = Subscription,
     case Seq > ResumeAt of
         true -> true;
         false -> lists:member(Seq, Missing)

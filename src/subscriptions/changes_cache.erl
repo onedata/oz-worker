@@ -17,8 +17,6 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(KEY, cache).
-
 -export([put/3, slice/2, newest_seq/0, oldest_seq/0, ensure_initialised/0]).
 
 %%--------------------------------------------------------------------
@@ -35,8 +33,9 @@ ensure_initialised() ->
             value = #subscriptions_state{cache = gb_trees:empty()}
         })
     catch
-        E:R -> ?info("State not created (may be already present) ~p:~p", [E, R])
-    end.
+        error:{badmatch, {error, already_exists}} -> ok;
+        E:R -> ?info("State not created  ~p:~p", [E, R])
+end.
 
 
 %%--------------------------------------------------------------------
@@ -84,7 +83,8 @@ slice(From, To) ->
 %%--------------------------------------------------------------------
 
 size_limit() ->
-    application:get_env(?APP_Name, subscription_cache_size, 100).
+    {ok, Limit} = application:get_env(?APP_Name, subscription_cache_size),
+    Limit.
 
 
 %%--------------------------------------------------------------------

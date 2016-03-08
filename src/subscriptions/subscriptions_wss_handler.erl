@@ -14,14 +14,11 @@
 
 -include("registered_names.hrl").
 -include("subscriptions/subscriptions.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% Cowboy WebSocket handler callbacks
--export([init/3,
-    websocket_init/3,
-    websocket_handle/3,
-    websocket_info/3,
-    websocket_terminate/3]).
+-export([init/3, websocket_init/3, websocket_handle/3, websocket_info/3, websocket_terminate/3]).
 
 -record(state, {provider}).
 
@@ -84,17 +81,7 @@ websocket_init(_TransportName, Req, _Opts) ->
     OutFrame :: cowboy_websocket:frame().
 websocket_handle({binary, Data}, Req, State) ->
     ?info("Received ~p", [Data]),
-
-    JSON = json_utils:decode(Data),
-    ResumeAt = proplists:get_value(<<"resume_at">>, JSON),
-    Missing = proplists:get_value(<<"missing">>, JSON),
-    Users = proplists:get_value(<<"users">>, JSON),
-
-    ProviderID = get_provider(Req),
-    worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME,
-        {update_missing_seq, ProviderID, ResumeAt, Missing}),
-    worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME,
-        {update_users, ProviderID, Users}),
+    update_subscription(Data, Req),
     {ok, Req, State};
 
 websocket_handle(_InFrame, Req, State) ->
@@ -137,7 +124,24 @@ websocket_terminate(_Reason, _Req, _State) ->
     worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME, {remove_connection, Provider, self()}),
     ok.
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
 get_provider(Req) ->
     {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
     {ok, Provider} = zone_ca:verify_provider(PeerCert), % todo fix
     Provider.
+
+update_subscription(Data, Req) ->
+    JSON = json_utils:decode(Data),
+    ResumeAt = proplists:get_value(<<"resume_at">>, JSON),
+    Missing = proplists:get_value(<<"missing">>, JSON),
+    Users = proplists:get_value(<<"users">>, JSON),
+
+    ProviderID = get_provider(Req),
+
+    worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME,
+        {update_missing_seq, ProviderID, ResumeAt, Missing}),
+    worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME,
+        {update_users, ProviderID, Users}).

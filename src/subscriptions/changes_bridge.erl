@@ -117,7 +117,7 @@ handle_cast(start_changes_stream, State) ->
     catch E:R ->
         ?info("Changes stream failed to start ~p:~p", [E, R]),
         {ok, Timeout} = application:get_env(?APP_Name,
-            changes_stream_restart_delay_seconds, 20),
+            changes_stream_restart_delay_seconds),
         timer:sleep(timer:seconds(Timeout)),
         {stop, changes_stream_not_available, State}
     end;
@@ -233,8 +233,7 @@ register_name_or_exit() ->
 
 -spec await_for_name_possibly_free() -> no_return().
 await_for_name_possibly_free() ->
-    AwaitLimit = application:get_env(?APP_Name,
-        changes_bridge_name_await_seconds, 300),
+    {ok, Limit} = application:get_env(?APP_Name, changes_bridge_name_await_seconds),
 
     case global:whereis_name(?MODULE) of
         undefined ->
@@ -246,7 +245,7 @@ await_for_name_possibly_free() ->
                 {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
                     ?info("Detected leader failure")
             after
-                timer:seconds(AwaitLimit) ->
+                timer:seconds(Limit) ->
                     ?info("Scheduled takeover")
             end
     end.

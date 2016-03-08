@@ -19,7 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% worker_plugin_behaviour callbacks
--export([init/1, handle/1, cleanup/0, push_via_wss/2]).
+-export([init/1, handle/1, cleanup/0, push_messages/2]).
 
 
 %%%===================================================================
@@ -115,12 +115,15 @@ fetch_from_db(From, To, Filter) ->
         end, From, To)
     end).
 
-push_via_wss(ProviderID, Messages) ->
-    {ok, #document{value = #provider_subscription{connections = [Conn | _]}}}
+push_messages(ProviderID, Messages) ->
+    {ok, #document{value = #provider_subscription{connections = Conns}}}
         = subscriptions:subscription(ProviderID),
-    Encoded = json_utils:encode({array, Messages}),
-    ?info("Pushing ~p ~p", [Conn, Encoded]),
-    Conn ! {push, Encoded}.
+    case Conns of
+        [Conn | _] -> Encoded = json_utils:encode({array, Messages}),
+            ?info("Pushing ~p ~p ~p", [ProviderID, Conn, Encoded]),
+            Conn ! {push, Encoded};
+        [] -> ?info("No connection ~p ~p", [ProviderID, Messages])
+    end.
 
 handle_change(Seq, Doc, Type, Filter) ->
     Message = translator:get_msg(Seq, Doc, Type),
@@ -131,12 +134,16 @@ handle_change(Seq, Doc, Type, Filter) ->
     ProvidersSet = sets:from_list(Providers),
 
     lists:foreach(fun(#document{value = Subscription}) ->
-        ProviderID = Subscription#provider_subscription.provider,
-        MessageToSend = case sets:is_element(ProviderID, ProvidersSet) of
-            true -> Message;
-            false -> IgnoreMessage
-        end,
-        outbox:put(ProviderID, fun push_via_wss/2, MessageToSend)
+        case subscriptions:subscribed(Subscription, Seq) of
+            false -> ok;
+            true ->
+                ProviderID = Subscription#provider_subscription.provider,
+                MessageToSend = case sets:is_element(ProviderID, ProvidersSet) of
+                    true -> Message;
+                    false -> IgnoreMessage
+                end,
+                outbox:put(ProviderID, fun push_messages/2, MessageToSend)
+        end
     end, Subscriptions).
 
 -spec last_seq() -> non_neg_integer().
