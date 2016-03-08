@@ -15,6 +15,12 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 
+%% Stores CA dedicated node
+%% todo: implement distributed CA properly (connected with VFS-1499)
+-record(ozpca_state, {
+    dedicated_node :: {ok, node()} | {error, Reason :: term()}
+}).
+
 %% Records of this type store a macaroons secret
 -record(onedata_auth, {
     secret :: binary(),

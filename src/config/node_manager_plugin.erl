@@ -75,7 +75,7 @@ listeners() -> node_manager:cluster_worker_listeners() ++ [
 %%--------------------------------------------------------------------
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() -> node_manager:cluster_worker_modules() ++ [
-    {zone_ca_worker, []}
+    {ozpca_worker, []}
 ].
 
 %%--------------------------------------------------------------------
