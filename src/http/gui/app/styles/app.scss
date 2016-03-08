@@ -221,14 +221,14 @@ input {
 // TODO: move to separate file
 
 $dropdown-radius: 6px;
-$dropdown-triangle-width: 20px;
+$dropdown-triangle-width: 8px;
 
 .dropdown-menu {
   position: absolute;
   padding: 15px;
   background-color: $color-dropdown-menu-bg;
   border-radius: $dropdown-radius !important;
-  border-color: transparent;
+  border: none;
 
   &.dropdown-menu-down {
     left: auto;

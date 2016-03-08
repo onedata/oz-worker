@@ -109,7 +109,8 @@ export default {
     sidebar: {
       connectHead: 'connect your accounts',
       manageSpacesHead: 'manage data spaces',
-      filesHead: 'go to your files'
+      filesHead: 'go to your files',
+      tokensHead: 'client tokens'
     },
     topBar: {
       manageProviders: 'manage providers',
@@ -134,6 +135,11 @@ export default {
       noProviders: 'No providers, get support first.'
     },
     providersAccordionItem: {
-    }
+    },
+    tokensAccordion: {
+      createNewToken: 'Create new client token'
+    },
+    tokensAccordionItem: {
+    },
   }
 };
