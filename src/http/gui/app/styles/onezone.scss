@@ -386,12 +386,27 @@ $search-box-height: 36px;
       width: 32px;
       line-height: $spaces-item-height;
       cursor: pointer; cursor: hand;
+
+      // not hovered - invisible
+      color: transparent;
     }
     .trash-button {
       display: table-cell;
       width: 32px;
       line-height: $spaces-item-height;
       cursor: pointer; cursor: hand;
+
+      // not hovered - invisible
+      color: transparent;
+    }
+
+    &:hover {
+      .select-button {
+        color: white;
+      }
+      .trash-button {
+        color: white;
+      }
     }
   }
 
