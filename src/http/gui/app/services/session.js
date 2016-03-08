@@ -8,7 +8,9 @@ export default SessionService.extend({
   sessionInitReject: null,
   sessionRestoreResolve: null,
   sessionRestoreReject: null,
+
   sessionValid: null,
+  sessionDetails: null,
 
   /** Returns a promise that will be resolved when the client has resolved
    * if it has session using WebSocket.
@@ -72,7 +74,7 @@ export default SessionService.extend({
       console.log("RESOLVE SESSION REQ");
       console.log('data: ' + JSON.stringify(data));
       if (data.sessionValid === true) {
-        this.get('session').set('opData', data);
+        this.set('sessionDetails', data.sessionDetails);
         let sessionRestoreResolveFun = this.get('sessionRestoreResolve');
         if (sessionRestoreResolveFun) {
           console.log("SESSION VALID, RESTORED");
@@ -85,6 +87,7 @@ export default SessionService.extend({
         console.log("SESSION INVALID");
         let sessionRestoreRejectFun = this.get('sessionRestoreReject');
         if (sessionRestoreRejectFun) {
+          console.log("RESTORE REJECTED");
           sessionRestoreRejectFun();
         }
       }

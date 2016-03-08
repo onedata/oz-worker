@@ -4,7 +4,6 @@ import ApplicationRouteMixin from 'ember-simple-auth/mixins/application-route-mi
 //let ApplicationRoute = Ember.Route.extend(ApplicationRouteMixin);
 
 export default Ember.Route.extend(ApplicationRouteMixin, {
-  server: Ember.inject.service('server'),
   session: Ember.inject.service('session'),
 
   activate() {
@@ -20,9 +19,9 @@ export default Ember.Route.extend(ApplicationRouteMixin, {
   initSession: function () {
     // @todo This returns a promise. We should display a loading page here
     // and transition to proper page on promise resolve.
-    this.get('server').initWebSocketAndSession().then(
+    this.get('session').initSession().then(
       () => {
-        console.log('initWebSocketAndSession resolved');
+        console.log('initSession resolved');
       }
     );
   }.on('init')

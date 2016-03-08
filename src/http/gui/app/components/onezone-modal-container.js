@@ -7,9 +7,9 @@ export default Ember.Component.extend({
   providers: null,
 
   isFirstLogin: function() {
-    let sessionDetails = this.get('session').get('opData').sessionDetails;
+    let sessionDetails = this.get('session').get('sessionDetails');
     return sessionDetails && sessionDetails.firstLogin;
-  }.property('session.opData'),
+  }.property('session.sessionDetails'),
 
   /** If true, show "none providers" modal */
   modalNoneProviders: function() {

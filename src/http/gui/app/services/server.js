@@ -16,33 +16,27 @@ export default Ember.Service.extend({
   }.property(),
 
   /**
-   * Returns a promise that will be resolved only when a websocket connection
-   * is successfully created and the server responds with session details.
-   * When this is called in application router init, it ensures that
-   * WS connection and session are active before the page renders
+   * Forces the WebSocket adapter to initialize a WebSocket connection.
+   * Can register onOpen, onError callbacks that will be called after
+   * the connection is established or refused.
    */
-  initWebSocketAndSession: function () {
-    return this.get('adapter').initWebSocketAndSession();
-  },
-
   initializeWebSocket: function (onOpen, onError) {
-    return this.get('adapter').initializeWebSocket(onOpen, onError);
+    this.get('adapter').initializeWebSocket(onOpen, onError);
   },
 
-
-  tryToRestoreSession: function () {
-    return this.get('adapter').tryToRestoreSession();
-  },
-
+  /**
+   * Sends a RPC call via WebSocket asking for session data, i.e. if the session
+   * is valid and session details such as user name.
+   * Returns a promise that will be called with received data.
+   */
   sessionRPC: function () {
     return this.get('adapter').RPC('session', 'get');
   },
 
   /**
    * Sends an RPC call to the server for a publicly available resource.
-   * onSuccess is evaluated on response from the server.
+   * Returns a promise that will be called with received data.
    */
-
   publicRPC: function (operation, data) {
     return this.get('adapter').RPC('public', operation, data);
   },
@@ -50,7 +44,7 @@ export default Ember.Service.extend({
   /**
    * Sends an RPC call to the server for a resource that is restricted to
    * logged in clients.
-   * onSuccess is evaluated on response from the server.
+   * Returns a promise that will be called with received data.
    */
   privateRPC: function (operation, data) {
     return this.get('adapter').RPC('private', operation, data);

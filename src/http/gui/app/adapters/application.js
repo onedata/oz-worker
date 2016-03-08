@@ -13,25 +13,25 @@ import DS from 'ember-data';
 
 // Interface between WebSocket Adapter client and server. Corresponding
 // interface is located in gui_ws_handler.erl.
-var FIND = 'find';
-var FIND_ALL = 'findAll';
-var FIND_QUERY = 'findQuery';
-var FIND_MANY = 'findMany';
-var FIND_HAS_MANY = 'findHasMany';
-var FIND_BELONGS_TO = 'findBelongsTo';
-var CREATE_RECORD = 'createRecord';
-var UPDATE_RECORD = 'updateRecord';
-var DELETE_RECORD = 'deleteRecord';
-var PULL_RESP = 'pullResp';
-var PULL_REQ = 'pullReq';
+let FIND = 'find';
+let FIND_ALL = 'findAll';
+let FIND_QUERY = 'findQuery';
+let FIND_MANY = 'findMany';
+let FIND_HAS_MANY = 'findHasMany';
+let FIND_BELONGS_TO = 'findBelongsTo';
+let CREATE_RECORD = 'createRecord';
+let UPDATE_RECORD = 'updateRecord';
+let DELETE_RECORD = 'deleteRecord';
+let FETCH_RESP = 'fetchResp';
+let FETCH_REQ = 'fetchReq';
 
-var RPC_REQ = 'RPCReq';
-var RPC_RESP = 'RPCResp';
+let RPC_REQ = 'RPCReq';
+let RPC_RESP = 'RPCResp';
 
 
-//var PULL_RESULT = "result";
-//var MSG_TYPE_PUSH_UPDATED = "pushUpdated";
-//var MSG_TYPE_PUSH_DELETED = "pushDeleted";
+//let PULL_RESULT = "result";
+//let MSG_TYPE_PUSH_UPDATED = "pushUpdated";
+//let MSG_TYPE_PUSH_DELETED = "pushDeleted";
 
 export default DS.RESTAdapter.extend({
   initialized: false,
@@ -45,29 +45,66 @@ export default DS.RESTAdapter.extend({
   // Queue of messages before the socket is open
   beforeOpenQueue: [],
 
+  /** -------------------------------------------------------------------
+   * WebSocket initialization
+   * ------------------------------------------------------------------- */
+
   /** Called automatically on adapter init. */
-  init: function () {
+  init() {
     this.initializeWebSocket();
   },
 
-  /** If this is called, session data from websocket will resolve session
-   * restoration rather than run authenticate. */
-  initWebSocketAndSession: function () {
-    this.initializeWebSocket();
-    return new Ember.RSVP.Promise((resolve, reject) => {
-      // This promise will be resolved when WS connection is established
-      // and session details are sent via WS.
-      this.set('sessionInitResolve', resolve);
-      this.set('sessionInitReject', reject);
-    });
+  /** Initializes the WebSocket */
+  initializeWebSocket(onOpen, onError) {
+    // Register callbacks even if WebSocket is already being initialized.
+    if (onOpen) {
+      this.set('onOpenCallback', onOpen);
+    }
+    if (onError) {
+      this.set('onErrorCallback', onError);
+    }
+    if (this.get('initialized') === false) {
+      this.set('initialized', true);
+      let adapter = this;
+
+      let protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      //let querystring = window.location.pathname + window.location.search;
+      let host = window.location.hostname;
+      let port = window.location.port;
+
+      let url = protocol + host + (port === '' ? '' : ':' + port) + '/ws/'; // + querystring;
+      console.log('Connecting: ' + url);
+
+      if (adapter.socket === null) {
+        adapter.socket = new WebSocket(url);
+        adapter.socket.onopen = function (event) {
+          adapter.open.apply(adapter, [event]);
+        };
+        adapter.socket.onmessage = function (event) {
+          adapter.receive.apply(adapter, [event]);
+        };
+        adapter.socket.onerror = function (event) {
+          adapter.error.apply(adapter, [event]);
+        };
+      }
+    }
   },
 
+  /** -------------------------------------------------------------------
+   * Adapter API
+   * ------------------------------------------------------------------- */
+
+  /** Indicates if consecutive calls to findAll should use cached records or
+   * fetch all again. */
+  shouldReloadAll() {
+    return true;
+  },
 
   /** Developer function - for logging/debugging */
-  logToConsole: function (fun_name, fun_params) {
+  logToConsole(fun_name, fun_params) {
     console.log(fun_name + '(');
     if (fun_params) {
-      for (var i = 0; i < fun_params.length; i++) {
+      for (let i = 0; i < fun_params.length; i++) {
         console.log('    ' + String(fun_params[i]));
       }
     }
@@ -75,78 +112,167 @@ export default DS.RESTAdapter.extend({
   },
 
   /** Called when ember store wants to find a record */
-  find: function (store, type, id, record) {
+  find(store, type, id, record) {
     this.logToConsole(FIND, [store, type, id, record]);
     return this.asyncRequest(FIND, type.modelName, id);
   },
 
   /** Called when ember store wants to find all records of a type */
-  findAll: function (store, type, sinceToken) {
+  findAll(store, type, sinceToken) {
     this.logToConsole(FIND_ALL, [store, type, sinceToken]);
     return this.asyncRequest(FIND_ALL, type.modelName, null, sinceToken);
   },
 
   /** Called when ember store wants to find all records that match a query */
-  findQuery: function (store, type, query) {
+  findQuery(store, type, query) {
     this.logToConsole(FIND_QUERY, [store, type, query]);
     return this.asyncRequest(FIND_QUERY, type.modelName, null, query);
   },
 
   /** Called when ember store wants to find multiple records by id */
-  findMany: function (store, type, ids, records) {
+  findMany(store, type, ids, records) {
     this.logToConsole(FIND_MANY, [store, type, ids, records]);
     return this.asyncRequest(FIND_MANY, type.modelName, null, ids);
   },
 
   /** @todo is this needed? **/
-  findHasMany: function (store, record, url, relationship) {
+  findHasMany(store, record, url, relationship) {
     this.logToConsole(FIND_HAS_MANY, [store, record, url, relationship]);
     return 'not_implemented';
   },
 
   /** @todo is this needed? */
-  findBelongsTo: function (store, record, url, relationship) {
+  findBelongsTo(store, record, url, relationship) {
     this.logToConsole(FIND_BELONGS_TO, [store, record, url, relationship]);
     return 'not_implemented';
   },
 
   /** Called when ember store wants to create a record */
-  createRecord: function (store, type, record) {
+  createRecord(store, type, record) {
     this.logToConsole(CREATE_RECORD, [store, type, record]);
-    var data = {};
-    var serializer = store.serializerFor(type.modelName);
+    let data = {};
+    let serializer = store.serializerFor(type.modelName);
     serializer.serializeIntoHash(data, type, record, {includeId: true});
     return this.asyncRequest(CREATE_RECORD, type.modelName, null, data);
   },
 
   /** Called when ember store wants to update a record */
-  updateRecord: function (store, type, record) {
+  updateRecord(store, type, record) {
     this.logToConsole(UPDATE_RECORD, [store, type, record]);
-    var data = {};
-    var serializer = store.serializerFor(type.modelName);
+    let data = {};
+    let serializer = store.serializerFor(type.modelName);
     serializer.serializeIntoHash(data, type, record, {includeId: true});
-    var id = Ember.get(record, 'id');
+    let id = Ember.get(record, 'id');
     return this.asyncRequest(UPDATE_RECORD, type.modelName, id, data);
   },
 
   /** Called when ember store wants to delete a record */
-  deleteRecord: function (store, type, record) {
+  deleteRecord(store, type, record) {
     this.logToConsole(DELETE_RECORD, [store, type, record]);
-    var id = Ember.get(record, 'id');
+    let id = Ember.get(record, 'id');
     return this.asyncRequest(DELETE_RECORD, type.modelName, id);
   },
 
   /** @todo is this needed? */
-  groupRecordsForFindMany: function (store, records) {
+  groupRecordsForFindMany(store, records) {
     this.logToConsole('groupRecordsForFindMany', [store, records]);
     return [records];
   },
 
+  /** -------------------------------------------------------------------
+   * RPC API
+   * ------------------------------------------------------------------- */
+
+  /**
+   * Calls back to the server. Useful for getting information like
+   * user name etc. from the server or performing some operations that
+   * are not model-based.
+   * @param {string} type - identifier of resource, e.g. 'public' for public RPC
+   * @param {string} operation - function identifier
+   * @param {object} data - json data
+   */
+  RPC(type, operation, data) {
+    this.logToConsole('RPC', [type, operation, data]);
+    let payload = {
+      msgType: RPC_REQ,
+      resourceType: type,
+      operation: operation,
+      data: data
+    };
+    return this.sendAndRegisterPromise(operation, type, payload);
+  },
+
+  /** -------------------------------------------------------------------
+   * Internal functions
+   * ------------------------------------------------------------------- */
+
+  /**
+   * Performs an sync request to server side and stores a handle to the
+   * promise, which will be resolved in receive function.
+   */
+  asyncRequest(operation, type, ids, data) {
+    this.logToConsole('asyncRequest', [operation, type, ids, data]);
+    if (!ids) {
+      ids = null;
+    }
+    if (!data) {
+      data = null;
+    }
+    let payload = {
+      msgType: FETCH_REQ,
+      resourceType: type,
+      operation: operation,
+      resourceIds: ids,
+      data: this.transformRequest(data, type, operation)
+    };
+    return this.sendAndRegisterPromise(operation, type, payload);
+  },
+
+  /**
+   * Sends a payload (JSON) via WebSocket, previously adding a randomly
+   * generated UUID to it and registers a promise
+   * (which can later be retrieved by the UUID).
+   */
+  sendAndRegisterPromise(operation, type, payload) {
+    // Add UUID to payload so we can later connect the response with a promise
+    // (the server will include this uuid in the response)
+    let uuid = this.generateUuid();
+    payload.uuid = uuid;
+    let adapter = this;
+    return new Ember.RSVP.Promise(function (resolve, reject) {
+      let success = function (json) {
+        Ember.run(null, resolve, json);
+      };
+      let error = function (json) {
+        Ember.run(null, reject, json);
+      };
+      adapter.promises.set(uuid, {
+        success: success,
+        error: error,
+        type: type,
+        operation: operation
+      });
+      console.log('registerPromise: ' + JSON.stringify(payload));
+      adapter.send(payload);
+    });
+  },
+
+  /** Generates a random uuid */
+  generateUuid() {
+    let date = new Date().getTime();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,
+      function (character) {
+        let random = (date + Math.random() * 16) % 16 | 0;
+        date = Math.floor(date / 16);
+        return (character === 'x' ? random : (random & 0x7 | 0x8)).toString(16);
+      });
+  },
+
   /**
    * Used to transform some types of requests, because they carry different
-   * information.
+   * information than Ember assumes.
    */
-  transformRequest: function (json, type, operation) {
+  transformRequest(json, type, operation) {
     switch (operation) {
       case UPDATE_RECORD:
         return json[type];
@@ -160,11 +286,11 @@ export default DS.RESTAdapter.extend({
   },
 
   /**
-   * Transform response received from WebScoket to the format expected
-   * by ember.
+   * Transform response received from WebSocket to the format expected
+   * by Ember.
    */
-  transformResponse: function (json, type, operation) {
-    var result = {};
+  transformResponse(json, type, operation) {
+    let result = {};
     switch (operation) {
       case FIND:
         result[type] = json;
@@ -191,136 +317,52 @@ export default DS.RESTAdapter.extend({
     }
   },
 
-  /**
-   * Performs an sync request to server side and stores a handle to the
-   * promise, which will be resolved in message function.
-   */
-  asyncRequest: function (operation, type, ids, data) {
-    var adapter = this;
-    adapter.logToConsole('asyncRequest', [operation, type, ids, data]);
-    var uuid = adapter.generateUuid();
-    if (!ids) {
-      ids = null;
-    }
-    if (!data) {
-      data = null;
-    }
-
-    return new Ember.RSVP.Promise(function (resolve, reject) {
-      var success = function (json) {
-        Ember.run(null, resolve, json);
-      };
-      var error = function (json) {
-        Ember.run(null, reject, json);
-      };
-      adapter.promises.set(uuid, {
-        success: success,
-        error: error,
-        type: type,
-        operation: operation
-      });
-
-      var payload = {
-        msgType: PULL_REQ,
-        uuid: uuid,
-        resourceType: type,
-        operation: operation,
-        resourceIds: ids,
-        data: adapter.transformRequest(data, type, operation)
-      };
-
-      console.log('JSON payload: ' + JSON.stringify(payload));
-      if (adapter.socket.readyState === 1) {
-        adapter.socket.send(JSON.stringify(payload));
-      }
-      else {
-        adapter.beforeOpenQueue.push(payload);
-      }
-    });
-  },
-
-  /** Generates a random uuid */
-  generateUuid: function () {
-    var date = new Date().getTime();
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (character) {
-      var random = (date + Math.random() * 16) % 16 | 0;
-      date = Math.floor(date / 16);
-      return (character === 'x' ? random : (random & 0x7 | 0x8)).toString(16);
-    });
-  },
-
-  /** Initializes the WebSocket */
-  initializeWebSocket: function (onOpen, onError) {
-    // Register callbacks even if WebScoket is already being initialized.
-    if (onOpen) {
-      this.set('onOpenCallback', onOpen);
-    }
-    if (onError) {
-      this.set('onErrorCallback', onError);
-    }
-    if (this.get('initialized') === false) {
-      this.set('initialized', true);
-      var adapter = this;
-
-      var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-      //var querystring = window.location.pathname + window.location.search;
-      var host = window.location.hostname;
-      var port = window.location.port;
-
-      var url = protocol + host + (port === '' ? '' : ':' + port) + '/ws/'; // + querystring;
-      console.log('Connecting: ' + url);
-
-      if (adapter.socket === null) {
-        adapter.socket = new WebSocket(url);
-        adapter.socket.onopen = function (event) {
-          adapter.open.apply(adapter, [event]);
-        };
-        adapter.socket.onmessage = function (event) {
-          adapter.message.apply(adapter, [event]);
-        };
-        adapter.socket.onerror = function (event) {
-          adapter.error.apply(adapter, [event]);
-        };
-      }
-    }
-  },
-
-  /** WebScoket onopen callback */
-  open: function () {
-    var adapter = this;
-
+  /** WebSocket onopen callback */
+  open() {
     let onOpen = this.get('onOpenCallback');
     if (onOpen) {
       onOpen();
     }
-
-    if (adapter.beforeOpenQueue.length > 0) {
-      adapter.beforeOpenQueue.forEach(function (payload) {
-        adapter.socket.send(JSON.stringify(payload));
+    // Send messages waiting in queue
+    if (this.beforeOpenQueue.length > 0) {
+      this.beforeOpenQueue.forEach(function (payload) {
+        this.socket.send(JSON.stringify(payload));
       });
-      adapter.beforeOpenQueue = [];
+      this.beforeOpenQueue = [];
     }
   },
 
-  /** WebScoket onmessage callback, resolves promises with received replies. */
-  message: function (event) {
-    var adapter = this;
-    var promise;
-    console.log('received: ' + event.data);
-    var json = JSON.parse(event.data);
-    if (json.msgType === PULL_RESP) {
-      if (json.result === 'ok') {
-        promise = adapter.promises.get(json.uuid);
+  /** Used to send a payload (JSON) through WebSocket. If the WS is not
+   * established yet, it will put the payload in a queue, which will be
+   * sent when connection is on. */
+  send(payload) {
+    if (this.socket.readyState === 1) {
+      this.socket.send(JSON.stringify(payload));
+    }
+    else {
+      this.beforeOpenQueue.push(payload);
+    }
+  },
 
+  /** WebSocket onmessage callback, resolves promises with received replies. */
+  receive(event) {
+    let adapter = this;
+    let promise;
+    console.log('received: ' + event.data);
+    let json = JSON.parse(event.data);
+    // Received a response to data fetch
+    if (json.msgType === FETCH_RESP) {
+      promise = adapter.promises.get(json.uuid);
+      if (json.result === 'ok') {
         // TODO VFS-1508: sometimes, the callback is undefined - debug
-        var transformed_data = adapter.transformResponse(json.data,
+        let transformed_data = adapter.transformResponse(json.data,
           promise.type, promise.operation);
-        console.log('success: ' + JSON.stringify(transformed_data));
+        console.log('FETCH_RESP success: ' + JSON.stringify(transformed_data));
 
         promise.success(transformed_data);
       } else {
-        console.log('error: ' + json.data);
-        adapter.promises.get(json.uuid).error(json.data);
+        console.log('FETCH_RESP error: ' + json.data);
+        promise.error(json.data);
       }
       // TODO @todo implement on generic data type
       //} else if (json.msgType == MSG_TYPE_PUSH_UPDATED) {
@@ -328,7 +370,7 @@ export default DS.RESTAdapter.extend({
       //        file: json.data
       //    })
       //} else if (json.msgType == MSG_TYPE_PUSH_DELETED) {
-      //    var record_id;
+      //    let record_id;
       //    for (record_id in json.data) {
       //        App.File.store.find('file', record_id).then(function (post) {
       //            App.File.store.unloadRecord(post);
@@ -336,14 +378,20 @@ export default DS.RESTAdapter.extend({
       //    }
     } else if (json.msgType === RPC_RESP) {
       promise = adapter.promises.get(json.uuid);
-      promise.success(json.data);
+      if (json.result === 'ok') {
+        console.log('RPC_RESP success: ' + JSON.stringify(json.data));
+        promise.success(json.data);
+      } else {
+        console.log('RPC_RESP error: ' + JSON.stringify(json.data));
+        promise.error(json.data);
+      }
     }
     adapter.promises.delete(json.uuid);
   },
 
   /** WebSocket onerror callback */
-  error: function (event) {
-    var adapter = this;
+  error(event) {
+    let adapter = this;
     // TODO @todo better error handling
     // window.alert('WebSocket error, see console for details.');
     console.error(`WebSocket connection error, event data: ` + event.data);
@@ -358,51 +406,5 @@ export default DS.RESTAdapter.extend({
       promise.error();
     });
     adapter.promises.clear();
-  },
-
-  // TODO: when there is internal server error (eg. operation is invalid), then success is invoked
-  /**
-   * Calls back to the server. Useful for getting information like
-   * user name etc. from the server or performing some operation that
-   * are not model-based.
-   * @param {string} type - an identifier of resource, e.g. 'global' for global data
-   * @param {string} operation - function identifier
-   * @param {object} data - json data
-   */
-  RPC: function (type, operation, data) {
-    var adapter = this;
-    adapter.logToConsole('RPC', [type, operation, data]);
-    var uuid = adapter.generateUuid();
-
-    return new Ember.RSVP.Promise(function (resolve, reject) {
-      var success = function (json) {
-        Ember.run(null, resolve, json);
-      };
-      var error = function (json) {
-        Ember.run(null, reject, json);
-      };
-      adapter.promises.set(uuid, {
-        success: success,
-        error: error,
-        type: type,
-        operation: operation
-      });
-
-      var payload = {
-        msgType: RPC_REQ,
-        uuid: uuid,
-        resourceType: type,
-        operation: operation,
-        data: data
-      };
-
-      console.log('JSON payload: ' + JSON.stringify(payload));
-      if (adapter.socket.readyState === 1) {
-        adapter.socket.send(JSON.stringify(payload));
-      }
-      else {
-        adapter.beforeOpenQueue.push(payload);
-      }
-    });
   }
 });

@@ -6,8 +6,8 @@ export default Ember.Component.extend({
   classNames: ['navbar', 'navbar-onedata'],
 
   userName: function() {
-    return this.get('session.opData.sessionDetails.userName');
-  }.property('session.opData'),
+    return this.get('session.sessionDetails.userName');
+  }.property('session.sessionDetails'),
 
   didInsertElement() {
     let box = $('#navbar');

@@ -2,12 +2,10 @@
 
 import Ember from 'ember';
 
-// see: http://ember-simple-auth.com/api/classes/BaseAuthenticator.html
 import Base from 'ember-simple-auth/authenticators/base';
 
 export default Base.extend({
   session: Ember.inject.service('session'),
-  server: Ember.inject.service('server'),
 
   authenticate(options) {
     console.debug('auth authenticate start ');
@@ -22,14 +20,13 @@ export default Base.extend({
   restore(data) {
     // Inform the websocket adapter that we anticipate session restoring.
     console.debug('auth restore start ');
-    return this.get('server').tryToRestoreSession();
+    return this.get('session').tryToRestoreSession();
   },
 
   invalidate(data) {
     console.debug('auth invalidate start ');
     return new Ember.RSVP.Promise((resolve) => {
-      // TODO
-      this.get('session').set('opData', null);
+      this.get('session').set('sessionDetails', null);
       resolve();
     });
   }
