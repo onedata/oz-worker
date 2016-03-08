@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Michal Zmuda
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @copyright (C): 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -21,35 +21,14 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([space_changes_after_subscription/1,
-    space_changes_before_subscription/1,
-    node_for_subscription_changes/1,
-    subscription_expires_or_is_renewed/1,
-    change_bridge_restarts/1
-]).
-
--define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
--define(COMMUNICATION_WAIT, 500).
--define(ALLOWED_FAILURES, 20).
-
--define(URLS1, [<<"127.0.0.1">>]).
--define(URLS2, [<<"127.0.0.2">>]).
--define(REDIRECTION_POINT1, <<"https://127.0.0.1:443">>).
--define(REDIRECTION_POINT2, <<"https://127.0.0.2:443">>).
--define(CLIENT_NAME1, <<"provider1">>).
--define(CLIENT_NAME2, <<"provider2">>).
--define(USER_NAME1, <<"user1">>).
--define(USER_NAME2, <<"user2">>).
--define(USER_NAME3, <<"user3">>).
+-export([simple_test/1, change_bridge_restarts/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 all() -> ?ALL([
-    change_bridge_restarts, space_changes_after_subscription,
-    space_changes_before_subscription, node_for_subscription_changes,
-    subscription_expires_or_is_renewed
+    change_bridge_restarts, simple_test
 ]).
 
 change_bridge_restarts(_Config) ->
@@ -68,144 +47,15 @@ change_bridge_restarts(_Config) ->
     ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
     ok.
 
-space_changes_after_subscription(Config) ->
-    Nodes = [Node1, _] = ?config(oz_worker_nodes, Config),
-    [Address1, _] = ?config(restAddresses, Config),
-    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
+simple_test(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
 
-    % given
-    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
-    {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
-    First = getFirstSeq(Node1),
+    P1 = create_provider(Node, <<"p1">>, [<<"s1">>]),
+    create_space(Node, <<"s1">>, [P1], [], []),
 
-    % when
-    subscribe(First, <<"endpoint1">>, SubscribeParams1),
-    subscribe(First, <<"endpoint2">>, SubscribeParams2),
-
-    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1]}),
-    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1, ProviderID2]}),
-    SpaceDoc3 = save(Node1, <<"spacekey3">>, #space{name = <<"space3">>, providers = []}),
-    SpaceDoc4 = save(Node1, <<"spacekey4">>, #space{name = <<"space4">>, providers = [ProviderID1, ProviderID2]}),
-    SpaceDoc5 = save(Node1, <<"spacekey5">>, #space{name = <<"space5">>, providers = [ProviderID1], groups = [<<"g1">>, <<"g2">>]}),
-    SpaceDoc6 = save(Node1, <<"spacekey6">>, #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}),
-
-    % then
-    verify_messages(Nodes, <<"endpoint1">>,
-        [SpaceDoc1, SpaceDoc2, SpaceDoc4, SpaceDoc5, SpaceDoc6],
-        [SpaceDoc3],
-        10),
-    verify_messages(Nodes, <<"endpoint2">>,
-        [SpaceDoc2, SpaceDoc4],
-        [SpaceDoc1, SpaceDoc3, SpaceDoc5, SpaceDoc6],
-        10).
-
-space_changes_before_subscription(Config) ->
-    Nodes = [Node1, _] = ?config(oz_worker_nodes, Config),
-    [Address1, _] = ?config(restAddresses, Config),
-    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
-
-    % given
-    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
-    {ProviderID2, SubscribeParams2} = rest_utils:register_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, RegisterParams),
-    First = getFirstSeq(Node1),
-
-    % when
-    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1]}),
-    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1, ProviderID2]}),
-    SpaceDoc3 = save(Node1, <<"spacekey3">>, #space{name = <<"space3">>, providers = []}),
-    SpaceDoc4 = save(Node1, <<"spacekey4">>, #space{name = <<"space4">>, providers = [ProviderID1, ProviderID2]}),
-    SpaceDoc5 = save(Node1, <<"spacekey5">>, #space{name = <<"space5">>, providers = [ProviderID1], groups = [<<"g1">>, <<"g2">>]}),
-    SpaceDoc6 = save(Node1, <<"spacekey6">>, #space{name = <<"space6">>, providers = [ProviderID1], users = [<<"u1">>, <<"u2">>]}),
-
-    subscribe(First, <<"endpoint1">>, SubscribeParams1),
-    subscribe(First, <<"endpoint2">>, SubscribeParams2),
-
-    % then
-    verify_messages(Nodes, <<"endpoint1">>,
-        [SpaceDoc1, SpaceDoc2, SpaceDoc4, SpaceDoc5, SpaceDoc6],
-        [SpaceDoc3],
-        10).
-
-node_for_subscription_changes(Config) ->
-    Nodes = [Node1, Node2] = ?config(oz_worker_nodes, Config),
-    [Address1, Address2] = ?config(restAddresses, Config),
-    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
-
-    % given
-    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
-    SubscribeParams2 = rest_utils:update_req_params(SubscribeParams1, Address2, address),
-
-    % when
-    First = getFirstSeq(Node1),
-    subscribe(First, <<"endpoint1">>, SubscribeParams1),
-    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1], groups = []}),
-
-    await_messages(Nodes, <<"endpoint1">>, SpaceDoc1),
-    Later = getFirstSeq(Node1),
-    subscribe(Later, <<"endpoint1">>, SubscribeParams2),
-    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1], groups = []}),
-
-    % then
-    verify_messages(Nodes, <<"endpoint1">>, [SpaceDoc1, SpaceDoc2], [], 10),
-    ok.
-
-subscription_expires_or_is_renewed(Config) ->
-    Nodes = [Node1, Node2] = ?config(oz_worker_nodes, Config),
-    [Address1, Address2] = ?config(restAddresses, Config),
-    RegisterParams = {Address1, ?CONTENT_TYPE_HEADER, []},
-
-    MostOfTimeout = 8,
-    Timeout = 10,
-    MoreThanTimeout = 12,
-
-    % given
-    set_subscription_timeout(Node1, Timeout),
-    set_subscription_timeout(Node2, Timeout),
-    {ProviderID1, SubscribeParams1} = rest_utils:register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, RegisterParams),
-    SubscribeParams2 = rest_utils:update_req_params(SubscribeParams1, Address2, address),
-
-    % when
-    %% subscribe
-    Seq1 = getFirstSeq(Node1),
-    subscribe(Seq1, <<"endpoint1">>, SubscribeParams1),
-    SpaceDoc1 = save(Node1, <<"spacekey1">>, #space{name = <<"space1">>, providers = [ProviderID1], groups = []}),
-
-    %% let it expire
-    await_messages(Nodes, <<"endpoint1">>, SpaceDoc1),
-    timer:sleep(timer:seconds(MoreThanTimeout)),
-    SpaceDoc2 = save(Node1, <<"spacekey2">>, #space{name = <<"space2">>, providers = [ProviderID1], groups = []}),
-    % change could be reported after next subscription, so we need to sleep
-    % (awaiting is not possible as change isn't to be communicated)
-    timer:sleep(timer:seconds(10)),
-
-    %% subscribe anew
-    Seq3 = getFirstSeq(Node1),
-    subscribe(Seq3, <<"endpoint1">>, SubscribeParams1),
-    SpaceDoc3 = save(Node1, <<"spacekey3">>, #space{name = <<"space3">>, providers = [ProviderID1], groups = []}),
-
-    %% renew before expires
-    timer:sleep(timer:seconds(MostOfTimeout)),
-    Seq4 = getFirstSeq(Node1),
-    subscribe(Seq4, <<"endpoint1">>, SubscribeParams1),
-    SpaceDoc4 = save(Node1, <<"spacekey4">>, #space{name = <<"space4">>, providers = [ProviderID1], groups = []}),
-
-    %% again renew before expires
-    timer:sleep(timer:seconds(MostOfTimeout)),
-    Seq5 = getFirstSeq(Node1),
-    subscribe(Seq5, <<"endpoint1">>, SubscribeParams1),
-    SpaceDoc5 = save(Node1, <<"spacekey5">>, #space{name = <<"space5">>, providers = [ProviderID1], groups = []}),
-
-    %% renew at the other node before expires
-    timer:sleep(timer:seconds(MostOfTimeout)),
-    Seq6 = getFirstSeq(Node1),
-    subscribe(Seq6, <<"endpoint1">>, SubscribeParams2),
-    SpaceDoc6 = save(Node1, <<"spacekey6">>, #space{name = <<"space6">>, providers = [ProviderID1], groups = []}),
-
-    % then
-    verify_messages(Nodes, <<"endpoint1">>,
-        [SpaceDoc1, SpaceDoc3, SpaceDoc4, SpaceDoc5, SpaceDoc6],
-        [SpaceDoc2],
-        10),
+    verify_messages(Node, P1, [
+        [{<<"space">>, [{<<"id">>, <<"s1">>}, {<<"name">>, <<"s1">>}]}]
+    ], []),
     ok.
 
 
@@ -214,32 +64,15 @@ subscription_expires_or_is_renewed(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(ssl2),
-    hackney:start(),
-    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
+    ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
 
-    [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
-    [OZ_IP_1, OZ_IP_2] = [rest_utils:get_node_ip(Node1), rest_utils:get_node_ip(Node2)],
-    RestPort = rest_utils:get_rest_port(Node1),
-    RestAddress1 = "https://" ++ OZ_IP_1 ++ ":" ++ integer_to_list(RestPort),
-    RestAddress2 = "https://" ++ OZ_IP_2 ++ ":" ++ integer_to_list(RestPort),
-    Addresses = [RestAddress1, RestAddress2],
-    [{restAddresses, Addresses} | NewConfig].
+init_per_testcase(_, _Config) ->
+    _Config.
 
-init_per_testcase(_, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_new(Nodes, http_client),
-    test_utils:mock_expect(Nodes, http_client, post, fun(_Address, _Options, _Body) ->
-        ok end),
-    Config.
-
-end_per_testcase(_, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, http_client).
+end_per_testcase(_, _Config) ->
+    ok.
 
 end_per_suite(Config) ->
-    hackney:stop(),
-    application:stop(ssl2),
     test_node_starter:clean_environment(Config).
 
 
@@ -247,100 +80,103 @@ end_per_suite(Config) ->
 %%% Internal functions
 %%%===================================================================
 
-subscribe(LastSeen, Endpoint, SubscribeParams) ->
-    {Address, Headers, Options} = SubscribeParams,
-    Data = json_utils:encode([
-        {<<"last_seq">>, LastSeen},
-        {<<"endpoint">>, Endpoint}
-    ]),
-    RestAddress = Address ++ "/subscription",
-    Result = rest_utils:do_request(RestAddress, Headers, post, Data, Options),
-    ?assertEqual(204, rest_utils:get_response_status(Result)).
+create_group(Node, Name, Users, Spaces) ->
+    ?assertMatch({ok, Name}, rpc:call(Node, user_group, save, [#document{
+        key = Name,
+        value = #user_group{name = Name,
+            users = zip_with(Users, []), spaces = Spaces}
+    }])),
+    Name.
 
-await_messages(Nodes, Endpoint, ExpectedDoc) ->
-    verify_messages(Nodes, Endpoint, [ExpectedDoc], [], 10).
+create_space(Node, Name, Providers, Users, Groups) ->
+    ?assertMatch({ok, Name}, rpc:call(Node, space, save, [#document{
+        key = Name,
+        value = #space{name = Name, users = zip_with(Users, []),
+            groups = zip_with(Groups, []), providers = zip_with(Providers, 1)}
+    }])),
+    Name.
 
-verify_messages(Nodes, Endpoint, Expected, Forbidden, Retries) ->
-    NodeContexts = lists:map(fun(Node) -> {Node, 1, Retries} end, Nodes),
-    verify_messages(NodeContexts, Endpoint, as_changes(Expected), as_changes(Forbidden)).
-verify_messages(_, _, [], _) -> ok;
-verify_messages(NodeContexts, Endpoint, Expected, Forbidden) ->
-    {Messages, NewContexts} = get_messages(Endpoint, NodeContexts),
+create_user(Node, Name, Groups, Spaces) ->
+    ?assertMatch({ok, Name}, rpc:call(Node, onedata_user, save, [#document{
+        key = Name,
+        value = #onedata_user{alias = Name, name = Name,
+            groups = Groups, spaces = Spaces}
+    }])),
+    Name.
 
+create_provider(Node, Name, Spaces) ->
+    {_, CSRFile, _} = generate_cert_files(),
+    {ok, CSR} = file:read_file(CSRFile),
+    Params = [Name, [<<"127.0.0.1">>], <<"https://127.0.0.1:443">>, CSR],
+    {ok, ID, _} = rpc:call(Node, provider_logic, create, Params),
+    {ok, ID} = rpc:call(Node, provider, update, [ID, fun(P) ->
+        {ok, P#provider{spaces = lists:append(P#provider.spaces, Spaces)}}
+    end]),
+    ID.
 
-    AnyUnavailable = lists:member(not_present, Messages),
-    case AnyUnavailable of
-        true -> timer:sleep(?COMMUNICATION_WAIT);
-        false ->
-            Depleted = lists:all(fun
-                (retries_depleted) -> true;
-                (_) -> false
-            end, Messages),
-            case Depleted of
-                true -> ?assertEqual([], Expected);
-                false -> ok
-            end
-    end,
+zip_with(IDs, Val) ->
+    lists:map(fun(ID) -> {ID, Val} end, IDs).
 
-    lists:foreach(fun(M) -> lists:foreach(fun(F) ->
-        ?assertNotEqual(M, F)
-    end, Forbidden) end, Messages),
+generate_cert_files() ->
+    {MegaSec, Sec, MiliSec} = erlang:now(),
+    Prefix = lists:foldl(fun(Int, Acc) ->
+        Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
+    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
+    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
+    CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
+    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
+    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
+    {KeyFile, CSRFile, CertFile}.
 
-    verify_messages(NewContexts, Endpoint, Expected--Messages, Forbidden).
+verify_messages(Node, ProviderID, Expected, Forbidden) ->
+    call_worker(Node, {add_connection, ProviderID, self()}),
+    verify_messages(Node, ProviderID, 0, [], 5, Expected, Forbidden).
 
-get_messages(Endpoint, NodeContexts) ->
-    Results = lists:map(fun
-        ({_, _, 0} = Ctx) -> {[retries_depleted], Ctx};
-        ({Node, Number, RetriesLeft}) ->
-            Messages = get_messages(Endpoint, Node, Number),
-            case Messages of
-                not_present -> {[not_present], {Node, Number, RetriesLeft - 1}};
-                _ -> {Messages, {Node, Number + 1, RetriesLeft}}
-            end
-    end, NodeContexts),
-    {Messages, Contexts} = lists:unzip(Results),
-    {lists:append(Messages), Contexts}.
+verify_messages(_, _, _, _, 0, Expected, _) ->
+    ?assertMatch([], Expected);
+verify_messages(Node, ProviderID, ResumeAt, Missing, Retries, Expected, Forbidden) ->
+    call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
+    All = lists:append(get_messages(20, [])),
 
-get_messages(Endpoint, Node, Number) ->
-    Body = mock_capture(Node, [Number, http_client, post, [Endpoint, '_', '_'], 3]),
-    case Body of
-        {badrpc, _} ->
-            not_present;
+    ?assertMatch(Forbidden, Forbidden -- All),
+    case remaining_expected(Expected, All) of
+        [] -> ok;
         _ ->
-            Data = json_utils:decode(Body),
-            ct:print("~p", [Data]),
-            lists:map(fun(Messages) ->
-                lists:last(proplists:delete(<<"seq">>, Messages))
-            end, Data)
+            Seqs = extract_sequence_numbers(All),
+            NextResumeAt = largest([ResumeAt | Seqs]),
+            NextMissing = (Missing ++ new_expected_seqs(NextResumeAt, ResumeAt)) -- Seqs,
+
+            ct:print("ra ~p, m ~p \nnra ~p, nm ~p \nall ~p", [ResumeAt, Missing, NextResumeAt, NextMissing, All]),
+            verify_messages(Node, ProviderID, NextResumeAt, NextMissing, Retries - 1, Expected, Forbidden)
     end.
 
-as_changes(Docs) ->
-    lists:map(fun as_change/1, Docs).
+new_expected_seqs(NextResumeAt, ResumeAt) ->
+    case NextResumeAt > (ResumeAt + 1) of
+        true -> lists:seq(ResumeAt + 1, NextResumeAt);
+        false -> []
+    end.
 
-as_change(#document{key = ID, value = #space{name = Name, groups = Groups, users = Users}} = D) ->
-    [Msg] = json_utils:decode(json_utils:encode([{space, [
-        {id, ID},
-        {name, Name},
-        {groups, Groups},
-        {users, Users}
-    ]}])),
-    Msg.
+largest(List) ->
+    hd(lists:reverse(lists:usort(List))).
 
-mock_capture(Node, Args) ->
-    rpc:call(Node, meck, capture, Args).
+extract_sequence_numbers(All) ->
+    lists:map(fun(Message) ->
+        proplists:get_value(<<"seq">>, Message)
+    end, All).
 
-getFirstSeq(Node) ->
-    {_, LastSeqInDb, _} = ?assertMatch(
-        {ok, _, _},
-        rpc:call(Node, couchdb_datastore_driver, db_run,
-            [couchbeam_changes, follow_once, [], 3])
-    ),
-    binary_to_integer(LastSeqInDb).
+remaining_expected(Expected, All) ->
+    lists:filter(fun(Exp) ->
+        lists:all(fun(Msg) -> length(Exp -- Msg) =/= 0 end, All)
+    end, Expected).
 
-save(Node, Key, Value) ->
-    Doc = #document{key = Key, value = Value},
-    ?assertEqual({ok, Key}, rpc:call(Node, space, save, [Doc])),
-    Doc.
+call_worker(Node, Req) ->
+    rpc:call(Node, worker_proxy, call, [subscriptions_worker, Req]).
 
-set_subscription_timeout(Node, Seconds) ->
-    ok = rpc:call(Node, application, set_env, [?APP_Name, subscription_ttl_seconds, Seconds]).
+get_messages(0, Acc) -> Acc;
+get_messages(Retries, Acc) ->
+    receive
+        {push, Messages} ->
+            ct:print(">> ~p", [Messages]),
+            get_messages(Retries - 1, [json_utils:decode(Messages) | Acc])
+    after timer:seconds(2) -> Acc
+    end.
