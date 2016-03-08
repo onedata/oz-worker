@@ -17,7 +17,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([add_connection/2, remove_connection/2, subscription/1, update_users/2,
-    update_missing_seq/3, subscribed/2, remove_expired_connections/1]).
+    update_missing_seq/3, subscribed/2, remove_expired_connections/1,
+    subscriptions/0]).
 
 add_connection(ProviderID, HandlerPid) ->
     provider_subscription:create_or_update(#document{
@@ -54,6 +55,10 @@ remove_connection(ProviderID, HandlerPid) ->
 
 subscription(ProviderID) ->
     provider_subscription:get(ProviderID).
+
+subscriptions() ->
+    {ok, Subscriptions} = provider_subscription:all(),
+    Subscriptions.
 
 update_users(ProviderID, Users) ->
     {ok, #document{value = #provider_subscription{users = Current}}} =

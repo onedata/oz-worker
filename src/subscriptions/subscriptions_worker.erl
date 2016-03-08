@@ -19,7 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% worker_plugin_behaviour callbacks
--export([init/1, handle/1, cleanup/0]).
+-export([init/1, handle/1, cleanup/0, push_via_wss/2]).
 
 
 %%%===================================================================
@@ -115,27 +115,29 @@ fetch_from_db(From, To, Filter) ->
         end, From, To)
     end).
 
+push_via_wss(ProviderID, Messages) ->
+    {ok, #document{value = #provider_subscription{connections = [Conn | _]}}}
+        = subscriptions:subscription(ProviderID),
+    Encoded = json_utils:encode({array, Messages}),
+    ?info("Pushing ~p ~p", [Conn, Encoded]),
+    Conn ! {push, Encoded}.
+
 handle_change(Seq, Doc, Type, Filter) ->
     Message = translator:get_msg(Seq, Doc, Type),
-    Entitled = get_entitled_subscriptions(Doc, Type, Filter),
+    IgnoreMessage = translator:get_ignore_msg(Seq),
 
-    lists:foreach(fun(Subscription) ->
-        [Conn | _] = Subscription#provider_subscription.connections,
-        Messages = json_utils:encode({array, [Message]}),
-        ?info("Pushing ~p ~p", [Conn, Messages]),
-        Conn ! {push, Messages}
-    end, Entitled).
-
-get_entitled_subscriptions(Doc, Type, Filter) ->
     Providers = allowed:providers(Doc, Type, Filter),
+    Subscriptions = subscriptions:subscriptions(),
+    ProvidersSet = sets:from_list(Providers),
 
-    lists:filtermap(fun(Provider) ->
-        case subscriptions:subscription(Provider) of
-            {ok, #document{value = Val}} -> {true, Val};
-            _ -> false
-        end
-    end, Providers).
-
+    lists:foreach(fun(#document{value = Subscription}) ->
+        ProviderID = Subscription#provider_subscription.provider,
+        MessageToSend = case sets:is_element(ProviderID, ProvidersSet) of
+            true -> Message;
+            false -> IgnoreMessage
+        end,
+        outbox:put(ProviderID, fun push_via_wss/2, MessageToSend)
+    end, Subscriptions).
 
 -spec last_seq() -> non_neg_integer().
 last_seq() ->

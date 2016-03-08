@@ -20,48 +20,45 @@
 -export([push/2, put/3]).
 
 -record(outbox, {
+    timer_expires :: pos_integer(),
     timer :: timer:tref(),
     buffer :: [term()]
 }).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sends current batch of provider to provided endpoint and initialize
-%% next batch. Should not be called explicitly as outbox internally
-%% schedules pushes.
 %% @end
 %%--------------------------------------------------------------------
--spec push(ProviderID :: term(), Endpoint :: binary()) -> no_return().
-push(ProviderID, Endpoint) ->
-    worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ProviderID}, fun
+push(ID, PushFun) ->
+    worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
         (Outbox = #outbox{buffer = Buffer}) ->
-            Messages = json_utils:encode({array, Buffer}),
-            Headers = [{<<"content-type">>, <<"application/json">>}],
-            %% todo provider cert should be verified 9remove insecure)
-            Options = [{async, once}, insecure],
-            http_client:post(Endpoint, Headers, Messages, Options),
+            PushFun(ID, Buffer),
             Outbox#outbox{buffer = [], timer = undefined}
     end).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds message which should be send to given provider via given endpoint.
 %% Buffers the message ans schedules the push.
 %% @end
 %%--------------------------------------------------------------------
--spec put(ProviderID :: term(), Endpoint :: binary(), Message :: term()) -> no_return().
-put(ProviderID, Endpoint, Message) ->
-    ?info("Putting ~p", [[ProviderID, Endpoint, Message]]), %todo
-    worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ProviderID}, fun
+put(ID, PushFun, Message) ->
+    Now = erlang:system_time(),
+    TimerTTL = application:get_env(?APP_Name, subscription_batch_ttl, 2000),
+    TimerExpires = Now + TimerTTL,
+
+    ?info("Putting ~p", [[ID, Message, Now, TimerTTL, PushFun]]),
+    worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
         (undefined) ->
-            TRef = setup_timer(ProviderID, Endpoint),
-            #outbox{timer = TRef, buffer = [Message]};
-        (Outbox = #outbox{buffer = Buffer, timer = undefined}) ->
-            TRef = setup_timer(ProviderID, Endpoint),
-            Outbox#outbox{buffer = [Message | Buffer], timer = TRef};
+            TRef = setup_timer(ID, PushFun),
+            #outbox{buffer = [Message],
+                timer = TRef, timer_expires = TimerExpires};
+        (Outbox = #outbox{buffer = Buffer, timer = OldTimer, timer_expires =
+        OldExpires}) when OldTimer =:= undefined; OldExpires < Now ->
+            TRef = setup_timer(ID, PushFun),
+            Outbox#outbox{buffer = [Message | Buffer],
+                timer = TRef, timer_expires = TimerExpires};
         (Outbox = #outbox{buffer = Buffer}) ->
-            Outbox#outbox{buffer = [Message | Buffer]};
-        (X) -> ?info("XXX ~p", [X]) %todo
+            Outbox#outbox{buffer = [Message | Buffer]}
     end).
 
 %%%===================================================================
@@ -74,7 +71,7 @@ put(ProviderID, Endpoint, Message) ->
 %% Schedules buffer push.
 %% @end
 %%--------------------------------------------------------------------
-setup_timer(Provider, Endpoint) ->
+setup_timer(ID, PushFun) ->
     TTL = application:get_env(?APP_Name, subscriptions_buffer_millis, 1000),
-    {ok, TRef} = timer:apply_after(TTL, ?MODULE, push, [Provider, Endpoint]),
+    {ok, TRef} = timer:apply_after(TTL, ?MODULE, push, [ID, PushFun]),
     TRef.

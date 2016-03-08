@@ -15,7 +15,19 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([get_msg/3]).
+-export([get_msg/3, get_ignore_msg/1]).
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% Translates documents to structures required by the provider.
+%%% Those structures are serializable to json.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec get_ignore_msg(Seq :: pos_integer())
+        -> term().
+
+get_ignore_msg(Seq) ->
+    [{seq, Seq}, {ignore, true}].
 
 %%%-------------------------------------------------------------------
 %%% @doc

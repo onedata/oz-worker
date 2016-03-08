@@ -19,7 +19,7 @@
     model_init/0, 'after'/5, before/4]).
 
 %% API
--export([create_or_update/2]).
+-export([create_or_update/2, all/0]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -125,3 +125,13 @@ before(_ModelName, _Method, _Level, _Context) ->
     {ok, datastore:ext_key()} | datastore:update_error().
 create_or_update(Doc, Diff) ->
     datastore:create_or_update(?STORE_LEVEL, Doc, Diff).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Return all documents
+%% @end
+%%--------------------------------------------------------------------
+-spec all() -> {ok, [datastore:document()]} | no_return().
+all() ->
+    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).
+

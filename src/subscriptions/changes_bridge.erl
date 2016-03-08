@@ -6,6 +6,10 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This module fetches recent changes from the couchbase. It is designed
+%%% to be singleton element of the system.
+%%% @todo do not monitor global name
+%%% @todo use solution introduced in VFS-1748
 %%% @end
 %%%-------------------------------------------------------------------
 -module(changes_bridge).
@@ -67,8 +71,6 @@ change_callback(Seq, Doc, Type) ->
     {ok, State :: #{}} | {ok, State :: #{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore).
 init([]) ->
-    % todo: find better way to create singleton gen_server
-    % todo: both functions below may cause undesired behaviour
     await_for_name_possibly_free(),
     case register_name_or_exit() of
         ok ->
@@ -114,7 +116,9 @@ handle_cast(start_changes_stream, State) ->
         {noreply, State}
     catch E:R ->
         ?info("Changes stream failed to start ~p:~p", [E, R]),
-        timer:sleep(2000),
+        {ok, Timeout} = application:get_env(?APP_Name,
+            changes_stream_restart_delay_seconds, 20),
+        timer:sleep(timer:seconds(Timeout)),
         {stop, changes_stream_not_available, State}
     end;
 handle_cast({stop, Reason}, State) ->
@@ -150,7 +154,6 @@ handle_info(_Info, State) ->
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #{}) -> term()).
 terminate(_Reason, _State) ->
-    ?info("Changes bridge  terminates ~p", [self()]),
     ok.
 
 %%--------------------------------------------------------------------
@@ -230,8 +233,8 @@ register_name_or_exit() ->
 
 -spec await_for_name_possibly_free() -> no_return().
 await_for_name_possibly_free() ->
-    WaitLimit = application:get_env(?APP_Name,
-        changes_bridge_await_limit, timer:minutes(5)),
+    AwaitLimit = application:get_env(?APP_Name,
+        changes_bridge_name_await_seconds, 300),
 
     case global:whereis_name(?MODULE) of
         undefined ->
@@ -243,7 +246,7 @@ await_for_name_possibly_free() ->
                 {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
                     ?info("Detected leader failure")
             after
-                WaitLimit ->
+                timer:seconds(AwaitLimit) ->
                     ?info("Scheduled takeover")
             end
     end.
