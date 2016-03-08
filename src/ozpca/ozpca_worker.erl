@@ -92,8 +92,8 @@ call_dedicated_node(Fun, Req) ->
     case get_dedicated_node() of
         {ok, Self} ->
             Fun();
-        {ok, _DedicatedNode} ->
-            worker_proxy:call({?MODULE, _DedicatedNode}, Req);
+        {ok, DedicatedNode} ->
+            worker_proxy:call({?MODULE, DedicatedNode}, Req);
         {error, _Reason} ->
             ?error_stacktrace("Cannot process CA request ~p due to error ~p", [Req, _Reason]),
             {error, _Reason}
