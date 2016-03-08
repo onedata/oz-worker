@@ -19,6 +19,7 @@
 -export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_default_provider/2]).
+-export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
 
 %%%===================================================================
@@ -334,7 +335,8 @@ set_default_space(UserId, SpaceId) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Retrieves user's default provider (or returns undefined).
+%% @doc
+%% Retrieves user's default provider (or returns undefined).
 %% @end
 %%--------------------------------------------------------------------
 -spec get_default_provider(UserId :: binary()) ->
@@ -342,6 +344,45 @@ set_default_space(UserId, SpaceId) ->
 get_default_provider(UserId) ->
     {ok, #onedata_user{default_provider = DefProv}} = get_user(UserId),
     {ok, DefProv}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Retrieves user's list of client tokens.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_client_tokens(UserId :: binary()) ->
+    {ok, Tokens :: [binary()]}.
+get_client_tokens(UserId) ->
+    {ok, #onedata_user{client_tokens = ClientTokens}} = get_user(UserId),
+    {ok, ClientTokens}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a token to the list of user's client tokens.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_client_token(UserId :: binary(), Token :: binary()) -> ok.
+add_client_token(UserId, Token) ->
+    {ok, #onedata_user{client_tokens = ClientTokens}} = get_user(UserId),
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        {ok, User#onedata_user{client_tokens = ClientTokens ++ [Token]}}
+    end),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes a token from the list of user's client tokens.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_client_token(UserId :: binary(), Token :: binary()) -> ok.
+delete_client_token(UserId, Token) ->
+    {ok, #onedata_user{client_tokens = ClientTokens}} = get_user(UserId),
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        {ok, User#onedata_user{client_tokens = ClientTokens -- [Token]}}
+    end),
+    ok.
 
 
 %%--------------------------------------------------------------------

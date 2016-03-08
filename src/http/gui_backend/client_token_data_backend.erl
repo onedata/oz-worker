@@ -26,64 +26,48 @@
 
 %% Convenience macro to log a debug level log dumping given variable.
 -define(log_debug(_Arg),
-    ?debug("~s", [str_utils:format("CLIENT_TOKEN_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
+    ?alert("~s", [str_utils:format("CLIENT_TOKEN_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
 ).
 
 
 init() ->
     ?log_debug({websocket_init, g_session:get_session_id()}),
-%%    {ok, _Pid} = data_backend:async_process(fun() -> async_loop() end),
     ok.
 
 
-find(<<"clienttoken">>, ProviderIds) ->
+find(<<"clienttoken">>, _Ids) ->
     {error, not_iplemented}.
-    % UserId = g_session:get_user_id(),
-    % Res = lists:map(
-    %     fun(ProviderId) ->
-    %         {ok, ProviderData} = provider_logic:get_data(ProviderId),
-    %         Name = proplists:get_value(clientName, ProviderData),
-    %         IsWorking = provider_logic:check_provider_connectivity(ProviderId),
-    %         {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
-    %         {ok, #document{
-    %             value = #onedata_user{
-    %                 default_provider = DefaultProvider
-    %             }
-    %         }} = user_logic:get_user_doc(UserId),
-    %         [
-    %             {<<"id">>, ProviderId},
-    %             {<<"name">>, Name},
-    %             {<<"isDefault">>, ProviderId =:= DefaultProvider},
-    %             {<<"isWorking">>, IsWorking},
-    %             {<<"spaces">>, Spaces}
-    %         ]
-    %     end, ProviderIds),
-    % {ok, Res}.
 
 find_query(<<"clienttoken">>, _Data) ->
     {error, not_iplemented}.
 
-%% Called when ember asks for all files
+%% Called when ember calls findAll
 find_all(<<"clienttoken">>) ->
-   {ok, [
-      [{<<"id">>, <<"fsdsfaADSFhAERtaDSFgadgaeQRtEQRtErtfsdsfaADSFhAERtaDSFgadgaeQRtEQRtErtfsdsfaADSFhAERtaDSFgadgaeQRtEQRtErt">>}],
-      [{<<"id">>, <<"MAdfmASDMFAmsdfmasdFasjdfiouasdMAdfmASDMFAmsdfmasdFasjdfiouasdMAdfmASDMFAmsdfmasdFasjdfiouasdMAdfmASDMFAmsdfmasdFasjdfiouasd">>}]
-   ]}.
-    % UserId = g_session:get_user_id(),
-    % {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
-    % {ok, _Res} = find(<<"clienttoken">>, ProviderIds).
-
+    UserId = g_session:get_user_id(),
+    {ok, ClientTokens} = user_logic:get_client_tokens(UserId),
+    Res = lists:map(
+        fun(Id) ->
+            [{<<"id">>, Id}]
+        end, ClientTokens),
+    {ok, Res}.
 
 %% Called when ember asks to create a record
 create_record(<<"clienttoken">>, _Data) ->
+    UserId = g_session:get_user_id(),
+    Token = auth_logic:gen_token(UserId),
+    user_logic:add_client_token(UserId, Token),
     {ok, [
-      {<<"id">>, <<"nowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowynowy">>}
+        {<<"id">>, Token}
     ]}.
 
 %% Called when ember asks to update a record
-update_record(<<"clienttoken">>, _TokenId, Data) ->
+update_record(<<"clienttoken">>, _TokenId, _Data) ->
     {error, not_iplemented}.
 
 %% Called when ember asks to delete a record
-delete_record(<<"clienttoken">>, _Id) ->
-    ok.
+delete_record(<<"clienttoken">>, Token) ->
+    UserId = g_session:get_user_id(),
+    {ok, Macaroon} = macaroon:deserialize(Token),
+    Identifier = macaroon:identifier(Macaroon),
+    onedata_auth:delete(Identifier),
+    user_logic:delete_client_token(UserId, Token).

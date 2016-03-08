@@ -97,7 +97,9 @@
     default_provider = undefined :: binary() | undefined,
     % This allows to remember the to which provider user is being redirected.
     % It is needed in DNS so it knows where to redirect
-    chosen_provider = undefined :: binary() | undefined
+    chosen_provider = undefined :: binary() | undefined,
+    % TODO temporary solution
+    client_tokens = [] :: [binary()]
 }).
 
 -type user_info() :: #onedata_user{}.

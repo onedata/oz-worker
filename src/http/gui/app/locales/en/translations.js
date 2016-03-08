@@ -110,7 +110,7 @@ export default {
       connectHead: 'connect your accounts',
       manageSpacesHead: 'manage data spaces',
       filesHead: 'go to your files',
-      tokensHead: 'client tokens'
+      tokensHead: 'manage client tokens'
     },
     topBar: {
       manageProviders: 'manage providers',

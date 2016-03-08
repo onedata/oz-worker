@@ -118,8 +118,6 @@ get_redirection_uri(UserId, ProviderId) ->
     ]),
     {ok, URL}.
 
-%% {ok, <<"https://", Prefix/binary, ".", Hostname/binary, ":", (integer_to_binary(ProviderGUIPort))/binary,
-%% ?provider_auth_endpoint, "?code=", AuthCode/binary>>}.
 
 %%--------------------------------------------------------------------
 %% @doc Creates an authorization code for a native client.
