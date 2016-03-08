@@ -418,6 +418,10 @@ $search-box-height: 36px;
     }
   }
 
+  .tokens-accordion {
+    padding-bottom: 5px;
+  }
+
   .providers-accordion, .spaces-accordion, .tokens-accordion {
     color: white;
     .one-icon {
@@ -456,7 +460,7 @@ $search-box-height: 36px;
 
           &.create-new {
             margin-top: 20px;
-            margin-bottom: 20px;
+            //margin-bottom: 20px;
             background-color: transparent;
           }
 
@@ -508,18 +512,23 @@ $search-box-height: 36px;
             display: table-cell;
             position: relative;
             width: 50px;
+            height: 35px;
             overflow-x: hidden;
             cursor: pointer; cursor: hand;
             @include vendor-prefix(user-select, none);
 
             .icon {
               position: absolute;
+              top: 0;
+              left: 0;
               .one-icon {
                 font-size: 1.1em;
               }
             }
             .label {
               position: absolute;
+              top: 0;
+              left: 0;
               display: table-cell;
               vertical-align: middle;
               height: 35px;
