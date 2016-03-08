@@ -32,8 +32,36 @@
 
 init() ->
     ?log_debug({websocket_init, g_session:get_session_id()}),
-%%    {ok, _Pid} = data_backend:async_process(fun() -> async_loop() end),
+    {ok, _Pid1} = data_backend:async_process(fun() -> async_loop_upt(0) end),
+    {ok, _Pid2} = data_backend:async_process(fun() -> async_loop_crt(0) end),
     ok.
+
+%% Currently unused
+async_loop_upt(C) ->
+    data_backend:push_updated(<<"provider">>, [
+        {<<"id">>, <<"provider2">>},
+        {<<"name">>, <<"hehix">>},
+        {<<"isDefault">>, false},
+        {<<"isWorking">>, (C div 2) * 2 =:= C},
+        {<<"spaces">>, []}
+    ]),
+    timer:sleep(1000),
+    async_loop_upt(C + 1).
+
+%% Currently unused
+async_loop_crt(C) ->
+    Id = datastore_utils:gen_uuid(),
+    data_backend:push_created(<<"provider">>, [
+        {<<"id">>, Id},
+        {<<"name">>, binary:part(Id, {0, 10})},
+        {<<"isDefault">>, false},
+        {<<"isWorking">>, (C div 2) * 2 =:= C},
+        {<<"spaces">>, []}
+    ]),
+    timer:sleep(2000),
+    data_backend:push_deleted(<<"provider">>, Id),
+    timer:sleep(500),
+    async_loop_crt(C + 1).
 
 
 find(<<"provider">>, ProviderIds) ->

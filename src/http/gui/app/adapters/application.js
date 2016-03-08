@@ -37,8 +37,9 @@ let WS_ENDPOINT = '/ws/';
 // Message types, identified by `msgType` key
 let TYPE_MODEL_REQ = 'modelReq';
 let TYPE_MODEL_RESP = 'modelResp';
-let TYPE_MODEL_UPD_PUSH = 'modelPushUpdated';
-let TYPE_MODEL_DEL_PUSH = 'modelPushDeleted';
+let TYPE_MODEL_CRT_PUSH = 'modelPushCreated';
+let TYPE_MODEL_UPT_PUSH = 'modelPushUpdated';
+let TYPE_MODEL_DLT_PUSH = 'modelPushDeleted';
 let TYPE_RPC_REQ = 'RPCReq';
 let TYPE_RPC_RESP = 'RPCResp';
 // Operations on model, identified by `operation` key
@@ -56,6 +57,8 @@ let RESULT_OK = 'ok';
 let RESULT_ERROR = 'error';
 
 export default DS.RESTAdapter.extend({
+  store: Ember.inject.service('store'),
+
   initialized: false,
   onOpenCallback: null,
   onErrorCallback: null,
@@ -371,8 +374,8 @@ export default DS.RESTAdapter.extend({
     let promise;
     console.log('received: ' + event.data);
     let json = JSON.parse(event.data);
-    // Received a response to data fetch
     if (json.msgType === TYPE_MODEL_RESP) {
+      // Received a response to data fetch
       promise = adapter.promises.get(json.uuid);
       if (json.result === RESULT_OK) {
         // TODO VFS-1508: sometimes, the callback is undefined - debug
@@ -387,19 +390,8 @@ export default DS.RESTAdapter.extend({
       } else {
         console.log('Unknown operation result: ' + json.result);
       }
-      // TODO @todo implement on generic data type
-      //} else if (json.msgType == TYPE_MODEL_UPD_PUSH) {
-      //    App.File.store.pushPayload('file', {
-      //        file: json.data
-      //    })
-      //} else if (json.msgType == TYPE_MODEL_DEL_PUSH) {
-      //    let record_id;
-      //    for (record_id in json.data) {
-      //        App.File.store.find('file', record_id).then(function (post) {
-      //            App.File.store.unloadRecord(post);
-      //        });
-      //    }
     } else if (json.msgType === TYPE_RPC_RESP) {
+      // Received a response to RPC call
       promise = adapter.promises.get(json.uuid);
       if (json.result === RESULT_OK) {
         console.log('RPC_RESP success: ' + JSON.stringify(json.data));
@@ -411,7 +403,42 @@ export default DS.RESTAdapter.extend({
         console.log('Unknown operation result: ' + json.result);
       }
     }
-    adapter.promises.delete(json.uuid);
+    else if (json.msgType === TYPE_MODEL_CRT_PUSH) {
+      // Received a push message that something was created
+      console.log('Create:' + JSON.stringify(json));
+      this.get('store').push({
+        data: {
+          id: json.data.id,
+          type: json.resourceType,
+          attributes: json.data
+        }
+      });
+    } else if (json.msgType === TYPE_MODEL_UPT_PUSH) {
+      // Received a push message that something was updated
+      console.log('Update:' + JSON.stringify(json));
+      this.get('store').push({
+        data: {
+          id: json.data.id,
+          type: json.resourceType,
+          attributes: json.data
+        }
+      });
+    }
+    else if (json.msgType === TYPE_MODEL_DLT_PUSH) {
+      let store = this.get('store');
+      // Received a push message that something was deleted
+      console.log('Delete:' + JSON.stringify(json));
+      // data field contains a list of ids to delete
+      json.data.forEach(function (id) {
+        store.findRecord(json.resourceType, id).then(
+          function (record) {
+            store.unloadRecord(record);
+          });
+      });
+    }
+    if (json.uuid) {
+      adapter.promises.delete(json.uuid);
+    }
   },
 
   /** WebSocket onerror callback */
