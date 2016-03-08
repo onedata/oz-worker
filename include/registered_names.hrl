@@ -13,12 +13,7 @@
 -define(REGISTERED_NAMES_HRL, 1).
 
 %% App name
--define(APP_Name, globalregistry).
-
-%% Name of dao genserver
--define(Dao, dao_worker).
-
-%% Name of oneprovider channel gen_server
--define(OpChannel, op_channel).
+-define(APP_Name, oz_worker).
+-define(CLUSTER_WORKER_NAME, cluster_worker).
 
 -endif.

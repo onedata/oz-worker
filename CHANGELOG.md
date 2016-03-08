@@ -1,4 +1,4 @@
-# Release notes for project globalregistry
+# Release notes for project oz_worker
 
 
 CHANGELOG
