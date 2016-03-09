@@ -60,7 +60,7 @@
     issuer :: rest_handler:client()
 }).
 
-%% This record defines a token that can be used by user to do something
+%% This record defines a GUI session
 -record(session, {
     user_id = undefined :: onedata_user:id() | undefined,
     memory = [] :: session:memory(),
@@ -104,7 +104,7 @@
     % This allows to remember the to which provider user is being redirected.
     % It is needed in DNS so it knows where to redirect
     chosen_provider = undefined :: binary() | undefined,
-    % TODO temporary solution
+    % List of user's client tokens
     client_tokens = [] :: [binary()]
 }).
 

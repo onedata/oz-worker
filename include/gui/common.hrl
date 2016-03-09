@@ -12,7 +12,6 @@
 -ifndef(CONTROL_PANEL_COMMON_HRL).
 -define(CONTROL_PANEL_COMMON_HRL, 1).
 
--include_lib("ctool/include/gui/common.hrl").
 -include("registered_names.hrl").
 
 % Relative suffix of GUI address, leading to privacy policy page
@@ -23,11 +22,6 @@
 
 % Relative suffix of GUI address, leading to page with info about providers
 -define(become_a_provider_url, "/become_a_provider").
-
-% @todo remove
-% Endpoint at oneprovider to check connectivity. Checks the index
-% page of provider if it responds.
--define(provider_connection_check_endpoint, "/").
 
 % URL (relative) to redirect to after login.
 -define(page_after_login, "/#/onezone").

@@ -224,11 +224,7 @@ generate_state_token(HandlerModule, ConnectAccount) ->
         {connect_account, ConnectAccount},
         % Right now this always redirects to main page, although
         % might be used in the future.
-        {redirect_after_login, <<"/">>},
-        % PROBABLY DEVELOPER-ONLY FUNCTIONALITY
-        % If this value was set on login page, the user will be redirected to
-        % this certain provider if he click "go to your files"
-        {referer, erlang:get(referer)}
+        {redirect_after_login, <<"/">>}
     ],
 
     ets:insert(?STATE_TOKEN, {Token, erlang:monotonic_time(seconds), StateInfo}),

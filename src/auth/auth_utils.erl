@@ -135,12 +135,6 @@ validate_login() ->
                                         end
                                 end
                         end,
-
-                        % PROBABLY DEVELOPER-ONLY FUNCTIONALITY
-                        % Save the referer URL in user session. If it was specified, this will cause the user
-                        % to be redirected to given provider when he clicks "go to your files"
-                        g_session:put_value(referer, proplists:get_value(referer, Props)),
-
                         Result
                 end
         end

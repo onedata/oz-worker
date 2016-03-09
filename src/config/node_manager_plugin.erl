@@ -197,7 +197,7 @@ check_node_ip_address() ->
             ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
             {127, 0, 0, 1};
         Ip ->
-            {ok, Address} = inet_parse:ipv4_address(Ip),
+            {ok, Address} = inet_parse:ipv4_address(str_utils:to_list(Ip)),
             ?info("External IP: ~p", [Address]),
             Address
     end.
