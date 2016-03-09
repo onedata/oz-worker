@@ -2,26 +2,14 @@
   <div class="row row-centered">
     <div class="col-xs-9 col-centered login-box">
       <h1>{{t 'login.boxTitle'}}</h1>
+
       <h2>{{t 'login.boxSubtitle'}}</h2>
+
       <div class="container-fluid login-buttons-container">
         <div class="row row-centered">
           <div class="col-xs-11 col-centered">
             <div class="row row-centered">
-              <div class="col-xs-12 col-sm-2 col-centered xs-center">
-                {{social-box type='plgrid' action='authenticate'}}
-              </div>
-              <div class="col-xs-6 col-sm-2 col-centered xs-right">
-                {{social-box type='dropbox' action='authenticate'}}
-              </div>
-              <div class="col-xs-6 col-sm-2 col-centered xs-left">
-                {{social-box type='github' action='authenticate'}}
-              </div>
-              <div class="col-xs-6 col-sm-2 col-centered xs-right">
-                {{social-box type='facebook' action='authenticate'}}
-              </div>
-              <div class="col-xs-6 col-sm-2 col-centered xs-left">
-                {{social-box type='google' action='authenticate'}}
-              </div>
+              {{social-box-list}}
             </div>
           </div>
         </div>

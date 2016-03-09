@@ -1,22 +1,18 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module implements callback_backend_behaviour.
-%%% It is used to handle callbacks from the client - such requests that do not
-%%% correspond to underlying models. For example -
-%%% 'give me the name of current user'.
+%%% It is used to handle RPC calls from clients with active session.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(private_rpc_backend).
 -author("Lukasz Opiola").
 -behaviour(rpc_backend_behaviour).
-
--compile([export_all]).
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -24,6 +20,16 @@
 %% API
 -export([handle/2]).
 
+
+%%%===================================================================
+%%% API functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link rpc_backend_behaviour} callback handle/2.
+%% @end
+%%--------------------------------------------------------------------
 handle(<<"sessionDetails">>, _) ->
     {ok, #document{value = #onedata_user{name = Name}}} =
         onedata_user:get(g_session:get_user_id()),
@@ -34,6 +40,14 @@ handle(<<"sessionDetails">>, _) ->
     ],
     ?alert("~p", [Res]),
     {ok, Res};
+
+% @todo the same in private
+handle(<<"getSupportedAuthorizers">>, _) ->
+    {ok, [
+        <<"github">>, <<"plgrid">>,
+        <<"google">>, <<"dropbox">>,
+        <<"facebook">>
+    ]};
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     Provider = provider_to_provider_id(ProviderBin),

@@ -1,20 +1,18 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module implements data_backend_behaviour and is used to synchronize
-%%% the file model used in Ember application.
-%%% THIS IS A PROTOTYPE AND AN EXAMPLE OF IMPLEMENTATION.
+%%% the `space` model used in Ember application.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(space_data_backend).
 -author("Lukasz Opiola").
-
--compile([export_all]).
+-behaviour(data_backend_behaviour).
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -24,17 +22,25 @@
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
 
-%% Convenience macro to log a debug level log dumping given variable.
--define(log_debug(_Arg),
-    ?alert("~s", [str_utils:format("SPACE_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
-).
 
+%%%===================================================================
+%%% API functions
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback init/0.
+%% @end
+%%--------------------------------------------------------------------
 init() ->
-    ?log_debug({websocket_init, g_session:get_session_id()}),
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback find/2.
+%% @end
+%%--------------------------------------------------------------------
 find(<<"space">>, SpaceIds) ->
     UserId = g_session:get_user_id(),
     {ok, GetSpaces} = user_logic:get_spaces(UserId),
@@ -54,10 +60,21 @@ find(<<"space">>, SpaceIds) ->
         end, SpaceIds),
     {ok, Res}.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback find_query/2.
+%% @end
+%%--------------------------------------------------------------------
 find_query(<<"space">>, _Data) ->
     {error, not_iplemented}.
 
-%% Called when ember asks for all files
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback find_all/1.
+%% @end
+%%--------------------------------------------------------------------
 find_all(<<"space">>) ->
     UserId = g_session:get_user_id(),
     {ok, GetSpaces} = user_logic:get_spaces(UserId),
@@ -65,9 +82,12 @@ find_all(<<"space">>) ->
     {ok, _Res} = find(<<"space">>, SpaceIds).
 
 
-%% Called when ember asks to create a record
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback create_record/2.
+%% @end
+%%--------------------------------------------------------------------
 create_record(<<"space">>, Data) ->
-    ?dump(Data),
     Name = proplists:get_value(<<"name">>, Data),
     {ok, SpaceId} = space_logic:create({user, g_session:get_user_id()}, Name),
     NewSpaceData = [
@@ -78,9 +98,13 @@ create_record(<<"space">>, Data) ->
     ],
     {ok, NewSpaceData}.
 
-%% Called when ember asks to update a record
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback update_record/3.
+%% @end
+%%--------------------------------------------------------------------
 update_record(<<"space">>, SpaceId, Data) ->
-    ?dump({SpaceId, Data}),
     UserId = g_session:get_user_id(),
     IsDefault = proplists:get_value(<<"isDefault">>, Data),
     case IsDefault of
@@ -91,6 +115,11 @@ update_record(<<"space">>, SpaceId, Data) ->
     end,
     ok.
 
-%% Called when ember asks to delete a record
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback delete_record/2.
+%% @end
+%%--------------------------------------------------------------------
 delete_record(<<"space">>, _Id) ->
     {error, not_iplemented}.

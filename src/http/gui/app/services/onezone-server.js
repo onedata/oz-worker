@@ -4,6 +4,15 @@ export default Ember.Service.extend({
   server: Ember.inject.service('server'),
 
   /**
+   Fetch supported authorizers and return it in the promise resolve as a
+   list of strings
+   @returns {RSVP.Promise}
+   */
+  getSupportedAuthorizers() {
+    return this.get('server').publicRPC('getSupportedAuthorizers');
+  },
+
+  /**
     Fetch token for provider and return it in the promise resolve
     @param {string} spaceId
     @returns {RSVP.Promise}

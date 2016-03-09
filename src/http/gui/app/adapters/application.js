@@ -348,11 +348,12 @@ export default DS.RESTAdapter.extend({
       onOpen();
     }
     // Send messages waiting in queue
-    if (this.beforeOpenQueue.length > 0) {
-      this.beforeOpenQueue.forEach(function (payload) {
-        this.socket.send(JSON.stringify(payload));
+    let adapter = this;
+    if (adapter.beforeOpenQueue.length > 0) {
+      adapter.beforeOpenQueue.forEach(function (payload) {
+        adapter.socket.send(JSON.stringify(payload));
       });
-      this.beforeOpenQueue = [];
+      adapter.beforeOpenQueue = [];
     }
   },
 

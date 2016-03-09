@@ -6,14 +6,13 @@ let LoginRoute = PageBase.extend(UnauthenticatedRouteMixin);
 
 export default LoginRoute.extend({
   onezoneServer: Ember.inject.service('onezoneServer'),
+  name: 'login'
 
-  name: 'login',
-
-  actions: {
-    authenticate(providerName) {
-      this.get('onezoneServer').getLoginEndpoint(providerName).then((url) => {
-        window.location = url;
-      });
-    }
-  }
+  //actions: {
+  //  authenticate(providerName) {
+  //    this.get('onezoneServer').getLoginEndpoint(providerName).then((url) => {
+  //      window.location = url;
+  //    });
+  //  }
+  //}
 });

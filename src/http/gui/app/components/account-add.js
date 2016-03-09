@@ -4,6 +4,7 @@ import bindFloater from '../utils/bind-floater';
 export default Ember.Component.extend({
   onezoneServer: Ember.inject.service('onezoneServer'),
   classNames: ['account-add', 'account-item'],
+  authProviders: null,
 
   didInsertElement() {
     let popup = this.$().find('.account-add-popup');
@@ -12,21 +13,28 @@ export default Ember.Component.extend({
     $('.accordion-container').on('scroll', updater);
   },
 
-  generateAuthProviders: function() {
-    let authProviders = [
-      ['google', 'Google+'],
-      ['facebook', 'Facebook'],
-      ['github', 'GitHub'],
-      ['dropbox', 'Dropbox'],
-      ['plgrid', 'PLGrid OpenID']
-    ].map((item) => {
-      return {
-        type: item[0],
-        label: `Connect by ${item[1]}`
-      };
-    });
+  generateAuthProviders: function () {
+    let authProviders = [];
+    let allAuthProviders = {
+      google: 'Google+',
+      facebook: 'Facebook',
+      github: 'GitHub',
+      dropbox: 'Dropbox',
+      plgrid: 'PLGrid OpenID'
+    };
 
-    this.set('authProviders', authProviders);
+    this.get('onezoneServer').getSupportedAuthorizers().then((data) => {
+      data.forEach((authorizerId) => {
+        authProviders.push([authorizerId, allAuthProviders[authorizerId]]);
+      });
+      authProviders = authProviders.map((item) => {
+        return {
+          type: item[0],
+          label: `Connect by ${item[1]}`
+        };
+      });
+      this.set('authProviders', authProviders);
+    });
   }.on('init'),
 
   actions: {
@@ -37,8 +45,6 @@ export default Ember.Component.extend({
     }
   }
 });
-
-
 
 
 // <a {{action "connectNewAccount" "github"}}>

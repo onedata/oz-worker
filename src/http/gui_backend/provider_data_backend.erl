@@ -1,20 +1,18 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module implements data_backend_behaviour and is used to synchronize
-%%% the file model used in Ember application.
-%%% THIS IS A PROTOTYPE AND AN EXAMPLE OF IMPLEMENTATION.
+%%% the `provider` model used in Ember application.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(provider_data_backend).
 -author("Lukasz Opiola").
-
--compile([export_all]).
+-behaviour(data_backend_behaviour).
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -24,46 +22,25 @@
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
 
-%% Convenience macro to log a debug level log dumping given variable.
--define(log_debug(_Arg),
-    ?debug("~s", [str_utils:format("PROVIDER_DATA_BACKEND: ~s: ~p", [??_Arg, _Arg])])
-).
 
+%%%===================================================================
+%%% API functions
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback init/0.
+%% @end
+%%--------------------------------------------------------------------
 init() ->
-    ?log_debug({websocket_init, g_session:get_session_id()}),
-%%    {ok, _Pid1} = gui_async:spawn(fun() -> async_loop_upt(0) end),
-%%    {ok, _Pid2} = gui_async:spawn(fun() -> async_loop_crt(0) end),
     ok.
 
-%%%% Currently unused
-%%async_loop_upt(C) ->
-%%    gui_async:push_updated(<<"provider">>, [
-%%        {<<"id">>, <<"provider2">>},
-%%        {<<"name">>, <<"hehix">>},
-%%        {<<"isDefault">>, false},
-%%        {<<"isWorking">>, (C div 2) * 2 =:= C},
-%%        {<<"spaces">>, []}
-%%    ]),
-%%    timer:sleep(1000),
-%%    async_loop_upt(C + 1).
-%%
-%%%% Currently unused
-%%async_loop_crt(C) ->
-%%    Id = datastore_utils:gen_uuid(),
-%%    gui_async:push_created(<<"provider">>, [
-%%        {<<"id">>, Id},
-%%        {<<"name">>, binary:part(Id, {0, 10})},
-%%        {<<"isDefault">>, false},
-%%        {<<"isWorking">>, (C div 2) * 2 =:= C},
-%%        {<<"spaces">>, []}
-%%    ]),
-%%    timer:sleep(2000),
-%%    gui_async:push_deleted(<<"provider">>, Id),
-%%    timer:sleep(500),
-%%    async_loop_crt(C + 1).
 
-
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback find/2.
+%% @end
+%%--------------------------------------------------------------------
 find(<<"provider">>, ProviderIds) ->
     UserId = g_session:get_user_id(),
     Res = lists:map(
@@ -87,23 +64,42 @@ find(<<"provider">>, ProviderIds) ->
         end, ProviderIds),
     {ok, Res}.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback find_query/2.
+%% @end
+%%--------------------------------------------------------------------
 find_query(<<"provider">>, _Data) ->
     {error, not_iplemented}.
 
-%% Called when ember asks for all files
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback find_all/1.
+%% @end
+%%--------------------------------------------------------------------
 find_all(<<"provider">>) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
     {ok, _Res} = find(<<"provider">>, ProviderIds).
 
 
-%% Called when ember asks to create a record
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback create_record/2.
+%% @end
+%%--------------------------------------------------------------------
 create_record(<<"provider">>, _Data) ->
     {error, not_iplemented}.
 
-%% Called when ember asks to update a record
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback update_record/3.
+%% @end
+%%--------------------------------------------------------------------
 update_record(<<"provider">>, ProviderId, Data) ->
-    ?dump({ProviderId, Data}),
     UserId = g_session:get_user_id(),
     IsDefault = proplists:get_value(<<"isDefault">>, Data),
     case IsDefault of
@@ -114,6 +110,11 @@ update_record(<<"provider">>, ProviderId, Data) ->
     end,
     ok.
 
-%% Called when ember asks to delete a record
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link authorizer_data_backend} callback delete_record/2.
+%% @end
+%%--------------------------------------------------------------------
 delete_record(<<"provider">>, _Id) ->
     {error, not_iplemented}.
