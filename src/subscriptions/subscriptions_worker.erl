@@ -70,7 +70,12 @@ handle({update_missing_seq, ProviderID, ResumeAt, Missing}) ->
     fetch_history(ProviderID, ResumeAt, Missing);
 
 handle({update_users, ProviderID, Users}) ->
-    subscriptions:update_users(ProviderID, Users);%todo fetch data for new users
+    NewUsers = subscriptions:update_users(ProviderID, Users),
+    Updates = user_subscriptions:updates(ProviderID, NewUsers),
+    Filter = fun(P) -> P =:= ProviderID end,
+    lists:foreach(fun({Seq, Doc, Model}) ->
+        handle_change(Seq, Doc, Model, Filter)
+    end, Updates);
 
 handle(_Request) ->
     ?log_bad_request(_Request).

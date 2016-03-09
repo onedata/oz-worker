@@ -82,6 +82,7 @@ update_missing_seq(ProviderID, ResumeAt, Missing) ->
         resume_at = ResumeAt
     }} end).
 
+subscribed(_, -1) -> true;
 subscribed(Subscription, Seq) ->
     #provider_subscription{missing = Missing, resume_at = ResumeAt} = Subscription,
     case Seq > ResumeAt of

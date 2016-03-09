@@ -67,5 +67,7 @@ get_msg(_Seq, _Doc, _Model) ->
 %%%===================================================================
 
 -spec revs_prop(Doc :: datastore:document()) -> term().
-revs_prop(Doc) ->
-    {revs, element(2, Doc#document.rev)}.
+revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
+    {revs, element(2, Revs)};
+revs_prop(#document{rev = Rev}) ->
+    {revs, [Rev]}.

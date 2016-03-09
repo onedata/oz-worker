@@ -25,23 +25,25 @@
     user_update_test/1, group_update_through_users_test/1,
     no_space_update_test/1, space_update_through_users_test/1,
     group_update_through_spaces_test/1, no_user_update_test/1,
-    no_group_update_test/1, multiple_updates_test/1]).
+    no_group_update_test/1, multiple_updates_test/1,
+    updates_for_added_user_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 all() -> ?ALL([
-    change_bridge_restarts,
-    multiple_updates_test,
-    no_space_update_test,
-    space_update_through_support_test,
-    space_update_through_users_test,
-    no_user_update_test,
-    user_update_test,
-    no_group_update_test,
-    group_update_through_users_test,
-    group_update_through_spaces_test
+%%    change_bridge_restarts,
+%%    multiple_updates_test,
+%%    no_space_update_test,
+%%    space_update_through_support_test,
+%%    space_update_through_users_test,
+%%    no_user_update_test,
+%%    user_update_test,
+%%    no_group_update_test,
+%%    group_update_through_users_test,
+%%    group_update_through_spaces_test,
+    updates_for_added_user_test
 ]).
 
 change_bridge_restarts(_Config) ->
@@ -215,6 +217,27 @@ group_update_through_spaces_test(Config) ->
     ], []),
     ok.
 
+updates_for_added_user_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, [<<"s1">>, <<"s2">>]),
+    create_user(Node, <<"u1">>, [<<"g1">>], [<<"s2">>]),
+    create_group(Node, <<"g1">>, [], [<<"s1">>]),
+    create_space(Node, <<"s1">>, [P1], [], [<<"g1">>]),
+    create_space(Node, <<"s2">>, [P1], [<<"u1">>], []),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    Context = init_messages(Node, P1, []),
+    {Node, ProviderID, _Users, ResumeAt, Missing} = Context,
+
+    % when & then
+    verify_messages({Node, ProviderID, [<<"u1">>], ResumeAt, Missing}, [
+        user_expectation(<<"u1">>, <<"u1">>, [<<"s2">>], [<<"g1">>]),
+        group_expectation(<<"g1">>, <<"g1">>),
+        space_expectation(<<"s1">>, <<"s1">>),
+        space_expectation(<<"s2">>, <<"s2">>)
+    ], []),
+    ok.
 
 %%%===================================================================
 %%% Setup/teardown functions

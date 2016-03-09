@@ -28,7 +28,8 @@
     fun((ProviderID :: term())-> boolean())) -> [ProviderID :: term()].
 
 providers(Doc, Model, Filter) ->
-    lists:filter(Filter, lists:usort(providers(Doc, Model))).
+    Providers = lists:usort(providers(Doc, Model)),
+    lists:filter(Filter, Providers).
 
 providers(Doc, space) ->
     #document{value = Value, key = SpaceID} = Doc,
