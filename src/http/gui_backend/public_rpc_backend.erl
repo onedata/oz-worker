@@ -31,26 +31,17 @@
 %% @end
 %%--------------------------------------------------------------------
 handle(<<"getSupportedAuthorizers">>, _) ->
-    {ok, [
-        <<"github">>, <<"plgrid">>,
-        <<"google">>, <<"dropbox">>,
-        <<"facebook">>
-    ]};
+    Providers = auth_config:get_auth_providers(),
+    % Providers is a list of atoms
+    {ok, [str_utils:to_binary(Provider) || Provider <- Providers]};
 
 handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     case application:get_env(?APP_Name, dev_mode) of
         {ok, true} ->
             {ok, <<"/dev_login">>};
         _ ->
-            Provider = provider_to_provider_id(ProviderBin),
+            Provider = binary_to_atom(ProviderBin, utf8),
             HandlerModule = auth_config:get_provider_module(Provider),
             {ok, URL} = HandlerModule:get_redirect_url(false),
             {ok, URL}
     end.
-
-
-provider_to_provider_id(<<"github">>) -> github;
-provider_to_provider_id(<<"plgrid">>) -> plgrid;
-provider_to_provider_id(<<"google">>) -> google;
-provider_to_provider_id(<<"dropbox">>) -> dropbox;
-provider_to_provider_id(<<"facebook">>) -> facebook.

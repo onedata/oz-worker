@@ -42,7 +42,7 @@ handle(<<"sessionDetails">>, _) ->
     {ok, Res};
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
-    Provider = provider_to_provider_id(ProviderBin),
+    Provider = binary_to_atom(ProviderBin, utf8),
     HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
     {ok, URL};
@@ -57,11 +57,3 @@ handle(<<"getRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     UserId = g_session:get_user_id(),
     % @todo check if provider is online, if not push update of model
     auth_logic:get_redirection_uri(UserId, ProviderId).
-
-
-provider_to_provider_id(<<"github">>) -> github;
-provider_to_provider_id(<<"plgrid">>) -> plgrid;
-provider_to_provider_id(<<"google">>) -> google;
-provider_to_provider_id(<<"dropbox">>) -> dropbox;
-provider_to_provider_id(<<"facebook">>) -> facebook.
-
