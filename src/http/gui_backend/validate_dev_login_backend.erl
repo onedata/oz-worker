@@ -1,21 +1,19 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module implements page_backend_behaviour and is called
-%%% when login page is visited - it contains login logic (redirects to GR).
-%%% THIS IS A PROTOTYPE AND AN EXAMPLE OF IMPLEMENTATION.
+%%% when validate_dev_login page is visited.
+%%% It is used only in developer mode to log in bypassing auth providers.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(validate_dev_login_backend).
 -author("Lukasz Opiola").
 -behaviour(page_backend_behaviour).
-
--compile([export_all]).
 
 -include_lib("ctool/include/logging.hrl").
 
@@ -23,6 +21,15 @@
 -export([page_init/0]).
 
 
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link page_backend_behaviour} callback page_init/0.
+%% @end
+%%--------------------------------------------------------------------
 page_init() ->
     ParamsProps = g_ctx:get_url_params(),
     UserId = proplists:get_value(<<"user">>, ParamsProps),

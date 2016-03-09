@@ -56,9 +56,9 @@
 
 %% This record defines a token that can be used by user to do something
 -record(session, {
-    user_id :: onedata_user:id(),
+    user_id = undefined :: onedata_user:id() | undefined,
     memory = [] :: session:memory(),
-    accessed = 0 :: erlang:timestamp()
+    accessed = {0, 0, 0} :: erlang:timestamp()
 }).
 
 % Value in DB meaning that alias is not set.

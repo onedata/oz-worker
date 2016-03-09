@@ -71,7 +71,7 @@ find(<<"provider">>, ProviderIds) ->
 %% @end
 %%--------------------------------------------------------------------
 find_query(<<"provider">>, _Data) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.
 
 
 %%--------------------------------------------------------------------
@@ -91,7 +91,7 @@ find_all(<<"provider">>) ->
 %% @end
 %%--------------------------------------------------------------------
 create_record(<<"provider">>, _Data) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.
 
 
 %%--------------------------------------------------------------------
@@ -117,4 +117,4 @@ update_record(<<"provider">>, ProviderId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 delete_record(<<"provider">>, _Id) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.

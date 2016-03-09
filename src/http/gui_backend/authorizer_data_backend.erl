@@ -42,7 +42,7 @@ init() ->
 %% @end
 %%--------------------------------------------------------------------
 find(<<"authorizer">>, [_AuthorizerId]) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.
 
 
 %%--------------------------------------------------------------------
@@ -51,7 +51,7 @@ find(<<"authorizer">>, [_AuthorizerId]) ->
 %% @end
 %%--------------------------------------------------------------------
 find_query(<<"authorizer">>, _Data) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.
 
 
 %%--------------------------------------------------------------------
@@ -92,7 +92,7 @@ find_all(<<"authorizer">>) ->
 %% @end
 %%--------------------------------------------------------------------
 create_record(<<"authorizer">>, _Data) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.
 
 
 %%--------------------------------------------------------------------
@@ -101,7 +101,7 @@ create_record(<<"authorizer">>, _Data) ->
 %% @end
 %%--------------------------------------------------------------------
 update_record(<<"authorizer">>, _Id, _Data) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.
 
 
 %%--------------------------------------------------------------------
@@ -110,4 +110,4 @@ update_record(<<"authorizer">>, _Id, _Data) ->
 %% @end
 %%--------------------------------------------------------------------
 delete_record(<<"authorizer">>, _Id) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.

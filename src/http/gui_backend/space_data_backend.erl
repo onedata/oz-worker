@@ -67,7 +67,7 @@ find(<<"space">>, SpaceIds) ->
 %% @end
 %%--------------------------------------------------------------------
 find_query(<<"space">>, _Data) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.
 
 
 %%--------------------------------------------------------------------
@@ -122,4 +122,4 @@ update_record(<<"space">>, SpaceId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 delete_record(<<"space">>, _Id) ->
-    {error, not_iplemented}.
+    {error, <<"Not implemented">>}.

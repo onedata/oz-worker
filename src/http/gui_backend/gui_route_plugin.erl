@@ -68,7 +68,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see gui_route_plugin_behaviour:route/1
+%% {@link gui_route_plugin_behaviour} callback route/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec route(Path :: binary()) -> #gui_route{}.
@@ -95,7 +95,7 @@ route(_) -> ?INDEX.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see gui_route_plugin_behaviour:data_backend/2
+%% {@link gui_route_plugin_behaviour} callback data_backend/2
 %% @end
 %%--------------------------------------------------------------------
 -spec data_backend(HasSession :: boolean(), Identifier :: binary()) -> HandlerModule :: module().
@@ -107,7 +107,7 @@ data_backend(true, <<"clienttoken">>) -> client_token_data_backend.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see gui_route_plugin_behaviour:private_rpc_backend/0
+%% {@link gui_route_plugin_behaviour} callback private_rpc_backend/0
 %% @end
 %%--------------------------------------------------------------------
 private_rpc_backend() -> private_rpc_backend.
@@ -115,7 +115,7 @@ private_rpc_backend() -> private_rpc_backend.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see gui_route_plugin_behaviour:public_rpc_backend/0
+%% {@link gui_route_plugin_behaviour} callback public_rpc_backend/0
 %% @end
 %%--------------------------------------------------------------------
 public_rpc_backend() -> public_rpc_backend.
@@ -123,7 +123,7 @@ public_rpc_backend() -> public_rpc_backend.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see gui_route_plugin_behaviour:get_session_details/0
+%% {@link gui_route_plugin_behaviour} callback get_session_details/0
 %% @end
 %%--------------------------------------------------------------------
 -spec session_details() -> {ok, proplists:proplist()} | {error, term()}.
@@ -140,7 +140,7 @@ session_details() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see gui_route_plugin_behaviour:login_page_path/0
+%% {@link gui_route_plugin_behaviour} callback login_page_path/0
 %% @end
 %%--------------------------------------------------------------------
 -spec login_page_path() -> Path :: binary().
@@ -150,7 +150,7 @@ login_page_path() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see gui_route_plugin_behaviour:default_page_path/0
+%% {@link gui_route_plugin_behaviour} callback default_page_path/0
 %% @end
 %%--------------------------------------------------------------------
 -spec default_page_path() -> Path :: binary().
@@ -160,7 +160,7 @@ default_page_path() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see gui_route_plugin_behaviour:error_404_html_file/0
+%% {@link gui_route_plugin_behaviour} callback error_404_html_file/0
 %% @end
 %%--------------------------------------------------------------------
 -spec error_404_html_file() -> FileName :: binary().
@@ -170,7 +170,7 @@ error_404_html_file() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see gui_route_plugin_behaviour:error_500_html_file/0
+%% {@link gui_route_plugin_behaviour} callback error_500_html_file/0
 %% @end
 %%--------------------------------------------------------------------
 -spec error_500_html_file() -> FileName :: binary().
