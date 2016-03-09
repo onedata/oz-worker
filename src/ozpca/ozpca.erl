@@ -9,7 +9,7 @@
 %%% This module's methods should be used to manipulate Providers' certificates.
 %%% @end
 %%%-------------------------------------------------------------------
--module(zone_ca).
+-module(ozpca).
 -author("Konrad Zemek").
 
 -include("registered_names.hrl").
@@ -41,7 +41,7 @@
 %%--------------------------------------------------------------------
 -spec cacert_path(CaDir :: string()) -> string().
 cacert_path(CaDir) ->
-    {ok, CaDir} = application:get_env(?APP_Name, zone_ca_dir),
+    {ok, CaDir} = application:get_env(?APP_Name, ozpca_dir),
     filename:join(CaDir, ?CACERT_FILE).
 
 %%--------------------------------------------------------------------
@@ -153,7 +153,7 @@ generate_oz_cert(CADir, CertPath, KeyPath, Domain) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc The underlying implementation of {@link zone_ca:revoke/1}.
+%% @doc The underlying implementation of {@link ozpca:revoke/1}.
 %%--------------------------------------------------------------------
 -spec revoke_imp(Serial :: binary(), CaDir :: string()) -> ok.
 revoke_imp(Serial, CaDir) ->
@@ -172,7 +172,7 @@ revoke_imp(Serial, CaDir) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc The underlying implementation of {@link zone_ca:sign_provider_req/2}.
+%% @doc The underlying implementation of {@link ozpca:sign_provider_req/2}.
 %%--------------------------------------------------------------------
 -spec sign_provider_req_imp(ProviderId :: binary(), CSRPem :: binary(),
     CaDir :: string()) -> {ok, Pem :: binary(), Serial :: integer()}.
@@ -202,7 +202,7 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc The underlying implementation of {@link zone_ca:verify_provider_imp/1}.
+%% @doc The underlying implementation of {@link ozpca:verify_provider_imp/1}.
 %%--------------------------------------------------------------------
 -spec verify_provider_imp(PeerCertDer :: public_key:der_encoded(),
     CaDir :: string()) -> {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: any()}}.
@@ -224,7 +224,7 @@ verify_provider_imp(PeerCertDer, CaDir) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc The underlying implementation of {@link zone_ca:gen_crl/0}.
+%% @doc The underlying implementation of {@link ozpca:gen_crl/0}.
 %%--------------------------------------------------------------------
 -spec gen_crl_imp(CaDir :: string()) -> ok.
 gen_crl_imp(CaDir) ->
@@ -305,7 +305,7 @@ loop(CaDir) ->
     PeerCert :: #'OTPCertificate'{}) ->
     valid | {bad_cert, Reason :: any()}.
 check_revoked(CaCertDer, CaCert, PeerCert) ->
-    {ok, CaDir} = application:get_env(?APP_Name, zone_ca_dir),
+    {ok, CaDir} = application:get_env(?APP_Name, ozpca_dir),
 
     {ok, CRLPem} = file:read_file(filename:join(CaDir, "crl.pem")),
     [{'CertificateList', CRLDer, not_encrypted}] = public_key:pem_decode(CRLPem),

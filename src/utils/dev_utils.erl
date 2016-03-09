@@ -186,7 +186,7 @@ destroy_test_entities(Users, Groups, Spaces) ->
     RedirectionPoint :: binary(), CSR :: binary(), UUID :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
-    {ok, {ProviderCertPem, Serial}} = zone_ca:sign_provider_req(UUID, CSRBin),
+    {ok, {ProviderCertPem, Serial}} = ozpca:sign_provider_req(UUID, CSRBin),
     Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
     provider:save(#document{key = UUID, value = Provider}),
     {ok, UUID, ProviderCertPem}.
