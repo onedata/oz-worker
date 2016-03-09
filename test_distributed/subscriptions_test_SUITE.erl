@@ -21,7 +21,11 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([space_update_through_support_test/1, change_bridge_restarts/1, user_update_test/1, group_update_through_users_test/1, no_space_update_test/1, space_update_through_users_test/1, group_update_through_spaces_test/1, no_user_update_test/1, no_group_update_test/1]).
+-export([space_update_through_support_test/1, change_bridge_restarts/1,
+    user_update_test/1, group_update_through_users_test/1,
+    no_space_update_test/1, space_update_through_users_test/1,
+    group_update_through_spaces_test/1, no_user_update_test/1,
+    no_group_update_test/1, multiple_updates_test/1]).
 
 %%%===================================================================
 %%% API functions
@@ -29,6 +33,7 @@
 
 all() -> ?ALL([
     change_bridge_restarts,
+    multiple_updates_test,
     no_space_update_test,
     space_update_through_support_test,
     space_update_through_users_test,
@@ -135,6 +140,26 @@ user_update_test(Config) ->
     % then
     verify_messages(Context, [
         user_expectation(<<"u1">>, <<"updated">>, [], [])
+    ], []),
+    ok.
+
+multiple_updates_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, [<<"s1">>]),
+    create_user(Node, <<"u1">>, [], []),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Context = init_messages(Node, P1, [<<"u1">>]),
+    update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated1">>}),
+    update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated2">>}),
+    update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated3">>}),
+    update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated4">>}),
+
+    % then
+    verify_messages(Context, [
+        user_expectation(<<"u1">>, <<"updated4">>, [], [])
     ], []),
     ok.
 
@@ -329,5 +354,5 @@ get_messages(Retries, Acc) ->
     receive
         {push, Messages} ->
             get_messages(Retries - 1, [json_utils:decode(Messages) | Acc])
-    after 500 -> Acc
+    after timer:seconds(2) -> Acc
     end.
