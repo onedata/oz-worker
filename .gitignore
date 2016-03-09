@@ -11,7 +11,6 @@ ebin
 cluster_manager
 rel/oz_worker
 rel/*.rpm
-rel/data/auth.config
 package
 package.tar.gz
 dockerbuild-sha.txt
