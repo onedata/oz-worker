@@ -71,11 +71,14 @@ change_callback(Seq, Doc, Type) ->
     {ok, State :: #{}} | {ok, State :: #{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore).
 init([]) ->
-    await_for_name_possibly_free(),
-    case register_name_or_exit() of
+    case await_for_name_possibly_free() of
         ok ->
-            gen_server:cast({global, ?MODULE}, start_changes_stream),
-            {ok, #{}};
+            case register_name_or_exit() of
+                ok ->
+                    gen_server:cast({global, ?MODULE}, start_changes_stream),
+                    {ok, #{}};
+                {error, Reason} -> {stop, Reason}
+            end;
         {error, Reason} -> {stop, Reason}
     end.
 
@@ -237,15 +240,14 @@ await_for_name_possibly_free() ->
 
     case global:whereis_name(?MODULE) of
         undefined ->
-            ?info("No leader detected");
+            ?info("No leader detected"), ok;
         Pid ->
             ?info("Leader ~p detected", [Pid]),
             erlang:monitor(process, Pid),
             receive
                 {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
-                    ?info("Detected leader failure")
+                    ?info("Detected leader failure"), ok
             after
-                timer:seconds(Limit) ->
-                    ?info("Scheduled takeover")
+                timer:seconds(Limit) -> {error, await_timeout}
             end
     end.

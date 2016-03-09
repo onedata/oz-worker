@@ -119,7 +119,9 @@ push_messages(ProviderID, Messages) ->
     {ok, #document{value = #provider_subscription{connections = Conns}}}
         = subscriptions:subscription(ProviderID),
     case Conns of
-        [Conn | _] -> Encoded = json_utils:encode({array, Messages}),
+        [Conn | _] ->
+            UniqueMessages = lists:usort(Messages),
+            Encoded = json_utils:encode({array, UniqueMessages}),
             ?info("Pushing ~p ~p ~p", [ProviderID, Conn, Encoded]),
             Conn ! {push, Encoded};
         [] -> ?info("No connection ~p ~p", [ProviderID, Messages])

@@ -27,20 +27,34 @@
 -spec providers(Doc :: datastore:document(), Model :: atom(),
     fun((ProviderID :: term())-> boolean())) -> [ProviderID :: term()].
 
-providers(Doc, space, Filter) ->
+providers(Doc, Model, Filter) ->
+    lists:filter(Filter, lists:usort(providers(Doc, Model))).
+
+providers(Doc, space) ->
     #document{value = Value, key = SpaceID} = Doc,
-    #space{providers = ProvidersWithSupport} = Value,
-    {SpaceProviders, _} = lists:unzip(ProvidersWithSupport),
-    UserProviders = [], % todo
+    #space{providers = SpaceProviders} = Value,
+
+    {ok, [{users, Users}]} = space_logic:get_effective_users(SpaceID),
+    UserProviders = get_providers(Users),
+
     SpaceProviders ++ UserProviders;
 
-providers(_Doc, user_group, _Filter) ->
-    [];
+providers(Doc, user_group) ->
+    #document{value = #user_group{users = UsersWithPriv, spaces = Spaces}} = Doc,
+    {Users, _} = lists:unzip(UsersWithPriv),
+    ProvidesThroughUsers = get_providers(Users),
 
-providers(Doc, onedata_user, _Filter) ->
+    ProvidesThroughSpaces = lists:flatmap(fun(SpaceID) ->
+        {ok, #document{value = #space{providers = Providers}}} = space:get(SpaceID),
+        Providers
+    end, Spaces),
+
+    ProvidesThroughUsers ++ ProvidesThroughSpaces;
+
+providers(Doc, onedata_user) ->
     get_providers([Doc#document.key]);
 
-providers(_Doc, _Type, _ProviderFilterFun) ->
+providers(_Doc, _Type) ->
     [].
 
 get_providers(UserIDs) ->

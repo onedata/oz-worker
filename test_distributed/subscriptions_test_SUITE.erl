@@ -21,16 +21,22 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([simple_space_update_test/1, change_bridge_restarts/1, simple_user_update_test/1]).
+-export([space_update_through_support_test/1, change_bridge_restarts/1, user_update_test/1, group_update_through_users_test/1, no_space_update_test/1, space_update_through_users_test/1, group_update_through_spaces_test/1, no_user_update_test/1, no_group_update_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 all() -> ?ALL([
-%%    change_bridge_restarts,
-    simple_space_update_test,
-    simple_user_update_test
+    change_bridge_restarts,
+    no_space_update_test,
+    space_update_through_support_test,
+    space_update_through_users_test,
+    no_user_update_test,
+    user_update_test,
+    no_group_update_test,
+    group_update_through_users_test,
+    group_update_through_spaces_test
 ]).
 
 change_bridge_restarts(_Config) ->
@@ -49,7 +55,23 @@ change_bridge_restarts(_Config) ->
     ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
     ok.
 
-simple_space_update_test(Config) ->
+no_space_update_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, []),
+    create_space(Node, <<"s1">>, [], [], []),
+
+    % when
+    Context = init_messages(Node, P1, []),
+    update_document(Node, space, <<"s1">>, #{name => <<"updated">>}),
+
+    % then
+    verify_messages(Context, [], [
+        space_expectation(<<"s1">>, <<"updated">>)
+    ]),
+    ok.
+
+space_update_through_support_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, <<"p1">>, [<<"s1">>]),
@@ -65,7 +87,41 @@ simple_space_update_test(Config) ->
     ], []),
     ok.
 
-simple_user_update_test(Config) ->
+space_update_through_users_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, []),
+    create_user(Node, <<"u1">>, [], []),
+    create_space(Node, <<"s1">>, [P1], [<<"u1">>], []),
+
+    % when
+    Context = init_messages(Node, P1, [<<"u1">>]),
+    update_document(Node, space, <<"s1">>, #{name => <<"updated">>}),
+
+    % then
+    verify_messages(Context, [
+        space_expectation(<<"s1">>, <<"updated">>)
+    ], []),
+    ok.
+
+no_user_update_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, [<<"s1">>]),
+    create_user(Node, <<"u1">>, [], []),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Context = init_messages(Node, P1, []),
+    update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated">>}),
+
+    % then
+    verify_messages(Context, [], [
+        user_expectation(<<"u1">>, <<"updated">>, [], [])
+    ]),
+    ok.
+
+user_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, <<"p1">>, [<<"s1">>]),
@@ -79,6 +135,58 @@ simple_user_update_test(Config) ->
     % then
     verify_messages(Context, [
         user_expectation(<<"u1">>, <<"updated">>, [], [])
+    ], []),
+    ok.
+
+no_group_update_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, []),
+    create_group(Node, <<"g1">>, [], []),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Context = init_messages(Node, P1, [<<"u1">>]),
+    update_document(Node, user_group, <<"g1">>, #{name => <<"updated">>}),
+
+    % then
+    verify_messages(Context, [], [
+        group_expectation(<<"g1">>, <<"updated">>)
+    ]),
+    ok.
+group_update_through_users_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, []),
+    create_user(Node, <<"u1">>, [], []),
+    create_group(Node, <<"g1">>, [<<"u1">>], []),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Context = init_messages(Node, P1, [<<"u1">>]),
+    update_document(Node, user_group, <<"g1">>, #{name => <<"updated">>}),
+
+    % then
+    verify_messages(Context, [
+        group_expectation(<<"g1">>, <<"updated">>)
+    ], []),
+    ok.
+
+group_update_through_spaces_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, [<<"s1">>]),
+    create_space(Node, <<"s1">>, [P1], [], [<<"g1">>]),
+    create_group(Node, <<"g1">>, [], [<<"s1">>]),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Context = init_messages(Node, P1, [<<"u1">>]),
+    update_document(Node, user_group, <<"g1">>, #{name => <<"updated">>}),
+
+    % then
+    verify_messages(Context, [
+        group_expectation(<<"g1">>, <<"updated">>)
     ], []),
     ok.
 
@@ -112,6 +220,9 @@ user_expectation(ID, Name, Spaces, Groups) ->
         {<<"name">>, Name}, {<<"space_ids">>, Spaces}, {<<"group_ids">>, Groups}
     ]}].
 
+group_expectation(ID, Name) ->
+    [{<<"id">>, ID}, {<<"group">>, [{<<"name">>, Name}]}].
+
 create_group(Node, Name, Users, Spaces) ->
     ?assertMatch({ok, Name}, rpc:call(Node, user_group, save, [#document{
         key = Name,
@@ -123,7 +234,7 @@ create_space(Node, Name, Providers, Users, Groups) ->
     ?assertMatch({ok, Name}, rpc:call(Node, space, save, [#document{
         key = Name,
         value = #space{name = Name, users = zip_with(Users, []),
-            groups = zip_with(Groups, []), providers = zip_with(Providers, 1)}
+            groups = zip_with(Groups, []), providers = Providers}
     }])).
 
 create_user(Node, Name, Groups, Spaces) ->
@@ -179,6 +290,9 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages(20, [])),
 
+    ct:print("Context ~p", [Context]),
+    ct:print("All ~p", [All]),
+
     Seqs = extract_sequence_numbers(All),
     NextResumeAt = largest([ResumeAt | Seqs]),
     NextMissing = (Missing ++ new_expected_seqs(NextResumeAt, ResumeAt)) -- Seqs,
@@ -215,5 +329,5 @@ get_messages(Retries, Acc) ->
     receive
         {push, Messages} ->
             get_messages(Retries - 1, [json_utils:decode(Messages) | Acc])
-    after timer:seconds(2) -> Acc
+    after 500 -> Acc
     end.
