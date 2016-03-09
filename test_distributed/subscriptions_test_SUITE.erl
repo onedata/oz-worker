@@ -21,14 +21,16 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([simple_test/1, change_bridge_restarts/1]).
+-export([simple_space_update_test/1, change_bridge_restarts/1, simple_user_update_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 all() -> ?ALL([
-    change_bridge_restarts, simple_test
+%%    change_bridge_restarts,
+    simple_space_update_test,
+    simple_user_update_test
 ]).
 
 change_bridge_restarts(_Config) ->
@@ -47,14 +49,36 @@ change_bridge_restarts(_Config) ->
     ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
     ok.
 
-simple_test(Config) ->
+simple_space_update_test(Config) ->
+    % given
     [Node | _] = ?config(oz_worker_nodes, Config),
-
     P1 = create_provider(Node, <<"p1">>, [<<"s1">>]),
     create_space(Node, <<"s1">>, [P1], [], []),
 
-    verify_messages(Node, P1, [
-        [{<<"space">>, [{<<"id">>, <<"s1">>}, {<<"name">>, <<"s1">>}]}]
+    % when
+    Context = init_messages(Node, P1, []),
+    update_document(Node, space, <<"s1">>, #{name => <<"updated">>}),
+
+    % then
+    verify_messages(Context, [
+        space_expectation(<<"s1">>, <<"updated">>)
+    ], []),
+    ok.
+
+simple_user_update_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, [<<"s1">>]),
+    create_user(Node, <<"u1">>, [], []),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Context = init_messages(Node, P1, [<<"u1">>]),
+    update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated">>}),
+
+    % then
+    verify_messages(Context, [
+        user_expectation(<<"u1">>, <<"updated">>, [], [])
     ], []),
     ok.
 
@@ -80,29 +104,37 @@ end_per_suite(Config) ->
 %%% Internal functions
 %%%===================================================================
 
+space_expectation(ID, Name) ->
+    [{<<"id">>, ID}, {<<"space">>, [{<<"id">>, ID}, {<<"name">>, Name}]}].
+
+user_expectation(ID, Name, Spaces, Groups) ->
+    [{<<"id">>, ID}, {<<"user">>, [
+        {<<"name">>, Name}, {<<"space_ids">>, Spaces}, {<<"group_ids">>, Groups}
+    ]}].
+
 create_group(Node, Name, Users, Spaces) ->
     ?assertMatch({ok, Name}, rpc:call(Node, user_group, save, [#document{
         key = Name,
         value = #user_group{name = Name,
             users = zip_with(Users, []), spaces = Spaces}
-    }])),
-    Name.
+    }])).
 
 create_space(Node, Name, Providers, Users, Groups) ->
     ?assertMatch({ok, Name}, rpc:call(Node, space, save, [#document{
         key = Name,
         value = #space{name = Name, users = zip_with(Users, []),
             groups = zip_with(Groups, []), providers = zip_with(Providers, 1)}
-    }])),
-    Name.
+    }])).
 
 create_user(Node, Name, Groups, Spaces) ->
     ?assertMatch({ok, Name}, rpc:call(Node, onedata_user, save, [#document{
         key = Name,
         value = #onedata_user{alias = Name, name = Name,
             groups = Groups, spaces = Spaces}
-    }])),
-    Name.
+    }])).
+
+update_document(Node, Model, ID, Diff) ->
+    ?assertMatch({ok, _}, rpc:call(Node, Model, update, [ID, Diff])).
 
 create_provider(Node, Name, Spaces) ->
     {_, CSRFile, _} = generate_cert_files(),
@@ -128,27 +160,33 @@ generate_cert_files() ->
     os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
     {KeyFile, CSRFile, CertFile}.
 
-verify_messages(Node, ProviderID, Expected, Forbidden) ->
-    call_worker(Node, {add_connection, ProviderID, self()}),
-    verify_messages(Node, ProviderID, 0, [], 5, Expected, Forbidden).
+verify_messages(Context, Expected, Forbidden) ->
+    verify_messages(Context, 5, Expected, Forbidden).
 
-verify_messages(_, _, _, _, 0, Expected, _) ->
-    ?assertMatch([], Expected);
-verify_messages(Node, ProviderID, ResumeAt, Missing, Retries, Expected, Forbidden) ->
+init_messages(Node, ProviderID, Users) ->
+    call_worker(Node, {add_connection, ProviderID, self()}),
+    verify_messages({Node, ProviderID, Users, 1, []}, [], [["flushy flushy"]]).
+
+verify_messages(Context, _, [], []) ->
+    Context;
+verify_messages(Context, 0, Expected, _) ->
+    ?assertMatch([], Expected),
+    Context;
+verify_messages(Context, Retries, Expected, Forbidden) ->
+    {Node, ProviderID, Users, ResumeAt, Missing} = Context,
+
+    call_worker(Node, {update_users, ProviderID, Users}),
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages(20, [])),
 
-    ?assertMatch(Forbidden, Forbidden -- All),
-    case remaining_expected(Expected, All) of
-        [] -> ok;
-        _ ->
-            Seqs = extract_sequence_numbers(All),
-            NextResumeAt = largest([ResumeAt | Seqs]),
-            NextMissing = (Missing ++ new_expected_seqs(NextResumeAt, ResumeAt)) -- Seqs,
+    Seqs = extract_sequence_numbers(All),
+    NextResumeAt = largest([ResumeAt | Seqs]),
+    NextMissing = (Missing ++ new_expected_seqs(NextResumeAt, ResumeAt)) -- Seqs,
+    NextContext = {Node, ProviderID, Users, NextResumeAt, NextMissing},
 
-            ct:print("ra ~p, m ~p \nnra ~p, nm ~p \nall ~p", [ResumeAt, Missing, NextResumeAt, NextMissing, All]),
-            verify_messages(Node, ProviderID, NextResumeAt, NextMissing, Retries - 1, Expected, Forbidden)
-    end.
+    ?assertMatch(Forbidden, Forbidden -- All),
+    RemainingExpected = remaining_expected(Expected, All),
+    verify_messages(NextContext, Retries - 1, RemainingExpected, Forbidden).
 
 new_expected_seqs(NextResumeAt, ResumeAt) ->
     case NextResumeAt > (ResumeAt + 1) of
@@ -176,7 +214,6 @@ get_messages(0, Acc) -> Acc;
 get_messages(Retries, Acc) ->
     receive
         {push, Messages} ->
-            ct:print(">> ~p", [Messages]),
             get_messages(Retries - 1, [json_utils:decode(Messages) | Acc])
     after timer:seconds(2) -> Acc
     end.

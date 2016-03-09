@@ -38,8 +38,19 @@ providers(_Doc, user_group, _Filter) ->
     [];
 
 providers(Doc, onedata_user, _Filter) ->
-    [];
+    get_providers([Doc#document.key]);
 
 providers(_Doc, _Type, _ProviderFilterFun) ->
     [].
+
+get_providers(UserIDs) ->
+    UsersSet = ordsets:from_list(UserIDs),
+    lists:filtermap(fun(SubDoc) ->
+        #document{value = #provider_subscription{users = Users,
+            provider = ProviderID}} = SubDoc,
+        case ordsets:is_disjoint(UsersSet, ordsets:from_list(Users)) of
+            false -> {true, ProviderID};
+            true -> false
+        end
+    end, subscriptions:subscriptions()).
 
