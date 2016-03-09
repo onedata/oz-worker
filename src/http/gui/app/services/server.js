@@ -20,8 +20,8 @@ export default Ember.Service.extend({
    * Can register onOpen, onError callbacks that will be called after
    * the connection is established or refused.
    */
-  initializeWebSocket: function (onOpen, onError) {
-    this.get('adapter').initializeWebSocket(onOpen, onError);
+  initWebSocket: function (onOpen, onError) {
+    this.get('adapter').initWebSocket(onOpen, onError);
   },
 
   /**

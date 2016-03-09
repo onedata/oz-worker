@@ -41,14 +41,6 @@ handle(<<"sessionDetails">>, _) ->
     ?alert("~p", [Res]),
     {ok, Res};
 
-% @todo the same in private
-handle(<<"getSupportedAuthorizers">>, _) ->
-    {ok, [
-        <<"github">>, <<"plgrid">>,
-        <<"google">>, <<"dropbox">>,
-        <<"facebook">>
-    ]};
-
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     Provider = provider_to_provider_id(ProviderBin),
     HandlerModule = auth_config:get_provider_module(Provider),
@@ -56,11 +48,9 @@ handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     {ok, URL};
 
 handle(<<"getSupportToken">>, [{<<"spaceId">>, SpaceId}]) ->
-    ?dump({getSupportToken, SpaceId}),
     Client = #client{type = user, id = g_session:get_user_id()},
     {ok, Token} = token_logic:create(
         Client, space_support_token, {space, SpaceId}),
-    ?dump(Token),
     {ok, Token};
 
 handle(<<"getRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->

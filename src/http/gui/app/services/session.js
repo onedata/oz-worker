@@ -42,7 +42,7 @@ export default SessionService.extend({
       this.set('sessionRestoreResolve', null);
       this.set('sessionRestoreReject', null);
     };
-    this.get('server').initializeWebSocket(onOpen, onError);
+    this.get('server').initWebSocket(onOpen, onError);
     return new Ember.RSVP.Promise((resolve, reject) => {
       // This promise will be resolved when WS connection is established
       // and session details are sent via WS.

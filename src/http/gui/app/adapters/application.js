@@ -76,11 +76,11 @@ export default DS.RESTAdapter.extend({
 
   /** Called automatically on adapter init. */
   init() {
-    this.initializeWebSocket();
+    this.initWebSocket();
   },
 
   /** Initializes the WebSocket */
-  initializeWebSocket(onOpen, onError) {
+  initWebSocket(onOpen, onError) {
     // Register callbacks even if WebSocket is already being initialized.
     if (onOpen) {
       this.set('onOpenCallback', onOpen);

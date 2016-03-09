@@ -74,6 +74,8 @@ generate_dev: deps compile gui_dev
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
 	./rebar generate $(OVERLAY_VARS)
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
+	# Try to get developer auth.config
+	./get_dev_auth_config.sh
 
 ## Generates a production release
 generate: deps compile gui_prod

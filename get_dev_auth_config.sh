@@ -7,11 +7,11 @@
 # cited in 'LICENSE.txt'.
 # ===================================================================
 # This simple script clones or updates onedev repository if it is possible
-# i. e. the user has rights to clone it. If it succeeds, it swaps the empty
+# i. e. the user has rights to clone it. If it succeeds, it swaps the example
 # auth config file with the one from repository making it possible to login
 # via OAuth test apps.
 #
-# The script is run at every get-deps rebar command.
+# The script is run on test_rel make target.
 # ===================================================================
 
 # Enter the script directory
@@ -26,30 +26,21 @@ cd deps
 if [ ! -d "onedev/.git" ]; then
     # Try to clone the repo
     git clone ssh://git@git.plgrid.pl:7999/vfs/onedev.git
-    if [ $? -eq 0 ]; then
-        # The repo was cloned, update to the newest version.
-        echo -e "\t[  OK  ]"
-        cd onedev
-        git checkout develop
-        git pull
-    else
-        # The repo was not cloned, skip
+    if [ $? -ne 0 ]; then
+        # The repo was not cloned, terminate
         echo -e "\t[FAILED]"
-        echo "Replacing auth.config with auth.config.example."
-        cd ${RUNNER_SCRIPT_DIR}
-        cp rel/data/auth.config.example rel/data/auth.config
         exit 0
     fi
-else
-    # The repo was not cloned, but it already exists. Update to the newest version.
-    echo -e "\t[  OK  ]"
-    cd onedev
-    git checkout develop
-    git pull
 fi
+
+# The repo was either cloned or existed. Update to the newest version.
+echo -e "\t[  OK  ]"
+cd onedev
+git checkout develop
+git pull
 
 # Replace auth.config
 cd ${RUNNER_SCRIPT_DIR}
 echo "Replacing auth.config."
-cp deps/onedev/auth.config rel/data/auth.config
+cp deps/onedev/auth.config rel/oz_worker/data/auth.config
 exit 0
