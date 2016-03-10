@@ -9,14 +9,14 @@
 %%% This module resolves which providers are eligible for receiving updates.
 %%% @end
 %%%-------------------------------------------------------------------
--module(allowed).
+-module(eligible).
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([providers/3]).
+-export([providers/2]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -24,26 +24,21 @@
 %% @end
 %%--------------------------------------------------------------------
 
--spec providers(Doc :: datastore:document(), Model :: atom(),
-    fun((ProviderID :: term())-> boolean())) -> [ProviderID :: term()].
-
-providers(Doc, Model, Filter) ->
-    Providers = lists:usort(providers(Doc, Model)),
-    lists:filter(Filter, Providers).
-
+-spec providers(Doc :: datastore:document(), Model :: atom())
+        -> [ProviderID :: term()].
 providers(Doc, space) ->
     #document{value = Value, key = SpaceID} = Doc,
     #space{providers = SpaceProviders} = Value,
 
     {ok, [{users, Users}]} = space_logic:get_effective_users(SpaceID),
-    UserProviders = get_providers(Users),
+    UserProviders = through_users(Users),
 
     SpaceProviders ++ UserProviders;
 
 providers(Doc, user_group) ->
     #document{value = #user_group{users = UsersWithPriv, spaces = Spaces}} = Doc,
     {Users, _} = lists:unzip(UsersWithPriv),
-    ProvidesThroughUsers = get_providers(Users),
+    ProvidesThroughUsers = through_users(Users),
 
     ProvidesThroughSpaces = lists:flatmap(fun(SpaceID) ->
         {ok, #document{value = #space{providers = Providers}}} = space:get(SpaceID),
@@ -53,12 +48,31 @@ providers(Doc, user_group) ->
     ProvidesThroughUsers ++ ProvidesThroughSpaces;
 
 providers(Doc, onedata_user) ->
-    get_providers([Doc#document.key]);
+    through_users([Doc#document.key]);
 
 providers(_Doc, _Type) ->
     [].
 
-get_providers(UserIDs) ->
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns providers eligible for receiving given update.
+%% @end
+%%--------------------------------------------------------------------
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns providers who are eligible thanks to users declared in
+%% current subscription.
+%% @end
+%%--------------------------------------------------------------------
+
+through_users(UserIDs) ->
     UsersSet = ordsets:from_list(UserIDs),
     lists:filtermap(fun(SubDoc) ->
         #document{value = #provider_subscription{users = Users,
@@ -67,5 +81,5 @@ get_providers(UserIDs) ->
             false -> {true, ProviderID};
             true -> false
         end
-    end, subscriptions:subscriptions()).
+    end, subscriptions:all()).
 

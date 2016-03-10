@@ -23,7 +23,7 @@
 -record(provider_subscription, {
     connections = [] :: [pid()],
     provider :: binary(),
-    resume_at = 0 :: seq(),
+    resume_at = 1 :: seq(),
     missing = [] :: [seq()],
     users = [] :: [binary()]
 }).

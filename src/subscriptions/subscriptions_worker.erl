@@ -19,17 +19,37 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% worker_plugin_behaviour callbacks
--export([init/1, handle/1, cleanup/0, push_messages/2]).
+-export([init/1, handle/1, cleanup/0]).
 
+%% API
+-export([push_messages/2]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes messages to the provider via (wss) connection.
+%% If there is no connection messages are discarded.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_messages(ProviderID :: binary(), Messages :: [term()])
+        -> no_return().
+push_messages(ProviderID, Messages) ->
+    {ok, #document{value = #provider_subscription{connections = Conns}}}
+        = subscriptions:get_doc(ProviderID),
+    case Conns of
+        [Conn | _] ->
+            UniqueMessages = lists:usort(Messages),
+            Encoded = json_utils:encode({array, UniqueMessages}),
+            Conn ! {push, Encoded};
+        [] -> ?info("No connection ~p ~p", [ProviderID, Messages])
+    end.
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -39,13 +59,12 @@
 -spec init(Args :: term()) ->
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
 init(_Args) ->
-    process_flag(trap_exit, true),
     changes_cache:ensure_initialised(),
     {ok, #{}}.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Initialises the worker and ensures cache is available.
+%% Handles various requests connected with subscriptions.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle(Request :: term()) -> ok | {error, Reason :: term()} | no_return().
@@ -93,24 +112,66 @@ cleanup() ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches old changes and sends them to the providers.
+%% @end
+%%--------------------------------------------------------------------
+-spec fetch_history(ProviderID :: binary(), ResumeAt :: seq(), Missing :: [seq()])
+        -> no_return().
 fetch_history(ProviderID, ResumeAt, Missing) ->
-    [SmallestMissing | _] = lists:append(Missing, [ResumeAt]),
     Filter = fun(P) -> P =:= ProviderID end,
-    case {changes_cache:newest_seq(), changes_cache:oldest_seq()} of
-        {{ok, _Newest}, {ok, _Oldest}} when SmallestMissing >= _Oldest ->
-            fetch_from_cache(SmallestMissing, _Newest, Filter);
-        {{ok, _Newest}, {ok, _Oldest}} ->
-            fetch_from_cache(SmallestMissing, _Newest, Filter),
-            fetch_from_db(SmallestMissing, _Oldest - 1, Filter);
-        _ -> fetch_from_db(SmallestMissing, last_seq(), Filter)
+
+
+    case {changes_cache:oldest_seq(), changes_cache:newest_seq()} of
+        {{ok, Oldest}, {ok, Newest}} ->
+            case get_seq_to_fetch(Newest, ResumeAt, Missing) of
+                [] -> ok;
+                [SmallestToFetch | _] = ToFetch ->
+                    fetch_from_cache(ToFetch, Filter),
+                    case Oldest >= SmallestToFetch of
+                        true -> ok;
+                        false -> fetch_from_db(SmallestToFetch, Oldest, Filter)
+                    end
+            end;
+        _ ->
+            [Start | _] = Missing ++ [ResumeAt],
+            fetch_from_db(Start, current_seq(), Filter)
     end.
 
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Transforms provider declaration to historical sequence numbers.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_seq_to_fetch(Newest :: seq(), ResumeAt :: seq(), Missing :: [seq()])
+        -> ToFetch :: [seq()].
+get_seq_to_fetch(Newest, ResumeAt, Missing) ->
+    case Newest < ResumeAt of
+        true -> Missing;
+        false -> Missing ++ lists:seq(ResumeAt, Newest)
+    end.
 
-fetch_from_cache(From, To, Filter) ->
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches old changes from cache and sends them to the providers.
+%% @end
+%%--------------------------------------------------------------------
+
+fetch_from_cache(Seqs, Filter) ->
     lists:foreach(fun({Seq, {Doc, Type}}) ->
         handle_change(Seq, Doc, Type, Filter)
-    end, changes_cache:slice(From, To)).
+    end, changes_cache:query(Seqs)).
 
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches changes from db and sends them to the providers.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec fetch_from_db(From :: seq(), To :: seq(),
+    Filter :: fun((ProviderID :: binary()) -> boolean()))
+        -> no_return().
 fetch_from_db(From, To, Filter) ->
     spawn(fun() ->
         couchdb_datastore_driver:changes_start_link(fun
@@ -120,28 +181,28 @@ fetch_from_db(From, To, Filter) ->
         end, From, To)
     end).
 
-push_messages(ProviderID, Messages) ->
-    {ok, #document{value = #provider_subscription{connections = Conns}}}
-        = subscriptions:subscription(ProviderID),
-    case Conns of
-        [Conn | _] ->
-            UniqueMessages = lists:usort(Messages),
-            Encoded = json_utils:encode({array, UniqueMessages}),
-            ?info("Pushing ~p ~p ~p", [ProviderID, Conn, Encoded]),
-            Conn ! {push, Encoded};
-        [] -> ?info("No connection ~p ~p", [ProviderID, Messages])
-    end.
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Sends to all providers information about the update. If provider shouldn't
+%% be informed about given change, only 'ignore' message is sent to inform the
+%% provider, that he shouldn't expect update with given sequence number.
+%% @end
+%%--------------------------------------------------------------------
 
-handle_change(Seq, Doc, Type, Filter) ->
-    Message = translator:get_msg(Seq, Doc, Type),
+-spec handle_change(Seq :: seq(), Doc :: datastore:document(), Model :: atom(),
+    Filter :: fun((ProviderID :: binary()) -> boolean()))
+        -> no_return().
+
+handle_change(Seq, Doc, Model, Filter) ->
+    Message = translator:get_msg(Seq, Doc, Model),
     IgnoreMessage = translator:get_ignore_msg(Seq),
 
-    Providers = allowed:providers(Doc, Type, Filter),
-    Subscriptions = subscriptions:subscriptions(),
+    Providers = lists:filter(Filter, eligible:providers(Doc, Model)),
+    Subscriptions = subscriptions:all(),
     ProvidersSet = sets:from_list(Providers),
 
     lists:foreach(fun(#document{value = Subscription}) ->
-        case subscriptions:subscribed(Subscription, Seq) of
+        case subscriptions:seen(Subscription, Seq) of
             false -> ok;
             true ->
                 ProviderID = Subscription#provider_subscription.provider,
@@ -153,8 +214,14 @@ handle_change(Seq, Doc, Type, Filter) ->
         end
     end, Subscriptions).
 
--spec last_seq() -> non_neg_integer().
-last_seq() ->
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Retrieves current sequence number from the db.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec current_seq() -> non_neg_integer().
+current_seq() ->
     try
         {ok, LastSeq, _} = couchdb_datastore_driver:db_run(couchbeam_changes, follow_once, [], 30),
         binary_to_integer(LastSeq)

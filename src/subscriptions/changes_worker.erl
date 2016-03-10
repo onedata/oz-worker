@@ -7,9 +7,9 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This worker maintains stream which fetches recent changes
-%%% from the couchbase. Only one worker is to be active.
-%%% @todo do not monitor global name
-%%% @todo use solution introduced in VFS-1748
+%%% from the couchbase. Only one worker is maintain active stream.
+%%% todo: do not monitor global name
+%%% todo: use solution introduced in VFS-1748
 %%% @end
 %%%-------------------------------------------------------------------
 -module(changes_worker).
@@ -37,14 +37,16 @@
 %% @end
 %%--------------------------------------------------------------------
 
--spec change_callback(Seq :: non_neg_integer(), datastore:document() | stream_ended,
+-spec change_callback(Seq :: non_neg_integer(),
+    datastore:document() | stream_ended,
     model_behaviour:model_type() | undefined) -> ok.
 
 change_callback(_Seq, stream_ended, _Type) ->
     gen_server:cast(?MODULE, {stop, stream_ended});
 
 change_callback(Seq, Doc, Type) ->
-    worker_proxy:cast(?SUBSCRIPTIONS_WORKER_NAME, {handle_change, Seq, Doc, Type}).
+    Request = {handle_change, Seq, Doc, Type},
+    worker_proxy:cast(?SUBSCRIPTIONS_WORKER_NAME, Request).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -101,6 +103,8 @@ cleanup() ->
 %% @private
 %% @doc
 %% Initialize changes stream, which starts from current sequence number.
+%% If claim for the global name is not valid, the stream is terminated.
+%% If couchbase is not reachable, stream is not to be started.
 %% @end
 %%--------------------------------------------------------------------
 
@@ -140,6 +144,17 @@ fetch_last_seq() ->
             {error, couchbeam_changes_not_working}
     end.
 
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Schedules stream presence check. Checks are executed at regular interval
+%% and they trigger stream restarts once problems are detected.
+%% First check is performed immediately.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec schedule_stream_presence_check() -> no_return().
 schedule_stream_presence_check() ->
     {ok, Interval} = application:get_env(?APP_Name,
         changes_stream_presence_check_interval_seconds),

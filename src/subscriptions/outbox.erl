@@ -6,7 +6,9 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module accepts messages and pushes them in small batches.
+%%% Accepts messages and pushes them in small batches.
+%%% This module relies on subscriptions_worker running.
+%%% Each subscriptions_worker maintains separate batches.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(outbox).
@@ -19,6 +21,7 @@
 
 -export([push/2, put/3]).
 
+% Describes state of batch.
 -record(outbox, {
     timer_expires :: pos_integer(),
     timer :: timer:tref(),
@@ -27,20 +30,32 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Pushes current batch.
+%% This function is used internally but can be used to force immediate batch push.
 %% @end
 %%--------------------------------------------------------------------
+-spec push(ID, PushFun) -> no_return() when
+    ID :: term(),
+    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> no_return()).
+
 push(ID, PushFun) ->
     worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
-        (Outbox = #outbox{buffer = Buffer}) ->
+        (Outbox = #outbox{buffer = Buffer, timer = TRef}) ->
+            case TRef of undefined -> ok; _ -> timer:cancel(TRef) end,
             PushFun(ID, Buffer),
             Outbox#outbox{buffer = [], timer = undefined}
     end).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Buffers the message ans schedules the push.
+%% Buffers the message ans schedules the push (if needed).
 %% @end
 %%--------------------------------------------------------------------
+-spec put(ID, PushFun, Message) -> no_return() when
+    ID :: term(),
+    Message :: term(),
+    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> no_return()).
+
 put(ID, PushFun, Message) ->
     Now = erlang:system_time(),
     TimerTTL = batch_ttl(),
@@ -68,12 +83,25 @@ put(ID, PushFun, Message) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Schedules buffer push.
+%% Schedules buffer push. Returns timer reference responsible for the push.
 %% @end
 %%--------------------------------------------------------------------
+-spec setup_timer(ID, PushFun) -> TRef when
+    ID :: term(),
+    TRef :: timer:tref(),
+    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> no_return()).
+
 setup_timer(ID, PushFun) ->
     {ok, TRef} = timer:apply_after(batch_ttl(), ?MODULE, push, [ID, PushFun]),
     TRef.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns batching period (a.k.a. batch time to live)
+%% @end
+%%--------------------------------------------------------------------
+-spec batch_ttl() -> pos_integer().
 
 batch_ttl() ->
     {ok, TTL} = application:get_env(?APP_Name, subscription_batch_ttl),

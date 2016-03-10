@@ -17,7 +17,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([put/3, slice/2, newest_seq/0, oldest_seq/0, ensure_initialised/0]).
+-export([put/3, newest_seq/0, oldest_seq/0, ensure_initialised/0, query/1]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -35,7 +35,7 @@ ensure_initialised() ->
     catch
         error:{badmatch, {error, already_exists}} -> ok;
         E:R -> ?info("State not created  ~p:~p", [E, R])
-end.
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -68,13 +68,11 @@ put(Seq, Doc, Model) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec slice(From :: seq(), To :: seq()) ->
+-spec query(Seqs :: ordsets:ordset(seq())) ->
     [{Seq :: seq(), {Doc :: datastore:document(), Model :: atom()}}].
-slice(From, To) ->
-    Cache = get_cache(),
-    CachedList = gb_trees:to_list(Cache),
-    Shifted = lists:dropwhile(fun({Seq, _}) -> Seq < From end, CachedList),
-    lists:takewhile(fun({Seq, _}) -> Seq =< To end, Shifted).
+query(Seqs) ->
+    Cache = gb_trees:to_list(get_cache()),
+    fetch_by_seqs(Cache, Seqs).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -134,3 +132,15 @@ get_cache() ->
     {ok, Doc} = subscriptions_state:get(?SUBSCRIPTIONS_STATE_KEY),
     #document{value = #subscriptions_state{cache = Cache}} = Doc,
     Cache.
+
+
+fetch_by_seqs([{CSeq, _} | Changes], [Seq | _] = Seqs) when CSeq < Seq ->
+    fetch_by_seqs(Changes, Seqs);
+fetch_by_seqs([{CSeq, _} | _] = Changes, [Seq | Seqs]) when CSeq > Seq ->
+    fetch_by_seqs(Changes, Seqs);
+fetch_by_seqs([Change | Changes], [_Seq | Seqs]) ->
+    [Change | fetch_by_seqs(Changes, Seqs)];
+fetch_by_seqs([], _) ->
+    [];
+fetch_by_seqs(_, []) ->
+    [].
