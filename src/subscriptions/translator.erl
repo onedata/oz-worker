@@ -68,6 +68,11 @@ get_msg(_Seq, _Doc, _Model) ->
 
 -spec revs_prop(Doc :: datastore:document()) -> term().
 revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
-    {revs, element(2, Revs)};
+    {Start, Hashes} = Revs,
+    Numbers = lists:seq(Start, Start - length(Hashes) + 1, -1),
+    PrefixedRevs = lists:zipwith(fun(N, H) ->
+        list_to_binary(integer_to_list(N) ++ "-" ++ binary_to_list(H))
+    end, Numbers, Hashes),
+    {revs, PrefixedRevs};
 revs_prop(#document{rev = Rev}) ->
     {revs, [Rev]}.

@@ -14,6 +14,7 @@
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("cluster_worker/include/modules/datastore/datastore_common_internal.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([updates/2]).
@@ -21,8 +22,13 @@
 updates(ProviderID, NewUsers) ->
     UserChanges = get_users(ProviderID, NewUsers),
     GroupChanges = get_groups(ProviderID, UserChanges),
-    SpaceChanges = get_spaces(ProviderID, UserChanges) ++ get_group_spaces(ProviderID, GroupChanges),
-    UserChanges ++ SpaceChanges ++ GroupChanges.
+    SpaceChanges = get_spaces(ProviderID, UserChanges)
+        ++ get_group_spaces(ProviderID, GroupChanges),
+    Changes = UserChanges ++ SpaceChanges ++ GroupChanges,
+
+    lists:map(fun({Seq, Doc, Model}) ->
+        {Seq, Doc#document{rev = fetch_revs(Doc, Model)}, Model}
+    end, Changes).
 
 get_users(ProviderID, NewUsers) ->
     lists:filtermap(fun(UserID) ->
@@ -73,3 +79,14 @@ get_group_spaces(ProviderID, GroupChanges) ->
             end
         end, Spaces)
     end, GroupChanges).
+
+fetch_revs(Doc, Model) ->
+    #document{key = Key, rev = Rev} = Doc,
+    #model_config{bucket = Bucket} = Model:model_init(),
+    DbKey = base64:encode(term_to_binary({Bucket, Key})),
+    {ok, {RawRichDoc}} = couchdb_datastore_driver:db_run(couchbeam, open_doc,
+        [DbKey, [{<<"revs">>, <<"true">>}, {<<"rev">>, Rev}]], 3),
+    {_, {RevsRaw}} = lists:keyfind(<<"_revisions">>, 1, RawRichDoc),
+    {_, Revs} = lists:keyfind(<<"ids">>, 1, RevsRaw),
+    {_, Start} = lists:keyfind(<<"start">>, 1, RevsRaw),
+    {Start, Revs}.

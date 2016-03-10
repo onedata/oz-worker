@@ -26,24 +26,27 @@
     no_space_update_test/1, space_update_through_users_test/1,
     group_update_through_spaces_test/1, no_user_update_test/1,
     no_group_update_test/1, multiple_updates_test/1,
-    updates_for_added_user_test/1]).
+    updates_for_added_user_test/1,
+    updates_for_added_user_have_revisions_test/1, updates_have_revisions_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 all() -> ?ALL([
-%%    change_bridge_restarts,
-%%    multiple_updates_test,
-%%    no_space_update_test,
-%%    space_update_through_support_test,
-%%    space_update_through_users_test,
-%%    no_user_update_test,
-%%    user_update_test,
-%%    no_group_update_test,
-%%    group_update_through_users_test,
-%%    group_update_through_spaces_test,
-    updates_for_added_user_test
+    change_bridge_restarts,
+    multiple_updates_test,
+    no_space_update_test,
+    space_update_through_support_test,
+    space_update_through_users_test,
+    no_user_update_test,
+    user_update_test,
+    no_group_update_test,
+    group_update_through_users_test,
+    group_update_through_spaces_test,
+    updates_for_added_user_test,
+    updates_for_added_user_have_revisions_test,
+    updates_have_revisions_test
 ]).
 
 change_bridge_restarts(_Config) ->
@@ -181,6 +184,7 @@ no_group_update_test(Config) ->
         group_expectation(<<"g1">>, <<"updated">>)
     ]),
     ok.
+
 group_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
@@ -239,6 +243,63 @@ updates_for_added_user_test(Config) ->
     ], []),
     ok.
 
+updates_for_added_user_have_revisions_test(Config) ->
+    % given
+    UniqueID = <<"u1-updates_for_added_user_have_revisions_test">>,
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, []),
+    create_user(Node, UniqueID, [], []),
+    Rev0 = get_rev(Node, onedata_user, UniqueID),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Context = init_messages(Node, P1, []),
+    {Node, ProviderID, _Users, ResumeAt, Missing} = Context,
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated1">>}),
+    Rev1 = get_rev(Node, onedata_user, UniqueID),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated2">>}),
+    Rev2 = get_rev(Node, onedata_user, UniqueID),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated3">>}),
+    Rev3 = get_rev(Node, onedata_user, UniqueID),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated4">>}),
+    Rev4 = get_rev(Node, onedata_user, UniqueID),
+
+    % then
+    verify_messages({Node, ProviderID, [UniqueID], ResumeAt, Missing}, [
+        expectation_with_rev(
+            [Rev4, Rev3, Rev2, Rev1, Rev0],
+            user_expectation(UniqueID, <<"updated4">>, [], []))
+    ], []),
+    ok.
+
+updates_have_revisions_test(Config) ->
+    % given
+    UniqueID = <<"u1-updates_have_revisions_test">>,
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, []),
+    create_user(Node, UniqueID, [], []),
+    Rev0 = get_rev(Node, onedata_user, UniqueID),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Context = init_messages(Node, P1, [UniqueID]),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated1">>}),
+    Rev1 = get_rev(Node, onedata_user, UniqueID),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated2">>}),
+    Rev2 = get_rev(Node, onedata_user, UniqueID),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated3">>}),
+    Rev3 = get_rev(Node, onedata_user, UniqueID),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated4">>}),
+    Rev4 = get_rev(Node, onedata_user, UniqueID),
+
+    % then
+    verify_messages(Context, [
+        expectation_with_rev(
+            [Rev4, Rev3, Rev2, Rev1, Rev0],
+            user_expectation(UniqueID, <<"updated4">>, [], []))
+    ], []),
+    ok.
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -271,6 +332,9 @@ user_expectation(ID, Name, Spaces, Groups) ->
 group_expectation(ID, Name) ->
     [{<<"id">>, ID}, {<<"group">>, [{<<"name">>, Name}]}].
 
+expectation_with_rev(Revs, Expectation) ->
+    [{<<"revs">>, Revs} | Expectation].
+
 create_group(Node, Name, Users, Spaces) ->
     ?assertMatch({ok, Name}, rpc:call(Node, user_group, save, [#document{
         key = Name,
@@ -294,6 +358,12 @@ create_user(Node, Name, Groups, Spaces) ->
 
 update_document(Node, Model, ID, Diff) ->
     ?assertMatch({ok, _}, rpc:call(Node, Model, update, [ID, Diff])).
+
+get_rev(Node, Model, ID) ->
+    Result = rpc:call(Node, Model, get, [ID]),
+    ?assertMatch({ok, _}, Result),
+    {ok, #document{rev = Rev}} = Result,
+    Rev.
 
 create_provider(Node, Name, Spaces) ->
     {_, CSRFile, _} = generate_cert_files(),
