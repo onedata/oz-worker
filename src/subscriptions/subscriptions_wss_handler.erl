@@ -130,7 +130,7 @@ websocket_terminate(_Reason, _Req, _State) ->
 
 get_provider(Req) ->
     {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
-    {ok, Provider} = zone_ca:verify_provider(PeerCert), % todo fix
+    {ok, Provider} = worker_proxy:call(ozpca_worker, {verify_provider, PeerCert}),
     Provider.
 
 update_subscription(Data, Req) ->

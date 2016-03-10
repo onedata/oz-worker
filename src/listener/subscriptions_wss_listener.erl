@@ -50,12 +50,12 @@ start() ->
         {ok, HttpsAcceptors} = application:get_env(?APP_Name, subscroptions_https_acceptors),
 
         % Get cert paths
-        {ok, ZoneCADir} = application:get_env(?APP_Name, zone_ca_dir),
+        {ok, ZoneCADir} = application:get_env(?APP_Name, ozpca_dir),
         {ok, GuiCertFile} = application:get_env(?APP_Name, gui_cert_file),
         {ok, GuiKeyFile} = application:get_env(?APP_Name, gui_key_file),
         {ok, GuiCaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
 
-        {ok, ZoneCABin} = file:read_file(zone_ca:cacert_path(ZoneCADir)),
+        {ok, ZoneCABin} = file:read_file(ozpca:cacert_path(ZoneCADir)),
         [{_, ZoneCADER, _} | _] = public_key:pem_decode(ZoneCABin),
 
         {ok, GuiCABin} = file:read_file(GuiCaCertFile),
