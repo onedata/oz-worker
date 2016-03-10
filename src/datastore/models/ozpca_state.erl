@@ -1,27 +1,26 @@
 %%%-------------------------------------------------------------------
 %%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% Stores CA dedicated node
+%%% todo: implement distributed CA properly (connected with VFS-1499)
 %%% @end
 %%%-------------------------------------------------------------------
--module(onedata_user).
+-module(ozpca_state).
 -author("Michal Zmuda").
 -behaviour(model_behaviour).
 
--include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
 %% model_behaviour callbacks
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
+    model_init/0, 'after'/5, before/4, create_or_update/2]).
 
-%% API
--export([get_all_ids/0, get_by_criterion/1]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -85,13 +84,11 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link model_behaviour} callback model_init/0.
-%% todo: change level once list is supported by the datastore (couchbase)
 %% @end
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    StoreLevel = application:get_env(?APP_Name, user_store_level, ?GLOBAL_ONLY_LEVEL),
-    ?MODEL_CONFIG(onedata_user_bucket, [], StoreLevel).
+    ?MODEL_CONFIG(ozpca_bucket, [], ?GLOBAL_ONLY_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -114,90 +111,13 @@ model_init() ->
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
 
-%%%===================================================================
-%%% API callbacks
-%%%===================================================================
-
 %%--------------------------------------------------------------------
-%% @doc 
-%% @private
-%% Gets all users from DB (that have at least one email address set).
-%% This function is used for development purposes, there appears to be no production use case.
+%% @doc
+%% Updates document with using ID from document. If such object does not exist,
+%% it initialises the object with the document.
 %% @end
 %%--------------------------------------------------------------------
--spec get_all_ids() -> {ok, [binary()]}.
-get_all_ids() ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #onedata_user{}, key = Id}, Acc) ->
-            {next, [Id | Acc]};
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).
-
-%%--------------------------------------------------------------------
-%% @doc 
-%% @private
-%% Gets first user matching given criterion.
-%% todo: change implementation to something fast (connected with VFS-1498)
-%% @end
-%%--------------------------------------------------------------------
-
--spec get_by_criterion(Criterion :: {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
-{email, binary()} | {alias, binary()}) ->
-    {ok, #document{}} | {error, any()}.
-
-get_by_criterion({email, Value}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #onedata_user{email_list = EmailList}} = Doc, Acc) ->
-            case lists:member(Value, EmailList) of
-                true -> {abort, [Doc | Acc]};
-                false -> {next, [Acc]}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result};
-
-get_by_criterion({alias, Value}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #onedata_user{alias = Alias}} = Doc, Acc) ->
-            case Alias of
-                Value -> {abort, [Doc | Acc]};
-                _ -> {next, [Acc]}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result};
-
-get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #onedata_user{connected_accounts = Accounts}} = Doc, Acc) ->
-            Found = lists:any(fun
-                (#oauth_account{provider_id = PID, user_id = UID}) ->
-                    case {PID, UID} of
-                        {ProviderID, UserID} -> true;
-                        _ -> false
-                    end;
-                (_) -> false
-            end, Accounts),
-            case Found of
-                true -> {abort, [Doc | Acc]};
-                _ -> {next, [Acc]}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result}.
+-spec create_or_update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
+    {ok, datastore:ext_key()} | datastore:update_error().
+create_or_update(Doc, Diff) ->
+    datastore:create_or_update(?STORE_LEVEL, Doc, Diff).

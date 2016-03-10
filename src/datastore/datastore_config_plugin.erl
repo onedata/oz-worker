@@ -27,6 +27,7 @@
 models() -> [
   provider_subscription,
   subscriptions_state,
+  ozpca_state,
   onedata_auth,
   onedata_user,
   provider,
