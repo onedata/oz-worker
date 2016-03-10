@@ -21,49 +21,39 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([space_update_through_support_test/1, change_bridge_restarts/1,
-    user_update_test/1, group_update_through_users_test/1,
-    no_space_update_test/1, space_update_through_users_test/1,
-    group_update_through_spaces_test/1, no_user_update_test/1,
-    no_group_update_test/1, multiple_updates_test/1,
+-export([
+    space_update_through_support_test/1,
+    space_update_through_users_test/1,
+    no_space_update_test/1,
+    user_update_test/1,
+    no_user_update_test/1,
+    group_update_through_users_test/1,
+    group_update_through_spaces_test/1,
+    no_group_update_test/1,
+    multiple_updates_test/1,
     updates_for_added_user_test/1,
-    updates_for_added_user_have_revisions_test/1, updates_have_revisions_test/1]).
+    updates_for_added_user_have_revisions_test/1,
+    updates_have_revisions_test/1
+]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 all() -> ?ALL([
-%%    change_bridge_restarts,
-%%    multiple_updates_test,
-%%    no_space_update_test,
-%%    space_update_through_support_test,
-%%    space_update_through_users_test,
-%%    no_user_update_test,
-%%    user_update_test,
-%%    no_group_update_test,
-%%    group_update_through_users_test,
-%%    group_update_through_spaces_test,
-%%    updates_for_added_user_test,
-%%    updates_have_revisions_test,
+%%%%    multiple_updates_test,
+%%%%    no_space_update_test,
+%%%%    space_update_through_support_test,
+%%%%    space_update_through_users_test,
+%%%%    no_user_update_test,
+%%%%    user_update_test,
+%%%%    no_group_update_test,
+%%%%    group_update_through_users_test,
+%%%%    group_update_through_spaces_test,
+%%%%    updates_for_added_user_test,
+%%%%    updates_have_revisions_test,
     updates_for_added_user_have_revisions_test
 ]).
-
-change_bridge_restarts(_Config) ->
-    ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
-
-    gen_server:cast({global, changes_bridge}, stop),
-    timer:sleep(200),
-    ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
-
-    gen_server:cast({global, changes_bridge}, stop),
-    timer:sleep(200),
-    ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
-
-    gen_server:cast({global, changes_bridge}, stop),
-    timer:sleep(200),
-    ?assertNotEqual(undefined, global:whereis_name(changes_bridge)),
-    ok.
 
 no_space_update_test(Config) ->
     % given

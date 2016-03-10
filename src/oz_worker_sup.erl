@@ -54,21 +54,10 @@ start_link() ->
     {ok, {SupFlags :: supervisor:sup_flags(), [ChildSpec :: supervisor:child_spec()]}}.
 init([]) ->
     {ok, {#{strategy => one_for_one, intensity => 1000, period => 3600}, [
-        cluster_worker_specs:main_worker_sup_spec(),
-        changes_bridge_spec()
+        cluster_worker_specs:main_worker_sup_spec()
     ]}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
--spec changes_bridge_spec() -> supervisor:child_spec().
-changes_bridge_spec() ->
-    #{
-        id => changes_bridge,
-        start => {changes_bridge, start_link, []},
-        restart => permanent,
-        shutdown => infinity,
-        type => worker,
-        modules => [changes_bridge]
-    }.
