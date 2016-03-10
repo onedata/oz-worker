@@ -13,7 +13,7 @@
 -module(page_manage_account).
 
 -include_lib("ctool/include/logging.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("auth_common.hrl").
 -include("gui/common.hrl").
 
@@ -27,7 +27,7 @@
 
 %% Template points to the template file, which will be filled with content
 main() ->
-    case gr_gui_utils:maybe_redirect(true) of
+    case oz_gui_utils:maybe_redirect(true) of
         true ->
             #dtl{file = "bare", app = ?APP_Name, bindings = [{title, <<"">>}, {body, <<"">>}, {custom, <<"">>}]};
         false ->
@@ -40,7 +40,7 @@ title() -> <<"Manage account">>.
 %% This will be placed in the template instead of [[[page:body()]]] tag
 body() ->
     #panel{class = <<"page-container">>, body = [
-        gr_gui_utils:top_menu(manage_account_tab),
+        oz_gui_utils:top_menu(manage_account_tab),
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"Manage account">>},
             #panel{id = <<"main_table">>, body = main_table()},
@@ -55,7 +55,7 @@ body() ->
 
 %% Main table containing user account info
 main_table() ->
-    {ok, #user{} = User} = user_logic:get_user(gui_ctx:get_user_id()),
+    {ok, #onedata_user{} = User} = user_logic:get_user(gui_ctx:get_user_id()),
     #table{style = <<"border-width: 0px; width: auto;">>, body = [
         #tbody{body = [
             #tr{cells = [
@@ -87,7 +87,7 @@ main_table() ->
 %% Table row with user name edition
 user_name_section(User) ->
     gui_jq:bind_enter_to_submit_button(<<"new_name_textbox">>, <<"new_name_submit">>),
-    #user{name = Name} = User,
+    #onedata_user{name = Name} = User,
     [
         #span{style = <<"font-size: 18px;">>, id = <<"displayed_name">>, body = Name},
         #link{id = <<"change_name_button">>, class = <<"glyph-link">>, style = <<"margin-left: 10px;">>,
@@ -106,7 +106,7 @@ user_name_section(User) ->
 %% Table row with user alias edition
 alias_section(User) ->
     gui_jq:bind_enter_to_submit_button(<<"new_alias_textbox">>, <<"new_alias_submit">>),
-    #user{alias = Alias} = User,
+    #onedata_user{alias = Alias} = User,
     {AliasStyle, AliasBody, AliasHint} =
         case Alias of
             ?EMPTY_ALIAS ->
@@ -133,7 +133,7 @@ alias_section(User) ->
 
 % HTML list with emails printed
 user_emails_section(User) ->
-    #user{email_list = Emails} = User,
+    #onedata_user{email_list = Emails} = User,
 
     {CurrentEmails, _} = lists:mapfoldl(
         fun(Email, Acc) ->
@@ -166,7 +166,7 @@ user_emails_section(User) ->
 
 % Section allowing for edition of connected accounts
 connected_accounts_section(User) ->
-    #user{connected_accounts = ConnectedAccounts} = User,
+    #onedata_user{connected_accounts = ConnectedAccounts} = User,
     TableHead = #tr{cells = [
         #th{body = <<"">>},
         #th{body = <<"provider">>},
@@ -298,14 +298,14 @@ provider_redirection_panel() ->
                 end, lists:usort(Providers))
             };
         _ ->
-            case gr_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
+            case oz_gui_utils:get_redirection_url_to_provider(gui_ctx:get(referer)) of
                 {ok, ProviderHostname, URL} ->
                     #panel{id = <<"redirection_panel">>, body = [
                         #button{body = <<"Go to your files">>, class = <<"btn btn-huge btn-inverse">>,
                             postback = {action, redirect_to_provider, [ProviderHostname, URL]}}
                     ]};
                 {error, no_provider} ->
-                    {ok, #user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
+                    {ok, #onedata_user{first_space_support_token = Token}} = user_logic:get_user(gui_ctx:get_user_id()),
                     gui_jq:select_text(<<"token_textbox">>),
                     #panel{id = <<"redirection_panel">>, class = <<"dialog dialog-danger">>, body = [
                         #p{body = <<"Currently, none of your spaces are supported by any provider. To access your files, ",
@@ -331,7 +331,7 @@ event({action, Fun}) ->
     event({action, Fun, []});
 
 event({action, Fun, Args}) ->
-    gr_gui_utils:apply_or_redirect(?MODULE, Fun, Args).
+    oz_gui_utils:apply_or_redirect(?MODULE, Fun, Args).
 
 % Connects an oauth account to users account
 connect_account(Provider) ->
@@ -349,7 +349,7 @@ generate_token() ->
 % Prompt to ask for confirmation to disconnect an account
 disconnect_account_prompt(Provider) ->
     % Get user info doc
-    {ok, #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(gui_ctx:get_user_id()),
+    {ok, #onedata_user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(gui_ctx:get_user_id()),
     % Get provider name
     ProviderName = auth_config:get_provider_name(Provider),
     case length(ConnectedAccounts) of
@@ -366,7 +366,7 @@ disconnect_account_prompt(Provider) ->
 disconnect_account(Provider) ->
     UserId = gui_ctx:get_user_id(),
     % Find the user, remove provider info from his user info doc and reload the page
-    {ok, #user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(UserId),
+    {ok, #onedata_user{connected_accounts = ConnectedAccounts}} = user_logic:get_user(UserId),
     OAuthAccount = find_connected_account(Provider, ConnectedAccounts),
     user_logic:modify(UserId, [{connected_accounts, ConnectedAccounts -- [OAuthAccount]}]),
     gui_jq:redirect(<<"/manage_account">>).
@@ -374,7 +374,7 @@ disconnect_account(Provider) ->
 % Update email list - add or remove one and save new user doc
 update_email(AddOrRemove) ->
     UserId = gui_ctx:get_user_id(),
-    {ok, #user{email_list = OldEmailList}} = user_logic:get_user(UserId),
+    {ok, #onedata_user{email_list = OldEmailList}} = user_logic:get_user(UserId),
     case AddOrRemove of
         {add, submitted} ->
             NewEmail = http_utils:normalize_email(gui_ctx:postback_param(<<"new_email_textbox">>)),
@@ -501,7 +501,7 @@ redirect_to_provider(ProviderHostname, URL) ->
 
 
 redirect_to_provider_dev(ProviderID) ->
-    {ok, ProviderHostname, URL} = gr_gui_utils:get_redirection_url_to_provider(ProviderID),
+    {ok, ProviderHostname, URL} = oz_gui_utils:get_redirection_url_to_provider(ProviderID),
     case http_client:get(<<ProviderHostname/binary, ?provider_connection_check_endpoint>>, [], <<>>, [insecure]) of
         {ok, _, _, _} ->
             gui_jq:redirect(URL);

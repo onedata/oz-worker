@@ -42,8 +42,8 @@
 -module(dev_utils).
 
 -include_lib("ctool/include/logging.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
--include("dao/dao_types.hrl").
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).
@@ -68,7 +68,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
         lists:foreach(
             fun({UserID, Props}) ->
                 DefaultSpace = proplists:get_value(<<"default_space">>, Props),
-                UserInfo = #user{
+                UserInfo = #onedata_user{
                     name = UserID,
                     alias = UserID,
                     email_list = [<<UserID/binary, "@email.com">>],
@@ -169,58 +169,52 @@ destroy_test_entities(Users, Groups, Spaces) ->
 
 %%--------------------------------------------------------------------
 %% @doc Create a provider's account with implicit UUID.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_with_uuid(ClientName :: binary(), URLs :: [binary()],
     RedirectionPoint :: binary(), CSR :: binary(), UUID :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
-    {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(UUID, CSRBin),
-    dao_adapter:save(#db_document{uuid = binary:bin_to_list(UUID), record =
-    #provider{client_name = ClientName, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial}}),
+    {ok, {ProviderCertPem, Serial}} = ozpca:sign_provider_req(UUID, CSRBin),
+    Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
+    provider:save(#document{key = UUID, value = Provider}),
     {ok, UUID, ProviderCertPem}.
 
 
 %%--------------------------------------------------------------------
 %% @doc Creates a user account with implicit UUID.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user_with_uuid(User :: #user{}, UUID :: binary()) -> {ok, UserId :: binary()}.
+-spec create_user_with_uuid(User :: #onedata_user{}, UUID :: binary()) -> {ok, UserId :: binary()}.
 create_user_with_uuid(User, UUID) ->
-    UserIDStr = binary:bin_to_list(UUID),
-    UserID = dao_adapter:save(#db_document{uuid = UserIDStr, record = User}),
-    {ok, UserID}.
+    {ok, _} = onedata_user:save(#document{key = UUID, value = User}).
 
 
 %%--------------------------------------------------------------------
 %% @doc Creates a group for a user with implicit UUID.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group_with_uuid(UserId :: binary(), Name :: binary(), UUID :: binary()) ->
     {ok, GroupId :: binary()}.
 create_group_with_uuid(UserId, Name, UUID) ->
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-
-    UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #user{groups = Groups} = User} = UserDoc,
+    {ok, UserDoc} = onedata_user:get(UserId),
+    #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
 
     Privileges = privileges:group_admin(),
     Group = #user_group{name = Name, users = [{UserId, Privileges}]},
-    GroupId = dao_adapter:save(#db_document{uuid = binary:bin_to_list(UUID), record = Group}),
-    UserNew = User#user{groups = [GroupId | Groups]},
-    dao_adapter:save(UserDoc#db_document{record = UserNew}),
+    {ok, GroupId} = user_group:save(#document{key = UUID, value = Group}),
+    UserNew = User#onedata_user{groups = [GroupId | Groups]},
+    onedata_user:save(UserDoc#document{value = UserNew}),
 
-    op_channel_logic:user_modified(UserProviders, UserId, UserNew),
     {ok, GroupId}.
 
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user or group with implicit UUID.
-%% Throws exception when call to dao fails, or given member doesn't exist.
+%% Throws exception when call to the datastore fails, or given member doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_with_uuid({user | group, Id :: binary()}, Name :: binary(), UUID :: binary()) ->
@@ -231,7 +225,7 @@ create_space_with_uuid(Member, Name, UUID) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user or group with implicit UUID, by a provider that will support it.
-%% Throws exception when call to dao fails, or token/member_from_token doesn't exist.
+%% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_with_uuid({provider, ProviderId :: binary()}, Name :: binary(),
@@ -245,38 +239,31 @@ create_space_with_uuid({provider, ProviderId}, Name, Token, Size, UUID) ->
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user or a group with implicit UUID, with a preexisting provider.
-%% Throws exception when call to dao fails, or user/group doesn't exist.
+%% Throws exception when call to the datastore fails, or user/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_with_provider({user | group, Id :: binary()}, Name :: binary(), Providers :: [binary()],
     Size :: [{Provider :: binary(), ProvidedSize :: pos_integer()}], UUID :: binary()) ->
     {ok, SpaceId :: binary()}.
 create_space_with_provider({user, UserId}, Name, Providers, Size, UUID) ->
-    UserDoc = dao_adapter:user_doc(UserId),
-    #db_document{record = #user{spaces = Spaces} = User} = UserDoc,
+    {ok, UserDoc} = onedata_user:get(UserId),
+    #document{value = #onedata_user{spaces = Spaces} = User} = UserDoc,
 
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, size = Size, providers = Providers, users = [{UserId, Privileges}]},
-    SpaceId = dao_adapter:save(#db_document{uuid = binary:bin_to_list(UUID), record = Space}),
-    UserNew = User#user{spaces = [SpaceId | Spaces]},
-    dao_adapter:save(UserDoc#db_document{record = UserNew}),
+    {ok, SpaceId} = space:save(#document{key = UUID, value = Space}),
+    UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
+    onedata_user:save(UserDoc#document{value = UserNew}),
 
-    op_channel_logic:space_modified(Providers, SpaceId, Space),
-    op_channel_logic:user_modified(Providers, UserId, UserNew),
     {ok, SpaceId};
 create_space_with_provider({group, GroupId}, Name, Providers, Size, UUID) ->
-    GroupDoc = dao_adapter:group_doc(GroupId),
-    #db_document{record = #user_group{users = Users, spaces = Spaces} = Group} = GroupDoc,
+    {ok, GroupDoc} = user_group:get(GroupId),
+    #document{value = #user_group{spaces = Spaces} = Group} = GroupDoc,
 
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, size = Size, providers = Providers, groups = [{GroupId, Privileges}]},
-    SpaceId = dao_adapter:save(#db_document{uuid = binary:bin_to_list(UUID), record = Space}),
+    {ok, SpaceId} = space:save(#document{key = UUID, value = Space}),
     GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
-    dao_adapter:save(GroupDoc#db_document{record = GroupNew}),
+    user_group:save(GroupDoc#document{value = GroupNew}),
 
-    op_channel_logic:space_modified(Providers, SpaceId, Space),
-    op_channel_logic:group_modified(Providers, GroupId, Group),
-    lists:foreach(fun({UserId, _}) ->
-        op_channel_logic:user_modified(Providers, UserId, dao_adapter:user(UserId))
-    end, Users),
     {ok, SpaceId}.

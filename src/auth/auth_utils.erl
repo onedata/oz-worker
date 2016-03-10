@@ -12,8 +12,8 @@
 -module(auth_utils).
 
 -include_lib("ctool/include/logging.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
--include("dao/dao_types.hrl").
 -include("auth_common.hrl").
 
 %% API
@@ -84,8 +84,7 @@ validate_login() ->
                             false ->
                                 % Standard login, check if there is an account belonging to the user
                                 case user_logic:get_user_doc({connected_account_user_id, {ProviderID, UserID}}) of
-                                    {ok, #db_document{uuid = UserIdString}} ->
-                                        UserId = list_to_binary(UserIdString),
+                                    {ok, #document{key = UserId}} ->
                                         % The account already exists
                                         gui_ctx:create_session(),
                                         gui_ctx:set_user_id(UserId),
@@ -100,7 +99,7 @@ validate_login() ->
                                                 {error, ?error_auth_new_email_occupied};
                                             false ->
                                                 % All emails are available, proceed
-                                                UserInfo = #user{email_list = Emails, name = Name, connected_accounts = [
+                                                UserInfo = #onedata_user{email_list = Emails, name = Name, connected_accounts = [
                                                     OAuthAccount
                                                 ]},
                                                 {ok, UserId} = user_logic:create(UserInfo),
@@ -132,7 +131,7 @@ validate_login() ->
                                             false ->
                                                 % Everything ok, get the user and add new provider info
                                                 UserId = gui_ctx:get_user_id(),
-                                                {ok, #user{} = UserRecord} = user_logic:get_user(UserId),
+                                                {ok, #onedata_user{} = UserRecord} = user_logic:get_user(UserId),
                                                 ModificationProplist = merge_connected_accounts(OAuthAccount, UserRecord),
                                                 user_logic:modify(UserId, ModificationProplist),
                                                 {redirect, <<"/manage_account">>}
@@ -157,7 +156,6 @@ validate_login() ->
 %%--------------------------------------------------------------------
 -spec is_any_email_in_use(Emails :: [binary()], binary()) -> true | false.
 is_any_email_in_use(Emails, UserID) ->
-    UserIDString = binary_to_list(UserID),
     lists:foldl(
         fun(Email, Acc) ->
             case Acc of
@@ -165,9 +163,9 @@ is_any_email_in_use(Emails, UserID) ->
                     true;
                 _ ->
                     case user_logic:get_user_doc({email, Email}) of
-                        {ok, #db_document{uuid = UserIDString}} ->
+                        {ok, #document{key = UserID}} ->
                             false;
-                        {ok, #db_document{}} ->
+                        {ok, #document{}} ->
                             true;
                         _ ->
                             false
@@ -180,9 +178,9 @@ is_any_email_in_use(Emails, UserID) ->
 %% @doc Merges user account with information gathered from new connected account.
 %% @end
 %%--------------------------------------------------------------------
--spec merge_connected_accounts(OAuthAccount :: #oauth_account{}, UserInfo :: #user{}) -> [tuple()].
+-spec merge_connected_accounts(OAuthAccount :: #oauth_account{}, UserInfo :: #onedata_user{}) -> [tuple()].
 merge_connected_accounts(OAuthAccount, UserInfo) ->
-    #user{name = Name, email_list = Emails, connected_accounts = ConnectedAccounts} = UserInfo,
+    #onedata_user{name = Name, email_list = Emails, connected_accounts = ConnectedAccounts} = UserInfo,
     #oauth_account{name = ProvName, email_list = ConnAccEmails} = OAuthAccount,
     % If no name is specified, take the one provided with new info
     NewName = case Name of

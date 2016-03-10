@@ -15,7 +15,7 @@ RUN dnf install -y curl && \
     /etc/yum.repos.d/onedata.repo
 
 # Install required packages
-RUN dnf -y --enablerepo=onedata install globalregistry-${VERSION}
+RUN dnf -y --enablerepo=onedata install oz_worker-${VERSION}
 
 # Add missing CA bundle (required for server cert validation)
 RUN curl -o /etc/ssl/cert.pem https://raw.githubusercontent.com/bagder/ca-bundle/master/ca-bundle.crt

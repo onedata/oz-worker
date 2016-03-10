@@ -5,26 +5,27 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc: This module implements dns_handler_behaviour and is responsible
-%%% for handling DNS queries.
+%%% @doc: This module is responsible for handling DNS queries.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(dns_query_handler).
--behaviour(dns_handler_behaviour).
 
 -include_lib("kernel/src/inet_dns.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
 
 %% DNS config handling
 -export([load_config/0, load_config/1, get_canonical_hostname/0]).
 
 %% dns_handler_behaviour API
--export([handle_a/1, handle_ns/1, handle_cname/1, handle_soa/1, handle_wks/1,
-    handle_ptr/1, handle_hinfo/1, handle_minfo/1, handle_mx/1, handle_txt/1]).
+-export([handle_a/2, handle_ns/2, handle_cname/2, handle_soa/2, handle_wks/2,
+    handle_ptr/2, handle_hinfo/2, handle_minfo/2, handle_mx/2, handle_txt/2]).
 
--define(DEFAULT_DNS_CONFIG_LOCATION, "resources/dns.config").
+-define(DEFAULT_DNS_CONFIG_LOCATION, "data/dns.config").
+
+%% Alias of all available GR workers
+-define(ALL_WORKERS, "ALL").
 
 % Record holding zone config. Config file is parsed into list of such records.
 -record(dns_zone, {
@@ -84,9 +85,11 @@ load_config(ConfigFile) ->
             IPAddresses = lists:map(
                 fun({Hostname, AddressesString}) ->
                     Addresses = lists:map(
-                        fun(AddrString) ->
-                            {ok, AddrAtoms} = inet_parse:ipv4_address(AddrString),
-                            AddrAtoms
+                        fun
+                            (?ALL_WORKERS) -> ?ALL_WORKERS;
+                            (AddrString) ->
+                                {ok, AddrAtoms} = inet_parse:ipv4_address(AddrString),
+                                AddrAtoms
                         end, AddressesString),
                     Index = string:str(Hostname, CName),
                     % All hostnames must end with cname
@@ -143,8 +146,8 @@ get_canonical_hostname() ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_a(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_a(DomainNotNormalized) ->
+-spec handle_a(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_a(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -153,8 +156,9 @@ handle_a(DomainNotNormalized) ->
                 undefined ->
                     handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone);
                 IPAddrList ->
+                    FinalIPAddrList = account_lb(IPAddrList, LBAdvice),
                     {ok,
-                            [dns_server:answer_record(DomainNotNormalized, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
+                            [dns_server:answer_record(DomainNotNormalized, TTL, ?S_A, IPAddress) || IPAddress <- FinalIPAddrList] ++
                             [dns_server:authoritative_answer_flag(true)]
                     }
             end
@@ -166,8 +170,8 @@ handle_a(DomainNotNormalized) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_ns(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_ns(DomainNotNormalized) ->
+-spec handle_ns(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_ns(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -177,9 +181,10 @@ handle_ns(DomainNotNormalized) ->
                     {ok,
                             [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
                             lists:flatten([begin
-                                               IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
-                                               [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
-                                           end || NSHostname <- NSServers]) ++
+                                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
+                                FinalIPAddrList = account_lb(IPAddrList, LBAdvice),
+                                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- FinalIPAddrList]
+                            end || NSHostname <- NSServers]) ++
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
@@ -193,8 +198,8 @@ handle_ns(DomainNotNormalized) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_cname(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_cname(DomainNotNormalized) ->
+-spec handle_cname(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_cname(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -208,8 +213,8 @@ handle_cname(DomainNotNormalized) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_mx(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_mx(DomainNotNormalized) ->
+-spec handle_mx(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_mx(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -219,9 +224,10 @@ handle_mx(DomainNotNormalized) ->
                     {ok,
                             [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_MX, {MXPriority, MXHostname}) || {MXPriority, MXHostname} <- MXServers] ++
                             lists:flatten([begin
-                                               IPAddrList = proplists:get_value(MXHostname, IPAddresses, []),
-                                               [dns_server:additional_record(MXHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
-                                           end || {_MXPriority, MXHostname} <- MXServers]) ++
+                                IPAddrList = proplists:get_value(MXHostname, IPAddresses, []),
+                                FinalIPAddrList = account_lb(IPAddrList, LBAdvice),
+                                [dns_server:additional_record(MXHostname, TTLA, ?S_A, IPAddress) || IPAddress <- FinalIPAddrList]
+                            end || {_MXPriority, MXHostname} <- MXServers]) ++
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
@@ -235,8 +241,8 @@ handle_mx(DomainNotNormalized) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_soa(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_soa(DomainNotNormalized) ->
+-spec handle_soa(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_soa(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -248,9 +254,10 @@ handle_soa(DomainNotNormalized) ->
                             [dns_server:answer_record(DomainNotNormalized, TTLSOA, ?S_SOA, Authority)] ++
                             [dns_server:authority_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
                             lists:flatten([begin
-                                               IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
-                                               [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
-                                           end || NSHostname <- NSServers]) ++
+                                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
+                                FinalIPAddrList = account_lb(IPAddrList, LBAdvice),
+                                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- FinalIPAddrList]
+                            end || NSHostname <- NSServers]) ++
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
@@ -264,8 +271,8 @@ handle_soa(DomainNotNormalized) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_wks(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_wks(DomainNotNormalized) ->
+-spec handle_wks(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_wks(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -279,8 +286,8 @@ handle_wks(DomainNotNormalized) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_ptr(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_ptr(DomainNotNormalized) ->
+-spec handle_ptr(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_ptr(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -294,8 +301,8 @@ handle_ptr(DomainNotNormalized) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_hinfo(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_hinfo(DomainNotNormalized) ->
+-spec handle_hinfo(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_hinfo(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -309,8 +316,8 @@ handle_hinfo(DomainNotNormalized) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_minfo(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_minfo(DomainNotNormalized) ->
+-spec handle_minfo(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_minfo(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -324,8 +331,8 @@ handle_minfo(DomainNotNormalized) ->
 %% See {@link dns_handler_behaviour} for reference.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_txt(DomainNotNormalized :: string()) -> dns_handler_behaviour:handler_reply().
-handle_txt(DomainNotNormalized) ->
+-spec handle_txt(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
+handle_txt(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
@@ -349,9 +356,9 @@ handle_txt(DomainNotNormalized) ->
 parse_domain(DomainArg) ->
     % If requested domain starts with 'www.', ignore it
     Domain = case DomainArg of
-                 [$w, $w, $w, $. | Rest] -> Rest;
-                 Other -> Other
-             end,
+        [$w, $w, $w, $. | Rest] -> Rest;
+        Other -> Other
+    end,
     {ok, DNSZones} = application:get_env(?APP_Name, dns_zones),
     % Find first matching zone
     MatchingZone = lists:foldl(
@@ -398,25 +405,23 @@ parse_domain(DomainArg) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}) ->
-    dns_handler_behaviour:handler_reply().
+    dns_worker_plugin_behaviour:handler_reply().
 handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
     try
         Prefix = list_to_binary(PrefixStr),
         GetUserResult = case Prefix of
-                            <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
-                                user_logic:get_user_doc(UUID);
-                            _ ->
-                                case user_logic:get_user_doc({alias, Prefix}) of
-                                    {ok, Ans} ->
-                                        {ok, Ans};
-                                    _ ->
-                                        user_logic:get_user_doc(Prefix)
-                                end
-                        end,
+            <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
+                user_logic:get_user_doc(UUID);
+            _ ->
+                case user_logic:get_user_doc({alias, Prefix}) of
+                    {ok, Ans} ->
+                        {ok, Ans};
+                    _ ->
+                        user_logic:get_user_doc(Prefix)
+                end
+        end,
         case GetUserResult of
-            {ok, #db_document{uuid = UserIDStr,
-                record = #user{default_provider = DefaultProvider}}} ->
-                UserID = list_to_binary(UserIDStr),
+            {ok, #document{key = UserID, value = #onedata_user{default_provider = DefaultProvider}}} ->
                 % If default provider is not known, set it.
                 DataProplist =
                     try
@@ -463,19 +468,34 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
 %% in authority section of DNS response.
 %% @end
 %%--------------------------------------------------------------------
--spec answer_with_soa(Domain :: string(), DNSZone :: #dns_zone{}) -> dns_handler_behaviour:handler_reply().
+-spec answer_with_soa(Domain :: string(), DNSZone :: #dns_zone{}) -> dns_worker_plugin_behaviour:handler_reply().
 answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, authority = Authority, ttl_soa = TTL}) ->
     ReplyType = case proplists:get_value(Domain, IPAddresses, undefined) of
-                    undefined ->
-                        nx_domain;
-                    _ ->
-                        ok
-                end,
+        undefined ->
+            nx_domain;
+        _ ->
+            ok
+    end,
     {ReplyType, [
         dns_server:authority_record(CName, TTL, ?S_SOA, Authority),
         dns_server:authoritative_answer_flag(true)
     ]}.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Returns IP list unchanged. If "ALL" nodes are requested, then
+%% load balancing comes into play and IPs are returned according to it.
+%% @end
+%%--------------------------------------------------------------------
+-spec account_lb(IPAddrList :: [string()]|[{A :: byte(), B :: byte(), C :: byte(), D :: byte()}], DSNAdvice :: term())
+        -> [{A :: byte(), B :: byte(), C :: byte(), D :: byte()}].
+account_lb(IPAddrList, LBAdvice) ->
+    case IPAddrList of
+        [?ALL_WORKERS] ->
+            load_balancing:choose_nodes_for_dns(LBAdvice);
+        _ ->
+            IPAddrList
+    end.
 
 %% % TODO this is a temporary solution to always return A records of provider when
 %% % the DNS is asked for address of alias.onedata.org
