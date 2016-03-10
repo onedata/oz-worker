@@ -22,7 +22,7 @@
 
 %% Template points to the template file, which will be filled with content
 main() ->
-    case gr_gui_utils:maybe_redirect(true) of
+    case oz_gui_utils:maybe_redirect(true) of
         true ->
             #dtl{file = "bare", app = ?APP_Name, bindings = [{title, <<"">>}, {body, <<"">>}, {custom, <<"">>}]};
         false ->
@@ -35,7 +35,7 @@ title() -> <<"About">>.
 %% This will be placed in the template instead of {{body}} tag
 body() ->
     #panel{class = <<"page-container">>, body = [
-        gr_gui_utils:top_menu(about_tab),
+        oz_gui_utils:top_menu(about_tab),
         #panel{style = <<"margin-top: 60px; padding: 20px;">>, body = [
             #h6{style = <<" text-align: center;">>, body = <<"About">>},
             #panel{id = <<"about_table">>, body = about_table()}

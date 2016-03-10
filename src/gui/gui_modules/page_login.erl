@@ -15,15 +15,12 @@
 -include("registered_names.hrl").
 -include("gui/common.hrl").
 -include("auth_common.hrl").
--include("dao/dao_users.hrl").
--include("dao/dao_external.hrl").
--include_lib("dao/include/dao_helper.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 % n2o API
 -export([main/0, event/1]).
 
--define(HOME_PAGE_FILE, "resources/HOMEPAGE_HEADER.html").
+-define(HOME_PAGE_FILE, "data/HOMEPAGE_HEADER.html").
 
 -define(ONEDATA_INFO, "http://slides.com/onedata/globalstorage#/").
 
@@ -39,9 +36,9 @@ body() ->
     % If dev_mode is on, include a logging menu that allows to log on any account.
     DevLoginPanel = case application:get_env(?APP_Name, dev_mode) of
                         {ok, true} ->
-                            {ok, UserIDs} = dao_lib:apply(dao_users, get_all_users, [], 1),
+                            {ok, UserIDs} = onedata_user:get_all_ids(),
                             #panel{style = <<"text-align: center; margin-bottom: 100px;">>, body = [
-                                #h2{body = <<"GlobalRegistry works in DEV MODE">>},
+                                #h2{body = <<"OneZone works in DEV MODE">>},
                                 #p{body = <<"You can use the menu below to login on user accounts, bypassing OpenID">>},
                                 #h5{body = <<"dev login:">>},
                                 lists:map(
@@ -112,7 +109,7 @@ login_panel() ->
                 #link{postback = show_copernicus_info, body = #image{image = "/images/copernicus.png",
                     style = <<"display: block; margin-left: auto; margin-right: auto; margin-top: 75px; width: 300px;">>}},
                 gui_utils:cookie_policy_popup_body(<<?privacy_policy_url>>)
-            ] ++ gr_gui_utils:logotype_footer(55)}
+            ] ++ oz_gui_utils:logotype_footer(55)}
     end.
 
 % content of HOMEPAGE_HEADER.html file

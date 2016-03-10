@@ -11,8 +11,8 @@
 -module(user_logic_test_SUITE).
 -author("Krzysztof Trzepla").
 
--include("dao/dao_users.hrl").
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -35,7 +35,7 @@ all() ->
 set_space_name_mapping_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
-    {ok, UserId} = ?assertMatch({ok, _}, gr_test_utils:create_user(Config, #user{})),
+    {ok, UserId} = ?assertMatch({ok, _}, oz_test_utils:create_user(Config, #onedata_user{})),
 
     SpaceId1 = <<"1111111111">>,
     SpaceName1 = <<"space_name">>,
@@ -63,21 +63,21 @@ clean_space_name_mapping_test(Config) ->
     [Node] = ?config(gr_nodes, Config),
 
     SpaceName = <<"space_name">>,
-    {ok, UserId} = ?assertMatch({ok, _}, gr_test_utils:create_user(Config, #user{})),
-    {ok, GroupId} = ?assertMatch({ok, _}, gr_test_utils:create_group(Config, UserId, <<"group">>)),
-    {ok, SpaceId} = ?assertMatch({ok, _}, gr_test_utils:create_space(Config, {group, GroupId}, SpaceName)),
-    ?assertEqual(ok, gr_test_utils:join_space(Config, {user, UserId}, SpaceId)),
+    {ok, UserId} = ?assertMatch({ok, _}, oz_test_utils:create_user(Config, #onedata_user{})),
+    {ok, GroupId} = ?assertMatch({ok, _}, oz_test_utils:create_group(Config, UserId, <<"group">>)),
+    {ok, SpaceId} = ?assertMatch({ok, _}, oz_test_utils:create_space(Config, {group, GroupId}, SpaceName)),
+    ?assertEqual(ok, oz_test_utils:join_space(Config, {user, UserId}, SpaceId)),
 
     ?assertNot(clean_space_name_mapping(Node, UserId, SpaceId)),
     ?assertEqual({ok, SpaceName}, get_space_name_mapping(Node, UserId, SpaceId)),
 
-    ?assert(gr_test_utils:leave_space(Config, {group, GroupId}, SpaceId)),
+    ?assert(oz_test_utils:leave_space(Config, {group, GroupId}, SpaceId)),
     ?assertNot(clean_space_name_mapping(Node, UserId, SpaceId)),
     ?assertEqual({ok, SpaceName}, get_space_name_mapping(Node, UserId, SpaceId)),
 
-    ?assert(gr_test_utils:leave_space(Config, {user, UserId}, SpaceId)),
+    ?assert(oz_test_utils:leave_space(Config, {user, UserId}, SpaceId)),
     ?assert(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertMatch(#user{space_names = []}, rpc:call(Node, dao_adapter, user, [UserId])).
+    ?assertMatch(#onedata_user{space_names = #{}}, rpc:call(Node, dao_adapter, user, [UserId])).
 
 %%%===================================================================
 %%% Setup/teardown functions

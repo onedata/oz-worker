@@ -1,8 +1,13 @@
-# Release notes for project globalregistry
+# Release notes for project oz_worker
 
 
 CHANGELOG
 ---------
+
+### 3.0.0-alpha2
+
+* VFS-1665 Pull in Macaroons.
+
 
 ### 3.0.0-alpha
 
