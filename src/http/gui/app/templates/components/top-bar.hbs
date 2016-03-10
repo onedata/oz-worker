@@ -1,0 +1,16 @@
+<div class="container">
+  <div class="navbar-header">
+    {{#link-to 'index' class="navbar-brand"}}
+      <img src="/assets/images/logo.svg" alt="onedata" />
+    {{/link-to}}
+    {{!-- A navbar toogle, which is visible only when menu is collapsed --}}
+    {{navbar-toggle enableCloseMenuButton=false}}
+    {{!-- TODO: logo color is too saturized --}}
+  </div>
+  <div id="navbar" class="collapse navbar-collapse navbar-collapse-homepage">
+    {{main-menu}}
+    {{!-- A navbar toggle, which is visible only when menu is toggled (uncollapsed) --}}
+    {{!-- Using this, because the button should be "glued" to toggled menu --}}
+    {{navbar-toggle enableOpenMenuButton=false topRight=true}}
+  </div><!--/.nav-collapse -->
+</div>

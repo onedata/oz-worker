@@ -1,0 +1,9 @@
+{{#if hasLink}}
+  <a href="{{link}}" class="login-icon-box {{type}}">
+    {{one-icon icon=iconName}}
+  </a>
+{{else}}
+  <a {{action 'authenticate'}} class="login-icon-box {{type}}">
+    {{one-icon icon=iconName}}
+  </a>
+{{/if}}

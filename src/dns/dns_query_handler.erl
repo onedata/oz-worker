@@ -22,8 +22,6 @@
 -export([handle_a/2, handle_ns/2, handle_cname/2, handle_soa/2, handle_wks/2,
     handle_ptr/2, handle_hinfo/2, handle_minfo/2, handle_mx/2, handle_txt/2]).
 
--define(DEFAULT_DNS_CONFIG_LOCATION, "data/dns.config").
-
 %% Alias of all available GR workers
 -define(ALL_WORKERS, "ALL").
 
@@ -61,7 +59,8 @@
 %%--------------------------------------------------------------------
 -spec load_config() -> ok | no_return().
 load_config() ->
-    load_config(?DEFAULT_DNS_CONFIG_LOCATION).
+    {ok, ConfigFile} = application:get_env(cluster_worker, dns_config_file),
+    load_config(ConfigFile).
 
 
 %%--------------------------------------------------------------------
@@ -421,7 +420,7 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                 end
         end,
         case GetUserResult of
-            {ok, #document{key = UserID, value = #onedata_user{default_provider = DefaultProvider}}} ->
+            {ok, #document{key = UserID, value = #onedata_user{chosen_provider = DefaultProvider}}} ->
                 % If default provider is not known, set it.
                 DataProplist =
                     try
@@ -429,8 +428,8 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                         Data
                     catch _:_ ->
                         {ok, NewDefProv} =
-                            provider_logic:get_default_provider_for_user(UserID),
-                        ok = user_logic:modify(UserID, [{default_provider, NewDefProv}]),
+                            provider_logic:choose_provider_for_user(UserID),
+                        ok = user_logic:modify(UserID, [{chosen_provider, NewDefProv}]),
                         {ok, Data2} = provider_logic:get_data(NewDefProv),
                         Data2
                     end,
@@ -514,7 +513,7 @@ account_lb(IPAddrList, LBAdvice) ->
 %%                                 end
 %%                         end,
 %%         case GetUserResult of
-%%             {ok, #user{default_provider = DefaulfProvider}} ->
+%%             {ok, #user{chosen_provider = DefaulfProvider}} ->
 %%                 {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
 %%                 URLs = proplists:get_value(urls, DataProplist),
 %%                 IPAddrList = [begin {ok, IP} = inet_parse:ipv4_address(binary_to_list(IPBin)), IP end || IPBin <- URLs],
@@ -531,7 +530,7 @@ account_lb(IPAddrList, LBAdvice) ->
 %%
 %%
 %% % TODO this is a temporary solution, returns GR's NS addresses
-%% return_gr_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}) ->
+%% return_oz_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}) ->
 %%     {ok,
 %%             [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
 %%             lists:flatten([begin

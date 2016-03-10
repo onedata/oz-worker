@@ -1,0 +1,10 @@
+<ul class="accordion-content">
+  {{#each authorizers as |account|}}
+    <li>
+      {{account-item type=account.type label=account.email}}
+    </li>
+  {{/each}}
+  <li>
+    {{account-add}}
+  </li>
+</ul>
