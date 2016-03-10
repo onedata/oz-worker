@@ -24,15 +24,11 @@ updates(ProviderID, NewUsers) ->
     GroupChanges = get_groups(ProviderID, UserChanges),
     SpaceChanges = get_spaces(ProviderID, UserChanges)
         ++ get_group_spaces(ProviderID, GroupChanges),
-    Changes = UserChanges ++ SpaceChanges ++ GroupChanges,
-
-    lists:map(fun({Seq, Doc, Model}) ->
-        {Seq, Doc#document{rev = fetch_revs(Doc, Model)}, Model}
-    end, Changes).
+    UserChanges ++ SpaceChanges ++ GroupChanges.
 
 get_users(ProviderID, NewUsers) ->
     lists:filtermap(fun(UserID) ->
-        case onedata_user:get(UserID) of
+        case get_with_revs(onedata_user, UserID) of
             {ok, Doc} -> {true, {-1, Doc, onedata_user}};
             {error, _} ->
                 ?warning("Missing user ~p; provider ~p", [UserID, ProviderID]),
@@ -44,7 +40,7 @@ get_spaces(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         #document{value = #onedata_user{spaces = Spaces}} = UserDoc,
         lists:filtermap(fun(SpaceID) ->
-            case space:get(SpaceID) of
+            case get_with_revs(space, SpaceID) of
                 {ok, Doc} -> {true, {-1, Doc, space}};
                 {error, _} ->
                     ?warning("Missing space ~p; provider ~p", [SpaceID, ProviderID]),
@@ -57,7 +53,7 @@ get_groups(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         #document{value = #onedata_user{groups = Groups}} = UserDoc,
         lists:filtermap(fun(GroupID) ->
-            case user_group:get(GroupID) of
+            case get_with_revs(user_group, GroupID) of
                 {ok, Doc} -> {true, {-1, Doc, user_group}};
                 {error, _} ->
                     ?warning("Missing group ~p; provider ~p", [GroupID, ProviderID]),
@@ -71,7 +67,7 @@ get_group_spaces(ProviderID, GroupChanges) ->
     lists:flatmap(fun({_, GroupDoc, _}) ->
         #document{value = #user_group{spaces = Spaces}} = GroupDoc,
         lists:filtermap(fun(SpaceID) ->
-            case space:get(SpaceID) of
+            case get_with_revs(space, SpaceID) of
                 {ok, Doc} -> {true, {-1, Doc, space}};
                 {error, _} ->
                     ?warning("Missing space ~p; provider ~p", [SpaceID, ProviderID]),
@@ -80,13 +76,5 @@ get_group_spaces(ProviderID, GroupChanges) ->
         end, Spaces)
     end, GroupChanges).
 
-fetch_revs(Doc, Model) ->
-    #document{key = Key, rev = Rev} = Doc,
-    #model_config{bucket = Bucket} = Model:model_init(),
-    DbKey = base64:encode(term_to_binary({Bucket, Key})),
-    {ok, {RawRichDoc}} = couchdb_datastore_driver:db_run(couchbeam, open_doc,
-        [DbKey, [{<<"revs">>, <<"true">>}, {<<"rev">>, Rev}]], 3),
-    {_, {RevsRaw}} = lists:keyfind(<<"_revisions">>, 1, RawRichDoc),
-    {_, Revs} = lists:keyfind(<<"ids">>, 1, RevsRaw),
-    {_, Start} = lists:keyfind(<<"start">>, 1, RevsRaw),
-    {Start, Revs}.
+get_with_revs(Model, Key) ->
+    couchdb_datastore_driver:get_with_revs(Model:model_init(), Key).
