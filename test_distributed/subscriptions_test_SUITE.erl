@@ -41,17 +41,17 @@
 %%%===================================================================
 
 all() -> ?ALL([
-%%%%    multiple_updates_test,
-%%%%    no_space_update_test,
-%%%%    space_update_through_support_test,
-%%%%    space_update_through_users_test,
-%%%%    no_user_update_test,
-%%%%    user_update_test,
-%%%%    no_group_update_test,
-%%%%    group_update_through_users_test,
-%%%%    group_update_through_spaces_test,
-%%%%    updates_for_added_user_test,
-%%%%    updates_have_revisions_test,
+    multiple_updates_test,
+    no_space_update_test,
+    space_update_through_support_test,
+    space_update_through_users_test,
+    no_user_update_test,
+    user_update_test,
+    no_group_update_test,
+    group_update_through_users_test,
+    group_update_through_spaces_test,
+    updates_for_added_user_test,
+    updates_have_revisions_test,
     updates_for_added_user_have_revisions_test
 ]).
 

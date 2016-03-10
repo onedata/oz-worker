@@ -98,11 +98,11 @@ get_redirection_uri(UserId, ProviderId, _ProviderGUIPort) ->
     {ok, #onedata_user{alias = Alias}} = user_logic:get_user(UserId),
     ok = user_logic:modify(UserId, [{default_provider, ProviderId}]),
     _Prefix = case Alias of
-                  ?EMPTY_ALIAS ->
-                      <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
-                  _ ->
-                      Alias
-              end,
+        ?EMPTY_ALIAS ->
+            <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
+        _ ->
+            Alias
+    end,
     % TODO return IP address rather than alias.onedata.org
     % It shall be used normally when we have a possibility to
     % resolve domains on developer's host systems (so their web browsers can connect).
@@ -182,9 +182,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 
             V1 = macaroon_verifier:satisfy_general(V, VerifyFun),
             case macaroon_verifier:verify(V1, Macaroon, Secret, DischargeMacaroons) of
-                ok ->
-                    subscriptions_worker:subscribe_user(UserId, ProviderId),
-                    {ok, UserId};
+                ok -> {ok, UserId};
                 {error, Reason} -> {error, Reason}
             end;
 
@@ -199,7 +197,8 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
 -spec invalidate_token({user_id, binary()} | binary()) -> ok.
 invalidate_token({user_id, UserId}) ->
     {ok, AuthDocs} = onedata_auth:get_auth_by_user_id(UserId),
-    lists:foreach(fun(#document{key = AuthId}) -> invalidate_token(AuthId) end, AuthDocs),
+    lists:foreach(fun(#document{key = AuthId}) ->
+        invalidate_token(AuthId) end, AuthDocs),
     ok;
 invalidate_token(Identifier) when is_binary(Identifier) ->
     onedata_auth:delete(Identifier),
@@ -296,4 +295,4 @@ create_macaroon(Secret, Identifier, Caveats) ->
 -spec generate_secret() -> binary().
 generate_secret() ->
     BinSecret = crypto:rand_bytes(macaroon:suggested_secret_length()),
-    << <<Y>> ||<<X:4>> <= BinSecret, Y <- integer_to_list(X,16) >>.
+    <<<<Y>> || <<X:4>> <= BinSecret, Y <- integer_to_list(X, 16)>>.
