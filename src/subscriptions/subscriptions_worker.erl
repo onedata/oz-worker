@@ -164,16 +164,20 @@ fetch_from_cache(Seqs) ->
 %% Fetches changes from db and sends them to the providers.
 %% Only one attempt is to be made as some sequence numbers may not be present
 %% in couchbase. In that scenario ignore messages are sent.
+%% When fetching is taking too long it is aborted (provider will include
+%% remaining missing sequences in next subscription renewals).
 %% @end
 %%--------------------------------------------------------------------
 
 -spec fetch_from_db(Seqs :: ordsets:ordset()) -> no_return().
 fetch_from_db([]) -> ok;
 fetch_from_db(Seqs) ->
-    From = hd(Seqs),
+    From = hd(Seqs) - 1,
     To = lists:last(Seqs),
 
     spawn(fun() ->
+        {ok, Timeout} = application:get_env(?APP_Name,
+            history_changes_stream_life_limit_seconds),
         process_flag(trap_exit, true),
 
         {ok, Pid} = couchdb_datastore_driver:changes_start_link(fun
@@ -192,8 +196,11 @@ fetch_from_db(Seqs) ->
                             fun push_messages/2, IgnoreMessage)
                     end, Seqs)
                 end, Subscriptions)
+        after
+            timer:seconds(Timeout) ->
+                ?warning("Fetch from DB taking too long - kill"),
+                exit(Pid, fetch_taking_too_long)
         end
-
     end).
 
 %%--------------------------------------------------------------------
@@ -208,22 +215,24 @@ fetch_from_db(Seqs) ->
         -> no_return().
 
 handle_change(Seq, Doc, Model) ->
-    Message = translator:get_msg(Seq, Doc, Model),
-    IgnoreMessage = translator:get_ignore_msg(Seq),
+    spawn(fun() ->
+        Message = translator:get_msg(Seq, Doc, Model),
+        IgnoreMessage = translator:get_ignore_msg(Seq),
 
-    Providers = eligible:providers(Doc, Model),
-    ProvidersSet = sets:from_list(Providers),
-    Subscriptions = subscriptions:all(),
+        Providers = eligible:providers(Doc, Model),
+        ProvidersSet = sets:from_list(Providers),
+        Subscriptions = subscriptions:all(),
 
-    lists:foreach(fun(#document{value = Subscription}) ->
-        case subscriptions:seen(Subscription, Seq) of
-            true -> ok;
-            false ->
-                ProviderID = Subscription#provider_subscription.provider,
-                MessageToSend = case sets:is_element(ProviderID, ProvidersSet) of
-                    true -> Message;
-                    false -> IgnoreMessage
-                end,
-                outbox:put(ProviderID, fun push_messages/2, MessageToSend)
-        end
-    end, Subscriptions).
+        lists:foreach(fun(#document{value = Subscription}) ->
+            case subscriptions:seen(Subscription, Seq) of
+                true -> ok;
+                false ->
+                    ProviderID = Subscription#provider_subscription.provider,
+                    MessageToSend = case sets:is_element(ProviderID, ProvidersSet) of
+                        true -> Message;
+                        false -> IgnoreMessage
+                    end,
+                    outbox:put(ProviderID, fun push_messages/2, MessageToSend)
+            end
+        end, Subscriptions)
+    end).
