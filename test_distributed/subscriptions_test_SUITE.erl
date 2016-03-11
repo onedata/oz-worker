@@ -35,7 +35,9 @@
     updates_for_added_user_test/1,
     updates_for_added_user_have_revisions_test/1,
     updates_have_revisions_test/1,
-    fetches_changes_older_than_in_cache/1]).
+    fetches_changes_older_than_in_cache/1,
+    fetches_changes_from_both_cache_and_db/1,
+    fetches_changes_when_cache_has_gaps/1]).
 
 -define(MESSAGES_WAIT_TIMEOUT, timer:seconds(3)).
 -define(MESSAGES_RECEIVE_ATTEMPTS, 30).
@@ -54,19 +56,21 @@
 %%%===================================================================
 
 all() -> ?ALL([
-    multiple_updates_test,
-    no_space_update_test,
-    space_update_through_support_test,
-    space_update_through_users_test,
-    no_user_update_test,
-    user_update_test,
-    no_group_update_test,
-    group_update_through_users_test,
-    group_update_through_spaces_test,
-    updates_for_added_user_test,
-    updates_have_revisions_test,
-    updates_for_added_user_have_revisions_test,
-    fetches_changes_older_than_in_cache
+%%    multiple_updates_test,
+%%    no_space_update_test,
+%%    space_update_through_support_test,
+%%    space_update_through_users_test,
+%%    no_user_update_test,
+%%    user_update_test,
+%%    no_group_update_test,
+%%    group_update_through_users_test,
+%%    group_update_through_spaces_test,
+%%    updates_for_added_user_test,
+%%    updates_have_revisions_test,
+%%    updates_for_added_user_have_revisions_test,
+%%    fetches_changes_older_than_in_cache,
+%%    fetches_changes_from_both_cache_and_db,
+    fetches_changes_when_cache_has_gaps
 ]).
 
 no_space_update_test(Config) ->
@@ -335,6 +339,79 @@ fetches_changes_older_than_in_cache(Config) ->
     ]),
     ok.
 
+
+fetches_changes_from_both_cache_and_db(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, [
+        <<"s1">>, <<"s2">>, <<"s3">>, <<"s4">>, <<"s5">>, <<"s6">>
+    ]),
+    create_space(Node, <<"s1">>, [P1], [], []),
+    create_space(Node, <<"s2">>, [P1], [], []),
+    create_space(Node, <<"s3">>, [P1], [], []),
+    create_space(Node, <<"s4">>, [P1], [], []),
+    create_space(Node, <<"s5">>, [P1], [], []),
+    create_space(Node, <<"s6">>, [P1], [], []),
+    create_space(Node, <<"s7">>, [P1], [], []),
+    create_space(Node, <<"s8">>, [P1], [], []),
+    create_space(Node, <<"s9">>, [P1], [], []),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Copy = Context = init_messages(Node, P1, []),
+    flush_messages(Context, space_expectation(<<"s9">>, <<"s9">>)),
+    empty_first_half_of_cache(Node),
+
+    % then
+    verify_messages_present(Copy, [
+        space_expectation(<<"s1">>, <<"s1">>),
+        space_expectation(<<"s2">>, <<"s2">>),
+        space_expectation(<<"s3">>, <<"s3">>),
+        space_expectation(<<"s4">>, <<"s4">>),
+        space_expectation(<<"s5">>, <<"s5">>),
+        space_expectation(<<"s6">>, <<"s6">>),
+        space_expectation(<<"s7">>, <<"s7">>),
+        space_expectation(<<"s8">>, <<"s8">>),
+        space_expectation(<<"s9">>, <<"s9">>)
+    ]),
+    ok.
+
+fetches_changes_when_cache_has_gaps(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, [
+        <<"s1">>, <<"s2">>, <<"s3">>, <<"s4">>, <<"s5">>, <<"s6">>
+    ]),
+    create_space(Node, <<"s1">>, [P1], [], []),
+    create_space(Node, <<"s2">>, [P1], [], []),
+    create_space(Node, <<"s3">>, [P1], [], []),
+    create_space(Node, <<"s4">>, [P1], [], []),
+    create_space(Node, <<"s5">>, [P1], [], []),
+    create_space(Node, <<"s6">>, [P1], [], []),
+    create_space(Node, <<"s7">>, [P1], [], []),
+    create_space(Node, <<"s8">>, [P1], [], []),
+    create_space(Node, <<"s9">>, [P1], [], []),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Copy = Context = init_messages(Node, P1, []),
+    flush_messages(Context, space_expectation(<<"s9">>, <<"s9">>)),
+    empty_odd_seqs_in_cache(Node),
+
+    % then
+    verify_messages_present(Copy, [
+        space_expectation(<<"s1">>, <<"s1">>),
+        space_expectation(<<"s2">>, <<"s2">>),
+        space_expectation(<<"s3">>, <<"s3">>),
+        space_expectation(<<"s4">>, <<"s4">>),
+        space_expectation(<<"s5">>, <<"s5">>),
+        space_expectation(<<"s6">>, <<"s6">>),
+        space_expectation(<<"s7">>, <<"s7">>),
+        space_expectation(<<"s8">>, <<"s8">>),
+        space_expectation(<<"s9">>, <<"s9">>)
+    ]),
+    ok.
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -360,6 +437,38 @@ end_per_suite(Config) ->
 empty_cache(Node) ->
     update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{
         cache => gb_trees:empty()
+    }).
+
+empty_first_half_of_cache(Node) ->
+    {ok, #document{value = #subscriptions_state{cache = Cache}}} =
+        rpc:call(Node, subscriptions_state, get, [?SUBSCRIPTIONS_STATE_KEY]),
+
+    AsList = gb_trees:to_list(Cache),
+    {MedianSeq, _} = lists:nth(length(AsList) div 2, AsList),
+    Filtered = lists:filter(fun({Seq, _}) -> Seq > MedianSeq end, AsList),
+
+    UpdatedCache = lists:foldl(fun({Seq, Val}, Acc) ->
+        gb_trees:enter(Seq, Val, Acc)
+    end, gb_trees:empty(), Filtered),
+
+    update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{
+        cache => UpdatedCache
+    }).
+
+empty_odd_seqs_in_cache(Node) ->
+    {ok, #document{value = #subscriptions_state{cache = Cache}}} =
+        rpc:call(Node, subscriptions_state, get, [?SUBSCRIPTIONS_STATE_KEY]),
+
+    AsList = gb_trees:to_list(Cache),
+    Filter = fun({Seq, _}) -> (Seq rem 2) =:= 0 end,
+    Filtered = lists:filter(Filter, AsList),
+
+    UpdatedCache = lists:foldl(fun({Seq, Val}, Acc) ->
+        gb_trees:enter(Seq, Val, Acc)
+    end, gb_trees:empty(), Filtered),
+
+    update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{
+        cache => UpdatedCache
     }).
 
 call_worker(Node, Req) ->
