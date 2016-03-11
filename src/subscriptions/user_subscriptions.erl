@@ -19,14 +19,36 @@
 
 -export([updates/2]).
 
-updates(ProviderID, NewUsers) ->
-    UserChanges = get_users(ProviderID, NewUsers),
+%%--------------------------------------------------------------------
+%% @doc
+%% Fetches documents pushed when new users are declared in subscription
+%% for the first time.
+%% Special sequence number (-1) is used to force update push.
+%% @end
+%%--------------------------------------------------------------------
+-spec updates(ProviderID :: binary(), NewUserIDs :: [binary()]) ->
+    [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}].
+updates(ProviderID, NewUserIDs) ->
+    UserChanges = get_users(ProviderID, NewUserIDs),
     GroupChanges = get_groups(ProviderID, UserChanges),
     SpaceChanges = get_spaces(ProviderID, UserChanges)
         ++ get_group_spaces(ProviderID, GroupChanges),
     UserChanges ++ SpaceChanges ++ GroupChanges.
 
-get_users(ProviderID, NewUsers) ->
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches user documents.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_users(ProviderID :: binary(), NewUserIDs :: [binary()]) ->
+    [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}].
+get_users(ProviderID, NewUserIDs) ->
     lists:filtermap(fun(UserID) ->
         case get_with_revs(onedata_user, UserID) of
             {ok, Doc} -> {true, {-1, Doc, onedata_user}};
@@ -34,8 +56,16 @@ get_users(ProviderID, NewUsers) ->
                 ?warning("Missing user ~p; provider ~p", [UserID, ProviderID]),
                 false
         end
-    end, NewUsers).
+    end, NewUserIDs).
 
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches spaces of the users.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces(ProviderID :: binary(),
+    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_spaces(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         #document{value = #onedata_user{spaces = Spaces}} = UserDoc,
@@ -49,6 +79,15 @@ get_spaces(ProviderID, UserChanges) ->
         end, Spaces)
     end, UserChanges).
 
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches groups of the users.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_groups(ProviderID :: binary(),
+    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_groups(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         #document{value = #onedata_user{groups = Groups}} = UserDoc,
@@ -62,7 +101,14 @@ get_groups(ProviderID, UserChanges) ->
         end, Groups)
     end, UserChanges).
 
-
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches spaces of the users that are accessible due to group membership.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_spaces(ProviderID :: binary(),
+    GroupChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_group_spaces(ProviderID, GroupChanges) ->
     lists:flatmap(fun({_, GroupDoc, _}) ->
         #document{value = #user_group{spaces = Spaces}} = GroupDoc,
@@ -76,5 +122,13 @@ get_group_spaces(ProviderID, GroupChanges) ->
         end, Spaces)
     end, GroupChanges).
 
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches document from couchbase with revisions tuple instead regular
+%% binary in 'rev' field (as in changes stream).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_with_revs(Model :: atom(), Key :: binary()) ->
+    {ok, datastore:document()} | {error, Reason :: binary()}.
 get_with_revs(Model, Key) ->
     couchdb_datastore_driver:get_with_revs(Model:model_init(), Key).

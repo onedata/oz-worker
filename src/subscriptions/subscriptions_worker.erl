@@ -48,7 +48,7 @@ push_messages(ProviderID, Messages) ->
     end.
 
 %%%===================================================================
-%%% gen_server callbacks
+%%% worker_plugin_behaviour callbacks
 %%%===================================================================
 
 %%--------------------------------------------------------------------
@@ -122,21 +122,16 @@ cleanup() ->
 fetch_history(ProviderID, ResumeAt, Missing) ->
     Filter = fun(P) -> P =:= ProviderID end,
 
-
-    case {changes_cache:oldest_seq(), changes_cache:newest_seq()} of
-        {{ok, Oldest}, {ok, Newest}} ->
+    case changes_cache:newest_seq() of
+        {ok, Newest} ->
             case get_seq_to_fetch(Newest, ResumeAt, Missing) of
                 [] -> ok;
-                [SmallestToFetch | _] = ToFetch ->
-                    fetch_from_cache(ToFetch, Filter),
-                    case Oldest >= SmallestToFetch of
-                        true -> ok;
-                        false -> fetch_from_db(SmallestToFetch, Oldest, Filter)
-                    end
+                ToFetch ->
+                    Misses = fetch_from_cache(ToFetch, Filter),
+                    fetch_from_db(Misses, Filter)
             end;
         _ ->
-            [Start | _] = Missing ++ [ResumeAt],
-            fetch_from_db(Start, current_seq(), Filter)
+            fetch_from_db(Missing, Filter)
     end.
 
 %%--------------------------------------------------------------------
@@ -158,10 +153,15 @@ get_seq_to_fetch(Newest, ResumeAt, Missing) ->
 %% @end
 %%--------------------------------------------------------------------
 
+-spec fetch_from_cache(Seqs :: ordsets:ordset(),
+    Filter :: fun((ProviderID :: binary()) -> boolean()))
+        -> no_return().
 fetch_from_cache(Seqs, Filter) ->
+    {Hits, Misses} = changes_cache:query(Seqs),
     lists:foreach(fun({Seq, {Doc, Type}}) ->
         handle_change(Seq, Doc, Type, Filter)
-    end, changes_cache:query(Seqs)).
+    end, Hits),
+    Misses.
 
 %%--------------------------------------------------------------------
 %% @doc @private
@@ -169,10 +169,14 @@ fetch_from_cache(Seqs, Filter) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec fetch_from_db(From :: seq(), To :: seq(),
+-spec fetch_from_db(Seqs :: ordsets:ordset(),
     Filter :: fun((ProviderID :: binary()) -> boolean()))
         -> no_return().
-fetch_from_db(From, To, Filter) ->
+fetch_from_db([], _) -> ok;
+fetch_from_db(Seqs, Filter) ->
+    From = hd(Seqs),
+    To = lists:last(Seqs),
+
     spawn(fun() ->
         couchdb_datastore_driver:changes_start_link(fun
             (_Seq, stream_ended, _Type) -> ok;
@@ -213,20 +217,3 @@ handle_change(Seq, Doc, Model, Filter) ->
                 outbox:put(ProviderID, fun push_messages/2, MessageToSend)
         end
     end, Subscriptions).
-
-%%--------------------------------------------------------------------
-%% @doc @private
-%% Retrieves current sequence number from the db.
-%% @end
-%%--------------------------------------------------------------------
-
--spec current_seq() -> non_neg_integer().
-current_seq() ->
-    try
-        {ok, LastSeq, _} = couchdb_datastore_driver:db_run(couchbeam_changes, follow_once, [], 30),
-        binary_to_integer(LastSeq)
-    catch
-        E:R ->
-            ?error("Last sequence number unknown (assuming 1) due to ~p:~p", [E, R]),
-            1
-    end.

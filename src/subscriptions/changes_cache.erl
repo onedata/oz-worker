@@ -27,16 +27,13 @@
 
 -spec ensure_initialised() -> no_return().
 ensure_initialised() ->
-    try
-        {ok, ?SUBSCRIPTIONS_STATE_KEY} = subscriptions_state:create(#document{
-            key = ?SUBSCRIPTIONS_STATE_KEY,
-            value = #subscriptions_state{cache = gb_trees:empty()}
-        })
-    catch
-        error:{badmatch, {error, already_exists}} -> ok;
-        E:R -> ?info("State not created  ~p:~p", [E, R])
+    case (subscriptions_state:create(#document{
+        key = ?SUBSCRIPTIONS_STATE_KEY,
+        value = #subscriptions_state{cache = gb_trees:empty()}
+    })) of
+        {ok, ?SUBSCRIPTIONS_STATE_KEY} -> ok;
+        {error, already_exists} -> ?info("State already exists")
     end.
-
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -68,11 +65,19 @@ put(Seq, Doc, Model) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec query(Seqs :: ordsets:ordset(seq())) ->
-    [{Seq :: seq(), {Doc :: datastore:document(), Model :: atom()}}].
+-spec query(Seqs :: ordsets:ordset(seq())) -> {Hits, Misses} when
+    Hits :: [{Seq :: seq(), {Doc :: datastore:document(), Model :: atom()}}],
+    Misses :: [seq()].
+
 query(Seqs) ->
-    Cache = gb_trees:to_list(get_cache()),
-    fetch_by_seqs(Cache, Seqs).
+    Cache = get_cache(),
+    Lookup = lists:map(fun(Seq) ->
+        case gb_trees:lookup(Seq, Cache) of
+            none -> Seq;
+            {value, Val} -> {Seq, Val}
+        end
+    end, Seqs),
+    lists:partition(fun({_, _}) -> true; (_) -> false end, Lookup).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -132,15 +137,3 @@ get_cache() ->
     {ok, Doc} = subscriptions_state:get(?SUBSCRIPTIONS_STATE_KEY),
     #document{value = #subscriptions_state{cache = Cache}} = Doc,
     Cache.
-
-
-fetch_by_seqs([{CSeq, _} | Changes], [Seq | _] = Seqs) when CSeq < Seq ->
-    fetch_by_seqs(Changes, Seqs);
-fetch_by_seqs([{CSeq, _} | _] = Changes, [Seq | Seqs]) when CSeq > Seq ->
-    fetch_by_seqs(Changes, Seqs);
-fetch_by_seqs([Change | Changes], [_Seq | Seqs]) ->
-    [Change | fetch_by_seqs(Changes, Seqs)];
-fetch_by_seqs([], _) ->
-    [];
-fetch_by_seqs(_, []) ->
-    [].

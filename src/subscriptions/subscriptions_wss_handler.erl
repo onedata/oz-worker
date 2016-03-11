@@ -1,6 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% @author Krzysztof Trzepla
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @author Michal Zmuda
+%%% @copyright (C): 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -11,6 +12,7 @@
 %%%-------------------------------------------------------------------
 -module(subscriptions_wss_handler).
 -author("Krzysztof Trzepla").
+-author("Michal Zmuda").
 
 -include("registered_names.hrl").
 -include("subscriptions/subscriptions.hrl").
@@ -80,11 +82,11 @@ websocket_init(_TransportName, Req, _Opts) ->
     State :: any(),
     OutFrame :: cowboy_websocket:frame().
 websocket_handle({binary, Data}, Req, State) ->
-    ?info("Received ~p", [Data]),
     update_subscription(Data, Req),
     {ok, Req, State};
 
 websocket_handle(_InFrame, Req, State) ->
+    ?log_bad_request(_InFrame),
     {ok, Req, State}.
 
 %%--------------------------------------------------------------------
@@ -128,11 +130,24 @@ websocket_terminate(_Reason, _Req, _State) ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Uses certificate info to resolve ID of connected provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_provider(Req :: cowboy_req:req()) -> ProviderID :: binary().
 get_provider(Req) ->
     {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
     {ok, Provider} = worker_proxy:call(ozpca_worker, {verify_provider, PeerCert}),
     Provider.
 
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Decodes message data and updates provider subscription accordingly.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_subscription(Data :: binary(), Req :: cowboy_req:req())
+        -> no_return().
 update_subscription(Data, Req) ->
     JSON = json_utils:decode(Data),
     ResumeAt = proplists:get_value(<<"resume_at">>, JSON),
