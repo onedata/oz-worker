@@ -593,8 +593,9 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
 
-    ct:print("Context ~p", [Context]),
-    ct:print("All ~p", [All]),
+%%    todo: remove
+%%    ct:print("Context ~p", [Context]),
+%%    ct:print("All ~p", [All]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),
