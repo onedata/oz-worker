@@ -144,12 +144,12 @@ update_missing_seq(ProviderID, ResumeAt, Missing) ->
 %%--------------------------------------------------------------------
 -spec seen(Subscription :: #provider_subscription{}, Seq :: seq())
         -> boolean().
-seen(_, -1) -> true;
+seen(_, -1) -> false;
 seen(Subscription, Seq) ->
     #provider_subscription{missing = Missing, resume_at = ResumeAt} = Subscription,
     case Seq > ResumeAt of
-        true -> true;
-        false -> lists:member(Seq, Missing)
+        true -> false;
+        false -> not lists:member(Seq, Missing)
     end.
 
 %%%===================================================================

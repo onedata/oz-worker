@@ -76,7 +76,7 @@ handle(healthcheck) ->
 
 handle({handle_change, Seq, Doc, Type}) ->
     changes_cache:put(Seq, Doc, Type),
-    handle_change(Seq, Doc, Type, fun(_) -> true end);
+    handle_change(Seq, Doc, Type);
 
 handle({add_connection, ProviderID, Connection}) ->
     subscriptions:add_connection(ProviderID, Connection);
@@ -91,9 +91,8 @@ handle({update_missing_seq, ProviderID, ResumeAt, Missing}) ->
 handle({update_users, ProviderID, Users}) ->
     NewUsers = subscriptions:update_users(ProviderID, Users),
     Updates = user_subscriptions:updates(ProviderID, NewUsers),
-    Filter = fun(P) -> P =:= ProviderID end,
     lists:foreach(fun({Seq, Doc, Model}) ->
-        handle_change(Seq, Doc, Model, Filter)
+        handle_change(Seq, Doc, Model)
     end, Updates);
 
 handle(_Request) ->
@@ -120,18 +119,17 @@ cleanup() ->
 -spec fetch_history(ProviderID :: binary(), ResumeAt :: seq(), Missing :: [seq()])
         -> no_return().
 fetch_history(ProviderID, ResumeAt, Missing) ->
-    Filter = fun(P) -> P =:= ProviderID end,
 
     case changes_cache:newest_seq() of
         {ok, Newest} ->
             case get_seq_to_fetch(Newest, ResumeAt, Missing) of
                 [] -> ok;
                 ToFetch ->
-                    Misses = fetch_from_cache(ToFetch, Filter),
-                    fetch_from_db(Misses, Filter)
+                    Misses = fetch_from_cache(ToFetch),
+                    fetch_from_db(Misses)
             end;
         _ ->
-            fetch_from_db(Missing, Filter)
+            fetch_from_db(Missing)
     end.
 
 %%--------------------------------------------------------------------
@@ -153,36 +151,49 @@ get_seq_to_fetch(Newest, ResumeAt, Missing) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec fetch_from_cache(Seqs :: ordsets:ordset(),
-    Filter :: fun((ProviderID :: binary()) -> boolean()))
-        -> no_return().
-fetch_from_cache(Seqs, Filter) ->
+-spec fetch_from_cache(Seqs :: ordsets:ordset()) -> no_return().
+fetch_from_cache(Seqs) ->
     {Hits, Misses} = changes_cache:query(Seqs),
     lists:foreach(fun({Seq, {Doc, Type}}) ->
-        handle_change(Seq, Doc, Type, Filter)
+        handle_change(Seq, Doc, Type)
     end, Hits),
     Misses.
 
 %%--------------------------------------------------------------------
 %% @doc @private
 %% Fetches changes from db and sends them to the providers.
+%% Only one attempt is to be made as some sequence numbers may not be present
+%% in couchbase. In that scenario ignore messages are sent.
 %% @end
 %%--------------------------------------------------------------------
 
--spec fetch_from_db(Seqs :: ordsets:ordset(),
-    Filter :: fun((ProviderID :: binary()) -> boolean()))
-        -> no_return().
-fetch_from_db([], _) -> ok;
-fetch_from_db(Seqs, Filter) ->
+-spec fetch_from_db(Seqs :: ordsets:ordset()) -> no_return().
+fetch_from_db([]) -> ok;
+fetch_from_db(Seqs) ->
     From = hd(Seqs),
     To = lists:last(Seqs),
 
     spawn(fun() ->
-        couchdb_datastore_driver:changes_start_link(fun
+        process_flag(trap_exit, true),
+
+        {ok, Pid} = couchdb_datastore_driver:changes_start_link(fun
             (_Seq, stream_ended, _Type) -> ok;
             (Seq, Doc, Type) ->
-                handle_change(Seq, Doc, Type, Filter)
-        end, From, To)
+                handle_change(Seq, Doc, Type)
+        end, From, To),
+
+        receive
+            {'EXIT', Pid, _Reason} ->
+                Subscriptions = subscriptions:all(),
+                lists:foreach(fun(#document{value = Subscription}) ->
+                    lists:foreach(fun(Seq) ->
+                        IgnoreMessage = translator:get_ignore_msg(Seq),
+                        outbox:put(Subscription#provider_subscription.provider,
+                            fun push_messages/2, IgnoreMessage)
+                    end, Seqs)
+                end, Subscriptions)
+        end
+
     end).
 
 %%--------------------------------------------------------------------
@@ -193,22 +204,21 @@ fetch_from_db(Seqs, Filter) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec handle_change(Seq :: seq(), Doc :: datastore:document(), Model :: atom(),
-    Filter :: fun((ProviderID :: binary()) -> boolean()))
+-spec handle_change(Seq :: seq(), Doc :: datastore:document(), Model :: atom())
         -> no_return().
 
-handle_change(Seq, Doc, Model, Filter) ->
+handle_change(Seq, Doc, Model) ->
     Message = translator:get_msg(Seq, Doc, Model),
     IgnoreMessage = translator:get_ignore_msg(Seq),
 
-    Providers = lists:filter(Filter, eligible:providers(Doc, Model)),
-    Subscriptions = subscriptions:all(),
+    Providers = eligible:providers(Doc, Model),
     ProvidersSet = sets:from_list(Providers),
+    Subscriptions = subscriptions:all(),
 
     lists:foreach(fun(#document{value = Subscription}) ->
         case subscriptions:seen(Subscription, Seq) of
-            false -> ok;
-            true ->
+            true -> ok;
+            false ->
                 ProviderID = Subscription#provider_subscription.provider,
                 MessageToSend = case sets:is_element(ProviderID, ProvidersSet) of
                     true -> Message;
