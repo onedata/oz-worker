@@ -12,6 +12,7 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
+-include("subscriptions/subscriptions.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -33,10 +34,10 @@
     multiple_updates_test/1,
     updates_for_added_user_test/1,
     updates_for_added_user_have_revisions_test/1,
-    updates_have_revisions_test/1
-]).
+    updates_have_revisions_test/1,
+    fetches_changes_older_than_in_cache/1]).
 
--define(MESSAGES_WAIT_TIMEOUT, timer:seconds(2)).
+-define(MESSAGES_WAIT_TIMEOUT, timer:seconds(3)).
 -define(MESSAGES_RECEIVE_ATTEMPTS, 30).
 
 %% helper record for maintaining subscription progress between message receives
@@ -64,7 +65,8 @@ all() -> ?ALL([
     group_update_through_spaces_test,
     updates_for_added_user_test,
     updates_have_revisions_test,
-    updates_for_added_user_have_revisions_test
+    updates_for_added_user_have_revisions_test,
+    fetches_changes_older_than_in_cache
 ]).
 
 no_space_update_test(Config) ->
@@ -90,7 +92,8 @@ space_update_through_support_test(Config) ->
     create_space(Node, <<"s1">>, [P1], [], []),
 
     % when
-    Context = init_messages(Node, P1, []),
+    Context1 = init_messages(Node, P1, []),
+    Context = flush_messages(Context1, space_expectation(<<"s1">>, <<"s1">>)),
     update_document(Node, space, <<"s1">>, #{name => <<"updated">>}),
 
     % then
@@ -107,7 +110,8 @@ space_update_through_users_test(Config) ->
     create_space(Node, <<"s1">>, [P1], [<<"u1">>], []),
 
     % when
-    Context = init_messages(Node, P1, [<<"u1">>]),
+    Context1 = init_messages(Node, P1, []),
+    Context = flush_messages(Context1, space_expectation(<<"s1">>, <<"s1">>)),
     update_document(Node, space, <<"s1">>, #{name => <<"updated">>}),
 
     % then
@@ -124,7 +128,7 @@ no_user_update_test(Config) ->
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
-    Context = init_messages(Node, P1, []),
+    Context = init_messages(Node, P1, [<<"u1">>]),
     update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated">>}),
 
     % then
@@ -141,7 +145,8 @@ user_update_test(Config) ->
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
-    Context = init_messages(Node, P1, [<<"u1">>]),
+    Context1 = init_messages(Node, P1, [<<"u1">>]),
+    Context = flush_messages(Context1, user_expectation(<<"u1">>, <<"u1">>, [], [])),
     update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated">>}),
 
     % then
@@ -158,7 +163,9 @@ multiple_updates_test(Config) ->
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
-    Context = init_messages(Node, P1, [<<"u1">>]),
+    Context1 = init_messages(Node, P1, [<<"u1">>]),
+    Context = flush_messages(Context1, user_expectation(<<"u1">>, <<"u1">>, [], [])),
+
     update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated1">>}),
     update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated2">>}),
     update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated3">>}),
@@ -196,7 +203,8 @@ group_update_through_users_test(Config) ->
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
-    Context = init_messages(Node, P1, [<<"u1">>]),
+    Context1 = init_messages(Node, P1, [<<"u1">>]),
+    Context = flush_messages(Context1, group_expectation(<<"g1">>, <<"g1">>)),
     update_document(Node, user_group, <<"g1">>, #{name => <<"updated">>}),
 
     % then
@@ -214,7 +222,8 @@ group_update_through_spaces_test(Config) ->
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
-    Context = init_messages(Node, P1, [<<"u1">>]),
+    Context1 = init_messages(Node, P1, [<<"u1">>]),
+    Context = flush_messages(Context1, group_expectation(<<"g1">>, <<"g1">>)),
     update_document(Node, user_group, <<"g1">>, #{name => <<"updated">>}),
 
     % then
@@ -233,7 +242,8 @@ updates_for_added_user_test(Config) ->
     create_space(Node, <<"s2">>, [P1], [<<"u1">>], []),
     call_worker(Node, {add_connection, P1, self()}),
 
-    Context = init_messages(Node, P1, []),
+    Context1 = init_messages(Node, P1, []),
+    Context = flush_messages(Context1, space_expectation(<<"s2">>, <<"s2">>)),
 
     % when & then
     verify_messages_present(Context#subs_ctx{users = [<<"u1">>]}, [
@@ -282,7 +292,8 @@ updates_have_revisions_test(Config) ->
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
-    Context = init_messages(Node, P1, [UniqueID]),
+    Context1 = init_messages(Node, P1, [UniqueID]),
+    Context = flush_messages(Context1, user_expectation(UniqueID, UniqueID, [], [])),
     update_document(Node, onedata_user, UniqueID, #{name => <<"updated1">>}),
     Rev1 = get_rev(Node, onedata_user, UniqueID),
     update_document(Node, onedata_user, UniqueID, #{name => <<"updated2">>}),
@@ -300,6 +311,30 @@ updates_have_revisions_test(Config) ->
     ]),
     ok.
 
+fetches_changes_older_than_in_cache(Config) ->
+    % given
+    UniqueID = <<"u1-updates_have_revisions_test">>,
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, <<"p1">>, []),
+    create_user(Node, UniqueID, [], []),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated1">>}),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated2">>}),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated3">>}),
+    update_document(Node, onedata_user, UniqueID, #{name => <<"updated4">>}),
+
+    % when
+    Context = init_messages(Node, P1, [UniqueID]),
+    _ForgottenContext = flush_messages(Context,
+        user_expectation(UniqueID, <<"updated4">>, [], [])),
+
+    empty_cache(Node),
+
+    % then
+    verify_messages_present(Context, [
+        user_expectation(UniqueID, <<"updated4">>, [], [])
+    ]),
+    ok.
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -311,6 +346,7 @@ init_per_testcase(_, _Config) ->
     _Config.
 
 end_per_testcase(_, _Config) ->
+    flush(),
     ok.
 
 end_per_suite(Config) ->
@@ -319,6 +355,18 @@ end_per_suite(Config) ->
 
 %%%===================================================================
 %%% Internal functions
+%%%===================================================================
+
+empty_cache(Node) ->
+    update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{
+        cache => gb_trees:empty()
+    }).
+
+call_worker(Node, Req) ->
+    rpc:call(Node, worker_proxy, call, [?SUBSCRIPTIONS_WORKER_NAME, Req]).
+
+%%%===================================================================
+%%% Internal: datastore setup
 %%%===================================================================
 
 create_group(Node, Name, Users, Spaces) ->
@@ -375,9 +423,6 @@ generate_cert_files() ->
     os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
     {KeyFile, CSRFile, CertFile}.
 
-call_worker(Node, Req) ->
-    rpc:call(Node, worker_proxy, call, [subscriptions_worker, Req]).
-
 
 %%%===================================================================
 %%% Internal: Message expectations
@@ -408,13 +453,17 @@ verify_messages_absent(Context, Forbidden) ->
     verify_messages(Context, ?MESSAGES_RECEIVE_ATTEMPTS, [], Forbidden).
 
 init_messages(Node, ProviderID, Users) ->
-    AlwaysAbsentMessage = ["flushy flushy"],
     call_worker(Node, {add_connection, ProviderID, self()}),
+    #subs_ctx{node = Node, provider = ProviderID,
+        users = Users, resume_at = 1, missing = []}.
 
-    Context = #subs_ctx{node = Node, provider = ProviderID,
-        users = Users, resume_at = 1, missing = []},
+flush_messages(Context, LastExpected) ->
+    UpdatedContext = verify_messages(Context, [LastExpected], []),
+    flush(),
+    UpdatedContext.
 
-    verify_messages(Context, [], [AlwaysAbsentMessage]).
+flush() ->
+    receive _ -> flush() after ?MESSAGES_WAIT_TIMEOUT -> ok end.
 
 verify_messages(Context, Expected, Forbidden) ->
     verify_messages(Context, ?MESSAGES_RECEIVE_ATTEMPTS, Expected, Forbidden).
