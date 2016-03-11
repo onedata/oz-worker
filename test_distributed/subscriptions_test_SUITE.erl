@@ -44,9 +44,9 @@
 
 %% appends function name to id (atom) and yields binary accepted by the db
 -define(ID(Id), list_to_binary(
-    atom_to_list(Id)) ++ "_" ++
+    atom_to_list(Id) ++ " # " ++
     atom_to_list(element(2, element(2, process_info(self(), current_function))))
-).
+)).
 
 %% helper record for maintaining subscription progress between message receives
 -record(subs_ctx, {
