@@ -36,6 +36,18 @@
     updates_have_revisions_test/1
 ]).
 
+-define(MESSAGES_WAIT_TIMEOUT, timer:seconds(2)).
+-define(MESSAGES_RECEIVE_ATTEMPTS, 30).
+
+%% helper record for maintaining subscription progress between message receives
+-record(subs_ctx, {
+    node :: node(),
+    provider :: binary(),
+    users :: [binary()],
+    resume_at :: seq(),
+    missing :: [seq()]
+}).
+
 %%%===================================================================
 %%% API functions
 %%%===================================================================
@@ -66,7 +78,7 @@ no_space_update_test(Config) ->
     update_document(Node, space, <<"s1">>, #{name => <<"updated">>}),
 
     % then
-    verify_messages(Context, [], [
+    verify_messages_absent(Context, [
         space_expectation(<<"s1">>, <<"updated">>)
     ]),
     ok.
@@ -82,9 +94,9 @@ space_update_through_support_test(Config) ->
     update_document(Node, space, <<"s1">>, #{name => <<"updated">>}),
 
     % then
-    verify_messages(Context, [
+    verify_messages_present(Context, [
         space_expectation(<<"s1">>, <<"updated">>)
-    ], []),
+    ]),
     ok.
 
 space_update_through_users_test(Config) ->
@@ -99,9 +111,9 @@ space_update_through_users_test(Config) ->
     update_document(Node, space, <<"s1">>, #{name => <<"updated">>}),
 
     % then
-    verify_messages(Context, [
+    verify_messages_present(Context, [
         space_expectation(<<"s1">>, <<"updated">>)
-    ], []),
+    ]),
     ok.
 
 no_user_update_test(Config) ->
@@ -116,7 +128,7 @@ no_user_update_test(Config) ->
     update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated">>}),
 
     % then
-    verify_messages(Context, [], [
+    verify_messages_absent(Context, [
         user_expectation(<<"u1">>, <<"updated">>, [], [])
     ]),
     ok.
@@ -153,9 +165,9 @@ multiple_updates_test(Config) ->
     update_document(Node, onedata_user, <<"u1">>, #{name => <<"updated4">>}),
 
     % then
-    verify_messages(Context, [
+    verify_messages_present(Context, [
         user_expectation(<<"u1">>, <<"updated4">>, [], [])
-    ], []),
+    ]),
     ok.
 
 no_group_update_test(Config) ->
@@ -170,7 +182,7 @@ no_group_update_test(Config) ->
     update_document(Node, user_group, <<"g1">>, #{name => <<"updated">>}),
 
     % then
-    verify_messages(Context, [], [
+    verify_messages_absent(Context, [
         group_expectation(<<"g1">>, <<"updated">>)
     ]),
     ok.
@@ -188,9 +200,9 @@ group_update_through_users_test(Config) ->
     update_document(Node, user_group, <<"g1">>, #{name => <<"updated">>}),
 
     % then
-    verify_messages(Context, [
+    verify_messages_present(Context, [
         group_expectation(<<"g1">>, <<"updated">>)
-    ], []),
+    ]),
     ok.
 
 group_update_through_spaces_test(Config) ->
@@ -206,9 +218,9 @@ group_update_through_spaces_test(Config) ->
     update_document(Node, user_group, <<"g1">>, #{name => <<"updated">>}),
 
     % then
-    verify_messages(Context, [
+    verify_messages_present(Context, [
         group_expectation(<<"g1">>, <<"updated">>)
-    ], []),
+    ]),
     ok.
 
 updates_for_added_user_test(Config) ->
@@ -222,15 +234,14 @@ updates_for_added_user_test(Config) ->
     call_worker(Node, {add_connection, P1, self()}),
 
     Context = init_messages(Node, P1, []),
-    {Node, ProviderID, _Users, ResumeAt, Missing} = Context,
 
     % when & then
-    verify_messages({Node, ProviderID, [<<"u1">>], ResumeAt, Missing}, [
+    verify_messages_present(Context#subs_ctx{users = [<<"u1">>]}, [
         user_expectation(<<"u1">>, <<"u1">>, [<<"s2">>], [<<"g1">>]),
         group_expectation(<<"g1">>, <<"g1">>),
         space_expectation(<<"s1">>, <<"s1">>),
         space_expectation(<<"s2">>, <<"s2">>)
-    ], []),
+    ]),
     ok.
 
 updates_for_added_user_have_revisions_test(Config) ->
@@ -244,7 +255,6 @@ updates_for_added_user_have_revisions_test(Config) ->
 
     % when
     Context = init_messages(Node, P1, []),
-    {Node, ProviderID, _Users, ResumeAt, Missing} = Context,
     update_document(Node, onedata_user, UniqueID, #{name => <<"updated1">>}),
     Rev1 = get_rev(Node, onedata_user, UniqueID),
     update_document(Node, onedata_user, UniqueID, #{name => <<"updated2">>}),
@@ -255,11 +265,11 @@ updates_for_added_user_have_revisions_test(Config) ->
     Rev4 = get_rev(Node, onedata_user, UniqueID),
 
     % then
-    verify_messages({Node, ProviderID, [UniqueID], ResumeAt, Missing}, [
+    verify_messages_present(Context#subs_ctx{users = [UniqueID]}, [
         expectation_with_rev(
             [Rev4, Rev3, Rev2, Rev1, Rev0],
             user_expectation(UniqueID, <<"updated4">>, [], []))
-    ], []),
+    ]),
     ok.
 
 updates_have_revisions_test(Config) ->
@@ -283,11 +293,11 @@ updates_have_revisions_test(Config) ->
     Rev4 = get_rev(Node, onedata_user, UniqueID),
 
     % then
-    verify_messages(Context, [
+    verify_messages_present(Context, [
         expectation_with_rev(
             [Rev4, Rev3, Rev2, Rev1, Rev0],
             user_expectation(UniqueID, <<"updated4">>, [], []))
-    ], []),
+    ]),
     ok.
 
 %%%===================================================================
@@ -310,20 +320,6 @@ end_per_suite(Config) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-space_expectation(ID, Name) ->
-    [{<<"id">>, ID}, {<<"space">>, [{<<"id">>, ID}, {<<"name">>, Name}]}].
-
-user_expectation(ID, Name, Spaces, Groups) ->
-    [{<<"id">>, ID}, {<<"user">>, [
-        {<<"name">>, Name}, {<<"space_ids">>, Spaces}, {<<"group_ids">>, Groups}
-    ]}].
-
-group_expectation(ID, Name) ->
-    [{<<"id">>, ID}, {<<"group">>, [{<<"name">>, Name}]}].
-
-expectation_with_rev(Revs, Expectation) ->
-    [{<<"revs">>, Revs} | Expectation].
 
 create_group(Node, Name, Users, Spaces) ->
     ?assertMatch({ok, Name}, rpc:call(Node, user_group, save, [#document{
@@ -379,12 +375,49 @@ generate_cert_files() ->
     os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
     {KeyFile, CSRFile, CertFile}.
 
-verify_messages(Context, Expected, Forbidden) ->
-    verify_messages(Context, 5, Expected, Forbidden).
+call_worker(Node, Req) ->
+    rpc:call(Node, worker_proxy, call, [subscriptions_worker, Req]).
+
+
+%%%===================================================================
+%%% Internal: Message expectations
+%%%===================================================================
+
+space_expectation(ID, Name) ->
+    [{<<"id">>, ID}, {<<"space">>, [{<<"id">>, ID}, {<<"name">>, Name}]}].
+
+user_expectation(ID, Name, Spaces, Groups) ->
+    [{<<"id">>, ID}, {<<"user">>, [
+        {<<"name">>, Name}, {<<"space_ids">>, Spaces}, {<<"group_ids">>, Groups}
+    ]}].
+
+group_expectation(ID, Name) ->
+    [{<<"id">>, ID}, {<<"group">>, [{<<"name">>, Name}]}].
+
+expectation_with_rev(Revs, Expectation) ->
+    [{<<"revs">>, Revs} | Expectation].
+
+%%%===================================================================
+%%% Internal: Message presence/absence verification
+%%%===================================================================
+
+verify_messages_present(Context, Expected) ->
+    verify_messages(Context, ?MESSAGES_RECEIVE_ATTEMPTS, Expected, []).
+
+verify_messages_absent(Context, Forbidden) ->
+    verify_messages(Context, ?MESSAGES_RECEIVE_ATTEMPTS, [], Forbidden).
 
 init_messages(Node, ProviderID, Users) ->
+    AlwaysAbsentMessage = ["flushy flushy"],
     call_worker(Node, {add_connection, ProviderID, self()}),
-    verify_messages({Node, ProviderID, Users, 1, []}, [], [["flushy flushy"]]).
+
+    Context = #subs_ctx{node = Node, provider = ProviderID,
+        users = Users, resume_at = 1, missing = []},
+
+    verify_messages(Context, [], [AlwaysAbsentMessage]).
+
+verify_messages(Context, Expected, Forbidden) ->
+    verify_messages(Context, ?MESSAGES_RECEIVE_ATTEMPTS, Expected, Forbidden).
 
 verify_messages(Context, _, [], []) ->
     Context;
@@ -392,23 +425,34 @@ verify_messages(Context, 0, Expected, _) ->
     ?assertMatch([], Expected),
     Context;
 verify_messages(Context, Retries, Expected, Forbidden) ->
-    {Node, ProviderID, Users, ResumeAt, Missing} = Context,
+    #subs_ctx{node = Node, provider = ProviderID,
+        users = Users, resume_at = ResumeAt, missing = Missing} = Context,
 
     call_worker(Node, {update_users, ProviderID, Users}),
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
-    All = lists:append(get_messages(20, [])),
+    All = lists:append(get_messages()),
 
     ct:print("Context ~p", [Context]),
     ct:print("All ~p", [All]),
 
-    Seqs = extract_sequence_numbers(All),
+    Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),
-    NextMissing = (Missing ++ new_expected_seqs(NextResumeAt, ResumeAt)) -- Seqs,
-    NextContext = {Node, ProviderID, Users, NextResumeAt, NextMissing},
+    NewExpectedSeqs = new_expected_seqs(NextResumeAt, ResumeAt),
+    NextMissing = (Missing ++ NewExpectedSeqs) -- Seqs,
+    NextContext = Context#subs_ctx{
+        resume_at = NextResumeAt,
+        missing = NextMissing
+    },
 
     ?assertMatch(Forbidden, Forbidden -- All),
     RemainingExpected = remaining_expected(Expected, All),
     verify_messages(NextContext, Retries - 1, RemainingExpected, Forbidden).
+
+get_messages() ->
+    receive {push, Messages} ->
+        [json_utils:decode(Messages)]
+    after ?MESSAGES_WAIT_TIMEOUT -> [] end.
+
 
 new_expected_seqs(NextResumeAt, ResumeAt) ->
     case NextResumeAt > (ResumeAt + 1) of
@@ -419,23 +463,12 @@ new_expected_seqs(NextResumeAt, ResumeAt) ->
 largest(List) ->
     hd(lists:reverse(lists:usort(List))).
 
-extract_sequence_numbers(All) ->
+extract_seqs(Messages) ->
     lists:map(fun(Message) ->
         proplists:get_value(<<"seq">>, Message)
-    end, All).
+    end, Messages).
 
-remaining_expected(Expected, All) ->
+remaining_expected(Expected, Messages) ->
     lists:filter(fun(Exp) ->
-        lists:all(fun(Msg) -> length(Exp -- Msg) =/= 0 end, All)
+        lists:all(fun(Msg) -> length(Exp -- Msg) =/= 0 end, Messages)
     end, Expected).
-
-call_worker(Node, Req) ->
-    rpc:call(Node, worker_proxy, call, [subscriptions_worker, Req]).
-
-get_messages(0, Acc) -> Acc;
-get_messages(Retries, Acc) ->
-    receive
-        {push, Messages} ->
-            get_messages(Retries - 1, [json_utils:decode(Messages) | Acc])
-    after timer:seconds(2) -> Acc
-    end.
