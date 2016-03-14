@@ -150,7 +150,7 @@ get_seq_to_fetch(Newest, ResumeAt, Missing) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec fetch_from_cache(Seqs :: ordsets:ordset()) -> no_return().
+-spec fetch_from_cache(Seqs :: ordsets:ordset(seq())) -> no_return().
 fetch_from_cache(Seqs) ->
     {Hits, Misses} = changes_cache:query(Seqs),
     lists:foreach(fun({Seq, {Doc, Type}}) ->
@@ -168,7 +168,7 @@ fetch_from_cache(Seqs) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec fetch_from_db(Seqs :: ordsets:ordset()) -> no_return().
+-spec fetch_from_db(Seqs :: ordsets:ordset(seq())) -> no_return().
 fetch_from_db([]) -> ok;
 fetch_from_db(Seqs) ->
     From = hd(Seqs) - 1,
@@ -202,7 +202,7 @@ fetch_from_db(Seqs) ->
 %% Sends to all providers information to skip the sequence numbers.
 %% @end
 %%--------------------------------------------------------------------
--spec ignore_all(Seqs :: ordsets:ordset()) -> no_return().
+-spec ignore_all(Seqs :: ordsets:ordset(seq())) -> no_return().
 ignore_all(Seqs) ->
     Subscriptions = subscriptions:all(),
     lists:foreach(fun(#document{value = Subscription}) ->
