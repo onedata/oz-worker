@@ -38,23 +38,25 @@ get_ignore_msg(Seq) ->
 -spec get_msg(Seq :: pos_integer(), Doc :: datastore:document(), Model :: atom())
         -> term().
 
-get_msg(Seq, Doc, space) ->
+get_msg(Seq, Doc = #document{rev = deleted, key = ID}, Model) ->
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {model(Model), delete}];
+get_msg(Seq, Doc, space = Model) ->
     #document{value = Value, key = ID} = Doc,
     #space{name = Name} = Value,
-    [{seq, Seq}, revs_prop(Doc), {id, ID}, {space, [
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {model(Model), [
         {id, ID},
         {name, Name}
     ]}];
-get_msg(Seq, Doc, user_group) ->
+get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
     #user_group{name = Name} = Value,
-    [{seq, Seq}, revs_prop(Doc), {id, ID}, {group, [
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {model(Model), [
         {name, Name}
     ]}];
-get_msg(Seq, Doc, onedata_user) ->
+get_msg(Seq, Doc, onedata_user = Model) ->
     #document{value = Value, key = ID} = Doc,
     #onedata_user{name = Name, spaces = Spaces, groups = Groups} = Value,
-    [{seq, Seq}, revs_prop(Doc), {id, ID}, {user, [
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {model(Model), [
         {name, Name},
         {space_ids, Spaces},
         {group_ids, Groups}
@@ -76,3 +78,8 @@ revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
     {revs, PrefixedRevs};
 revs_prop(#document{rev = Rev}) ->
     {revs, [Rev]}.
+
+-spec model(atom()) -> atom().
+model(space) -> space;
+model(onedata_user) -> user;
+model(user_group) -> group.

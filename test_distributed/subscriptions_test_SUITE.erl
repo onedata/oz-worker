@@ -36,7 +36,8 @@
     updates_have_revisions_test/1,
     fetches_changes_older_than_in_cache/1,
     fetches_changes_from_both_cache_and_db/1,
-    fetches_changes_when_cache_has_gaps/1]).
+    fetches_changes_when_cache_has_gaps/1,
+    simple_delete_test/1]).
 
 -define(MESSAGES_WAIT_TIMEOUT, timer:seconds(3)).
 -define(MESSAGES_RECEIVE_ATTEMPTS, 30).
@@ -67,6 +68,7 @@ all() -> ?ALL([
     space_update_through_users_test,
     no_user_update_test,
     user_update_test,
+    simple_delete_test,
     no_group_update_test,
     group_update_through_users_test,
     updates_for_added_user_test,
@@ -160,6 +162,30 @@ user_update_test(Config) ->
     % then
     verify_messages(Context, [
         user_expectation(?ID(u1), <<"updated">>, [], [])
+    ], []),
+    ok.
+
+simple_delete_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    P1 = create_provider(Node, ?ID(p1), [?ID(s1)]),
+    create_user(Node, ?ID(u1), [?ID(g1)], []),
+    create_group(Node, ?ID(g1), [?ID(u1)], []),
+    create_space(Node, ?ID(s1), [P1], [?ID(u1)], []),
+    call_worker(Node, {add_connection, P1, self()}),
+
+    % when
+    Context1 = init_messages(Node, P1, [?ID(u1)]),
+    Context = flush_messages(Context1, user_expectation(?ID(u1), ?ID(u1), [], [?ID(g1)])),
+    delete_document(Node, onedata_user, ?ID(u1)),
+    delete_document(Node, user_group, ?ID(g1)),
+    delete_document(Node, space, ?ID(s1)),
+
+    % then
+    verify_messages(Context, [
+        [{<<"id">>, ?ID(g1)}, {<<"group">>, <<"delete">>}],
+        [{<<"id">>, ?ID(u1)}, {<<"user">>, <<"delete">>}],
+        [{<<"id">>, ?ID(s1)}, {<<"space">>, <<"delete">>}]
     ], []),
     ok.
 
@@ -483,6 +509,9 @@ create_user(Node, Name, Groups, Spaces) ->
 
 update_document(Node, Model, ID, Diff) ->
     ?assertMatch({ok, _}, rpc:call(Node, Model, update, [ID, Diff])).
+
+delete_document(Node, Model, ID) ->
+    ?assertMatch(ok, rpc:call(Node, Model, delete, [ID])).
 
 get_rev(Node, Model, ID) ->
     Result = rpc:call(Node, Model, get, [ID]),

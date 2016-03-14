@@ -27,13 +27,19 @@
 -spec providers(Doc :: datastore:document(), Model :: atom())
         -> [ProviderID :: term()].
 providers(Doc, space) ->
-    #document{value = Value, key = SpaceID} = Doc,
-    #space{providers = SpaceProviders} = Value,
+    #document{value = #space{providers = SpaceProviders,
+        users = SpaceUserTuples, groups = GroupTuples}} = Doc,
 
-    {ok, [{users, Users}]} = space_logic:get_effective_users(SpaceID),
-    UserProviders = through_users(Users),
+    GroupUsersSets = lists:flatmap(fun({GroupId, _}) ->
+        {ok, #document{value = #user_group{users = GroupUserTuples}}} = user_group:get(GroupId),
+        {GroupUsers, _} = lists:unzip(GroupUserTuples),
+        GroupUsers
+    end, GroupTuples),
 
-    SpaceProviders ++ UserProviders;
+    {SpaceUsers, _} = lists:unzip(SpaceUserTuples),
+    SpaceUsersSet = ordsets:from_list(SpaceUsers),
+
+    SpaceProviders ++ through_users(SpaceUsersSet ++ GroupUsersSets);
 
 providers(Doc, user_group) ->
     #document{value = #user_group{users = UsersWithPrivileges}} = Doc,
