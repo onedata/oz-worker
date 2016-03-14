@@ -109,7 +109,10 @@
                             "http_domain": {
                                 "string": "127.0.0.1"
                             },
-                            "dev_mode": true
+                            "dev_mode": true,
+                            "space_store_level": "globally_cached",
+                            "user_store_level": "globally_cached",
+                            "group_store_level": "globally_cached"
                         }
                     }
                 }
@@ -125,7 +128,7 @@
                 "default_space": "space2"
             },
             "user3": {
-                "default_space": "space1"
+                "default_space": "space3"
             }
         },
         "groups": {

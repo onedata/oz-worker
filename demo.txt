@@ -1,0 +1,81 @@
+# oz_worker (test_rel) w bieżącym katalogu
+# op_worker (test_rel) w ../op-worker/
+# pamiętaj o demo.json i katalogu logs
+
+./bamboos/docker/env_up.py -bcm cluster_manager -bw ../op-worker/ -boz . -l logs demo.json
+
+# [OZ] attach do procesu
+# [OP] attach do procesu
+
+
+# weryfikujemy co gdzie jest
+
+[OZ] space:get(<<"space1">>).
+[OZ] space:get(<<"space2">>).
+[OZ] onedata_user:get(<<"user1">>).
+[OZ] onedata_user:get(<<"user2">>).
+[OZ] onedata_user:get(<<"user3">>).
+[OZ] user_group:get(<<"group1">>).
+[OZ] user_group:get(<<"group2">>).
+
+# co się zsyncowało na OP
+# space providera się syncują zawsze
+
+[OP] space_info:get(<<"space1">>).
+[OP] space_info:get(<<"space2">>).
+
+# a co nie
+# userzy i grupy w space syncują się tylko jeżeli użytkownik jest
+# zadeklarowany w subscrypcji (tj. ma/miał sesję w tym providerze)
+# dzięki temu subskrypcja jest dużo lżejsza (obliczenie adresatów)
+
+[OP] onedata_user:get(<<"user1">>).
+[OP] onedata_user:get(<<"user2">>).
+[OP] onedata_user:get(<<"user3">>).
+[OP] onedata_group:get(<<"group1">>).
+[OP] onedata_group:get(<<"group2">>).
+
+# dodajemy subskrypcję uzytkownika
+
+[OP] session_manager:reuse_or_create_rest_session({identity,<<"user1">>,undefined},{auth,undefined,[]})
+[OP] subscriptions:get_users().
+
+# weryfinkujemy że on i jego grupy są teraz obecne
+# (jego space też, ale akurat tutaj są wszystkie)
+# uwaga: tu jest mnesia + couchbase i trzeba czeeekać
+
+[OP] onedata_user:get(<<"user1">>).
+[OP] onedata_group:get(<<"group1">>).
+
+# reszty niet
+
+[OP] onedata_user:get(<<"user2">>).
+[OP] onedata_user:get(<<"user3">>).
+[OP] onedata_group:get(<<"group2">>).
+
+# dodajemy nowy space
+# user1 ma do niego dostep przez grupe
+# space3 nie ma zadnych providerow
+
+[OZ] space:create({document, <<"space3">>, undefined,
+    {space, <<"space3">>, [], [], [{<<"group1">>, []}], []},
+[]}).
+
+# sprawdzamy ze jest
+[OP] space_info:get(<<"space3">>).
+
+# aktualizujemy dokument
+[OZ] space:save({document, <<"space2">>, undefined,
+    {space, <<"onedata ftw">>, [], [], [{<<"group1">>, []}], []},
+[]}).
+
+# sprawdzamy ze jest zmiana i nowy nr rewizji
+[OP] space_info:get(<<"space2">>).
+
+# usuwamy
+[OZ] space:delete(<<"space2">>).
+
+# sprawdzamy ze jest zmiana
+[OP] space_info:get(<<"space2">>).
+
+# konflikty i rozne typy updeteów pokryte są w unitach i ct
