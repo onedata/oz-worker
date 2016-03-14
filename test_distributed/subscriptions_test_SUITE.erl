@@ -40,7 +40,7 @@
     simple_delete_test/1]).
 
 -define(MESSAGES_WAIT_TIMEOUT, timer:seconds(3)).
--define(MESSAGES_RECEIVE_ATTEMPTS, 30).
+-define(MESSAGES_RECEIVE_ATTEMPTS, 40).
 
 %% appends function name to id (atom) and yields binary accepted by the db
 -define(ID(Id), list_to_binary(
