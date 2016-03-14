@@ -147,7 +147,7 @@ get_provider(Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_subscription(Data :: binary(), Req :: cowboy_req:req())
-        -> no_return().
+        -> any().
 update_subscription(Data, Req) ->
     JSON = json_utils:decode(Data),
     ResumeAt = proplists:get_value(<<"resume_at">>, JSON),

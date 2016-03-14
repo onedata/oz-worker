@@ -25,7 +25,7 @@
 %% @end
 %%--------------------------------------------------------------------
 
--spec ensure_initialised() -> no_return().
+-spec ensure_initialised() -> any().
 ensure_initialised() ->
     case (subscriptions_state:create(#document{
         key = ?SUBSCRIPTIONS_STATE_KEY,
@@ -42,7 +42,7 @@ ensure_initialised() ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec put(Seq :: seq(), Doc :: #document{}, Model :: atom()) -> no_return().
+-spec put(Seq :: seq(), Doc :: #document{}, Model :: atom()) -> any().
 put(Seq, Doc, Model) ->
     {ok, _} = subscriptions_state:update(?SUBSCRIPTIONS_STATE_KEY, fun(State) ->
         Cache = State#subscriptions_state.cache,

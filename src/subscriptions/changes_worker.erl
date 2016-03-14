@@ -80,7 +80,7 @@ handle(stream_presence_check) ->
     case global:whereis_name(?STREAM_GLOBAL_NAME) of
         undefined -> start_changes_stream();
         _ -> ?info("Stream detected - presence check OK")
-    end;
+    end, ok;
 
 handle(_Request) ->
     ?log_bad_request(_Request).
@@ -108,7 +108,7 @@ cleanup() ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec start_changes_stream() -> no_return().
+-spec start_changes_stream() -> any().
 start_changes_stream() ->
     case fetch_last_seq() of
         {error, Reason} ->
@@ -154,7 +154,7 @@ fetch_last_seq() ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec schedule_stream_presence_check() -> no_return().
+-spec schedule_stream_presence_check() -> any().
 schedule_stream_presence_check() ->
     {ok, Interval} = application:get_env(?APP_Name,
         changes_stream_presence_check_interval_seconds),

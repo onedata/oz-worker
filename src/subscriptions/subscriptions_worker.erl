@@ -35,7 +35,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec push_messages(ProviderID :: binary(), Messages :: [term()])
-        -> no_return().
+        -> any().
 push_messages(ProviderID, Messages) ->
     {ok, #document{value = #provider_subscription{connections = Conns}}}
         = subscriptions:get_doc(ProviderID),
@@ -76,24 +76,29 @@ handle(healthcheck) ->
 
 handle({handle_change, Seq, Doc, Type}) ->
     changes_cache:put(Seq, Doc, Type),
-    handle_change(Seq, Doc, Type);
+    handle_change(Seq, Doc, Type),
+    ok;
 
 handle({add_connection, ProviderID, Connection}) ->
-    subscriptions:add_connection(ProviderID, Connection);
+    subscriptions:add_connection(ProviderID, Connection),
+    ok;
 
 handle({remove_connection, ProviderID, Connection}) ->
-    subscriptions:remove_connection(ProviderID, Connection);
+    subscriptions:remove_connection(ProviderID, Connection),
+    ok;
 
 handle({update_missing_seq, ProviderID, ResumeAt, Missing}) ->
     subscriptions:update_missing_seq(ProviderID, ResumeAt, Missing),
-    fetch_history(ResumeAt, Missing);
+    fetch_history(ResumeAt, Missing),
+    ok;
 
 handle({update_users, ProviderID, Users}) ->
     NewUsers = subscriptions:update_users(ProviderID, Users),
     Updates = user_subscriptions:updates(ProviderID, NewUsers),
     lists:foreach(fun({Seq, Doc, Model}) ->
         handle_change(Seq, Doc, Model)
-    end, Updates);
+    end, Updates),
+    ok;
 
 handle(_Request) ->
     ?log_bad_request(_Request).
@@ -116,7 +121,7 @@ cleanup() ->
 %% Fetches old changes and sends them to the providers.
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_history(ResumeAt :: seq(), Missing :: [seq()]) -> no_return().
+-spec fetch_history(ResumeAt :: seq(), Missing :: [seq()]) -> any().
 fetch_history(ResumeAt, Missing) ->
 
     case changes_cache:newest_seq() of
@@ -150,7 +155,7 @@ get_seq_to_fetch(Newest, ResumeAt, Missing) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec fetch_from_cache(Seqs :: ordsets:ordset(seq())) -> no_return().
+-spec fetch_from_cache(Seqs :: ordsets:ordset(seq())) -> any().
 fetch_from_cache(Seqs) ->
     {Hits, Misses} = changes_cache:query(Seqs),
     lists:foreach(fun({Seq, {Doc, Type}}) ->
@@ -168,7 +173,7 @@ fetch_from_cache(Seqs) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec fetch_from_db(Seqs :: ordsets:ordset(seq())) -> no_return().
+-spec fetch_from_db(Seqs :: ordsets:ordset(seq())) -> any().
 fetch_from_db([]) -> ok;
 fetch_from_db(Seqs) ->
     From = hd(Seqs) - 1,
@@ -202,7 +207,7 @@ fetch_from_db(Seqs) ->
 %% Sends to all providers information to skip the sequence numbers.
 %% @end
 %%--------------------------------------------------------------------
--spec ignore_all(Seqs :: ordsets:ordset(seq())) -> no_return().
+-spec ignore_all(Seqs :: ordsets:ordset(seq())) -> any().
 ignore_all(Seqs) ->
     Subscriptions = subscriptions:all(),
     lists:foreach(fun(#document{value = Subscription}) ->
@@ -222,7 +227,7 @@ ignore_all(Seqs) ->
 %%--------------------------------------------------------------------
 
 -spec handle_change(Seq :: seq(), Doc :: datastore:document(), Model :: atom())
-        -> no_return().
+        -> any().
 
 handle_change(Seq, Doc, Model) ->
     spawn(fun() ->

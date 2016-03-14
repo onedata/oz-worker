@@ -34,9 +34,9 @@
 %% This function is used internally but can be used to force immediate batch push.
 %% @end
 %%--------------------------------------------------------------------
--spec push(ID, PushFun) -> no_return() when
+-spec push(ID, PushFun) -> any() when
     ID :: term(),
-    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> no_return()).
+    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> any()).
 
 push(ID, PushFun) ->
     worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
@@ -51,10 +51,10 @@ push(ID, PushFun) ->
 %% Buffers the message ans schedules the push (if needed).
 %% @end
 %%--------------------------------------------------------------------
--spec put(ID, PushFun, Message) -> no_return() when
+-spec put(ID, PushFun, Message) -> any() when
     ID :: term(),
     Message :: term(),
-    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> no_return()).
+    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> any()).
 
 put(ID, PushFun, Message) ->
     Now = erlang:system_time(),
@@ -89,7 +89,7 @@ put(ID, PushFun, Message) ->
 -spec setup_timer(ID, PushFun) -> TRef when
     ID :: term(),
     TRef :: timer:tref(),
-    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> no_return()).
+    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> any()).
 
 setup_timer(ID, PushFun) ->
     {ok, TRef} = timer:apply_after(batch_ttl(), ?MODULE, push, [ID, PushFun]),

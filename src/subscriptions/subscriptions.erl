@@ -27,7 +27,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec add_connection(ProviderID :: binary(), Connection :: pid())
-        -> no_return().
+        -> any().
 add_connection(ProviderID, Connection) ->
     provider_subscription:create_or_update(#document{
         key = ProviderID,
@@ -46,7 +46,7 @@ add_connection(ProviderID, Connection) ->
 %% Removes expired connections from provider connections.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_expired_connections(ProviderID :: binary()) -> no_return().
+-spec remove_expired_connections(ProviderID :: binary()) -> any().
 remove_expired_connections(ProviderID) ->
     provider_subscription:update(ProviderID, fun(Subscription) ->
         Filtered = lists:filter(fun(Pid) ->
@@ -61,7 +61,7 @@ remove_expired_connections(ProviderID) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_connection(ProviderID :: binary(), Connection :: pid())
-        -> no_return().
+        -> any().
 remove_connection(ProviderID, Connection) ->
     provider_subscription:create_or_update(#document{
         key = ProviderID,
@@ -121,7 +121,7 @@ update_users(ProviderID, Users) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_missing_seq(ProviderID :: binary(), ResumeAt :: seq(),
-    Missing :: [seq()]) -> no_return().
+    Missing :: [seq()]) -> any().
 
 update_missing_seq(ProviderID, ResumeAt, Missing) ->
     {ok, _} = provider_subscription:create_or_update(#document{
