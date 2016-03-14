@@ -29,7 +29,6 @@
     user_update_test/1,
     no_user_update_test/1,
     group_update_through_users_test/1,
-    group_update_through_spaces_test/1,
     no_group_update_test/1,
     multiple_updates_test/1,
     updates_for_added_user_test/1,
@@ -45,7 +44,7 @@
 %% appends function name to id (atom) and yields binary accepted by the db
 -define(ID(Id), list_to_binary(
     atom_to_list(Id) ++ " # " ++
-    atom_to_list(element(2, element(2, process_info(self(), current_function))))
+        atom_to_list(element(2, element(2, process_info(self(), current_function))))
 )).
 
 %% helper record for maintaining subscription progress between message receives
@@ -70,7 +69,6 @@ all() -> ?ALL([
     user_update_test,
     no_group_update_test,
     group_update_through_users_test,
-    group_update_through_spaces_test,
     updates_for_added_user_test,
     updates_have_revisions_test,
     updates_for_added_user_have_revisions_test,
@@ -223,31 +221,12 @@ group_update_through_users_test(Config) ->
     ]),
     ok.
 
-group_update_through_spaces_test(Config) ->
-    % given
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    P1 = create_provider(Node, ?ID(p1), [?ID(s1)]),
-    create_space(Node, ?ID(s1), [P1], [], [?ID(g1)]),
-    create_group(Node, ?ID(g1), [], [?ID(s1)]),
-    call_worker(Node, {add_connection, P1, self()}),
-
-    % when
-    Context1 = init_messages(Node, P1, [?ID(u1)]),
-    Context = flush_messages(Context1, group_expectation(?ID(g1), ?ID(g1))),
-    update_document(Node, user_group, ?ID(g1), #{name => <<"updated">>}),
-
-    % then
-    verify_messages_present(Context, [
-        group_expectation(?ID(g1), <<"updated">>)
-    ]),
-    ok.
-
 updates_for_added_user_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), [?ID(s1), ?ID(s2)]),
     create_user(Node, ?ID(u1), [?ID(g1)], [?ID(s2)]),
-    create_group(Node, ?ID(g1), [], [?ID(s1)]),
+    create_group(Node, ?ID(g1), [?ID(u1)], [?ID(s1)]),
     create_space(Node, ?ID(s1), [P1], [], [?ID(g1)]),
     create_space(Node, ?ID(s2), [P1], [?ID(u1)], []),
     call_worker(Node, {add_connection, P1, self()}),
@@ -592,10 +571,6 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_users, ProviderID, Users}),
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
-
-%%    todo: remove
-%%    ct:print("Context ~p", [Context]),
-%%    ct:print("All ~p", [All]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),

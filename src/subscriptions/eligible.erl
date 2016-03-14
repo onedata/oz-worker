@@ -36,16 +36,9 @@ providers(Doc, space) ->
     SpaceProviders ++ UserProviders;
 
 providers(Doc, user_group) ->
-    #document{value = #user_group{users = UsersWithPriv, spaces = Spaces}} = Doc,
-    {Users, _} = lists:unzip(UsersWithPriv),
-    ProvidesThroughUsers = through_users(Users),
-
-    ProvidesThroughSpaces = lists:flatmap(fun(SpaceID) ->
-        {ok, #document{value = #space{providers = Providers}}} = space:get(SpaceID),
-        Providers
-    end, Spaces),
-
-    ProvidesThroughUsers ++ ProvidesThroughSpaces;
+    #document{value = #user_group{users = UsersWithPrivileges}} = Doc,
+    {Users, _} = lists:unzip(UsersWithPrivileges),
+    through_users(Users);
 
 providers(Doc, onedata_user) ->
     through_users([Doc#document.key]);
