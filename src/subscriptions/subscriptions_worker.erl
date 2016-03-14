@@ -86,7 +86,7 @@ handle({remove_connection, ProviderID, Connection}) ->
 
 handle({update_missing_seq, ProviderID, ResumeAt, Missing}) ->
     subscriptions:update_missing_seq(ProviderID, ResumeAt, Missing),
-    fetch_history(ProviderID, ResumeAt, Missing);
+    fetch_history(ResumeAt, Missing);
 
 handle({update_users, ProviderID, Users}) ->
     NewUsers = subscriptions:update_users(ProviderID, Users),
@@ -116,9 +116,8 @@ cleanup() ->
 %% Fetches old changes and sends them to the providers.
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_history(ProviderID :: binary(), ResumeAt :: seq(), Missing :: [seq()])
-        -> no_return().
-fetch_history(ProviderID, ResumeAt, Missing) ->
+-spec fetch_history(ResumeAt :: seq(), Missing :: [seq()]) -> no_return().
+fetch_history(ResumeAt, Missing) ->
 
     case changes_cache:newest_seq() of
         {ok, Newest} ->
@@ -188,20 +187,31 @@ fetch_from_db(Seqs) ->
 
         receive
             {'EXIT', Pid, _Reason} ->
-                Subscriptions = subscriptions:all(),
-                lists:foreach(fun(#document{value = Subscription}) ->
-                    lists:foreach(fun(Seq) ->
-                        IgnoreMessage = translator:get_ignore_msg(Seq),
-                        outbox:put(Subscription#provider_subscription.provider,
-                            fun push_messages/2, IgnoreMessage)
-                    end, Seqs)
-                end, Subscriptions)
+                ignore_all(Seqs)
         after
             timer:seconds(Timeout) ->
                 ?warning("Fetch from DB taking too long - kill"),
-                exit(Pid, fetch_taking_too_long)
+                exit(Pid, fetch_taking_too_long),
+                exit(fetch_taking_too_long)
         end
     end).
+
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Sends to all providers information to skip the sequence numbers.
+%% @end
+%%--------------------------------------------------------------------
+-spec ignore_all(Seqs :: ordsets:ordset()) -> no_return().
+ignore_all(Seqs) ->
+    Subscriptions = subscriptions:all(),
+    lists:foreach(fun(#document{value = Subscription}) ->
+        lists:foreach(fun(Seq) ->
+            IgnoreMessage = translator:get_ignore_msg(Seq),
+            outbox:put(Subscription#provider_subscription.provider,
+                fun push_messages/2, IgnoreMessage)
+        end, Seqs)
+    end, Subscriptions).
 
 %%--------------------------------------------------------------------
 %% @doc @private
