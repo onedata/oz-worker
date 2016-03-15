@@ -179,7 +179,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
                     lists:member(atom_to_binary(RootResource, utf8),
                         binary:split(Resources, <<",">>, [global]));
                 (<<"providerId = ", PID/binary>>) ->
-                    PID =:= ProviderId;
+                    true;
                 (_) ->
                     false
             end,
