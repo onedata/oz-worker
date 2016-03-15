@@ -60,7 +60,7 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist = gui_ctx:get_request_params(),
+        ParamsProplist = g_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request
@@ -99,7 +99,8 @@ validate_login() ->
         JSONProplist = json_utils:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = proplists:get_value(<<"id">>, JSONProplist, <<"">>),
+            user_id = str_utils:to_binary(
+                proplists:get_value(<<"id">>, JSONProplist, <<"">>)),
             email_list = extract_emails(JSONEmails),
             name = proplists:get_value(<<"name">>, JSONProplist, <<"">>),
             login = proplists:get_value(<<"login">>, JSONProplist, <<"">>)

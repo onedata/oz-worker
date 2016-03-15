@@ -71,13 +71,21 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 UserInfo = #onedata_user{
                     name = UserID,
                     alias = UserID,
-                    email_list = [<<UserID/binary, "@email.com">>],
-                    connected_accounts = [],
+                    email_list = [<<UserID/binary, "@gmail.com">>],
+                    connected_accounts = [
+                        #oauth_account{provider_id = google,
+                            user_id = <<UserID/binary, "#oauth_id">>,
+                            login = <<UserID/binary, "#oauth_login">>,
+                            name = UserID,
+                            email_list = [<<UserID/binary, "@gmail.com">>]
+                        }
+                    ],
                     spaces = [],
                     default_space = DefaultSpace,
                     groups = [],
                     first_space_support_token = <<"">>,
-                    default_provider = <<"">>
+                    default_provider = undefined,
+                    chosen_provider = undefined
                 },
                 {ok, UserID} = create_user_with_uuid(UserInfo, UserID)
             end, Users),
@@ -110,8 +118,10 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     end,
                 %% create space with given name; if name is not defined, set ID as a name
                 {ok, SpaceID} = case proplists:get_value(<<"displayed_name">>, Props) of
-                    undefined -> create_space_with_uuid(Member, SpaceID, SpaceID);
-                    SpaceName -> create_space_with_uuid(Member, SpaceName, SpaceID)
+                    undefined ->
+                        create_space_with_uuid(Member, SpaceID, SpaceID);
+                    SpaceName ->
+                        create_space_with_uuid(Member, SpaceName, SpaceID)
                 end,
                 % Support the space by all providers
                 lists:foreach(

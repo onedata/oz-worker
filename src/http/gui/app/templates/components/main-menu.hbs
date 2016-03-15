@@ -1,0 +1,25 @@
+{{#each menuItems as |item|}}
+  {{#if session.isAuthenticated}}
+    {{#if item.showAuthenticated}}
+      {{main-menu-item linkTo=item.linkTo titleI18n=item.titleI18n}}
+    {{/if}}
+  {{else}}
+    {{#if item.showUnauthenticated}}
+      {{main-menu-item linkTo=item.linkTo titleI18n=item.titleI18n}}
+    {{/if}}
+  {{/if}}
+{{/each}}
+{{#if session.isAuthenticated}}
+  <li class="dropdown account-menu">
+    {{!-- TODO: beware long user names --}}
+    <a href="#" class="dropdown-toggle account-dropdown" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+      <span class="account-icon">{{one-icon icon="user-profile"}}</span>
+      <span class="account-label">{{session.sessionDetails.userName}} <span class="caret"></span></span>
+    </a>
+    <ul class="dropdown-menu dropdown-menu-down dropdown-menu-list">
+      {{main-menu-item linkTo='onezone' titleI18n='application.onezone'}}
+      <li role="separator" class="divider"></li>
+      {{main-menu-item linkTo='home.logout' titleI18n='application.logout'}}
+    </ul>
+  </li>
+{{/if}}

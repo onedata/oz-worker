@@ -14,6 +14,7 @@
 -include("gui_config.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("gui/include/gui.hrl").
 
 -behaviour(listener_behaviour).
 
@@ -48,55 +49,72 @@ start() ->
         %% we don't use legit server certificates on providers.
         application:set_env(ctool, verify_server_cert, false),
 
+        % Resolve static files root. First, check if there is a non-empty dir
+        % located in gui_custom_static_root. If not, use default.
+        {ok, CstmRoot} = application:get_env(?APP_Name, gui_custom_static_root),
+        {ok, DefRoot} = application:get_env(?APP_Name, gui_default_static_root),
+        DocRoot = case file:list_dir_all(CstmRoot) of
+            {error, enoent} -> DefRoot;
+            {ok, []} -> DefRoot;
+            {ok, _} -> CstmRoot
+        end,
+
         % Get gui config
         GuiPort = port(),
-        {ok, GuiHttpsAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),
-        {ok, GuiSocketTimeout} = application:get_env(?APP_Name, gui_socket_timeout),
-        {ok, GuiMaxKeepalive} = application:get_env(?APP_Name, gui_max_keepalive),
+        {ok, GuiNbAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),
+        {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
+        {ok, MaxKeepAlive} = application:get_env(?APP_Name, gui_max_keepalive),
         % Get cert paths
-        {ok, GuiCaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
-        {ok, GuiCertFile} = application:get_env(?APP_Name, gui_cert_file),
-        {ok, GuiKeyFile} = application:get_env(?APP_Name, gui_key_file),
+        {ok, CaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
+        {ok, CertFile} = application:get_env(?APP_Name, gui_cert_file),
+        {ok, KeyFile} = application:get_env(?APP_Name, gui_key_file),
 
         GRHostname = dns_query_handler:get_canonical_hostname(),
 
         % Setup GUI dispatch opts for cowboy
         GUIDispatch = [
-            % Matching requests will be redirected to the same address without leading 'www.'
-            % Cowboy does not have a mechanism to match every hostname starting with 'www.'
-            % This will match hostnames with up to 8 segments
-            % e. g. www.seg2.seg3.seg4.seg5.seg6.seg7.com
-            {"www.:_[.:_[.:_[.:_[.:_[.:_[.:_]]]]]]", [{'_', https_redirect_handler, []}]},
+            % Matching requests will be redirected
+            % to the same address without leading 'www.'
+            % Cowboy does not have a mechanism to match
+            % every hostname starting with 'www.'
+            % This will match hostnames with up to 6 segments
+            % e. g. www.seg2.seg3.seg4.seg5.com
+            {"www.:_[.:_[.:_[.:_[.:_]]]]", [
+                % redirector_handler is defined in cluster_worker
+                {'_', redirector_handler, []}
+            ]},
             % Redirect requests in form: alias.onedata.org
             {":alias." ++ GRHostname, [{'_', client_redirect_handler, []}]},
             % Proper requests are routed to handler modules
-            {'_', static_dispatches(?gui_static_root, ?static_paths) ++ [
+            % Proper requests are routed to handler modules
+            {'_', [
                 {<<"/google97a2428c78c25c27.html">>, cowboy_static,
-                    {file, <<"data/gui_static/google_analytics/google97a2428c78c25c27.html">>}},
-                {"/ws/[...]", bullet_handler, [{handler, n2o_bullet}]},
-                {'_', n2o_cowboy, []}
+                    {file, <<"resources/gui_static/google_analytics/google97a2428c78c25c27.html">>}},
+                {"/nagios/[...]", nagios_handler, []},
+                {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
+                {"/[...]", gui_static_handler, {dir, DocRoot}}
             ]}
         ],
 
-        % Create ets tables and set envs needed by n2o
-        gui_utils:init_n2o_ets_and_envs(GuiPort, ?gui_routing_module, ?session_logic_module, ?cowboy_bridge_module),
-
-        % Initilize auth handler
+        % Initialize auth handler
         auth_config:load_auth_config(),
 
-        {ok, _} = cowboy:start_https(?gui_https_listener, GuiHttpsAcceptors,
-            [
+        % Call gui init, which will call init on all modules that might need state.
+        gui:init(),
+        % Start the listener for web gui and nagios handler
+        {ok, _} = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
+            ranch_ssl2, [
+                {ip, {127, 0, 0, 1}},
                 {port, GuiPort},
-                {cacertfile, GuiCaCertFile},
-                {certfile, GuiCertFile},
-                {keyfile, GuiKeyFile},
+                {cacertfile, CaCertFile},
+                {certfile, CertFile},
+                {keyfile, KeyFile},
                 {ciphers, ssl:cipher_suites() -- weak_ciphers()},
                 {versions, ['tlsv1.2', 'tlsv1.1']}
-            ],
-            [
+            ], cowboy_protocol, [
                 {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
-                {max_keepalive, GuiMaxKeepalive},
-                {timeout, GuiSocketTimeout},
+                {max_keepalive, MaxKeepAlive},
+                {timeout, Timeout},
                 % On every request, add headers that improve security to the response
                 {onrequest, fun gui_utils:onrequest_adjust_headers/1}
             ]),
@@ -148,15 +166,3 @@ healthcheck() ->
 %% ====================================================================
 weak_ciphers() ->
     [{dhe_rsa, des_cbc, sha}, {rsa, des_cbc, sha}].
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Generates static file routing for cowboy.
-%% @end
-%%--------------------------------------------------------------------
--spec static_dispatches(DocRoot :: string(), StaticPaths :: [string()]) -> term().
-static_dispatches(DocRoot, StaticPaths) ->
-    _StaticDispatches = lists:map(fun(Dir) ->
-        {Dir ++ "[...]", cowboy_static, {dir, DocRoot ++ Dir}}
-    end, StaticPaths).

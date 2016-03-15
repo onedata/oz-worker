@@ -11,17 +11,19 @@
     },
     "zone_domains": {
         "oz": {
-            "db_driver": "couchbase",
+            "db_driver": "couchdb",
             "cluster_manager": {
                 "cm": {
                     "vm.args": {
                         "setcookie": "test_cookie"
                     },
                     "sys.config": {
-                        "cm_nodes": [
-                            "cm"
-                        ],
-                        "worker_num": 2
+                        "cluster_manager": {
+                            "cm_nodes": [
+                                "cm"
+                            ],
+                            "worker_num": 2
+                        }
                     }
                 }
             },
@@ -31,14 +33,16 @@
                         "setcookie": "test_cookie"
                     },
                     "sys.config": {
-                        "cm_nodes": [
-                            "cm"
-                        ],
-                        "db_nodes": [
-                            "127.0.0.1:49161"
-                        ],
-                        "http_domain": {
-                            "string": "127.0.0.1"
+                        "oz_worker": {
+                            "cm_nodes": [
+                                "cm"
+                            ],
+                            "db_nodes": [
+                                "127.0.0.1:49161"
+                            ],
+                            "http_domain": {
+                                "string": "127.0.0.1"
+                            }
                         }
                     }
                 },
@@ -47,14 +51,16 @@
                         "setcookie": "test_cookie"
                     },
                     "sys.config": {
-                        "cm_nodes": [
-                            "cm"
-                        ],
-                        "db_nodes": [
-                            "127.0.0.1:49161"
-                        ],
-                        "http_domain": {
-                            "string": "127.0.0.1"
+                        "oz_worker": {
+                            "cm_nodes": [
+                                "cm"
+                            ],
+                            "db_nodes": [
+                                "127.0.0.1:49161"
+                            ],
+                            "http_domain": {
+                                "string": "127.0.0.1"
+                            }
                         }
                     }
                 }
