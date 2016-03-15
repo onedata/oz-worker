@@ -49,15 +49,16 @@ push(ID, PushFun) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Buffers the message ans schedules the push (if needed).
+%% Buffers the messages and schedules the push (if needed).
 %% @end
 %%--------------------------------------------------------------------
--spec put(ID, PushFun, Message) -> any() when
+-spec put(ID, PushFun, Messages) -> any() when
     ID :: term(),
-    Message :: term(),
+    Messages :: [term()],
     PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> any()).
 
-put(ID, PushFun, Message) ->
+put(_, _, []) -> ok;
+put(ID, PushFun, Messages) ->
     Now = erlang:system_time(),
     TimerTTL = batch_ttl(),
     TimerExpires = Now + TimerTTL,
@@ -65,16 +66,16 @@ put(ID, PushFun, Message) ->
     worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
         (undefined) ->
             TRef = setup_timer(ID, PushFun),
-            #outbox{buffer = [Message],
+            #outbox{buffer = Messages,
                 timer = TRef, timer_expires = TimerExpires};
         (Outbox = #outbox{buffer = Buffer, timer = OldTimer, timer_expires =
         % timer expires after twice the ttl
         OldExpires}) when OldTimer =:= undefined; OldExpires < (Now - TimerTTL) ->
             TRef = setup_timer(ID, PushFun),
-            Outbox#outbox{buffer = [Message | Buffer],
+            Outbox#outbox{buffer = Messages ++ Buffer,
                 timer = TRef, timer_expires = TimerExpires};
         (Outbox = #outbox{buffer = Buffer}) ->
-            Outbox#outbox{buffer = [Message | Buffer]}
+            Outbox#outbox{buffer = Messages ++ Buffer}
     end).
 
 %%%===================================================================

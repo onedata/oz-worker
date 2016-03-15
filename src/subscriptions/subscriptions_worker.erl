@@ -95,9 +95,7 @@ handle({update_missing_seq, ProviderID, ResumeAt, Missing}) ->
 handle({update_users, ProviderID, Users}) ->
     NewUsers = subscriptions:update_users(ProviderID, Users),
     Updates = user_subscriptions:updates(ProviderID, NewUsers),
-    lists:foreach(fun({Seq, Doc, Model}) ->
-        handle_change(Seq, Doc, Model)
-    end, Updates),
+    handle_change(Updates),
     ok;
 
 handle(_Request) ->
@@ -158,9 +156,10 @@ get_seq_to_fetch(Newest, ResumeAt, Missing) ->
 -spec fetch_from_cache(Seqs :: ordsets:ordset(seq())) -> any().
 fetch_from_cache(Seqs) ->
     {Hits, Misses} = changes_cache:query(Seqs),
-    lists:foreach(fun({Seq, {Doc, Type}}) ->
-        handle_change(Seq, Doc, Type)
+    Updates = lists:map(fun({Seq, {Doc, Type}}) ->
+        {Seq, Doc, Type}
     end, Hits),
+    handle_change(Updates),
     Misses.
 
 %%--------------------------------------------------------------------
@@ -192,13 +191,14 @@ fetch_from_db(Seqs) ->
 
         receive
             {'EXIT', Pid, _Reason} ->
-                ignore_all([hd(Seqs)])
+                ignore_all(Seqs)
         after
             timer:seconds(Timeout) ->
                 ?warning("Fetch from DB taking too long - kill"),
                 exit(Pid, fetch_taking_too_long),
                 exit(fetch_taking_too_long)
         end
+
     end).
 
 
@@ -211,12 +211,10 @@ fetch_from_db(Seqs) ->
 ignore_all(Seqs) ->
     ?warning("Ignoring ~p", [Seqs]),
     Subscriptions = subscriptions:all(),
-    lists:foreach(fun(#document{value = Subscription}) ->
-        lists:foreach(fun(Seq) ->
-            IgnoreMessage = translator:get_ignore_msg(Seq),
-            outbox:put(Subscription#provider_subscription.provider,
-                fun push_messages/2, IgnoreMessage)
-        end, Seqs)
+    lists:foreach(fun(#document{value = #provider_subscription{provider = ID}}) ->
+        outbox:put(ID, fun push_messages/2, lists:map(fun(Seq) ->
+            translator:get_ignore_msg(Seq)
+        end, Seqs))
     end, Subscriptions).
 
 %%--------------------------------------------------------------------
@@ -227,28 +225,39 @@ ignore_all(Seqs) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec handle_change(Seq :: seq(), Doc :: datastore:document(), Model :: atom())
-        -> any().
+-spec handle_change(Seq :: seq(), Doc :: datastore:document(),
+    Model :: atom()) -> any().
 
 handle_change(Seq, Doc, Model) ->
-    spawn_link(fun() ->
-        Message = translator:get_msg(Seq, Doc, Model),
-        IgnoreMessage = translator:get_ignore_msg(Seq),
+    handle_change([{Seq, Doc, Model}]).
 
-        Providers = eligible:providers(Doc, Model),
-        ProvidersSet = sets:from_list(Providers),
-        Subscriptions = subscriptions:all(),
+-spec handle_change([{Seq :: seq(), Doc :: datastore:document(),
+    Model :: atom()}]) -> any().
 
-        lists:foreach(fun(#document{value = Subscription}) ->
-            case subscriptions:seen(Subscription, Seq) of
-                true -> ok;
-                false ->
-                    ProviderID = Subscription#provider_subscription.provider,
-                    MessageToSend = case sets:is_element(ProviderID, ProvidersSet) of
-                        true -> Message;
-                        false -> IgnoreMessage
-                    end,
-                    outbox:put(ProviderID, fun push_messages/2, MessageToSend)
-            end
-        end, Subscriptions)
-    end).
+handle_change(Updates) ->
+    UpdatesWithProviders = utils:pmap(fun({Seq, Doc, Model}) ->
+        {Seq, Doc, Model, sets:from_list(eligible:providers(Doc, Model))}
+    end, Updates),
+
+    utils:pforeach(fun(#document{value = Subscription}) ->
+        try
+            #provider_subscription{provider = ID} = Subscription,
+            Messages = lists:filtermap(fun({Seq, Doc, Model, ProvidersSet}) ->
+                Message = translator:get_msg(Seq, Doc, Model),
+                IgnoreMessage = translator:get_ignore_msg(Seq),
+
+                case subscriptions:seen(Subscription, Seq) of
+                    true -> false;
+                    false ->
+                        {true, case sets:is_element(ID, ProvidersSet) of
+                            true -> Message;
+                            false -> IgnoreMessage
+                        end}
+                end
+            end, UpdatesWithProviders),
+            outbox:put(ID, fun push_messages/2, Messages)
+        catch
+            E:R ->
+                ?error_stacktrace("Problem with handler ~p:~p", [E, R])
+        end
+    end, subscriptions:all()).
