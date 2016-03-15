@@ -629,7 +629,10 @@ init_messages(Node, ProviderID, Users) ->
         users = Users, resume_at = Start, missing = []}.
 
 flush_messages(Context, LastExpected) ->
-    UpdatedContext = verify_messages(Context, [LastExpected], []),
+    UpdatedContext = verify_messages(Context#subs_ctx{
+        %% if changes were actually send before init, we could miss last expected
+        resume_at = Context#subs_ctx.resume_at - 3
+    }, [LastExpected], []),
     flush(),
     UpdatedContext.
 
