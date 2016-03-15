@@ -37,7 +37,8 @@
     fetches_changes_older_than_in_cache/1,
     fetches_changes_from_both_cache_and_db/1,
     fetches_changes_when_cache_has_gaps/1,
-    simple_delete_test/1]).
+    simple_delete_test/1,
+    stress_test/1]).
 
 -define(MESSAGES_WAIT_TIMEOUT, timer:seconds(3)).
 -define(MESSAGES_RECEIVE_ATTEMPTS, 40).
@@ -384,6 +385,49 @@ fetches_changes_from_both_cache_and_db(Config) ->
     ]),
     ok.
 
+stress_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+
+    ProvidersCount = ?config(providers_count, Config),
+    DocsCount = ?config(docs_count, Config),
+
+    Results = utils:pmap(fun(ID) ->
+        %% given
+        PNameList = "provider_" ++ integer_to_list(ID),
+        PName = list_to_binary(PNameList),
+        SIDs = lists:map(fun(ID1) ->
+            list_to_binary("space_" ++ integer_to_list(ID1) ++ "@" ++ PNameList)
+        end, lists:seq(1, DocsCount)),
+
+        %% when
+        PID = create_provider(Node, PName, SIDs),
+        Context = init_messages(Node, PID, []),
+        lists:foreach(fun(SID) ->
+            create_space(Node, SID, [PID], [], [])
+        end, SIDs),
+
+        %% then
+        Start = erlang:system_time(milli_seconds),
+        verify_messages_present(Context,
+            lists:map(fun(SID) -> space_expectation(SID, SID) end, SIDs)
+        ),
+        {ok, erlang:system_time(milli_seconds) - Start}
+    end, lists:seq(1, ProvidersCount)),
+
+    lists:map(fun(Res) ->
+        ?assertMatch({ok, _}, Res)
+    end, Results),
+
+    UpdatesMeanTime = lists:sum(lists:map(fun
+        ({ok, Time}) -> Time
+    end, Results)) / length(Results),
+
+    [
+        #parameter{name = updates_await, value = UpdatesMeanTime, unit = "ms",
+            description = "Time until every update arrived (providers mean)"}
+    ].
+
 fetches_changes_when_cache_has_gaps(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
@@ -524,9 +568,7 @@ create_provider(Node, Name, Spaces) ->
     {ok, CSR} = file:read_file(CSRFile),
     Params = [Name, [<<"127.0.0.1">>], <<"https://127.0.0.1:443">>, CSR],
     {ok, ID, _} = rpc:call(Node, provider_logic, create, Params),
-    {ok, ID} = rpc:call(Node, provider, update, [ID, fun(P) ->
-        {ok, P#provider{spaces = lists:append(P#provider.spaces, Spaces)}}
-    end]),
+    {ok, ID} = rpc:call(Node, provider, update, [ID, #{spaces => Spaces}]),
     ID.
 
 zip_with(IDs, Val) ->
@@ -567,15 +609,24 @@ expectation_with_rev(Revs, Expectation) ->
 %%%===================================================================
 
 verify_messages_present(Context, Expected) ->
-    verify_messages(Context, ?MESSAGES_RECEIVE_ATTEMPTS, Expected, []).
+    verify_messages_present(Context, Expected, ?MESSAGES_RECEIVE_ATTEMPTS).
+
+verify_messages_present(Context, Expected, AttemptsLimit) ->
+    verify_messages(Context, AttemptsLimit, Expected, []).
 
 verify_messages_absent(Context, Forbidden) ->
     verify_messages(Context, ?MESSAGES_RECEIVE_ATTEMPTS, [], Forbidden).
 
 init_messages(Node, ProviderID, Users) ->
     call_worker(Node, {add_connection, ProviderID, self()}),
+
+    Start = case rpc:call(Node, changes_worker, fetch_last_seq, []) of
+        {ok, Val} -> Val; _ -> 0
+    end,
+
+
     #subs_ctx{node = Node, provider = ProviderID,
-        users = Users, resume_at = 1, missing = []}.
+        users = Users, resume_at = Start, missing = []}.
 
 flush_messages(Context, LastExpected) ->
     UpdatedContext = verify_messages(Context, [LastExpected], []),

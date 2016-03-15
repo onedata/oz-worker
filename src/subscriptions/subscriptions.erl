@@ -29,7 +29,7 @@
 -spec add_connection(ProviderID :: binary(), Connection :: pid())
         -> any().
 add_connection(ProviderID, Connection) ->
-    provider_subscription:create_or_update(#document{
+    {ok, ProviderID} = provider_subscription:create_or_update(#document{
         key = ProviderID,
         value = #provider_subscription{
             provider = ProviderID,

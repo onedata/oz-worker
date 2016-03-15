@@ -40,6 +40,7 @@
 
 push(ID, PushFun) ->
     worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
+        (undefined) -> undefined;
         (Outbox = #outbox{buffer = Buffer, timer = TRef}) ->
             case TRef of undefined -> ok; _ -> timer:cancel(TRef) end,
             PushFun(ID, Buffer),

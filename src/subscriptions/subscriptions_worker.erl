@@ -192,7 +192,7 @@ fetch_from_db(Seqs) ->
 
         receive
             {'EXIT', Pid, _Reason} ->
-                ignore_all(Seqs)
+                ignore_all([hd(Seqs)])
         after
             timer:seconds(Timeout) ->
                 ?warning("Fetch from DB taking too long - kill"),
@@ -209,6 +209,7 @@ fetch_from_db(Seqs) ->
 %%--------------------------------------------------------------------
 -spec ignore_all(Seqs :: ordsets:ordset(seq())) -> any().
 ignore_all(Seqs) ->
+    ?warning("Ignoring ~p", [Seqs]),
     Subscriptions = subscriptions:all(),
     lists:foreach(fun(#document{value = Subscription}) ->
         lists:foreach(fun(Seq) ->
@@ -230,7 +231,7 @@ ignore_all(Seqs) ->
         -> any().
 
 handle_change(Seq, Doc, Model) ->
-    spawn(fun() ->
+    spawn_link(fun() ->
         Message = translator:get_msg(Seq, Doc, Model),
         IgnoreMessage = translator:get_ignore_msg(Seq),
 
