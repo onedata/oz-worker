@@ -356,11 +356,16 @@ set_space_name_mapping(UserId, SpaceId, SpaceName) ->
                 {max(PrefLen + 1, UniquePrefLen), maps:put(Id, Name, SpacesAcc)}
         end, {SpaceNameLen, #{}}, SpaceNames),
 
-        ValidUniquePrefLen = min(max(ShortestUniquePrefLen,
-            SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
-            size(UniqueSpaceName)),
-        ShortestUniqueSpaceName = <<UniqueSpaceName:(ValidUniquePrefLen)/binary>>,
+        ValidUniquePrefLen = case ShortestUniquePrefLen > SpaceNameLen of
+            true ->
+                min(max(ShortestUniquePrefLen,
+                    SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
+                    size(UniqueSpaceName));
+            false ->
+                ShortestUniquePrefLen
+        end,
 
+        ShortestUniqueSpaceName = <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
         NewUser = User#onedata_user{
             space_names = maps:put(SpaceId, ShortestUniqueSpaceName, FilteredSpaces)
         },

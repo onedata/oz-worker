@@ -520,9 +520,11 @@ create_with_provider({group, GroupId}, Name, Providers, Size) ->
     end),
 
     add_space_to_providers(SpaceId, Providers),
+    {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
     lists:foreach(fun({UserId, _}) ->
         user_logic:set_space_name_mapping(UserId, SpaceId, Name)
     end, Users),
+
     {ok, SpaceId}.
 
 

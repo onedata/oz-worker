@@ -33,7 +33,7 @@ all() ->
 %%%===================================================================
 
 set_space_name_mapping_test(Config) ->
-    [Node] = ?config(gr_nodes, Config),
+    [Node | _] = ?config(oz_worker_nodes, Config),
 
     {ok, UserId} = ?assertMatch({ok, _}, oz_test_utils:create_user(Config, #onedata_user{})),
 
@@ -60,7 +60,7 @@ set_space_name_mapping_test(Config) ->
         get_space_name_mapping(Node, UserId, SpaceId4)).
 
 clean_space_name_mapping_test(Config) ->
-    [Node] = ?config(gr_nodes, Config),
+    [Node | _] = ?config(oz_worker_nodes, Config),
 
     SpaceName = <<"space_name">>,
     {ok, UserId} = ?assertMatch({ok, _}, oz_test_utils:create_user(Config, #onedata_user{})),
@@ -77,14 +77,15 @@ clean_space_name_mapping_test(Config) ->
 
     ?assert(oz_test_utils:leave_space(Config, {user, UserId}, SpaceId)),
     ?assert(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertMatch(#onedata_user{space_names = #{}}, rpc:call(Node, dao_adapter, user, [UserId])).
+    ?assertMatch({ok, #document{value = #onedata_user{space_names = #{}}}},
+        rpc:call(Node, onedata_user, get, [UserId])).
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
 init_per_suite(Config) ->
-    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
+    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]),
     timer:sleep(10000), % TODO add nagios to GR and delete sleep
     NewConfig.
 

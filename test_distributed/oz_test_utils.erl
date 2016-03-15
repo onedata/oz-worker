@@ -30,7 +30,7 @@
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_space(Config, Member, Name) ->
     try
-        [Node] = ?config(gr_nodes, Config),
+        [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, space_logic, create, [Member, Name])
     catch
         _:Reason ->
@@ -45,7 +45,7 @@ create_space(Config, Member, Name) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_user(Config, User) ->
     try
-        [Node] = ?config(gr_nodes, Config),
+        [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, user_logic, create, [User])
     catch
         _:Reason ->
@@ -60,7 +60,7 @@ create_user(Config, User) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_group(Config, UserId, Name) ->
     try
-        [Node] = ?config(gr_nodes, Config),
+        [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, group_logic, create, [UserId, Name])
     catch
         _:Reason ->
@@ -75,7 +75,7 @@ create_group(Config, UserId, Name) ->
     ok | {error, Reason :: term()}.
 join_group(Config, UserId, GroupId) ->
     try
-        [Node] = ?config(gr_nodes, Config),
+        [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(#client{type = user, id = UserId}, group_invite_token, {group, GroupId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
@@ -95,7 +95,7 @@ join_group(Config, UserId, GroupId) ->
     ok | {error, Reason :: term()}.
 join_space(Config, {user, UserId}, SpaceId) ->
     try
-        [Node] = ?config(gr_nodes, Config),
+        [Node | _] = ?config(oz_worker_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_invite_user_token, {space, SpaceId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
@@ -109,7 +109,7 @@ join_space(Config, {user, UserId}, SpaceId) ->
 
 join_space(Config, {group, GroupId}, SpaceId) ->
     try
-        [Node] = ?config(gr_nodes, Config),
+        [Node | _] = ?config(oz_worker_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(#client{type = provider}, space_invite_group_token, {space, SpaceId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
@@ -129,7 +129,7 @@ join_space(Config, {group, GroupId}, SpaceId) ->
     ok | {error, Reason :: term()}.
 leave_space(Config, {user, UserId}, SpaceId) ->
     try
-        [Node] = ?config(gr_nodes, Config),
+        [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, space_logic, remove_user, [SpaceId, UserId])
     catch
         _:Reason ->
@@ -138,7 +138,7 @@ leave_space(Config, {user, UserId}, SpaceId) ->
 
 leave_space(Config, {group, GroupId}, SpaceId) ->
     try
-        [Node] = ?config(gr_nodes, Config),
+        [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, space_logic, remove_group, [SpaceId, GroupId])
     catch
         _:Reason ->
@@ -153,7 +153,7 @@ leave_space(Config, {group, GroupId}, SpaceId) ->
     ok | {error, Reason :: term()}.
 support_space(Config, ProviderId, SpaceId, Size) ->
     try
-        [Node] = ?config(gr_nodes, Config),
+        [Node | _] = ?config(oz_worker_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(#client{type = provider}, space_support_token, {space, SpaceId}),
             {ok, Macaroon} = macaroon:deserialize(Token),
