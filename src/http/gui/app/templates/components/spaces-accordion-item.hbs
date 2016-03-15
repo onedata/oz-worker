@@ -1,0 +1,76 @@
+<div class="accordion-group spaces-accordion-group">
+  <div class="accordion-heading spaces-accordion-heading">
+    <a class="accordion-toggle spaces-accordion-toggle">
+      <div class="" data-toggle="collapse" href="#collapse-space-{{space.id}}">
+        <div class="space-icon">
+          {{#if space.isDefault}}
+            {{one-icon icon='space-default'}}
+          {{else}}
+            {{one-icon icon='space'}}
+          {{/if}}
+        </div>
+        <div class="space-header">
+          {{space.name}}
+        </div>
+      </div>
+      <div class="star-toggle" {{action "toggleDefault"}}>
+        {{#if space.isDefault}}
+          {{one-icon icon="star"}}
+        {{else}}
+          <div class="star-empty">
+            {{one-icon icon="star-empty"}}
+          </div>
+        {{/if}}
+      </div>
+      <div class="providers-count" data-toggle="collapse" href="#collapse-space-{{space.id}}">
+        <div class="icon">
+          {{one-icon icon="provider"}}
+        </div>
+        <div class="label">
+          {{space.providers.length}}
+        </div>
+      </div>
+    </a>
+  </div>
+  <div id="collapse-space-{{space.id}}" class="accordion-body spaces-accordion-body sidebar-list collapse">
+    <div class="accordion-inner">
+      <ul>
+        {{#each space.providers as |p|}}
+          <li>
+            <div class="icon">
+              {{#if p.isDefault}}
+                {{one-icon icon="provider-default"}}
+              {{else}}
+                {{one-icon icon="provider"}}
+              {{/if}}
+            </div>
+            <div class="label">
+              {{p.name}}
+            </div>
+          </li>
+        {{/each}}
+        <li class='get-support'>
+          {{!-- TODO: create some dropdown component, which does not close on click --}}
+          {{!-- TODO: like this: http://stackoverflow.com/questions/25089297/twitter-bootstrap-avoid-dropdown-menu-close-on-click-inside --}}
+          <div class="dropdown side-dropdown">
+            <a href="#" class="dropdown-toggle side-dropdown-toggle"
+              data-toggle="dropdown" role="button" aria-haspopup="true"
+              aria-expanded="false" {{action 'getNewSupportToken'}}>
+              <div class="icon">
+                {{one-icon icon="add"}}
+              </div>
+              <div class="label">
+                {{t 'onezone.spacesAccordionItem.getSupport'}}
+              </div>
+            </a>
+            <div class="dropdown-menu dropdown-menu-right token-popup floater">
+              {{!-- TODO: style and copy button --}}
+              {{!-- TODO: loading icon --}}
+              {{input value=supportToken readonly=true}}
+            </div>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>

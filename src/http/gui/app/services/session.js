@@ -1,0 +1,1 @@
+../../../../../deps/gui/common_assets/js/session-service-1.0.0.js

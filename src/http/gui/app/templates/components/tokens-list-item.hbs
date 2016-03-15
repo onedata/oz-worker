@@ -1,0 +1,25 @@
+{{!-- TODO: this "emulates" accordion group like in spaces accordion item --}}
+{{!-- TODO: but this is not an accordion --}}
+{{!-- TODO: create other style class --}}
+<div class="accordion-group tokens-accordion-group">
+  <div class="accordion-heading tokens-accordion-heading">
+    <a class="accordion-toggle tokens-accordion-toggle">
+      <div class="token-icon">
+          {{one-icon icon='menu-token'}}
+      </div>
+      <div class="token-header">
+        {{input value=token.id}}
+      </div>
+      <div class="select-button" {{action "selectTokenText"}}>
+        <div class="copy-icon">
+          {{one-icon icon="copy"}}
+        </div>
+      </div>
+      <div class="trash-button" {{action "remove"}}>
+        <div class="remove-icon">
+          {{one-icon icon="trash"}}
+        </div>
+      </div>
+    </a>
+  </div>
+</div>

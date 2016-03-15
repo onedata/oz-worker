@@ -60,6 +60,13 @@
     issuer :: rest_handler:client()
 }).
 
+%% This record defines a GUI session
+-record(session, {
+    user_id = undefined :: onedata_user:id() | undefined,
+    memory = [] :: session:memory(),
+    accessed = {0, 0, 0} :: erlang:timestamp()
+}).
+
 % Value in DB meaning that alias is not set.
 % Empty list, must be used as a list not binary so JS view will work correctly
 -define(EMPTY_ALIAS, "").
@@ -74,11 +81,11 @@
 %% This record defines user's account info
 %% received from an openid / oauth provider
 -record(oauth_account, {
-    provider_id = undefined,
-    user_id = <<"">>,
-    login = <<"">>,
-    name = <<"">>,
-    email_list = []
+    provider_id = undefined :: atom(),
+    user_id = <<"">> :: binary(),
+    login = <<"">> :: binary(),
+    name = <<"">> :: binary(),
+    email_list = [] :: [binary()]
 }).
 
 %% This record defines a user and is handled as a database document
@@ -93,9 +100,13 @@
     groups = [] :: [GroupId :: binary()],
     % TODO this is a mock
     first_space_support_token = <<"">> :: binary(),
-    % TODO temporary solution
     % This allows to remember the provider which was selected for user, so DNS knows where to redirect
-    default_provider = <<"">> :: binary()
+    default_provider = undefined :: binary() | undefined,
+    % This allows to remember to which provider user is being redirected.
+    % It is needed in DNS so it knows where to redirect.
+    chosen_provider = undefined :: binary() | undefined,
+    % List of user's client tokens
+    client_tokens = [] :: [binary()]
 }).
 
 -type user_info() :: #onedata_user{}.
