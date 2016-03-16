@@ -200,7 +200,7 @@ join({user, UserId}, Macaroon) ->
         false ->
             {ok, _} = space:update(SpaceId, fun(Space) ->
                 Privileges = privileges:space_user(),
-                #space{name = Name, users = Users} = Space,
+                #space{users = Users} = Space,
                 {ok, Space#space{users = [{UserId, Privileges} | Users]}}
             end),
             {ok, _} = onedata_user:update(UserId, fun(User) ->
