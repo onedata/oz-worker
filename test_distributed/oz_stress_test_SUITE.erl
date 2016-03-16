@@ -57,7 +57,7 @@ subscriptions_stress_test(Config) ->
     ?PERFORMANCE(Config, [
         {parameters, [
             [{name, providers_count}, {value, 10}, {description, "Number of providers (threads) used during the test."}],
-            [{name, docs_count}, {value, 20}, {description, "Number of documents used by a single thread/provider."}]
+            [{name, docs_count}, {value, 10}, {description, "Number of documents used by a single thread/provider."}]
         ]},
         {description, "Performs document saves and gathers subscription updated for many providers"}
     ]).
