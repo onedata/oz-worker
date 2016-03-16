@@ -37,7 +37,7 @@
 %% @end
 %%--------------------------------------------------------------------
 
--spec change_callback(Seq :: non_neg_integer(),
+-spec change_callback(Seq :: subscriptions:seq(),
     datastore:document() | stream_ended,
     model_behaviour:model_type() | undefined) -> ok.
 
@@ -108,7 +108,7 @@ cleanup() ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec start_changes_stream() -> any().
+-spec start_changes_stream() -> ok.
 start_changes_stream() ->
     case fetch_last_seq() of
         {error, Reason} ->
@@ -123,7 +123,8 @@ start_changes_stream() ->
                     ?warning("Stream conflict - name could not be registered"),
                     exit(Pid, could_not_register_name)
             end
-    end.
+    end,
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -153,12 +154,13 @@ fetch_last_seq() ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec schedule_stream_presence_check() -> any().
+-spec schedule_stream_presence_check() -> ok.
 schedule_stream_presence_check() ->
     {ok, Interval} = application:get_env(?APP_Name,
         changes_stream_presence_check_interval_seconds),
 
     worker_proxy:cast({?MODULE, node()}, stream_presence_check),
 
-    timer:send_interval(timer:seconds(Interval), whereis(?MODULE),
-        {timer, stream_presence_check}).
+    {ok, _} = timer:send_interval(timer:seconds(Interval), whereis(?MODULE),
+        {timer, stream_presence_check}),
+    ok.

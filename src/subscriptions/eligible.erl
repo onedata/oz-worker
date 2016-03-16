@@ -23,9 +23,8 @@
 %% Returns providers eligible for receiving given update.
 %% @end
 %%--------------------------------------------------------------------
-
--spec providers(Doc :: datastore:document(), Model :: atom())
-        -> [ProviderID :: term()].
+-spec providers(Doc :: datastore:document(), Model :: subscriptions:model())
+        -> [ProviderID :: binary()].
 providers(Doc, space) ->
     #document{value = #space{providers = SpaceProviders,
         users = SpaceUserTuples, groups = GroupTuples}} = Doc,
@@ -57,20 +56,13 @@ providers(_Doc, _Type) ->
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc
-%% Returns providers eligible for receiving given update.
-%% @end
-%%--------------------------------------------------------------------
-
-
-%%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Returns providers who are eligible thanks to users declared in
 %% current subscription.
 %% @end
 %%--------------------------------------------------------------------
-
+-spec through_users(UserIDs :: [binary()]) -> ProviderIDs :: [binary()].
 through_users(UserIDs) ->
     UsersSet = ordsets:from_list(UserIDs),
     lists:filtermap(fun(SubDoc) ->

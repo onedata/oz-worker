@@ -24,8 +24,7 @@
 %% Ensures state is operable after this function returns.
 %% @end
 %%--------------------------------------------------------------------
-
--spec ensure_initialised() -> any().
+-spec ensure_initialised() -> ok.
 ensure_initialised() ->
     case (subscriptions_state:create(#document{
         key = ?SUBSCRIPTIONS_STATE_KEY,
@@ -41,8 +40,8 @@ ensure_initialised() ->
 %% Cache size limit is guaranteed.
 %% @end
 %%--------------------------------------------------------------------
-
--spec put(Seq :: seq(), Doc :: #document{}, Model :: atom()) -> any().
+-spec put(Seq :: subscriptions:seq(), Doc :: datastore:document(),
+    Model :: subscriptions:model()) -> ok.
 put(Seq, Doc, Model) ->
     {ok, _} = subscriptions_state:update(?SUBSCRIPTIONS_STATE_KEY, fun(State) ->
         Cache = State#subscriptions_state.cache,
@@ -57,18 +56,18 @@ put(Seq, Doc, Model) ->
                 ?warning("Cache not saturated - size ~p of ~p", [Size, Limit]),
                 {ok, State#subscriptions_state{cache = UpdatedCache}}
         end
-    end).
+    end),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns ordered changes using given range.
 %% @end
 %%--------------------------------------------------------------------
-
--spec query(Seqs :: ordsets:ordset(seq())) -> {Hits, Misses} when
-    Hits :: [{Seq :: seq(), {Doc :: datastore:document(), Model :: atom()}}],
-    Misses :: [seq()].
-
+-spec query(Seqs :: ordsets:ordset(subscriptions:seq())) -> {Hits, Misses} when
+    Hits :: [{Seq :: subscriptions:seq(),
+        {Doc :: datastore:document(), Model :: subscriptions:model()}}],
+    Misses :: [subscriptions:seq()].
 query(Seqs) ->
     Cache = get_cache(),
     Lookup = lists:map(fun(Seq) ->
@@ -84,18 +83,17 @@ query(Seqs) ->
 %% Returns ordered changes using given range.
 %% @end
 %%--------------------------------------------------------------------
-
+-spec size_limit() -> pos_integer().
 size_limit() ->
     {ok, Limit} = application:get_env(?APP_Name, subscription_cache_size),
     Limit.
-
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns largest sequence number in cache.
 %% @end
 %%--------------------------------------------------------------------
--spec newest_seq() -> {ok, seq()} | {error, cache_empty}.
+-spec newest_seq() -> {ok, subscriptions:seq()} | {error, cache_empty}.
 newest_seq() ->
     Cache = get_cache(),
     case gb_trees:is_empty(Cache) of
@@ -110,7 +108,7 @@ newest_seq() ->
 %% Returns smallest sequence number in cache.
 %% @end
 %%--------------------------------------------------------------------
--spec oldest_seq() -> {ok, seq()} | {error, cache_empty}.
+-spec oldest_seq() -> {ok, subscriptions:seq()} | {error, cache_empty}.
 oldest_seq() ->
     Cache = get_cache(),
     case gb_trees:is_empty(Cache) of

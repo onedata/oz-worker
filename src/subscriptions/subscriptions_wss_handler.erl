@@ -146,8 +146,7 @@ get_provider(Req) ->
 %% Decodes message data and updates provider subscription accordingly.
 %% @end
 %%--------------------------------------------------------------------
--spec update_subscription(Data :: binary(), Req :: cowboy_req:req())
-        -> any().
+-spec update_subscription(Data :: binary(), Req :: cowboy_req:req()) -> ok.
 update_subscription(Data, Req) ->
     JSON = json_utils:decode(Data),
     ResumeAt = proplists:get_value(<<"resume_at">>, JSON),
@@ -159,4 +158,5 @@ update_subscription(Data, Req) ->
     worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME,
         {update_missing_seq, ProviderID, ResumeAt, Missing}),
     worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME,
-        {update_users, ProviderID, Users}).
+        {update_users, ProviderID, Users}),
+    ok.

@@ -19,12 +19,11 @@
     cache :: gb_trees:tree()
 }).
 
--type(seq() :: pos_integer()).
 -record(provider_subscription, {
     connections = [] :: [pid()],
     provider :: binary(),
-    resume_at = 1 :: seq(),
-    missing = [] :: [seq()],
+    resume_at = 1 :: subscriptions:seq(),
+    missing = [] :: [subscriptions:seq()],
     users = [] :: [binary()]
 }).
 

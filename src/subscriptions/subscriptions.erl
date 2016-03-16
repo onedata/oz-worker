@@ -20,14 +20,16 @@
     update_missing_seq/3, seen/2, remove_expired_connections/1,
     all/0]).
 
+-type(seq() :: non_neg_integer()).
+-type(model() :: onedata_user | onedata_group | space_info).
+-export_type([seq/0, model/0]).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Adds connection to the working provider.
 %% @end
 %%--------------------------------------------------------------------
--spec add_connection(ProviderID :: binary(), Connection :: pid())
-        -> any().
+-spec add_connection(ProviderID :: binary(), Connection :: pid()) -> ok.
 add_connection(ProviderID, Connection) ->
     {ok, ProviderID} = provider_subscription:create_or_update(#document{
         key = ProviderID,
@@ -38,7 +40,7 @@ add_connection(ProviderID, Connection) ->
     }, fun(Subscription) ->
         Extended = [Connection | Subscription#provider_subscription.connections],
         {ok, Subscription#provider_subscription{connections = Extended}}
-    end).
+    end), ok.
 
 
 %%--------------------------------------------------------------------
@@ -46,24 +48,23 @@ add_connection(ProviderID, Connection) ->
 %% Removes expired connections from provider connections.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_expired_connections(ProviderID :: binary()) -> any().
+-spec remove_expired_connections(ProviderID :: binary()) -> ok.
 remove_expired_connections(ProviderID) ->
-    provider_subscription:update(ProviderID, fun(Subscription) ->
+    {ok, _} = provider_subscription:update(ProviderID, fun(Subscription) ->
         Filtered = lists:filter(fun(Pid) ->
             process_info(Pid) =/= undefined
         end, Subscription#provider_subscription.connections),
         Subscription#provider_subscription{connections = Filtered}
-    end).
+    end), ok.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Removes connection from provider connections.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_connection(ProviderID :: binary(), Connection :: pid())
-        -> any().
+-spec remove_connection(ProviderID :: binary(), Connection :: pid()) -> ok.
 remove_connection(ProviderID, Connection) ->
-    provider_subscription:create_or_update(#document{
+    {ok, _} = provider_subscription:create_or_update(#document{
         key = ProviderID,
         value = #provider_subscription{
             provider = ProviderID,
@@ -73,15 +74,15 @@ remove_connection(ProviderID, Connection) ->
         Connections = Subscription#provider_subscription.connections,
         Filtered = [E || E <- Connections, E =/= Connection],
         {ok, Subscription#provider_subscription{connections = Filtered}}
-    end).
+    end), ok.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Fetches subscription of the provider with given ID
 %% @end
 %%--------------------------------------------------------------------
--spec get_doc(ProviderID :: binary())
-        -> {ok, datastore:document()} | {error, Reason :: term()}.
+-spec get_doc(ProviderID :: binary()) ->
+    {ok, datastore:document()} | {error, Reason :: term()}.
 get_doc(ProviderID) ->
     provider_subscription:get(ProviderID).
 
@@ -121,7 +122,7 @@ update_users(ProviderID, Users) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_missing_seq(ProviderID :: binary(), ResumeAt :: seq(),
-    Missing :: [seq()]) -> any().
+    Missing :: [seq()]) -> ok.
 
 update_missing_seq(ProviderID, ResumeAt, Missing) ->
     {ok, _} = provider_subscription:create_or_update(#document{
@@ -133,7 +134,7 @@ update_missing_seq(ProviderID, ResumeAt, Missing) ->
     }, fun(Subscription) -> {ok, Subscription#provider_subscription{
         missing = Missing,
         resume_at = ResumeAt
-    }} end).
+    }} end), ok.
 
 
 %%--------------------------------------------------------------------

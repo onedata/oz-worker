@@ -34,8 +34,7 @@
 %% If there is no connection messages are discarded.
 %% @end
 %%--------------------------------------------------------------------
--spec push_messages(ProviderID :: binary(), Messages :: [term()])
-        -> any().
+-spec push_messages(ProviderID :: binary(), Messages :: [term()]) -> ok.
 push_messages(ProviderID, Messages) ->
     {ok, #document{value = #provider_subscription{connections = Conns}}}
         = subscriptions:get_doc(ProviderID),
@@ -43,7 +42,8 @@ push_messages(ProviderID, Messages) ->
         [Conn | _] ->
             UniqueMessages = lists:usort(Messages),
             Encoded = json_utils:encode({array, UniqueMessages}),
-            Conn ! {push, Encoded};
+            Conn ! {push, Encoded},
+            ok;
         [] -> ?info("No connection ~p ~p", [ProviderID, Messages])
     end.
 
@@ -119,9 +119,9 @@ cleanup() ->
 %% Fetches old changes and sends them to the providers.
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_history(ResumeAt :: seq(), Missing :: [seq()]) -> any().
+-spec fetch_history(ResumeAt :: subscriptions:seq(),
+    Missing :: [subscriptions:seq()]) -> ok.
 fetch_history(ResumeAt, Missing) ->
-
     case changes_cache:newest_seq() of
         {ok, Newest} ->
             case get_seq_to_fetch(Newest, ResumeAt, Missing) of
@@ -139,8 +139,9 @@ fetch_history(ResumeAt, Missing) ->
 %% Transforms provider declaration to historical sequence numbers.
 %% @end
 %%--------------------------------------------------------------------
--spec get_seq_to_fetch(Newest :: seq(), ResumeAt :: seq(), Missing :: [seq()])
-        -> ToFetch :: [seq()].
+-spec get_seq_to_fetch(Newest :: subscriptions:seq(),
+    ResumeAt :: subscriptions:seq(), Missing :: [subscriptions:seq()]) ->
+    ToFetch :: [subscriptions:seq()].
 get_seq_to_fetch(Newest, ResumeAt, Missing) ->
     case Newest < ResumeAt of
         true -> Missing;
@@ -153,7 +154,8 @@ get_seq_to_fetch(Newest, ResumeAt, Missing) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec fetch_from_cache(Seqs :: ordsets:ordset(seq())) -> any().
+-spec fetch_from_cache(Seqs :: ordsets:ordset(subscriptions:seq())) ->
+    Misses :: ordsets:ordset(subscriptions:seq()).
 fetch_from_cache(Seqs) ->
     {Hits, Misses} = changes_cache:query(Seqs),
     Updates = lists:map(fun({Seq, {Doc, Type}}) ->
@@ -172,7 +174,7 @@ fetch_from_cache(Seqs) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec fetch_from_db(Seqs :: ordsets:ordset(seq())) -> any().
+-spec fetch_from_db(Seqs :: ordsets:ordset(subscriptions:seq())) -> ok.
 fetch_from_db([]) -> ok;
 fetch_from_db(Seqs) ->
     From = hd(Seqs) - 1,
@@ -199,7 +201,7 @@ fetch_from_db(Seqs) ->
                 exit(fetch_taking_too_long)
         end
 
-    end).
+    end), ok.
 
 
 %%--------------------------------------------------------------------
@@ -207,7 +209,7 @@ fetch_from_db(Seqs) ->
 %% Sends to all providers information to skip the sequence numbers.
 %% @end
 %%--------------------------------------------------------------------
--spec ignore_all(Seqs :: ordsets:ordset(seq())) -> any().
+-spec ignore_all(Seqs :: ordsets:ordset(subscriptions:seq())) -> ok.
 ignore_all(Seqs) ->
     ?warning("Ignoring ~p", [Seqs]),
     Subscriptions = subscriptions:all(),
@@ -215,7 +217,7 @@ ignore_all(Seqs) ->
         outbox:put(ID, fun push_messages/2, lists:map(fun(Seq) ->
             translator:get_ignore_msg(Seq)
         end, Seqs))
-    end, Subscriptions).
+    end, Subscriptions), ok.
 
 %%--------------------------------------------------------------------
 %% @doc @private
@@ -224,16 +226,13 @@ ignore_all(Seqs) ->
 %% provider, that he shouldn't expect update with given sequence number.
 %% @end
 %%--------------------------------------------------------------------
-
--spec handle_change(Seq :: seq(), Doc :: datastore:document(),
-    Model :: atom()) -> any().
-
+-spec handle_change(Seq :: subscriptions:seq(), Doc :: datastore:document(),
+    Model :: atom()) -> ok.
 handle_change(Seq, Doc, Model) ->
     handle_change([{Seq, Doc, Model}]).
 
--spec handle_change([{Seq :: seq(), Doc :: datastore:document(),
-    Model :: atom()}]) -> any().
-
+-spec handle_change([{Seq :: subscriptions:seq(), Doc :: datastore:document(),
+    Model :: atom()}]) -> ok.
 handle_change(Updates) ->
     UpdatesWithProviders = utils:pmap(fun({Seq, Doc, Model}) ->
         {Seq, Doc, Model, sets:from_list(eligible:providers(Doc, Model))}
@@ -260,4 +259,5 @@ handle_change(Updates) ->
             E:R ->
                 ?error_stacktrace("Problem with handler ~p:~p", [E, R])
         end
-    end, subscriptions:all()).
+    end, subscriptions:all()),
+    ok.

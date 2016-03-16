@@ -34,10 +34,9 @@
 %% This function is used internally but can be used to force immediate batch push.
 %% @end
 %%--------------------------------------------------------------------
--spec push(ID, PushFun) -> any() when
+-spec push(ID, PushFun) -> ok when
     ID :: term(),
-    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> any()).
-
+    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> ok).
 push(ID, PushFun) ->
     worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
         (undefined) -> undefined;
@@ -52,11 +51,10 @@ push(ID, PushFun) ->
 %% Buffers the messages and schedules the push (if needed).
 %% @end
 %%--------------------------------------------------------------------
--spec put(ID, PushFun, Messages) -> any() when
+-spec put(ID, PushFun, Messages) -> ok when
     ID :: term(),
     Messages :: [term()],
-    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> any()).
-
+    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> ok).
 put(_, _, []) -> ok;
 put(ID, PushFun, Messages) ->
     Now = erlang:system_time(),
@@ -91,8 +89,7 @@ put(ID, PushFun, Messages) ->
 -spec setup_timer(ID, PushFun) -> TRef when
     ID :: term(),
     TRef :: timer:tref(),
-    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> any()).
-
+    PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> ok).
 setup_timer(ID, PushFun) ->
     {ok, TRef} = timer:apply_after(batch_ttl(), ?MODULE, push, [ID, PushFun]),
     TRef.
@@ -104,7 +101,6 @@ setup_timer(ID, PushFun) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec batch_ttl() -> pos_integer().
-
 batch_ttl() ->
     {ok, TTL} = application:get_env(?APP_Name, subscription_batch_ttl),
     TTL.

@@ -54,8 +54,8 @@
     node :: node(),
     provider :: binary(),
     users :: [binary()],
-    resume_at :: seq(),
-    missing :: [seq()]
+    resume_at :: subscriptions:seq(),
+    missing :: [subscriptions:seq()]
 }).
 
 %%%===================================================================
