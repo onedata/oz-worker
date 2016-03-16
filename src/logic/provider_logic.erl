@@ -22,8 +22,8 @@
 -export([create/4, modify/2, exists/1]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
--export([test_connection/1]).
--export([get_default_provider_for_user/1]).
+-export([test_connection/1, check_provider_connectivity/1]).
+-export([choose_provider_for_user/1]).
 
 %%%===================================================================
 %%% API
@@ -175,6 +175,24 @@ test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
 test_connection(_, _) ->
     {error, bad_data}.
 
+
+% Checks if given provider (by ID) is alive and responding.
+-spec check_provider_connectivity(ProviderId :: binary()) -> boolean().
+check_provider_connectivity(ProviderId) ->
+    {ok, Data} = provider_logic:get_data(ProviderId),
+    RedirectionPoint = proplists:get_value(redirectionPoint, Data),
+    % @todo check provider_id_endpoint
+%%    ProviderConnCheckEndpoint = <<RedirectionPoint/binary, ?provider_id_endpoint>>,
+    ProviderConnCheckEndpoint = RedirectionPoint,
+    % We do not need to check for provider's certificate - some providers do not have a signed one.
+    % Plus user's browser will do the verification.
+    case http_client:get(ProviderConnCheckEndpoint, [], <<>>, [insecure]) of
+        % @todo check provider_id_endpoint
+%%        {ok, _, _, ProviderId} -> true;
+        {ok, _, _, _} -> true;
+        _ -> false
+    end.
+
 %%--------------------------------------------------------------------
 %% @doc Returns provider id of provider that has been chosen
 %% as default for given user, or {error, no_provider} otherwise.
@@ -184,9 +202,9 @@ test_connection(_, _) ->
 %% one of them will be chosen randomly.
 %% @end
 %%--------------------------------------------------------------------
--spec get_default_provider_for_user(Referer :: binary() | undefined) ->
+-spec choose_provider_for_user(Referer :: binary() | undefined) ->
     {ok, ProviderID :: binary()} | {error, no_provider}.
-get_default_provider_for_user(UserID) ->
+choose_provider_for_user(UserID) ->
     % Check if the user has a default space and if it is supported.
     {ok, [{spaces, Spaces}, {default, DefaultSpace}]} =
         user_logic:get_spaces(UserID),

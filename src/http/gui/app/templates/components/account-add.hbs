@@ -1,0 +1,20 @@
+<div class="dropdown side-dropdown">
+  <a href="#" class="dropdown-toggle side-dropdown-toggle"
+    data-toggle="dropdown" role="button" aria-haspopup="true"
+    aria-expanded="false">
+    <div class="account-icon account-add-icon">
+      {{one-icon icon='add'}}
+    </div>
+    <div class="account-label connect-new">
+      {{t 'onezone.accountAdd.connectNewAccount'}}
+    </div>
+  </a>
+  <div class="dropdown-menu dropdown-menu-right floater account-add-popup">
+    {{!-- TODO: style and copy button --}}
+    {{!-- TODO: loading icon --}}
+    {{#each authProviders as |authProvider|}}
+      {{account-item type=authProvider.type label=authProvider.label
+        mode="connect" action="connectNewAccount"}}
+    {{/each}}
+  </div>
+</div>

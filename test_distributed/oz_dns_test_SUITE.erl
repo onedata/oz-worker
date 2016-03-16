@@ -81,12 +81,12 @@ end_per_suite(Config) ->
 %%%===================================================================
 
 get_dns_port(Node) ->
-    {ok, RestPort} = rpc:call(Node, application, get_env, [?CLUSTER_WORKER_NAME, dns_port]),
-    RestPort.
+    {ok, DNSPort} = rpc:call(Node, application, get_env, [?CLUSTER_WORKER_NAME, dns_port]),
+    DNSPort.
 
 get_dns_ip(Node) ->
-    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, external_ip]),
-    atom_to_list(RestPort).
+    {ok, ExternalIP} = rpc:call(Node, application, get_env, [?APP_Name, external_ip]),
+    str_utils:to_list(ExternalIP).
 
 get_domain(Node) ->
     string:join(lists:nthtail(1, string:tokens(atom_to_list(Node), ".")), ".").

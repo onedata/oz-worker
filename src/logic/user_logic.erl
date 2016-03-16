@@ -18,6 +18,8 @@
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
 -export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
+-export([get_default_provider/1, set_default_provider/2]).
+-export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
 
 %%%===================================================================
@@ -87,7 +89,8 @@ modify(UserId, Proplist) ->
             default_space = DefaultSpace,
             % TODO mock
             first_space_support_token = FSST,
-            default_provider = DefaultProvider
+            default_provider = DefaultProvider,
+            chosen_provider = ChosenProvider
         } = User,
 
         % Check if alias was requested to be modified and if it is allowed
@@ -161,7 +164,8 @@ modify(UserId, Proplist) ->
                     default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
                     % TODO mock
                     first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST),
-                    default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider)},
+                    default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider),
+                    chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider)},
                 DocNew = Doc#document{value = NewUser},
                 onedata_user:save(DocNew),
                 case SetAlias of
@@ -320,10 +324,83 @@ set_default_space(UserId, SpaceId) ->
     {ok, Doc} = onedata_user:get(UserId),
     AllUserSpaces = get_all_spaces(Doc),
     case ordsets:is_element(SpaceId, AllUserSpaces) of
-        false -> false;
+        false ->
+            false;
         true ->
             {ok, _} = onedata_user:update(UserId, fun(User) ->
                 {ok, User#onedata_user{default_space = SpaceId}}
+            end),
+            true
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user's default provider (or returns undefined).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_default_provider(UserId :: binary()) ->
+    {ok, ProviderId :: binary() | undefined}.
+get_default_provider(UserId) ->
+    {ok, #onedata_user{default_provider = DefProv}} = get_user(UserId),
+    {ok, DefProv}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Retrieves user's list of client tokens.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_client_tokens(UserId :: binary()) ->
+    {ok, Tokens :: [binary()]}.
+get_client_tokens(UserId) ->
+    {ok, #onedata_user{client_tokens = ClientTokens}} = get_user(UserId),
+    {ok, ClientTokens}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a token to the list of user's client tokens.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_client_token(UserId :: binary(), Token :: binary()) -> ok.
+add_client_token(UserId, Token) ->
+    {ok, #onedata_user{client_tokens = ClientTokens}} = get_user(UserId),
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        {ok, User#onedata_user{client_tokens = ClientTokens ++ [Token]}}
+    end),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes a token from the list of user's client tokens.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_client_token(UserId :: binary(), Token :: binary()) -> ok.
+delete_client_token(UserId, Token) ->
+    {ok, #onedata_user{client_tokens = ClientTokens}} = get_user(UserId),
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        {ok, User#onedata_user{client_tokens = ClientTokens -- [Token]}}
+    end),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc Set user's default space ID.
+%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
+%% don't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_default_provider(UserId :: binary(), ProviderId :: binary()) ->
+    true.
+set_default_provider(UserId, ProviderId) ->
+    {ok, [{providers, AllUserProviders}]} = get_providers(UserId),
+    case ordsets:is_element(ProviderId, AllUserProviders) of
+        false ->
+            false;
+        true ->
+            {ok, _} = onedata_user:update(UserId, fun(User) ->
+                {ok, User#onedata_user{default_provider = ProviderId}}
             end),
             true
     end.
