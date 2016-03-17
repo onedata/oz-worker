@@ -20,26 +20,26 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([rest_api_connection_test/1, dao_connection_test/1]).
+-export([rest_api_connection_test/1, datastore_connection_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
-all() -> ?ALL([rest_api_connection_test, dao_connection_test]).
+all() -> ?ALL([rest_api_connection_test, datastore_connection_test]).
 
 rest_api_connection_test(Config) ->
-    [Node] = ?config(gr_nodes, Config),
-    {ok, RestPort} = rpc:call(Node, application, get_env,
-        [?APP_Name, rest_port]),
-    URL = str_utils:format("https://~s:~B/provider/test/check_my_ip",
-        [utils:get_host(Node), RestPort]),
-    ?assertMatch({ok, _, _, _}, http_client:get(URL, [], <<>>, [insecure])).
+    [Node1, Node2] = ?config(oz_worker_nodes, Config),
+    {ok, RestPort} = rpc:call(Node1, application, get_env, [?APP_Name, rest_port]),
+    URL1 = str_utils:format("https://~s:~B/provider/test/check_my_ip", [utils:get_host(Node1), RestPort]),
+    URL2 = str_utils:format("https://~s:~B/provider/test/check_my_ip", [utils:get_host(Node2), RestPort]),
+    ?assertMatch({ok, _, _, _}, http_client:get(URL1, [], <<>>, [insecure])),
+    ?assertMatch({ok, _, _, _}, http_client:get(URL2, [], <<>>, [insecure])).
 
-dao_connection_test(Config) ->
-    [Node] = ?config(gr_nodes, Config),
-    ?assertMatch({ok, _}, rpc:call(Node, dao_lib, apply,
-        [dao_helper, list_dbs, [], 1])).
+datastore_connection_test(Config) ->
+    [Node1, Node2] = ?config(oz_worker_nodes, Config),
+    ?assertEqual(pong, rpc:call(Node1, worker_proxy, call, [datastore_worker, ping])),
+    ?assertEqual(pong, rpc:call(Node2, worker_proxy, call, [datastore_worker, ping])).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -47,7 +47,6 @@ dao_connection_test(Config) ->
 
 init_per_suite(Config) ->
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
-    timer:sleep(60000), % TODO add nagios to GR and delete sleep
     NewConfig.
 
 init_per_testcase(rest_api_connection_test, Config) ->

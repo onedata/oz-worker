@@ -1,0 +1,46 @@
+/*** owl carousel ***/
+
+.owl-carousel-component {
+  .owl-carousel {
+    .owl-item {
+      .img-box {
+        height: 64px;
+        width: 100%;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+
+        // for images that are too wide
+        &.background-contain {
+          background-size: contain;
+        }
+      }
+    }
+  }
+
+  .owl-carousel-arrows {
+    text-align: center;
+
+    a {
+      display: inline-block;
+      color: #CACACA;
+      background-color: transparent;
+      border: none;
+      &:active, &:focus, &:hover {
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+      &:hover, &:focus {
+        color: $color-grey-1 !important;
+        cursor: pointer;
+        cursor: hand;
+      }
+      &:active {
+        color: #484848 !important;
+      }
+    }
+  }
+}
+
+/*** ***/

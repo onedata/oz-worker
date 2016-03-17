@@ -1,0 +1,20 @@
+/*** Bootstrap configuration ***/
+
+// control the screen sizes
+$screen-xs-min: 380px;
+$screen-sm-min: 1000px;
+$screen-md-min: 1260px; // default: 800px
+$screen-lg-min: 1860px;
+
+$container-sm: $screen-sm-min - $container-min-padding/2;
+$container-md: $screen-md-min - $container-min-padding/2;
+$container-lg: $screen-lg-min - $container-min-padding/2;
+
+// this tells which screen size to use to start breaking on
+// will tell navbar when to collapse
+$grid-float-breakpoint: $screen-md-min;
+
+// then import your bootstrap
+@import "bootstrap";
+
+/*** ***/

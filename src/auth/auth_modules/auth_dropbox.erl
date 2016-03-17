@@ -14,7 +14,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -define(PROVIDER_NAME, dropbox).
 
@@ -57,7 +57,7 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist = gui_ctx:get_request_params(),
+        ParamsProplist = g_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Prepare basic auth code
@@ -90,7 +90,7 @@ validate_login() ->
         UserInfoProplist = json_utils:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = UserID,
+            user_id = str_utils:to_binary(UserID),
             email_list = lists:flatten([proplists:get_value(<<"email">>, UserInfoProplist, [])]),
             name = proplists:get_value(<<"display_name">>, UserInfoProplist, <<"">>),
             login = proplists:get_value(<<"login">>, UserInfoProplist, <<"">>)

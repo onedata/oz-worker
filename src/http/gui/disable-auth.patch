@@ -1,0 +1,28 @@
+diff --git a/src/http/gui/app/routes/application.js b/src/http/gui/app/routes/application.js
+index 6eadce8..92be6b2 100644
+--- a/src/http/gui/app/routes/application.js
++++ b/src/http/gui/app/routes/application.js
+@@ -17,7 +17,7 @@ export default Ember.Route.extend({
+   },
+ 
+   initAdapter: function () {
+-    this.get('store').adapterFor('application').init();
++    // this.get('store').adapterFor('application').init();
+   }.on('init')
+ 
+ 
+diff --git a/src/http/gui/app/routes/onezone.js b/src/http/gui/app/routes/onezone.js
+index 6575d2e..5a05f93 100644
+--- a/src/http/gui/app/routes/onezone.js
++++ b/src/http/gui/app/routes/onezone.js
+@@ -1,7 +1,7 @@
+ import Ember from 'ember';
+-import AuthenticatedRouteMixin from 'ember-simple-auth/mixins/authenticated-route-mixin';
++// import AuthenticatedRouteMixin from 'ember-simple-auth/mixins/authenticated-route-mixin';
+ 
+-let OnezoneRoute = Ember.Route.extend(AuthenticatedRouteMixin);
++// let OnezoneRoute = Ember.Route.extend(AuthenticatedRouteMixin);
+ 
+-export default OnezoneRoute.extend({
++export default Ember.Route.extend({
+ });

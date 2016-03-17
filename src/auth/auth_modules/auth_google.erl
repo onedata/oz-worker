@@ -14,7 +14,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
--include("dao/dao_types.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -define(PROVIDER_NAME, google).
 
@@ -58,7 +58,7 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist = gui_ctx:get_request_params(),
+        ParamsProplist = g_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request
@@ -87,7 +87,8 @@ validate_login() ->
         JSONProplist = json_utils:decode(Response2),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = proplists:get_value(<<"sub">>, JSONProplist, <<"">>),
+            user_id = str_utils:to_binary(
+                proplists:get_value(<<"sub">>, JSONProplist, <<"">>)),
             email_list = extract_emails(JSONProplist),
             name = proplists:get_value(<<"name">>, JSONProplist, <<"">>)
         },
