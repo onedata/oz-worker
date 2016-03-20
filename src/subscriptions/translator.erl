@@ -38,7 +38,7 @@ get_ignore_msg(Seq) ->
 -spec get_msg(Seq :: pos_integer(), Doc :: datastore:document(), Model :: atom())
         -> term().
 
-get_msg(Seq, Doc = #document{rev = deleted, key = ID}, Model) ->
+get_msg(Seq, Doc = #document{deleted = true, key = ID}, Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {model(Model), delete}];
 get_msg(Seq, Doc, space = Model) ->
     #document{value = Value, key = ID} = Doc,
