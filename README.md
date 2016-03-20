@@ -1,7 +1,7 @@
 About
 =====
 
-*globalregistry* is a server that can store data needed by large scale distributed systems to cooperate.
+*oz_worker* is a server that can store data needed by large scale distributed systems to cooperate.
 
 Goals
 -----

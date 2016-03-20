@@ -1,0 +1,26 @@
+<div class="row">
+  <div class="col-xs-1 align-right">
+    <div class="owl-carousel-arrows">
+			<a class="prev">
+        <span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
+      </a>
+		</div>
+  </div>
+
+  <div class="col-xs-10">
+    <div class="owl-carousel manual">
+      {{#each supporters as |s|}}
+        <div class="img-box {{s.boxClasses}}" style="background-image: url({{s.image}});">
+        </div>
+      {{/each}}
+    </div>
+  </div>
+
+  <div class="col-xs-1 align-left">
+    <div class="owl-carousel-arrows">
+			<a class="next">
+        <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
+      </a>
+		</div>
+  </div>
+</div>

@@ -1,30 +1,66 @@
 {
     "dirs_config": {
-        "globalregistry": {
-            "input_dir": "rel/globalregistry",
+        "cluster_manager": {
+            "input_dir": "rel/cluster_manager",
+            "target_dir": "rel/test_cluster"
+        },
+        "oz_worker": {
+            "input_dir": "rel/oz_worker",
             "target_dir": "rel/test_cluster"
         }
     },
-    "os_configs": {
-        "cfg1": {
-            "storages": [],
-            "users": [],
-            "groups": {}
-        }
-    },
-    "globalregistry_domains": {
-        "gr": {
-            "globalregistry": {
+    "zone_domains": {
+        "oz": {
+            "db_driver": "couchdb",
+            "cluster_manager": {
+                "cm": {
+                    "vm.args": {
+                        "setcookie": "test_cookie"
+                    },
+                    "sys.config": {
+                        "cluster_manager": {
+                            "cm_nodes": [
+                                "cm"
+                            ],
+                            "worker_num": 2
+                        }
+                    }
+                }
+            },
+            "oz_worker": {
                 "node1": {
                     "vm.args": {
                         "setcookie": "test_cookie"
                     },
                     "sys.config": {
-                        "db_nodes": [
-                            "db"
-                        ],
-                        "http_domain": {
-                            "string": "127.0.0.1"
+                        "oz_worker": {
+                            "cm_nodes": [
+                                "cm"
+                            ],
+                            "db_nodes": [
+                                "127.0.0.1:49161"
+                            ],
+                            "http_domain": {
+                                "string": "127.0.0.1"
+                            }
+                        }
+                    }
+                },
+                "node2": {
+                    "vm.args": {
+                        "setcookie": "test_cookie"
+                    },
+                    "sys.config": {
+                        "oz_worker": {
+                            "cm_nodes": [
+                                "cm"
+                            ],
+                            "db_nodes": [
+                                "127.0.0.1:49161"
+                            ],
+                            "http_domain": {
+                                "string": "127.0.0.1"
+                            }
                         }
                     }
                 }

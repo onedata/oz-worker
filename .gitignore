@@ -8,9 +8,9 @@ src/gui/gui_static/n2o
 
 deps
 ebin
-rel/globalregistry
-rel/globalregistry-*.rpm
-rel/resources/auth.config
+cluster_manager
+rel/oz_worker
+rel/*.rpm
 package
 package.tar.gz
 dockerbuild-sha.txt

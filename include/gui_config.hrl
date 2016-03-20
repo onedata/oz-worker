@@ -15,11 +15,8 @@
 % ID of GUI listener
 -define(gui_https_listener, https).
 
-% ID of redirector listener
--define(gui_redirector_listener, http).
-
 % Path to directory that contains gui static files
--define(gui_static_root, "resources/gui_static").
+-define(gui_static_root, "data/gui_static").
 % Paths in gui static directory
 -define(static_paths, ["/common/", "/css/", "/flatui/", "/fonts/", "/images/", "/n2o/"]).
 

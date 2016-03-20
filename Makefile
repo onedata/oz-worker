@@ -1,57 +1,111 @@
-.PHONY: test deps generate
+REPO	        ?= oz_worker
+
+# distro for package building (oneof: wily, fedora-23-x86_64)
+DISTRIBUTION    ?= none
+export DISTRIBUTION
+
+PKG_REVISION    ?= $(shell git describe --tags --always)
+PKG_VERSION     ?= $(shell git describe --tags --always | tr - .)
+PKG_ID           = oz_worker-$(PKG_VERSION)
+PKG_BUILD        = 1
+BASE_DIR         = $(shell pwd)
+ERLANG_BIN       = $(shell dirname $(shell which erl))
+REBAR           ?= $(BASE_DIR)/rebar
+PKG_VARS_CONFIG  = pkg.vars.config
+OVERLAY_VARS    ?=
 
 DOCKER_REG_USER        ?= ""
 DOCKER_REG_PASSWORD    ?= ""
 DOCKER_REG_EMAIL       ?= ""
-GLOBALREGISTRY_VERSION ?= $(shell git describe --tags --always | tr - .)
 
 BASE_DIR         = $(shell pwd)
-GIT_URL         := $(shell git config --get remote.origin.url | sed -e 's/\(\/[^/]*\)$$//g')
-GIT_URL         := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgrid.pl:7999/vfs'; else echo ${GIT_URL}; fi)
+GIT_URL := $(shell git config --get remote.origin.url | sed -e 's/\(\/[^/]*\)$$//g')
+GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgrid.pl:7999/vfs'; else echo ${GIT_URL}; fi)
 ONEDATA_GIT_URL := $(shell if [ "${ONEDATA_GIT_URL}" = "" ]; then echo ${GIT_URL}; else echo ${ONEDATA_GIT_URL}; fi)
 export ONEDATA_GIT_URL
 
-all: rel
+.PHONY: test deps generate package test_gui
+
+all: test_rel
+
+##
+## Rebar targets
+##
 
 deps:
-	@./rebar get-deps
-	@git submodule init
-	@git submodule update
+	./rebar get-deps
 
+recompile:
+	./rebar compile skip_deps=true
+
+gui_dev:
+	./deps/gui/build_gui.sh dev
+
+gui_prod:
+	./deps/gui/build_gui.sh prod
+
+gui_doc:
+	jsdoc -c src/http/gui/.jsdoc.conf src/http/gui/app
+
+gui_clean:
+	cd src/http/gui && rm -rf node_modules bower_components dist tmp
+
+##
+## If performance is compiled in cluster_worker then annotations do not work.
+## Make sure they are not included in cluster_worker build.
+## todo: find better solution
+##
 compile:
-	@./rebar compile
+	sed -i "s/ \"deps\/ctool\/annotations\/performance\.erl\"/%%\"deps\/ctool\/annotations\/performance\.erl\"/" deps/cluster_worker/rebar.config
+	rm deps/cluster_worker/ebin/performance.beam || true
+	./rebar compile
+	sed -i "s/%%\"deps\/ctool\/annotations\/performance\.erl\"/ \"deps\/ctool\/annotations\/performance\.erl\"/" deps/cluster_worker/rebar.config
 
-generate: deps compile
-	@./rebar generate
+##
+## Reltool configs introduce dependency on deps directories (which do not exist)
+## Also a release is not necessary for us.
+## We prevent reltool from creating a release.
+## todo: find better solution
+##
+## Generates a dev release
+generate_dev: deps compile gui_dev
+	# Remove gui tmp dir
+	rm -rf src/http/gui/tmp
+	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
+	./rebar generate $(OVERLAY_VARS)
+	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
+	# Try to get developer auth.config
+	./get_dev_auth_config.sh
+
+## Generates a production release
+generate: deps compile gui_prod
+	# Remove gui tmp dir
+	rm -rf src/http/gui/tmp
+	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
+	./rebar generate $(OVERLAY_VARS)
+	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
 
 clean:
-	@./rebar clean
+	./rebar clean
 
 distclean: clean
-	@./rebar delete-deps
+	./rebar delete-deps
 
 ##
-## Dialyzer targets local
+## Release targets
 ##
 
-PLT ?= .dialyzer.plt
+rel: generate
 
-# Builds dialyzer's Persistent Lookup Table file.
-.PHONY: plt
-plt:
-	dialyzer --check_plt --plt ${PLT}; \
-	if [ $$? != 0 ]; then \
-	    dialyzer --build_plt --output_plt ${PLT} --apps kernel stdlib sasl erts \
-	        ssl tools runtime_tools crypto inets xmerl snmp public_key eunit \
-	        common_test test_server syntax_tools compiler edoc mnesia hipe \
-	        ssh webtool -r deps; \
-	fi; exit 0
+test_rel: generate_dev cm_rel
 
+cm_rel:
+	ln -sf deps/cluster_worker/cluster_manager/
+	make -C cluster_manager/ rel
 
-# Dialyzes the project.
-dialyzer: plt
-	dialyzer ./ebin --plt ${PLT} -Werror_handling -Wrace_conditions --fullpath
-
+relclean:
+	rm -rf rel/oz_worker
+	rm -rf cluster_manager/rel/cluster_manager
 
 ##
 ## Testing
@@ -65,27 +119,70 @@ eunit:
 coverage:
 	$(BASE_DIR)/bamboos/docker/coverage.escript $(BASE_DIR)
 
+test_gui:
+	cd test_gui && ember test
+
 ##
-## Release targets
+## Dialyzer targets local
 ##
 
-rel: generate
+PLT ?= .dialyzer.plt
 
-relclean:
-	rm -rf rel/globalregistry
+# Builds dialyzer's Persistent Lookup Table file.
+.PHONY: plt
+plt:
+	dialyzer --check_plt --plt ${PLT}; \
+	if [ $$? != 0 ]; then \
+	    dialyzer --build_plt --output_plt ${PLT} --apps kernel stdlib sasl erts \
+		ssl tools runtime_tools crypto inets xmerl snmp public_key eunit \
+		mnesia edoc common_test test_server syntax_tools compiler ./deps/*/ebin; \
+	fi; exit 0
 
-rpmdirs:
+
+# Dialyzes the project.
+dialyzer: plt
+	dialyzer ./ebin --plt ${PLT} -Werror_handling -Wrace_conditions --fullpath
+
+##
+## Packaging targets
+##
+
+export PKG_VERSION PKG_ID PKG_BUILD BASE_DIR ERLANG_BIN REBAR OVERLAY_VARS RELEASE PKG_VARS_CONFIG
+
+check_distribution:
+ifeq ($(DISTRIBUTION), none)
+	@echo "Please provide package distribution. Oneof: 'wily', 'fedora-23-x86_64'"
+	@exit 1
+else
+	@echo "Building package for distribution $(DISTRIBUTION)"
+endif
+
+package/$(PKG_ID).tar.gz: deps
+	mkdir -p package
+	rm -rf package/$(PKG_ID)
+	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION) | (cd package && tar -xf -)
+	${MAKE} -C package/$(PKG_ID) deps
+	for dep in package/$(PKG_ID) package/$(PKG_ID)/deps/*; do \
+	     echo "Processing dependency: `basename $${dep}`"; \
+	     vsn=`git --git-dir=$${dep}/.git describe --tags 2>/dev/null`; \
+	     mkdir -p $${dep}/priv; \
+	     echo "$${vsn}" > $${dep}/priv/vsn.git; \
+	     sed -i'' "s/{vsn,\\s*git}/{vsn, \"$${vsn}\"}/" $${dep}/src/*.app.src 2>/dev/null || true; \
+	done
+	find package/$(PKG_ID) -name ".git" -type d -exec rm -rf {} +
+	tar -C package -czf package/$(PKG_ID).tar.gz $(PKG_ID)
+
+dist: package/$(PKG_ID).tar.gz
+	cp package/$(PKG_ID).tar.gz .
+
+package: check_distribution package/$(PKG_ID).tar.gz
+	${MAKE} -C package -f $(PWD)/deps/node_package/Makefile
+
+pkgclean:
 	rm -rf package
-	mkdir -p package/fedora-23-x86_64/x86_64
-
-package: rel rpmdirs
-	make -C onepanel rel CONFIG=config/globalregistry.config
-	./rel/rpm/create_rpm
-	mv rel/globalregistry-*.rpm package/fedora-23-x86_64/x86_64
-	tar -czf rpm.tar.gz package
 
 docker:
 	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \
-                         --email $(DOCKER_REG_EMAIL) --name globalregistry \
-                         --build-arg VERSION=$(GLOBALREGISTRY_VERSION) \
-                         --publish --remove packaging
+                     --email $(DOCKER_REG_EMAIL) --name oz_worker \
+                     --build-arg VERSION=$(PKG_VERSION) \
+                     --publish --remove packaging

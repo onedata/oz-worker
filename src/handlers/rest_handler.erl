@@ -158,18 +158,19 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
             true -> {true, Req, State#rstate{client = #client{}}};
             false ->
                 PeerCert = case ssl:peercert(cowboy_req:get(socket, Req2)) of
-                               {ok, PeerCert1} -> PeerCert1;
-                               {error, no_peercert} ->
-                                   throw({silent_error, Req2})
-                           end,
+                    {ok, PeerCert1} -> PeerCert1;
+                    {error, no_peercert} ->
+                        throw({silent_error, Req2})
+                end,
 
-                ProviderId = case grpca:verify_provider(PeerCert) of
-                                 {ok, ProviderId1} -> ProviderId1;
-                                 {error, {bad_cert, Reason}} ->
-                                     ?warning("Attempted authentication with "
-                                     "bad peer certificate: ~p", [Reason]),
-                                     throw({silent_error, Req2})
-                             end,
+                ProviderId = case worker_proxy:call(ozpca_worker,
+                    {verify_provider, PeerCert}) of
+                    {ok, ProviderId1} -> ProviderId1;
+                    {error, {bad_cert, Reason}} ->
+                        ?warning("Attempted authentication with "
+                        "bad peer certificate: ~p", [Reason]),
+                        throw({silent_error, Req2})
+                end,
 
                 {Macaroon, DischargeMacaroons, Req3} =
                     parse_macaroons_from_headers(Req2),
@@ -228,7 +229,7 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
 resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
     {Method, Req2} = cowboy_req:method(Req),
     case Method of
-    %% Global Registry REST API always creates new resource on POST
+        %% OZ REST API always creates new resource on POST
         <<"POST">> -> {false, Req2, State};
         _ ->
             {ResId, Req3} = get_res_id(Req2, State),
@@ -246,10 +247,10 @@ resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
 accept_resource_json(Req, #rstate{} = State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
     Data = try
-               json_utils:decode(Body)
-           catch
-               _:_ -> malformed
-           end,
+        json_utils:decode(Body)
+    catch
+        _:_ -> malformed
+    end,
 
     case Data =:= malformed of
         true ->
@@ -380,9 +381,9 @@ binary_to_method(<<"DELETE">>) -> delete.
 get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     ResId = case proplists:get_value(id, Bindings) of
-                undefined -> ClientId;
-                X -> X
-            end,
+        undefined -> ClientId;
+        X -> X
+    end,
     {ResId, Req2}.
 
 %%--------------------------------------------------------------------

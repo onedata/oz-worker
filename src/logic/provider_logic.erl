@@ -12,10 +12,9 @@
 -module(provider_logic).
 -author("Konrad Zemek").
 
--include("dao/dao_types.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
-
--include_lib("dao/include/common.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -23,8 +22,8 @@
 -export([create/4, modify/2, exists/1]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
--export([test_connection/1]).
--export([get_default_provider_for_user/1]).
+-export([test_connection/1, check_provider_connectivity/1]).
+-export([choose_provider_for_user/1]).
 
 %%%===================================================================
 %%% API
@@ -32,63 +31,66 @@
 
 %%--------------------------------------------------------------------
 %% @doc Create a provider's account.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(ClientName :: binary(), URLs :: [binary()],
     RedirectionPoint :: binary(), CSR :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
-    ProviderId = dao_helper:gen_uuid(),
-    BinProviderId = str_utils:to_binary(ProviderId),
-    {ok, ProviderCertPem, Serial} = grpca:sign_provider_req(BinProviderId, CSRBin),
-    dao_adapter:save(#db_document{uuid = ProviderId, record =
-    #provider{client_name = ClientName, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial}}),
+    ProviderId = datastore_utils:gen_uuid(),
+    {ok, {ProviderCertPem, Serial}} = worker_proxy:call(ozpca_worker,
+        {sign_provider_req, ProviderId, CSRBin}),
 
-    {ok, BinProviderId, ProviderCertPem}.
+    Provider = #provider{client_name = ClientName, urls = URLs,
+        redirection_point = RedirectionPoint, serial = Serial},
+    provider:save(#document{key = ProviderId, value = Provider}),
+
+    {ok, ProviderId, ProviderCertPem}.
 
 %%--------------------------------------------------------------------
 %% @doc Modify provider's details.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
     ok.
 modify(ProviderId, Data) ->
-    Doc = dao_adapter:provider_doc(ProviderId),
-    #db_document{record = Provider} = Doc,
-
-    URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
-    RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
-    ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
-
-    ProviderNew = Provider#provider{urls = URLs, redirection_point = RedirectionPoint, client_name = ClientName},
-    Res = dao_adapter:save(Doc#db_document{record = ProviderNew}),
+    {ok, _} = provider:update(ProviderId, fun(Provider) ->
+        URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
+        RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
+        ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
+        {ok, Provider#provider{
+            urls = URLs,
+            redirection_point = RedirectionPoint,
+            client_name = ClientName
+        }}
+    end),
     ok.
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether a Provider exists.
-%% Throws exception when call to dao fails.
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(ProviderId :: binary()) ->
     boolean().
 exists(ProviderId) ->
-    dao_adapter:provider_exists(ProviderId).
+    provider:exists(ProviderId).
 
 %%--------------------------------------------------------------------
 %% @doc Get provider's details.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_data(ProviderId) ->
-    #provider{
+    {ok, #document{value = #provider{
         client_name = ClientName,
         urls = URLs,
-        redirection_point = RedirectionPoint} = dao_adapter:provider(ProviderId),
+        redirection_point = RedirectionPoint
+    }}} = provider:get(ProviderId),
 
     {ok, [
         {clientName, ClientName},
@@ -99,36 +101,40 @@ get_data(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc Get Spaces supported by the provider.
-%% Throws exception when call to dao fails, or provider doesn't exist.
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_spaces(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_spaces(ProviderId) ->
-    #provider{spaces = Spaces} = dao_adapter:provider(ProviderId),
+    {ok, #document{value = #provider{spaces = Spaces}}} = provider:get(ProviderId),
     {ok, [{spaces, Spaces}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Remove provider's account.
-%% Throws exception when call to dao fails, or provider is already removed.
+%% Throws exception when call to the datastore fails, or provider is already removed.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove(ProviderId :: binary()) ->
     true.
 remove(ProviderId) ->
-    #provider{spaces = Spaces, serial = Serial} = dao_adapter:provider(ProviderId),
+    {ok, #document{value = #provider{spaces = Spaces, serial = Serial}}} = provider:get(ProviderId),
 
     lists:foreach(fun(SpaceId) ->
-        SpaceDoc = dao_adapter:space_doc(SpaceId),
-        #db_document{record = #space{providers = Providers, size = Size} = Space} = SpaceDoc,
-        SpaceNew = Space#space{providers = lists:delete(ProviderId, Providers), size = proplists:delete(ProviderId, Size)},
-        dao_adapter:save(SpaceDoc#db_document{record = SpaceNew}),
-        op_channel_logic:space_modified(SpaceNew#space.providers, SpaceId, SpaceNew),
-        op_channel_logic:space_removed([ProviderId], SpaceId)
+        {ok, _} = space:update(SpaceId, fun(Space) ->
+            #space{providers = Providers, size = Size} = Space,
+            {ok, Space#space{
+                providers = lists:delete(ProviderId, Providers),
+                size = proplists:delete(ProviderId, Size)
+            }}
+        end)
     end, Spaces),
 
-    grpca:revoke(Serial),
-    dao_adapter:provider_remove(ProviderId).
+    worker_proxy:call(ozpca_worker, {revoke, Serial}),
+    case (provider:delete(ProviderId)) of
+        ok -> true;
+        _ -> flase
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Tests connection to given url.
@@ -151,23 +157,41 @@ test_connection([], Acc) ->
     {ok, lists:reverse(Acc)};
 test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
     ConnStatus = case http_client:get(Url, [], <<>>, [insecure]) of
-                     {ok, 200, _, _} -> ok;
-                     _ -> error
-                 end,
+        {ok, 200, _, _} -> ok;
+        _ -> error
+    end,
     test_connection(Rest, [{Url, ConnStatus} | Acc]);
 test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
-    ConnStatus = 
+    ConnStatus =
         case http_client:get(Url, [], <<>>, [insecure]) of
-                     {ok, 200, _, ServiceName} ->
-                         ok;
-                     Error ->
-                         ?debug("Checking connection to ~p failed with error: ~n~p",
-                             [Url, Error]),
-                         error
-                 end,
+            {ok, 200, _, ServiceName} ->
+                ok;
+            Error ->
+                ?debug("Checking connection to ~p failed with error: ~n~p",
+                    [Url, Error]),
+                error
+        end,
     test_connection(Rest, [{Url, ConnStatus} | Acc]);
 test_connection(_, _) ->
     {error, bad_data}.
+
+
+% Checks if given provider (by ID) is alive and responding.
+-spec check_provider_connectivity(ProviderId :: binary()) -> boolean().
+check_provider_connectivity(ProviderId) ->
+    {ok, Data} = provider_logic:get_data(ProviderId),
+    RedirectionPoint = proplists:get_value(redirectionPoint, Data),
+    % @todo check provider_id_endpoint
+%%    ProviderConnCheckEndpoint = <<RedirectionPoint/binary, ?provider_id_endpoint>>,
+    ProviderConnCheckEndpoint = RedirectionPoint,
+    % We do not need to check for provider's certificate - some providers do not have a signed one.
+    % Plus user's browser will do the verification.
+    case http_client:get(ProviderConnCheckEndpoint, [], <<>>, [insecure]) of
+        % @todo check provider_id_endpoint
+%%        {ok, _, _, ProviderId} -> true;
+        {ok, _, _, _} -> true;
+        _ -> false
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Returns provider id of provider that has been chosen
@@ -178,9 +202,9 @@ test_connection(_, _) ->
 %% one of them will be chosen randomly.
 %% @end
 %%--------------------------------------------------------------------
--spec get_default_provider_for_user(Referer :: binary() | undefined) ->
+-spec choose_provider_for_user(Referer :: binary() | undefined) ->
     {ok, ProviderID :: binary()} | {error, no_provider}.
-get_default_provider_for_user(UserID) ->
+choose_provider_for_user(UserID) ->
     % Check if the user has a default space and if it is supported.
     {ok, [{spaces, Spaces}, {default, DefaultSpace}]} =
         user_logic:get_spaces(UserID),

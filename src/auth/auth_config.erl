@@ -28,7 +28,8 @@
 %%--------------------------------------------------------------------
 -spec load_auth_config() -> ok.
 load_auth_config() ->
-    Config = case file:consult(?auth_config_file_path) of
+    {ok, AuthConfigFile} = application:get_env(?APP_Name, auth_config_file),
+    Config = case file:consult(AuthConfigFile) of
                  {ok, []} -> [];
                  {ok, [Cfg]} when is_list(Cfg) -> Cfg;
                  _ -> []
