@@ -39,7 +39,7 @@ create(User) ->
 %%--------------------------------------------------------------------
 %% @doc Retrieves user from the database.
 %%--------------------------------------------------------------------
--spec get_user(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
+-spec get_user(Key :: binary() | {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     {ok, #onedata_user{}} | {error, any()}.
 get_user(Key) ->
@@ -54,7 +54,7 @@ get_user(Key) ->
 %%--------------------------------------------------------------------
 %% @doc Retrieves user doc from the database.
 %%--------------------------------------------------------------------
--spec get_user_doc(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
+-spec get_user_doc(Key :: binary() | {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     {ok, #document{}} | {error, any()}.
 get_user_doc(Key) ->
@@ -264,7 +264,7 @@ get_providers(UserId) ->
 %%--------------------------------------------------------------------
 %% @doc Rreturns true if user was found by a given key.
 %%--------------------------------------------------------------------
--spec exists(Key :: binary() | {connected_account_user_id, binary()} |
+-spec exists(Key :: binary() | {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     boolean().
 exists(Key) ->

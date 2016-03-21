@@ -47,7 +47,7 @@ page_init() ->
         new_user ->
             UserId = g_session:get_user_id(),
             ?info("User ~p logged in for the first time", [UserId]),
-            {redirect_relative, ?page_after_login};
+            {redirect_relative, <<?page_after_login>>};
         {error, ErrorId} ->
             ?info("Error: ~p", [ErrorId]),
             {redirect_relative, <<"/">>}

@@ -25,11 +25,11 @@ export default Ember.Component.extend({
     },
     {
       link: '#',
-      image: logoFor('indigo', 'png')
+      image: logoFor('indigo')
     },
     {
       link: '#',
-      image: logoFor('plgrid', 'png')
+      image: logoFor('plgrid')
     },
     {
       link: '#',
