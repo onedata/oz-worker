@@ -47,7 +47,7 @@
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).
--export([create_provider_with_uuid/5]).
+-export([create_provider_with_uuid/7]).
 -export([create_user_with_uuid/2]).
 -export([create_group_with_uuid/3]).
 -export([create_space_with_uuid/3, create_space_with_uuid/5, create_space_with_provider/5]).
@@ -182,12 +182,16 @@ destroy_test_entities(Users, Groups, Spaces) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_with_uuid(ClientName :: binary(), URLs :: [binary()],
+-spec create_provider_with_uuid(Latitude :: float() | undefined,
+    Longitude :: float() | undefined,
+    ClientName :: binary(), URLs :: [binary()],
     RedirectionPoint :: binary(), CSR :: binary(), UUID :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
-create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
+create_provider_with_uuid(Latitude, Longitude, ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
     {ok, {ProviderCertPem, Serial}} = ozpca:sign_provider_req(UUID, CSRBin),
-    Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
+    Provider = #provider{client_name = ClientName, urls = URLs,
+        redirection_point = RedirectionPoint, serial = Serial,
+        latitude = Latitude, longitude = Longitude},
     provider:save(#document{key = UUID, value = Provider}),
     {ok, UUID, ProviderCertPem}.
 

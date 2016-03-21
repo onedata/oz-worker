@@ -109,10 +109,13 @@ accept_resource(provider_dev, post, _ProviderId, Data, _Client, Req) ->
     CSR = rest_module_helper:assert_key(<<"csr">>, Data, binary, Req),
     RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary, Req),
     UUID = rest_module_helper:assert_key(<<"uuid">>, Data, binary, Req),
+    Latitude = rest_module_helper:assert_type(<<"latitude">>, Data, binary, Req),
+    Longitude = rest_module_helper:assert_type(<<"longitude">>, Data, binary, Req),
 
     % Create provider with given UUID - UUID is the same as the provider name.
     {ok, ProviderId, SignedPem} =
-        dev_utils:create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSR, UUID),
+        dev_utils:create_provider_with_uuid(Latitude, Longitude,
+            ClientName, URLs, RedirectionPoint, CSR, UUID),
     Body = json_utils:encode([{<<"providerId">>, ProviderId}, 
         {<<"certificate">>, SignedPem}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),
@@ -122,8 +125,11 @@ accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
     URLs = rest_module_helper:assert_key(<<"urls">>, Data, list_of_bin, Req),
     CSR = rest_module_helper:assert_key(<<"csr">>, Data, binary, Req),
     RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary, Req),
+    Latitude = rest_module_helper:assert_type(<<"latitude">>, Data, float, Req),
+    Longitude = rest_module_helper:assert_type(<<"longitude">>, Data, float, Req),
 
-    {ok, ProviderId, SignedPem} = provider_logic:create(ClientName, URLs, RedirectionPoint, CSR),
+    {ok, ProviderId, SignedPem} = provider_logic:create(Latitude, Longitude,
+        ClientName, URLs, RedirectionPoint, CSR),
     Body = json_utils:encode([{<<"providerId">>, ProviderId},
         {<<"certificate">>, SignedPem}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),
@@ -132,6 +138,9 @@ accept_resource(provider, patch, ProviderId, Data, _Client, Req) ->
     rest_module_helper:assert_type(<<"clientName">>, Data, binary, Req),
     rest_module_helper:assert_type(<<"urls">>, Data, list_of_bin, Req),
     rest_module_helper:assert_type(<<"redirectionPoint">>, Data, binary, Req),
+    rest_module_helper:assert_type(<<"latitude">>, Data, float, Req),
+    rest_module_helper:assert_type(<<"longitude">>, Data, float, Req),
+
     ok = provider_logic:modify(ProviderId, Data),
     {true, Req};
 accept_resource(spaces, post, _ProviderId, Data, Client, Req) ->

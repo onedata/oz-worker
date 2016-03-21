@@ -40,7 +40,9 @@
     redirection_point :: binary(),
     urls :: [binary()],
     spaces = [] :: [SpaceId :: binary()],
-    serial :: binary()
+    serial :: binary(),
+    latitude = undefined :: float() | undefined,
+    longitude = undefined :: float() | undefined
 }).
 
 %% This record defines a space that can be used by users to store their files
