@@ -4,16 +4,18 @@
   display: inline-block;
   height: 72px;
   width: 72px;
-  // pull down
-  padding-top: 2px;
   margin-top: 10px;
   margin-bottom: 10px;
   text-align: center;
   line-height: 72px;
-  font-size: 42px;
+  font-size: 56px;
   color: white !important;
   text-decoration: none !important;
   cursor: pointer; cursor: hand;
+
+  .one-icon {
+    line-height: inherit;
+  }
 
   &.github {
     background-color: $color-login-github;
