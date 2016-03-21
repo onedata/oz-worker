@@ -15,10 +15,19 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 
+% Describes state of batch.
+-record(outbox, {
+    timer_expires :: pos_integer(),
+    timer :: timer:tref(),
+    buffer :: [term()]
+}).
+
+% Stores data used to provide subscription updates
 -record(subscriptions_state, {
     cache :: gb_trees:tree()
 }).
 
+% Stores state of provider subscription
 -record(provider_subscription, {
     connections = [] :: [pid()],
     provider :: binary(),

@@ -22,7 +22,7 @@
 -export([init/1, handle/1, cleanup/0]).
 
 %% API
--export([push_messages/2]).
+-export([push_messages/2, fetch_from_cache_and_db/1]).
 
 %%%===================================================================
 %%% API
@@ -127,8 +127,15 @@ fetch_history(ResumeAt, Missing) ->
             case get_seq_to_fetch(Newest, ResumeAt, Missing) of
                 [] -> ok;
                 ToFetch ->
-                    Misses = fetch_from_cache(ToFetch),
-                    fetch_from_db(Misses)
+                    case fetch_from_cache(ToFetch) of
+                        [] -> ok;
+                        Misses ->
+                            {ok, Backoff} = application:get_env(?APP_Name,
+                                wait_for_latest_changes_in_cache),
+                            {ok, _} = timer:apply_after(Backoff, ?MODULE,
+                                fetch_from_cache_and_db, [Misses]),
+                            ok
+                    end
             end;
         _ ->
             fetch_from_db(Missing)
@@ -147,6 +154,19 @@ get_seq_to_fetch(Newest, ResumeAt, Missing) ->
         true -> Missing;
         false -> Missing ++ lists:seq(ResumeAt, Newest)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches old changes from both cache and db.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec fetch_from_cache_and_db(Seqs :: [subscriptions:seq()]) -> ok.
+fetch_from_cache_and_db([]) -> ok;
+fetch_from_cache_and_db(Seqs) ->
+    Misses = fetch_from_cache(Seqs),
+    fetch_from_db(Misses).
 
 %%--------------------------------------------------------------------
 %% @doc @private
@@ -214,7 +234,7 @@ ignore_all(Seqs) ->
     ?warning("Ignoring ~p", [Seqs]),
     Subscriptions = subscriptions:all(),
     lists:foreach(fun(#document{value = #provider_subscription{provider = ID}}) ->
-        outbox:put(ID, fun push_messages/2, lists:map(fun(Seq) ->
+        outboxes:put(ID, fun push_messages/2, lists:map(fun(Seq) ->
             translator:get_ignore_msg(Seq)
         end, Seqs))
     end, Subscriptions), ok.
@@ -254,7 +274,7 @@ handle_change(Updates) ->
                         end}
                 end
             end, UpdatesWithProviders),
-            outbox:put(ID, fun push_messages/2, Messages)
+            outboxes:put(ID, fun push_messages/2, Messages)
         catch
             E:R ->
                 ?error_stacktrace("Problem with handler ~p:~p", [E, R])

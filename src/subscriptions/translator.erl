@@ -12,6 +12,7 @@
 -module(translator).
 -author("Michal Zmuda").
 
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -70,11 +71,14 @@ get_msg(_Seq, _Doc, _Model) ->
 
 -spec revs_prop(Doc :: datastore:document()) -> term().
 revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
+    {ok, MaxSize} = application:get_env(?APP_Name, subscriptions_sent_revisions_limit),
     {Start, Hashes} = Revs,
-    Numbers = lists:seq(Start, Start - length(Hashes) + 1, -1),
+    Size = min(MaxSize, length(Hashes)),
+
+    Numbers = lists:seq(Start, Start - Size + 1, -1),
     PrefixedRevs = lists:zipwith(fun(N, H) ->
         list_to_binary(integer_to_list(N) ++ "-" ++ binary_to_list(H))
-    end, Numbers, Hashes),
+    end, Numbers, lists:sublist(Hashes, Size)),
     {revs, PrefixedRevs};
 revs_prop(#document{rev = Rev}) ->
     {revs, [Rev]}.

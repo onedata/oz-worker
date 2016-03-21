@@ -11,7 +11,7 @@
 %%% Each subscriptions_worker maintains separate batches.
 %%% @end
 %%%-------------------------------------------------------------------
--module(outbox).
+-module(outboxes).
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
@@ -20,13 +20,6 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([push/2, put/3]).
-
-% Describes state of batch.
--record(outbox, {
-    timer_expires :: pos_integer(),
-    timer :: timer:tref(),
-    buffer :: [term()]
-}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -38,12 +31,12 @@
     ID :: term(),
     PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> ok).
 push(ID, PushFun) ->
-    worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
-        (undefined) -> undefined;
-        (Outbox = #outbox{buffer = Buffer, timer = TRef}) ->
-            case TRef of undefined -> ok; _ -> timer:cancel(TRef) end,
-            PushFun(ID, Buffer),
-            Outbox#outbox{buffer = [], timer = undefined}
+    outbox:create_or_update(#document{key = ID, value = #outbox{
+        buffer = [], timer = undefined, timer_expires = undefined
+    }}, fun(Outbox = #outbox{buffer = Buffer, timer = TRef}) ->
+        case TRef of undefined -> ok; _ -> timer:cancel(TRef) end,
+        PushFun(ID, Buffer),
+        {ok, Outbox#outbox{buffer = [], timer = undefined}}
     end).
 
 %%--------------------------------------------------------------------
@@ -61,20 +54,20 @@ put(ID, PushFun, Messages) ->
     TimerTTL = batch_ttl(),
     TimerExpires = Now + TimerTTL,
 
-    worker_host:state_update(?SUBSCRIPTIONS_WORKER_NAME, {msg_buffer, ID}, fun
-        (undefined) ->
-            TRef = setup_timer(ID, PushFun),
-            #outbox{buffer = Messages,
-                timer = TRef, timer_expires = TimerExpires};
+    TRef = setup_timer(ID, PushFun),
+    {ok, _} = outbox:create_or_update(#document{key = ID, value = #outbox{
+        buffer = Messages, timer = TRef, timer_expires = TimerExpires
+    }}, fun
         (Outbox = #outbox{buffer = Buffer, timer = OldTimer, timer_expires =
         % timer expires after twice the ttl
         OldExpires}) when OldTimer =:= undefined; OldExpires < (Now - TimerTTL) ->
-            TRef = setup_timer(ID, PushFun),
-            Outbox#outbox{buffer = Messages ++ Buffer,
-                timer = TRef, timer_expires = TimerExpires};
+            {ok, Outbox#outbox{buffer = Messages ++ Buffer,
+                timer = TRef, timer_expires = TimerExpires}};
         (Outbox = #outbox{buffer = Buffer}) ->
-            Outbox#outbox{buffer = Messages ++ Buffer}
-    end).
+            timer:cancel(TRef),
+            {ok, Outbox#outbox{buffer = Messages ++ Buffer}};
+        (_Outbox) -> ?warning("Unexpected document ~p", [_Outbox])
+    end), ok.
 
 %%%===================================================================
 %%% Internal functions

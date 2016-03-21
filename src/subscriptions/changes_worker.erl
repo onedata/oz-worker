@@ -23,7 +23,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% worker_plugin_behaviour callbacks
--export([init/1, handle/1, cleanup/0, change_callback/3, fetch_last_seq/0]).
+-export([init/1, handle/1, cleanup/0, change_callback/3]).
 
 -define(STREAM_GLOBAL_NAME, subscriptions_current_changes_stream).
 
@@ -127,6 +127,7 @@ start_changes_stream() ->
     ok.
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Get latest sequence number from datastore.
 %% @end

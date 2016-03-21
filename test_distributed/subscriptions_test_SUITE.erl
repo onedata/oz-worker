@@ -40,8 +40,8 @@
     simple_delete_test/1,
     stress_test/1]).
 
--define(MESSAGES_WAIT_TIMEOUT, timer:seconds(3)).
--define(MESSAGES_RECEIVE_ATTEMPTS, 40).
+-define(MESSAGES_WAIT_TIMEOUT, timer:seconds(2)).
+-define(MESSAGES_RECEIVE_ATTEMPTS, 60).
 
 %% appends function name to id (atom) and yields binary accepted by the db
 -define(ID(Id), list_to_binary(
@@ -64,20 +64,20 @@
 
 all() -> ?ALL([
     multiple_updates_test,
-    no_space_update_test,
     space_update_through_support_test,
     space_update_through_users_test,
-    no_user_update_test,
     user_update_test,
     simple_delete_test,
-    no_group_update_test,
     group_update_through_users_test,
     updates_for_added_user_test,
     updates_have_revisions_test,
     updates_for_added_user_have_revisions_test,
     fetches_changes_older_than_in_cache,
     fetches_changes_from_both_cache_and_db,
-    fetches_changes_when_cache_has_gaps
+    fetches_changes_when_cache_has_gaps,
+    no_space_update_test,
+    no_user_update_test,
+    no_group_update_test
 ]).
 
 no_space_update_test(Config) ->
@@ -620,7 +620,7 @@ verify_messages_absent(Context, Forbidden) ->
 init_messages(Node, ProviderID, Users) ->
     call_worker(Node, {add_connection, ProviderID, self()}),
 
-    Start = case rpc:call(Node, changes_worker, fetch_last_seq, []) of
+    Start = case rpc:call(Node, changes_cache, newest_seq, []) of
         {ok, Val} -> Val; _ -> 0
     end,
 
