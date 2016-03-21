@@ -37,7 +37,7 @@ push(ID, PushFun) ->
         case TRef of undefined -> ok; _ -> timer:cancel(TRef) end,
         PushFun(ID, Buffer),
         {ok, Outbox#outbox{buffer = [], timer = undefined}}
-    end).
+    end), ok.
 
 %%--------------------------------------------------------------------
 %% @doc
