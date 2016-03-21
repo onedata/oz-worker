@@ -7,7 +7,7 @@ export default Ember.Component.extend({
   noProviders: function() {
     let providers = this.get('providers');
     return providers.get('length') === 0;
-  }.property('providers'),
+  }.property('providers.length'),
 
   didInsertElement() {
     this.$().find('#providers-list').searchable({
