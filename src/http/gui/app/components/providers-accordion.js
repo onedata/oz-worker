@@ -2,7 +2,7 @@ import Ember from 'ember';
 
 // TODO: shared base class with spaces-accordion
 export default Ember.Component.extend({
-  classNames: ['providers-accordion', 'accordion-content'],
+  classNames: ['secondary-accordion', 'providers-accordion', 'accordion-content'],
 
   noProviders: function() {
     let providers = this.get('providers');

@@ -1,15 +1,15 @@
-<div class="accordion-group spaces-accordion-group">
-  <div class="accordion-heading spaces-accordion-heading">
-    <a class="accordion-toggle spaces-accordion-toggle">
+<div class="accordion-group secondary-accordion-group spaces-accordion-group">
+  <div class="accordion-heading secondary-accordion-heading spaces-accordion-heading">
+    <a class="accordion-toggle secondary-accordion-toggle spaces-accordion-toggle">
       <div class="" data-toggle="collapse" href="#collapse-space-{{space.id}}">
-        <div class="space-icon">
+        <div class="secondary-icon space-icon">
           {{#if space.isDefault}}
             {{one-icon icon='space-default'}}
           {{else}}
             {{one-icon icon='space'}}
           {{/if}}
         </div>
-        <div class="space-header">
+        <div class="secondary-header space-header">
           {{space.name}}
         </div>
       </div>
@@ -32,7 +32,8 @@
       </div>
     </a>
   </div>
-  <div id="collapse-space-{{space.id}}" class="accordion-body spaces-accordion-body sidebar-list collapse">
+  <div id="collapse-space-{{space.id}}"
+    class="accordion-body secondary-accordion-body spaces-accordion-body sidebar-list collapse">
     <div class="accordion-inner">
       <ul>
         {{#each space.providers as |p|}}

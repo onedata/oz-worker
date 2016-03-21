@@ -187,6 +187,8 @@ $search-box-height: 36px;
   background: $color-onezone-sidebar-bg;
 
   $onezone-accordion-heading-height: 75px;
+  $onezone-secondary-accordion-heading-height: 32px;
+  $onezone-secondary-accordion-item-height: 35px;
 
   input {
     border: none;
@@ -362,16 +364,13 @@ $search-box-height: 36px;
   //    inside there should be classes: token-icon, token-header, select-button,
   //    .trash-button
 
-  $spaces-item-height: 35px;
-
-  .tokens-accordion-toggle {
-    // TODO: pull up, because for unknow reasons, its too high
-    margin-top: 2px;
-
+  .tokens-container {
+    padding-bottom: 5px;
     .token-icon {
       display: table-cell;
       width: 30px;
-      line-height: $spaces-item-height;
+      height: $onezone-secondary-accordion-heading-height;
+      line-height: $onezone-secondary-accordion-heading-height;
     }
     .token-header {
       display: table-cell;
@@ -379,20 +378,21 @@ $search-box-height: 36px;
       padding-right: 15px;
       text-transform: none;
       font-size: 0.8em;
-      line-height: $spaces-item-height;
+      line-height: $onezone-secondary-accordion-heading-height;
 
       input {
         width: 100%;
         padding: 0;
         margin: 0;
-        line-height: $spaces-item-height;
+        line-height: $onezone-secondary-accordion-heading-height;
+        text-overflow: ellipsis;
         background: inherit;
       }
     }
     .select-button {
       display: table-cell;
       width: 32px;
-      line-height: $spaces-item-height;
+      line-height: $onezone-secondary-accordion-heading-height;
       cursor: pointer; cursor: hand;
 
       // not hovered - invisible
@@ -401,7 +401,7 @@ $search-box-height: 36px;
     .trash-button {
       display: table-cell;
       width: 32px;
-      line-height: $spaces-item-height;
+      line-height: $onezone-secondary-accordion-heading-height;
       cursor: pointer; cursor: hand;
 
       // not hovered - invisible
@@ -418,34 +418,35 @@ $search-box-height: 36px;
     }
   }
 
-  .tokens-accordion {
-    padding-bottom: 5px;
+  .sidebar-secondary-container {
+    color: white;
+
+    .one-icon {
+      font-size: 28px;
+      text-align: center;
+    }
   }
 
-  .providers-accordion, .spaces-accordion, .tokens-accordion {
-    color: white;
-    .one-icon {
-      font-size: 15pt;
-    }
+  .secondary-accordion {
 
-    .providers-accordion-item, .spaces-accordion-item, .tokens-accordion-item {
+    .secondary-accordion-item {
       &:first-of-type {
         margin-top: 20px;
       }
     }
 
-    .providers-accordion-group, .spaces-accordion-group, .tokens-accordion-group {
+    .secondary-accordion-group {
       border: none;
 
-      .providers-accordion-heading, .spaces-accordion-heading, .tokens-accordion-heading {
-        height: $spaces-item-height;
-        line-height: $spaces-item-height;
+      .secondary-accordion-heading {
+        height: $onezone-secondary-accordion-heading-height;
+        line-height: $onezone-secondary-accordion-heading-height;
 
-        .providers-accordion-toggle, .spaces-accordion-toggle, .tokens-accordion-toggle {
+        .secondary-accordion-toggle {
           display: table;
           width: 100%;
-          height: $spaces-item-height;
-          line-height: $spaces-item-height;
+          max-height: $onezone-secondary-accordion-heading-height;
+          line-height: $onezone-secondary-accordion-heading-height;
           padding-left: 10px;
           padding-right: 24px;
           color: white;
@@ -453,6 +454,10 @@ $search-box-height: 36px;
 
           text-decoration: none !important;
           background-color: #3A3A3A;
+
+          > * {
+            display: table-cell;
+          }
 
           .go-to-provider {
             cursor: pointer; cursor: hand;
@@ -466,14 +471,19 @@ $search-box-height: 36px;
 
           &.crate-new-text {}
 
-          .provider-icon, .space-icon {
+          .secondary-icon, .provider-icon, .space-icon {
             display: table-cell;
-            width: 30px;
+            width: 32px;
+
+            .one-icon {
+              font-size: 28px;
+              line-height: inherit;
+            }
           }
-          .provider-header, .space-header {
+          .secondary-header, .provider-header, .space-header {
             display: table-cell;
             padding-left: 8px;
-            line-height: $spaces-item-height;
+            line-height: $onezone-secondary-accordion-heading-height;
             vertical-align: middle;
             text-transform: none;
             font-size: 0.8em;
@@ -500,6 +510,7 @@ $search-box-height: 36px;
           .star-toggle {
             display: table-cell;
             width: 40px;
+            font-size: 30px;
             cursor: pointer; cursor: hand;
 
             .star-empty {
@@ -512,7 +523,7 @@ $search-box-height: 36px;
             display: table-cell;
             position: relative;
             width: 50px;
-            height: 35px;
+            height: $onezone-secondary-accordion-heading-height;
             overflow-x: hidden;
             cursor: pointer; cursor: hand;
             @include vendor-prefix(user-select, none);
@@ -522,7 +533,7 @@ $search-box-height: 36px;
               top: 0;
               left: 0;
               .one-icon {
-                font-size: 1.1em;
+                font-size: 28px;
               }
             }
             .label {
@@ -531,8 +542,8 @@ $search-box-height: 36px;
               left: 0;
               display: table-cell;
               vertical-align: middle;
-              height: 35px;
-              line-height: 35px;
+              height: $onezone-secondary-accordion-heading-height;;
+              line-height: $onezone-secondary-accordion-heading-height;;
               width: 30px;
               text-align: center;
               padding: 0;
@@ -543,7 +554,7 @@ $search-box-height: 36px;
         }
       }
 
-      .providers-accordion-body, .spaces-accordion-body {
+      .secondary-accordion-body {
         background-color: #3E3E3E;
 
         ul {
@@ -649,8 +660,8 @@ $search-box-height: 36px;
         position: absolute;
         display: table-cell;
         vertical-align: middle;
-        height: 35px;
-        line-height: 35px;
+        height: $onezone-secondary-accordion-item-height;
+        line-height: $onezone-secondary-accordion-item-height;
         width: 32px;
         text-align: center;
         padding: 0;

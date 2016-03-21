@@ -3,7 +3,7 @@ import Ember from 'ember';
 
 export default Ember.Component.extend({
     store: Ember.inject.service('store'),
-    classNames: ['spaces-accordion', 'accordion-content'],
+    classNames: ['secondary-accordion', 'spaces-accordion', 'accordion-content'],
 
     /** If true, the createNewSpace button is a input field */
     createNewSpaceEditing: false,

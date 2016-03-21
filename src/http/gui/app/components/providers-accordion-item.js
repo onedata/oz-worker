@@ -18,7 +18,7 @@ export default Ember.Component.extend({
     return (provider && provider.get('isWorking')) ? 'provider-working' : 'provider-not-working';
   }.property('provider.isWorking'),
 
-  classNames: ['providers-accordion-item'],
+  classNames: ['secondary-accordion-item', 'providers-accordion-item'],
 
   didInsertElement() {
     this.$().find('.floater').each(function() {

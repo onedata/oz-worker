@@ -1,22 +1,22 @@
 <!-- TODO: class list-group-item -->
-<div class="accordion-group providers-accordion-group">
+<div class="accordion-group secondary-accordion-group providers-accordion-group">
   <div class="item">
-    <div class="accordion-heading providers-accordion-heading">
-      <a class="accordion-toggle providers-accordion-toggle">
+    <div class="accordion-heading secondary-accordion-heading providers-accordion-heading">
+      <a class="accordion-toggle secondary-accordion-toggle providers-accordion-toggle">
         <div class="go-to-provider" {{action "goToProvider"}}>
-          <div class="provider-icon">
+          <div class="secondary-icon provider-icon">
             {{one-icon icon=iconName color=iconColor}}
           </div>
-          <div class="provider-header">
+          <div class="secondary-header provider-header">
             {{provider.name}}
           </div>
         </div>
         <div class="star-toggle" {{action "toggleDefault"}}>
           {{#if provider.isDefault}}
-            {{one-icon icon="star"}}
+            {{one-icon icon="home"}}
           {{else}}
             <div class="star-empty">
-              {{one-icon icon="star-empty"}}
+              {{one-icon icon="home-outline"}}
             </div>
           {{/if}}
         </div>
@@ -30,7 +30,7 @@
         </div>
       </a>
     </div>
-    <div id="collapse-provider-{{provider.id}}" class="accordion-body providers-accordion-body sidebar-list collapse">
+    <div id="collapse-provider-{{provider.id}}" class="accordion-body secondary-accordion-body providers-accordion-body sidebar-list collapse">
       <div class="accordion-inner">
         <ul>
           {{#each provider.spaces as |s|}}
