@@ -30,6 +30,8 @@
 %% {@link rpc_backend_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
+-spec handle(FunctionId :: binary(), RequestData :: term()) ->
+    ok | {ok, ResponseData :: term()} | gui_error:error_result().
 handle(<<"sessionDetails">>, _) ->
     {ok, #document{value = #onedata_user{name = Name}}} =
         onedata_user:get(g_session:get_user_id()),

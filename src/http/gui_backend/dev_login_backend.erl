@@ -30,6 +30,7 @@
 %% {@link page_backend_behaviour} callback page_init/0.
 %% @end
 %%--------------------------------------------------------------------
+-spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
     {ok, UserIds} = onedata_user:get_all_ids(),
     ?dump(UserIds),
