@@ -113,10 +113,10 @@ accept_resource(provider_dev, post, _ProviderId, Data, _Client, Req) ->
     Longitude = rest_module_helper:assert_type(<<"longitude">>, Data, binary, Req),
 
     % Create provider with given UUID - UUID is the same as the provider name.
-    {ok, ProviderId, SignedPem} =
-        dev_utils:create_provider_with_uuid(Latitude, Longitude,
-            ClientName, URLs, RedirectionPoint, CSR, UUID),
-    Body = json_utils:encode([{<<"providerId">>, ProviderId}, 
+    {ok, ProviderId, SignedPem} = dev_utils:create_provider_with_uuid(
+        ClientName, URLs, RedirectionPoint, CSR, UUID,
+        #{latitude => Latitude, longitude => Longitude}),
+    Body = json_utils:encode([{<<"providerId">>, ProviderId},
         {<<"certificate">>, SignedPem}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),
     {true, Req2};
@@ -128,8 +128,8 @@ accept_resource(provider, post, _ProviderId, Data, _Client, Req) ->
     Latitude = rest_module_helper:assert_type(<<"latitude">>, Data, float, Req),
     Longitude = rest_module_helper:assert_type(<<"longitude">>, Data, float, Req),
 
-    {ok, ProviderId, SignedPem} = provider_logic:create(Latitude, Longitude,
-        ClientName, URLs, RedirectionPoint, CSR),
+    {ok, ProviderId, SignedPem} = provider_logic:create(ClientName, URLs,
+        RedirectionPoint, CSR, #{latitude => Latitude, longitude => Longitude}),
     Body = json_utils:encode([{<<"providerId">>, ProviderId},
         {<<"certificate">>, SignedPem}]),
     Req2 = cowboy_req:set_resp_body(Body, Req),
