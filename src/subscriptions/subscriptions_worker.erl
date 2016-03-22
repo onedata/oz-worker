@@ -35,16 +35,27 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec push_messages(ProviderID :: binary(), Messages :: [term()]) -> ok.
+push_messages(_, []) -> ok;
 push_messages(ProviderID, Messages) ->
     {ok, #document{value = #provider_subscription{connections = Conns}}}
         = subscriptions:get_doc(ProviderID),
+
     case Conns of
-        [Conn | _] ->
+        [] ->
+            ?info("No connection ~p ~p", [ProviderID, Messages]);
+        _ ->
+            Conn = utils:random_element(Conns),
             UniqueMessages = lists:usort(Messages),
             Encoded = json_utils:encode({array, UniqueMessages}),
-            Conn ! {push, Encoded},
-            ok;
-        [] -> ?info("No connection ~p ~p", [ProviderID, Messages])
+            try
+                Conn ! {push, Encoded},
+                ok
+            catch
+                E:R ->
+                    ?info("Removing unusable connection due to ~p:~p", [E, R]),
+                    subscriptions:remove_connection(ProviderID, Conn),
+                    push_messages(ProviderID, UniqueMessages)
+            end
     end.
 
 %%%===================================================================
@@ -69,10 +80,7 @@ init(_Args) ->
 %%--------------------------------------------------------------------
 -spec handle(Request :: term()) -> ok | {error, Reason :: term()} | no_return().
 handle(healthcheck) ->
-    case couchdb_datastore_driver:db_run(couchbeam_changes, follow_once, [], 30) of
-        {ok, _, _} -> ok;
-        _ -> {error, couchbeam_not_reachable}
-    end;
+    ok;
 
 handle({handle_change, Seq, Doc, Type}) ->
     changes_cache:put(Seq, Doc, Type),

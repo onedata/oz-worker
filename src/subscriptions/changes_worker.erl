@@ -110,7 +110,7 @@ cleanup() ->
 
 -spec start_changes_stream() -> ok.
 start_changes_stream() ->
-    case fetch_last_seq() of
+    case get_last_seq() of
         {error, Reason} ->
             ?warning("Stream failed to start due to ~p", [Reason]);
         {ok, Start} ->
@@ -129,13 +129,27 @@ start_changes_stream() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Get latest sequence number from datastore.
+%% Get latest sequence number from cache (or from datastore if cache is empty)
 %% @end
 %%--------------------------------------------------------------------
+-spec get_last_seq() -> {ok, non_neg_integer()}| {error, term()}.
+get_last_seq() ->
+    case changes_cache:newest_seq() of
+        {ok, Val} -> {ok, Val};
+        _ -> fetch_last_seq()
+    end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Get latest sequence number from datastore.
+%% Should be used only when provider is started.
+%% @end
+%%--------------------------------------------------------------------
 -spec fetch_last_seq() -> {ok, non_neg_integer()}| {error, term()}.
 fetch_last_seq() ->
     try
+        %% todo: once couchbeam is fixed, use different method
         {ok, LastSeq, _} = couchdb_datastore_driver:db_run(couchbeam_changes,
             follow_once, [], 30),
         {ok, binary_to_integer(LastSeq)}
