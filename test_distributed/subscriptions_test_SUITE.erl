@@ -39,6 +39,7 @@
     fetches_changes_when_cache_has_gaps/1,
     simple_delete_test/1,
     stress_test/1,
+    provider_connection_checks_test/1,
     all_data_in_space_update_test/1,
     all_data_in_user_update_test/1,
     all_data_in_group_update_test/1]).
@@ -66,6 +67,7 @@
 %%%===================================================================
 
 all() -> ?ALL([
+    provider_connection_checks_test,
     multiple_updates_test,
     space_update_through_support_test,
     space_update_through_users_test,
@@ -85,6 +87,50 @@ all() -> ?ALL([
     no_user_update_test,
     no_group_update_test
 ]).
+
+
+provider_connection_checks_test(Config) ->
+    [Node, OtherNode | _] = ?config(oz_worker_nodes, Config),
+    StubConnFun = fun() -> receive _ -> ok after 5000 -> ok end end,
+    P1 = create_provider(Node, ?ID(p1), []),
+
+    %% no connection
+    ?assertNot(rpc:call(Node, subscriptions, any_connection_active, [P1])),
+
+    %% local connection
+    LocalConn = proc_lib:spawn(Node, StubConnFun),
+    call_worker(Node, {add_connection, P1, LocalConn}),
+    ?assert(rpc:call(Node, subscriptions, any_connection_active, [P1])),
+
+    %% broken local connection
+    exit(LocalConn, killed),
+    ?assertNot(rpc:call(Node, subscriptions, any_connection_active, [P1])),
+
+    %% other local connection
+    NewLocalConn = proc_lib:spawn(Node, StubConnFun),
+    call_worker(Node, {add_connection, P1, NewLocalConn}),
+    ?assert(rpc:call(Node, subscriptions, any_connection_active, [P1])),
+
+    %% connections removed
+    call_worker(Node, {remove_connection, P1, LocalConn}),
+    call_worker(Node, {remove_connection, P1, NewLocalConn}),
+    ?assertNot(rpc:call(Node, subscriptions, any_connection_active, [P1])),
+
+    %% connection at different worker
+    RemoteConn = proc_lib:spawn(OtherNode, StubConnFun),
+    call_worker(Node, {add_connection, P1, RemoteConn}),
+    ?assert(rpc:call(Node, subscriptions, any_connection_active, [P1])),
+
+    %% addition of broken connection
+    NewRemoteConn = proc_lib:spawn(OtherNode, StubConnFun),
+    exit(NewRemoteConn, killed),
+    call_worker(Node, {add_connection, P1, NewRemoteConn}),
+    ?assert(rpc:call(Node, subscriptions, any_connection_active, [P1])),
+
+    %% all connections broken
+    exit(RemoteConn, killed),
+    ?assertNot(rpc:call(Node, subscriptions, any_connection_active, [P1])),
+    ok.
 
 no_space_update_test(Config) ->
     % given
