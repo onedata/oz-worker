@@ -20,7 +20,7 @@
     update_missing_seq/3, seen/2, all/0]).
 
 -type(seq() :: non_neg_integer()).
--type(model() :: onedata_user | onedata_group | space_info).
+-type(model() :: onedata_user | user_group | space | provider).
 -export_type([seq/0, model/0]).
 
 %%--------------------------------------------------------------------

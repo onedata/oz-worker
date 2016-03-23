@@ -84,7 +84,7 @@ no_space_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), []),
-    create_space(Node, ?ID(s1), [], [], []),
+    save_space(Node, ?ID(s1), [], [], []),
 
     % when
     Context = init_messages(Node, P1, []),
@@ -92,7 +92,7 @@ no_space_update_test(Config) ->
 
     % then
     verify_messages_absent(Context, [
-        space_expectation(?ID(s1), <<"updated">>)
+        space_expectation(?ID(s1), <<"updated">>, [P1])
     ]),
     ok.
 
@@ -100,16 +100,16 @@ space_update_through_support_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), [?ID(s1)]),
-    create_space(Node, ?ID(s1), [P1], [], []),
+    save_space(Node, ?ID(s1), [P1], [], []),
 
     % when
     Context1 = init_messages(Node, P1, []),
-    Context = flush_messages(Context1, space_expectation(?ID(s1), ?ID(s1))),
+    Context = flush_messages(Context1, space_expectation(?ID(s1), ?ID(s1), [P1])),
     update_document(Node, space, ?ID(s1), #{name => <<"updated">>}),
 
     % then
     verify_messages_present(Context, [
-        space_expectation(?ID(s1), <<"updated">>)
+        space_expectation(?ID(s1), <<"updated">>, [P1])
     ]),
     ok.
 
@@ -117,17 +117,19 @@ space_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), []),
-    create_user(Node, ?ID(u1), [], []),
-    create_space(Node, ?ID(s1), [P1], [?ID(u1)], []),
+    save_user(Node, ?ID(u1), [], []),
+    save_space(Node, ?ID(s1), [P1], [?ID(u1)], []),
 
     % when
     Context1 = init_messages(Node, P1, []),
-    Context = flush_messages(Context1, space_expectation(?ID(s1), ?ID(s1))),
+    Context = flush_messages(Context1, space_expectation(
+        ?ID(s1), ?ID(s1), [P1], [{?ID(u1), []}], [], []
+    )),
     update_document(Node, space, ?ID(s1), #{name => <<"updated">>}),
 
     % then
     verify_messages_present(Context, [
-        space_expectation(?ID(s1), <<"updated">>)
+        space_expectation(?ID(s1), <<"updated">>, [P1], [{?ID(u1), []}], [], [])
     ]),
     ok.
 
@@ -135,7 +137,7 @@ no_user_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), [?ID(s1)]),
-    create_user(Node, ?ID(u1), [], []),
+    save_user(Node, ?ID(u1), [], []),
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
@@ -144,7 +146,7 @@ no_user_update_test(Config) ->
 
     % then
     verify_messages_absent(Context, [
-        user_expectation(?ID(u1), <<"updated">>, [], [])
+        user_expectation(?ID(u1), <<"updated">>)
     ]),
     ok.
 
@@ -152,7 +154,7 @@ user_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), [?ID(s1)]),
-    create_user(Node, ?ID(u1), [], []),
+    save_user(Node, ?ID(u1), [], []),
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
@@ -162,7 +164,7 @@ user_update_test(Config) ->
 
     % then
     verify_messages(Context, [
-        user_expectation(?ID(u1), <<"updated">>, [], [])
+        user_expectation(?ID(u1), <<"updated">>)
     ], []),
     ok.
 
@@ -170,9 +172,9 @@ simple_delete_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), [?ID(s1)]),
-    create_user(Node, ?ID(u1), [?ID(g1)], []),
-    create_group(Node, ?ID(g1), [?ID(u1)], []),
-    create_space(Node, ?ID(s1), [P1], [?ID(u1)], []),
+    save_user(Node, ?ID(u1), [?ID(g1)], []),
+    save_group(Node, ?ID(g1), [?ID(u1)], []),
+    save_space(Node, ?ID(s1), [P1], [?ID(u1)], []),
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
@@ -194,7 +196,7 @@ multiple_updates_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), [?ID(s1)]),
-    create_user(Node, ?ID(u1), [], []),
+    save_user(Node, ?ID(u1), [], []),
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
@@ -208,7 +210,7 @@ multiple_updates_test(Config) ->
 
     % then
     verify_messages_present(Context, [
-        user_expectation(?ID(u1), <<"updated4">>, [], [])
+        user_expectation(?ID(u1), <<"updated4">>)
     ]),
     ok.
 
@@ -216,7 +218,7 @@ no_group_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), []),
-    create_group(Node, ?ID(g1), [], []),
+    save_group(Node, ?ID(g1), [], []),
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
@@ -233,18 +235,18 @@ group_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), []),
-    create_user(Node, ?ID(u1), [], []),
-    create_group(Node, ?ID(g1), [?ID(u1)], []),
+    save_user(Node, ?ID(u1), [], []),
+    save_group(Node, ?ID(g1), [?ID(u1)], []),
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
     Context1 = init_messages(Node, P1, [?ID(u1)]),
-    Context = flush_messages(Context1, group_expectation(?ID(g1), ?ID(g1))),
+    Context = flush_messages(Context1, group_expectation(?ID(g1), ?ID(g1), [{?ID(u1), []}], [])),
     update_document(Node, user_group, ?ID(g1), #{name => <<"updated">>}),
 
     % then
     verify_messages_present(Context, [
-        group_expectation(?ID(g1), <<"updated">>)
+        group_expectation(?ID(g1), <<"updated">>, [{?ID(u1), []}], [])
     ]),
     ok.
 
@@ -252,21 +254,21 @@ updates_for_added_user_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), [?ID(s1), ?ID(s2)]),
-    create_user(Node, ?ID(u1), [?ID(g1)], [?ID(s2)]),
-    create_group(Node, ?ID(g1), [?ID(u1)], [?ID(s1)]),
-    create_space(Node, ?ID(s1), [P1], [], [?ID(g1)]),
-    create_space(Node, ?ID(s2), [P1], [?ID(u1)], []),
+    save_user(Node, ?ID(u1), [?ID(g1)], [?ID(s2)]),
+    save_group(Node, ?ID(g1), [?ID(u1)], [?ID(s1)]),
+    save_space(Node, ?ID(s1), [P1], [], [?ID(g1)]),
+    save_space(Node, ?ID(s2), [P1], [?ID(u1)], []),
     call_worker(Node, {add_connection, P1, self()}),
 
     Context1 = init_messages(Node, P1, []),
-    Context = flush_messages(Context1, space_expectation(?ID(s2), ?ID(s2))),
+    Context = flush_messages(Context1, space_expectation(?ID(s2), ?ID(s2), [P1], [{?ID(u1), []}], [], [])),
 
     % when & then
     verify_messages_present(Context#subs_ctx{users = [?ID(u1)]}, [
         user_expectation(?ID(u1), ?ID(u1), [?ID(s2)], [?ID(g1)]),
-        group_expectation(?ID(g1), ?ID(g1)),
-        space_expectation(?ID(s1), ?ID(s1)),
-        space_expectation(?ID(s2), ?ID(s2))
+        group_expectation(?ID(g1), ?ID(g1), [{?ID(u1), []}], [?ID(s1)]),
+        space_expectation(?ID(s1), ?ID(s1), [P1], [], [{?ID(g1), []}], []),
+        space_expectation(?ID(s2), ?ID(s2), [P1], [{?ID(u1), []}], [], [])
     ]),
     ok.
 
@@ -274,7 +276,7 @@ updates_for_added_user_have_revisions_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), []),
-    create_user(Node, ?ID(u1), [], []),
+    save_user(Node, ?ID(u1), [], []),
     Rev0 = get_rev(Node, onedata_user, ?ID(u1)),
     call_worker(Node, {add_connection, P1, self()}),
 
@@ -293,7 +295,7 @@ updates_for_added_user_have_revisions_test(Config) ->
     verify_messages_present(Context#subs_ctx{users = [(?ID(u1))]}, [
         expectation_with_rev(
             [Rev4, Rev3, Rev2, Rev1, Rev0],
-            user_expectation(?ID(u1), <<"updated4">>, [], []))
+            user_expectation(?ID(u1), <<"updated4">>))
     ]),
     ok.
 
@@ -301,7 +303,7 @@ updates_have_revisions_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), []),
-    create_user(Node, ?ID(u1), [], []),
+    save_user(Node, ?ID(u1), [], []),
     Rev0 = get_rev(Node, onedata_user, ?ID(u1)),
     call_worker(Node, {add_connection, P1, self()}),
 
@@ -321,7 +323,7 @@ updates_have_revisions_test(Config) ->
     verify_messages_present(Context, [
         expectation_with_rev(
             [Rev4, Rev3, Rev2, Rev1, Rev0],
-            user_expectation(?ID(u1), <<"updated4">>, [], []))
+            user_expectation(?ID(u1), <<"updated4">>))
     ]),
     ok.
 
@@ -329,7 +331,7 @@ fetches_changes_older_than_in_cache(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     P1 = create_provider(Node, ?ID(p1), []),
-    create_user(Node, ?ID(u1), [], []),
+    save_user(Node, ?ID(u1), [], []),
     update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>}),
     update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
     update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated3">>}),
@@ -338,13 +340,13 @@ fetches_changes_older_than_in_cache(Config) ->
     % when
     Context = init_messages(Node, P1, [(?ID(u1))]),
     _ForgottenContext = flush_messages(Context,
-        user_expectation(?ID(u1), <<"updated4">>, [], [])),
+        user_expectation(?ID(u1), <<"updated4">>)),
 
     empty_cache(Node),
 
     % then
     verify_messages_present(Context, [
-        user_expectation(?ID(u1), <<"updated4">>, [], [])
+        user_expectation(?ID(u1), <<"updated4">>)
     ]),
     ok.
 
@@ -355,33 +357,33 @@ fetches_changes_from_both_cache_and_db(Config) ->
     P1 = create_provider(Node, ?ID(p1), [
         ?ID(s1), ?ID(s2), ?ID(s3), ?ID(s4), ?ID(s5), ?ID(s6)
     ]),
-    create_space(Node, ?ID(s1), [P1], [], []),
-    create_space(Node, ?ID(s2), [P1], [], []),
-    create_space(Node, ?ID(s3), [P1], [], []),
-    create_space(Node, ?ID(s4), [P1], [], []),
-    create_space(Node, ?ID(s5), [P1], [], []),
-    create_space(Node, ?ID(s6), [P1], [], []),
-    create_space(Node, ?ID(s7), [P1], [], []),
-    create_space(Node, ?ID(s8), [P1], [], []),
-    create_space(Node, ?ID(s9), [P1], [], []),
+    save_space(Node, ?ID(s1), [P1], [], []),
+    save_space(Node, ?ID(s2), [P1], [], []),
+    save_space(Node, ?ID(s3), [P1], [], []),
+    save_space(Node, ?ID(s4), [P1], [], []),
+    save_space(Node, ?ID(s5), [P1], [], []),
+    save_space(Node, ?ID(s6), [P1], [], []),
+    save_space(Node, ?ID(s7), [P1], [], []),
+    save_space(Node, ?ID(s8), [P1], [], []),
+    save_space(Node, ?ID(s9), [P1], [], []),
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
     Copy = Context = init_messages(Node, P1, []),
-    flush_messages(Context, space_expectation(?ID(s9), ?ID(s9))),
+    flush_messages(Context, space_expectation(?ID(s9), ?ID(s9), [P1])),
     empty_first_half_of_cache(Node),
 
     % then
     verify_messages_present(Copy, [
-        space_expectation(?ID(s1), ?ID(s1)),
-        space_expectation(?ID(s2), ?ID(s2)),
-        space_expectation(?ID(s3), ?ID(s3)),
-        space_expectation(?ID(s4), ?ID(s4)),
-        space_expectation(?ID(s5), ?ID(s5)),
-        space_expectation(?ID(s6), ?ID(s6)),
-        space_expectation(?ID(s7), ?ID(s7)),
-        space_expectation(?ID(s8), ?ID(s8)),
-        space_expectation(?ID(s9), ?ID(s9))
+        space_expectation(?ID(s1), ?ID(s1), [P1]),
+        space_expectation(?ID(s2), ?ID(s2), [P1]),
+        space_expectation(?ID(s3), ?ID(s3), [P1]),
+        space_expectation(?ID(s4), ?ID(s4), [P1]),
+        space_expectation(?ID(s5), ?ID(s5), [P1]),
+        space_expectation(?ID(s6), ?ID(s6), [P1]),
+        space_expectation(?ID(s7), ?ID(s7), [P1]),
+        space_expectation(?ID(s8), ?ID(s8), [P1]),
+        space_expectation(?ID(s9), ?ID(s9), [P1])
     ]),
     ok.
 
@@ -404,13 +406,13 @@ stress_test(Config) ->
         PID = create_provider(Node, PName, SIDs),
         Context = init_messages(Node, PID, []),
         lists:foreach(fun(SID) ->
-            create_space(Node, SID, [PID], [], [])
+            save_space(Node, SID, [PID], [], [])
         end, SIDs),
 
         %% then
         Start = erlang:system_time(milli_seconds),
         verify_messages_present(Context,
-            lists:map(fun(SID) -> space_expectation(SID, SID) end, SIDs)
+            lists:map(fun(SID) -> space_expectation(SID, SID, [PID]) end, SIDs)
         ),
         {ok, erlang:system_time(milli_seconds) - Start}
     end, lists:seq(1, ProvidersCount)),
@@ -434,33 +436,33 @@ fetches_changes_when_cache_has_gaps(Config) ->
     P1 = create_provider(Node, ?ID(p1), [
         ?ID(s1), ?ID(s2), ?ID(s3), ?ID(s4), ?ID(s5), ?ID(s6)
     ]),
-    create_space(Node, ?ID(s1), [P1], [], []),
-    create_space(Node, ?ID(s2), [P1], [], []),
-    create_space(Node, ?ID(s3), [P1], [], []),
-    create_space(Node, ?ID(s4), [P1], [], []),
-    create_space(Node, ?ID(s5), [P1], [], []),
-    create_space(Node, ?ID(s6), [P1], [], []),
-    create_space(Node, ?ID(s7), [P1], [], []),
-    create_space(Node, ?ID(s8), [P1], [], []),
-    create_space(Node, ?ID(s9), [P1], [], []),
+    save_space(Node, ?ID(s1), [P1], [], []),
+    save_space(Node, ?ID(s2), [P1], [], []),
+    save_space(Node, ?ID(s3), [P1], [], []),
+    save_space(Node, ?ID(s4), [P1], [], []),
+    save_space(Node, ?ID(s5), [P1], [], []),
+    save_space(Node, ?ID(s6), [P1], [], []),
+    save_space(Node, ?ID(s7), [P1], [], []),
+    save_space(Node, ?ID(s8), [P1], [], []),
+    save_space(Node, ?ID(s9), [P1], [], []),
     call_worker(Node, {add_connection, P1, self()}),
 
     % when
     Copy = Context = init_messages(Node, P1, []),
-    flush_messages(Context, space_expectation(?ID(s9), ?ID(s9))),
+    flush_messages(Context, space_expectation(?ID(s9), ?ID(s9), [P1])),
     empty_odd_seqs_in_cache(Node),
 
     % then
     verify_messages_present(Copy, [
-        space_expectation(?ID(s1), ?ID(s1)),
-        space_expectation(?ID(s2), ?ID(s2)),
-        space_expectation(?ID(s3), ?ID(s3)),
-        space_expectation(?ID(s4), ?ID(s4)),
-        space_expectation(?ID(s5), ?ID(s5)),
-        space_expectation(?ID(s6), ?ID(s6)),
-        space_expectation(?ID(s7), ?ID(s7)),
-        space_expectation(?ID(s8), ?ID(s8)),
-        space_expectation(?ID(s9), ?ID(s9))
+        space_expectation(?ID(s1), ?ID(s1), [P1]),
+        space_expectation(?ID(s2), ?ID(s2), [P1]),
+        space_expectation(?ID(s3), ?ID(s3), [P1]),
+        space_expectation(?ID(s4), ?ID(s4), [P1]),
+        space_expectation(?ID(s5), ?ID(s5), [P1]),
+        space_expectation(?ID(s6), ?ID(s6), [P1]),
+        space_expectation(?ID(s7), ?ID(s7), [P1]),
+        space_expectation(?ID(s8), ?ID(s8), [P1]),
+        space_expectation(?ID(s9), ?ID(s9), [P1])
     ]),
     ok.
 
@@ -530,21 +532,21 @@ call_worker(Node, Req) ->
 %%% Internal: datastore setup
 %%%===================================================================
 
-create_group(Node, Name, Users, Spaces) ->
+save_group(Node, Name, Users, Spaces) ->
     ?assertMatch({ok, Name}, rpc:call(Node, user_group, save, [#document{
         key = Name,
         value = #user_group{name = Name,
             users = zip_with(Users, []), spaces = Spaces}
     }])).
 
-create_space(Node, Name, Providers, Users, Groups) ->
+save_space(Node, Name, Providers, Users, Groups) ->
     ?assertMatch({ok, Name}, rpc:call(Node, space, save, [#document{
         key = Name,
         value = #space{name = Name, users = zip_with(Users, []),
             groups = zip_with(Groups, []), providers = Providers}
     }])).
 
-create_user(Node, Name, Groups, Spaces) ->
+save_user(Node, Name, Groups, Spaces) ->
     ?assertMatch({ok, Name}, rpc:call(Node, onedata_user, save, [#document{
         key = Name,
         value = #onedata_user{alias = Name, name = Name,
@@ -590,16 +592,42 @@ generate_cert_files() ->
 %%% Internal: Message expectations
 %%%===================================================================
 
-space_expectation(ID, Name) ->
-    [{<<"id">>, ID}, {<<"space">>, [{<<"id">>, ID}, {<<"name">>, Name}]}].
+space_expectation(ID, Name, Providers) ->
+    space_expectation(ID, Name, Providers, [], [], []).
+space_expectation(ID, Name, Providers, Users, Groups, Supports) ->
+    [{<<"id">>, ID}, {<<"space">>, [
+        {<<"id">>, ID},
+        {<<"name">>, Name},
+        {<<"size">>, Supports},
+        {<<"providers">>, Providers},
+        {<<"users">>, privileges_as_binaries(Users)},
+        {<<"groups">>, privileges_as_binaries(Groups)}
+    ]}].
 
+user_expectation(ID, Name) ->
+    user_expectation(ID, Name, [], []).
 user_expectation(ID, Name, Spaces, Groups) ->
     [{<<"id">>, ID}, {<<"user">>, [
-        {<<"name">>, Name}, {<<"space_ids">>, Spaces}, {<<"group_ids">>, Groups}
+        {<<"name">>, Name},
+        {<<"space_ids">>, Spaces},
+        {<<"group_ids">>, Groups}
     ]}].
 
 group_expectation(ID, Name) ->
-    [{<<"id">>, ID}, {<<"group">>, [{<<"name">>, Name}]}].
+    group_expectation(ID, Name, [], []).
+group_expectation(ID, Name, Users, Spaces) ->
+    [{<<"id">>, ID}, {<<"group">>, [
+        {<<"name">>, Name},
+        {<<"spaces">>, Spaces},
+        {<<"users">>, privileges_as_binaries(Users)}
+    ]}].
+
+privileges_as_binaries(IDsWithPrivileges) ->
+    lists:map(fun({ID, Privileges}) ->
+        {ID, lists:map(fun(Privilege) ->
+            atom_to_binary(Privilege, latin1)
+        end, Privileges)}
+    end, IDsWithPrivileges).
 
 expectation_with_rev(Revs, Expectation) ->
     [{<<"revs">>, Revs} | Expectation].
@@ -666,6 +694,9 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
 
     ?assertMatch(Forbidden, Forbidden -- All),
     RemainingExpected = remaining_expected(Expected, All),
+
+
+    ct:print("~p\n\n~p", [All, RemainingExpected]),
     verify_messages(NextContext, Retries - 1, RemainingExpected, Forbidden).
 
 get_messages() ->
