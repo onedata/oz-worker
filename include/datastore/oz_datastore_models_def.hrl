@@ -15,6 +15,27 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 
+% Describes state of batch.
+-record(outbox, {
+    timer_expires :: pos_integer(),
+    timer :: timer:tref(),
+    buffer :: [term()]
+}).
+
+% Stores data used to provide subscription updates
+-record(subscriptions_state, {
+    cache :: gb_trees:tree()
+}).
+
+% Stores state of provider subscription
+-record(provider_subscription, {
+    connections = [] :: [pid()],
+    provider :: binary(),
+    resume_at = 1 :: subscriptions:seq(),
+    missing = [] :: [subscriptions:seq()],
+    users = [] :: [binary()]
+}).
+
 %% Stores CA dedicated node
 %% todo: implement distributed CA properly (connected with VFS-1499)
 -record(ozpca_state, {
