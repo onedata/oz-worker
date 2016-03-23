@@ -60,6 +60,10 @@ export default Ember.Component.extend({
     }
   }.observes('posX', 'posY'),
 
+  isActive: function() {
+    return this.get('provider.isSelected');
+  }.property('provider.isSelected'),
+
   didInsertElement() {
     this.positionChanged();
     this.sizeChanged();
@@ -67,7 +71,7 @@ export default Ember.Component.extend({
 
   actions: {
     toggleActive() {
-      this.set('isActive', !this.get('isActive'));
+      this.sendAction('selectProvider', this.get('provider'));
     }
   }
 });

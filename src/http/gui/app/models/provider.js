@@ -11,5 +11,8 @@ export default DS.Model.extend({
   /** East */
   longitude: 19.909258,
 
-  url: 'http://example.com'
+  url: 'http://example.com',
+
+  /** Is provider selected in GUI */
+  isSelected: false,
 });

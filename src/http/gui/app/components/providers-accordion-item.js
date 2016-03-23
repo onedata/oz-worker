@@ -31,14 +31,20 @@ export default Ember.Component.extend({
   },
 
   actions: {
-    /** Redirects to OneProvider using url from provider model */
+    // Old behaviour - redirects directly to Oneprovider using url
+    // /** Redirects to OneProvider using url from provider model */
+    // goToProvider() {
+    //   let provider = this.get('provider');
+    //   if (provider) {
+    //     this.get('onezoneServer').getProviderRedirectURL(provider.get('id')).then((url) => {
+    //       window.location = url;
+    //     });
+    //   }
+    // },
+
     goToProvider() {
       let provider = this.get('provider');
-      if (provider) {
-        this.get('onezoneServer').getProviderRedirectURL(provider.get('id')).then((url) => {
-          window.location = url;
-        });
-      }
+      this.sendAction('selectProvider', provider);
     },
 
     /** Set or unset the provider as default (can unset other providers) */

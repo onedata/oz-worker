@@ -21,6 +21,7 @@ $provider-place-circle-border-size: 2px;
     border: $color-red $provider-place-circle-border-size solid;
     color: $color-red;
     background-color: white;
+    cursor: pointer; cursor: hand;
 
     .provider-icon {
       position: relative;

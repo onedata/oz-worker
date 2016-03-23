@@ -21,5 +21,14 @@ export default Ember.Component.extend({
         elem.slideUp( 100 );
       }
     });
+  },
+
+  actions: {
+    selectProvider(provider) {
+      if (provider) {
+        this.get('providers').forEach((p) => p.set('isSelected', false));
+        provider.set('isSelected', true);
+      }
+    }
   }
 });

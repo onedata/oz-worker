@@ -2,6 +2,8 @@ import Ember from 'ember';
 import bindFloater from '../utils/bind-floater';
 
 export default Ember.Component.extend({
+  onezoneServer: Ember.inject.service('onezone-server'),
+
   classNames: ['provider-place-drop', 'drop-left'],
 
   /** Parent component - must be injected! */
@@ -22,5 +24,13 @@ export default Ember.Component.extend({
     this.$().on('mouseover', updater);
     this.$().parent().on('mouseover', updater);
     $(window).resize(updater);
+  },
+
+  actions: {
+    goToFiles() {
+      this.get('onezoneServer').getProviderRedirectURL(this.get('provider.id')).then((url) => {
+        window.location = url;
+      });
+    }
   }
 });

@@ -11,7 +11,7 @@
       {{provider.location}}
     </div> --}}
     <ul>
-      {{#each spaces as |space|}}
+      {{#each provider.spaces as |space|}}
         <li>
           <div class="space-icon">
             {{one-icon icon=(if space.isDefault "space-default" "space")}}
@@ -26,5 +26,8 @@
         </li>
       {{/each}}
     </ul>
+    <a href="#" {{action 'goToFiles'}}>
+      {{t "onezone.providerPlaceDrop.goToFiles"}}
+    </a>
   </div>
 </div>

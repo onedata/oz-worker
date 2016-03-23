@@ -69,10 +69,14 @@ $provider-drop-radius: 4px;
       }
 
       ul {
-        padding-top: 4px;
+        padding-top: 8px;
+        padding-left: 0;
+        padding-right: 0;
 
         li {
           display: table;
+          height: 22px;
+          line-height: 22px;
 
           > * {
             display: table-cell;
@@ -80,11 +84,13 @@ $provider-drop-radius: 4px;
           }
 
           .space-icon {
+            position: relative;
+            top: 2px;
             width: 20px;
           }
 
           .space-label {
-
+            line-height: inherit;
           }
 
           .space-size {
