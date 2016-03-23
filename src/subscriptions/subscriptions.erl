@@ -17,8 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([add_connection/2, remove_connection/2, get_doc/1, update_users/2,
-    update_missing_seq/3, seen/2, remove_expired_connections/1,
-    all/0, any_connection_active/1]).
+    update_missing_seq/3, seen/2, all/0, any_connection_active/1]).
 
 -type(seq() :: non_neg_integer()).
 -type(model() :: onedata_user | onedata_group | space_info).
@@ -40,21 +39,6 @@ add_connection(ProviderID, Connection) ->
     }, fun(Subscription) ->
         Extended = [Connection | Subscription#provider_subscription.connections],
         {ok, Subscription#provider_subscription{connections = Extended}}
-    end), ok.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Removes expired connections from provider connections.
-%% @end
-%%--------------------------------------------------------------------
--spec remove_expired_connections(ProviderID :: binary()) -> ok.
-remove_expired_connections(ProviderID) ->
-    {ok, _} = provider_subscription:update(ProviderID, fun(Subscription) ->
-        Filtered = lists:filter(fun(Pid) ->
-            process_info(Pid) =/= undefined
-        end, Subscription#provider_subscription.connections),
-        Subscription#provider_subscription{connections = Filtered}
     end), ok.
 
 %%--------------------------------------------------------------------
