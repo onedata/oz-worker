@@ -24,15 +24,24 @@
 %%%             {<<"users">>, [<<"u1">>, <<"u3">>]},
 %%%             {<<"groups">>, [<<"g1">>]},
 %%%             {<<"providers">>, [
-%%%                 {<<"provider">>, <<"p2">>}, {<<"supported_size">>, 1 * 1024 * 1024 * 1024}
+%%%                 {<<"p2">> [
+%%%                    {<<"storage">>, <<"/mnt/s1">>},
+%%%                    {<<"supported_size">>, 1 * 1024 * 1024 * 1024}
+%%%                 ]}
 %%%             ]}
 %%%         ]},
 %%%         {<<"s2">>, [
 %%%             {<<"users">>, [<<"u2">>]},
 %%%             {<<"groups">>, [<<"g2">>]},
 %%%             {<<"providers">>, [
-%%%                 {<<"provider">>, <<"p1">>}, {<<"supported_size">>, 2 * 1024 * 1024 * 1024},
-%%%                 {<<"provider">>, <<"p2">>}, {<<"supported_size">>, 3 * 1024 * 1024 * 1024}
+%%%                 {<<"p1">>, [
+%%%                    {<<"storage">>, <<"/mnt/s1">>},
+%%%                    {<<"supported_size">>, 2 * 1024 * 1024 * 1024}
+%%%                 ],
+%%%                 {<<"p2">>, [
+%%%                    {<<"storage">>, <<"/mnt/s2">>},
+%%%                    {<<"supported_size">>, 3 * 1024 * 1024 * 1024}
+%%%                 ]
 %%%             ]}
 %%%         ]}
 %%%     ].
@@ -125,8 +134,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 end,
                 % Support the space by all providers
                 lists:foreach(
-                    fun(ProviderProps) ->
-                        ProviderID = proplists:get_value(<<"provider">>, ProviderProps),
+                    fun({ProviderID, ProviderProps}) ->
                         SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
                         {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = MemberId}, space_support_token, {space, SpaceID}),
                         {ok, SpaceToken} = macaroon:deserialize(SerializedSpaceToken),
