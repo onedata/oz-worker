@@ -141,5 +141,9 @@ export default {
     },
     tokensAccordionItem: {
     },
+    providerPlaceDrop: {
+      operable: 'Operable',
+      notOperable: 'Not operable',
+    }
   }
 };

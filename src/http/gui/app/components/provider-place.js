@@ -63,5 +63,11 @@ export default Ember.Component.extend({
   didInsertElement() {
     this.positionChanged();
     this.sizeChanged();
+  },
+
+  actions: {
+    toggleActive() {
+      this.set('isActive', !this.get('isActive'));
+    }
   }
 });
