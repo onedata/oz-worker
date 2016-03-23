@@ -179,16 +179,7 @@ test_connection(_, _) ->
 % Checks if given provider (by ID) is alive and responding.
 -spec check_provider_connectivity(ProviderId :: binary()) -> boolean().
 check_provider_connectivity(ProviderId) ->
-    case subscriptions:get_doc(ProviderId) of
-        {ok, #document{value = #provider_subscription{connections = PidList}}} ->
-            lists:any(fun(Pid) ->
-                case process_info(Pid) of
-                    undefined -> false;
-                    _ -> true
-                end
-            end, PidList);
-        _ -> false
-    end.
+    subscriptions:any_connection_active(ProviderId).
 
 %%--------------------------------------------------------------------
 %% @doc Returns provider id of provider that has been chosen
