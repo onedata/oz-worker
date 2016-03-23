@@ -12,6 +12,7 @@
 -author("Michal Zmuda").
 -behaviour(model_behaviour).
 
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
@@ -85,7 +86,8 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(space_bucket, [], ?GLOBALLY_CACHED_LEVEL).
+    StoreLevel = application:get_env(?APP_Name, space_store_level, ?GLOBALLY_CACHED_LEVEL),
+    ?MODEL_CONFIG(space_bucket, [], StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc
