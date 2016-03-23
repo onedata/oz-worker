@@ -10,7 +10,7 @@ export default Ember.Component.extend({
 
   iconName: function() {
     let provider = this.get('provider');
-    return (provider && provider.get('isDefault')) ? 'provider-default' : 'provider';
+    return (provider && provider.get('isDefault')) ? 'provider-home' : 'provider';
   }.property('provider.isDefault'),
 
   iconColor: function() {

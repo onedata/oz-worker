@@ -15,6 +15,7 @@
           {{#if provider.isDefault}}
             {{one-icon icon="home"}}
           {{else}}
+            {{!-- class name is star-empty because of historical reasons... --}}
             <div class="star-empty">
               {{one-icon icon="home-outline"}}
             </div>
@@ -36,11 +37,7 @@
           {{#each provider.spaces as |s|}}
             <li>
               <div class="icon">
-                {{#if s.isDefault}}
-                  {{one-icon icon="space-default"}}
-                {{else}}
-                  {{one-icon icon="space"}}
-                {{/if}}
+                {{one-icon icon=(if s.isDefault "space-home" "space")}}
               </div>
               <div class="label">
                 {{s.name}}
