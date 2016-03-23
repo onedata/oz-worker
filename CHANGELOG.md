@@ -4,6 +4,34 @@
 CHANGELOG
 ---------
 
+### 3.0.0-alpha3
+
+* VFS-1638 enable simple auth mixins and adjust redirection pages after login
+* VFS-1672: New callbacks for login create
+* VFS-1672: Conditionally show/hide modals on onezone
+* VFS-1638 add support for custom GUI
+* VFS-1672: User dropdown on the right
+* VFS-1672: New homepage account dropdown style
+* VFS-1672: New rendering of social icons in onezone
+* VFS-1638 add real user credentials to backend
+* VFS-1672: Onezone panels
+* VFS-1638 differentiate between chosen provider and default provider
+* VFS-1672: Updated oneicons 1.3
+* VFS-1665 Pull in Macaroons.
+* VFS-1544 distributed gr is packaged via onezone repo
+* VFS-1672: Fixed main menu blinking on click
+* VFS-1544 uuids easier to use with http
+* VFS-1638 switch to hash based location service, use server backend for spaces and providers
+* VFS-1638 enable login for all oauth providers
+* VFS-1638 allow logging in with openid providers
+* VFS-1638 allow pages without .html extension to server index.html
+* VFS-1638 add new gui_livereload modes
+* VFS-1544 updating CW and adapting to refactored dns
+* VFS-1672: New routes and draft of onezone layout
+* VFS-1636: Red menu highlight on top (z dimension) of menu line
+* VFS-1638 add polling and watching options for gui livereload
+
+
 ### 3.0.0-alpha2
 
 * VFS-1665 Pull in Macaroons.
