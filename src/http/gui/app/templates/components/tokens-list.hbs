@@ -1,11 +1,11 @@
-<div class="accordion tokens-accordion">
+<div class="secondary-accordion tokens-container">
   {{#each tokens as |t|}}
     {{tokens-list-item token=t}}
   {{/each}}
 
-  <div class="accordion-group tokens-accordion-group">
-    <div class="accordion-heading tokens-accordion-heading">
-      <a class="accordion-toggle tokens-accordion-toggle create-new"
+  <div class="accordion-group secondary-accordion-group tokens-accordion-group">
+    <div class="accordion-heading secondary-accordion-heading tokens-accordion-heading">
+      <a class="onezone-sidebar-secondary-item secondary-accordion-toggle create-new"
         {{action 'createNewToken'}}>
         <div class="token-icon">
           {{one-icon icon='add'}}

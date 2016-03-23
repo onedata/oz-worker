@@ -141,5 +141,10 @@ export default {
     },
     tokensAccordionItem: {
     },
+    providerPlaceDrop: {
+      operable: 'Operable',
+      notOperable: 'Not operable',
+      goToFiles: 'Go to your files...'
+    }
   }
 };

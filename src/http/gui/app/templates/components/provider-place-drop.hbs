@@ -1,0 +1,33 @@
+<div class="drop-panel">
+  <div class="drop-title-bar">
+    {{t (if provider.isWorking "onezone.providerPlaceDrop.operable" "onezone.providerPlaceDrop.operable")}}
+  </div>
+  <div class="drop-body">
+    <div class="provider-label">
+      {{provider.name}}
+    </div>
+    {{!-- TODO: location name --}}
+    {{!-- <div class="provider-location">
+      {{provider.location}}
+    </div> --}}
+    <ul>
+      {{#each provider.spaces as |space|}}
+        <li>
+          <div class="space-icon">
+            {{one-icon icon=(if space.isDefault "space-default" "space")}}
+          </div>
+          <div class="space-label">
+            {{space.name}}
+          </div>
+          {{!-- TODO: space capacity --}}
+          {{!-- <div class="space-size">
+            {{space.capacity}}
+          </div> --}}
+        </li>
+      {{/each}}
+    </ul>
+    <a href="#" {{action 'goToFiles'}}>
+      {{t "onezone.providerPlaceDrop.goToFiles"}}
+    </a>
+  </div>
+</div>

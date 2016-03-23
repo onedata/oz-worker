@@ -8,7 +8,7 @@ export default Ember.Component.extend({
   /** Should be injected */
   space: null,
 
-  classNames: ['spaces-accordion-item'],
+  classNames: ['secondary-accordion-item', 'spaces-accordion-item'],
 
   supportToken: null,
 

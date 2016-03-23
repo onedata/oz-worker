@@ -10,7 +10,7 @@ export default Ember.Component.extend({
 
   iconName: function() {
     let provider = this.get('provider');
-    return (provider && provider.get('isDefault')) ? 'provider-default' : 'provider';
+    return (provider && provider.get('isDefault')) ? 'provider-home' : 'provider';
   }.property('provider.isDefault'),
 
   iconColor: function() {
@@ -18,7 +18,7 @@ export default Ember.Component.extend({
     return (provider && provider.get('isWorking')) ? 'provider-working' : 'provider-not-working';
   }.property('provider.isWorking'),
 
-  classNames: ['providers-accordion-item'],
+  classNames: ['secondary-accordion-item', 'providers-accordion-item'],
 
   didInsertElement() {
     this.$().find('.floater').each(function() {
@@ -31,14 +31,20 @@ export default Ember.Component.extend({
   },
 
   actions: {
-    /** Redirects to OneProvider using url from provider model */
+    // Old behaviour - redirects directly to Oneprovider using url
+    // /** Redirects to OneProvider using url from provider model */
+    // goToProvider() {
+    //   let provider = this.get('provider');
+    //   if (provider) {
+    //     this.get('onezoneServer').getProviderRedirectURL(provider.get('id')).then((url) => {
+    //       window.location = url;
+    //     });
+    //   }
+    // },
+
     goToProvider() {
       let provider = this.get('provider');
-      if (provider) {
-        this.get('onezoneServer').getProviderRedirectURL(provider.get('id')).then((url) => {
-          window.location = url;
-        });
-      }
+      this.sendAction('selectProvider', provider);
     },
 
     /** Set or unset the provider as default (can unset other providers) */
