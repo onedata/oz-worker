@@ -109,8 +109,8 @@ accept_resource(provider_dev, post, _ProviderId, Data, _Client, Req) ->
     CSR = rest_module_helper:assert_key(<<"csr">>, Data, binary, Req),
     RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary, Req),
     UUID = rest_module_helper:assert_key(<<"uuid">>, Data, binary, Req),
-    Latitude = rest_module_helper:assert_type(<<"latitude">>, Data, binary, Req),
-    Longitude = rest_module_helper:assert_type(<<"longitude">>, Data, binary, Req),
+    Latitude = rest_module_helper:assert_type(<<"latitude">>, Data, float, Req),
+    Longitude = rest_module_helper:assert_type(<<"longitude">>, Data, float, Req),
 
     % Create provider with given UUID - UUID is the same as the provider name.
     {ok, ProviderId, SignedPem} = dev_utils:create_provider_with_uuid(
