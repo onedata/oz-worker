@@ -47,7 +47,7 @@
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).
--export([create_provider_with_uuid/5]).
+-export([create_provider_with_uuid/6, create_provider_with_uuid/5]).
 -export([create_user_with_uuid/2]).
 -export([create_group_with_uuid/3]).
 -export([create_space_with_uuid/3, create_space_with_uuid/5, create_space_with_provider/5]).
@@ -176,7 +176,6 @@ destroy_test_entities(Users, Groups, Spaces) ->
         end, Spaces),
     ok.
 
-
 %%--------------------------------------------------------------------
 %% @doc Create a provider's account with implicit UUID.
 %% Throws exception when call to the datastore fails.
@@ -186,8 +185,28 @@ destroy_test_entities(Users, Groups, Spaces) ->
     RedirectionPoint :: binary(), CSR :: binary(), UUID :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
+    create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID, #{}).
+
+%%--------------------------------------------------------------------
+%% @doc Create a provider's account with implicit UUID.
+%% Throws exception when call to the datastore fails.
+%% Accepts optional arguments map (which currently supports 'latitude' and
+%% 'longitude' keys)
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider_with_uuid(ClientName :: binary(), URLs :: [binary()],
+    RedirectionPoint :: binary(), CSR :: binary(), UUID :: binary(),
+    OptionalArgs :: #{atom() => term()}) ->
+    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
+create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID, OptionalArgs) ->
     {ok, {ProviderCertPem, Serial}} = ozpca:sign_provider_req(UUID, CSRBin),
-    Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
+    Latitude = maps:get(latitude, OptionalArgs, undefined),
+    Longitude = maps:get(longitude, OptionalArgs, undefined),
+
+    Provider = #provider{client_name = ClientName, urls = URLs,
+        redirection_point = RedirectionPoint, serial = Serial,
+        latitude = Latitude, longitude = Longitude},
+
     provider:save(#document{key = UUID, value = Provider}),
     {ok, UUID, ProviderCertPem}.
 
