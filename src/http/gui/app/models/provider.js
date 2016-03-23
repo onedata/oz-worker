@@ -6,5 +6,10 @@ export default DS.Model.extend({
   isDefault: DS.attr('boolean', {defaultValue: false}),
   spaces: DS.hasMany('space', {async: true}),
 
+  /** North */
+  latitude: 50.068918,
+  /** East */
+  longitude: 19.909258,
+
   url: 'http://example.com'
 });

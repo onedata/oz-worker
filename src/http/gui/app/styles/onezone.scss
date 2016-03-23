@@ -138,6 +138,9 @@ $search-box-height: 36px;
 
   .onezone-atlas {
     height: 100%;
+    position: relative;
+    margin-left: auto;
+    margin-right: auto;
     background-image: url("/assets/images/onezone/onezone-atlas.svg");
     background-size: cover;
     background-position: center center;

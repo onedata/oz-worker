@@ -1,1 +1,11 @@
-{{onezone-modal-container providers=model}}
+{{!-- TODO: place modals above map (absolute?) --}}
+
+{{#onezone-atlas as |atlas|}}
+  {{#each model as |provider|}}
+    {{provider-place provider=provider atlas=atlas}}
+  {{/each}}
+{{/onezone-atlas}}
+
+
+
+{{!-- {{onezone-modal-container providers=model}} --}}

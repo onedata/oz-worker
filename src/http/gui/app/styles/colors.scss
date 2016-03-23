@@ -10,6 +10,8 @@ $color-grey-5: #FCFCFC;
 $color-red-1: #EF3C40;
 $color-red-2: #F25255;
 $color-red-3: #F6456F;
+// default red
+$color-red: $color-red-1;
 // the real button color from mockup, but not used - similiar to red2
 // $color-red-button: #F14549;
 $color-red-button: $color-red-2;
@@ -38,4 +40,12 @@ $color-dropdown-menu-bg-hover: $color-red-2;
 
 .color-white {
   color: white;
+}
+
+.color-green {
+  color: $color-green;
+}
+
+.color-red {
+  color: $color-red;
 }
