@@ -179,19 +179,7 @@ test_connection(_, _) ->
 % Checks if given provider (by ID) is alive and responding.
 -spec check_provider_connectivity(ProviderId :: binary()) -> boolean().
 check_provider_connectivity(ProviderId) ->
-    {ok, Data} = provider_logic:get_data(ProviderId),
-    RedirectionPoint = proplists:get_value(redirectionPoint, Data),
-    % @todo check provider_id_endpoint
-%%    ProviderConnCheckEndpoint = <<RedirectionPoint/binary, ?provider_id_endpoint>>,
-    ProviderConnCheckEndpoint = RedirectionPoint,
-    % We do not need to check for provider's certificate - some providers do not have a signed one.
-    % Plus user's browser will do the verification.
-    case http_client:get(ProviderConnCheckEndpoint, [], <<>>, [insecure]) of
-        % @todo check provider_id_endpoint
-%%        {ok, _, _, ProviderId} -> true;
-        {ok, _, _, _} -> true;
-        _ -> false
-    end.
+    subscriptions:any_connection_active(ProviderId).
 
 %%--------------------------------------------------------------------
 %% @doc Returns provider id of provider that has been chosen

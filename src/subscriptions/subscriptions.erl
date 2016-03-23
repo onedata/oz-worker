@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([add_connection/2, remove_connection/2, get_doc/1, update_users/2,
-    update_missing_seq/3, seen/2, all/0]).
+    update_missing_seq/3, seen/2, all/0, any_connection_active/1]).
 
 -type(seq() :: non_neg_integer()).
 -type(model() :: onedata_user | onedata_group | space_info).
@@ -135,6 +135,26 @@ seen(Subscription, Seq) ->
     case Seq > ResumeAt of
         true -> false;
         false -> not lists:member(Seq, Missing)
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks if provider has an alive connection.
+%% @end
+%%--------------------------------------------------------------------
+-spec any_connection_active(ProviderID :: binary()) -> boolean().
+any_connection_active(ProviderID) ->
+    case subscriptions:get_doc(ProviderID) of
+        {ok, #document{value = #provider_subscription{connections = PidList}}} ->
+            lists:any(fun(Pid) ->
+                node(Pid) =:= node() andalso process_info(Pid) =/= undefined
+            end, PidList
+            ) orelse lists:any(fun(Pid) ->
+                Node = node(Pid),
+                Node =/= node() andalso
+                    rpc:call(Node, erlang, process_info, [Pid]) =/= undefined
+            end, PidList);
+        _ -> false
     end.
 
 %%%===================================================================
