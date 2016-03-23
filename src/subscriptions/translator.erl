@@ -69,11 +69,6 @@ get_msg(Seq, Doc, onedata_user = Model) ->
         {space_ids, Spaces},
         {group_ids, Groups}
     ]}];
-get_msg(Seq, Doc, provider = Model) ->
-    #document{value = #provider{client_name = Name}, key = ID} = Doc,
-    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
-        {client_name, Name}
-    ]}];
 get_msg(_Seq, _Doc, _Model) ->
     [].
 
@@ -98,5 +93,4 @@ revs_prop(#document{rev = Rev}) ->
 -spec message_model(subscriptions:model()) -> atom().
 message_model(space) -> space;
 message_model(onedata_user) -> user;
-message_model(user_group) -> group;
-message_model(provider) -> provider.
+message_model(user_group) -> group.
