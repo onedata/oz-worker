@@ -13,6 +13,7 @@
 -author("Konrad Zemek").
 
 -include("datastore/oz_datastore_models_def.hrl").
+-include("deps/ctool/include/utils/utils.hrl").
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
@@ -220,7 +221,7 @@ get_data(UserId, user) ->
     {ok, #document{value = #onedata_user{name = Name, connected_accounts = ConnectedAccounts,
         alias = Alias, email_list = EmailList}}} = onedata_user:get(UserId),
     ConnectedAccountsMaps = lists:map(fun(Account) ->
-        utils:record_to_list(Account, record_info(fields, oauth_account)) end, ConnectedAccounts),
+        ?record_to_list(oauth_account, Account) end, ConnectedAccounts),
     {ok, [
         {userId, UserId},
         {name, Name},
