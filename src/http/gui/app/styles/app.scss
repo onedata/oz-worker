@@ -345,3 +345,20 @@ $dropdown-triangle-width: 8px;
 //   left: 0;
 //   right:0
 // }
+
+
+
+.hover-parent {
+  .white-on-parent-hover {
+    color: transparent !important;
+  }
+  &:hover {
+    .white-on-parent-hover {
+      color: white !important;
+    }
+  }
+}
+
+.mouse-pointer {
+  cursor: pointer; cursor: hand;
+}
