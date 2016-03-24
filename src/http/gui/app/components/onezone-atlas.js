@@ -17,12 +17,12 @@ export default Ember.Component.extend({
       newWidth = parentHeight * this.ATLAS_AR;
       newHeight = parentHeight;
       // TODO: to debug: sometimes the container have scrollbars
-      // console.debug(`Atlas resize - width >= height, w: ${newWidth}, h ${newHeight`);
+      console.debug(`Atlas resize - width >= height, w: ${newWidth}, h ${newHeight}`);
     } else {
       newWidth = parentWidth;
       newHeight = parentWidth * (1/this.ATLAS_AR);
       // TODO: to debug: sometimes the container have scrollbars
-      // console.debug(`Atlas resize - width < height, w: ${newWidth}, h ${newHeight`);
+      console.debug(`Atlas resize - width < height, w: ${newWidth}, h ${newHeight}`);
     }
     this.set('width', newWidth);
     this.set('height', newHeight);

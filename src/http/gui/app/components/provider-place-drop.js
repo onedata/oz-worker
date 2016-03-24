@@ -29,6 +29,7 @@ export default Ember.Component.extend({
     this.$().on('mouseover', updater);
     this.$().parent().on('mouseover', updater);
     $(window).resize(updater);
+    $(window).scroll(updater);
   },
 
   actions: {

@@ -33,8 +33,8 @@ export default function bindFloater(element, parent, options) {
     }
 
     element.css({
-      left: `${parseInt(left) + options.offsetX}px`,
-      top: `${parseInt(top) + options.offsetY}px`
+      left: `${parseInt(left) + options.offsetX - $(window).scrollLeft()}px`,
+      top: `${parseInt(top) + options.offsetY + $(window).scrollTop()}px`
     });
     // element.css({
     //   left: left,
