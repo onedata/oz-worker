@@ -392,12 +392,16 @@ $search-box-height: 36px;
         background: inherit;
       }
     }
+    .visible-on-hover {
+      color: transparent;
+    }
     .select-button {
       display: table-cell;
       width: 32px;
       line-height: $onezone-secondary-accordion-heading-height;
       cursor: pointer; cursor: hand;
 
+      // TODO: deprecated, use .visible-on-hover
       // not hovered - invisible
       color: transparent;
     }
@@ -407,17 +411,9 @@ $search-box-height: 36px;
       line-height: $onezone-secondary-accordion-heading-height;
       cursor: pointer; cursor: hand;
 
+      // TODO: deprecated, use .visible-on-hover
       // not hovered - invisible
       color: transparent;
-    }
-
-    &:hover {
-      .select-button {
-        color: white;
-      }
-      .trash-button {
-        color: white;
-      }
     }
   }
 
@@ -438,6 +434,11 @@ $search-box-height: 36px;
       }
     }
 
+    .stretch-hack {
+      // a hack to stretch main heading element horizontally - use with caution!
+      width: 1000px;
+    }
+
     .secondary-accordion-group {
       border: none;
 
@@ -446,7 +447,8 @@ $search-box-height: 36px;
         line-height: $onezone-secondary-accordion-heading-height;
 
         .secondary-accordion-toggle {
-          display: table;
+          // this caused height stretching
+          // display: table;
           width: 100%;
           max-height: $onezone-secondary-accordion-heading-height;
           line-height: $onezone-secondary-accordion-heading-height;
@@ -461,7 +463,6 @@ $search-box-height: 36px;
           > * {
             display: table-cell;
           }
-
           .go-to-provider {
             cursor: pointer; cursor: hand;
           }
@@ -718,6 +719,14 @@ $search-box-height: 36px;
     float: right !important;
     .dropdown-menu {
       position: absolute !important;
+    }
+  }
+}
+
+.hover-parent {
+  &:hover {
+    .white-on-parent-hover {
+      color: white !important;
     }
   }
 }
