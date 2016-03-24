@@ -5,6 +5,12 @@ $provider-drop-radius: 4px;
 .provider-place-drop {
   position: fixed;
 
+  &.working {
+    .drop-panel .drop-title-bar .status-circle {
+      background-color: $color-pale-green;
+    }
+  }
+
   &.drop-right {
     &:after {
       position: absolute;
@@ -53,6 +59,22 @@ $provider-drop-radius: 4px;
       border-bottom: 1px solid #F3F3F3;
       border-top-left-radius: $provider-drop-radius;
       border-top-right-radius: $provider-drop-radius;
+
+      .title-label {
+        float: left;
+      }
+
+      .status-circle {
+        margin-top: 10px;
+        margin-right: 2px;
+        float: right;
+        border-radius: 50%;
+        width: 8px;
+        height: 8px;
+        padding-top: auto;
+        padding-bottom: auto;
+        background-color: $color-red;
+      }
     }
 
     .drop-body {
@@ -62,6 +84,17 @@ $provider-drop-radius: 4px;
       border-bottom-left-radius: $provider-drop-radius;
       border-bottom-right-radius: $provider-drop-radius;
 
+      .btn {
+        width: 100%;
+        border-radius: 6px;
+      }
+
+      hr {
+        margin-top: 10px;
+        margin-bottom: 10px;
+        color: #F2F2F2;
+      }
+
       .provider-label {
         font-weight: bold;
       }
@@ -69,9 +102,11 @@ $provider-drop-radius: 4px;
       }
 
       ul {
-        padding-top: 8px;
+        padding-top: 0;
         padding-left: 0;
         padding-right: 0;
+        margin-top: 8px;
+        margin-bottom: 0;
 
         li {
           display: table;

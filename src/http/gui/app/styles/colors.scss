@@ -20,6 +20,7 @@ $color-azure: #5094E4;
 $color-pale-yellow: #FDCD58;
 $color-yellow: #F6A500;
 $color-green: #4DC249;
+$color-pale-green: #69CB93;
 
 $color-login-github: #1E2325;
 $color-login-twitter: #6ED3F3;
@@ -44,6 +45,10 @@ $color-dropdown-menu-bg-hover: $color-red-2;
 
 .color-green {
   color: $color-green;
+}
+
+.color-pale-green {
+  color: $color-pale-green;
 }
 
 .color-red {

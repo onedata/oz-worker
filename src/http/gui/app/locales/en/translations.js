@@ -144,7 +144,7 @@ export default {
     providerPlaceDrop: {
       operable: 'Operable',
       notOperable: 'Not operable',
-      goToFiles: 'Go to your files...'
+      goToFiles: 'Go to your files'
     }
   }
 };

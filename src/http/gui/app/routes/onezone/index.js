@@ -13,9 +13,13 @@ export default Ember.Route.extend({
         } else {
           let providers = this.controllerFor(this.routeName).get('model');
           providers.forEach((p) => p.set('isSelected', false));
-          provider.set('isSelected', true);  
+          provider.set('isSelected', true);
         }
       }
+    },
+    deselectProviders() {
+      let providers = this.controllerFor(this.routeName).get('model');
+      providers.forEach((p) => p.set('isSelected', false));
     }
   }
 });

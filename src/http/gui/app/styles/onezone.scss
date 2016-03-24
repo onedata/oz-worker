@@ -377,6 +377,8 @@ $search-box-height: 36px;
     }
     .token-header {
       display: table-cell;
+      // TODO: maybe create a header common class
+      vertical-align: top;
       padding-left: 15px;
       padding-right: 15px;
       text-transform: none;
@@ -392,32 +394,30 @@ $search-box-height: 36px;
         background: inherit;
       }
     }
+    .visible-on-hover {
+      color: transparent;
+    }
     .select-button {
+      // size hack
+      font-size: 24px;
+      position: relative;
+      top: -3px;
+
       display: table-cell;
       width: 32px;
       line-height: $onezone-secondary-accordion-heading-height;
       cursor: pointer; cursor: hand;
-
-      // not hovered - invisible
-      color: transparent;
     }
     .trash-button {
+      // size hack
+      font-size: 24px;
+      position: relative;
+      top: -3px;
+
       display: table-cell;
       width: 32px;
       line-height: $onezone-secondary-accordion-heading-height;
       cursor: pointer; cursor: hand;
-
-      // not hovered - invisible
-      color: transparent;
-    }
-
-    &:hover {
-      .select-button {
-        color: white;
-      }
-      .trash-button {
-        color: white;
-      }
     }
   }
 
@@ -438,6 +438,14 @@ $search-box-height: 36px;
       }
     }
 
+    .stretch-hack {
+      display: table-cell;
+      // a hack to stretch main heading element horizontally - use with caution!
+      width: 500px;
+      // TODO: maybe create a header common class
+      vertical-align: top;
+    }
+
     .secondary-accordion-group {
       border: none;
 
@@ -446,7 +454,8 @@ $search-box-height: 36px;
         line-height: $onezone-secondary-accordion-heading-height;
 
         .secondary-accordion-toggle {
-          display: table;
+          // this caused height stretching
+          // display: table;
           width: 100%;
           max-height: $onezone-secondary-accordion-heading-height;
           line-height: $onezone-secondary-accordion-heading-height;
@@ -461,7 +470,6 @@ $search-box-height: 36px;
           > * {
             display: table-cell;
           }
-
           .go-to-provider {
             cursor: pointer; cursor: hand;
           }
@@ -476,7 +484,9 @@ $search-box-height: 36px;
 
           .secondary-icon, .provider-icon, .space-icon {
             display: table-cell;
+            // TODO: this does not work because of stretch-hack
             width: 32px;
+            padding-right: 4px;
 
             .one-icon {
               font-size: 28px;
@@ -484,6 +494,9 @@ $search-box-height: 36px;
             }
           }
           .secondary-header, .provider-header, .space-header {
+            // pull-up hack
+            position: relative;
+            top: -2px;
             display: table-cell;
             padding-left: 8px;
             line-height: $onezone-secondary-accordion-heading-height;
@@ -494,16 +507,25 @@ $search-box-height: 36px;
 
           // for space
           .providers-count {
+            // pull up hack
+            position: relative;
+            top: -3px;
+
             display: table-cell;
             width: 50px;
             overflow-x: hidden;
             .icon {
               display: table-cell;
               .one-icon {
-                font-size: 0.9em;
+                font-size: 22px;
               }
             }
             .label {
+              // pull up pull left hack
+              position: relative;
+              top: -2px;
+              left: -4px;
+
               display: table-cell;
               vertical-align: middle;
               font-size: 0.6em;
@@ -525,6 +547,8 @@ $search-box-height: 36px;
           .spaces-count {
             display: table-cell;
             position: relative;
+            // pull down
+            top: 2px;
             width: 50px;
             height: $onezone-secondary-accordion-heading-height;
             overflow-x: hidden;
@@ -564,12 +588,14 @@ $search-box-height: 36px;
           li {
             display: table;
             padding-left: 70px;
-            padding-top: 8px;
-            padding-bottom: 8px;
+            // TODO: hack - padding disabled, because icons are too high...
+            // padding-top: 8px;
+            // padding-bottom: 8px;
             width: 100%;
             .icon {
               display: table-cell;
               width: 32px;
+              font-size: 32px;
             }
             .label {
               display: table-cell;
@@ -618,11 +644,16 @@ $search-box-height: 36px;
     $onezone-account-item-height: $onezone-accordion-heading-height * 0.75;
 
     display: table;
+    width: 100%;
     height: $onezone-account-item-height;
     line-height: $onezone-account-item-height;
     padding-left: 10px;
     padding-right: 24px;
     color: white;
+
+    > .dropdown, > .dropdown-toggle {
+      width: 100%;
+    }
 
     .account-icon {
       position: relative;
@@ -638,7 +669,10 @@ $search-box-height: 36px;
       &.account-add-icon {
         // add account does not need pulling down...
         padding-top: 0;
-        font-size: 28px;
+        // size hack
+        font-size: 48px;
+        position: relative;
+        left: -8px;
       }
 
       .circle {
@@ -686,6 +720,9 @@ $search-box-height: 36px;
         font-family: 'Lato', sans-serif;
         font-weight: 100;
         font-style: italic;
+
+        // hack TODO
+        padding-left: 4px;
       }
     }
   }
@@ -720,4 +757,23 @@ $search-box-height: 36px;
       position: absolute !important;
     }
   }
+}
+
+.hover-parent {
+  &:hover {
+    // TODO: make a "hover-parent" class
+    .visible-on-parent-hover {
+      color: white ;
+    }
+  }
+}
+
+// hacky
+.add-item-icon {
+  // add account does not need pulling down...
+  padding-top: 0;
+  // size hack
+  font-size: 32px !important;
+  position: relative;
+  left: -2px;
 }
