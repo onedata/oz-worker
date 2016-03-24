@@ -50,6 +50,8 @@ find(<<"provider">>, ProviderIds) ->
         fun(ProviderId) ->
             {ok, ProviderData} = provider_logic:get_data(ProviderId),
             Name = proplists:get_value(clientName, ProviderData),
+            Latitude = proplists:get_value(latitude, ProviderData, 0.0),
+            Longitude = proplists:get_value(longitude, ProviderData, 0.0),
             IsWorking = provider_logic:check_provider_connectivity(ProviderId),
             {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
             {ok, #document{
@@ -62,7 +64,9 @@ find(<<"provider">>, ProviderIds) ->
                 {<<"name">>, Name},
                 {<<"isDefault">>, ProviderId =:= DefaultProvider},
                 {<<"isWorking">>, IsWorking},
-                {<<"spaces">>, Spaces}
+                {<<"spaces">>, Spaces},
+                {<<"latitude">>, Latitude},
+                {<<"longitude">>, Longitude}
             ]
         end, ProviderIds),
     {ok, Res}.
