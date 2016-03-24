@@ -1,6 +1,9 @@
 <div class="drop-panel">
   <div class="drop-title-bar">
-    {{t (if provider.isWorking "onezone.providerPlaceDrop.operable" "onezone.providerPlaceDrop.operable")}}
+    <div class="title-label">
+      {{t (if provider.isWorking "onezone.providerPlaceDrop.operable" "onezone.providerPlaceDrop.operable")}}
+    </div>
+    <div class="status-circle"></div>
   </div>
   <div class="drop-body">
     <div class="provider-label">
@@ -26,7 +29,8 @@
         </li>
       {{/each}}
     </ul>
-    <a href="#" {{action 'goToFiles'}}>
+    <hr>
+    <a href="#" class="btn btn-small btn-pale-green" {{action 'goToFiles'}}>
       {{t "onezone.providerPlaceDrop.goToFiles"}}
     </a>
   </div>

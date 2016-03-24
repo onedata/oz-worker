@@ -3,6 +3,11 @@ import bindFloater from '../utils/bind-floater';
 
 export default Ember.Component.extend({
   onezoneServer: Ember.inject.service('onezone-server'),
+  classNameBindings: ['isWorking'],
+
+  isWorking: function() {
+    return this.get('provider.isWorking') ? 'working' : '';
+  }.property('provider.isWorking'),
 
   classNames: ['provider-place-drop', 'drop-left'],
 
