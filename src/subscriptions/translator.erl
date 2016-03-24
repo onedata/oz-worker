@@ -36,28 +36,35 @@ get_ignore_msg(Seq) ->
 %%% Those structures are serializable to json.
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_msg(Seq :: pos_integer(), Doc :: datastore:document(), Model :: atom())
-        -> term().
+-spec get_msg(Seq :: pos_integer(), Doc :: datastore:document(),
+    Model :: subscriptions:model()) -> term().
 
 get_msg(Seq, Doc = #document{deleted = true, key = ID}, Model) ->
-    [{seq, Seq}, revs_prop(Doc), {id, ID}, {model(Model), delete}];
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), delete}];
 get_msg(Seq, Doc, space = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #space{name = Name} = Value,
-    [{seq, Seq}, revs_prop(Doc), {id, ID}, {model(Model), [
+    #space{name = Name, users = Users, groups = Groups,
+        providers = Providers, size = Sizes} = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {id, ID},
-        {name, Name}
+        {name, Name},
+        {size, Sizes},
+        {providers, Providers},
+        {users, Users},
+        {groups, Groups}
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #user_group{name = Name} = Value,
-    [{seq, Seq}, revs_prop(Doc), {id, ID}, {model(Model), [
-        {name, Name}
+    #user_group{name = Name, spaces = Spaces, users = Users} = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {name, Name},
+        {spaces, Spaces},
+        {users, Users}
     ]}];
 get_msg(Seq, Doc, onedata_user = Model) ->
     #document{value = Value, key = ID} = Doc,
     #onedata_user{name = Name, spaces = Spaces, groups = Groups} = Value,
-    [{seq, Seq}, revs_prop(Doc), {id, ID}, {model(Model), [
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {space_ids, Spaces},
         {group_ids, Groups}
@@ -83,7 +90,7 @@ revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
 revs_prop(#document{rev = Rev}) ->
     {revs, [Rev]}.
 
--spec model(atom()) -> atom().
-model(space) -> space;
-model(onedata_user) -> user;
-model(user_group) -> group.
+-spec message_model(subscriptions:model()) -> atom().
+message_model(space) -> space;
+message_model(onedata_user) -> user;
+message_model(user_group) -> group.
