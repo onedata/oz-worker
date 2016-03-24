@@ -217,17 +217,16 @@ get_data(UserId, provider) ->
         {name, Name}
     ]};
 get_data(UserId, user) ->
-    {ok, #document{value = #onedata_user{name = Name, connected_accounts = Connected_accounts,
-        alias = Alias, email_list = Email_list}}} = onedata_user:get(UserId),
-    Connected_accounts_proplist = lists:map(
-        fun(Account) -> lists:zip(record_info(fields, oauth_account), tl(tuple_to_list(Account))) end,
-        Connected_accounts),
+    {ok, #document{value = #onedata_user{name = Name, connected_accounts = ConnectedAccounts,
+        alias = Alias, email_list = EmailList}}} = onedata_user:get(UserId),
+    ConnectedAccountsMaps = lists:map(fun(Account) ->
+        utils:record_to_list(Account, record_info(fields, oauth_account)) end, ConnectedAccounts),
     {ok, [
         {userId, UserId},
         {name, Name},
-        {connectedAccounts, Connected_accounts_proplist},
+        {connectedAccounts, ConnectedAccountsMaps},
         {alias, Alias},
-        {emailList, Email_list}
+        {emailList, EmailList}
     ]}.
 
 %%--------------------------------------------------------------------

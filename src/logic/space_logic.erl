@@ -330,7 +330,6 @@ get_providers(SpaceId, _Client) ->
     UserId :: binary()) ->
     {ok, [proplists:property()]}.
 get_user(_SpaceId, _Client, UserId) ->
-    %% @todo: we don't want to give out every bit of data once clients have more data stored
     user_logic:get_data(UserId, provider).
 
 %%--------------------------------------------------------------------
