@@ -52,5 +52,11 @@ export default Ember.Component.extend({
     this.$().parents().css('height', '100%');
     this.resizeToFit();
     $(window).resize(() => this.resizeToFit());
+  },
+
+  actions: {
+    deselectProviders() {
+      this.sendAction('deselectProviders');
+    }
   }
 });
