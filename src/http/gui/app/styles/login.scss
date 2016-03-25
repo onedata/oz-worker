@@ -60,4 +60,61 @@
   }
 }
 
+.zone {
+  color: white;
+  background: transparent;
+  margin-top: 10px;
+  margin-bottom: 30px;
+  font-family: 'Myriad Pro Semibold', 'Open Sans', sans-serif;
+
+  .zone-image {
+    height: 170px;
+    background-size: contain;
+    background-image: url(/assets/images/login/zone.svg);
+    background-repeat: no-repeat;
+    background-position: center center;
+
+    text-align: center;
+    padding-top: 40px;
+    font-weight: bold;
+    font-size: 18pt;
+
+    line-height: 125%;
+
+    > * {
+      display: table;
+      margin-left: auto;
+      margin-right: auto;
+      max-width: 100px;
+    }
+
+    .logo {
+      text-transform: uppercase;
+    }
+
+    .isolated {
+      font-size: 0.9em
+    }
+  }
+  .zone-arrow {
+    height: 170px;
+    background-image: url(/assets/images/login/zone-arrow.svg);
+    background-repeat: no-repeat;
+    background-position: center 100px;
+  }
+  .zone-label {
+    padding-top: 50px;
+    font-weight: bold;
+    font-size: 34pt;
+    text-align: center;
+    text-transform: uppercase;
+    line-height: 100%;
+    .zone-zone {
+    }
+    .zone-company-name {
+      font-size: 0.9em;
+    }
+  }
+}
+
 /*** ***/
