@@ -7,12 +7,29 @@ let LoginRoute = PageBase.extend(UnauthenticatedRouteMixin);
 export default LoginRoute.extend({
   onezoneServer: Ember.inject.service('onezoneServer'),
   name: 'login',
-  zoneName: null,
 
   beforeModel() {
     if (this.get('session.isAuthenticated')) {
       this.transitionTo('onezone');
     }
+  },
+
+  model() {
+    return new Ember.RSVP.Promise((resolve/*, reject*/) => {
+      this.get('onezoneServer').getZoneName().then(
+        (zoneName) => {
+          resolve({
+            zoneName: zoneName
+          });
+        },
+        () => {
+          console.error('Failed to get zone name');
+          resolve({
+            zoneName: null,
+          });
+        }
+      );
+    });
   }
 
   //actions: {

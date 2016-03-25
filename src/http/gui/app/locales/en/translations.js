@@ -82,7 +82,8 @@ export default {
   },
   login: {
     boxTitle: 'login',
-    boxSubtitle: 'Login with your social account'
+    boxSubtitle: 'Login with your social account',
+    unknownZoneName: 'unknown'
   },
   onezone: {
     messages: {
