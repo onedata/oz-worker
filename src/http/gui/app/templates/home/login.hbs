@@ -17,7 +17,11 @@
             zone
           </div>
           <div class="zone-company-name">
-            {{zoneName}}
+            {{#if model.zoneName}}
+              {{model.zoneName}}
+            {{else}}
+              {{t 'login.unknownZoneName'}}
+            {{/if}}
           </div>
         </div>
       </div>
