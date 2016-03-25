@@ -8,6 +8,7 @@ export default LoginRoute.extend({
   session: Ember.inject.service('session'),
   onezoneServer: Ember.inject.service('onezoneServer'),
   name: 'login',
+  zoneName: null,
 
   beforeModel() {
     if (this.get('session.isAuthenticated')) {

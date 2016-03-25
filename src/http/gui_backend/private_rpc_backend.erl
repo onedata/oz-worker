@@ -32,17 +32,6 @@
 %%--------------------------------------------------------------------
 -spec handle(FunctionId :: binary(), RequestData :: term()) ->
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
-handle(<<"sessionDetails">>, _) ->
-    {ok, #document{value = #onedata_user{name = Name}}} =
-        onedata_user:get(g_session:get_user_id()),
-    FirstLogin = g_session:get_value(firstLogin, false),
-    Res = [
-        {<<"userName">>, Name},
-        {<<"firstLogin">>, FirstLogin}
-    ],
-    ?alert("~p", [Res]),
-    {ok, Res};
-
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     Provider = binary_to_atom(ProviderBin, utf8),
     HandlerModule = auth_config:get_provider_module(Provider),
