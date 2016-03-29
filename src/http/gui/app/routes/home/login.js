@@ -5,6 +5,7 @@ import UnauthenticatedRouteMixin from 'ember-simple-auth/mixins/unauthenticated-
 let LoginRoute = PageBase.extend(UnauthenticatedRouteMixin);
 
 export default LoginRoute.extend({
+  session: Ember.inject.service('session'),
   onezoneServer: Ember.inject.service('onezoneServer'),
   name: 'login',
   zoneName: null,
