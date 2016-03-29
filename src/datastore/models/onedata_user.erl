@@ -147,7 +147,7 @@ get_all_ids() ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec get_by_criterion(Criterion :: {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
+-spec get_by_criterion(Criterion :: {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     {ok, #document{}} | {error, any()}.
 

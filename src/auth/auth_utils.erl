@@ -72,11 +72,10 @@ validate_login() ->
                             [Reason, ParamsProplist, g_ctx:get_form_params()]),
                         {error, ?error_auth_invalid_request};
 
-                    {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderIdAtom, user_id = UserID, email_list = OriginalEmails, name = Name}} ->
+                    {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderId, user_id = UserID, email_list = OriginalEmails, name = Name}} ->
                         Emails = lists:map(fun(Email) ->
                             http_utils:normalize_email(Email) end, OriginalEmails),
-                        OAuthAccount = OriginalOAuthAccount#oauth_account{email_list = Emails},
-                        ProviderId = str_utils:to_binary(ProviderIdAtom),
+                        OAuthAccount = OriginalOAuthAccount#oauth_account{email_list = Emails, provider_id = ProviderId},
                         Result = case proplists:get_value(connect_account, Props) of
                             false ->
                                 % Standard login, check if there is an account belonging to the user
@@ -111,7 +110,6 @@ validate_login() ->
                                 end;
 
                             true ->
-                                ?dump(connectlol),
                                 % Account adding flow
                                 % Check if this account isn't connected to other profile
                                 case user_logic:get_user({connected_account_user_id, {ProviderId, UserID}}) of
