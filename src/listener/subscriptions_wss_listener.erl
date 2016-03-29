@@ -5,7 +5,8 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc Subscriptions WSS listener
+%%% @doc This module is responsible for subscriptions WSS listener starting
+%%% and stopping.
 %%% @end
 %%%--------------------------------------------------------------------
 -module(subscriptions_wss_listener).
@@ -23,12 +24,12 @@
 -define(WSS_LISTENER, subscriptions_wss).
 
 %%%===================================================================
-%%% listener_starter_behaviour callbacks
+%%% listener_behaviour callbacks
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link listener_starter_behaviour} callback port/0.
+%% {@link listener_behaviour} callback port/0.
 %% @end
 %%--------------------------------------------------------------------
 -spec port() -> integer().
@@ -39,7 +40,7 @@ port() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link listener_starter_behaviour} callback start/1.
+%% {@link listener_behaviour} callback start/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec start() -> ok | {error, Reason :: term()}.
@@ -93,7 +94,7 @@ start() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link listener_starter_behaviour} callback stop/1.
+%% {@link listener_behaviour} callback stop/0.
 %% @end
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, Reason :: term()}.
@@ -109,25 +110,27 @@ stop() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the status of a listener.
+%% {@link listener_behaviour} callback healtcheck/0.
 %% @end
 %%--------------------------------------------------------------------
 -spec healthcheck() -> ok | {error, server_not_responding}.
 healthcheck() ->
-    Port = port(),
-    case http_client:get("https://127.0.0.1:" ++ integer_to_list(Port), [], <<>>, [insecure]) of
-        {ok, _, _, _} ->
-            ok;
-        _ ->
-            {error, server_not_responding}
+    Endpoint = "https://127.0.0.1:" ++ integer_to_list(port()),
+    case http_client:get(Endpoint, [], <<>>, [insecure]) of
+        {ok, _, _, _} -> ok;
+        _ -> {error, server_not_responding}
     end.
 
-%% ====================================================================
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Returns list of weak ciphers.
 %% @end
 -spec weak_ciphers() -> list().
-%% ====================================================================
+%%--------------------------------------------------------------------
 weak_ciphers() ->
     [{dhe_rsa, des_cbc, sha}, {rsa, des_cbc, sha}].
