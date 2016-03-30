@@ -46,5 +46,9 @@ export default Ember.Service.extend({
   */
   getConnectAccountEndpoint(providerName) {
     return this.get('server').privateRPC('getConnectAccountEndpoint', {provider: providerName});
+  },
+
+  getZoneName() {
+    return this.get('server').publicRPC('getZoneName');
   }
 });

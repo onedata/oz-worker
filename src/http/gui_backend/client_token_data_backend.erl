@@ -29,36 +29,32 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback init/0.
+%% {@link data_backend_behaviour} callback init/0.
 %% @end
 %%--------------------------------------------------------------------
+-spec init() -> ok.
 init() ->
     ok.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback find/2.
+%% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
+-spec find(ResourceType :: binary(), Ids :: [binary()]) ->
+    {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"clienttoken">>, _Ids) ->
-    {error, <<"Not implemented">>}.
+    gui_error:report_error(<<"Not iplemented">>).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback find_query/2.
+%% {@link data_backend_behaviour} callback find_all/1.
 %% @end
 %%--------------------------------------------------------------------
-find_query(<<"clienttoken">>, _Data) ->
-    {error, <<"Not implemented">>}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link authorizer_data_backend} callback find_all/1.
-%% @end
-%%--------------------------------------------------------------------
+-spec find_all(ResourceType :: binary()) ->
+    {ok, proplists:proplist()} | gui_error:error_result().
 find_all(<<"clienttoken">>) ->
     UserId = g_session:get_user_id(),
     {ok, ClientTokens} = user_logic:get_client_tokens(UserId),
@@ -71,9 +67,22 @@ find_all(<<"clienttoken">>) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback create_record/2.
+%% {@link data_backend_behaviour} callback find_query/2.
 %% @end
 %%--------------------------------------------------------------------
+-spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
+    {ok, proplists:proplist()} | gui_error:error_result().
+find_query(<<"clienttoken">>, _Data) ->
+    gui_error:report_error(<<"Not iplemented">>).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link data_backend_behaviour} callback create_record/2.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_record(RsrcType :: binary(), Data :: proplists:proplist()) ->
+    {ok, proplists:proplist()} | gui_error:error_result().
 create_record(<<"clienttoken">>, _Data) ->
     UserId = g_session:get_user_id(),
     Token = auth_logic:gen_token(UserId),
@@ -85,18 +94,23 @@ create_record(<<"clienttoken">>, _Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback update_record/3.
+%% {@link data_backend_behaviour} callback update_record/3.
 %% @end
 %%--------------------------------------------------------------------
+-spec update_record(RsrcType :: binary(), Id :: binary(),
+    Data :: proplists:proplist()) ->
+    ok | gui_error:error_result().
 update_record(<<"clienttoken">>, _TokenId, _Data) ->
-    {error, <<"Not implemented">>}.
+    gui_error:report_error(<<"Not iplemented">>).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback delete_record/2.
+%% {@link data_backend_behaviour} callback delete_record/2.
 %% @end
 %%--------------------------------------------------------------------
+-spec delete_record(RsrcType :: binary(), Id :: binary()) ->
+    ok | gui_error:error_result().
 delete_record(<<"clienttoken">>, Token) ->
     UserId = g_session:get_user_id(),
     {ok, Macaroon} = macaroon:deserialize(Token),
