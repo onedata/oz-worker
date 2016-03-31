@@ -46,6 +46,8 @@ init() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"provider">>, ProviderIds) ->
     UserId = g_session:get_user_id(),
+    {ok, GetSpaces} = user_logic:get_spaces(UserId),
+    UserSpaces = proplists:get_value(spaces, GetSpaces),
     Res = lists:map(
         fun(ProviderId) ->
             {ok, ProviderData} = provider_logic:get_data(ProviderId),
@@ -54,6 +56,10 @@ find(<<"provider">>, ProviderIds) ->
             Longitude = proplists:get_value(longitude, ProviderData, 0.0),
             IsWorking = provider_logic:check_provider_connectivity(ProviderId),
             {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
+            SpacesToDisplay = lists:filter(
+                fun(Space) ->
+                    lists:member(Space, UserSpaces)
+                end, Spaces),
             {ok, #document{
                 value = #onedata_user{
                     default_provider = DefaultProvider
@@ -64,7 +70,7 @@ find(<<"provider">>, ProviderIds) ->
                 {<<"name">>, Name},
                 {<<"isDefault">>, ProviderId =:= DefaultProvider},
                 {<<"isWorking">>, IsWorking},
-                {<<"spaces">>, Spaces},
+                {<<"spaces">>, SpacesToDisplay},
                 {<<"latitude">>, Latitude},
                 {<<"longitude">>, Longitude}
             ]
