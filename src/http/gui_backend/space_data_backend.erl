@@ -46,6 +46,7 @@ init() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"space">>, SpaceIds) ->
     UserId = g_session:get_user_id(),
+    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, GetSpaces} = user_logic:get_spaces(UserId),
     Default = proplists:get_value(default, GetSpaces),
     Res = lists:map(
@@ -54,11 +55,15 @@ find(<<"space">>, SpaceIds) ->
             Name = proplists:get_value(name, SpaceData),
             {ok, [{providers, Providers}]} =
                 space_logic:get_providers(SpaceId, provider),
+            ProvidersToDisplay = lists:filter(
+                fun(Provider) ->
+                    lists:member(Provider, UserProviders)
+                end, Providers),
             [
                 {<<"id">>, SpaceId},
                 {<<"name">>, Name},
                 {<<"isDefault">>, SpaceId =:= Default},
-                {<<"providers">>, Providers}
+                {<<"providers">>, ProvidersToDisplay}
             ]
         end, SpaceIds),
     {ok, Res}.
