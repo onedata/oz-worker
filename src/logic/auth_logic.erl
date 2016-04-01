@@ -144,8 +144,7 @@ gen_token(UserId, ProviderId) ->
     {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{
         secret = Secret, user_id = UserId}}),
     Identifier = binary_to_list(IdentifierBinary),
-    M = create_macaroon(Secret, str_utils:to_binary(Identifier), [[
-        "providerId = ", ProviderId]]),
+    M = create_macaroon(Secret, str_utils:to_binary(Identifier), []),
 
     CaveatKey = generate_secret(),
     {ok, CaveatIdBinary} = onedata_auth:save(#document{value = #onedata_auth{
@@ -179,7 +178,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
                     lists:member(atom_to_binary(RootResource, utf8),
                         binary:split(Resources, <<",">>, [global]));
                 (<<"providerId = ", PID/binary>>) ->
-                    true;
+                    PID =:= ProviderId;
                 (_) ->
                     false
             end,
