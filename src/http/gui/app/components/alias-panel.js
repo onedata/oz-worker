@@ -45,15 +45,14 @@ export default Ember.Component.extend({
     },
 
     endEditAlias: function(aliasName) {
-      debugger;
       try {
         this.get('onezoneServer').setUserAlias(aliasName).then(
-          () => {
+          (newAlias) => {
+            this.set('aliasText', newAlias);
             console.debug('Set alias successful');
-            this.updateAliasText();
           },
           (error) => {
-            window.alert('Set alias failed: ' + error);
+            window.alert('Set alias failed: ' + error.message);
           }
         );
       } finally {

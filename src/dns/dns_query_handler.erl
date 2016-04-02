@@ -10,7 +10,228 @@
 %%%-------------------------------------------------------------------
 -module(dns_query_handler).
 
--include_lib("kernel/src/inet_dns.hrl").
+%%-include_lib("kernel/src/inet_dns.hrl").
+
+%%
+%% Currently defined opcodes
+%%
+-define(QUERY,    16#0).          %% standard query
+-define(IQUERY,   16#1).	      %% inverse query
+-define(STATUS,   16#2).	      %% nameserver status query
+%% -define(xxx,   16#3)  %% 16#3 reserved
+%%  non standard
+-define(UPDATEA,  16#9).	       %% add resource record
+-define(UPDATED,  16#a).	       %% delete a specific resource record
+-define(UPDATEDA, 16#b).	       %% delete all nemed resource record
+-define(UPDATEM,  16#c).	       %% modify a specific resource record
+-define(UPDATEMA, 16#d).	       %% modify all named resource record
+
+-define(ZONEINIT, 16#e).	       %% initial zone transfer
+-define(ZONEREF,  16#f).	       %% incremental zone referesh
+
+
+%%
+%% Currently defined response codes
+%%
+-define(NOERROR,  0).		%% no error
+-define(FORMERR,  1).		%% format error
+-define(SERVFAIL, 2).		%% server failure
+-define(NXDOMAIN, 3).		%% non existent domain
+-define(NOTIMP,	  4).		%% not implemented
+-define(REFUSED,  5).		%% query refused
+%%	non standard
+-define(NOCHANGE, 16#f).		%% update failed to change db
+-define(BADVERS,  16).
+
+%%
+%% Type values for resources and queries
+%%
+-define(T_A,		1).		%% host address
+-define(T_NS,		2).		%% authoritative server
+-define(T_MD,		3).		%% mail destination
+-define(T_MF,		4).		%% mail forwarder
+-define(T_CNAME,	5).		%% connonical name
+-define(T_SOA,		6).		%% start of authority zone
+-define(T_MB,		7).		%% mailbox domain name
+-define(T_MG,		8).		%% mail group member
+-define(T_MR,		9).		%% mail rename name
+-define(T_NULL,		10).		%% null resource record
+-define(T_WKS,		11).		%% well known service
+-define(T_PTR,		12).		%% domain name pointer
+-define(T_HINFO,	13).		%% host information
+-define(T_MINFO,	14).		%% mailbox information
+-define(T_MX,		15).		%% mail routing information
+-define(T_TXT,		16).		%% text strings
+-define(T_AAAA,         28).            %% ipv6 address
+%% SRV (RFC 2052)
+-define(T_SRV,          33).            %% services
+%% NAPTR (RFC 2915)
+-define(T_NAPTR,        35).            %% naming authority pointer
+-define(T_OPT,          41).            %% EDNS pseudo-rr RFC2671(7)
+%% SPF (RFC 4408)
+-define(T_SPF,          99).            %% server policy framework
+%%      non standard
+-define(T_UINFO,	100).		%% user (finger) information
+-define(T_UID,		101).		%% user ID
+-define(T_GID,		102).		%% group ID
+-define(T_UNSPEC,	103).		%% Unspecified format (binary data)
+%%	Query type values which do not appear in resource records
+-define(T_AXFR,		252).		%% transfer zone of authority
+-define(T_MAILB,	253).		%% transfer mailbox records
+-define(T_MAILA,	254).		%% transfer mail agent records
+-define(T_ANY,		255).		%% wildcard match
+
+%%
+%% Symbolic Type values for resources and queries
+%%
+-define(S_A,		a).		%% host address
+-define(S_NS,		ns).		%% authoritative server
+-define(S_MD,		md).		%% mail destination
+-define(S_MF,		mf).		%% mail forwarder
+-define(S_CNAME,	cname).		%% connonical name
+-define(S_SOA,		soa).		%% start of authority zone
+-define(S_MB,		mb).		%% mailbox domain name
+-define(S_MG,		mg).		%% mail group member
+-define(S_MR,		mr).		%% mail rename name
+-define(S_NULL,		null).		%% null resource record
+-define(S_WKS,		wks).		%% well known service
+-define(S_PTR,		ptr).		%% domain name pointer
+-define(S_HINFO,	hinfo).		%% host information
+-define(S_MINFO,	minfo).		%% mailbox information
+-define(S_MX,		mx).		%% mail routing information
+-define(S_TXT,		txt).		%% text strings
+-define(S_AAAA,         aaaa).          %% ipv6 address
+%% SRV (RFC 2052)
+-define(S_SRV,          srv).           %% services
+%% NAPTR (RFC 2915)
+-define(S_NAPTR,        naptr).         %% naming authority pointer
+-define(S_OPT,          opt).           %% EDNS pseudo-rr RFC2671(7)
+%% SPF (RFC 4408)
+-define(S_SPF,          spf).           %% server policy framework
+%%      non standard
+-define(S_UINFO,	uinfo).		%% user (finger) information
+-define(S_UID,		uid).		%% user ID
+-define(S_GID,		gid).		%% group ID
+-define(S_UNSPEC,	unspec).        %% Unspecified format (binary data)
+%%	Query type values which do not appear in resource records
+-define(S_AXFR,		axfr).		%% transfer zone of authority
+-define(S_MAILB,	mailb).		%% transfer mailbox records
+-define(S_MAILA,	maila).		%% transfer mail agent records
+-define(S_ANY,		any).		%% wildcard match
+
+%%
+%% Values for class field
+%%
+
+-define(C_IN,		1).      	%% the arpa internet
+-define(C_CHAOS,	3).		%% for chaos net at MIT
+-define(C_HS,		4).		%% for Hesiod name server at MIT
+%%  Query class values which do not appear in resource records
+-define(C_ANY,		255).		%% wildcard match
+
+
+%% indirection mask for compressed domain names
+-define(INDIR_MASK, 16#c0).
+
+%%
+%% Structure for query header, the order of the fields is machine and
+%% compiler dependent, in our case, the bits within a byte are assignd
+%% least significant first, while the order of transmition is most
+%% significant first.  This requires a somewhat confusing rearrangement.
+%%
+-record(dns_header,
+{
+    id = 0,       %% ushort query identification number
+    %% byte F0
+    qr = 0,       %% :1   response flag
+    opcode = 0,   %% :4   purpose of message
+    aa = 0,       %% :1   authoritive answer
+    tc = 0,       %% :1   truncated message
+    rd = 0,       %% :1   recursion desired
+    %% byte F1
+    ra = 0,       %% :1   recursion available
+    pr = 0,       %% :1   primary server required (non standard)
+    %% :2   unused bits
+    rcode = 0     %% :4   response code
+}).
+
+-record(dns_rec,
+{
+    header,       %% dns_header record
+    qdlist = [],  %% list of question entries
+    anlist = [],  %% list of answer entries
+    nslist = [],  %% list of authority entries
+    arlist = []   %% list of resource entries
+}).
+
+%% DNS resource record
+-record(dns_rr,
+{
+    domain = "",   %% resource domain
+    type = any,    %% resource type
+    class = in,    %% reource class
+    cnt = 0,       %% access count
+    ttl = 0,       %% time to live
+    data = [],     %% raw data
+    %%
+    tm,            %% creation time
+    bm = [],       %% Bitmap storing domain character case information.
+    func = false   %% Optional function calculating the data field.
+}).
+
+-define(DNS_UDP_PAYLOAD_SIZE, 1280).
+
+-record(dns_rr_opt,           %% EDNS RR OPT (RFC2671), dns_rr{type=opt}
+{
+    domain = "",        %% should be the root domain
+    type = opt,
+    udp_payload_size = ?DNS_UDP_PAYLOAD_SIZE, %% RFC2671(4.5 CLASS)
+    ext_rcode = 0,      %% RFC2671(4.6 EXTENDED-RCODE)
+    version = 0,        %% RFC2671(4.6 VERSION)
+    z = 0,              %% RFC2671(4.6 Z)
+    data = []           %% RFC2671(4.4)
+}).
+
+-record(dns_query,
+{
+    domain,     %% query domain
+    type,        %% query type
+    class      %% query class
+}).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
@@ -153,7 +374,7 @@ handle_a(DomainNotNormalized, LBAdvice) ->
         {Domain, Prefix, #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone} ->
             case proplists:get_value(Domain, IPAddresses, undefined) of
                 undefined ->
-                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone);
+                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone, LBAdvice);
                 IPAddrList ->
                     FinalIPAddrList = account_lb(IPAddrList, LBAdvice),
                     {ok,
@@ -187,7 +408,7 @@ handle_ns(DomainNotNormalized, LBAdvice) ->
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone, LBAdvice)
             end
     end.
 
@@ -202,8 +423,8 @@ handle_cname(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -217,7 +438,7 @@ handle_mx(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Domain, Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, mail_exchange = MXServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
+        {Domain, _Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, mail_exchange = MXServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
             case Domain of
                 CName ->
                     {ok,
@@ -230,7 +451,7 @@ handle_mx(DomainNotNormalized, LBAdvice) ->
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+                    answer_with_soa(Domain, DNSZone)
             end
     end.
 
@@ -245,7 +466,7 @@ handle_soa(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Domain, Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, authority = Authority,
+        {Domain, _Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, authority = Authority,
             ttl_a = TTLA, ttl_ns = TTLNS, ttl_soa = TTLSOA} = DNSZone} ->
             case Domain of
                 CName ->
@@ -260,7 +481,7 @@ handle_soa(DomainNotNormalized, LBAdvice) ->
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+                    answer_with_soa(Domain, DNSZone)
             end
     end.
 
@@ -275,8 +496,8 @@ handle_wks(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -286,12 +507,12 @@ handle_wks(DomainNotNormalized, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_ptr(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
-handle_ptr(DomainNotNormalized, _) ->
+handle_ptr(DomainNotNormalized, _LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -305,8 +526,8 @@ handle_hinfo(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -320,8 +541,8 @@ handle_minfo(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -335,8 +556,8 @@ handle_txt(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -403,36 +624,13 @@ parse_domain(DomainArg) ->
 %% 2) The subdomain is in form of alias.onedata.org -> return NS servers of supporting provider
 %% @end
 %%--------------------------------------------------------------------
--spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}) ->
+-spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}, LBAdvice :: term()) ->
     dns_worker_plugin_behaviour:handler_reply().
-handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
+handle_unknown_subdomain(Domain, PrefixStr, DNSZone, LBAdvice) ->
     try
         Prefix = list_to_binary(PrefixStr),
-        GetUserResult = case Prefix of
-            <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
-                user_logic:get_user_doc(UUID);
-            _ ->
-                case user_logic:get_user_doc({alias, Prefix}) of
-                    {ok, Ans} ->
-                        {ok, Ans};
-                    _ ->
-                        user_logic:get_user_doc(Prefix)
-                end
-        end,
-        case GetUserResult of
-            {ok, #document{key = UserID, value = #onedata_user{chosen_provider = DefaultProvider}}} ->
-                % If default provider is not known, set it.
-                DataProplist =
-                    try
-                        {ok, Data} = provider_logic:get_data(DefaultProvider),
-                        Data
-                    catch _:_ ->
-                        {ok, NewDefProv} =
-                            provider_logic:choose_provider_for_user(UserID),
-                        ok = user_logic:modify(UserID, [{chosen_provider, NewDefProv}]),
-                        {ok, Data2} = provider_logic:get_data(NewDefProv),
-                        Data2
-                    end,
+        case get_provider_data_by_alias(Prefix) of
+            {ok, DataProplist} ->
                 GRDomain = get_canonical_hostname(),
                 RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
                 % Check if provider is in the same domain - then return NS
@@ -441,9 +639,14 @@ handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
                 case string:rstr(RedPoint, GRDomain) of
                     0 ->
                         #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone,
-                        IPAddressList = proplists:get_value(GRDomain, IPAddresses),
+                        IPAddrList = proplists:get_value(GRDomain, IPAddresses),
+                        FinalIPAddrList = account_lb(IPAddrList, LBAdvice),
+                        ?dump({ok,
+                                [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- FinalIPAddrList] ++
+                                [dns_server:authoritative_answer_flag(true)]
+                        }),
                         {ok,
-                                [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddressList] ++
+                                [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- FinalIPAddrList] ++
                                 [dns_server:authoritative_answer_flag(true)]
                         };
                     _ ->
@@ -495,6 +698,41 @@ account_lb(IPAddrList, LBAdvice) ->
         _ ->
             IPAddrList
     end.
+
+
+get_provider_data_by_alias(Alias) ->
+    GetUserResult = case Alias of
+        <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
+            user_logic:get_user_doc(UUID);
+        _ ->
+            case user_logic:get_user_doc({alias, Alias}) of
+                {ok, Ans} ->
+                    {ok, Ans};
+                _ ->
+                    user_logic:get_user_doc(Alias)
+            end
+    end,
+    case GetUserResult of
+        {ok, #document{key = UserID, value = #onedata_user{chosen_provider = ChosenProvider}}} ->
+            % If default provider is not known, set it.
+            DataProplist =
+                try
+                    {ok, Data} = provider_logic:get_data(ChosenProvider),
+                    Data
+                catch _:_ ->
+                    {ok, NewChosenProv} =
+                        provider_logic:choose_provider_for_user(UserID),
+                    ok = user_logic:modify(UserID, [{chosen_provider, NewChosenProv}]),
+                    {ok, Data2} = provider_logic:get_data(NewChosenProv),
+                    Data2
+                end,
+            {ok, DataProplist};
+        _ ->
+            error
+    end.
+
+
+
 
 %% % TODO this is a temporary solution to always return A records of provider when
 %% % the DNS is asked for address of alias.onedata.org

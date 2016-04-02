@@ -84,7 +84,7 @@ start() ->
                 {'_', redirector_handler, []}
             ]},
             % Redirect requests in form: alias.onedata.org
-            {":alias." ++ GRHostname, [{'_', client_redirect_handler, []}]},
+            {":alias." ++ GRHostname, [{'_', client_redirect_handler, [GuiPort]}]},
             % Proper requests are routed to handler modules
             % Proper requests are routed to handler modules
             {'_', [
