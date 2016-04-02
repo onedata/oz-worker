@@ -8,13 +8,6 @@ export default Ember.Component.extend({
 
   classNames: ['tokens-list-item'],
 
-  didInsertElement() {
-    this.$().find('.input-with-button').on('click', function(event) {
-      debugger;
-      event.stopPropagation();
-    });
-  },
-
   actions: {
     remove() {
       this.get('token').destroyRecord();

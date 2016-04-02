@@ -50,5 +50,13 @@ export default Ember.Service.extend({
 
   getZoneName() {
     return this.get('server').publicRPC('getZoneName');
+  },
+
+  getUserAlias() {
+    return this.get('server').privateRPC('getUserAlias');
+  },
+
+  setUserAlias() {
+    return this.get('server').privateRPC('setUserAlias');
   }
 });

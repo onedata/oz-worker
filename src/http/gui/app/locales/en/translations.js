@@ -117,7 +117,8 @@ export default {
       connectHead: 'connect your accounts',
       manageSpacesHead: 'manage data spaces',
       filesHead: 'go to your files',
-      tokensHead: 'manage client tokens'
+      tokensHead: 'manage client tokens',
+      aliasHead: 'set user alias'
     },
     topBar: {
       manageProviders: 'manage accounts',
