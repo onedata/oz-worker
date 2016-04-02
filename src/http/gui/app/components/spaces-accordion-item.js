@@ -20,6 +20,13 @@ export default Ember.Component.extend({
       // TODO: performance - better all updatePositions in one fun
       $('.accordion-container').on('scroll', updatePosition);
     });
+
+
+
+    // // prevent space token popup close on input-pair click
+    $(document).on('click', `#${this.get('elementId')} .input-with-button`, function (e) {
+      e.stopPropagation();
+    });
   },
 
   actions: {
@@ -51,6 +58,12 @@ export default Ember.Component.extend({
         let space = this.get('space');
         space.set('isDefault', true);
         space.save();
+      },
+      copySuccess() {
+        console.log('Token copied');
+      },
+      copyError() {
+        console.warn('Token not copied');
       }
   }
 });

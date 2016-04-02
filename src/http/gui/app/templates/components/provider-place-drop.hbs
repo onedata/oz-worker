@@ -7,7 +7,7 @@
   </div>
   <div class="drop-body">
     <div class="provider-label">
-      {{provider.name}}
+      {{trim-string provider.name 20}}
     </div>
     {{!-- TODO: location name --}}
     {{!-- <div class="provider-location">
@@ -20,7 +20,7 @@
             {{one-icon icon=(if space.isDefault "space-default" "space")}}
           </div>
           <div class="space-label">
-            {{space.name}}
+            {{trim-string space.name 20}}
           </div>
           {{!-- TODO: space capacity --}}
           {{!-- <div class="space-size">

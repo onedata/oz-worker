@@ -619,7 +619,9 @@ $search-box-height: 36px;
             width: 640px;
 
             input {
-              width: 100%;
+              // TODO: a hack for copy button
+              width: 90%;
+              text-overflow: ellipsis;
             }
           }
         }
