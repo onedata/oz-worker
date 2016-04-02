@@ -11,11 +11,8 @@ export default Ember.Component.extend({
   /** A provider model that will be represented on map */
   provider: null,
 
-  // ICON_AR_X: 0.052344031,
-  // ICON_AR_Y: 0.10648918,
-
-  ICON_AR_X: 0.052344031*0.9,
-  ICON_AR_Y: 0.10648918*0.9,
+  ICON_AR_X: 0.052344031*0.5,
+  ICON_AR_Y: 0.10648918*0.5,
 
   // TODO: dynamic width/height, currently set as in styles
   width: function() {

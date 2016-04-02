@@ -151,7 +151,7 @@ export default {
     },
     providerPlaceDrop: {
       operable: 'Operable',
-      notOperable: 'Not operable',
+      inoperable: 'Inoperable',
       goToFiles: 'Go to your files'
     },
     aliasPanel: {
