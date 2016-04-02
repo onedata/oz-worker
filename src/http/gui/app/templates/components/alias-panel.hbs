@@ -11,7 +11,11 @@
           {{#if aliasEditing}}
             {{input enter='endEditAlias' value=aliasTextEdit}}
           {{else}}
-            {{aliasText}}
+            {{#if correctAlias}}
+              {{aliasText}}
+            {{else}}
+              <em>{{t 'onezone.aliasPanel.noAlias'}}</em>
+            {{/if}}
           {{/if}}
         </div>
       </a>

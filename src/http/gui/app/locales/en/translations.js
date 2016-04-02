@@ -153,6 +153,9 @@ export default {
       operable: 'Operable',
       notOperable: 'Not operable',
       goToFiles: 'Go to your files'
+    },
+    aliasPanel: {
+      noAlias: 'You have no alias'
     }
   }
 };

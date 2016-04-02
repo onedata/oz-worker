@@ -6,6 +6,10 @@ export default Ember.Component.extend({
 
   classNames: ['secondary-accordion', 'alias-panel', 'accordion-content'],
 
+  correctAlias: function() {
+    return !!this.get('aliasText');
+  }.property('aliasText'),
+
   aliasText: null,
   aliasTextEdit: null,
 
@@ -41,6 +45,7 @@ export default Ember.Component.extend({
     },
 
     endEditAlias: function(aliasName) {
+      debugger;
       try {
         this.get('onezoneServer').setUserAlias(aliasName).then(
           () => {

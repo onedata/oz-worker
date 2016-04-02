@@ -56,7 +56,9 @@ export default Ember.Service.extend({
     return this.get('server').privateRPC('getUserAlias');
   },
 
-  setUserAlias() {
-    return this.get('server').privateRPC('setUserAlias');
+  setUserAlias(userAlias) {
+    return this.get('server').privateRPC('setUserAlias', {
+      userAlias: userAlias
+    });
   }
 });
