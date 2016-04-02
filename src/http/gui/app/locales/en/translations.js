@@ -1,5 +1,7 @@
 export default {
   application: {
+    title: 'Onezone',
+
     getStarted: 'get started',
     documentation: 'documentation',
     community: 'community',
@@ -81,11 +83,15 @@ export default {
     }
   },
   login: {
+    title: 'Login',
+
     boxTitle: 'login',
     boxSubtitle: 'Login with your social account',
     unknownZoneName: 'unknown'
   },
   onezone: {
+    title: 'Manage accounts',
+
     messages: {
       noneProviders: {
         title: 'None of your providers does not work',
@@ -114,7 +120,7 @@ export default {
       tokensHead: 'manage client tokens'
     },
     topBar: {
-      manageProviders: 'manage providers',
+      manageProviders: 'manage accounts',
       enableHints: 'enable hints'
     },
     accountsList: {

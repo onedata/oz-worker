@@ -4,6 +4,6 @@ export default PageBase.extend({
   name: 'index',
 
   beforeModel() {
-    this.transitionTo('onezone')
+    this.transitionTo('onezone');
   }
 });
