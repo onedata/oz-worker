@@ -43,6 +43,7 @@ export default Ember.Component.extend({
 
   posY: function() {
     return this.get('atlas.centerY') -
+
       (this.get('provider.latitude')/90)*(this.get('atlas.height')/2) -
       (this.get('height')/2);
   }.property('provider.latitude', 'atlas.centerY'),

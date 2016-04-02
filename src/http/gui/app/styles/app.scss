@@ -232,6 +232,16 @@ html {
   background-color: #EF3C40;
 }
 
+.btn-right {
+  border-top-left-radius: 0px;
+  border-bottom-left-radius: 0px;
+}
+
+.btn-left {
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
+}
+
 // TODO: real style for various contexts
 input {
   font-family: 'Open Sans';
@@ -359,4 +369,39 @@ $dropdown-triangle-width: 8px;
 
 .mouse-pointer {
   cursor: pointer; cursor: hand;
+}
+
+.input-with-button {
+  display: table;
+  width: 100%;
+
+  > * {
+    display: table-cell;
+  }
+
+  > *:first-child {
+    width: 100%;
+  }
+
+  input, .form-control {
+    height: 42px !important;
+    text-overflow: ellipsis;
+  }
+
+  .btn {
+    // a hack to pull up - notice, other than in oneprovider
+    margin-top: -3px;
+
+    width: 48px;
+
+    padding-top: 0;
+    padding-bottom: 0;
+    height: 42px;
+    padding-left: 4px;
+    padding-right: 4px;
+
+    .one-icon {
+      font-size: 32px;
+    }
+  }
 }
