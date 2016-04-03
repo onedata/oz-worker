@@ -12,11 +12,13 @@
 -module(provider_logic).
 -author("Konrad Zemek").
 
+-include("gui/common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("hackney/include/hackney_lib.hrl").
 
 %% API
 -export([create/4, create/5, modify/2, exists/1]).
@@ -207,7 +209,28 @@ test_connection(_, _) ->
 % Checks if given provider (by ID) is alive and responding.
 -spec check_provider_connectivity(ProviderId :: binary()) -> boolean().
 check_provider_connectivity(ProviderId) ->
-    subscriptions:any_connection_active(ProviderId).
+    case subscriptions:any_connection_active(ProviderId) of
+        true ->
+            true;
+        false ->
+            try
+                % Make sure that provider is not active
+                % (sometimes subscriptions lie)
+                {ok, Data} = provider_logic:get_data(ProviderId),
+                RedirectionPoint = proplists:get_value(redirectionPoint, Data),
+                #hackney_url{
+                    host = Host
+                } = hackney_url:parse_url(RedirectionPoint),
+                ConnCheckEndpoint = str_utils:format_bin("https://~s~s", [
+                    Host, ?provider_id_endpoint
+                ]),
+                {ok, _, _, ProviderId} =
+                    http_client:get(ConnCheckEndpoint, [], <<>>, [insecure]),
+                true
+            catch _:_ ->
+                false
+            end
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Returns provider id of provider that has been chosen
