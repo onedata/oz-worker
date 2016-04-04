@@ -491,7 +491,7 @@ account_lb(IPAddrList, LBAdvice) ->
 %% provider data or returns error when it is not possible.
 %% @end
 %%--------------------------------------------------------------------
--spec get_provider_data_by_alias(Alias :: binary) -> {ok, proplists:proplist()} | error.
+-spec get_provider_data_by_alias(Alias :: binary()) -> {ok, proplists:proplist()} | error.
 get_provider_data_by_alias(Alias) ->
     GetUserResult = case Alias of
         <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
