@@ -33,7 +33,7 @@
     <div class="accordion-inner">
       <ul>
         {{#each space.providers as |p|}}
-          <li>
+          <li {{action "goToProvider" p}}>
             <div class="icon">
               {{one-icon icon=(if p.isDefault "provider-home" "provider")}}
             </div>
