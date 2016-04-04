@@ -13,12 +13,12 @@
 -author("Konrad Zemek").
 
 -include("datastore/oz_datastore_models_def.hrl").
-
+-include_lib("ctool/include/logging.hrl").
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
 -export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
--export([get_default_provider/1, set_default_provider/2]).
+-export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
 
@@ -90,7 +90,8 @@ modify(UserId, Proplist) ->
             % TODO mock
             first_space_support_token = FSST,
             default_provider = DefaultProvider,
-            chosen_provider = ChosenProvider
+            chosen_provider = ChosenProvider,
+            client_tokens = ClientTokens
         } = User,
 
         % Check if alias was requested to be modified and if it is allowed
@@ -165,7 +166,8 @@ modify(UserId, Proplist) ->
                     % TODO mock
                     first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST),
                     default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider),
-                    chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider)},
+                    chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider),
+                    client_tokens = proplists:get_value(client_tokens, Proplist, ClientTokens)},
                 DocNew = Doc#document{value = NewUser},
                 onedata_user:save(DocNew),
                 case SetAlias of
@@ -386,22 +388,41 @@ delete_client_token(UserId, Token) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Set user's default space ID.
-%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
-%% don't exist.
+%% @doc Set given provider as default for user or un-sets it.
+%% (It is allowed to not have a default provider)
+%% Throws exception when call to the datastore fails, or user doesn't exist,
+%% or his groups don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_default_provider(UserId :: binary(), ProviderId :: binary()) ->
-    true.
-set_default_provider(UserId, ProviderId) ->
+-spec set_provider_as_default(UserId :: binary(), ProviderId :: binary(),
+    Flag :: boolean()) -> boolean().
+set_provider_as_default(UserId, ProviderId, Flag) ->
     {ok, [{providers, AllUserProviders}]} = get_providers(UserId),
     case ordsets:is_element(ProviderId, AllUserProviders) of
         false ->
             false;
         true ->
-            {ok, _} = onedata_user:update(UserId, fun(User) ->
-                {ok, User#onedata_user{default_provider = ProviderId}}
-            end),
+            Diff = fun(#onedata_user{default_provider = CrrntDefProv} = User) ->
+                NewDefProv = case Flag of
+                    true ->
+                        % Setting ProviderId to default
+                        ProviderId;
+                    false ->
+                        case ProviderId of
+                            CrrntDefProv ->
+                                % Un-setting ProviderId as default - the user
+                                % no longer has a default provider.
+                                undefined;
+                            _ ->
+                                % Un-setting ProviderId as default - but current
+                                % default provider is different, so it stays.
+                                CrrntDefProv
+                        end
+                end,
+                {ok, User#onedata_user{
+                    default_provider = NewDefProv}}
+            end,
+            {ok, _} = onedata_user:update(UserId, Diff),
             true
     end.
 

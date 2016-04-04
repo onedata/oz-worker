@@ -1,5 +1,7 @@
 export default {
   application: {
+    title: 'Onezone',
+
     getStarted: 'get started',
     documentation: 'documentation',
     community: 'community',
@@ -81,11 +83,15 @@ export default {
     }
   },
   login: {
+    title: 'Login',
+
     boxTitle: 'login',
     boxSubtitle: 'Login with your social account',
     unknownZoneName: 'unknown'
   },
   onezone: {
+    title: 'Manage accounts',
+
     messages: {
       noneProviders: {
         title: 'None of your providers does not work',
@@ -111,10 +117,11 @@ export default {
       connectHead: 'connect your accounts',
       manageSpacesHead: 'manage data spaces',
       filesHead: 'go to your files',
-      tokensHead: 'manage client tokens'
+      tokensHead: 'manage client tokens',
+      aliasHead: 'set user alias'
     },
     topBar: {
-      manageProviders: 'manage providers',
+      manageProviders: 'manage accounts',
       enableHints: 'enable hints'
     },
     accountsList: {
@@ -144,8 +151,11 @@ export default {
     },
     providerPlaceDrop: {
       operable: 'Operable',
-      notOperable: 'Not operable',
+      inoperable: 'Inoperable',
       goToFiles: 'Go to your files'
+    },
+    aliasPanel: {
+      noAlias: 'You have no alias'
     }
   }
 };

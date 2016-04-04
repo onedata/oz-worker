@@ -8,7 +8,7 @@
             {{one-icon icon=iconName color=iconColor}}
           </div>
           <div class="secondary-header provider-header stretch-hack">
-            {{provider.name}}
+            {{trim-string provider.name 24}}
           </div>
         </div>
         <div class="star-toggle" {{action "toggleDefault"}}>
@@ -40,7 +40,7 @@
                 {{one-icon icon=(if s.isDefault "space-home" "space")}}
               </div>
               <div class="label">
-                {{s.name}}
+                {{trim-string s.name 24}}
               </div>
             </li>
           {{/each}}

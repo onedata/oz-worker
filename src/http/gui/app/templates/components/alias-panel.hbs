@@ -1,0 +1,24 @@
+<div class="accordion secondary-accordion spaces-accordion">
+  {{!-- faking the accordion group... this should be separate class --}}
+  <div class="accordion-group secondary-accordion-group spaces-accordion-group">
+    <div class="accordion-heading secondary-accordion-heading spaces-accordion-heading">
+      <a class="accordion-toggle secondary-accordion-toggle spaces-accordion-toggle create-new mouse-pointer"
+        {{action 'startEditAlias'}}>
+        <div class="secondary-icon">
+          {{one-icon icon='user'}}
+        </div>
+        <div class="secondary-header space-header stretch-hack">
+          {{#if aliasEditing}}
+            {{input enter='endEditAlias' value=aliasTextEdit}}
+          {{else}}
+            {{#if correctAlias}}
+              {{aliasText}}
+            {{else}}
+              <em>{{t 'onezone.aliasPanel.noAlias'}}</em>
+            {{/if}}
+          {{/if}}
+        </div>
+      </a>
+    </div>
+  </div>
+</div>
