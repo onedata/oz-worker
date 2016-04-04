@@ -4,6 +4,7 @@ $provider-drop-radius: 4px;
 
 .provider-place-drop {
   position: fixed;
+  z-index: 1001 !important;
 
   &.working {
     .drop-panel .drop-title-bar .status-circle {
