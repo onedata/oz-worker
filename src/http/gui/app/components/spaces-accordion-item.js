@@ -64,6 +64,10 @@ export default Ember.Component.extend({
       },
       copyError() {
         console.warn('Token not copied');
+      },
+      goToProvider(provider) {
+        this.get('space.providers').forEach((p) => p.set('isSelected', false));
+        provider.set('isSelected', true);
       }
   }
 });
