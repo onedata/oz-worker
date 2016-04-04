@@ -8,7 +8,7 @@ module.exports = function(defaults) {
       includePaths: ['app/styles', 'app/styles/oneicons']
     },
     'ember-bootstrap': {
-      'importBootstrapFont': false,
+      'importBootstrapFont': true,
       'importBootstrapCSS': false
     }
   });
