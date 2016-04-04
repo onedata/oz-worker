@@ -8,6 +8,14 @@ export default Ember.Component.extend({
 
   classNames: ['tokens-list-item'],
 
+  clipboardTarget: function() {
+    return `#${this.get('inputId')}`;
+  }.property('inputId'),
+
+  inputId: function() {
+    return `clienttoken-input-${this.get('token.id')}`;
+  }.property('token.id'),
+
   actions: {
     remove() {
       this.get('token').destroyRecord();
@@ -16,6 +24,14 @@ export default Ember.Component.extend({
     selectTokenText() {
       let input = this.$().find('input')[0];
       input.setSelectionRange(0, input.value.length);
+    },
+
+    copySuccess() {
+      console.debug('Token copied successfully');
+    },
+
+    copyError() {
+      console.error('Token copy error');
     }
   }
 });

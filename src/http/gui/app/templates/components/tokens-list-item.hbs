@@ -8,13 +8,17 @@
           {{one-icon icon='menu-token'}}
       </div>
       <div class="token-header stretch-hack">
-        {{input value=token.id}}
+        {{input value=token.id id=inputId}}
       </div>
-      <div class="select-button white-on-parent-hover" {{action "selectTokenText"}}>
+
+      {{!-- <div class="select-button white-on-parent-hover" {{action "selectTokenText"}}> --}}
+      {{#copy-button tagName='div' success='copySuccess' error='copyError'
+        clipboardTarget=clipboardTarget class="select-button white-on-parent-hover"}}
         <div class="copy-icon">
           {{one-icon icon="copy"}}
         </div>
-      </div>
+      {{/copy-button}}
+      {{!-- </div> --}}
       <div class="trash-button white-on-parent-hover" {{action "remove"}}>
         <div class="remove-icon">
           {{one-icon icon="remove"}}
