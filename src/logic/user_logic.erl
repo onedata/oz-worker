@@ -13,12 +13,13 @@
 -author("Konrad Zemek").
 
 -include("datastore/oz_datastore_models_def.hrl").
+-include("deps/ctool/include/utils/utils.hrl").
 
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
--export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
+-export([get_data/2, get_spaces/1, get_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_default_provider/2]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
@@ -42,7 +43,7 @@ create(User) ->
 %%--------------------------------------------------------------------
 %% @doc Retrieves user from the database.
 %%--------------------------------------------------------------------
--spec get_user(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
+-spec get_user(Key :: binary() | {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     {ok, #onedata_user{}} | {error, any()}.
 get_user(Key) ->
@@ -57,7 +58,7 @@ get_user(Key) ->
 %%--------------------------------------------------------------------
 %% @doc Retrieves user doc from the database.
 %%--------------------------------------------------------------------
--spec get_user_doc(Key :: binary() | {connected_account_user_id, {ProviderID :: binary(), UserID :: binary()}} |
+-spec get_user_doc(Key :: binary() | {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     {ok, #document{}} | {error, any()}.
 get_user_doc(Key) ->
@@ -211,13 +212,25 @@ merge(_UserId, _Macaroon) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(UserId :: binary()) ->
+-spec get_data(UserId :: binary(), Type :: provider | user) ->
     {ok, [proplists:property()]}.
-get_data(UserId) ->
+get_data(UserId, provider) ->
     {ok, #document{value = #onedata_user{name = Name}}} = onedata_user:get(UserId),
     {ok, [
         {userId, UserId},
         {name, Name}
+    ]};
+get_data(UserId, user) ->
+    {ok, #document{value = #onedata_user{name = Name, connected_accounts = ConnectedAccounts,
+        alias = Alias, email_list = EmailList}}} = onedata_user:get(UserId),
+    ConnectedAccountsMaps = lists:map(fun(Account) ->
+        ?record_to_list(oauth_account, Account) end, ConnectedAccounts),
+    {ok, [
+        {userId, UserId},
+        {name, Name},
+        {connectedAccounts, ConnectedAccountsMaps},
+        {alias, Alias},
+        {emailList, EmailList}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -267,7 +280,7 @@ get_providers(UserId) ->
 %%--------------------------------------------------------------------
 %% @doc Rreturns true if user was found by a given key.
 %%--------------------------------------------------------------------
--spec exists(Key :: binary() | {connected_account_user_id, binary()} |
+-spec exists(Key :: binary() | {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     boolean().
 exists(Key) ->

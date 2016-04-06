@@ -165,8 +165,8 @@ accept_resource(merge, post, UserId, Data, _Client, Req) ->
 -spec provide_resource(Resource :: provided_resource(), UserId :: binary() | undefined,
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
-provide_resource(user, UserId, _Client, Req) ->
-    {ok, User} = user_logic:get_data(UserId),
+provide_resource(user, UserId, #client{type = Type}, Req) ->
+    {ok, User} = user_logic:get_data(UserId, Type),
     {User, Req};
 provide_resource(spaces, UserId, _Client, Req) ->
     {ok, Spaces} = user_logic:get_spaces(UserId),
