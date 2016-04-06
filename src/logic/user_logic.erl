@@ -13,10 +13,11 @@
 -author("Konrad Zemek").
 
 -include("datastore/oz_datastore_models_def.hrl").
+-include("deps/ctool/include/utils/utils.hrl").
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
--export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
+-export([get_data/2, get_spaces/1, get_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_default_provider/2]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
@@ -208,13 +209,25 @@ merge(_UserId, _Macaroon) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(UserId :: binary()) ->
+-spec get_data(UserId :: binary(), Type :: provider | user) ->
     {ok, [proplists:property()]}.
-get_data(UserId) ->
+get_data(UserId, provider) ->
     {ok, #document{value = #onedata_user{name = Name}}} = onedata_user:get(UserId),
     {ok, [
         {userId, UserId},
         {name, Name}
+    ]};
+get_data(UserId, user) ->
+    {ok, #document{value = #onedata_user{name = Name, connected_accounts = ConnectedAccounts,
+        alias = Alias, email_list = EmailList}}} = onedata_user:get(UserId),
+    ConnectedAccountsMaps = lists:map(fun(Account) ->
+        ?record_to_list(oauth_account, Account) end, ConnectedAccounts),
+    {ok, [
+        {userId, UserId},
+        {name, Name},
+        {connectedAccounts, ConnectedAccountsMaps},
+        {alias, Alias},
+        {emailList, EmailList}
     ]}.
 
 %%--------------------------------------------------------------------
