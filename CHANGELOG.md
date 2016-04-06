@@ -4,6 +4,30 @@
 CHANGELOG
 ---------
 
+### 3.0.0-beta1
+
+* VFS-1770 make sure provider is inoperable before displaying it
+* VFS-1768: Token copy button in modals; dynamic page titles
+* VFS-1521 remove providerId restriction on new tokens
+* VFS-1757 Change application ports availability checking procedure.
+* VFS-1792 moving privilages to ctool
+* VFS-1796 location as optional create args
+* VFS-1629 covered cache malfunctions
+* VFS-1629 covered fetching old changes from db
+* VFS-1629 limiting db fetch life
+* VFS-1629 connected provider to the OZ (over websocket)
+* VFS-1629 subscribtions over websocket
+* VFS-1629 sending info needed by op
+* VFS-1629 user subscriptions
+* VFS-1629 client subscriptions
+* VFS-1629 extracted outbox
+* VFS-1629 buffering outbox
+* VFS-1629 extraction of subscription handling
+* VFS-1629 introduction of modules: cache, subscribers, translator
+* VFS-1629 provider can obtain only spaces on his own
+* VFS-1629 subscriptions via rest
+
+
 ### 3.0.0-alpha3
 
 * VFS-1638 enable simple auth mixins and adjust redirection pages after login
