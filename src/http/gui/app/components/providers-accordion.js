@@ -2,12 +2,12 @@ import Ember from 'ember';
 
 // TODO: shared base class with spaces-accordion
 export default Ember.Component.extend({
-  classNames: ['providers-accordion', 'accordion-content'],
+  classNames: ['secondary-accordion', 'providers-accordion', 'accordion-content'],
 
   noProviders: function() {
     let providers = this.get('providers');
     return providers.get('length') === 0;
-  }.property('providers'),
+  }.property('providers.length'),
 
   didInsertElement() {
     this.$().find('#providers-list').searchable({
@@ -21,5 +21,14 @@ export default Ember.Component.extend({
         elem.slideUp( 100 );
       }
     });
+  },
+
+  actions: {
+    selectProvider(provider) {
+      if (provider) {
+        this.get('providers').forEach((p) => p.set('isSelected', false));
+        provider.set('isSelected', true);
+      }
+    }
   }
 });

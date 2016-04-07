@@ -1,9 +1,8 @@
 import Ember from 'ember';
 
-// TODO: shared base class with spaces-accordion
 export default Ember.Component.extend({
   store: Ember.inject.service('store'),
-  classNames: ['tokens-accordion', 'accordion-content'],
+  classNames: ['secondary-accordion', 'tokens-accordion', 'accordion-content'],
 
   actions: {
     createNewToken: function() {

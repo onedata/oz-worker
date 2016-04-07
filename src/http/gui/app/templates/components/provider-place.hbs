@@ -1,0 +1,9 @@
+<div class="circle" {{action "toggleActive" bubbles=false }}>
+  <div class="provider-icon">
+    {{one-icon icon="provider"}}
+  </div>
+</div>
+
+{{#if isActive}}
+  {{provider-place-drop providerPlace=this}}
+{{/if}}

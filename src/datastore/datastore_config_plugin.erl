@@ -25,6 +25,9 @@
 %%--------------------------------------------------------------------
 -spec models() -> Models :: [model_behaviour:model_type()].
 models() -> [
+  outbox,
+  provider_subscription,
+  subscriptions_state,
   ozpca_state,
   onedata_auth,
   onedata_user,
