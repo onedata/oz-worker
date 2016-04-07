@@ -266,11 +266,13 @@ support(ProviderId, Macaroon, SupportedSize) ->
 -spec get_data(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider) ->
     {ok, [proplists:property()]}.
 get_data(SpaceId, {user, UserId}) ->
+    {ok, #document{value = #space{name = CanonicalName}}} = space:get(SpaceId),
     {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
     {ok, Name} = maps:find(SpaceId, SpaceNames),
     {ok, [
         {spaceId, SpaceId},
-        {name, Name}
+        {name, Name},
+        {canonicalName, CanonicalName}
     ]};
 get_data(SpaceId, provider) ->
     {ok, #document{value = #space{name = Name, size = Size}}} = space:get(SpaceId),
