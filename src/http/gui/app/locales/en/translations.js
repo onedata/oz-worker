@@ -82,7 +82,8 @@ export default {
   },
   login: {
     boxTitle: 'login',
-    boxSubtitle: 'Login with your social account'
+    boxSubtitle: 'Login with your social account',
+    unknownZoneName: 'unknown'
   },
   onezone: {
     messages: {
@@ -141,5 +142,10 @@ export default {
     },
     tokensAccordionItem: {
     },
+    providerPlaceDrop: {
+      operable: 'Operable',
+      notOperable: 'Not operable',
+      goToFiles: 'Go to your files'
+    }
   }
 };

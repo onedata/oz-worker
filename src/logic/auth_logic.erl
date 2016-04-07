@@ -17,6 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("hackney/include/hackney_lib.hrl").
 
 -define(STATE_TOKEN, state_token).
 -define(STATE_TOKEN_EXPIRATION_SECS, 60). %% @todo: config
@@ -109,12 +110,10 @@ get_redirection_uri(UserId, ProviderId) ->
     % To do this, we need a recursive DNS server in docker environment,
     % whose address must be fed to system's resolv.conf.
     {ok, PData} = provider_logic:get_data(ProviderId),
-    [RedirectionIP | _] = proplists:get_value(urls, PData),
     RedirectionPoint = proplists:get_value(redirectionPoint, PData),
-    {ok, {_Scheme, _UserInfo, _HostStr, Port, _Path, _Query}} =
-        http_uri:parse(str_utils:to_list(RedirectionPoint)),
+    #hackney_url{host = Host, port = Port} = hackney_url:parse_url(RedirectionPoint),
     URL = str_utils:format_bin("https://~s:~B~s?code=~s", [
-        RedirectionIP, Port, ?provider_auth_endpoint, Token
+        Host, Port, ?provider_auth_endpoint, Token
     ]),
     {ok, URL}.
 

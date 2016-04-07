@@ -180,9 +180,3 @@ package: check_distribution package/$(PKG_ID).tar.gz
 
 pkgclean:
 	rm -rf package
-
-docker:
-	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \
-                     --email $(DOCKER_REG_EMAIL) --name oz_worker \
-                     --build-arg VERSION=$(PKG_VERSION) \
-                     --publish --remove packaging
