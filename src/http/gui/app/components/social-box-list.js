@@ -16,6 +16,7 @@ export default Ember.Component.extend({
 
   actions: {
     authenticate(providerName) {
+      this.$().find(`.login-icon-box.${providerName}`).addClass('active');
       this.get('onezoneServer').getLoginEndpoint(providerName).then((url) => {
         window.location = url;
       });
