@@ -85,6 +85,3 @@ handle(<<"getRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     UserId = g_session:get_user_id(),
     % @todo check if provider is online, if not push update of model
     auth_logic:get_redirection_uri(UserId, ProviderId).
-
-
-
