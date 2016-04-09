@@ -136,7 +136,7 @@ no_space_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = create_provider(Node, ?ID(p1), []),
-    S1 = #space{name = <<"initial">>, providers = []},
+    S1 = #space{name = <<"initial">>, providers_supports = []},
     save(Node, ?ID(s1), S1),
 
     % when
@@ -154,7 +154,7 @@ space_update_through_support_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = create_provider(Node, ?ID(p1), [?ID(s1)]),
-    S1 = #space{name = <<"initial">>, providers = [PID]},
+    S1 = #space{name = <<"initial">>, providers_supports = [{PID, 0}]},
     save(Node, ?ID(s1), S1),
 
     % when
@@ -172,7 +172,8 @@ space_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = create_provider(Node, ?ID(p1), []),
-    S1 = #space{name = <<"initial">>, providers = [PID], users = [{?ID(u1), []}]},
+    S1 = #space{name = <<"initial">>, providers_supports = [{PID, 0}],
+        users = [{?ID(u1), []}]},
     U1 = #onedata_user{name = <<"u1">>},
 
     save(Node, ?ID(u1), U1),
@@ -207,10 +208,9 @@ all_data_in_space_update_test(Config) ->
     % when
     Space = #space{
         name = <<"space">>,
-        providers = [PID, PID2, PID3],
         users = [{?ID(u1), privileges:space_manager()}, {?ID(u2), []}],
         groups = [{?ID(g1), privileges:space_admin()}, {?ID(g2), []}],
-        size = [{PID2, 100}, {PID3, 1000}]
+        providers_supports = [{PID, 0}, {PID2, 100}, {PID3, 1000}]
     },
     Context = init_messages(Node, PID, []),
     save(Node, ?ID(s1), Space),
@@ -305,7 +305,8 @@ simple_delete_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = create_provider(Node, ?ID(p1), [?ID(s1)]),
     U1 = #onedata_user{name = <<"u1">>, groups = [?ID(g1)]},
-    S1 = #space{name = <<"s1">>, providers = [PID], users = [{?ID(u1), []}]},
+    S1 = #space{name = <<"s1">>, providers_supports = [{PID, 0}],
+        users = [{?ID(u1), []}]},
     G1 = #user_group{name = <<"g1">>, users = [{?ID(u1), []}]},
 
     save(Node, ?ID(u1), U1),
@@ -392,8 +393,8 @@ updates_for_added_user_test(Config) ->
     PID = create_provider(Node, ?ID(p1), [?ID(s1), ?ID(s2)]),
     U1 = #onedata_user{name = <<"u1">>, groups = [?ID(g1)], spaces = [?ID(s2)]},
     G1 = #user_group{name = <<"g1">>, users = [{?ID(u1), []}], spaces = [?ID(s1)]},
-    S1 = #space{name = <<"s1">>, providers = [PID], groups = [{?ID(g1), []}]},
-    S2 = #space{name = <<"s2">>, providers = [PID], users = [{?ID(u1), []}]},
+    S1 = #space{name = <<"s1">>, providers_supports = [{PID, 0}], groups = [{?ID(g1), []}]},
+    S2 = #space{name = <<"s2">>, providers_supports = [{PID, 0}], users = [{?ID(u1), []}]},
     save(Node, ?ID(u1), U1),
     save(Node, ?ID(g1), G1),
     save(Node, ?ID(s1), S1),
@@ -498,7 +499,7 @@ fetches_changes_from_both_cache_and_db(Config) ->
     PID = create_provider(Node, ?ID(p1), [
         ?ID(s1), ?ID(s2), ?ID(s3), ?ID(s4), ?ID(s5), ?ID(s6), ?ID(s7), ?ID(s8), ?ID(s9)
     ]),
-    Space = #space{name = <<"initial">>, providers = [PID]},
+    Space = #space{name = <<"initial">>, providers_supports = [{PID, 0}]},
     save(Node, ?ID(s1), Space),
     save(Node, ?ID(s3), Space),
     save(Node, ?ID(s2), Space),
@@ -545,7 +546,7 @@ stress_test(Config) ->
 
         %% when
         PID = create_provider(Node, PName, SIDs),
-        Space = #space{name = <<"name">>, providers = [PID]},
+        Space = #space{name = <<"name">>, providers_supports = [{PID, 0}]},
         Context = init_messages(Node, PID, []),
         lists:map(fun(SID) ->
             save(Node, SID, Space)
@@ -578,7 +579,7 @@ fetches_changes_when_cache_has_gaps(Config) ->
     PID = create_provider(Node, ?ID(p1), [
         ?ID(s1), ?ID(s2), ?ID(s3), ?ID(s4), ?ID(s5), ?ID(s6), ?ID(s7), ?ID(s8), ?ID(s9)
     ]),
-    Space = #space{name = <<"initial">>, providers = [PID]},
+    Space = #space{name = <<"initial">>, providers_supports = [{PID, 0}]},
     save(Node, ?ID(s1), Space),
     save(Node, ?ID(s2), Space),
     save(Node, ?ID(s3), Space),
@@ -715,20 +716,19 @@ generate_cert_files() ->
 %%% Internal: Message expectations
 %%%===================================================================
 
-expectation(ID, #space{name = Name, providers = Providers, groups = Groups,
-    size = Size, users = Users}) ->
-    space_expectation(ID, Name, Providers, Users, Groups, Size);
+expectation(ID, #space{name = Name, providers_supports = Supports,
+    groups = Groups, users = Users}) ->
+    space_expectation(ID, Name, Users, Groups, Supports);
 expectation(ID, #onedata_user{name = Name, groups = Groups, spaces = Spaces}) ->
     user_expectation(ID, Name, Spaces, Groups);
 expectation(ID, #user_group{name = Name, users = Users, spaces = Spaces}) ->
     group_expectation(ID, Name, Users, Spaces).
 
-space_expectation(ID, Name, Providers, Users, Groups, Supports) ->
+space_expectation(ID, Name, Users, Groups, Supports) ->
     [{<<"id">>, ID}, {<<"space">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
-        {<<"size">>, Supports},
-        {<<"providers">>, Providers},
+        {<<"providers_supports">>, Supports},
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"groups">>, privileges_as_binaries(Groups)}
     ]}].

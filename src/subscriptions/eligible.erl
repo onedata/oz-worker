@@ -26,8 +26,9 @@
 -spec providers(Doc :: datastore:document(), Model :: subscriptions:model())
         -> [ProviderID :: binary()].
 providers(Doc, space) ->
-    #document{value = #space{providers = SpaceProviders,
-        users = SpaceUserTuples, groups = GroupTuples}} = Doc,
+    #document{value = #space{users = SpaceUserTuples, groups = GroupTuples,
+        providers_supports = ProvidersSupports}} = Doc,
+    {SpaceProviders, _} = lists:unzip(ProvidersSupports),
 
     GroupUsersSets = lists:flatmap(fun({GroupId, _}) ->
         {ok, #document{value = #user_group{users = GroupUserTuples}}} = user_group:get(GroupId),
