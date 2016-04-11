@@ -405,8 +405,7 @@ delete_client_token(UserId, Token) ->
 %%--------------------------------------------------------------------
 %% @doc Set given provider as default for user or un-sets it.
 %% (It is allowed to not have a default provider)
-%% Throws exception when call to the datastore fails, or user doesn't exist,
-%% or his groups don't exist.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec set_provider_as_default(UserId :: binary(), ProviderId :: binary(),
