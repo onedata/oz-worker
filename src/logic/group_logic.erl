@@ -191,7 +191,9 @@ get_spaces(GroupId) ->
 get_providers(GroupId) ->
     {ok, #document{value = #user_group{spaces = Spaces}}} = user_group:get(GroupId),
     GroupProviders = lists:foldl(fun(Space, Providers) ->
-        {ok, #document{value = #space{providers = SpaceProviders}}} = space:get(Space),
+        {ok, #document{value = #space{providers_supports = ProvidersSupports}}}
+            = space:get(Space),
+        {SpaceProviders, _} = lists:unzip(ProvidersSupports),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)
     end, ordsets:new(), Spaces),
     {ok, [{providers, GroupProviders}]}.
