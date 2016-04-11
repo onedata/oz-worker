@@ -9,6 +9,10 @@ import DS from 'ember-data';
  */
 export default DS.Model.extend({
   name: DS.attr('string'),
+
+  /** isDefault is old form of "is home a space" - only one user space can be default */
   isDefault: DS.attr('boolean', {defaultValue: false}),
+
+  /** List of models of providers that support this space */
   providers: DS.hasMany('provider', {async: true})
 });
