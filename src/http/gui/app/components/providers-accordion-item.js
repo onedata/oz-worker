@@ -1,11 +1,18 @@
 import Ember from 'ember';
 import bindFloater from '../utils/bind-floater';
 
+/**
+ * Provider entry in sidebar. Contains list of its spaces.
+ * @module components/providers-accordion-item
+ * @author Jakub Liput
+ * @copyright (C) 2016 ACK CYFRONET AGH
+ * @license This software is released under the MIT license cited in 'LICENSE.txt'.
+ */
 export default Ember.Component.extend({
   store: Ember.inject.service('store'),
   onezoneServer: Ember.inject.service('onezoneServer'),
 
-  /** Should be injected */
+  /** Provider model to display - should be injected */
   provider: null,
 
   iconName: function() {
@@ -31,17 +38,7 @@ export default Ember.Component.extend({
   },
 
   actions: {
-    // Old behaviour - redirects directly to Oneprovider using url
-    // /** Redirects to OneProvider using url from provider model */
-    // goToProvider() {
-    //   let provider = this.get('provider');
-    //   if (provider) {
-    //     this.get('onezoneServer').getProviderRedirectURL(provider.get('id')).then((url) => {
-    //       window.location = url;
-    //     });
-    //   }
-    // },
-
+    /** Currently set its provider selection */
     goToProvider() {
       let provider = this.get('provider');
       this.sendAction('selectProvider', provider);
@@ -54,8 +51,6 @@ export default Ember.Component.extend({
       if (provider.get('isDefault')) {
         provider.set('isDefault', false);
       } else {
-        // TODO: use query?
-        // there should be only one default provider, but for safety...
         let defaultProviders = store.peekAll('provider').filterBy('isDefault', true);
         defaultProviders.toArray().forEach((p) => {
           p.set('isDefault', false);

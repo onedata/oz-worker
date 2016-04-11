@@ -1,5 +1,13 @@
 import Ember from 'ember';
 
+/**
+ * Renders single login button. Can optionally has a "link" property set to go
+ * to a provided link instead of invoking action.
+ * @module components/social-box
+ * @author Jakub Liput
+ * @copyright (C) 2016 ACK CYFRONET AGH
+ * @license This software is released under the MIT license cited in 'LICENSE.txt'.
+ */
 export default Ember.Component.extend({
   tagName: 'div',
   classNames: ['social-box-component'],

@@ -10,6 +10,5 @@ export default LogoutRoute.extend({
       console.debug('logout promise ');
       window.location = '/do_logout';
     });
-    //Ember.$.ajax({ url: '/logout.html', type: 'POST' });
   }
 });

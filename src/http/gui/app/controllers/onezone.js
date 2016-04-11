@@ -8,7 +8,8 @@ export default Ember.Controller.extend({
     });
   },
 
-  queryParams: ['expand_accounts', 'expand_spaces', 'expand_providers', 'expand_tokens'],
+  queryParams: ['expand_accounts', 'expand_spaces', 'expand_providers',
+    'expand_tokens', 'expand_alias'],
 
   expandAccounts: function() {
     return this.get('expand_accounts') === 'true';
@@ -26,6 +27,10 @@ export default Ember.Controller.extend({
     return this.get('expand_tokens') === 'true';
   }.property('expand_tokens'),
 
+  expandAlias: function() {
+    return this.get('expand_alias') === 'true';
+  }.property('expand_alias'),
+
   actions: {
     expandQuerySpecifiedAccordions: function() {
       if (this.get('expandAccounts')) {
@@ -39,6 +44,9 @@ export default Ember.Controller.extend({
       }
       if (this.get('expandTokens')) {
         $('#collapse-tokens').collapse('show');
+      }
+      if (this.get('expandAlias')) {
+        $('#collapse-alias').collapse('show');
       }
     }
   },
