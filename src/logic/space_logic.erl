@@ -50,7 +50,9 @@ has_provider(SpaceId, ProviderId) ->
     case exists(SpaceId) of
         false -> false;
         true ->
-            {ok, #document{value = #space{providers = Providers}}} = space:get(SpaceId),
+            {ok, #document{value = #space{
+                providers_supports = ProvidersSupports}}} = space:get(SpaceId),
+            {Providers, _} = lists:unzip(ProvidersSupports),
             lists:member(ProviderId, Providers)
     end.
 
@@ -140,7 +142,7 @@ has_effective_privilege(SpaceId, UserId, Privilege) ->
 -spec create({user | group, Id :: binary()}, Name :: binary()) ->
     {ok, SpaceId :: binary()} | no_return().
 create(Member, Name) ->
-    create_with_provider(Member, Name, [], []).
+    create_with_provider(Member, Name, []).
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user, by a provider that will support it.
@@ -152,7 +154,7 @@ create(Member, Name) ->
     {ok, SpaceId :: binary()}.
 create({provider, ProviderId}, Name, Macaroon, Size) ->
     {ok, Member} = token_logic:consume(Macaroon),
-    create_with_provider(Member, Name, [ProviderId], [{ProviderId, Size}]).
+    create_with_provider(Member, Name, [{ProviderId, Size}]).
 
 %%--------------------------------------------------------------------
 %% @doc Modifies Space's data.
@@ -247,10 +249,9 @@ support(ProviderId, Macaroon, SupportedSize) ->
         true -> ok;
         false ->
             {ok, _} = space:update(SpaceId, fun(Space) ->
-                #space{size = Size, providers = Providers} = Space,
+                #space{providers_supports = Supports} = Space,
                 {ok, Space#space{
-                    size = [{ProviderId, SupportedSize} | Size],
-                    providers = [ProviderId | Providers]
+                    providers_supports = [{ProviderId, SupportedSize} | Supports]
                 }}
             end),
             add_space_to_providers(SpaceId, [ProviderId])
@@ -266,20 +267,21 @@ support(ProviderId, Macaroon, SupportedSize) ->
 -spec get_data(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider) ->
     {ok, [proplists:property()]}.
 get_data(SpaceId, {user, UserId}) ->
-    {ok, #document{value = #space{name = CanonicalName}}} = space:get(SpaceId),
+    {ok, #document{value = #space{name = CanonicalName, providers_supports = Supports}}} = space:get(SpaceId),
     {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
     {ok, Name} = maps:find(SpaceId, SpaceNames),
     {ok, [
         {spaceId, SpaceId},
         {name, Name},
-        {canonicalName, CanonicalName}
+        {canonicalName, CanonicalName},
+        {providersSupports, Supports}
     ]};
 get_data(SpaceId, provider) ->
-    {ok, #document{value = #space{name = Name, size = Size}}} = space:get(SpaceId),
+    {ok, #document{value = #space{name = CanonicalName, providers_supports = Supports}}} = space:get(SpaceId),
     {ok, [
         {spaceId, SpaceId},
-        {name, Name},
-        {size, Size}
+        {name, CanonicalName},
+        {providersSupports, Supports}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -337,7 +339,9 @@ get_groups(SpaceId) ->
 -spec get_providers(SpaceId :: binary(), Client :: user | provider) ->
     {ok, [proplists:property()]}.
 get_providers(SpaceId, _Client) ->
-    {ok, #document{value = #space{providers = Providers}}} = space:get(SpaceId),
+    {ok, #document{value = #space{providers_supports = ProvidersSupports}}}
+        = space:get(SpaceId),
+    {Providers, _} = lists:unzip(ProvidersSupports),
     {ok, [{providers, Providers}]}.
 
 %%--------------------------------------------------------------------
@@ -399,7 +403,7 @@ get_privileges(SpaceId, {group, GroupId}) ->
     true.
 remove(SpaceId) ->
     {ok, #document{value = Space}} = space:get(SpaceId),
-    #space{users = Users, groups = Groups, providers = Providers} = Space,
+    #space{users = Users, groups = Groups, providers_supports = Supports} = Space,
 
     lists:foreach(fun({UserId, _}) ->
         user_logic:clean_space_name_mapping(UserId, SpaceId)
@@ -412,12 +416,12 @@ remove(SpaceId) ->
         end)
     end, Groups),
 
-    lists:foreach(fun(ProviderId) ->
+    lists:foreach(fun({ProviderId, _}) ->
         {ok, _} = provider:update(ProviderId, fun(Provider) ->
             #provider{spaces = PSpaces} = Provider,
             {ok, Provider#provider{spaces = lists:delete(SpaceId, PSpaces)}}
         end)
-    end, Providers),
+    end, Supports),
 
     case space:delete(SpaceId) of
         ok -> true;
@@ -480,10 +484,9 @@ remove_provider(SpaceId, ProviderId) ->
         {ok, Provider#provider{spaces = lists:delete(SpaceId, Spaces)}}
     end),
     {ok, _} = space:update(SpaceId, fun(Space) ->
-        #space{providers = Providers, size = Size} = Space,
+        #space{providers_supports = Supports} = Space,
         {ok, Space#space{
-            providers = lists:delete(ProviderId, Providers),
-            size = proplists:delete(ProviderId, Size)
+            providers_supports = proplists:delete(ProviderId, Supports)
         }}
     end),
     true.
@@ -494,11 +497,12 @@ remove_provider(SpaceId, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_with_provider({user | group, Id :: binary()}, Name :: binary(),
-    Providers :: [binary()], Size :: [{Provider :: binary(), ProvidedSize :: pos_integer()}]) ->
+    Size :: [{Provider :: binary(), ProvidedSize :: pos_integer()}]) ->
     {ok, SpaceId :: binary()}.
-create_with_provider({user, UserId}, Name, Providers, Size) ->
+create_with_provider({user, UserId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, size = Size, providers = Providers, users = [{UserId, Privileges}]},
+    Space = #space{name = Name, providers_supports = Supports, users = [{UserId, Privileges}]},
+    {Providers, _} = lists:unzip(Supports),
 
     {ok, SpaceId} = space:save(#document{value = Space}),
     {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -510,10 +514,11 @@ create_with_provider({user, UserId}, Name, Providers, Size) ->
     user_logic:set_space_name_mapping(UserId, SpaceId, Name),
     {ok, SpaceId};
 
-create_with_provider({group, GroupId}, Name, Providers, Size) ->
+create_with_provider({group, GroupId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, size = Size, providers = Providers, groups = [{GroupId, Privileges}]},
+    Space = #space{name = Name, providers_supports = Supports, groups = [{GroupId, Privileges}]},
     {ok, SpaceId} = space:save(#document{value = Space}),
+    {Providers, _} = lists:unzip(Supports),
 
     {ok, _} = user_group:update(GroupId, fun(Group) ->
         #user_group{spaces = Spaces} = Group,

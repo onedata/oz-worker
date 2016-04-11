@@ -1342,7 +1342,7 @@ get_space_info_by_provider(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/provider/spaces/" ++ EncodedSID, Headers, get, [], Options),
-    get_body_val([spaceId, name, size], Response).
+    get_body_val([spaceId, name, providers_supports], Response).
 
 unsupport_space(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,

@@ -272,7 +272,9 @@ get_providers(UserId) ->
     {ok, Doc} = onedata_user:get(UserId),
     Spaces = get_all_spaces(Doc),
     UserProviders = lists:foldl(fun(Space, Providers) ->
-        {ok, #document{value = #space{providers = SpaceProviders}}} = space:get(Space),
+        {ok, #document{value = #space{providers_supports = Supports}}}
+            = space:get(Space),
+        {SpaceProviders, _} = lists:unzip(Supports),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)
     end, ordsets:new(), Spaces),
     {ok, [{providers, UserProviders}]}.

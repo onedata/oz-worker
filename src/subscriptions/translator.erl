@@ -44,12 +44,11 @@ get_msg(Seq, Doc = #document{deleted = true, key = ID}, Model) ->
 get_msg(Seq, Doc, space = Model) ->
     #document{value = Value, key = ID} = Doc,
     #space{name = Name, users = Users, groups = Groups,
-        providers = Providers, size = Sizes} = Value,
+        providers_supports = Supports} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {id, ID},
         {name, Name},
-        {size, Sizes},
-        {providers, Providers},
+        {providers_supports, Supports},
         {users, Users},
         {groups, Groups}
     ]}];

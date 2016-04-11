@@ -150,10 +150,9 @@ remove(ProviderId) ->
 
     lists:foreach(fun(SpaceId) ->
         {ok, _} = space:update(SpaceId, fun(Space) ->
-            #space{providers = Providers, size = Size} = Space,
+            #space{providers_supports = Supports} = Space,
             {ok, Space#space{
-                providers = lists:delete(ProviderId, Providers),
-                size = proplists:delete(ProviderId, Size)
+                providers_supports = proplists:delete(ProviderId, Supports)
             }}
         end)
     end, Spaces),
