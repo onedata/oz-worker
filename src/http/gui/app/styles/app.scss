@@ -346,15 +346,19 @@ $dropdown-triangle-width: 8px;
   }
 
 }
-//
-// .side-cont {
-//   position: fixed;
-//   top: 0;
-//   left: 0;
-//   right:0
-// }
 
+.full-width {
+  display: block;
+  width: 100%;
+}
 
+.clickable {
+  cursor: pointer; cursor: hand;
+}
+
+.non-clickable {
+  cursor: default !important;
+}
 
 .hover-parent {
   .white-on-parent-hover {
@@ -365,10 +369,6 @@ $dropdown-triangle-width: 8px;
       color: white !important;
     }
   }
-}
-
-.mouse-pointer {
-  cursor: pointer; cursor: hand;
 }
 
 .input-with-button {
