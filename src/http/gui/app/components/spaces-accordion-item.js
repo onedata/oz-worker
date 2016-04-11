@@ -38,6 +38,7 @@ export default Ember.Component.extend({
       // TODO: this action should not be invoked when there is currently opened other token
       getNewSupportToken: function() {
         let space = this.get('space');
+        this.set('supportToken', null);
         if (space) {
           this.get('onezoneServer').getSupportToken(space.get('id')).then((token) => {
             // TODO: only debug, should be removed in future

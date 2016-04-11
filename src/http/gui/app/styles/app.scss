@@ -305,3 +305,36 @@ input {
     }
   }
 }
+
+.one-row {
+  display: table;
+  > * {
+    display: table-cell;
+    vertical-align: middle;
+  }
+}
+
+.loading-throbber {
+  width: 32px;
+  height: 32px;
+  background-image: url("/assets/images/loading-32.gif");
+  background-position: center;
+  background-repeat: no-repeat;
+
+  &.inverted {
+    background-image: url("/assets/images/loading-32-inverted.gif");
+
+    &.with-background {
+      background-color: black;
+    }
+  }
+
+  &.with-background {
+    background-size: 24px 24px;
+    border-radius: 4px;
+    background-color: white;
+  }
+}
+.loading-label {
+  padding-left: 15px;
+}
