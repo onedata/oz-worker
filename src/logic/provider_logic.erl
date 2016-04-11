@@ -213,8 +213,11 @@ check_provider_connectivity(ProviderId) ->
             true;
         false ->
             try
-                % Make sure that provider is not active
-                % (sometimes subscriptions lie)
+                % Sometimes it may happen that there is no websocket connection
+                % but the worker is fully operational. For example, when the
+                % connection has timed out and provider hasn't reconnected yet.
+                % In such case, make sure it is really inoperable by making
+                % a http request.
                 {ok, Data} = provider_logic:get_data(ProviderId),
                 RedirectionPoint = proplists:get_value(redirectionPoint, Data),
                 #hackney_url{
