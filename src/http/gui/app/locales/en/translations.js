@@ -130,7 +130,7 @@ export default {
       aliasHead: 'set user alias'
     },
     topBar: {
-      manageProviders: 'manage accounts',
+      manageProviders: 'manage account',
       enableHints: 'enable hints'
     },
     accountsList: {},
