@@ -24,7 +24,7 @@
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Creates space in Global Registry.
+%% @doc Creates space in onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space(Config :: term(), Member :: {user | group, Id :: binary()}, Name :: binary()) ->
@@ -39,7 +39,7 @@ create_space(Config, Member, Name) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Creates user in Global Registry.
+%% @doc Creates user in onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user(Config :: term(), User :: #onedata_user{}) ->
@@ -54,7 +54,7 @@ create_user(Config, User) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Creates group in Global Registry.
+%% @doc Creates group in onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group(Config :: term(), UserId :: binary(), Name :: binary()) ->
@@ -69,7 +69,7 @@ create_group(Config, UserId, Name) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Adds user to group in Global Registry.
+%% @doc Adds user to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_group(Config :: term(), UserId :: binary(), GroupId :: binary()) ->
@@ -167,7 +167,7 @@ support_space(Config, ProviderId, SpaceId, Size) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Creates space in Global Registry.
+%% @doc Modifies space name.
 %% @end
 %%--------------------------------------------------------------------
 -spec modify_space(Config :: term(), SpaceId :: binary(),
