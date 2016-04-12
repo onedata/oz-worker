@@ -21,7 +21,7 @@
             </div>
           {{/if}}
         </div>
-        <div class="spaces-count" data-toggle="collapse" href="#collapse-provider-{{provider.id}}">
+        <div class="spaces-count" data-toggle="collapse" href="#{{collapseId}}">
           <div class="icon">
             {{one-icon icon="space"}}
           </div>
@@ -31,7 +31,7 @@
         </div>
       </a>
     </div>
-    <div id="collapse-provider-{{provider.id}}" class="accordion-body secondary-accordion-body providers-accordion-body sidebar-list collapse">
+    <div id="{{collapseId}}" class="accordion-body secondary-accordion-body providers-accordion-body sidebar-list collapse">
       <div class="accordion-inner">
         <ul>
           {{#each spacesSorted as |s|}}

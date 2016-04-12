@@ -1,5 +1,6 @@
 import Ember from 'ember';
 import bindFloater from '../utils/bind-floater';
+import safeElementId from '../utils/safe-element-id';
 
 /**
  * Provider entry in sidebar. Contains list of its spaces.
@@ -20,6 +21,10 @@ export default Ember.Component.extend({
   }),
   spacesSorting: ['isDefault:desc', 'name'],
   spacesSorted: Ember.computed.sort('spaces', 'spacesSorting'),
+
+  collapseId: function() {
+    return safeElementId(`collapse-provider-${this.get('provider.id')}`);
+  }.property('provider', 'provider.id'),
 
   iconName: function() {
     let provider = this.get('provider');

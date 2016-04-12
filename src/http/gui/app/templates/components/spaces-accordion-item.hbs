@@ -62,9 +62,9 @@
               {{!-- TODO: loading icon --}}
               {{#if supportToken}}
                 <div class="input-with-button">
-                  {{input id=(concat "support-token-" space.id) value=supportToken readonly=true}}
+                  {{input id=(concat "support-token-" (safe-element-id space.id)) value=supportToken readonly=true}}
                   {{#copy-button success='copySuccess' error='copyError'
-                      clipboardTarget=(concat "#support-token-" space.id) class="btn btn-primary btn-right"}}
+                      clipboardTarget=(concat "#support-token-" (safe-element-id space.id)) class="btn btn-primary btn-right"}}
                     {{one-icon icon='copy'}}
                   {{/copy-button}}
                 </div>
