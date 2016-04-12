@@ -16,6 +16,7 @@ export default Ember.Component.extend({
 
     actions: {
       startCreateNewSpace: function() {
+        this.set('createNewSpaceName', null);
         if (!this.get('createNewSpaceEditing')) {
           this.set('createNewSpaceEditing', true);
         }

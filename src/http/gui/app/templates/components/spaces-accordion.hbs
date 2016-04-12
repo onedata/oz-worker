@@ -13,11 +13,19 @@
         </div>
         <div class="secondary-header space-header stretch-hack">
           {{#if createNewSpaceEditing}}
-            {{input enter='endCreateNewSpace'}}
+            {{input enter='endCreateNewSpace' value=createNewSpaceName autofocus="autofocus"}}
           {{else}}
             {{t 'onezone.spacesAccordion.createNewSpace'}}
           {{/if}}
         </div>
+        {{#if createNewSpaceEditing}}
+          <div class="secondary-icon" {{action 'endCreateNewSpace' createNewSpaceName bubbles=false }}>
+            {{one-icon icon='checkbox-check'}}
+          </div>
+          <div class="secondary-icon" {{action 'cancelCreateNewSpace' bubbles=false }} >
+            {{one-icon icon='checkbox-x'}}
+          </div>
+        {{/if}}
       </a>
     </div>
   </div>
