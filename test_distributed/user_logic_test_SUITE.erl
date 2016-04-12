@@ -19,7 +19,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
 -export([set_space_name_mapping_test/1, clean_space_name_mapping_test/1]).
 
 all() ->
@@ -33,31 +33,37 @@ all() ->
 %%%===================================================================
 
 set_space_name_mapping_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
+    [Node | _] = Nodes = ?config(oz_worker_nodes, Config),
 
     {ok, UserId} = ?assertMatch({ok, _}, oz_test_utils:create_user(Config, #onedata_user{})),
 
-    SpaceId1 = <<"1111111111">>,
     SpaceName1 = <<"space_name">>,
-    set_space_name_mapping(Node, UserId, SpaceId1, SpaceName1),
+    {ok, SpaceId1} = ?assertMatch({ok, _},
+        oz_test_utils:create_space(Config, {user, UserId}, SpaceName1)),
     ?assertEqual({ok, SpaceName1}, get_space_name_mapping(Node, UserId, SpaceId1)),
 
-    SpaceId2 = <<"2222222222">>,
     SpaceName2 = <<"different_space_name">>,
-    set_space_name_mapping(Node, UserId, SpaceId2, SpaceName2),
+    {ok, SpaceId2} = ?assertMatch({ok, _},
+        oz_test_utils:create_space(Config, {user, UserId}, SpaceName2)),
     ?assertEqual({ok, SpaceName2}, get_space_name_mapping(Node, UserId, SpaceId2)),
 
-    SpaceId3 = <<"3333333333">>,
     SpaceName3 = <<"space_name">>,
-    set_space_name_mapping(Node, UserId, SpaceId3, SpaceName3),
+    {ok, SpaceId3} = ?assertMatch({ok, _},
+        oz_test_utils:create_space(Config, {user, UserId}, SpaceName3)),
     ?assertEqual({ok, <<SpaceName3/binary, "#", SpaceId3:6/binary>>},
         get_space_name_mapping(Node, UserId, SpaceId3)),
 
-    SpaceId4 = <<"3333333334">>,
     SpaceName4 = <<"space_name">>,
-    set_space_name_mapping(Node, UserId, SpaceId4, SpaceName4),
+    SpaceId4 = <<SpaceId3:6/binary, "$random">>,
+    space_save_mock(Nodes, SpaceId4),
+    {ok, SpaceId4} = ?assertMatch({ok, _},
+        oz_test_utils:create_space(Config, {user, UserId}, SpaceName4)),
     ?assertEqual({ok, <<SpaceName4/binary, "#", SpaceId4:7/binary>>},
-        get_space_name_mapping(Node, UserId, SpaceId4)).
+        get_space_name_mapping(Node, UserId, SpaceId4)),
+
+    SpaceName5 = <<"modified_space_name">>,
+    ?assertEqual(ok, oz_test_utils:modify_space(Config, SpaceId4, {user, UserId}, SpaceName5)),
+    ?assertEqual({ok, SpaceName5}, get_space_name_mapping(Node, UserId, SpaceId4)).
 
 clean_space_name_mapping_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
@@ -92,13 +98,21 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     test_node_starter:clean_environment(Config).
 
+end_per_testcase(Config, set_space_name_mapping_test) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_validate_and_unload(Nodes, space);
+end_per_testcase(_Config, _) ->
+    ok.
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-set_space_name_mapping(Node, UserId, SpaceId, SpaceName) ->
-    ?assertEqual(ok, rpc:call(Node, user_logic, set_space_name_mapping,
-        [UserId, SpaceId, SpaceName])).
+space_save_mock(Nodes, SpaceId) ->
+    test_utils:mock_new(Nodes, space),
+    test_utils:mock_expect(Nodes, space, save, fun(Doc) ->
+        meck:passthrough([Doc#document{key = SpaceId}])
+    end).
 
 get_space_name_mapping(Node, UserId, SpaceId) ->
     {ok, Data} = ?assertMatch({ok, _},
