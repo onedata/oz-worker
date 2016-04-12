@@ -91,7 +91,7 @@
 
 % Value in DB meaning that alias is not set.
 % Empty list, must be used as a list not binary so JS view will work correctly
--define(EMPTY_ALIAS, "").
+-define(EMPTY_ALIAS, <<"">>).
 
 % Regexp to validate aliases - at least 5 alphanumeric chars
 -define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9]{5,}$">>).
@@ -113,7 +113,7 @@
 %% This record defines a user and is handled as a database document
 -record(onedata_user, {
     name = <<"">> :: binary(),
-    alias = ?EMPTY_ALIAS :: string() | integer() | binary(),
+    alias = ?EMPTY_ALIAS :: binary(),
     email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],
     spaces = [] :: [SpaceId :: binary()],
