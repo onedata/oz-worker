@@ -16,24 +16,24 @@ export default Ember.Component.extend({
   /** Should be injected */
   providers: null,
 
-  isFirstLogin: function() {
+  isFirstLogin: function () {
     let sessionDetails = this.get('session').get('sessionDetails');
     return sessionDetails && sessionDetails.firstLogin;
   }.property('session.sessionDetails'),
 
-  modalFirstLogin: function() {
+  modalFirstLogin: function () {
     return this.get('isFirstLogin');
   }.property('isFirstLogin'),
 
-  modalGetSupport: function() {
-    return !this.get('isFirstLogin') && (!this.get('providers') ||
-      (this.get('providers').get('length') === 0));
-  }.property('providers', 'providers.length', 'isFirstLogin'),
+  modalGetSupport: function () {
+    return !this.get('providers') ||
+      this.get('providers.length') === 0;
+  }.property('providers', 'providers.length'),
 
   /** If true, show "none providers" modal */
-  modalNoneProviders: function() {
-    return !this.get('modalGetSupport') && (!this.get('providers') ||
-      (this.get('providers').filterBy('isWorking', true).length === 0));
-  }.property('providers.@each.isWorking', 'modalGetSupport'),
+  modalNoneProviders: function () {
+    return this.get('providers.length') > 0 &&
+      this.get('providers').filterBy('isWorking', true).length === 0;
+  }.property('providers.@each.isWorking'),
 
 });
