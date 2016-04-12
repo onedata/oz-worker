@@ -35,9 +35,16 @@ export default Ember.Component.extend({
     /** Get a login endpoint URL from server and go to it */
     authenticate(providerName) {
       this.$().find(`.login-icon-box.${providerName}`).addClass('active');
-      this.get('onezoneServer').getLoginEndpoint(providerName).then((url) => {
-        window.location = url;
-      });
+      this.get('onezoneServer').getLoginEndpoint(providerName).then(
+        (url) => {
+          window.location = url;
+        },
+        (error) => {
+          // TODO: use modal instead of window.alert
+          window.alert('Getting authentication endpoint failed: ' + error);
+          this.$().find(`.login-icon-box.${providerName}`).removeClass('active');
+        }
+      );
     }
   }
 });
