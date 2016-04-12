@@ -18,7 +18,7 @@
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
     has_effective_privilege/3]).
--export([create/2, create/4, modify/2, set_privileges/3, join/2, support/3]).
+-export([create/2, create/4, modify/3, set_privileges/3, join/2, support/3]).
 -export([get_data/2, get_users/1, get_effective_users/1, get_groups/1,
     get_providers/2, get_user/3, get_group/2, get_provider/3, get_privileges/2,
     get_effective_privileges/2]).
@@ -161,9 +161,12 @@ create({provider, ProviderId}, Name, Macaroon, Size) ->
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(SpaceId :: binary(), Name :: binary()) ->
-    ok.
-modify(SpaceId, Name) ->
+-spec modify(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider,
+    Name :: binary()) -> ok.
+modify(SpaceId, {user, UserId}, Name) ->
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+    ok;
+modify(SpaceId, provider, Name) ->
     {ok, _} = space:update(SpaceId, fun(Space) ->
         {ok, Space#space{name = Name}}
     end),
@@ -205,7 +208,9 @@ join({user, UserId}, Macaroon) ->
             {ok, _} = onedata_user:update(UserId, fun(User) ->
                 #onedata_user{spaces = USpaces} = User,
                 {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
-            end)
+            end),
+            {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
+            user_logic:set_space_name_mapping(UserId, SpaceId, Name)
     end,
     {ok, SpaceId};
 join({group, GroupId}, Macaroon) ->
@@ -221,7 +226,12 @@ join({group, GroupId}, Macaroon) ->
             {ok, _} = user_group:update(GroupId, fun(Group) ->
                 #user_group{spaces = Spaces} = Group,
                 {ok, Group#user_group{spaces = [SpaceId | Spaces]}}
-            end)
+            end),
+            {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
+            {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
+            lists:foreach(fun({UserId, _}) ->
+                user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+            end, Users)
     end,
     {ok, SpaceId}.
 
@@ -254,15 +264,24 @@ support(ProviderId, Macaroon, SupportedSize) ->
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(SpaceId :: binary(), Client :: user | provider) ->
+-spec get_data(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider) ->
     {ok, [proplists:property()]}.
-get_data(SpaceId, _Client) ->
-    {ok, #document{value = #space{name = Name, providers_supports = Supports}}}
-        = space:get(SpaceId),
+get_data(SpaceId, {user, UserId}) ->
+    {ok, #document{value = #space{name = CanonicalName, providers_supports = Supports}}} = space:get(SpaceId),
+    {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
+    {ok, Name} = maps:find(SpaceId, SpaceNames),
     {ok, [
         {spaceId, SpaceId},
         {name, Name},
-        {providers_supports, Supports}
+        {canonicalName, CanonicalName},
+        {providersSupports, Supports}
+    ]};
+get_data(SpaceId, provider) ->
+    {ok, #document{value = #space{name = CanonicalName, providers_supports = Supports}}} = space:get(SpaceId),
+    {ok, [
+        {spaceId, SpaceId},
+        {name, CanonicalName},
+        {providersSupports, Supports}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -387,10 +406,7 @@ remove(SpaceId) ->
     #space{users = Users, groups = Groups, providers_supports = Supports} = Space,
 
     lists:foreach(fun({UserId, _}) ->
-        {ok, _} = onedata_user:update(UserId, fun(User) ->
-            #onedata_user{spaces = USpaces} = User,
-            {ok, User#onedata_user{spaces = lists:delete(SpaceId, USpaces)}}
-        end)
+        user_logic:clean_space_name_mapping(UserId, SpaceId)
     end, Users),
 
     lists:foreach(fun({GroupId, _}) ->
@@ -428,6 +444,7 @@ remove_user(SpaceId, UserId) ->
         #space{users = Users} = Space,
         {ok, Space#space{users = lists:keydelete(UserId, 1, Users)}}
     end),
+    user_logic:clean_space_name_mapping(UserId, SpaceId),
     cleanup(SpaceId),
     true.
 
@@ -439,6 +456,7 @@ remove_user(SpaceId, UserId) ->
 -spec remove_group(SpaceId :: binary(), GroupId :: binary()) ->
     true.
 remove_group(SpaceId, GroupId) ->
+    {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
     {ok, _} = user_group:update(GroupId, fun(Group) ->
         #user_group{spaces = Spaces} = Group,
         {ok, Group#user_group{spaces = lists:delete(SpaceId, Spaces)}}
@@ -447,6 +465,9 @@ remove_group(SpaceId, GroupId) ->
         #space{groups = Groups} = Space,
         {ok, Space#space{groups = lists:keydelete(GroupId, 1, Groups)}}
     end),
+    lists:foreach(fun({UserId, _}) ->
+        user_logic:clean_space_name_mapping(UserId, SpaceId)
+    end, Users),
     cleanup(SpaceId),
     true.
 
@@ -490,6 +511,7 @@ create_with_provider({user, UserId}, Name, Supports) ->
     end),
 
     add_space_to_providers(SpaceId, Providers),
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
     {ok, SpaceId};
 
 create_with_provider({group, GroupId}, Name, Supports) ->
@@ -504,6 +526,11 @@ create_with_provider({group, GroupId}, Name, Supports) ->
     end),
 
     add_space_to_providers(SpaceId, Providers),
+    {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
+    lists:foreach(fun({UserId, _}) ->
+        user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+    end, Users),
+
     {ok, SpaceId}.
 
 
