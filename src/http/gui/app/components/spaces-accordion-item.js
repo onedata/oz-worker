@@ -15,6 +15,13 @@ export default Ember.Component.extend({
   /** Space model - should be injected */
   space: null,
 
+  providers: Ember.computed('space.providers', function() {
+    return this.get('space.providers');
+  }),
+
+  providersSorting: ['isDefault:desc', 'name'],
+  providersSorted: Ember.computed.sort('providers', 'providersSorting'),
+
   classNames: ['secondary-accordion-item', 'spaces-accordion-item'],
 
   supportToken: null,

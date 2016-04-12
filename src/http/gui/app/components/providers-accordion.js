@@ -11,6 +11,10 @@ import Ember from 'ember';
 export default Ember.Component.extend({
   classNames: ['secondary-accordion', 'providers-accordion', 'accordion-content'],
 
+  providers: null,
+  providersSorting: ['isDefault:desc', 'name'],
+  providersSorted: Ember.computed.sort('providers', 'providersSorting'),
+
   noProviders: function() {
     let providers = this.get('providers');
     return providers.get('length') === 0;

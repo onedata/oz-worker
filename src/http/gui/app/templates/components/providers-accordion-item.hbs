@@ -26,7 +26,7 @@
             {{one-icon icon="space"}}
           </div>
           <div class="label">
-            {{provider.spaces.length}}
+            {{spaces.length}}
           </div>
         </div>
       </a>
@@ -34,7 +34,7 @@
     <div id="collapse-provider-{{provider.id}}" class="accordion-body secondary-accordion-body providers-accordion-body sidebar-list collapse">
       <div class="accordion-inner">
         <ul>
-          {{#each provider.spaces as |s|}}
+          {{#each spacesSorted as |s|}}
             <li>
               <div class="icon">
                 {{one-icon icon=(if s.isDefault "space-home" "space")}}

@@ -14,6 +14,10 @@ export default Ember.Component.extend({
     /** If true, the createNewSpace button is a input field */
     createNewSpaceEditing: false,
 
+    spaces: null,
+    spacesSorting: ['isDefault:desc', 'name'],
+    spacesSorted: Ember.computed.sort('spaces', 'spacesSorting'),
+
     actions: {
       startCreateNewSpace: function() {
         this.set('createNewSpaceName', null);

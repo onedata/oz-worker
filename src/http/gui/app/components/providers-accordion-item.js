@@ -15,6 +15,12 @@ export default Ember.Component.extend({
   /** Provider model to display - should be injected */
   provider: null,
 
+  spaces: Ember.computed('provider.spaces', function() {
+    return this.get('provider.spaces');
+  }),
+  spacesSorting: ['isDefault:desc', 'name'],
+  spacesSorted: Ember.computed.sort('spaces', 'spacesSorting'),
+
   iconName: function() {
     let provider = this.get('provider');
     return (provider && provider.get('isDefault')) ? 'provider-home' : 'provider';

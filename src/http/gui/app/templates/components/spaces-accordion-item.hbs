@@ -24,7 +24,7 @@
           {{one-icon icon="provider"}}
         </div>
         <div class="label">
-          {{space.providers.length}}
+          {{providers.length}}
         </div>
       </div>
     </a>
@@ -33,7 +33,7 @@
     class="accordion-body secondary-accordion-body spaces-accordion-body sidebar-list collapse">
     <div class="accordion-inner">
       <ul>
-        {{#each space.providers as |p|}}
+        {{#each providersSorted as |p|}}
           <li {{action "goToProvider" p}} class="clickable">
             <div class="icon">
               {{one-icon icon=(if p.isDefault "provider-home" "provider")}}
