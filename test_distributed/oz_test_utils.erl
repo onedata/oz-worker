@@ -17,13 +17,14 @@
 %% API
 -export([create_space/3, create_user/2, create_group/3]).
 -export([join_group/3, join_space/3, leave_space/3, support_space/4]).
+-export([modify_space/4]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Creates space in Global Registry.
+%% @doc Creates space in onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space(Config :: term(), Member :: {user | group, Id :: binary()}, Name :: binary()) ->
@@ -38,7 +39,7 @@ create_space(Config, Member, Name) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Creates user in Global Registry.
+%% @doc Creates user in onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user(Config :: term(), User :: #onedata_user{}) ->
@@ -53,7 +54,7 @@ create_user(Config, User) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Creates group in Global Registry.
+%% @doc Creates group in onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group(Config :: term(), UserId :: binary(), Name :: binary()) ->
@@ -68,7 +69,7 @@ create_group(Config, UserId, Name) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Adds user to group in Global Registry.
+%% @doc Adds user to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_group(Config :: term(), UserId :: binary(), GroupId :: binary()) ->
@@ -160,6 +161,22 @@ support_space(Config, ProviderId, SpaceId, Size) ->
             space_logic:support(ProviderId, Macaroon, Size)
         end, []]),
         ok
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Modifies space name.
+%% @end
+%%--------------------------------------------------------------------
+-spec modify_space(Config :: term(), SpaceId :: binary(),
+    Member :: {user, Id :: binary()} | provider, Name :: binary()) ->
+    {ok, Id :: binary()} | {error, Reason :: term()}.
+modify_space(Config, SpaceId, Member, Name) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, space_logic, modify, [SpaceId, Member, Name])
     catch
         _:Reason ->
             {error, Reason}
