@@ -325,8 +325,9 @@ $search-box-height: 36px;
         // border-bottom: $color-onezone-sidebar-separator 2px solid;
       }
 
-      .accordion-inner {
+      .main-accordion-inner {
         padding: 0px;
+        padding-bottom: 20px;
       }
     }
   }
