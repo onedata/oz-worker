@@ -1,4 +1,5 @@
 import Ember from 'ember';
+import safeElementId from '../utils/safe-element-id';
 
 /**
  * A token entry in tokens-list.
@@ -17,12 +18,16 @@ export default Ember.Component.extend({
   classNames: ['tokens-list-item'],
 
   clipboardTarget: function() {
-    return `#${this.get('inputId')}`;
-  }.property('inputId'),
+    return `#${this.get('inputContainerId')} input`;
+  }.property('inputContainerId'),
 
-  inputId: function() {
-    return `clienttoken-input-${this.get('token.id')}`;
-  }.property('token.id'),
+  inputContainerId: function() {
+    if (this.get('token.id')) {
+      return safeElementId(`clienttoken-input-${this.get('token.id')}`);
+    } else {
+      return null;
+    }
+  }.property('token', 'token.id'),
 
   actions: {
     remove() {
