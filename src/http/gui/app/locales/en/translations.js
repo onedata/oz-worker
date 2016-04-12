@@ -93,7 +93,7 @@ export default {
     unknownZoneName: 'unknown'
   },
   onezone: {
-    title: 'Manage accounts',
+    title: 'Manage account',
 
     messages: {
       noneProviders: {
