@@ -55,6 +55,9 @@ $search-box-height: 36px;
 }
 
 .panel-onezone {
+  position: relative;
+  // above providers drop
+  z-index: 1002;
   margin: 40px;
   padding: 70px;
   border-top: 5px $color-red-1 solid;
