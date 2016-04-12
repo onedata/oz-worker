@@ -16,11 +16,6 @@ export default Ember.Component.extend({
   /** Should be injected */
   providers: null,
 
-  // isAnyModal: function() {
-  //   return this.get('modalFirstLogin') ||
-  //     this.get('modalNoneProviders') || this.get('modalGetSupport');
-  // }.property('modalFirstLogin', 'modalNoneProviders', 'modalGetSupport'),
-
   isFirstLogin: function() {
     let sessionDetails = this.get('session').get('sessionDetails');
     return sessionDetails && sessionDetails.firstLogin;
