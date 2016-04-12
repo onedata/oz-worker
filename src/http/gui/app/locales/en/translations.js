@@ -93,7 +93,7 @@ export default {
     unknownZoneName: 'unknown'
   },
   onezone: {
-    title: 'Manage accounts',
+    title: 'Manage account',
 
     messages: {
       noneProviders: {
@@ -130,7 +130,7 @@ export default {
       aliasHead: 'set user alias'
     },
     topBar: {
-      manageProviders: 'manage accounts',
+      manageProviders: 'manage account',
       enableHints: 'enable hints'
     },
     accountsList: {},
