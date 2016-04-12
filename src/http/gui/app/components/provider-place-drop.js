@@ -26,6 +26,13 @@ export default Ember.Component.extend({
     return this.get('providerPlace.provider');
   }.property('providerPlace'),
 
+  spaces: function() {
+    return this.get('provider.spaces');
+  }.property('provider', 'provider.spaces'),
+
+  spacesSorting: ['isDefault:desc', 'name'],
+  spacesSorted: Ember.computed.sort('spaces', 'spacesSorting'),
+
   /** If true, places provider drop on the left of provider place circle */
   dropSideLeft: function() {
     return this.get('provider.longitude') >= 0;

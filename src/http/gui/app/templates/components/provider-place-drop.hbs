@@ -14,7 +14,7 @@
       {{provider.location}}
     </div> --}}
     <ul>
-      {{#each provider.spaces as |space|}}
+      {{#each spacesSorted as |space|}}
         <li>
           <div class="space-icon">
             {{one-icon icon=(if space.isDefault "space-default" "space")}}
