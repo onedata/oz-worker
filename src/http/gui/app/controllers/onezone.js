@@ -1,5 +1,13 @@
 import Ember from 'ember';
 
+/**
+ * Controller used mainly for reading query params for expanding particular accordions.
+ * See queryParams property.
+ * @module controllers/onezone
+ * @author Jakub Liput
+ * @copyright (C) 2016 ACK CYFRONET AGH
+ * @license This software is released under the MIT license cited in 'LICENSE.txt'.
+ */
 export default Ember.Controller.extend({
   init: function () {
     this._super();
@@ -8,7 +16,8 @@ export default Ember.Controller.extend({
     });
   },
 
-  queryParams: ['expand_accounts', 'expand_spaces', 'expand_providers', 'expand_tokens'],
+  queryParams: ['expand_accounts', 'expand_spaces', 'expand_providers',
+    'expand_tokens', 'expand_alias'],
 
   expandAccounts: function() {
     return this.get('expand_accounts') === 'true';
@@ -26,6 +35,10 @@ export default Ember.Controller.extend({
     return this.get('expand_tokens') === 'true';
   }.property('expand_tokens'),
 
+  expandAlias: function() {
+    return this.get('expand_alias') === 'true';
+  }.property('expand_alias'),
+
   actions: {
     expandQuerySpecifiedAccordions: function() {
       if (this.get('expandAccounts')) {
@@ -39,6 +52,9 @@ export default Ember.Controller.extend({
       }
       if (this.get('expandTokens')) {
         $('#collapse-tokens').collapse('show');
+      }
+      if (this.get('expandAlias')) {
+        $('#collapse-alias').collapse('show');
       }
     }
   },

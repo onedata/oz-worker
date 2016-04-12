@@ -1,11 +1,8 @@
 {{!-- TODO: place modals above map (absolute?) --}}
-
 {{#onezone-atlas deselectProviders='deselectProviders' as |atlas|}}
   {{#each model as |provider|}}
     {{provider-place provider=provider atlas=atlas selectProvider='selectProvider'}}
   {{/each}}
+
+  {{onezone-modal-container providers=model}}
 {{/onezone-atlas}}
-
-
-
-{{!-- {{onezone-modal-container providers=model}} --}}

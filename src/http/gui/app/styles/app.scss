@@ -43,6 +43,7 @@ $icomoon-font-path: "fonts/oneicons";
 @import "onezone";
 @import "provider-place";
 @import "provider-place-drop";
+@import "dropdowns";
 
 html, body {
   height: 100%;
@@ -96,11 +97,12 @@ img {
 }
 
 html {
-  background: url('/assets/images/main-background.png') no-repeat center center fixed;
-  -webkit-background-size: cover;
-  -moz-background-size: cover;
-  -o-background-size: cover;
-  background-size: cover;
+  // TODO: background size is corrupted on mobile devices (Android Chrome)
+  background-image: url('/assets/images/main-background.jpg');
+  background-repeat: no-repeat;
+  background-position: center center;
+  @include vendor-prefix(background-attachment, fixed);
+  @include vendor-prefix(background-size, cover);
 
   body {
     padding: 0;
@@ -188,11 +190,6 @@ html {
   }
 }
 
-
-.hover-visible:not(:hover) {
-  display: none;
-}
-
 // Buttons
 
 .btn {
@@ -248,113 +245,20 @@ input {
   color: black;
 }
 
-// TODO: move to separate file
+// TODO: there general-purpose classes should be moved to deps/gui styles
 
-$dropdown-radius: 6px;
-$dropdown-triangle-width: 8px;
-
-.dropdown-menu {
-  position: absolute;
-  padding: 15px;
-  background-color: $color-dropdown-menu-bg;
-  border-radius: $dropdown-radius !important;
-  border: none;
-
-  &.dropdown-menu-down {
-    left: auto;
-    right: 0;
-    min-width: 150px;
-
-    &:before {
-      position: absolute;
-      top: -$dropdown-triangle-width;
-      right: 10px;
-      display: inline-block;
-      border-right: $dropdown-triangle-width solid transparent;
-      border-bottom: $dropdown-triangle-width solid #ccc;
-      border-left: $dropdown-triangle-width solid transparent;
-      border-bottom-color: #2B3037;
-      content: '';
-    }
-  }
-
-  &.dropdown-menu-right {
-    left: 100%;
-    top: -50%;
-    min-width: 150px;
-    border-top-left-radius: 0 !important;
-
-    &:before {
-      position: absolute;
-      top: 0;
-      left: 2 * (-$dropdown-triangle-width);
-      border-bottom: $dropdown-triangle-width solid transparent;
-      border-right: $dropdown-triangle-width solid #2B3037;
-      border-left: $dropdown-triangle-width solid transparent;
-      content: '';
-
-      // // old version
-      // position: absolute;
-      // top: 10px;
-      // left: 2 * (-$dropdown-triangle-width);
-      // border-bottom: $dropdown-triangle-width solid transparent;
-      // border-right: $dropdown-triangle-width solid #2B3037;
-      // border-left: $dropdown-triangle-width solid transparent;
-      // border-top: $dropdown-triangle-width solid transparent;
-      // content: '';
-    }
-  }
-
-  &.dropdown-menu-list {
-    font-size: inherit;
-    padding: 0;
-
-    .divider {
-      // TODO: same as menu bottom line color
-      background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    > li:not(.divider) {
-      &:first-child {
-        border-top-left-radius: $dropdown-radius;
-        border-top-right-radius: $dropdown-radius;
-      }
-
-      &:last-child {
-        border-bottom-left-radius: $dropdown-radius;
-        border-bottom-right-radius: $dropdown-radius;
-      }
-
-      > a {
-        color: $top-font-color !important;
-        padding: 10px;
-        &:hover {
-          color: white !important;
-          background-color: transparent !important;
-        }
-      }
-
-      &:hover {
-        background-color: $color-dropdown-menu-bg-hover;
-      }
-    }
-
-    > .divider {
-      padding: 0;
-      margin: 0;
-    }
-  }
-
+.full-width {
+  display: block;
+  width: 100%;
 }
-//
-// .side-cont {
-//   position: fixed;
-//   top: 0;
-//   left: 0;
-//   right:0
-// }
 
+.clickable {
+  cursor: pointer; cursor: hand;
+}
 
+.non-clickable {
+  cursor: default !important;
+}
 
 .hover-parent {
   .white-on-parent-hover {
@@ -365,10 +269,6 @@ $dropdown-triangle-width: 8px;
       color: white !important;
     }
   }
-}
-
-.mouse-pointer {
-  cursor: pointer; cursor: hand;
 }
 
 .input-with-button {
@@ -404,4 +304,37 @@ $dropdown-triangle-width: 8px;
       font-size: 32px;
     }
   }
+}
+
+.one-row {
+  display: table;
+  > * {
+    display: table-cell;
+    vertical-align: middle;
+  }
+}
+
+.loading-throbber {
+  width: 32px;
+  height: 32px;
+  background-image: url("/assets/images/loading-32.gif");
+  background-position: center;
+  background-repeat: no-repeat;
+
+  &.inverted {
+    background-image: url("/assets/images/loading-32-inverted.gif");
+
+    &.with-background {
+      background-color: black;
+    }
+  }
+
+  &.with-background {
+    background-size: 24px 24px;
+    border-radius: 4px;
+    background-color: white;
+  }
+}
+.loading-label {
+  padding-left: 15px;
 }

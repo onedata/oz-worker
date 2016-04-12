@@ -2,14 +2,14 @@
   {{!-- faking the accordion group... this should be separate class --}}
   <div class="accordion-group secondary-accordion-group spaces-accordion-group">
     <div class="accordion-heading secondary-accordion-heading spaces-accordion-heading">
-      <a class="accordion-toggle secondary-accordion-toggle spaces-accordion-toggle create-new mouse-pointer"
+      <a class="accordion-toggle secondary-accordion-toggle spaces-accordion-toggle create-new clickable"
         {{action 'startEditAlias'}}>
         <div class="secondary-icon">
           {{one-icon icon='user'}}
         </div>
         <div class="secondary-header space-header stretch-hack">
           {{#if aliasEditing}}
-            {{input enter='endEditAlias' value=aliasTextEdit}}
+            {{input enter='endEditAlias' value=aliasTextEdit autofocus="autofocus"}}
           {{else}}
             {{#if correctAlias}}
               {{aliasText}}
@@ -18,6 +18,18 @@
             {{/if}}
           {{/if}}
         </div>
+        {{#if aliasEditing}}
+          <div class="secondary-icon" {{action 'endEditAlias' aliasTextEdit bubbles=false }}>
+            {{one-icon icon='checkbox-check'}}
+          </div>
+          <div class="secondary-icon" {{action 'cancelEditAlias' bubbles=false }} >
+            {{one-icon icon='checkbox-x'}}
+          </div>
+        {{else}}
+          <div class="secondary-icon">
+            {{one-icon icon='rename'}}
+          </div>
+        {{/if}}
       </a>
     </div>
   </div>
