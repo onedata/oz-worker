@@ -138,6 +138,9 @@ $search-box-height: 36px;
 
   .onezone-atlas {
     height: 100%;
+    position: relative;
+    margin-left: auto;
+    margin-right: auto;
     background-image: url("/assets/images/onezone/onezone-atlas.svg");
     background-size: cover;
     background-position: center center;
@@ -187,6 +190,8 @@ $search-box-height: 36px;
   background: $color-onezone-sidebar-bg;
 
   $onezone-accordion-heading-height: 75px;
+  $onezone-secondary-accordion-heading-height: 32px;
+  $onezone-secondary-accordion-item-height: 35px;
 
   input {
     border: none;
@@ -362,90 +367,98 @@ $search-box-height: 36px;
   //    inside there should be classes: token-icon, token-header, select-button,
   //    .trash-button
 
-  $spaces-item-height: 35px;
-
-  .tokens-accordion-toggle {
-    // TODO: pull up, because for unknow reasons, its too high
-    margin-top: 2px;
-
+  .tokens-container {
+    padding-bottom: 5px;
     .token-icon {
       display: table-cell;
       width: 30px;
-      line-height: $spaces-item-height;
+      height: $onezone-secondary-accordion-heading-height;
+      line-height: $onezone-secondary-accordion-heading-height;
     }
     .token-header {
       display: table-cell;
+      // TODO: maybe create a header common class
+      vertical-align: top;
       padding-left: 15px;
       padding-right: 15px;
       text-transform: none;
       font-size: 0.8em;
-      line-height: $spaces-item-height;
+      line-height: $onezone-secondary-accordion-heading-height;
 
       input {
         width: 100%;
         padding: 0;
         margin: 0;
-        line-height: $spaces-item-height;
+        line-height: $onezone-secondary-accordion-heading-height;
+        text-overflow: ellipsis;
         background: inherit;
       }
     }
+    .visible-on-hover {
+      color: transparent;
+    }
     .select-button {
+      // size hack
+      font-size: 24px;
+      position: relative;
+      top: -3px;
+
       display: table-cell;
       width: 32px;
-      line-height: $spaces-item-height;
+      line-height: $onezone-secondary-accordion-heading-height;
       cursor: pointer; cursor: hand;
-
-      // not hovered - invisible
-      color: transparent;
     }
     .trash-button {
+      // size hack
+      font-size: 24px;
+      position: relative;
+      top: -3px;
+
       display: table-cell;
       width: 32px;
-      line-height: $spaces-item-height;
+      line-height: $onezone-secondary-accordion-heading-height;
       cursor: pointer; cursor: hand;
-
-      // not hovered - invisible
-      color: transparent;
-    }
-
-    &:hover {
-      .select-button {
-        color: white;
-      }
-      .trash-button {
-        color: white;
-      }
     }
   }
 
-  .tokens-accordion {
-    padding-bottom: 5px;
-  }
-
-  .providers-accordion, .spaces-accordion, .tokens-accordion {
+  .sidebar-secondary-container {
     color: white;
-    .one-icon {
-      font-size: 15pt;
-    }
 
-    .providers-accordion-item, .spaces-accordion-item, .tokens-accordion-item {
+    .one-icon {
+      font-size: 28px;
+      text-align: center;
+    }
+  }
+
+  .secondary-accordion {
+
+    .secondary-accordion-item {
       &:first-of-type {
         margin-top: 20px;
       }
     }
 
-    .providers-accordion-group, .spaces-accordion-group, .tokens-accordion-group {
+    .stretch-hack {
+      display: table-cell;
+      // a hack to stretch main heading element horizontally - use with caution!
+      width: 500px;
+      // TODO: maybe create a header common class
+      vertical-align: top;
+    }
+
+    .secondary-accordion-group {
       border: none;
 
-      .providers-accordion-heading, .spaces-accordion-heading, .tokens-accordion-heading {
-        height: $spaces-item-height;
-        line-height: $spaces-item-height;
+      .secondary-accordion-heading {
+        height: $onezone-secondary-accordion-heading-height;
+        line-height: $onezone-secondary-accordion-heading-height;
 
-        .providers-accordion-toggle, .spaces-accordion-toggle, .tokens-accordion-toggle {
-          display: table;
+        .secondary-accordion-toggle {
+          // this caused height stretching
+          // display: table;
           width: 100%;
-          height: $spaces-item-height;
-          line-height: $spaces-item-height;
+          max-height: $onezone-secondary-accordion-heading-height;
+          line-height: $onezone-secondary-accordion-heading-height;
           padding-left: 10px;
           padding-right: 24px;
           color: white;
@@ -454,6 +467,9 @@ $search-box-height: 36px;
           text-decoration: none !important;
           background-color: #3A3A3A;
 
+          > * {
+            display: table-cell;
+          }
           .go-to-provider {
             cursor: pointer; cursor: hand;
           }
@@ -466,14 +482,24 @@ $search-box-height: 36px;
 
           &.crate-new-text {}
 
-          .provider-icon, .space-icon {
+          .secondary-icon, .provider-icon, .space-icon {
             display: table-cell;
-            width: 30px;
+            // TODO: this does not work because of stretch-hack
+            width: 32px;
+            padding-right: 4px;
+
+            .one-icon {
+              font-size: 28px;
+              line-height: inherit;
+            }
           }
-          .provider-header, .space-header {
+          .secondary-header, .provider-header, .space-header {
+            // pull-up hack
+            position: relative;
+            top: -2px;
             display: table-cell;
             padding-left: 8px;
-            line-height: $spaces-item-height;
+            line-height: $onezone-secondary-accordion-heading-height;
             vertical-align: middle;
             text-transform: none;
             font-size: 0.8em;
@@ -481,16 +507,25 @@ $search-box-height: 36px;
 
           // for space
           .providers-count {
+            // pull up hack
+            position: relative;
+            top: -3px;
+
             display: table-cell;
             width: 50px;
             overflow-x: hidden;
             .icon {
               display: table-cell;
               .one-icon {
-                font-size: 0.9em;
+                font-size: 22px;
               }
             }
             .label {
+              // pull up pull left hack
+              position: relative;
+              top: -2px;
+              left: -4px;
+
               display: table-cell;
               vertical-align: middle;
               font-size: 0.6em;
@@ -500,6 +535,7 @@ $search-box-height: 36px;
           .star-toggle {
             display: table-cell;
             width: 40px;
+            font-size: 30px;
             cursor: pointer; cursor: hand;
 
             .star-empty {
@@ -511,8 +547,10 @@ $search-box-height: 36px;
           .spaces-count {
             display: table-cell;
             position: relative;
+            // pull down
+            top: 2px;
             width: 50px;
-            height: 35px;
+            height: $onezone-secondary-accordion-heading-height;
             overflow-x: hidden;
             cursor: pointer; cursor: hand;
             @include vendor-prefix(user-select, none);
@@ -522,7 +560,7 @@ $search-box-height: 36px;
               top: 0;
               left: 0;
               .one-icon {
-                font-size: 1.1em;
+                font-size: 28px;
               }
             }
             .label {
@@ -531,8 +569,8 @@ $search-box-height: 36px;
               left: 0;
               display: table-cell;
               vertical-align: middle;
-              height: 35px;
-              line-height: 35px;
+              height: $onezone-secondary-accordion-heading-height;;
+              line-height: $onezone-secondary-accordion-heading-height;;
               width: 30px;
               text-align: center;
               padding: 0;
@@ -543,19 +581,21 @@ $search-box-height: 36px;
         }
       }
 
-      .providers-accordion-body, .spaces-accordion-body {
+      .secondary-accordion-body {
         background-color: #3E3E3E;
 
         ul {
           li {
             display: table;
             padding-left: 70px;
-            padding-top: 8px;
-            padding-bottom: 8px;
+            // TODO: hack - padding disabled, because icons are too high...
+            // padding-top: 8px;
+            // padding-bottom: 8px;
             width: 100%;
             .icon {
               display: table-cell;
               width: 32px;
+              font-size: 32px;
             }
             .label {
               display: table-cell;
@@ -604,11 +644,16 @@ $search-box-height: 36px;
     $onezone-account-item-height: $onezone-accordion-heading-height * 0.75;
 
     display: table;
+    width: 100%;
     height: $onezone-account-item-height;
     line-height: $onezone-account-item-height;
     padding-left: 10px;
     padding-right: 24px;
     color: white;
+
+    > .dropdown, > .dropdown-toggle {
+      width: 100%;
+    }
 
     .account-icon {
       position: relative;
@@ -624,7 +669,10 @@ $search-box-height: 36px;
       &.account-add-icon {
         // add account does not need pulling down...
         padding-top: 0;
-        font-size: 28px;
+        // size hack
+        font-size: 48px;
+        position: relative;
+        left: -8px;
       }
 
       .circle {
@@ -649,13 +697,13 @@ $search-box-height: 36px;
         position: absolute;
         display: table-cell;
         vertical-align: middle;
-        height: 35px;
-        line-height: 35px;
+        height: $onezone-secondary-accordion-item-height;
+        line-height: $onezone-secondary-accordion-item-height;
         width: 32px;
         text-align: center;
         padding: 0;
         color: white;
-        font-size: 1em;
+        font-size: 30px;
         background-color: none !important;
       }
     }
@@ -672,6 +720,9 @@ $search-box-height: 36px;
         font-family: 'Lato', sans-serif;
         font-weight: 100;
         font-style: italic;
+
+        // hack TODO
+        padding-left: 4px;
       }
     }
   }
@@ -706,4 +757,23 @@ $search-box-height: 36px;
       position: absolute !important;
     }
   }
+}
+
+.hover-parent {
+  &:hover {
+    // TODO: make a "hover-parent" class
+    .visible-on-parent-hover {
+      color: white ;
+    }
+  }
+}
+
+// hacky
+.add-item-icon {
+  // add account does not need pulling down...
+  padding-top: 0;
+  // size hack
+  font-size: 32px !important;
+  position: relative;
+  left: -2px;
 }

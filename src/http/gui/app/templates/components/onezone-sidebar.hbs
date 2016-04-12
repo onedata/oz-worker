@@ -11,14 +11,14 @@
         <div class="accordion-group main-accordion-group">
             <div class="accordion-heading main-accordion-heading">
                 <a class="accordion-toggle main-accordion-toggle"
-                   data-toggle="collapse" href="#collapse-connect">
+                   data-toggle="collapse" href="#collapse-accounts">
                     <h1>{{t 'onezone.sidebar.connectHead'}}</h1>
 
                     <div class="arrow-down"></div>
                 </a>
             </div>
-            <div id="collapse-connect"
-                 class="accordion-body main-accordion-body collapse {{if expandAccounts 'in' ''}}">
+            <div id="collapse-accounts"
+                 class="accordion-body main-accordion-body collapse">
                 <div class="accordion-inner">
                   {{accounts-list authorizers=authorizers}}
                 </div>
@@ -60,14 +60,14 @@
         <div class="accordion-group main-accordion-group">
             <div class="accordion-heading main-accordion-heading">
                 <a class="accordion-toggle main-accordion-toggle"
-                   data-toggle="collapse" href="#collapse-files">
+                   data-toggle="collapse" href="#collapse-providers">
                     <h1>{{t 'onezone.sidebar.filesHead'}}</h1>
 
                     <div class="arrow-down"></div>
                 </a>
             </div>
             <!-- TODO collapse in -->
-            <div id="collapse-files"
+            <div id="collapse-providers"
                  class="accordion-body main-accordion-body collapse">
                 <div class="accordion-inner">
                   {{providers-accordion providers=providers}}

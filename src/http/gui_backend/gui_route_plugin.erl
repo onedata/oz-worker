@@ -98,7 +98,8 @@ route(_) -> ?INDEX.
 %% {@link gui_route_plugin_behaviour} callback data_backend/2
 %% @end
 %%--------------------------------------------------------------------
--spec data_backend(HasSession :: boolean(), Identifier :: binary()) -> HandlerModule :: module().
+-spec data_backend(HasSession :: boolean(), Identifier :: binary()) ->
+    HandlerModule :: module().
 data_backend(true, <<"space">>) -> space_data_backend;
 data_backend(true, <<"authorizer">>) -> authorizer_data_backend;
 data_backend(true, <<"provider">>) -> provider_data_backend;
@@ -126,7 +127,8 @@ public_rpc_backend() -> public_rpc_backend.
 %% {@link gui_route_plugin_behaviour} callback get_session_details/0
 %% @end
 %%--------------------------------------------------------------------
--spec session_details() -> {ok, proplists:proplist()} | {error, term()}.
+-spec session_details() ->
+    {ok, proplists:proplist()} | gui_error:error_result().
 session_details() ->
     {ok, #document{value = #onedata_user{name = Name}}} =
         onedata_user:get(g_session:get_user_id()),

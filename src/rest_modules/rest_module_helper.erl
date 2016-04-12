@@ -13,6 +13,8 @@
 -module(rest_module_helper).
 -author("Konrad Zemek").
 
+-include_lib("ctool/include/logging.hrl").
+
 %% API
 -export([report_error/2, report_error/3, report_invalid_value/3, report_missing_key/2]).
 -export([assert_type/4, assert_key/4, assert_key_value/5]).
@@ -38,6 +40,9 @@ unauthorized_client | unsupported_grant_type | invalid_scope.
         Type :: binary, Req :: cowboy_req:req()) ->
     binary() | undefined | no_return();
     (Key :: json_string(), List :: [{json_string(), term()}],
+        Type :: float, Req :: cowboy_req:req()) ->
+    float() | undefined | no_return();
+    (Key :: json_string(), List :: [{json_string(), term()}],
         Type :: pos_integer, Req :: cowboy_req:req()) ->
     pos_integer() | undefined | no_return().
 assert_type(Key, List, Type, Req) ->
@@ -57,6 +62,9 @@ assert_type(Key, List, Type, Req) ->
                 {match, [Value]} -> binary_to_integer(Value);
                 _ -> report_invalid_value(Key, Value, Req)
             end;
+
+        {Key, Value} when Type =:= float andalso is_float(Value) ->
+            Value;
 
         {Key, Value} ->
             report_invalid_value(Key, Value, Req);
@@ -116,7 +124,7 @@ assert_key_value(Key, AcceptedValues, List, binary, Req) ->
     no_return().
 report_invalid_value(Key, Value, Req) ->
     Description = <<"invalid '", (str_utils:to_binary(Key))/binary,
-    "' value: '", (str_utils:to_binary(Value))/binary, "'">>,
+        "' value: '", (str_utils:to_binary(Value))/binary, "'">>,
     report_error(invalid_request, Description, Req).
 
 %%--------------------------------------------------------------------
@@ -126,7 +134,7 @@ report_invalid_value(Key, Value, Req) ->
     no_return().
 report_missing_key(Key, Req) ->
     Description = <<"missing required key: '",
-    (str_utils:to_binary(Key))/binary, "'">>,
+        (str_utils:to_binary(Key))/binary, "'">>,
     report_error(invalid_request, Description, Req).
 
 %%--------------------------------------------------------------------

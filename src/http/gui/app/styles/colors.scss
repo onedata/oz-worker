@@ -10,6 +10,8 @@ $color-grey-5: #FCFCFC;
 $color-red-1: #EF3C40;
 $color-red-2: #F25255;
 $color-red-3: #F6456F;
+// default red
+$color-red: $color-red-1;
 // the real button color from mockup, but not used - similiar to red2
 // $color-red-button: #F14549;
 $color-red-button: $color-red-2;
@@ -18,6 +20,7 @@ $color-azure: #5094E4;
 $color-pale-yellow: #FDCD58;
 $color-yellow: #F6A500;
 $color-green: #4DC249;
+$color-pale-green: #69CB93;
 
 $color-login-github: #1E2325;
 $color-login-twitter: #6ED3F3;
@@ -38,4 +41,16 @@ $color-dropdown-menu-bg-hover: $color-red-2;
 
 .color-white {
   color: white;
+}
+
+.color-green {
+  color: $color-green;
+}
+
+.color-pale-green {
+  color: $color-pale-green;
+}
+
+.color-red {
+  color: $color-red;
 }

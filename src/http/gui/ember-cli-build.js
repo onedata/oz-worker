@@ -5,7 +5,7 @@ var EmberApp = require('ember-cli/lib/broccoli/ember-app');
 module.exports = function(defaults) {
   var app = new EmberApp(defaults, {
     sassOptions: {
-      includePaths: ['app/styles']
+      includePaths: ['app/styles', 'app/styles/oneicons']
     },
     'ember-bootstrap': {
       'importBootstrapFont': false,
@@ -25,11 +25,6 @@ module.exports = function(defaults) {
   // modules that you would like to import into your application
   // please specify an object with the list of modules as keys
   // along with the exports of each module as its value.
-
-  app.import("bower_components/owl-carousel/owl-carousel/owl.carousel.min.js");
-  app.import("bower_components/owl-carousel/owl-carousel/owl.carousel.css");
-  app.import("bower_components/owl-carousel/owl-carousel/owl.theme.css");
-  app.import("bower_components/owl-carousel/owl-carousel/owl.transitions.css");
 
   app.import("bower_components/bind-first/release/jquery.bind-first-0.2.3.min.js");
   app.import("bower_components/jquery-mousewheel/jquery.mousewheel.min.js");

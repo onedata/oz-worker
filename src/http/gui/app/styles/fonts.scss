@@ -16,6 +16,13 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: 'Myriad Pro Bold';
+  src: url('/assets/fonts/myriadpro/myriadpro-bold.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 $lato-font-path: '/assets/fonts/lato';
 @font-face {
   font-family: 'Lato';

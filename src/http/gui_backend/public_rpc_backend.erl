@@ -30,6 +30,12 @@
 %% {@link rpc_backend_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
+-spec handle(FunctionId :: binary(), RequestData :: term()) ->
+    ok | {ok, ResponseData :: term()} | gui_error:error_result().
+handle(<<"getZoneName">>, _) ->
+    {ok, ZoneName} = application:get_env(?APP_Name, oz_name),
+    {ok, str_utils:to_binary(ZoneName)};
+
 handle(<<"getSupportedAuthorizers">>, _) ->
     Providers = auth_config:get_auth_providers(),
     % Providers is a list of atoms

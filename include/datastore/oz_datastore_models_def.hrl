@@ -15,6 +15,27 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
 -include("handlers/rest_handler.hrl").
 
+% Describes state of batch.
+-record(outbox, {
+    timer_expires :: pos_integer(),
+    timer :: timer:tref(),
+    buffer :: [term()]
+}).
+
+% Stores data used to provide subscription updates
+-record(subscriptions_state, {
+    cache :: gb_trees:tree()
+}).
+
+% Stores state of provider subscription
+-record(provider_subscription, {
+    connections = [] :: [pid()],
+    provider :: binary(),
+    resume_at = 1 :: subscriptions:seq(),
+    missing = [] :: [subscriptions:seq()],
+    users = [] :: [binary()]
+}).
+
 %% Stores CA dedicated node
 %% todo: implement distributed CA properly (connected with VFS-1499)
 -record(ozpca_state, {
@@ -40,16 +61,17 @@
     redirection_point :: binary(),
     urls :: [binary()],
     spaces = [] :: [SpaceId :: binary()],
-    serial :: binary()
+    serial :: binary(),
+    latitude :: float(),
+    longitude :: float()
 }).
 
 %% This record defines a space that can be used by users to store their files
 -record(space, {
     name :: binary(),
-    size = [] :: [{ProviderId :: binary(), Size :: pos_integer()}],
+    providers_supports = [] :: [{ProviderId :: binary(), Size :: pos_integer()}],
     users = [] :: [{UserId :: binary(), [privileges:space_privilege()]}],
-    groups = [] :: [{GroupId :: binary(), [privileges:space_privilege()]}],
-    providers = [] :: [ProviderId :: binary()]
+    groups = [] :: [{GroupId :: binary(), [privileges:space_privilege()]}]
 }).
 
 %% This record defines a token that can be used by user to do something
@@ -95,6 +117,7 @@
     email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],
     spaces = [] :: [SpaceId :: binary()],
+    space_names = #{} :: #{SpaceId :: binary() => SpaceName :: binary()},
     default_space :: binary() | undefined,
     groups = [] :: [GroupId :: binary()],
     % TODO this is a mock

@@ -184,10 +184,10 @@ provide_resource(spaces, GroupId, _Client, Req) ->
 provide_resource(screate, GroupId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, space_create_token, {group, GroupId}),
     {[{token, Token}], Req};
-provide_resource(space, _GroupId, _Client, Req) ->
+provide_resource(space, _GroupId, #client{id = UserId}, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {sid, SID} = lists:keyfind(sid, 1, Bindings),
-    {ok, Space} = space_logic:get_data(SID, user),
+    {ok, Space} = space_logic:get_data(SID, {user, UserId}),
     {Space, Req2}.
 
 %%--------------------------------------------------------------------
