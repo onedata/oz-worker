@@ -272,11 +272,13 @@ no_user_update_test(Config) ->
     save(Node, ?ID(u1), U1),
 
     % when
-    Context = init_messages(Node, PID, [?ID(u1)]),
+    Context = init_messages(Node, PID, []),
     update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated">>}),
 
     % then
-    verify_messages_absent(Context, [
+    verify_messages(Context, [
+        public_only_user_expectation(?ID(u1), <<"updated">>)
+    ], [
         expectation(?ID(u1), U1),
         expectation(?ID(u1), U1#onedata_user{name = <<"updated">>})
     ]),
@@ -737,7 +739,16 @@ user_expectation(ID, Name, Spaces, Groups) ->
     [{<<"id">>, ID}, {<<"user">>, [
         {<<"name">>, Name},
         {<<"space_ids">>, Spaces},
-        {<<"group_ids">>, Groups}
+        {<<"group_ids">>, Groups},
+        {<<"public_only">>, false}
+    ]}].
+
+public_only_user_expectation(ID, Name) ->
+    [{<<"id">>, ID}, {<<"user">>, [
+        {<<"name">>, Name},
+        {<<"space_ids">>, []},
+        {<<"group_ids">>, []},
+        {<<"public_only">>, true}
     ]}].
 
 group_expectation(ID, Name, Users, Spaces) ->
@@ -817,7 +828,7 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
         missing = NextMissing
     },
 
-    ?assertMatch(Forbidden, Forbidden -- All),
+    ?assertMatch(Forbidden, remaining_expected(Forbidden, All)),
     RemainingExpected = remaining_expected(Expected, All),
     verify_messages(NextContext, Retries - 1, RemainingExpected, Forbidden).
 
@@ -838,7 +849,7 @@ largest(List) ->
 
 extract_seqs(Messages) ->
     lists:map(fun(Message) ->
-        proplists:get_value(<<"seq">>, Message)
+        proplists:get_value(<<"seq">>, Message, -2)
     end, Messages).
 
 remaining_expected(Expected, Messages) ->

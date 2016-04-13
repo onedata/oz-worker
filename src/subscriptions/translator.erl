@@ -16,12 +16,36 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([get_msg/3, get_ignore_msg/1]).
+-export([get_ignore_msg/1, as_msg/3, get_msg/3]).
 
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% Translates documents to structures required by the provider.
 %%% Those structures are serializable to json.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec as_msg(Seq :: pos_integer(), Doc :: datastore:document(),
+    Ignore :: boolean()) -> term().
+as_msg(Seq, Doc = #document{value = Value}, false) ->
+    get_msg(Seq, Doc, element(1, Value));
+as_msg(-1, Doc = #document{value = Value}, _) ->
+    get_msg(-1, Doc, element(1, Value));
+as_msg(Seq, Doc = #document{value = #onedata_user{}}, true) ->
+    #document{value = Value = #onedata_user{name = Name}, key = ID} = Doc,
+    Model = element(1, Value),
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {name, Name},
+        {space_ids, []},
+        {group_ids, []},
+        {public_only, true}
+    ]}];
+as_msg(Seq, _Doc, _Ignore) ->
+    get_ignore_msg(Seq).
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% Translates documents to structures required by the provider.
+%%% Those structures are serializable to json and contain "ignore" commands.
 %%% @end
 %%%-------------------------------------------------------------------
 -spec get_ignore_msg(Seq :: pos_integer())
@@ -32,8 +56,9 @@ get_ignore_msg(Seq) ->
 
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% @private
 %%% Translates documents to structures required by the provider.
-%%% Those structures are serializable to json.
+%%% Those structures are serializable to json and provide details from documents.
 %%% @end
 %%%-------------------------------------------------------------------
 -spec get_msg(Seq :: pos_integer(), Doc :: datastore:document(),
@@ -66,7 +91,8 @@ get_msg(Seq, Doc, onedata_user = Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {space_ids, Spaces},
-        {group_ids, Groups}
+        {group_ids, Groups},
+        {public_only, false}
     ]}];
 get_msg(_Seq, _Doc, _Model) ->
     [].
