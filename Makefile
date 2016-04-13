@@ -24,7 +24,7 @@ GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgr
 ONEDATA_GIT_URL := $(shell if [ "${ONEDATA_GIT_URL}" = "" ]; then echo ${GIT_URL}; else echo ${ONEDATA_GIT_URL}; fi)
 export ONEDATA_GIT_URL
 
-.PHONY: test deps generate package test_gui
+.PHONY: test deps generate package
 
 all: test_rel
 
@@ -37,18 +37,6 @@ deps:
 
 recompile:
 	./rebar compile skip_deps=true
-
-gui_dev:
-	./deps/gui/build_gui.sh dev
-
-gui_prod:
-	./deps/gui/build_gui.sh prod
-
-gui_doc:
-	jsdoc -c src/http/gui/.jsdoc.conf src/http/gui/app
-
-gui_clean:
-	cd src/http/gui && rm -rf node_modules bower_components dist tmp
 
 ##
 ## If performance is compiled in cluster_worker then annotations do not work.
@@ -68,9 +56,7 @@ compile:
 ## todo: find better solution
 ##
 ## Generates a dev release
-generate_dev: deps compile gui_dev
-	# Remove gui tmp dir
-	rm -rf src/http/gui/tmp
+generate_dev: deps compile
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
 	./rebar generate $(OVERLAY_VARS)
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
@@ -78,9 +64,7 @@ generate_dev: deps compile gui_dev
 	./get_dev_auth_config.sh
 
 ## Generates a production release
-generate: deps compile gui_prod
-	# Remove gui tmp dir
-	rm -rf src/http/gui/tmp
+generate: deps compile
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
 	./rebar generate $(OVERLAY_VARS)
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
@@ -118,9 +102,6 @@ eunit:
 
 coverage:
 	$(BASE_DIR)/bamboos/docker/coverage.escript $(BASE_DIR)
-
-test_gui:
-	cd test_gui && ember test
 
 ##
 ## Dialyzer targets local

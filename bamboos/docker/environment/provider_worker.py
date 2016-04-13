@@ -35,7 +35,8 @@ class ProviderWorkerConfigurator:
     def pre_start_commands(self, domain):
         return 'escript bamboos/gen_dev/gen_dev.escript /tmp/gen_dev_args.json'
 
-    def configure_started_instance(self, bindir, instance, config,
+    # Called AFTER the instance (cluster of workers) has been started
+    def post_configure_instance(self, bindir, instance, config,
                                    container_ids, output, storages_dockers=None):
         this_config = config[self.domains_attribute()][instance]
         # Check if gui_livereload is enabled in env and turn it on
@@ -60,7 +61,7 @@ Starting GUI livereload
                             output[self.nodes_list_attribute()],
                             this_config[self.app_name()], bindir, storages_dockers)
 
-    def extra_volumes(self, config, bindir):
+    def extra_volumes(self, config, bindir, instance):
         if 'os_config' in config and config['os_config']['storages']:
             if isinstance(config['os_config']['storages'][0], basestring):
                 posix_storages = config['os_config']['storages']
