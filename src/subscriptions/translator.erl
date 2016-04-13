@@ -37,6 +37,7 @@ as_msg(Seq, Doc = #document{value = #onedata_user{}}, true) ->
         {name, Name},
         {space_ids, []},
         {group_ids, []},
+        {default_space, undefined},
         {public_only, true}
     ]}];
 as_msg(Seq, _Doc, _Ignore) ->
@@ -87,11 +88,13 @@ get_msg(Seq, Doc, user_group = Model) ->
     ]}];
 get_msg(Seq, Doc, onedata_user = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #onedata_user{name = Name, spaces = Spaces, groups = Groups} = Value,
+    #onedata_user{name = Name, spaces = Spaces, groups = Groups,
+        default_space = DefaultSpace} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {space_ids, Spaces},
         {group_ids, Groups},
+        {default_space, DefaultSpace},
         {public_only, false}
     ]}];
 get_msg(_Seq, _Doc, _Model) ->
