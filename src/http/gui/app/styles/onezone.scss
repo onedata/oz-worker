@@ -55,6 +55,9 @@ $search-box-height: 36px;
 }
 
 .panel-onezone {
+  position: relative;
+  // above providers drop
+  z-index: 1002;
   margin: 40px;
   padding: 70px;
   border-top: 5px $color-red-1 solid;
@@ -325,8 +328,9 @@ $search-box-height: 36px;
         // border-bottom: $color-onezone-sidebar-separator 2px solid;
       }
 
-      .accordion-inner {
+      .main-accordion-inner {
         padding: 0px;
+        padding-bottom: 20px;
       }
     }
   }
@@ -350,14 +354,20 @@ $search-box-height: 36px;
       li {
         padding: 0 10px;
         margin: 0;
-        cursor: pointer; cursor: hand;
+      }
+    }
+  }
 
+  .sidebar-list:not(.non-hoverable) {
+    ul:not(.non-hoverable) {
+      li:not(.non-hoverable) {
         &:hover {
           background-color: rgba(255, 255, 255, 0.1);
         }
       }
     }
   }
+
 
   // specific styles for spaces-accordion, see also .accordion styles
   // TODO: shared classes
@@ -463,6 +473,7 @@ $search-box-height: 36px;
           padding-right: 24px;
           color: white;
           clear: both;
+          overflow-y: hidden;
 
           text-decoration: none !important;
           background-color: #3A3A3A;
@@ -619,7 +630,9 @@ $search-box-height: 36px;
             width: 640px;
 
             input {
-              width: 100%;
+              // TODO: a hack for copy button
+              width: 90%;
+              text-overflow: ellipsis;
             }
           }
         }
@@ -740,6 +753,12 @@ $search-box-height: 36px;
   }
 }
 
+.onezone-modal-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
 .floater {
   position: fixed !important;
   top: auto;
@@ -760,10 +779,9 @@ $search-box-height: 36px;
 }
 
 .hover-parent {
-  &:hover {
-    // TODO: make a "hover-parent" class
+  &:not(:hover) {
     .visible-on-parent-hover {
-      color: white ;
+      color: transparent;
     }
   }
 }

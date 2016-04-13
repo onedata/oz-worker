@@ -66,7 +66,11 @@ start() ->
         {ok, GuiCABin} = file:read_file(GuiCaCertFile),
         [{_, GuiCADER, _} | _] = public_key:pem_decode(GuiCABin),
 
+        GRHostname = dns_query_handler:get_canonical_hostname(),
+
         Dispatch = cowboy_router:compile([
+            % Redirect requests in form: alias.onedata.org
+            {":alias." ++ GRHostname, [{'_', client_redirect_handler, [RestPort]}]},
             {'_', lists:append([
                 [{<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}}],
                 user_rest_module:routes(),

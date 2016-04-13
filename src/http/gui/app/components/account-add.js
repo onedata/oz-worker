@@ -1,6 +1,13 @@
 import Ember from 'ember';
 import bindFloater from '../utils/bind-floater';
 
+/**
+ * An add account button, which shows popup with authorization providers.
+ * @module components/account-add
+ * @author Jakub Liput
+ * @copyright (C) 2016 ACK CYFRONET AGH
+ * @license This software is released under the MIT license cited in 'LICENSE.txt'.
+ */
 export default Ember.Component.extend({
   onezoneServer: Ember.inject.service('onezoneServer'),
   classNames: ['account-add', 'account-item'],
@@ -45,13 +52,3 @@ export default Ember.Component.extend({
     }
   }
 });
-
-
-// <a {{action "connectNewAccount" "github"}}>
-//   <div class="account-icon account-add-icon">
-//     {{one-icon icon='add'}}
-//   </div>
-//   <div class="account-label connect-new">
-//     {{t 'onezone.accountAdd.connectNewAccount'}}
-//   </div>
-// </a>

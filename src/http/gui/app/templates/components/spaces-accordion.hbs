@@ -1,23 +1,31 @@
 <div class="accordion secondary-accordion spaces-accordion">
-  {{#each spaces as |s|}}
+  {{#each spacesSorted as |s|}}
     {{spaces-accordion-item space=s}}
   {{/each}}
 
   {{!-- faking the accordion group... this should be separate class --}}
   <div class="accordion-group secondary-accordion-group spaces-accordion-group">
     <div class="accordion-heading secondary-accordion-heading spaces-accordion-heading">
-      <a class="accordion-toggle secondary-accordion-toggle spaces-accordion-toggle create-new mouse-pointer"
+      <a class="accordion-toggle secondary-accordion-toggle spaces-accordion-toggle create-new clickable"
         {{action 'startCreateNewSpace'}}>
         <div class="secondary-icon space-icon">
           {{one-icon icon='space-add'}}
         </div>
         <div class="secondary-header space-header stretch-hack">
           {{#if createNewSpaceEditing}}
-            {{input enter='endCreateNewSpace'}}
+            {{input enter='endCreateNewSpace' value=createNewSpaceName autofocus="autofocus"}}
           {{else}}
             {{t 'onezone.spacesAccordion.createNewSpace'}}
           {{/if}}
         </div>
+        {{#if createNewSpaceEditing}}
+          <div class="secondary-icon" {{action 'endCreateNewSpace' createNewSpaceName bubbles=false }}>
+            {{one-icon icon='checkbox-check'}}
+          </div>
+          <div class="secondary-icon" {{action 'cancelCreateNewSpace' bubbles=false }} >
+            {{one-icon icon='checkbox-x'}}
+          </div>
+        {{/if}}
       </a>
     </div>
   </div>

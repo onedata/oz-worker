@@ -23,7 +23,7 @@
 
     <!-- TODO: class list-group -->
     <div class="list-group" id="providers-list">
-      {{#each providers as |p|}}
+      {{#each providersSorted as |p|}}
         {{providers-accordion-item provider=p selectProvider='selectProvider'}}
       {{/each}}
     </div>

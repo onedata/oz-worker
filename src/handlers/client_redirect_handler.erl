@@ -13,6 +13,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("hackney/include/hackney_lib.hrl").
 
 -export([init/3, handle/2, terminate/3]).
 
@@ -21,41 +22,65 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec init(any(), term(), any()) -> {ok, term(), []}.
-init(_Type, Req, _Opts) ->
-    {ok, Req, []}.
+init(_Type, Req, [RequestedPort]) ->
+    {ok, Req, RequestedPort}.
 
 %%--------------------------------------------------------------------
 %% @doc Handles a request returning a HTTP Redirect (307 - Moved temporarily).
 %% @end
 %%--------------------------------------------------------------------
 -spec handle(term(), term()) -> {ok, term(), term()}.
-handle(Req, State) ->
+handle(Req, RequestedPort = State) ->
     try
         % Get query string from URL
-        {QS, _} = cowboy_req:qs(Req),
         % Get the alias from URL
         {Alias, _} = cowboy_req:binding(alias, Req),
 
         % Find the user and his default provider
         GetUserResult = case Alias of
-                            <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
-                                user_logic:get_user_doc(UUID);
-                            _ ->
-                                case user_logic:get_user_doc({alias, Alias}) of
-                                    {ok, Ans} ->
-                                        {ok, Ans};
-                                    _ ->
-                                        user_logic:get_user_doc(Alias)
-                                end
-                        end,
-        {ok, #document{value = #onedata_user{chosen_provider = DefaultProvider}}} = GetUserResult,
-        {ok, DataProplist} = provider_logic:get_data(DefaultProvider),
-        RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
-        {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(str_utils:to_list(RedPoint)),
+            <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
+                user_logic:get_user_doc(UUID);
+            _ ->
+                case user_logic:get_user_doc({alias, Alias}) of
+                    {ok, Ans} ->
+                        {ok, Ans};
+                    _ ->
+                        user_logic:get_user_doc(Alias)
+                end
+        end,
+        {ok, #document{
+            key = UserId,
+            value = #onedata_user{
+                chosen_provider = ChosenProvider
+            }}} = GetUserResult,
+        % If default provider is not known, set it.
+        DataProplist =
+            try
+                {ok, Data} = provider_logic:get_data(ChosenProvider),
+                Data
+            catch _:_ ->
+                {ok, NewChosenProv} =
+                    provider_logic:choose_provider_for_user(UserId),
+                ok = user_logic:modify(UserId, [{chosen_provider, NewChosenProv}]),
+                {ok, Data2} = provider_logic:get_data(NewChosenProv),
+                Data2
+            end,
+        RedirectionPoint = proplists:get_value(redirectionPoint, DataProplist),
+        #hackney_url{host = Host} = hackney_url:parse_url(RedirectionPoint),
         {Path, _} = cowboy_req:path(Req),
+        QueryString = case cowboy_req:qs(Req) of
+            {<<"">>, _} ->
+                <<"">>;
+            {QS, _} ->
+                <<"?", QS/binary>>
+        end,
+        % Redirect to provider's hostname, but to requested port
+        URL = str_utils:format_bin("https://~s:~B~s~s", [
+            Host, RequestedPort, Path, QueryString
+        ]),
         {ok, Req2} = cowboy_req:reply(307,
             [
-                {<<"location">>, <<"https://", (list_to_binary(HostStr))/binary, Path/binary, "?", QS/binary>>},
+                {<<"location">>, URL},
                 {<<"content-type">>, <<"text/html">>}
             ], <<"">>, Req),
         {ok, Req2, State}
