@@ -124,12 +124,7 @@ create_record(<<"provider">>, _Data) ->
 update_record(<<"provider">>, ProviderId, Data) ->
     UserId = g_session:get_user_id(),
     IsDefault = proplists:get_value(<<"isDefault">>, Data),
-    case IsDefault of
-        true ->
-            user_logic:set_default_provider(UserId, ProviderId);
-        false ->
-            ok
-    end,
+    user_logic:set_provider_as_default(UserId, ProviderId, IsDefault),
     ok.
 
 

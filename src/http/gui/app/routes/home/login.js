@@ -4,6 +4,13 @@ import UnauthenticatedRouteMixin from 'ember-simple-auth/mixins/unauthenticated-
 
 let LoginRoute = PageBase.extend(UnauthenticatedRouteMixin);
 
+/**
+ * A login page, only true "home subpage" in standard OZ GUI. Show login widgets.
+ * @module routes/home/login
+ * @author Jakub Liput
+ * @copyright (C) 2016 ACK CYFRONET AGH
+ * @license This software is released under the MIT license cited in 'LICENSE.txt'.
+ */
 export default LoginRoute.extend({
   session: Ember.inject.service('session'),
   onezoneServer: Ember.inject.service('onezoneServer'),

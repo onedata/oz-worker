@@ -106,12 +106,14 @@ get_redirection_uri(UserId, ProviderId) ->
     end,
     % TODO return IP address rather than alias.onedata.org
     % It shall be used normally when we have a possibility to
-    % resolve domains on developer's host systems (so their web browsers can connect).
+    % resolve domains on developer's host systems
+    % (so their web browsers can connect).
     % To do this, we need a recursive DNS server in docker environment,
     % whose address must be fed to system's resolv.conf.
     {ok, PData} = provider_logic:get_data(ProviderId),
     RedirectionPoint = proplists:get_value(redirectionPoint, PData),
-    #hackney_url{host = Host, port = Port} = hackney_url:parse_url(RedirectionPoint),
+    #hackney_url{host = Host, port = Port} =
+        hackney_url:parse_url(RedirectionPoint),
     URL = str_utils:format_bin("https://~s:~B~s?code=~s", [
         Host, Port, ?provider_auth_endpoint, Token
     ]),
@@ -143,8 +145,8 @@ gen_token(UserId, ProviderId) ->
     {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{
         secret = Secret, user_id = UserId}}),
     Identifier = binary_to_list(IdentifierBinary),
-    M = create_macaroon(Secret, str_utils:to_binary(Identifier), [[
-        "providerId = ", ProviderId]]),
+    %% @todo: VFS-1869
+    M = create_macaroon(Secret, str_utils:to_binary(Identifier), []),
 
     CaveatKey = generate_secret(),
     {ok, CaveatIdBinary} = onedata_auth:save(#document{value = #onedata_auth{

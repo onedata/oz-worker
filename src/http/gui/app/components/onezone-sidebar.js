@@ -1,5 +1,12 @@
 import Ember from 'ember';
 
+/**
+ * Main onezone sidebar.
+ * @module
+ * @author Jakub Liput
+ * @copyright (C) 2016 ACK CYFRONET AGH
+ * @license This software is released under the MIT license cited in 'LICENSE.txt'.
+ */
 export default Ember.Component.extend({
   /** Providers list should be injected */
   providers: null,
@@ -9,20 +16,4 @@ export default Ember.Component.extend({
   authAccounts: null,
   /** Tokens list sholud be injected (from model) */
   tokens: null,
-
-  // didInsertElement() {
-  //   let box = $('.accordion-container');
-  //   let boxElement = box[0];
-  //
-  //   box.mousewheel(function(e) {
-  //     let delta = e.deltaY;
-  //     console.log(box.css('top'));
-  //     let scrollBegin = (parseInt(box.css('top')) === 80);
-  //     let scrollEnd = (parseInt(box.css('top') === (box.height()+80)));
-  //     let isScrollingUp = (delta > 0);
-  //     if (!(scrollBegin && isScrollingUp) && !(scrollEnd && !isScrollingUp)) {
-  //       box.css('top', `${parseInt(box.css('top'))+delta}px`);
-  //     }
-  //   });
-  // }
 });
