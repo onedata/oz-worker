@@ -49,8 +49,15 @@ start() ->
         %% we don't use legit server certificates on providers.
         application:set_env(ctool, verify_server_cert, false),
 
-        % Resolve static files root.
-        {ok, DocRoot} = application:get_env(?APP_Name, gui_static_root),
+        % Resolve static files root. First, check if there is a non-empty dir
+        % located in gui_custom_static_root. If not, use default.
+        {ok, CstmRoot} = application:get_env(?APP_Name, gui_custom_static_root),
+        {ok, DefRoot} = application:get_env(?APP_Name, gui_default_static_root),
+        DocRoot = case file:list_dir_all(CstmRoot) of
+            {error, enoent} -> DefRoot;
+            {ok, []} -> DefRoot;
+            {ok, _} -> CstmRoot
+        end,
 
         % Get gui config
         GuiPort = port(),

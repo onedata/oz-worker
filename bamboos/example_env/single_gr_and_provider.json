@@ -39,6 +39,13 @@
     },
     "provider_domains": {
         "p1": {
+            "gui": {
+                "mount_path": "/var/www/html",
+                "mount_from": {
+                    "host": "/Users/lopiola/git/op-gui-default/rel"
+                },
+                "livereload": true
+            },
             "db_driver": "couchdb",
             "os_config": "cfg1",
             "cluster_manager": {
