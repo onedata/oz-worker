@@ -16,7 +16,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([get_ignore_msg/1, as_msg/3, get_msg/3]).
+-export([get_ignore_msg/1, as_msg/3]).
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -24,7 +24,7 @@
 %%% Those structures are serializable to json.
 %%% @end
 %%%-------------------------------------------------------------------
--spec as_msg(Seq :: pos_integer(), Doc :: datastore:document(),
+-spec as_msg(Seq :: subscriptions:seq(), Doc :: datastore:document(),
     Ignore :: boolean()) -> term().
 as_msg(Seq, Doc = #document{value = Value}, false) ->
     get_msg(Seq, Doc, element(1, Value));
@@ -49,11 +49,15 @@ as_msg(Seq, _Doc, _Ignore) ->
 %%% Those structures are serializable to json and contain "ignore" commands.
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_ignore_msg(Seq :: pos_integer())
+-spec get_ignore_msg(Seq :: subscriptions:seq())
         -> term().
 
 get_ignore_msg(Seq) ->
     [{seq, Seq}, {ignore, true}].
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -62,7 +66,7 @@ get_ignore_msg(Seq) ->
 %%% Those structures are serializable to json and provide details from documents.
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_msg(Seq :: pos_integer(), Doc :: datastore:document(),
+-spec get_msg(Seq :: subscriptions:seq(), Doc :: datastore:document(),
     Model :: subscriptions:model()) -> term().
 
 get_msg(Seq, Doc = #document{deleted = true, key = ID}, Model) ->
@@ -98,11 +102,8 @@ get_msg(Seq, Doc, onedata_user = Model) ->
         {public_only, false}
     ]}];
 get_msg(_Seq, _Doc, _Model) ->
+    ?warning("Requesting message for unexpected model ~p", [_Model]),
     [].
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
 
 -spec revs_prop(Doc :: datastore:document()) -> term().
 revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
