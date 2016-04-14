@@ -91,7 +91,7 @@ is_authorized(R, put, SpaceId, #client{type = user, id = UserId})
 is_authorized(_, get, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_view_data);
 is_authorized(R, get, SpaceId, #client{type = provider, id = ProviderId})
-    when R =/= groups, R =/= ginvite, R =/= group, R =/= gpriv ->
+    when R =/= ginvite ->
     space_logic:has_provider(SpaceId, ProviderId);
 is_authorized(_, _, _, _) ->
     false.
