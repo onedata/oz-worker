@@ -306,7 +306,7 @@ no_user_update_test(Config) ->
     save(Node, ?ID(u1), U1),
 
     % when
-    Context = init_messages(Node, PID, [?ID(u1)]),
+    Context = init_messages(Node, PID, []),
     update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated">>}),
 
     % then
@@ -852,7 +852,7 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
         missing = NextMissing
     },
 
-    ?assertMatch(Forbidden, Forbidden -- All),
+    ?assertMatch(Forbidden, remaining_expected(Forbidden, All)),
     RemainingExpected = remaining_expected(Expected, All),
     verify_messages(NextContext, Retries - 1, RemainingExpected, Forbidden).
 
