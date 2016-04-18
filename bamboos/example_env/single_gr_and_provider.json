@@ -39,7 +39,7 @@
     },
     "provider_domains": {
         "p1": {
-            "gui": {
+            "gui_override": {
                 "mount_path": "/var/www/html",
                 "mount_from": {
                     "host": "/Users/lopiola/git/op-gui-default/rel"
@@ -86,10 +86,10 @@
     },
     "zone_domains": {
         "oz": {
-            "gui": {
+            "gui_override": {
                 "mount_path": "/var/www/html",
                 "mount_from": {
-                    "host": "/Users/lopiola/git/oz-gui-homepage/rel"
+                    "host": "/Users/lopiola/git/oz-gui-default/rel"
                 },
                 "livereload": true
             },
