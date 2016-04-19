@@ -1,5 +1,12 @@
 import Ember from 'ember';
 
+/**
+ * A circle representing a provider on world map.
+ * @module components/provider-place
+ * @author Jakub Liput
+ * @copyright (C) 2016 ACK CYFRONET AGH
+ * @license This software is released under the MIT license cited in 'LICENSE.txt'.
+ */
 export default Ember.Component.extend({
   classNames: ['provider-place'],
   classNameBindings: ['isWorking'],
@@ -11,13 +18,11 @@ export default Ember.Component.extend({
   /** A provider model that will be represented on map */
   provider: null,
 
-  // ICON_AR_X: 0.052344031,
-  // ICON_AR_Y: 0.10648918,
+  /*** Multipliers used to compute size of circle relative to world map size ***/
+  /*** Manipulate 0.5 multiplier to change relative size of circle ***/
+  ICON_AR_X: 0.052344031*0.5,
+  ICON_AR_Y: 0.10648918*0.5,
 
-  ICON_AR_X: 0.052344031*0.9,
-  ICON_AR_Y: 0.10648918*0.9,
-
-  // TODO: dynamic width/height, currently set as in styles
   width: function() {
     return this.get('atlas.width')*this.ICON_AR_X;
   }.property('atlas.width'),
@@ -26,7 +31,6 @@ export default Ember.Component.extend({
     return this.get('atlas.height')*this.ICON_AR_Y;
   }.property('atlas.height'),
 
-  // TODO: optimize
   sizeChanged: function() {
     let circle = this.$().find('.circle');
     circle.css({
@@ -35,14 +39,11 @@ export default Ember.Component.extend({
       width: this.get('width') + 'px',
       height: this.get('height') + 'px',
     });
-
-    // circle.css('fontSize', );
-    // circle.width(this.get('width'));
-    // circle.height(this.get('height'));
   }.observes('width', 'height'),
 
   posY: function() {
     return this.get('atlas.centerY') -
+
       (this.get('provider.latitude')/90)*(this.get('atlas.height')/2) -
       (this.get('height')/2);
   }.property('provider.latitude', 'atlas.centerY'),

@@ -1,12 +1,26 @@
 import Ember from 'ember';
 import bindFloater from '../utils/bind-floater';
 
+/**
+ * Single space entry in spaces-accordion. Has a list of its providers.
+ * @module components/spaces-accordion-item
+ * @author Jakub Liput
+ * @copyright (C) 2016 ACK CYFRONET AGH
+ * @license This software is released under the MIT license cited in 'LICENSE.txt'.
+ */
 export default Ember.Component.extend({
   store: Ember.inject.service('store'),
   onezoneServer: Ember.inject.service('onezoneServer'),
 
-  /** Should be injected */
+  /** Space model - should be injected */
   space: null,
+
+  providers: Ember.computed('space.providers', function() {
+    return this.get('space.providers');
+  }),
+
+  providersSorting: ['isDefault:desc', 'name'],
+  providersSorted: Ember.computed.sort('providers', 'providersSorting'),
 
   classNames: ['secondary-accordion-item', 'spaces-accordion-item'],
 
@@ -20,12 +34,18 @@ export default Ember.Component.extend({
       // TODO: performance - better all updatePositions in one fun
       $('.accordion-container').on('scroll', updatePosition);
     });
+
+    // prevent space token popup close on input and button click
+    $(document).on('click', `#${this.get('elementId')} .input-with-button`, function (e) {
+      e.stopPropagation();
+    });
   },
 
   actions: {
       // TODO: this action should not be invoked when there is currently opened other token
       getNewSupportToken: function() {
         let space = this.get('space');
+        this.set('supportToken', null);
         if (space) {
           this.get('onezoneServer').getSupportToken(space.get('id')).then((token) => {
             // TODO: only debug, should be removed in future
@@ -51,6 +71,18 @@ export default Ember.Component.extend({
         let space = this.get('space');
         space.set('isDefault', true);
         space.save();
+      },
+      // TODO: a notification for user
+      copySuccess() {
+        console.log('Token copied');
+      },
+      // TODO: a notification for user
+      copyError() {
+        console.warn('Token not copied');
+      },
+      goToProvider(provider) {
+        this.get('space.providers').forEach((p) => p.set('isSelected', false));
+        provider.set('isSelected', true);
       }
   }
 });
