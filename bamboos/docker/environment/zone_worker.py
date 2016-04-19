@@ -75,8 +75,8 @@ class OZWorkerConfigurator:
                                 storages_dockers=None):
         this_config = config[self.domains_attribute()][instance]
         # Check if gui_livereload is enabled in env and turn it on
-        if 'gui_override' in config and isinstance(config['gui_override'],
-                                                   dict):
+        if 'gui_override' in this_config and isinstance(
+                this_config['gui_override'], dict):
             gui_config = this_config['gui_override']
             livereload_flag = gui_config['livereload']
             livereload_dir = gui_config['mount_path']
@@ -96,7 +96,8 @@ sed -i.bak s/onedata.org/{domain}/g /root/bin/node/data/dns.config
     def extra_volumes(self, config, bindir, instance):
         extra_volumes = []
         # Check if gui mount is enabled in env and add required volumes
-        if 'gui_override' in config and isinstance(config['gui_override'], dict):
+        if 'gui_override' in config and isinstance(config['gui_override'],
+                                                   dict):
             gui_config = config['gui_override']
             if 'host' in gui_config['mount_from']:
                 # Mount a path on host to static root dir on OZ docker
