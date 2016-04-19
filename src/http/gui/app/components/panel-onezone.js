@@ -1,5 +1,13 @@
 import Ember from 'ember';
 
+/**
+ * A message panel for onezone-modal-container - show a message instead of
+ * providers world map.
+ * @module
+ * @author Jakub Liput
+ * @copyright (C) 2016 ACK CYFRONET AGH
+ * @license This software is released under the MIT license cited in 'LICENSE.txt'.
+ */
 export default Ember.Component.extend({
   classNames: ['panel', 'panel-onezone'],
   classNameBindings: ['panelType'],

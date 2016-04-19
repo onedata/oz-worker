@@ -1,26 +1,26 @@
 <div class="drop-panel">
   <div class="drop-title-bar">
     <div class="title-label">
-      {{t (if provider.isWorking "onezone.providerPlaceDrop.operable" "onezone.providerPlaceDrop.operable")}}
+      {{t (if provider.isWorking "onezone.providerPlaceDrop.operable" "onezone.providerPlaceDrop.inoperable")}}
     </div>
     <div class="status-circle"></div>
   </div>
   <div class="drop-body">
     <div class="provider-label">
-      {{provider.name}}
+      {{trim-string provider.name 20}}
     </div>
-    {{!-- TODO: location name --}}
+    {{!-- TODO: location name - get it from Google Maps API --}}
     {{!-- <div class="provider-location">
       {{provider.location}}
     </div> --}}
     <ul>
-      {{#each provider.spaces as |space|}}
+      {{#each spacesSorted as |space|}}
         <li>
           <div class="space-icon">
             {{one-icon icon=(if space.isDefault "space-default" "space")}}
           </div>
           <div class="space-label">
-            {{space.name}}
+            {{trim-string space.name 20}}
           </div>
           {{!-- TODO: space capacity --}}
           {{!-- <div class="space-size">
@@ -29,9 +29,11 @@
         </li>
       {{/each}}
     </ul>
-    <hr>
-    <a href="#" class="btn btn-small btn-pale-green" {{action 'goToFiles'}}>
-      {{t "onezone.providerPlaceDrop.goToFiles"}}
-    </a>
+    {{#if provider.isWorking}}
+      <hr>
+      <a href="#" class="btn btn-small btn-pale-green" {{action 'goToFiles'}}>
+        {{t "onezone.providerPlaceDrop.goToFiles"}}
+      </a>
+    {{/if}}
   </div>
 </div>

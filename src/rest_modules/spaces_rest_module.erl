@@ -91,7 +91,7 @@ is_authorized(R, put, SpaceId, #client{type = user, id = UserId})
 is_authorized(_, get, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_view_data);
 is_authorized(R, get, SpaceId, #client{type = provider, id = ProviderId})
-    when R =/= groups, R =/= ginvite, R =/= group, R =/= gpriv ->
+    when R =/= ginvite ->
     space_logic:has_provider(SpaceId, ProviderId);
 is_authorized(_, _, _, _) ->
     false.
@@ -149,9 +149,13 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = Prov
             {ok, SpaceId} = space_logic:create({provider, ProviderId}, Name, Macaroon, Size),
             {{true, <<"/spaces/", SpaceId/binary>>}, Req}
     end;
-accept_resource(space, patch, SpaceId, Data, _Client, Req) ->
+accept_resource(space, patch, SpaceId, Data, #client{type = user, id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    ok = space_logic:modify(SpaceId, Name),
+    ok = space_logic:modify(SpaceId, {user, UserId}, Name),
+    {true, Req};
+accept_resource(space, patch, SpaceId, Data, #client{type = provider}, Req) ->
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
+    ok = space_logic:modify(SpaceId, provider, Name),
     {true, Req};
 accept_resource(upriv, put, SpaceId, Data, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
@@ -184,8 +188,11 @@ accept_resource(gpriv, put, SpaceId, Data, _Client, Req) ->
 -spec provide_resource(Resource :: provided_resource(), SpaceId :: binary() | undefined,
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
-provide_resource(space, SpaceId, #client{type = ClientType}, Req) ->
-    {ok, Data} = space_logic:get_data(SpaceId, ClientType),
+provide_resource(space, SpaceId, #client{type = user, id = UserId}, Req) ->
+    {ok, Data} = space_logic:get_data(SpaceId, {user, UserId}),
+    {Data, Req};
+provide_resource(space, SpaceId, #client{type = provider}, Req) ->
+    {ok, Data} = space_logic:get_data(SpaceId, provider),
     {Data, Req};
 provide_resource(users, SpaceId, #client{type = user}, Req) ->
     {ok, Users} =

@@ -4,6 +4,7 @@ $provider-drop-radius: 4px;
 
 .provider-place-drop {
   position: fixed;
+  z-index: 1001 !important;
 
   &.working {
     .drop-panel .drop-title-bar .status-circle {
@@ -14,6 +15,7 @@ $provider-drop-radius: 4px;
   &.drop-right {
     &:after {
       position: absolute;
+      // TODO: optional triangle centered (top: 50%)
       top: 50%;
       left: -$provider-drop-triangle-height*2 + 1;
       border-bottom: $provider-drop-triangle-width solid transparent;
@@ -28,6 +30,7 @@ $provider-drop-radius: 4px;
   &.drop-left {
     &:after {
       position: absolute;
+      // TODO: optional triangle centered (top: 50%)
       top: 50%;
       right: -$provider-drop-triangle-height*2 + 1;
       border-bottom: $provider-drop-triangle-width solid transparent;
