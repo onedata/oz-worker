@@ -94,7 +94,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    StoreLevel = application:get_env(?APP_Name, user_store_level, ?GLOBAL_ONLY_LEVEL),
+    StoreLevel = application:get_env(?APP_Name, user_store_level, ?GLOBALLY_CACHED_LEVEL),
     ?MODEL_CONFIG(onedata_user_bucket, [], StoreLevel).
 
 %%--------------------------------------------------------------------
