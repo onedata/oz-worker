@@ -114,6 +114,7 @@ import os, shutil, subprocess, sys
 os.environ['HOME'] = '/root'
 
 ssh_home = '/root/.ssh'
+docker_home = '/root/.docker/'
 if {shed_privileges}:
     useradd = ['useradd', '--create-home', '--uid', '{uid}', 'maketmp']
     if {groups}:
@@ -124,6 +125,7 @@ if {shed_privileges}:
     os.environ['PATH'] = os.environ['PATH'].replace('sbin', 'bin')
     os.environ['HOME'] = '/home/maketmp'
     ssh_home = '/home/maketmp/.ssh'
+    docker_home = '/home/maketmp/.docker'
     os.setregid({gid}, {gid})
     os.setreuid({uid}, {uid})
 
@@ -135,10 +137,10 @@ for root, dirs, files in os.walk(ssh_home):
         os.chmod(os.path.join(root, file), 0o600)
 
 try:
-    os.makedirs('/home/maketmp/.docker')
+    os.makedirs(docker_home)
 except:
     pass
-shutil.copyfile('/tmp/docker_config/config.json', '/home/maketmp/.docker/config.json')
+shutil.copyfile('/tmp/docker_config/config.json', docker_home)
 
 sh_command = 'eval $(ssh-agent) > /dev/null; ssh-add 2>&1; {command} {params}'
 ret = subprocess.call(['sh', '-c', sh_command])
