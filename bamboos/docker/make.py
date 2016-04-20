@@ -140,7 +140,10 @@ try:
     os.makedirs(docker_home)
 except:
     pass
-shutil.copyfile('/tmp/docker_config/config.json', docker_home)
+shutil.copyfile(
+    '/tmp/docker_config/config.json',
+    os.path.join(docker_home, 'config.json'
+))
 
 sh_command = 'eval $(ssh-agent) > /dev/null; ssh-add 2>&1; {command} {params}'
 ret = subprocess.call(['sh', '-c', sh_command])
