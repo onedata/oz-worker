@@ -126,6 +126,8 @@ if {shed_privileges}:
     os.environ['HOME'] = '/home/maketmp'
     ssh_home = '/home/maketmp/.ssh'
     docker_home = '/home/maketmp/.docker'
+    docker_gid = os.stat('/var/run/docker.sock').st_gid
+    os.setgroups([docker_gid])
     os.setregid({gid}, {gid})
     os.setreuid({uid}, {uid})
 
