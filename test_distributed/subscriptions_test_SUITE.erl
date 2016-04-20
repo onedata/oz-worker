@@ -172,7 +172,7 @@ space_update_through_support_test(Config) ->
     ]),
     ok.
 
-% Checks if update is pushed to providers where user that have access to space is logged-n
+% Checks if update is pushed to providers where user that have access to space is logged-in
 space_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
@@ -852,8 +852,8 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
         missing = NextMissing
     },
 
-    ?assertMatch(Forbidden, remaining_expected(Forbidden, All)),
-    RemainingExpected = remaining_expected(Expected, All),
+    ?assertMatch(Forbidden, remove_matched_expectations(Forbidden, All)),
+    RemainingExpected = remove_matched_expectations(Expected, All),
     verify_messages(NextContext, Retries - 1, RemainingExpected, Forbidden).
 
 get_messages() ->
@@ -876,7 +876,7 @@ extract_seqs(Messages) ->
         proplists:get_value(<<"seq">>, Message)
     end, Messages).
 
-remaining_expected(Expected, Messages) ->
+remove_matched_expectations(Expected, Messages) ->
     lists:filter(fun(Exp) ->
         lists:all(fun(Msg) -> length(Exp -- Msg) =/= 0 end, Messages)
     end, Expected).
