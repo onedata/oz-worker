@@ -12,7 +12,7 @@ DOCKER_BINDIR_PATH = '/root/build'
 
 
 def up(image, bindir, dns_server, uid, config_path, logdir=None,
-       dnsconfig_path=None):
+       dnsconfig_path=None, storages_dockers=None, luma_config=None):
     if dnsconfig_path is None:
         config = common.parse_json_config_file(config_path)
         input_dir = config['dirs_config']['oz_worker']['input_dir']
@@ -49,9 +49,9 @@ class OZWorkerConfigurator:
             gui.override_gui(gui_config, instance, hostname)
 
     # Called AFTER the instance (cluster of workers) has been started
-    def post_configure_instance(self, bindir, instance, config,
-                                container_ids, output,
-                                storages_dockers=None):
+    def post_configure_instance(self, bindir, instance, config, container_ids,
+                                output, storages_dockers=None,
+                                luma_config=None):
         this_config = config[self.domains_attribute()][instance]
         # Check if gui livereload is enabled in env and turn it on
         if 'gui_override' in this_config and isinstance(
@@ -74,7 +74,7 @@ sed -i.bak s/onedata.org/{domain}/g /root/bin/node/data/dns.config
 
     def extra_volumes(self, config, bindir, instance):
         extra_volumes = []
-        # Check if gui mount is enabled in env and add required volumes
+        # Check if gui override is enabled in env and add required volumes
         if 'gui_override' in config and isinstance(config['gui_override'],
                                                    dict):
             gui_config = config['gui_override']

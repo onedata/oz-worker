@@ -14,9 +14,11 @@ DOCKER_BINDIR_PATH = '/root/build'
 
 
 def up(image, bindir, dns_server, uid, config_path, logdir=None,
-       storages_dockers=None):
+       storages_dockers=None, luma_config=None):
     return worker.up(image, bindir, dns_server, uid, config_path,
-                     ProviderWorkerConfigurator(), logdir, storages_dockers)
+                     ProviderWorkerConfigurator(), logdir,
+                     storages_dockers=storages_dockers,
+                     luma_config=luma_config)
 
 
 class ProviderWorkerConfigurator:
@@ -30,8 +32,7 @@ class ProviderWorkerConfigurator:
     def pre_start_commands(self, domain):
         return 'escript bamboos/gen_dev/gen_dev.escript /tmp/gen_dev_args.json'
 
-        # Called BEFORE the instance (cluster of workers) is started
-
+    # Called BEFORE the instance (cluster of workers) is started
     def pre_configure_instance(self, instance, uid, config):
         this_config = config[self.domains_attribute()][instance]
         if 'gui_override' in this_config and isinstance(
@@ -42,8 +43,9 @@ class ProviderWorkerConfigurator:
             gui.override_gui(gui_config, instance, hostname)
 
     # Called AFTER the instance (cluster of workers) has been started
-    def post_configure_instance(self, bindir, instance, config,
-                                container_ids, output, storages_dockers=None):
+    def post_configure_instance(self, bindir, instance, config, container_ids,
+                                output, storages_dockers=None,
+                                luma_config=None):
         this_config = config[self.domains_attribute()][instance]
         # Check if gui livereload is enabled in env and turn it on
         if 'gui_override' in this_config and isinstance(
@@ -73,7 +75,7 @@ class ProviderWorkerConfigurator:
             posix_storages = []
 
         extra_volumes = [common.volume_for_storage(s) for s in posix_storages]
-        # Check if gui mount is enabled in env and add required volumes
+        # Check if gui override is enabled in env and add required volumes
         if 'gui_override' in config and isinstance(config['gui_override'],
                                                    dict):
             gui_config = config['gui_override']
@@ -91,12 +93,6 @@ class ProviderWorkerConfigurator:
 
     def nodes_list_attribute(self):
         return "op_worker_nodes"
-
-    # Create volume name from docker image name and instance name
-    def gui_files_volume_name(self, image_name, instance_name):
-        volume_name = image_name.split('/')[-1].replace(
-            ':', '_').replace('-', '_')
-        return '{0}_{1}'.format(instance_name, volume_name)
 
 
 def create_storages(storages, op_nodes, op_config, bindir, storages_dockers):
@@ -142,7 +138,8 @@ def create_storages(storages, op_nodes, op_config, bindir, storages_dockers):
                        first_node, storage['name'], config['host_name'],
                        storage['bucket'], config['access_key'],
                        config['secret_key'],
-                       "iam.amazonaws.com"]
+                       config.get('iam_request_scheme', 'https'),
+                       config.get('iam_host', 'iam.amazonaws.com')]
             assert 0 is docker.exec_(container, command, tty=True,
                                      stdout=sys.stdout, stderr=sys.stderr)
         else:
