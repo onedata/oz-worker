@@ -101,7 +101,7 @@ def create_storages(storages, op_nodes, op_config, bindir, storages_dockers):
                     's3': 'create_s3_storage.escript',
                     'ceph': 'create_ceph_storage.escript'}
     pwd = common.get_script_dir()
-    for _, script_name in script_names.iteritems():
+    for script_name in script_names.values():
         command = ['cp', os.path.join(pwd, script_name),
                    os.path.join(bindir, script_name)]
         subprocess.check_call(command)
@@ -117,7 +117,7 @@ def create_storages(storages, op_nodes, op_config, bindir, storages_dockers):
     for storage in storages:
         if isinstance(storage, basestring):
             storage = {'type': 'posix', 'name': storage}
-        if storage['type'] == 'posix':
+        if storage['type'] in ['posix', 'nfs']:
             st_path = storage['name']
             command = ['escript', script_paths['posix'], cookie,
                        first_node, storage['name'], st_path]
@@ -146,6 +146,6 @@ def create_storages(storages, op_nodes, op_config, bindir, storages_dockers):
             raise RuntimeError(
                 'Unknown storage type: {}'.format(storage['type']))
     # clean-up
-    for _, script_name in script_names.iteritems():
+    for script_name in script_names.values():
         command = ['rm', os.path.join(bindir, script_name)]
         subprocess.check_call(command)

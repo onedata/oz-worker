@@ -61,8 +61,8 @@ def _tweak_config(config, name, instance, uid, configurator):
     return cfg, sys_config[app_name]['db_nodes']
 
 
-def _node_up(image, bindir, dns_servers, instance, config, db_node_mappings,
-             logdir, configurator):
+def _node_up(image, bindir, dns_servers, config, db_node_mappings, logdir,
+             configurator, storages_dockers):
     app_name = configurator.app_name()
     node_name = config['nodes']['node']['vm.args']['name']
     db_nodes = config['nodes']['node']['sys.config'][app_name]['db_nodes']
@@ -80,12 +80,15 @@ bash /root/bin/chown_logs.sh &
 cat <<"EOF" > /tmp/gen_dev_args.json
 {gen_dev_args}
 EOF
+{mount_commands}
 {pre_start_commands}
 /root/bin/node/bin/{executable} console'''
-    pre_start_commands = configurator.pre_start_commands(domain)
 
+    mount_commands = common.mount_nfs_command(config, storages_dockers)
+    pre_start_commands = configurator.pre_start_commands(domain)
     command = command.format(
         gen_dev_args=json.dumps({configurator.app_name(): config}),
+        mount_commands=mount_commands,
         pre_start_commands=pre_start_commands,
         uid=os.geteuid(),
         gid=os.getegid(),
@@ -109,6 +112,7 @@ EOF
         workdir=DOCKER_BINDIR_PATH,
         volumes=volumes,
         dns_list=dns_servers,
+        privileged=True if mount_commands else False,
         command=command)
 
     # create system users and groups (if specified)
@@ -241,9 +245,9 @@ def up(image, bindir, dns_server, uid, config_path, configurator, logdir=None,
         workers = []
         worker_ips = []
         for cfg in configs:
-            worker, node_out = _node_up(image, bindir, dns_servers, instance,
-                                        cfg, db_node_mappings, logdir,
-                                        configurator)
+            worker, node_out = _node_up(image, bindir, dns_servers, cfg,
+                                        db_node_mappings, logdir, configurator,
+                                        storages_dockers)
             workers.append(worker)
             worker_ips.append(common.get_docker_ip(worker))
             common.merge(current_output, node_out)
