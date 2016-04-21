@@ -232,8 +232,10 @@ def up(image, bindir, dns_server, uid, config_path, configurator, logdir=None,
 
         common.merge(current_output, db_out)
 
+        instance_domain = cluster_domain(instance, uid)
+
         # Call pre-start configuration for instance (cluster)
-        configurator.pre_configure_instance(instance, uid, config)
+        configurator.pre_configure_instance(instance, instance_domain, config)
 
         # Start the workers
         workers = []
@@ -252,7 +254,7 @@ def up(image, bindir, dns_server, uid, config_path, configurator, logdir=None,
         # Add the domain of current clusters
         domains = {
             'domains': {
-                cluster_domain(instance, uid): {
+                instance_domain: {
                     'ns': worker_ips,
                     'a': []
                 }

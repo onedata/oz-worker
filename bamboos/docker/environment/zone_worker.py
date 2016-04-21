@@ -38,15 +38,15 @@ class OZWorkerConfigurator:
 
         return cfg
 
-    # Called BEFORE the instance (cluster of workers) is started
-    def pre_configure_instance(self, instance, uid, config):
+    # Called BEFORE the instance (cluster of workers) is started,
+    # once for every instance
+    def pre_configure_instance(self, instance, instance_domain, config):
         this_config = config[self.domains_attribute()][instance]
         if 'gui_override' in this_config and isinstance(
                 this_config['gui_override'], dict):
             # Preconfigure GUI override
             gui_config = this_config['gui_override']
-            hostname = common.format_hostname(instance, uid)
-            gui.override_gui(gui_config, instance, hostname)
+            gui.override_gui(gui_config, instance_domain)
 
     # Called AFTER the instance (cluster of workers) has been started
     def post_configure_instance(self, bindir, instance, config, container_ids,
