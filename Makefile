@@ -54,16 +54,6 @@ compile:
 ## Also a release is not necessary for us.
 ## We prevent reltool from creating a release.
 ## todo: find better solution
-##
-## Generates a dev release
-generate_dev: deps compile
-	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
-	./rebar generate $(OVERLAY_VARS)
-	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
-	# Try to get developer auth.config
-	./get_dev_auth_config.sh
-	# Copy GUI static files into release
-	./inject_gui.sh
 
 ## Generates a production release
 generate: deps compile
@@ -72,6 +62,11 @@ generate: deps compile
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
 	# Copy GUI static files into release
 	./inject_gui.sh
+
+## Generates a dev release
+generate_dev: deps compile generate
+	# Try to get developer auth.config
+	./get_dev_auth_config.sh
 
 clean:
 	./rebar clean
