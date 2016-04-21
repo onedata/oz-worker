@@ -93,7 +93,7 @@ EOF
     )
 
     volumes = [(bindir, DOCKER_BINDIR_PATH, 'ro')]
-    volumes += configurator.extra_volumes(config, bindir, instance)
+    volumes += configurator.extra_volumes(config, bindir, domain)
 
     if logdir:
         logdir = os.path.join(os.path.abspath(logdir), hostname)
