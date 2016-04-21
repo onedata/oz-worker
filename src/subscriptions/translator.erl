@@ -49,9 +49,7 @@ as_msg(Seq, _Doc, _Ignore) ->
 %%% Those structures are serializable to json and contain "ignore" commands.
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_ignore_msg(Seq :: subscriptions:seq())
-        -> term().
-
+-spec get_ignore_msg(Seq :: subscriptions:seq()) -> term().
 get_ignore_msg(Seq) ->
     [{seq, Seq}, {ignore, true}].
 
