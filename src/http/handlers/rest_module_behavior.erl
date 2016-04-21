@@ -10,7 +10,7 @@
 -module(rest_module_behavior).
 -author("Konrad Zemek").
 
--include("handlers/rest_handler.hrl").
+-include("http/handlers/rest_handler.hrl").
 
 %%--------------------------------------------------------------------
 %% @doc Returns a Cowboy-understandable PathList of routes supported by a module

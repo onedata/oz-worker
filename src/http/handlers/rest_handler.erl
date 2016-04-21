@@ -12,7 +12,7 @@
 -module(rest_handler).
 -author("Konrad Zemek").
 
--include("handlers/rest_handler.hrl").
+-include("http/handlers/rest_handler.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API

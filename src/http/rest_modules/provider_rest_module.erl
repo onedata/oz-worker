@@ -10,7 +10,7 @@
 -module(provider_rest_module).
 -author("Konrad Zemek").
 
--include("handlers/rest_handler.hrl").
+-include("http/handlers/rest_handler.hrl").
 -include("registered_names.hrl").
 
 -behavior(rest_module_behavior).
