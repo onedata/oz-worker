@@ -13,7 +13,7 @@
 -define(GR_DATASTORE_MODELS_HRL, 1).
 
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
--include("handlers/rest_handler.hrl").
+-include("http/handlers/rest_handler.hrl").
 
 % Describes state of batch.
 -record(outbox, {

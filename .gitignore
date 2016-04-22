@@ -21,6 +21,7 @@ dockerbuild-report.txt
 *.beam
 *.pyc
 
+.rebar
 .eunit
 .dialyzer.plt
 test/eunit_results
