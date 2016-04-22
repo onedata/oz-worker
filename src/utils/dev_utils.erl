@@ -52,7 +52,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
--include("handlers/rest_handler.hrl").
+-include("http/handlers/rest_handler.hrl").
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).

@@ -269,17 +269,12 @@ handle_change(Updates) ->
     utils:pforeach(fun(#document{value = Subscription}) ->
         try
             #provider_subscription{provider = ID} = Subscription,
-            Messages = lists:filtermap(fun({Seq, Doc, Model, ProvidersSet}) ->
-                Message = translator:get_msg(Seq, Doc, Model),
-                IgnoreMessage = translator:get_ignore_msg(Seq),
-
+            Messages = lists:filtermap(fun({Seq, Doc, _, ProvidersSet}) ->
                 case subscriptions:seen(Subscription, Seq) of
                     true -> false;
                     false ->
-                        {true, case sets:is_element(ID, ProvidersSet) of
-                            true -> Message;
-                            false -> IgnoreMessage
-                        end}
+                        ToIgnore = not sets:is_element(ID, ProvidersSet),
+                        {true, translator:as_msg(Seq, Doc, ToIgnore)}
                 end
             end, UpdatesWithProviders),
             outboxes:put(ID, fun push_messages/2, Messages)
