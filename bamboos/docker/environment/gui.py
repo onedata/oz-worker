@@ -25,7 +25,6 @@ def override_gui(gui_config, instance_domain):
         # Create volume name from docker image name and instance domain
         volume_name = gui_files_volume_name(
             static_docker_image, instance_domain)
-        print(volume_name)
         # Create the volume from given image
         docker.create_volume(
             path=mount_path,
