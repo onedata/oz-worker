@@ -90,11 +90,11 @@ get_msg(Seq, Doc, user_group = Model) ->
     ]}];
 get_msg(Seq, Doc, onedata_user = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #onedata_user{name = Name, spaces = Spaces, groups = Groups,
+    #onedata_user{name = Name, space_names = SpaceNames, groups = Groups,
         default_space = DefaultSpace} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
-        {space_ids, Spaces},
+        {space_names, maps:to_list(SpaceNames)},
         {group_ids, Groups},
         {default_space, DefaultSpace},
         {public_only, false}

@@ -757,9 +757,9 @@ generate_cert_files() ->
 expectation(ID, #space{name = Name, providers_supports = Supports,
     groups = Groups, users = Users}) ->
     space_expectation(ID, Name, Users, Groups, Supports);
-expectation(ID, #onedata_user{name = Name, groups = Groups, spaces = Spaces,
+expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
     default_space = DefaultSpace}) ->
-    user_expectation(ID, Name, Spaces, Groups, case DefaultSpace of
+    user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, case DefaultSpace of
         undefined -> <<"undefined">>;
         _ -> DefaultSpace
     end);
@@ -778,7 +778,7 @@ space_expectation(ID, Name, Users, Groups, Supports) ->
 user_expectation(ID, Name, Spaces, Groups, DefaultSpace) ->
     [{<<"id">>, ID}, {<<"user">>, [
         {<<"name">>, Name},
-        {<<"space_ids">>, Spaces},
+        {<<"space_names">>, Spaces},
         {<<"group_ids">>, Groups},
         {<<"default_space">>, DefaultSpace},
         {<<"public_only">>, false}
