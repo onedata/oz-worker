@@ -86,7 +86,8 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    StoreLevel = application:get_env(?APP_Name, group_store_level, ?GLOBALLY_CACHED_LEVEL),
+    % TODO migrate to GLOBALLY_CACHED_LEVEL
+    StoreLevel = application:get_env(?APP_Name, group_store_level, ?DISK_ONLY_LEVEL),
     ?MODEL_CONFIG(user_group_bucket, [], StoreLevel).
 
 %%--------------------------------------------------------------------
