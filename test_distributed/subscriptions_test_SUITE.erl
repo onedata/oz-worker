@@ -28,7 +28,7 @@
     space_update_through_groups_test/1,
     no_space_update_test/1,
     user_update_test/1,
-    no_user_update_test/1,
+    only_public_user_update_test/1,
     group_update_through_users_test/1,
     no_group_update_test/1,
     multiple_updates_test/1,
@@ -86,7 +86,7 @@ all() -> ?ALL([
     fetches_changes_from_both_cache_and_db,
     fetches_changes_when_cache_has_gaps,
     no_space_update_test,
-    no_user_update_test,
+    only_public_user_update_test,
     no_group_update_test
 ]).
 
@@ -264,7 +264,8 @@ all_data_in_user_update_test(Config) ->
     User = #onedata_user{
         name = <<"user">>,
         groups = [?ID(g1), ?ID(g2)],
-        spaces = [?ID(s1), ?ID(s2)]
+        spaces = [?ID(s1), ?ID(s2)],
+        default_space = <<"s1">>
     },
     Context = init_messages(Node, PID, [?ID(u1)]),
     save(Node, ?ID(u1), User),
@@ -298,7 +299,7 @@ all_data_in_group_update_test(Config) ->
     ]),
     ok.
 
-no_user_update_test(Config) ->
+only_public_user_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = create_provider(Node, ?ID(p1), [?ID(s1)]),
@@ -310,7 +311,9 @@ no_user_update_test(Config) ->
     update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated">>}),
 
     % then
-    verify_messages_absent(Context, [
+    verify_messages(Context, [
+        public_only_user_expectation(?ID(u1), <<"updated">>)
+    ], [
         expectation(?ID(u1), U1),
         expectation(?ID(u1), U1#onedata_user{name = <<"updated">>})
     ]),
@@ -754,8 +757,12 @@ generate_cert_files() ->
 expectation(ID, #space{name = Name, providers_supports = Supports,
     groups = Groups, users = Users}) ->
     space_expectation(ID, Name, Users, Groups, Supports);
-expectation(ID, #onedata_user{name = Name, groups = Groups, spaces = Spaces}) ->
-    user_expectation(ID, Name, Spaces, Groups);
+expectation(ID, #onedata_user{name = Name, groups = Groups, spaces = Spaces,
+    default_space = DefaultSpace}) ->
+    user_expectation(ID, Name, Spaces, Groups, case DefaultSpace of
+        undefined -> <<"undefined">>;
+        _ -> DefaultSpace
+    end);
 expectation(ID, #user_group{name = Name, users = Users, spaces = Spaces}) ->
     group_expectation(ID, Name, Users, Spaces).
 
@@ -768,11 +775,22 @@ space_expectation(ID, Name, Users, Groups, Supports) ->
         {<<"groups">>, privileges_as_binaries(Groups)}
     ]}].
 
-user_expectation(ID, Name, Spaces, Groups) ->
+user_expectation(ID, Name, Spaces, Groups, DefaultSpace) ->
     [{<<"id">>, ID}, {<<"user">>, [
         {<<"name">>, Name},
         {<<"space_ids">>, Spaces},
-        {<<"group_ids">>, Groups}
+        {<<"group_ids">>, Groups},
+        {<<"default_space">>, DefaultSpace},
+        {<<"public_only">>, false}
+    ]}].
+
+public_only_user_expectation(ID, Name) ->
+    [{<<"id">>, ID}, {<<"user">>, [
+        {<<"name">>, Name},
+        {<<"space_ids">>, []},
+        {<<"group_ids">>, []},
+        {<<"default_space">>, <<"undefined">>},
+        {<<"public_only">>, true}
     ]}].
 
 group_expectation(ID, Name, Users, Spaces) ->
@@ -873,7 +891,7 @@ largest(List) ->
 
 extract_seqs(Messages) ->
     lists:map(fun(Message) ->
-        proplists:get_value(<<"seq">>, Message)
+        proplists:get_value(<<"seq">>, Message, -2)
     end, Messages).
 
 remove_matched_expectations(Expected, Messages) ->

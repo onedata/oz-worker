@@ -19,6 +19,7 @@ package.tar.gz
 *.beam
 *.pyc
 
+.rebar
 .eunit
 .dialyzer.plt
 test/eunit_results
