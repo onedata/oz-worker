@@ -155,6 +155,14 @@ set_up_test_entities(Users, Groups, Spaces) ->
                         space_logic:join({group, GroupID}, SpaceToken)
                     end, GroupsToAdd)
             end, Spaces),
+
+        % Give all space perms to users that have it as default space
+        lists:foreach(
+            fun({UserID, Props}) ->
+                DefaultSpace = proplists:get_value(<<"default_space">>, Props),
+                space_logic:set_privileges(
+                    DefaultSpace, {user, UserID}, privileges:space_admin())
+            end, Users),
         ok
     catch
         T:M ->
