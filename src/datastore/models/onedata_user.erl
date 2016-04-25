@@ -94,6 +94,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
+    % TODO migrate to GLOBALLY_CACHED_LEVEL
     StoreLevel = application:get_env(?APP_Name, user_store_level, ?DISK_ONLY_LEVEL),
     ?MODEL_CONFIG(onedata_user_bucket, [], StoreLevel).
 

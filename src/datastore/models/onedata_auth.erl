@@ -84,7 +84,6 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link model_behaviour} callback model_init/0.
-%% todo: change level once list is supported by the datastore (couchbase)
 %% @end
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
