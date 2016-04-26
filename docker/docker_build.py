@@ -129,6 +129,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--tag',
         action='append',
+        default=[],
         help='custom tag for docker image',
         dest='tags')
 
