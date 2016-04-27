@@ -34,6 +34,7 @@ all: test_rel
 
 deps:
 	./rebar get-deps
+	deps/gui/pull-gui.sh gui-config.sh
 
 recompile:
 	./rebar compile skip_deps=true
@@ -61,7 +62,8 @@ generate: deps compile
 	./rebar generate $(OVERLAY_VARS)
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
 	# Copy GUI static files into release
-	./inject_gui.sh
+	@mkdir -p rel/oz_worker/data/gui_static
+	cp -R deps/gui_static/* rel/oz_worker/data/gui_static/
 
 ## Generates a dev release
 generate_dev: deps compile generate
