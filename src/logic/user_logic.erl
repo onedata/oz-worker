@@ -13,7 +13,7 @@
 -author("Konrad Zemek").
 
 -include("datastore/oz_datastore_models_def.hrl").
--include("deps/ctool/include/utils/utils.hrl").
+-include_lib("ctool/include/utils/utils.hrl").
 
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
@@ -173,7 +173,7 @@ modify(UserId, Proplist) ->
                     chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider),
                     client_tokens = proplists:get_value(client_tokens, Proplist, ClientTokens)},
                 DocNew = Doc#document{value = NewUser},
-                onedata_user:save(DocNew),
+                {ok, _} = onedata_user:save(DocNew),
                 case SetAlias of
                     Alias ->
                         % Alias wasn't changed
