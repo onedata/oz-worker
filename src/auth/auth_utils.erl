@@ -13,7 +13,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
--include("handlers/rest_handler.hrl").
+-include("http/handlers/rest_handler.hrl").
 -include("auth_common.hrl").
 -include("gui/common.hrl").
 
@@ -74,7 +74,14 @@ validate_login() ->
 
                     {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderId, user_id = UserID, email_list = OriginalEmails, name = Name}} ->
                         Emails = lists:map(fun(Email) ->
-                            http_utils:normalize_email(Email) end, OriginalEmails),
+                            http_utils:normalize_email(Email)
+                        end, OriginalEmails),
+                        case Emails of
+                            [] ->
+                                throw(no_email_received_from_openid);
+                            _ ->
+                                ok
+                        end,
                         OAuthAccount = OriginalOAuthAccount#oauth_account{email_list = Emails, provider_id = ProviderId},
                         Result = case proplists:get_value(connect_account, Props) of
                             false ->
@@ -94,12 +101,20 @@ validate_login() ->
                                                 {error, ?error_auth_new_email_occupied};
                                             false ->
                                                 % All emails are available, proceed
-                                                UserInfo = #onedata_user{email_list = Emails, name = Name, connected_accounts = [
+                                                % check if name was returned from openid, if not set
+                                                % email as name (the part before @)
+                                                NameToSet = case Name of
+                                                    <<"">> ->
+                                                        hd(binary:split(hd(Emails), <<"@">>));
+                                                    _ ->
+                                                        Name
+                                                end,
+                                                UserInfo = #onedata_user{email_list = Emails, name = NameToSet, connected_accounts = [
                                                     OAuthAccount
                                                 ]},
                                                 {ok, UserId} = user_logic:create(UserInfo),
                                                 % Create a default space for the user and generate a token to support it
-                                                {ok, SpaceID} = space_logic:create({user, UserId}, <<Name/binary, "'s space">>),
+                                                {ok, SpaceID} = space_logic:create({user, UserId}, <<NameToSet/binary, "'s space">>),
                                                 true = user_logic:set_default_space(UserId, SpaceID),
                                                 {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_support_token, {space, SpaceID}),
                                                 user_logic:modify(UserId, [{first_space_support_token, Token}]),

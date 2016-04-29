@@ -4,6 +4,21 @@
 CHANGELOG
 ---------
 
+### 3.0.0-beta3
+
+* VFS-1860 explicit default space added
+* VFS-1860 trimmed (with public data only) users are always pushed
+* VFS-1825 rework gui starting in zone up
+* VFS-1768: Do not allow provider drop above onezone modals
+* VFS-1768: Do not allow scroll bars on atlas
+* VFS-1607 Add space canonical name to get data response in user context.
+* VFS-1596 Update getting onedata user.
+* VFS-1607 Save space name mapping in user document.
+* VFS-1596 More detailed get_data for user.
+* VFS-1768: Spinners in login boxes
+* VFS-1770 fix disappearing client tokens
+
+
 ### 3.0.0-beta1
 
 * VFS-1770 make sure provider is inoperable before displaying it

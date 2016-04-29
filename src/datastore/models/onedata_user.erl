@@ -94,7 +94,8 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    StoreLevel = application:get_env(?APP_Name, user_store_level, ?GLOBAL_ONLY_LEVEL),
+    % TODO migrate to GLOBALLY_CACHED_LEVEL
+    StoreLevel = application:get_env(?APP_Name, user_store_level, ?DISK_ONLY_LEVEL),
     ?MODEL_CONFIG(onedata_user_bucket, [], StoreLevel).
 
 %%--------------------------------------------------------------------
@@ -160,7 +161,7 @@ get_by_criterion({email, Value}) ->
         (#document{value = #onedata_user{email_list = EmailList}} = Doc, Acc) ->
             case lists:member(Value, EmailList) of
                 true -> {abort, [Doc | Acc]};
-                false -> {next, [Acc]}
+                false -> {next, Acc}
             end;
         (_, Acc) ->
             {next, Acc}
@@ -175,7 +176,7 @@ get_by_criterion({alias, Value}) ->
         (#document{value = #onedata_user{alias = Alias}} = Doc, Acc) ->
             case Alias of
                 Value -> {abort, [Doc | Acc]};
-                _ -> {next, [Acc]}
+                _ -> {next, Acc}
             end;
         (_, Acc) ->
             {next, Acc}
@@ -198,7 +199,7 @@ get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
             end, Accounts),
             case Found of
                 true -> {abort, [Doc | Acc]};
-                _ -> {next, [Acc]}
+                _ -> {next, Acc}
             end;
         (_, Acc) ->
             {next, Acc}

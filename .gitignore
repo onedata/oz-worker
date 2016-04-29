@@ -13,14 +13,13 @@ rel/oz_worker
 rel/*.rpm
 package
 package.tar.gz
-dockerbuild-sha.txt
-dockerbuild-report.txt
 
 *.iml
 *.sublime*
 *.beam
 *.pyc
 
+.rebar
 .eunit
 .dialyzer.plt
 test/eunit_results
