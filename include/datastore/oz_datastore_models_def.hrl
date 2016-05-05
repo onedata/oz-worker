@@ -51,7 +51,11 @@
 %% This record defines a group of users, it has: name, list of users that belongs to it, list of spaces that are used by this group
 -record(user_group, {
     name :: binary(),
-    users = [] :: [{UserId :: binary(), [privileges:group_privilege()]}],
+    type :: user_group:type(),
+    users = [] :: [{UserID :: binary(), [privileges:group_privilege()]}],
+    effective_users = [] :: [{UserID :: binary(), [privileges:group_privilege()]}],
+    groups = [] :: [{GroupID :: binary(), [privileges:group_privilege()]}],
+    parent_groups = [] :: [GroupID :: binary()],
     spaces = [] :: [SpaceId :: binary()]
 }).
 
