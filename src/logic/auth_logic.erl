@@ -17,6 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("hackney/include/hackney_lib.hrl").
 
 -define(STATE_TOKEN, state_token).
 -define(STATE_TOKEN_EXPIRATION_SECS, 60). %% @todo: config
@@ -105,16 +106,16 @@ get_redirection_uri(UserId, ProviderId) ->
     end,
     % TODO return IP address rather than alias.onedata.org
     % It shall be used normally when we have a possibility to
-    % resolve domains on developer's host systems (so their web browsers can connect).
+    % resolve domains on developer's host systems
+    % (so their web browsers can connect).
     % To do this, we need a recursive DNS server in docker environment,
     % whose address must be fed to system's resolv.conf.
     {ok, PData} = provider_logic:get_data(ProviderId),
-    [RedirectionIP | _] = proplists:get_value(urls, PData),
     RedirectionPoint = proplists:get_value(redirectionPoint, PData),
-    {ok, {_Scheme, _UserInfo, _HostStr, Port, _Path, _Query}} =
-        http_uri:parse(str_utils:to_list(RedirectionPoint)),
+    #hackney_url{host = Host, port = Port} =
+        hackney_url:parse_url(RedirectionPoint),
     URL = str_utils:format_bin("https://~s:~B~s?code=~s", [
-        RedirectionIP, Port, ?provider_auth_endpoint, Token
+        Host, Port, ?provider_auth_endpoint, Token
     ]),
     {ok, URL}.
 
@@ -144,8 +145,8 @@ gen_token(UserId, ProviderId) ->
     {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{
         secret = Secret, user_id = UserId}}),
     Identifier = binary_to_list(IdentifierBinary),
-    M = create_macaroon(Secret, str_utils:to_binary(Identifier), [[
-        "providerId = ", ProviderId]]),
+    %% @todo: VFS-1869
+    M = create_macaroon(Secret, str_utils:to_binary(Identifier), []),
 
     CaveatKey = generate_secret(),
     {ok, CaveatIdBinary} = onedata_auth:save(#document{value = #onedata_auth{

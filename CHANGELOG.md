@@ -4,6 +4,45 @@
 CHANGELOG
 ---------
 
+### 3.0.0-beta3
+
+* VFS-1860 explicit default space added
+* VFS-1860 trimmed (with public data only) users are always pushed
+* VFS-1825 rework gui starting in zone up
+* VFS-1768: Do not allow provider drop above onezone modals
+* VFS-1768: Do not allow scroll bars on atlas
+* VFS-1607 Add space canonical name to get data response in user context.
+* VFS-1596 Update getting onedata user.
+* VFS-1607 Save space name mapping in user document.
+* VFS-1596 More detailed get_data for user.
+* VFS-1768: Spinners in login boxes
+* VFS-1770 fix disappearing client tokens
+
+
+### 3.0.0-beta1
+
+* VFS-1770 make sure provider is inoperable before displaying it
+* VFS-1768: Token copy button in modals; dynamic page titles
+* VFS-1521 remove providerId restriction on new tokens
+* VFS-1757 Change application ports availability checking procedure.
+* VFS-1792 moving privilages to ctool
+* VFS-1796 location as optional create args
+* VFS-1629 covered cache malfunctions
+* VFS-1629 covered fetching old changes from db
+* VFS-1629 limiting db fetch life
+* VFS-1629 connected provider to the OZ (over websocket)
+* VFS-1629 subscribtions over websocket
+* VFS-1629 sending info needed by op
+* VFS-1629 user subscriptions
+* VFS-1629 client subscriptions
+* VFS-1629 extracted outbox
+* VFS-1629 buffering outbox
+* VFS-1629 extraction of subscription handling
+* VFS-1629 introduction of modules: cache, subscribers, translator
+* VFS-1629 provider can obtain only spaces on his own
+* VFS-1629 subscriptions via rest
+
+
 ### 3.0.0-alpha3
 
 * VFS-1638 enable simple auth mixins and adjust redirection pages after login

@@ -191,7 +191,9 @@ get_spaces(GroupId) ->
 get_providers(GroupId) ->
     {ok, #document{value = #user_group{spaces = Spaces}}} = user_group:get(GroupId),
     GroupProviders = lists:foldl(fun(Space, Providers) ->
-        {ok, #document{value = #space{providers = SpaceProviders}}} = space:get(Space),
+        {ok, #document{value = #space{providers_supports = ProvidersSupports}}}
+            = space:get(Space),
+        {SpaceProviders, _} = lists:unzip(ProvidersSupports),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)
     end, ordsets:new(), Spaces),
     {ok, [{providers, GroupProviders}]}.
@@ -204,8 +206,7 @@ get_providers(GroupId) ->
 -spec get_user(GroupId :: binary(), UserId :: binary()) ->
     {ok, [proplists:property()]}.
 get_user(_GroupId, UserId) ->
-    %% @todo: we don't want to give out every bit of data once clients have more data stored
-    user_logic:get_data(UserId).
+    user_logic:get_data(UserId, provider).
 
 %%--------------------------------------------------------------------
 %% @doc Returns list of group's member privileges.

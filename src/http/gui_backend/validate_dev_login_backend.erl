@@ -30,15 +30,19 @@
 %% {@link page_backend_behaviour} callback page_init/0.
 %% @end
 %%--------------------------------------------------------------------
+-spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
     ParamsProps = g_ctx:get_url_params(),
     UserId = proplists:get_value(<<"user">>, ParamsProps),
-    case {g_session:is_logged_in(), g_session:get_user_id()} of
-        {true, UserId} ->
-            ok;
-        {true, _} ->
-            g_session:log_out(),
-            g_session:log_in(UserId);
+    case g_session:is_logged_in() of
+        true ->
+            case g_session:get_user_id() of
+                UserId ->
+                    ok;
+                _ ->
+                    g_session:log_out(),
+                    g_session:log_in(UserId)
+            end;
         _ ->
             g_session:log_in(UserId)
     end,

@@ -12,14 +12,16 @@
 -module(provider_logic).
 -author("Konrad Zemek").
 
+-include("gui/common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("hackney/include/hackney_lib.hrl").
 
 %% API
--export([create/4, modify/2, exists/1]).
+-export([create/4, create/5, modify/2, exists/1]).
 -export([get_data/1, get_spaces/1]).
 -export([remove/1]).
 -export([test_connection/1, check_provider_connectivity/1]).
@@ -38,12 +40,31 @@
     RedirectionPoint :: binary(), CSR :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create(ClientName, URLs, RedirectionPoint, CSRBin) ->
+    create(ClientName, URLs, RedirectionPoint, CSRBin, #{}).
+
+
+%%--------------------------------------------------------------------
+%% @doc Create a provider's account.
+%% Throws exception when call to the datastore fails.
+%% Accepts optional arguments map (which currently supports 'latitude' and
+%% 'longitude' keys)
+%% @end
+%%--------------------------------------------------------------------
+-spec create(ClientName :: binary(), URLs :: [binary()],
+    RedirectionPoint :: binary(), CSR :: binary(),
+    OptionalArgs :: #{atom() => term()}) ->
+    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
+create(ClientName, URLs, RedirectionPoint, CSRBin, OptionalArgs) ->
     ProviderId = datastore_utils:gen_uuid(),
     {ok, {ProviderCertPem, Serial}} = worker_proxy:call(ozpca_worker,
         {sign_provider_req, ProviderId, CSRBin}),
 
+    Latitude = maps:get(latitude, OptionalArgs, undefined),
+    Longitude = maps:get(longitude, OptionalArgs, undefined),
+
     Provider = #provider{client_name = ClientName, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial},
+        redirection_point = RedirectionPoint, serial = Serial,
+        latitude = Latitude, longitude = Longitude},
     provider:save(#document{key = ProviderId, value = Provider}),
 
     {ok, ProviderId, ProviderCertPem}.
@@ -60,10 +81,15 @@ modify(ProviderId, Data) ->
         URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
         RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
         ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
+        Latitude = proplists:get_value(<<"latitude">>, Data, Provider#provider.latitude),
+        Longitude = proplists:get_value(<<"longitude">>, Data, Provider#provider.longitude),
+
         {ok, Provider#provider{
             urls = URLs,
             redirection_point = RedirectionPoint,
-            client_name = ClientName
+            client_name = ClientName,
+            latitude = Latitude,
+            longitude = Longitude
         }}
     end),
     ok.
@@ -89,14 +115,18 @@ get_data(ProviderId) ->
     {ok, #document{value = #provider{
         client_name = ClientName,
         urls = URLs,
-        redirection_point = RedirectionPoint
+        redirection_point = RedirectionPoint,
+        latitude = Latitude,
+        longitude = Longitude
     }}} = provider:get(ProviderId),
 
     {ok, [
         {clientName, ClientName},
         {providerId, ProviderId},
         {urls, URLs},
-        {redirectionPoint, RedirectionPoint}
+        {redirectionPoint, RedirectionPoint},
+        {latitude, Latitude},
+        {longitude, Longitude}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -122,10 +152,9 @@ remove(ProviderId) ->
 
     lists:foreach(fun(SpaceId) ->
         {ok, _} = space:update(SpaceId, fun(Space) ->
-            #space{providers = Providers, size = Size} = Space,
+            #space{providers_supports = Supports} = Space,
             {ok, Space#space{
-                providers = lists:delete(ProviderId, Providers),
-                size = proplists:delete(ProviderId, Size)
+                providers_supports = proplists:delete(ProviderId, Supports)
             }}
         end)
     end, Spaces),
@@ -179,18 +208,30 @@ test_connection(_, _) ->
 % Checks if given provider (by ID) is alive and responding.
 -spec check_provider_connectivity(ProviderId :: binary()) -> boolean().
 check_provider_connectivity(ProviderId) ->
-    {ok, Data} = provider_logic:get_data(ProviderId),
-    RedirectionPoint = proplists:get_value(redirectionPoint, Data),
-    % @todo check provider_id_endpoint
-%%    ProviderConnCheckEndpoint = <<RedirectionPoint/binary, ?provider_id_endpoint>>,
-    ProviderConnCheckEndpoint = RedirectionPoint,
-    % We do not need to check for provider's certificate - some providers do not have a signed one.
-    % Plus user's browser will do the verification.
-    case http_client:get(ProviderConnCheckEndpoint, [], <<>>, [insecure]) of
-        % @todo check provider_id_endpoint
-%%        {ok, _, _, ProviderId} -> true;
-        {ok, _, _, _} -> true;
-        _ -> false
+    case subscriptions:any_connection_active(ProviderId) of
+        true ->
+            true;
+        false ->
+            try
+                % Sometimes it may happen that there is no websocket connection
+                % but the worker is fully operational. For example, when the
+                % connection has timed out and provider hasn't reconnected yet.
+                % In such case, make sure it is really inoperable by making
+                % a http request.
+                {ok, Data} = provider_logic:get_data(ProviderId),
+                RedirectionPoint = proplists:get_value(redirectionPoint, Data),
+                #hackney_url{
+                    host = Host
+                } = hackney_url:parse_url(RedirectionPoint),
+                ConnCheckEndpoint = str_utils:format_bin("https://~s~s", [
+                    Host, ?provider_id_endpoint
+                ]),
+                {ok, _, _, ProviderId} =
+                    http_client:get(ConnCheckEndpoint, [], <<>>, [insecure]),
+                true
+            catch _:_ ->
+                false
+            end
     end.
 
 %%--------------------------------------------------------------------

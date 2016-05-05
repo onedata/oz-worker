@@ -29,20 +29,24 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback init/0.
+%% {@link data_backend_behaviour} callback init/0.
 %% @end
 %%--------------------------------------------------------------------
+-spec init() -> ok.
 init() ->
     ok.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback find/2.
+%% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
+-spec find(ResourceType :: binary(), Ids :: [binary()]) ->
+    {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"space">>, SpaceIds) ->
     UserId = g_session:get_user_id(),
+    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, GetSpaces} = user_logic:get_spaces(UserId),
     Default = proplists:get_value(default, GetSpaces),
     Res = lists:map(
@@ -51,11 +55,15 @@ find(<<"space">>, SpaceIds) ->
             Name = proplists:get_value(name, SpaceData),
             {ok, [{providers, Providers}]} =
                 space_logic:get_providers(SpaceId, provider),
+            ProvidersToDisplay = lists:filter(
+                fun(Provider) ->
+                    lists:member(Provider, UserProviders)
+                end, Providers),
             [
                 {<<"id">>, SpaceId},
                 {<<"name">>, Name},
                 {<<"isDefault">>, SpaceId =:= Default},
-                {<<"providers">>, Providers}
+                {<<"providers">>, ProvidersToDisplay}
             ]
         end, SpaceIds),
     {ok, Res}.
@@ -63,18 +71,11 @@ find(<<"space">>, SpaceIds) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback find_query/2.
+%% {@link data_backend_behaviour} callback find_all/1.
 %% @end
 %%--------------------------------------------------------------------
-find_query(<<"space">>, _Data) ->
-    {error, <<"Not implemented">>}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link authorizer_data_backend} callback find_all/1.
-%% @end
-%%--------------------------------------------------------------------
+-spec find_all(ResourceType :: binary()) ->
+    {ok, proplists:proplist()} | gui_error:error_result().
 find_all(<<"space">>) ->
     UserId = g_session:get_user_id(),
     {ok, GetSpaces} = user_logic:get_spaces(UserId),
@@ -84,9 +85,22 @@ find_all(<<"space">>) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback create_record/2.
+%% {@link data_backend_behaviour} callback find_query/2.
 %% @end
 %%--------------------------------------------------------------------
+-spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
+    {ok, proplists:proplist()} | gui_error:error_result().
+find_query(<<"space">>, _Data) ->
+    gui_error:report_error(<<"Not iplemented">>).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link data_backend_behaviour} callback create_record/2.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_record(RsrcType :: binary(), Data :: proplists:proplist()) ->
+    {ok, proplists:proplist()} | gui_error:error_result().
 create_record(<<"space">>, Data) ->
     Name = proplists:get_value(<<"name">>, Data),
     {ok, SpaceId} = space_logic:create({user, g_session:get_user_id()}, Name),
@@ -101,9 +115,12 @@ create_record(<<"space">>, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback update_record/3.
+%% {@link data_backend_behaviour} callback update_record/3.
 %% @end
 %%--------------------------------------------------------------------
+-spec update_record(RsrcType :: binary(), Id :: binary(),
+    Data :: proplists:proplist()) ->
+    ok | gui_error:error_result().
 update_record(<<"space">>, SpaceId, Data) ->
     UserId = g_session:get_user_id(),
     IsDefault = proplists:get_value(<<"isDefault">>, Data),
@@ -118,8 +135,10 @@ update_record(<<"space">>, SpaceId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link authorizer_data_backend} callback delete_record/2.
+%% {@link data_backend_behaviour} callback delete_record/2.
 %% @end
 %%--------------------------------------------------------------------
+-spec delete_record(RsrcType :: binary(), Id :: binary()) ->
+    ok | gui_error:error_result().
 delete_record(<<"space">>, _Id) ->
-    {error, <<"Not implemented">>}.
+    gui_error:report_error(<<"Not iplemented">>).

@@ -30,16 +30,44 @@
 %% {@link rpc_backend_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
-handle(<<"sessionDetails">>, _) ->
-    {ok, #document{value = #onedata_user{name = Name}}} =
-        onedata_user:get(g_session:get_user_id()),
-    FirstLogin = g_session:get_value(firstLogin, false),
-    Res = [
-        {<<"userName">>, Name},
-        {<<"firstLogin">>, FirstLogin}
-    ],
-    ?alert("~p", [Res]),
-    {ok, Res};
+-spec handle(FunctionId :: binary(), RequestData :: term()) ->
+    ok | {ok, ResponseData :: term()} | gui_error:error_result().
+handle(<<"getUserAlias">>, _) ->
+    UserId = g_session:get_user_id(),
+    {ok, #onedata_user{
+        alias = Alias
+    }} = user_logic:get_user(UserId),
+    case str_utils:to_binary(Alias) of
+        <<"">> ->
+            {ok, null};
+        Bin ->
+            {ok, Bin}
+    end;
+
+handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
+    UserId = g_session:get_user_id(),
+    case user_logic:modify(UserId, [{alias, NewAlias}]) of
+        ok ->
+            {ok, NewAlias};
+        {error, disallowed_prefix} ->
+            gui_error:report_warning(
+                <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
+        {error, invalid_alias} ->
+            gui_error:report_warning(
+                <<"Alias can contain only lowercase letters and digits, and "
+                "must be at least 5 characters long.">>);
+        {error, alias_occupied} ->
+            gui_error:report_warning(
+                <<"This alias is occupied by someone else. "
+                "Please choose other alias.">>);
+        {error, alias_conflict} ->
+            gui_error:report_warning(
+                <<"This alias is occupied by someone else. "
+                "Please choose other alias.">>);
+        _ ->
+            gui_error:report_warning(
+                <<"Cannot change alias due to unknown error.">>)
+    end;
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     Provider = binary_to_atom(ProviderBin, utf8),

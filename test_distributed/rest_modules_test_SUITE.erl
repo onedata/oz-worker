@@ -21,6 +21,8 @@
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/json">>}]).
 
 %%  set example test data
+-define(LATITUDE, 23.10).
+-define(LONGITUDE, 44.44).
 -define(URLS1, [<<"127.0.0.1">>]).
 -define(URLS2, [<<"127.0.0.2">>]).
 -define(REDIRECTION_POINT1, <<"https://127.0.0.1:443">>).
@@ -82,7 +84,7 @@
     get_space_privileges_test/1, invite_group_to_space_test/1, not_last_group_leaves_space_test/1,
     not_last_user_leaves_space_test/1, bad_request_test/1, get_unsupported_space_info_test/1,
     set_space_privileges_test/1, set_non_existing_space_as_user_default_space_test/1,
-    set_user_default_space_without_permission_test/1]).
+    set_user_default_space_without_permission_test/1, create_provider_with_location_test/1]).
 
 %%%===================================================================
 %%% API functions
@@ -104,6 +106,7 @@ groups() ->
             [],
             [
                 create_provider_test,
+                create_provider_with_location_test,
                 update_provider_test,
                 get_provider_info_test,
                 delete_provider_test,
@@ -202,6 +205,23 @@ create_provider_test(Config) ->
     ?assertMatch(
         [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
         get_provider_info(ParamsWithOtherAddress)
+    ).
+
+create_provider_with_location_test(Config) ->
+    RestAddress = ?config(restAddress, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
+
+    {ProviderId, ProviderReqParams} = register_provider(?LATITUDE, ?LONGITUDE, ?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    ParamsWithOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
+
+    ?assertMatch(
+        [?LATITUDE, ?LONGITUDE, ?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        get_provider_info_with_location(ProviderReqParams)
+    ),
+    ?assertMatch(
+        [?LATITUDE, ?LONGITUDE, ?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        get_provider_info_with_location(ParamsWithOtherAddress)
     ).
 
 update_provider_test(Config) ->
@@ -1241,15 +1261,25 @@ update_req_params(ReqParams, NewParam, address) ->
 %% Provider functions =====================================================
 
 register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
+    register_provider(undefined, undefined, URLS, RedirectionPoint, ClientName, Config, ReqParams).
+
+register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
     {RestAddress, Headers, _Options} = ReqParams,
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     {ok, CSR} = file:read_file(CSRFile),
-    Body = json_utils:encode([
+    Params = [
         {<<"urls">>, URLS},
         {<<"csr">>, CSR},
         {<<"redirectionPoint">>, RedirectionPoint},
         {<<"clientName">>, ClientName}
-    ]),
+    ],
+    Body = json_utils:encode(case {Latitude, Longitude} of
+        {undefined, _} -> Params;
+        {_, undefined} -> Params;
+        _ ->
+            Params ++ [{<<"latitude">>, Latitude}, {<<"longitude">>, Longitude}]
+    end),
+
     % Add insecure option - we do not want the GR server cert to be checked.
     hackney_pool:start_pool(noauth, [{timeout, 150000}, {max_connections, 100}]),
     Response = do_request(RestAddress ++ "/provider", Headers, post, Body),
@@ -1267,6 +1297,11 @@ get_provider_info(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response = do_request(RestAddress ++ "/provider", Headers, get, [], Options),
     get_body_val([clientName, urls, redirectionPoint, providerId], Response).
+
+get_provider_info_with_location(ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response = do_request(RestAddress ++ "/provider", Headers, get, [], Options),
+    get_body_val([latitude, longitude, clientName, urls, redirectionPoint, providerId], Response).
 
 get_provider_info(ProviderId, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
@@ -1307,7 +1342,7 @@ get_space_info_by_provider(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/provider/spaces/" ++ EncodedSID, Headers, get, [], Options),
-    get_body_val([spaceId, name, size], Response).
+    get_body_val([spaceId, name, providersSupports], Response).
 
 unsupport_space(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,

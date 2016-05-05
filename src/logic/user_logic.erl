@@ -13,14 +13,18 @@
 -author("Konrad Zemek").
 
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("ctool/include/utils/utils.hrl").
+
+-define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
--export([get_data/1, get_spaces/1, get_groups/1, get_providers/1]).
+-export([get_data/2, get_spaces/1, get_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
--export([get_default_provider/1, set_default_provider/2]).
+-export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
+-export([set_space_name_mapping/3, clean_space_name_mapping/2]).
 
 %%%===================================================================
 %%% API functions
@@ -90,7 +94,8 @@ modify(UserId, Proplist) ->
             % TODO mock
             first_space_support_token = FSST,
             default_provider = DefaultProvider,
-            chosen_provider = ChosenProvider
+            chosen_provider = ChosenProvider,
+            client_tokens = ClientTokens
         } = User,
 
         % Check if alias was requested to be modified and if it is allowed
@@ -154,7 +159,7 @@ modify(UserId, Proplist) ->
                 % Alias not allowed, return error
                 {error, Reason};
             _ ->
-                NewUser = #onedata_user{
+                NewUser = User#onedata_user{
                     name = proplists:get_value(name, Proplist, Name),
                     alias = SetAlias,
                     email_list = proplists:get_value(email_list, Proplist, Emails),
@@ -165,9 +170,10 @@ modify(UserId, Proplist) ->
                     % TODO mock
                     first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST),
                     default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider),
-                    chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider)},
+                    chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider),
+                    client_tokens = proplists:get_value(client_tokens, Proplist, ClientTokens)},
                 DocNew = Doc#document{value = NewUser},
-                onedata_user:save(DocNew),
+                {ok, _} = onedata_user:save(DocNew),
                 case SetAlias of
                     Alias ->
                         % Alias wasn't changed
@@ -208,13 +214,25 @@ merge(_UserId, _Macaroon) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(UserId :: binary()) ->
+-spec get_data(UserId :: binary(), Type :: provider | user) ->
     {ok, [proplists:property()]}.
-get_data(UserId) ->
+get_data(UserId, provider) ->
     {ok, #document{value = #onedata_user{name = Name}}} = onedata_user:get(UserId),
     {ok, [
         {userId, UserId},
         {name, Name}
+    ]};
+get_data(UserId, user) ->
+    {ok, #document{value = #onedata_user{name = Name, connected_accounts = ConnectedAccounts,
+        alias = Alias, email_list = EmailList}}} = onedata_user:get(UserId),
+    ConnectedAccountsMaps = lists:map(fun(Account) ->
+        ?record_to_list(oauth_account, Account) end, ConnectedAccounts),
+    {ok, [
+        {userId, UserId},
+        {name, Name},
+        {connectedAccounts, ConnectedAccountsMaps},
+        {alias, Alias},
+        {emailList, EmailList}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -256,7 +274,9 @@ get_providers(UserId) ->
     {ok, Doc} = onedata_user:get(UserId),
     Spaces = get_all_spaces(Doc),
     UserProviders = lists:foldl(fun(Space, Providers) ->
-        {ok, #document{value = #space{providers = SpaceProviders}}} = space:get(Space),
+        {ok, #document{value = #space{providers_supports = Supports}}}
+            = space:get(Space),
+        {SpaceProviders, _} = lists:unzip(Supports),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)
     end, ordsets:new(), Spaces),
     {ok, [{providers, UserProviders}]}.
@@ -319,7 +339,7 @@ get_default_space(UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec set_default_space(UserId :: binary(), SpaceId :: binary()) ->
-    true.
+    boolean().
 set_default_space(UserId, SpaceId) ->
     {ok, Doc} = onedata_user:get(UserId),
     AllUserSpaces = get_all_spaces(Doc),
@@ -332,7 +352,6 @@ set_default_space(UserId, SpaceId) ->
             end),
             true
     end.
-
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -386,21 +405,102 @@ delete_client_token(UserId, Token) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Set user's default space ID.
-%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
-%% don't exist.
+%% @doc Set given provider as default for user or un-sets it.
+%% (It is allowed to not have a default provider)
+%% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_default_provider(UserId :: binary(), ProviderId :: binary()) ->
-    true.
-set_default_provider(UserId, ProviderId) ->
+-spec set_provider_as_default(UserId :: binary(), ProviderId :: binary(),
+    Flag :: boolean()) -> boolean().
+set_provider_as_default(UserId, ProviderId, Flag) ->
     {ok, [{providers, AllUserProviders}]} = get_providers(UserId),
     case ordsets:is_element(ProviderId, AllUserProviders) of
         false ->
             false;
         true ->
+            Diff = fun(#onedata_user{default_provider = CrrntDefProv} = User) ->
+                NewDefProv = case Flag of
+                    true ->
+                        % Setting ProviderId to default
+                        ProviderId;
+                    false ->
+                        case ProviderId of
+                            CrrntDefProv ->
+                                % Un-setting ProviderId as default - the user
+                                % no longer has a default provider.
+                                undefined;
+                            _ ->
+                                % Un-setting ProviderId as default - but current
+                                % default provider is different, so it stays.
+                                CrrntDefProv
+                        end
+                end,
+                {ok, User#onedata_user{
+                    default_provider = NewDefProv}}
+            end,
+            {ok, _} = onedata_user:update(UserId, Diff),
+            true
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Sets name of a space, so that it is unique for the user. If user already
+%% is a member of another space with provided name, a '#' character and prefix
+%% of space ID it prepended to the name, so that the new name is unique and the
+%% prefix of a space ID satisfies minimal length.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_space_name_mapping(UserId :: binary(), SpaceId :: binary(),
+    SpaceName :: binary()) -> ok.
+set_space_name_mapping(UserId, SpaceId, SpaceName) ->
+    SpaceNameLen = size(SpaceName),
+    UniqueSpaceName = <<SpaceName/binary, "#", SpaceId/binary>>,
+
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        #onedata_user{space_names = SpaceNames} = User,
+
+        {ShortestUniquePrefLen, FilteredSpaces} = maps:fold(fun
+            (Id, _, {UniquePrefLen, SpacesAcc}) when Id == SpaceId ->
+                {UniquePrefLen, SpacesAcc};
+            (Id, Name, {UniquePrefLen, SpacesAcc}) ->
+                PrefLen = binary:longest_common_prefix([UniqueSpaceName, Name]),
+                {max(PrefLen + 1, UniquePrefLen), maps:put(Id, Name, SpacesAcc)}
+        end, {SpaceNameLen, #{}}, SpaceNames),
+
+        ValidUniquePrefLen = case ShortestUniquePrefLen > SpaceNameLen of
+            true ->
+                min(max(ShortestUniquePrefLen,
+                    SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
+                    size(UniqueSpaceName));
+            false ->
+                ShortestUniquePrefLen
+        end,
+
+        ShortestUniqueSpaceName = <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
+        NewUser = User#onedata_user{
+            space_names = maps:put(SpaceId, ShortestUniqueSpaceName, FilteredSpaces)
+        },
+
+        {ok, NewUser}
+    end),
+    ok.
+
+%%--------------------------------------------------------------------
+%% @doc Removes space name mapping if user does not effectively belongs to the space.
+%% Returns true if space name has been removed from the map, otherwise false.
+%% Throws exception when call to dao fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec clean_space_name_mapping(UserId :: binary(), SpaceId :: binary()) -> boolean().
+clean_space_name_mapping(UserId, SpaceId) ->
+    case space_logic:has_effective_user(SpaceId, UserId) of
+        true ->
+            false;
+        false ->
             {ok, _} = onedata_user:update(UserId, fun(User) ->
-                {ok, User#onedata_user{default_provider = ProviderId}}
+                #onedata_user{space_names = SpaceNames} = User,
+                NewUser = User#onedata_user{space_names = maps:remove(SpaceId, SpaceNames)},
+                {ok, NewUser}
             end),
             true
     end.

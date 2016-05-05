@@ -24,15 +24,24 @@
 %%%             {<<"users">>, [<<"u1">>, <<"u3">>]},
 %%%             {<<"groups">>, [<<"g1">>]},
 %%%             {<<"providers">>, [
-%%%                 {<<"provider">>, <<"p2">>}, {<<"supported_size">>, 1 * 1024 * 1024 * 1024}
+%%%                 {<<"p2">> [
+%%%                    {<<"storage">>, <<"/mnt/s1">>},
+%%%                    {<<"supported_size">>, 1 * 1024 * 1024 * 1024}
+%%%                 ]}
 %%%             ]}
 %%%         ]},
 %%%         {<<"s2">>, [
 %%%             {<<"users">>, [<<"u2">>]},
 %%%             {<<"groups">>, [<<"g2">>]},
 %%%             {<<"providers">>, [
-%%%                 {<<"provider">>, <<"p1">>}, {<<"supported_size">>, 2 * 1024 * 1024 * 1024},
-%%%                 {<<"provider">>, <<"p2">>}, {<<"supported_size">>, 3 * 1024 * 1024 * 1024}
+%%%                 {<<"p1">>, [
+%%%                    {<<"storage">>, <<"/mnt/s1">>},
+%%%                    {<<"supported_size">>, 2 * 1024 * 1024 * 1024}
+%%%                 ],
+%%%                 {<<"p2">>, [
+%%%                    {<<"storage">>, <<"/mnt/s2">>},
+%%%                    {<<"supported_size">>, 3 * 1024 * 1024 * 1024}
+%%%                 ]
 %%%             ]}
 %%%         ]}
 %%%     ].
@@ -43,14 +52,14 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
--include("handlers/rest_handler.hrl").
+-include("http/handlers/rest_handler.hrl").
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).
--export([create_provider_with_uuid/5]).
+-export([create_provider_with_uuid/6, create_provider_with_uuid/5]).
 -export([create_user_with_uuid/2]).
 -export([create_group_with_uuid/3]).
--export([create_space_with_uuid/3, create_space_with_uuid/5, create_space_with_provider/5]).
+-export([create_space_with_uuid/3, create_space_with_uuid/5, create_space_with_provider/4]).
 
 %%%===================================================================
 %%% API
@@ -125,8 +134,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 end,
                 % Support the space by all providers
                 lists:foreach(
-                    fun(ProviderProps) ->
-                        ProviderID = proplists:get_value(<<"provider">>, ProviderProps),
+                    fun({ProviderID, ProviderProps}) ->
                         SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
                         {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = MemberId}, space_support_token, {space, SpaceID}),
                         {ok, SpaceToken} = macaroon:deserialize(SerializedSpaceToken),
@@ -147,6 +155,14 @@ set_up_test_entities(Users, Groups, Spaces) ->
                         space_logic:join({group, GroupID}, SpaceToken)
                     end, GroupsToAdd)
             end, Spaces),
+
+        % Give all space perms to users that have it as default space
+        lists:foreach(
+            fun({UserID, Props}) ->
+                DefaultSpace = proplists:get_value(<<"default_space">>, Props),
+                space_logic:set_privileges(
+                    DefaultSpace, {user, UserID}, privileges:space_admin())
+            end, Users),
         ok
     catch
         T:M ->
@@ -176,7 +192,6 @@ destroy_test_entities(Users, Groups, Spaces) ->
         end, Spaces),
     ok.
 
-
 %%--------------------------------------------------------------------
 %% @doc Create a provider's account with implicit UUID.
 %% Throws exception when call to the datastore fails.
@@ -186,8 +201,28 @@ destroy_test_entities(Users, Groups, Spaces) ->
     RedirectionPoint :: binary(), CSR :: binary(), UUID :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
 create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID) ->
+    create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID, #{}).
+
+%%--------------------------------------------------------------------
+%% @doc Create a provider's account with implicit UUID.
+%% Throws exception when call to the datastore fails.
+%% Accepts optional arguments map (which currently supports 'latitude' and
+%% 'longitude' keys)
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider_with_uuid(ClientName :: binary(), URLs :: [binary()],
+    RedirectionPoint :: binary(), CSR :: binary(), UUID :: binary(),
+    OptionalArgs :: #{atom() => term()}) ->
+    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
+create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID, OptionalArgs) ->
     {ok, {ProviderCertPem, Serial}} = ozpca:sign_provider_req(UUID, CSRBin),
-    Provider = #provider{client_name = ClientName, urls = URLs, redirection_point = RedirectionPoint, serial = Serial},
+    Latitude = maps:get(latitude, OptionalArgs, undefined),
+    Longitude = maps:get(longitude, OptionalArgs, undefined),
+
+    Provider = #provider{client_name = ClientName, urls = URLs,
+        redirection_point = RedirectionPoint, serial = Serial,
+        latitude = Latitude, longitude = Longitude},
+
     provider:save(#document{key = UUID, value = Provider}),
     {ok, UUID, ProviderCertPem}.
 
@@ -230,7 +265,7 @@ create_group_with_uuid(UserId, Name, UUID) ->
 -spec create_space_with_uuid({user | group, Id :: binary()}, Name :: binary(), UUID :: binary()) ->
     {ok, SpaceId :: binary()} | no_return().
 create_space_with_uuid(Member, Name, UUID) ->
-    create_space_with_provider(Member, Name, [], [], UUID).
+    create_space_with_provider(Member, Name, [], UUID).
 
 
 %%--------------------------------------------------------------------
@@ -239,12 +274,12 @@ create_space_with_uuid(Member, Name, UUID) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_with_uuid({provider, ProviderId :: binary()}, Name :: binary(),
-    Token :: binary(), Size :: pos_integer(), UUID :: binary()) ->
+    Token :: binary(), Support :: pos_integer(), UUID :: binary()) ->
     {ok, SpaceId :: binary()}.
-create_space_with_uuid({provider, ProviderId}, Name, Token, Size, UUID) ->
+create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUID) ->
     {ok, Macaroon} = macaroon:deserialize(Token),
     {ok, Member} = token_logic:consume(Macaroon),
-    create_space_with_provider(Member, Name, [ProviderId], [{ProviderId, Size}], UUID).
+    create_space_with_provider(Member, Name, [{ProviderId, Support}], UUID).
 
 
 %%--------------------------------------------------------------------
@@ -252,28 +287,34 @@ create_space_with_uuid({provider, ProviderId}, Name, Token, Size, UUID) ->
 %% Throws exception when call to the datastore fails, or user/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create_space_with_provider({user | group, Id :: binary()}, Name :: binary(), Providers :: [binary()],
-    Size :: [{Provider :: binary(), ProvidedSize :: pos_integer()}], UUID :: binary()) ->
+-spec create_space_with_provider({user | group, Id :: binary()}, Name :: binary(),
+    Support :: [{Provider :: binary(), ProvidedSize :: pos_integer()}], UUID :: binary()) ->
     {ok, SpaceId :: binary()}.
-create_space_with_provider({user, UserId}, Name, Providers, Size, UUID) ->
+create_space_with_provider({user, UserId}, Name, Support, UUID) ->
     {ok, UserDoc} = onedata_user:get(UserId),
     #document{value = #onedata_user{spaces = Spaces} = User} = UserDoc,
 
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, size = Size, providers = Providers, users = [{UserId, Privileges}]},
+    Space = #space{name = Name, providers_supports = Support, users = [{UserId, Privileges}]},
     {ok, SpaceId} = space:save(#document{key = UUID, value = Space}),
     UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
     onedata_user:save(UserDoc#document{value = UserNew}),
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
 
     {ok, SpaceId};
-create_space_with_provider({group, GroupId}, Name, Providers, Size, UUID) ->
+create_space_with_provider({group, GroupId}, Name, Support, UUID) ->
     {ok, GroupDoc} = user_group:get(GroupId),
-    #document{value = #user_group{spaces = Spaces} = Group} = GroupDoc,
+    #document{value = #user_group{users = Users, spaces = Spaces} = Group} = GroupDoc,
 
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, size = Size, providers = Providers, groups = [{GroupId, Privileges}]},
+    Space = #space{name = Name, providers_supports = Support,
+        groups = [{GroupId, Privileges}]},
     {ok, SpaceId} = space:save(#document{key = UUID, value = Space}),
     GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
     user_group:save(GroupDoc#document{value = GroupNew}),
+
+    lists:foreach(fun({UserId, _}) ->
+        user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+    end, Users),
 
     {ok, SpaceId}.

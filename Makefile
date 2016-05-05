@@ -24,7 +24,7 @@ GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgr
 ONEDATA_GIT_URL := $(shell if [ "${ONEDATA_GIT_URL}" = "" ]; then echo ${GIT_URL}; else echo ${ONEDATA_GIT_URL}; fi)
 export ONEDATA_GIT_URL
 
-.PHONY: test deps generate package test_gui
+.PHONY: test deps generate package
 
 all: test_rel
 
@@ -34,21 +34,10 @@ all: test_rel
 
 deps:
 	./rebar get-deps
+	deps/gui/pull-gui.sh gui-config.sh
 
 recompile:
 	./rebar compile skip_deps=true
-
-gui_dev:
-	./deps/gui/build_gui.sh dev
-
-gui_prod:
-	./deps/gui/build_gui.sh prod
-
-gui_doc:
-	jsdoc -c src/http/gui/.jsdoc.conf src/http/gui/app
-
-gui_clean:
-	cd src/http/gui && rm -rf node_modules bower_components dist tmp
 
 ##
 ## If performance is compiled in cluster_worker then annotations do not work.
@@ -66,24 +55,20 @@ compile:
 ## Also a release is not necessary for us.
 ## We prevent reltool from creating a release.
 ## todo: find better solution
-##
-## Generates a dev release
-generate_dev: deps compile gui_dev
-	# Remove gui tmp dir
-	rm -rf src/http/gui/tmp
-	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
-	./rebar generate $(OVERLAY_VARS)
-	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
-	# Try to get developer auth.config
-	./get_dev_auth_config.sh
 
 ## Generates a production release
-generate: deps compile gui_prod
-	# Remove gui tmp dir
-	rm -rf src/http/gui/tmp
+generate: deps compile
 	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
 	./rebar generate $(OVERLAY_VARS)
 	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
+	# Copy GUI static files into release
+	@mkdir -p rel/oz_worker/data/gui_static
+	cp -R deps/gui_static/* rel/oz_worker/data/gui_static/
+
+## Generates a dev release
+generate_dev: deps compile generate
+	# Try to get developer auth.config
+	./get_dev_auth_config.sh
 
 clean:
 	./rebar clean
@@ -118,9 +103,6 @@ eunit:
 
 coverage:
 	$(BASE_DIR)/bamboos/docker/coverage.escript $(BASE_DIR)
-
-test_gui:
-	cd test_gui && ember test
 
 ##
 ## Dialyzer targets local
@@ -180,9 +162,3 @@ package: check_distribution package/$(PKG_ID).tar.gz
 
 pkgclean:
 	rm -rf package
-
-docker:
-	./dockerbuild.py --user $(DOCKER_REG_USER) --password $(DOCKER_REG_PASSWORD) \
-                     --email $(DOCKER_REG_EMAIL) --name oz_worker \
-                     --build-arg VERSION=$(PKG_VERSION) \
-                     --publish --remove packaging

@@ -14,6 +14,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
+-include_lib("hackney/include/hackney_lib.hrl").
 
 %% DNS config handling
 -export([load_config/0, load_config/1, get_canonical_hostname/0]).
@@ -153,7 +154,7 @@ handle_a(DomainNotNormalized, LBAdvice) ->
         {Domain, Prefix, #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone} ->
             case proplists:get_value(Domain, IPAddresses, undefined) of
                 undefined ->
-                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone);
+                    handle_unknown_subdomain(?S_A, DomainNotNormalized, Prefix, DNSZone, LBAdvice);
                 IPAddrList ->
                     FinalIPAddrList = account_lb(IPAddrList, LBAdvice),
                     {ok,
@@ -187,7 +188,7 @@ handle_ns(DomainNotNormalized, LBAdvice) ->
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+                    handle_unknown_subdomain(?S_NS, DomainNotNormalized, Prefix, DNSZone, LBAdvice)
             end
     end.
 
@@ -202,8 +203,8 @@ handle_cname(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -217,7 +218,7 @@ handle_mx(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Domain, Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, mail_exchange = MXServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
+        {Domain, _Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, mail_exchange = MXServers, ttl_ns = TTLNS, ttl_a = TTLA} = DNSZone} ->
             case Domain of
                 CName ->
                     {ok,
@@ -230,7 +231,7 @@ handle_mx(DomainNotNormalized, LBAdvice) ->
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+                    answer_with_soa(Domain, DNSZone)
             end
     end.
 
@@ -245,7 +246,7 @@ handle_soa(DomainNotNormalized, LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {Domain, Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, authority = Authority,
+        {Domain, _Prefix, #dns_zone{cname = CName, ip_addresses = IPAddresses, ns_servers = NSServers, authority = Authority,
             ttl_a = TTLA, ttl_ns = TTLNS, ttl_soa = TTLSOA} = DNSZone} ->
             case Domain of
                 CName ->
@@ -260,7 +261,7 @@ handle_soa(DomainNotNormalized, LBAdvice) ->
                             [dns_server:authoritative_answer_flag(true)]
                     };
                 _ ->
-                    handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+                    answer_with_soa(Domain, DNSZone)
             end
     end.
 
@@ -275,8 +276,8 @@ handle_wks(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -286,12 +287,12 @@ handle_wks(DomainNotNormalized, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_ptr(DomainNotNormalized :: string(), LBAdvice :: term()) -> dns_worker_plugin_behaviour:handler_reply().
-handle_ptr(DomainNotNormalized, _) ->
+handle_ptr(DomainNotNormalized, _LBAdvice) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -305,8 +306,8 @@ handle_hinfo(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -320,8 +321,8 @@ handle_minfo(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -335,8 +336,8 @@ handle_txt(DomainNotNormalized, _) ->
     case parse_domain(DomainNotNormalized) of
         unknown_domain ->
             refused;
-        {_Domain, Prefix, DNSZone} ->
-            handle_unknown_subdomain(DomainNotNormalized, Prefix, DNSZone)
+        {Domain, _Prefix, DNSZone} ->
+            answer_with_soa(Domain, DNSZone)
     end.
 
 
@@ -403,67 +404,53 @@ parse_domain(DomainArg) ->
 %% 2) The subdomain is in form of alias.onedata.org -> return NS servers of supporting provider
 %% @end
 %%--------------------------------------------------------------------
--spec handle_unknown_subdomain(Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}) ->
+-spec handle_unknown_subdomain(QueryType :: dns_worker_plugin_behaviour:query_type(),
+    Domain :: string(), Prefix :: string(), DNSZone :: #dns_zone{}, LBAdvice :: term()) ->
     dns_worker_plugin_behaviour:handler_reply().
-handle_unknown_subdomain(Domain, PrefixStr, DNSZone) ->
+handle_unknown_subdomain(QueryType, DomainNotNormalized, PrefixStr, DNSZone, LBAdvice) ->
     try
         Prefix = list_to_binary(PrefixStr),
-        GetUserResult = case Prefix of
-            <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
-                user_logic:get_user_doc(UUID);
-            _ ->
-                case user_logic:get_user_doc({alias, Prefix}) of
-                    {ok, Ans} ->
-                        {ok, Ans};
-                    _ ->
-                        user_logic:get_user_doc(Prefix)
-                end
-        end,
-        case GetUserResult of
-            {ok, #document{key = UserID, value = #onedata_user{chosen_provider = DefaultProvider}}} ->
-                % If default provider is not known, set it.
-                DataProplist =
-                    try
-                        {ok, Data} = provider_logic:get_data(DefaultProvider),
-                        Data
-                    catch _:_ ->
-                        {ok, NewDefProv} =
-                            provider_logic:choose_provider_for_user(UserID),
-                        ok = user_logic:modify(UserID, [{chosen_provider, NewDefProv}]),
-                        {ok, Data2} = provider_logic:get_data(NewDefProv),
-                        Data2
-                    end,
+        case get_provider_data_by_alias(Prefix) of
+            {ok, DataProplist} ->
                 GRDomain = get_canonical_hostname(),
                 RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
                 % Check if provider is in the same domain - then return NS
-                % It not, return A records of GR servers and then make a HTTP
+                % It not, return A or NS records of GR servers and then make a HTTP
                 % redirect.
                 case string:rstr(RedPoint, GRDomain) of
                     0 ->
-                        #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone,
-                        IPAddressList = proplists:get_value(GRDomain, IPAddresses),
-                        {ok,
-                                [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddressList] ++
-                                [dns_server:authoritative_answer_flag(true)]
-                        };
+                        % Depending if asking about A or NS, return OZ nameservers or workers
+                        case QueryType of
+                            ?S_NS ->
+                                return_oz_nameservers(DomainNotNormalized, DNSZone, LBAdvice);
+                            ?S_A ->
+                                #dns_zone{ip_addresses = IPAddresses, ttl_a = TTL} = DNSZone,
+                                IPAddrList = proplists:get_value(GRDomain, IPAddresses),
+                                FinalIPAddrList = account_lb(IPAddrList, LBAdvice),
+                                {ok,
+                                        [dns_server:answer_record(DomainNotNormalized, TTL, ?S_A, IPAddress) || IPAddress <- FinalIPAddrList] ++
+                                        [dns_server:authoritative_answer_flag(true)]
+                                }
+                        end;
                     _ ->
                         #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone,
-                        {ok, {_Scheme, _UserInfo, HostStr, _Port, _Path, _Query}} = http_uri:parse(str_utils:to_list(RedPoint)),
+                        #hackney_url{host = Host} = hackney_url:parse_url(RedPoint),
+                        HostStr = str_utils:to_list(Host),
                         {ok,
-                            [dns_server:answer_record(Domain, TTL, ?S_NS, HostStr)]
+                            [dns_server:answer_record(DomainNotNormalized, TTL, ?S_NS, HostStr)]
                         }
                 end;
             _ ->
-                answer_with_soa(Domain, DNSZone)
+                answer_with_soa(DomainNotNormalized, DNSZone)
         end
     catch _:_ ->
-        answer_with_soa(Domain, DNSZone)
+        answer_with_soa(DomainNotNormalized, DNSZone)
     end.
 
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Returns records that will be evaluated as uthoritative SOA record
+%% @doc Returns records that will be evaluated as authoritative SOA record
 %% in authority section of DNS response.
 %% @end
 %%--------------------------------------------------------------------
@@ -479,6 +466,7 @@ answer_with_soa(Domain, #dns_zone{cname = CName, ip_addresses = IPAddresses, aut
         dns_server:authority_record(CName, TTL, ?S_SOA, Authority),
         dns_server:authoritative_answer_flag(true)
     ]}.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -496,46 +484,59 @@ account_lb(IPAddrList, LBAdvice) ->
             IPAddrList
     end.
 
-%% % TODO this is a temporary solution to always return A records of provider when
-%% % the DNS is asked for address of alias.onedata.org
-%% return_providers_a_records(Domain, PrefixStr, #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone) ->
-%%     try
-%%         Prefix = list_to_binary(PrefixStr),
-%%         GetUserResult = case Prefix of
-%%                             <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
-%%                                 user_logic:get_user(UUID);
-%%                             _ ->
-%%                                 case user_logic:get_user({alias, Prefix}) of
-%%                                     {ok, Ans} ->
-%%                                         {ok, Ans};
-%%                                     _ ->
-%%                                         user_logic:get_user(Prefix)
-%%                                 end
-%%                         end,
-%%         case GetUserResult of
-%%             {ok, #user{chosen_provider = DefaulfProvider}} ->
-%%                 {ok, DataProplist} = provider_logic:get_data(DefaulfProvider),
-%%                 URLs = proplists:get_value(urls, DataProplist),
-%%                 IPAddrList = [begin {ok, IP} = inet_parse:ipv4_address(binary_to_list(IPBin)), IP end || IPBin <- URLs],
-%%                 {ok,
-%%                         [dns_server:answer_record(Domain, TTL, ?S_A, IPAddress) || IPAddress <- IPAddrList] ++
-%%                         [dns_server:authoritative_answer_flag(true)]
-%%                 };
-%%             _ ->
-%%                 answer_with_soa(Domain, DNSZone)
-%%         end
-%%     catch _:_ ->
-%%         answer_with_soa(Domain, DNSZone)
-%%     end.
-%%
-%%
-%% % TODO this is a temporary solution, returns GR's NS addresses
-%% return_oz_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}) ->
-%%     {ok,
-%%             [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
-%%             lists:flatten([begin
-%%                                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
-%%                                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- IPAddrList]
-%%                            end || NSHostname <- NSServers]) ++
-%%             [dns_server:authoritative_answer_flag(true)]
-%%     }.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Retrieves a provider for user by given alias and returns the
+%% provider data or returns error when it is not possible.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_provider_data_by_alias(Alias :: binary()) -> {ok, proplists:proplist()} | error.
+get_provider_data_by_alias(Alias) ->
+    GetUserResult = case Alias of
+        <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
+            user_logic:get_user_doc(UUID);
+        _ ->
+            case user_logic:get_user_doc({alias, Alias}) of
+                {ok, Ans} ->
+                    {ok, Ans};
+                _ ->
+                    user_logic:get_user_doc(Alias)
+            end
+    end,
+    case GetUserResult of
+        {ok, #document{key = UserID, value = #onedata_user{chosen_provider = ChosenProvider}}} ->
+            % If default provider is not known, set it.
+            DataProplist =
+                try
+                    {ok, Data} = provider_logic:get_data(ChosenProvider),
+                    Data
+                catch _:_ ->
+                    {ok, NewChosenProv} =
+                        provider_logic:choose_provider_for_user(UserID),
+                    ok = user_logic:modify(UserID, [{chosen_provider, NewChosenProv}]),
+                    {ok, Data2} = provider_logic:get_data(NewChosenProv),
+                    Data2
+                end,
+            {ok, DataProplist};
+        _ ->
+            error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Returns all GR nameservers and their A records in additional section.
+%% @end
+%%--------------------------------------------------------------------
+-spec return_oz_nameservers(Domain :: string(), DNSZone :: #dns_zone{}, LBAdvice :: term()) -> {ok, term()}.
+return_oz_nameservers(DomainNotNormalized, #dns_zone{ip_addresses = IPAddresses, ns_servers = NSServers, ttl_ns = TTLNS, ttl_a = TTLA}, LBAdvice) ->
+    {ok,
+            [dns_server:answer_record(DomainNotNormalized, TTLNS, ?S_NS, NSHostname) || NSHostname <- NSServers] ++
+            lists:flatten([begin
+                IPAddrList = proplists:get_value(NSHostname, IPAddresses, []),
+                FinalIPAddrList = account_lb(IPAddrList, LBAdvice),
+                [dns_server:additional_record(NSHostname, TTLA, ?S_A, IPAddress) || IPAddress <- FinalIPAddrList]
+            end || NSHostname <- NSServers]) ++
+            [dns_server:authoritative_answer_flag(true)]
+    }.
