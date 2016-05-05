@@ -16,9 +16,9 @@
 -include("datastore/oz_datastore_models_def.hrl").
 
 %% API
--export([exists/1, has_user/2, has_privilege/3]).
+-export([exists/1, has_user/2, has_effective_user/2, has_privilege/3, has_effective_privilege/3]).
 -export([create/2, modify/2, join/2, set_privileges/3]).
--export([get_data/1, get_users/1, get_spaces/1, get_providers/1, get_user/2, get_privileges/2]).
+-export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1, get_user/2, get_privileges/2]).
 -export([remove/1, remove_user/2, cleanup/1]).
 
 %%%===================================================================
@@ -66,6 +66,46 @@ has_privilege(GroupId, UserId, Privilege) ->
         false -> false;
         true ->
             {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
+            {_, Privileges} = lists:keyfind(UserId, 1, Users),
+            lists:member(Privilege, Privileges)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the user identified by UserId is a member of
+%% the group (both direct or indirect).
+%% Shall return false in any other case (group doesn't exist, etc).
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_effective_user(GroupId :: binary(), UserId :: binary()) ->
+    boolean().
+has_effective_user(GroupId, UserId) ->
+    case exists(GroupId) of
+        false -> false;
+        true ->
+            {ok, #document{value = #user_group{effective_users = Users}}}
+                = user_group:get(GroupId),
+            lists:keymember(UserId, 1, Users)
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the group's member identified by UserId has privilege
+%% in the group (direct or through nested groups).
+%% Shall return false in any other case (group doesn't exist,
+%% user is not group's member, etc).
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_effective_privilege(GroupId :: binary(), UserId :: binary(),
+    Privilege :: privileges:group_privilege()) ->
+    boolean().
+has_effective_privilege(GroupId, UserId, Privilege) ->
+    case exists(GroupId) of
+        false -> false;
+        true ->
+            {ok, #document{value = #user_group{effective_users = Users}}}
+                = user_group:get(GroupId),
             {_, Privileges} = lists:keyfind(UserId, 1, Users),
             lists:member(Privilege, Privileges)
     end.
@@ -167,6 +207,19 @@ get_data(GroupId) ->
     {ok, [proplists:property()]}.
 get_users(GroupId) ->
     {ok, #document{value = #user_group{users = UserTuples}}} = user_group:get(GroupId),
+    {Users, _} = lists:unzip(UserTuples),
+    {ok, [{users, Users}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns details about group's members (both direct and indirect).
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_users(GroupId :: binary()) ->
+    {ok, [proplists:property()]}.
+get_effective_users(GroupId) ->
+    {ok, #document{value = #user_group{effective_users = UserTuples}}}
+        = user_group:get(GroupId),
     {Users, _} = lists:unzip(UserTuples),
     {ok, [{users, Users}]}.
 
