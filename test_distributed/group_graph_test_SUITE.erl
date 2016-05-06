@@ -41,28 +41,37 @@ effective_attrs_maintained_test(Config) ->
 
     %% separate group
     G1 = #user_group{users = [{<<"U">>, [p1, p2]}],
-        child_groups = [], parent_groups = []},
+        child_groups = [], parent_groups = [],
+        effective_users = [{<<"U">>, [p1, p2]}],
+        effective_groups = [ID1]},
 
     save(Node, ID1, G1),
     set_poi(Node, ID1),
     refresh(Node),
 
-    Doc1 = get(Node, user_group, ID1),
-    ?assertMatch([ID1], effective_groups(Doc1)),
-    ?assertMatch([{<<"U">>, [p1, p2]}], effective_users(Doc1)),
+    Doc1A = get(Node, user_group, ID1),
+    ct:print("~p", [Doc1A]),
+    ?assertMatch([ID1], effective_groups(Doc1A)),
+    ?assertMatch([{<<"U">>, [p1, p2]}], effective_users(Doc1A)),
 
     %% child attached
     G2 = #user_group{users = [{<<"U">>, [p1, p3]}, {<<"W">>, [p1, p2]}],
-        child_groups = [], parent_groups = [G1]},
+        child_groups = [], parent_groups = [ID1],
+        effective_users = [{<<"U">>, [p1, p3]}, {<<"W">>, [p1, p2]}],
+        effective_groups = [ID2]},
     save(Node, ID2, G2),
-    save(Node, ID1, G1#user_group{child_groups = [{G2, [p2, p3]}]}),
+    save(Node, ID1, G1#user_group{child_groups = [{ID2, [p2, p3]}]}),
     set_poi(Node, ID1),
     set_poi(Node, ID2),
     refresh(Node),
-    Doc2 = get(Node, user_group, ID1),
-    Doc3 = get(Node, user_group, ID2),
-    ct:print("~p", [Doc2]),
-    ct:print("~p", [Doc3]),
+    Doc1B = get(Node, user_group, ID1),
+    Doc2B = get(Node, user_group, ID2),
+    ct:print("~p", [Doc1B]),
+    ct:print("~p", [Doc2B]),
+    ?assertMatch([ID1], effective_groups(Doc1B)),
+    ?assertMatch([ID1, ID2], effective_groups(Doc2B)),
+    ?assertMatch([{<<"U">>, [p1, p2]}, {<<"W">>, [p2]}], effective_users(Doc1B)),
+    ?assertMatch([{<<"U">>, [p1, p3]}, {<<"W">>, [p1, p2]}], effective_users(Doc2B)),
 
     ok.
 
