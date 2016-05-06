@@ -53,10 +53,16 @@
     name :: binary(),
     type :: user_group:type(),
     users = [] :: [{UserID :: binary(), [privileges:group_privilege()]}],
-    effective_users = [] :: [{UserID :: binary(), [privileges:group_privilege()]}],
-    groups = [] :: [{GroupID :: binary(), [privileges:group_privilege()]}],
+    effective_users = [] :: group_graph:effective_users(),
+    effective_groups = [] :: group_graph:effective_groups(),
+    child_groups = [] :: [{GroupID :: binary(), [privileges:group_privilege()]}],
     parent_groups = [] :: [GroupID :: binary()],
     spaces = [] :: [SpaceId :: binary()]
+}).
+
+-record(group_graph_context, {
+    changed_groups = [] :: [GroupID :: binary()],
+    last_rebuild = 0 :: integer()
 }).
 
 %% This record defines a provider who support spaces and can be reached via url

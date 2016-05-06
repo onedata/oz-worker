@@ -25,6 +25,7 @@
 %%--------------------------------------------------------------------
 -spec models() -> Models :: [model_behaviour:model_type()].
 models() -> [
+  group_graph_context,
   outbox,
   provider_subscription,
   subscriptions_state,
