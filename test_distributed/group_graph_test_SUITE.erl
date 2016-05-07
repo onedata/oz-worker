@@ -24,6 +24,10 @@
 -export([init_per_testcase/2, end_per_testcase/2]).
 -export([effective_attrs_maintained_test/1]).
 
+-define(assertUnorderedMatch(Guard, Expr), (fun() ->
+    Sorted = lists:sort(Guard),
+    ?assertMatch(Sorted, lists:sort(Expr))
+end)()).
 
 %%%===================================================================
 %%% API functions
@@ -36,42 +40,53 @@ all() -> ?ALL([
 
 effective_attrs_maintained_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
+    [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10] = [group_change_data,
+        group_create_space, group_create_space_token, group_invite_user,
+        group_join_space, group_leave_space, group_remove,
+        group_remove_user, group_set_privileges, group_view_data],
     {ID1, ID2, ID3, ID4, ID5, ID6, ID7, ID8} = {<<"ID1">>, <<"ID2">>,
         <<"ID3">>, <<"ID4">>, <<"ID5">>, <<"ID6">>, <<"ID7">>, <<"ID8">>},
 
     %% separate group
-    G1 = #user_group{users = [{<<"U">>, [p1, p2]}],
+    U1G1 = {<<"U1">>, [P1, P2]},
+    G1 = #user_group{users = [U1G1],
         child_groups = [], parent_groups = [],
-        effective_users = [{<<"U">>, [p1, p2]}],
+        effective_users = [U1G1],
         effective_groups = [ID1]},
 
     save(Node, ID1, G1),
     set_poi(Node, ID1),
     refresh(Node),
-
     Doc1A = get(Node, user_group, ID1),
     ct:print("~p", [Doc1A]),
-    ?assertMatch([ID1], effective_groups(Doc1A)),
-    ?assertMatch([{<<"U">>, [p1, p2]}], effective_users(Doc1A)),
+    ?assertUnorderedMatch([ID1], effective_groups(Doc1A)),
+    ?assertUnorderedMatch([U1G1], effective_users(Doc1A)),
 
     %% child attached
-    G2 = #user_group{users = [{<<"U">>, [p1, p3]}, {<<"W">>, [p1, p2]}],
+    U1G2 = {<<"U1">>, [P1, P3, P4]},
+    U2G2 = {<<"U2">>, [P1, P2]},
+    G2 = #user_group{users = [U1G2, U2G2],
         child_groups = [], parent_groups = [ID1],
-        effective_users = [{<<"U">>, [p1, p3]}, {<<"W">>, [p1, p2]}],
+        effective_users = [U1G2, U2G2],
         effective_groups = [ID2]},
     save(Node, ID2, G2),
-    save(Node, ID1, G1#user_group{child_groups = [{ID2, [p2, p3]}]}),
+    save(Node, ID1, G1#user_group{child_groups = [{ID2, [P2, P3]}]}),
+
     set_poi(Node, ID1),
     set_poi(Node, ID2),
     refresh(Node),
+
     Doc1B = get(Node, user_group, ID1),
     Doc2B = get(Node, user_group, ID2),
+
     ct:print("~p", [Doc1B]),
     ct:print("~p", [Doc2B]),
-    ?assertMatch([ID1], effective_groups(Doc1B)),
-    ?assertMatch([ID1, ID2], effective_groups(Doc2B)),
-    ?assertMatch([{<<"U">>, [p1, p2]}, {<<"W">>, [p2]}], effective_users(Doc1B)),
-    ?assertMatch([{<<"U">>, [p1, p3]}, {<<"W">>, [p1, p2]}], effective_users(Doc2B)),
+
+    ?assertUnorderedMatch([ID1], effective_groups(Doc1B)),
+    ?assertUnorderedMatch([{<<"U1">>, [P1, P2, P3]}, {<<"U2">>, [P2]}], effective_users(Doc1B)),
+
+    ?assertUnorderedMatch([ID1, ID2], effective_groups(Doc2B)),
+    ?assertUnorderedMatch([U1G2, U2G2], effective_users(Doc2B)),
 
     ok.
 
