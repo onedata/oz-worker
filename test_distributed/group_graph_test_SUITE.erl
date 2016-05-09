@@ -39,7 +39,7 @@ all() -> ?ALL([
 ]).
 
 conditional_update_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
+    [Node] = ?config(oz_worker_nodes, Config),
 
     G1 = #user_group{
         users = [{<<"U1">>, [group_change_data]}],
@@ -68,19 +68,18 @@ conditional_update_test(Config) ->
     ?assertUnorderedMatch([{<<"U2">>, [group_change_data]}], effective_users(Doc2)),
 
     %% when
-    meck:new(user_group, [passthrough]),
+    test_utils:mock_unload(Node),
+    test_utils:mock_new(Node, user_group),
     set_poi(Node, <<"1">>),
     set_poi(Node, <<"2">>),
     refresh(Node),
 
     %% then
-    ?assertEqual(0, meck:num_calls(user_group, update, '_')),
-    ?assertEqual(0, meck:num_calls(user_group, save, '_')),
-    meck:unload(user_group),
+    test_utils:mock_assert_num_calls(Node, user_group, 'after', ['_', '_', '_', '_', {ok, '_'}], 0),
     ok.
 
 grand_scenario_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
+    [Node] = ?config(oz_worker_nodes, Config),
     [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10] = [group_change_data,
         group_create_space, group_create_space_token, group_invite_user,
         group_join_space, group_leave_space, group_remove,
@@ -407,12 +406,18 @@ init_per_suite(Config) ->
     ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
 
 init_per_testcase(_, _Config) ->
-    [Node | _] = ?config(oz_worker_nodes, _Config),
+    [Node] = ?config(oz_worker_nodes, _Config),
+    test_utils:mock_new(Node, user_group),
+    test_utils:mock_expect(Node, user_group, 'after', fun(_, _, _, _, _) ->
+        ok
+    end),
     ok = rpc:call(Node, application, set_env, [?APP_Name, group_graph_refresh_interval, -1]),
     reset_state(Node),
     _Config.
 
 end_per_testcase(_, _Config) ->
+    [Node] = ?config(oz_worker_nodes, _Config),
+    test_utils:mock_unload(Node),
     ok.
 
 end_per_suite(Config) ->
