@@ -56,8 +56,8 @@ conditional_update_test(Config) ->
 
     save(Node, <<"1">>, G1),
     save(Node, <<"2">>, G2),
-    set_poi(Node, <<"1">>),
-    set_poi(Node, <<"2">>),
+    mark_group_changed(Node, <<"1">>),
+    mark_group_changed(Node, <<"2">>),
     refresh(Node),
 
     Doc1 = get(Node, user_group, <<"1">>),
@@ -70,8 +70,8 @@ conditional_update_test(Config) ->
     %% when
     test_utils:mock_unload(Node),
     test_utils:mock_new(Node, user_group),
-    set_poi(Node, <<"1">>),
-    set_poi(Node, <<"2">>),
+    mark_group_changed(Node, <<"1">>),
+    mark_group_changed(Node, <<"2">>),
     refresh(Node),
 
     %% then
@@ -97,7 +97,7 @@ grand_scenario_test(Config) ->
     save(Node, ID1, G1),
 
     %% given
-    set_poi(Node, ID1),
+    mark_group_changed(Node, ID1),
     refresh(Node),
 
     %% then
@@ -117,8 +117,8 @@ grand_scenario_test(Config) ->
     update(Node, user_group, ID1, #{child_groups => [{ID2, [P2, P3, P4, P6]}]}),
 
     %% when
-    set_poi(Node, ID1),
-    set_poi(Node, ID2),
+    mark_group_changed(Node, ID1),
+    mark_group_changed(Node, ID2),
     refresh(Node),
 
     %% then
@@ -141,8 +141,8 @@ grand_scenario_test(Config) ->
     update(Node, user_group, ID2, #{child_groups => [{ID3, [P3, P4, P5, P6]}]}),
 
     %% when
-    set_poi(Node, ID2),
-    set_poi(Node, ID3),
+    mark_group_changed(Node, ID2),
+    mark_group_changed(Node, ID3),
     refresh(Node),
 
     %% then
@@ -168,8 +168,8 @@ grand_scenario_test(Config) ->
     update(Node, user_group, ID1, #{parent_groups => [ID4]}),
 
     %% when
-    set_poi(Node, ID1),
-    set_poi(Node, ID4),
+    mark_group_changed(Node, ID1),
+    mark_group_changed(Node, ID4),
     refresh(Node),
 
     %% then
@@ -202,8 +202,8 @@ grand_scenario_test(Config) ->
     update(Node, user_group, ID4, #{child_groups => [{ID1, [P1, P2, P9]}, {ID5, [P2, P3, P4, P5, P6]}]}),
 
     %% when
-    set_poi(Node, ID4),
-    set_poi(Node, ID5),
+    mark_group_changed(Node, ID4),
+    mark_group_changed(Node, ID5),
     refresh(Node),
 
     %% then
@@ -232,8 +232,8 @@ grand_scenario_test(Config) ->
     update(Node, user_group, ID3, #{parent_groups => [ID2, ID5]}),
 
     %% when
-    set_poi(Node, ID3),
-    set_poi(Node, ID5),
+    mark_group_changed(Node, ID3),
+    mark_group_changed(Node, ID5),
     refresh(Node),
 
     %% then
@@ -279,9 +279,9 @@ grand_scenario_test(Config) ->
     save(Node, ID8, G8),
 
     %% given
-    set_poi(Node, ID6),
-    set_poi(Node, ID7),
-    set_poi(Node, ID8),
+    mark_group_changed(Node, ID6),
+    mark_group_changed(Node, ID7),
+    mark_group_changed(Node, ID8),
     refresh(Node),
 
     %% then - old component (unchanged)
@@ -321,8 +321,8 @@ grand_scenario_test(Config) ->
     update(Node, user_group, ID7, #{parent_groups => [ID6, ID1]}),
 
     %% when
-    set_poi(Node, ID7),
-    set_poi(Node, ID1),
+    mark_group_changed(Node, ID7),
+    mark_group_changed(Node, ID1),
     refresh(Node),
 
     %% then
@@ -362,8 +362,8 @@ grand_scenario_test(Config) ->
     update(Node, user_group, ID7, #{parent_groups => [ID6]}),
 
     %% when
-    set_poi(Node, ID7),
-    set_poi(Node, ID1),
+    mark_group_changed(Node, ID7),
+    mark_group_changed(Node, ID1),
     refresh(Node),
 
     %% then
@@ -448,8 +448,8 @@ save(Node, ID, Value) ->
     ?assertMatch({ok, ID}, rpc:call(Node, element(1, Value), save,
         [#document{key = ID, value = Value}])).
 
-set_poi(Node, ID) ->
-    ?assertMatch(ok, rpc:call(Node, group_graph, set_poi, [ID])).
+mark_group_changed(Node, ID) ->
+    ?assertMatch(ok, rpc:call(Node, group_graph, mark_group_changed, [ID])).
 
 reset_state(Node) ->
     save(Node, #document{key = <<"group_graph_context">>,
@@ -457,4 +457,4 @@ reset_state(Node) ->
     }).
 
 refresh(Node) ->
-    ?assertMatch(ok, rpc:call(Node, group_graph, refresh, [])).
+    ?assertMatch(ok, rpc:call(Node, group_graph, refresh_effective_caches, [])).

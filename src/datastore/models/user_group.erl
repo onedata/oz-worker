@@ -91,7 +91,8 @@ exists(Key) ->
 model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
     StoreLevel = application:get_env(?APP_Name, group_store_level, ?DISK_ONLY_LEVEL),
-    ?MODEL_CONFIG(user_group_bucket, [], StoreLevel).
+    Hooks = [{?MODULE, save}, {?MODULE, update}, {?MODULE, create}, {?MODULE, create_or_opdate}],
+    ?MODEL_CONFIG(user_group_bucket, Hooks, StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -101,6 +102,8 @@ model_init() ->
 -spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term(),
     ReturnValue :: term()) -> ok.
+'after'(?MODULE, _Method, _Level, _Context, {ok, ID}) ->
+    group_graph:mark_group_changed(ID);
 'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
     ok.
 

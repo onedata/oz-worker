@@ -19,7 +19,7 @@
 -define(LOCK_ID, <<"group_graph">>).
 
 %% API
--export([set_poi/1, refresh/0]).
+-export([mark_group_changed/1, refresh_effective_caches/0]).
 
 
 -type effective_users() :: [{UserID :: binary(), [privileges:group_privilege()]}].
@@ -30,16 +30,16 @@
 %%% API
 %%%===================================================================
 
--spec set_poi(GroupID :: binary()) -> ok.
-set_poi(GroupID) ->
+-spec mark_group_changed(GroupID :: binary()) -> ok.
+mark_group_changed(GroupID) ->
     ensure_state_present(),
     {ok, _} = group_graph_context:update(?KEY, fun(Context) ->
         NewGroups = [GroupID | Context#group_graph_context.changed_groups],
         {ok, Context#group_graph_context{changed_groups = NewGroups}}
     end), ok.
 
--spec refresh() -> ok | not_applicable.
-refresh() ->
+-spec refresh_effective_caches() -> ok | not_applicable.
+refresh_effective_caches() ->
     ensure_state_present(),
     Interval = application:get_env(?APP_Name, group_graph_refresh_interval, 500),
     Now = erlang:system_time(),
