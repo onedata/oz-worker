@@ -22,7 +22,7 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([grand_scenario_test/1]).
+-export([grand_scenario_test/1, conditional_update_test/1]).
 
 -define(assertUnorderedMatch(Guard, Expr), (fun() ->
     Sorted = lists:sort(Guard),
@@ -34,9 +34,50 @@ end)()).
 %%%===================================================================
 
 all() -> ?ALL([
-    grand_scenario_test
+    grand_scenario_test,
+    conditional_update_test
 ]).
 
+conditional_update_test(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
+
+    G1 = #user_group{
+        users = [{<<"U1">>, [group_change_data]}],
+        child_groups = [{<<"2">>, [group_change_data]}],
+        parent_groups = [],
+        effective_users = [{<<"U1">>, [group_change_data]}],
+        effective_groups = [<<"1">>]},
+    G2 = #user_group{
+        users = [{<<"U2">>, [group_change_data]}],
+        child_groups = [],
+        parent_groups = [<<"1">>],
+        effective_users = [{<<"U2">>, [group_change_data]}],
+        effective_groups = [<<"2">>]},
+
+    save(Node, <<"1">>, G1),
+    save(Node, <<"2">>, G2),
+    set_poi(Node, <<"1">>),
+    set_poi(Node, <<"2">>),
+    refresh(Node),
+
+    Doc1 = get(Node, user_group, <<"1">>),
+    Doc2 = get(Node, user_group, <<"2">>),
+    ?assertUnorderedMatch([<<"1">>], effective_groups(Doc1)),
+    ?assertUnorderedMatch([<<"1">>, <<"2">>], effective_groups(Doc2)),
+    ?assertUnorderedMatch([{<<"U1">>, [group_change_data]}, {<<"U2">>, [group_change_data]}], effective_users(Doc1)),
+    ?assertUnorderedMatch([{<<"U2">>, [group_change_data]}], effective_users(Doc2)),
+
+    %% when
+    meck:new(user_group, [passthrough]),
+    set_poi(Node, <<"1">>),
+    set_poi(Node, <<"2">>),
+    refresh(Node),
+
+    %% then
+    ?assertEqual(0, meck:num_calls(user_group, update, '_')),
+    ?assertEqual(0, meck:num_calls(user_group, save, '_')),
+    meck:unload(user_group),
+    ok.
 
 grand_scenario_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),

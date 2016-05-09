@@ -85,7 +85,7 @@ update_effective_groups_visitor(GroupDoc, Context) ->
         end
     end, [], ParentGroups),
     Effective = lists:usort([ID | EffectiveOfParents]),
-    user_group:update(ID, #{effective_groups => Effective}),
+    update_effective_groups(ID, Effective),
     maps:put(ID, Effective, Context).
 
 update_effective_users_visitor(GroupDoc, Context) ->
@@ -98,7 +98,7 @@ update_effective_users_visitor(GroupDoc, Context) ->
         merge_effective_users(All, ChildEffective, ChildPrivileges)
     end, [], ChildGroups),
     Effective = merge_effective_users(EffectiveFromChildren, Users, privileges:group_privileges()),
-    user_group:update(ID, #{effective_users => Effective}),
+    update_effective_users(ID, Effective),
     maps:put(ID, Effective, Context).
 
 
@@ -182,3 +182,29 @@ topsort(Groups, Ordered, GetNext) ->
             end
         end
     end, Ordered, Groups).
+
+%%%===================================================================
+%%% Internal: Conditional updates
+%%%===================================================================
+
+update_effective_groups(ID, Effective) ->
+    user_group:update(ID, fun(Group) ->
+        Current = ordsets:from_list(Group#user_group.effective_groups),
+        Removed = ordsets:subtract(Current, Effective),
+        Added = ordsets:subtract(Effective, Current),
+        case {Added, Removed} of
+            {[], []} -> {error, update_not_needed};
+            _ -> {ok, Group#user_group{effective_groups = Effective}}
+        end
+    end).
+
+update_effective_users(ID, Effective) ->
+    user_group:update(ID, fun(Group) ->
+        Current = ordsets:from_list(Group#user_group.effective_users),
+        Removed = ordsets:subtract(Current, Effective),
+        Added = ordsets:subtract(Effective, Current),
+        case {Added, Removed} of
+            {[], []} -> {error, update_not_needed};
+            _ -> {ok, Group#user_group{effective_users = Effective}}
+        end
+    end).
