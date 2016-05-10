@@ -50,6 +50,7 @@ routes() ->
         {<<"/user/spaces/join">>, M, S#rstate{resource = sjoin, methods = [post]}},
         {<<"/user/spaces/token">>, M, S#rstate{resource = screate, methods = [get]}},
         {<<"/user/spaces/:sid">>, M, S#rstate{resource = space, methods = [get, delete]}},
+        {<<"/user/effective_groups">>, M, S#rstate{resource = effective_groups, methods = [get]}},
         {<<"/user/groups">>, M, S#rstate{resource = groups, methods = [get, post]}},
         {<<"/user/groups/join">>, M, S#rstate{resource = gjoin, methods = [post]}},
         {<<"/user/groups/:gid">>, M, S#rstate{resource = group, methods = [get, delete]}},
@@ -182,6 +183,9 @@ provide_resource(space, UserId, _Client, Req) ->
     {sid, SID} = lists:keyfind(sid, 1, Bindings),
     {ok, Space} = space_logic:get_data(SID, {user, UserId}),
     {Space, Req2};
+provide_resource(effective_groups, UserId, _Client, Req) ->
+    {ok, Groups} = user_logic:get_effective_groups(UserId),
+    {Groups, Req};
 provide_resource(groups, UserId, _Client, Req) ->
     {ok, Groups} = user_logic:get_groups(UserId),
     {Groups, Req};

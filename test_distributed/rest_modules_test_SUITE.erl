@@ -72,7 +72,7 @@
     last_user_leaves_space_test/1, user_gets_space_info_test/1, invite_user_to_space_test/1,
     get_group_info_by_user_test/1, last_user_leaves_group_test/1, non_last_user_leaves_group_test/1,
     group_invitation_test/1, create_group_test/1, update_group_test/1,
-    delete_group_test/1, create_group_for_user_test/1, invite_user_to_group_test/1,
+    delete_group_test/1, create_group_for_user_test/1, effective_group_for_user_test/1, invite_user_to_group_test/1,
     get_user_info_by_group_test/1, delete_user_from_group_test/1, get_group_privileges_test/1,
     set_group_privileges_test/1, group_creates_space_test/1, get_space_info_by_group_test/1,
     last_group_leaves_space_test/1, create_space_by_user_test/1,
@@ -149,6 +149,7 @@ groups() ->
                 update_group_test,
                 delete_group_test,
                 create_group_for_user_test,
+                effective_group_for_user_test,
                 invite_user_to_group_test,
                 get_user_info_by_group_test,
                 delete_user_from_group_test,
@@ -534,6 +535,23 @@ create_group_for_user_test(Config) ->
 
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))),
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserParamsOtherAddress))).
+
+effective_group_for_user_test(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
+
+    GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
+    GID2 = create_group_for_user(?GROUP_NAME2, UserReqParams),
+
+    ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))),
+    ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserParamsOtherAddress))),
+
+    ?assertMatch(ok, rpc:call(Node, group_graph, refresh_effective_caches, [])),
+
+    ?assertMatch(true, is_included([GID1, GID2], get_user_effective_groups(UserReqParams))),
+    ?assertMatch(true, is_included([GID1, GID2], get_user_effective_groups(UserParamsOtherAddress))).
 
 get_group_info_by_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1477,6 +1495,12 @@ get_user_groups(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response = do_request(RestAddress ++ "/user/groups", Headers, get, [], Options),
     Val = get_body_val([groups], Response),
+    fetch_value_from_list(Val).
+
+get_user_effective_groups(ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Response = do_request(RestAddress ++ "/user/effective_groups", Headers, get, [], Options),
+    Val = get_body_val([effective_groups], Response),
     fetch_value_from_list(Val).
 
 get_group_info_by_user(GID, ReqParams) ->
