@@ -537,7 +537,6 @@ create_group_for_user_test(Config) ->
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserParamsOtherAddress))).
 
 effective_group_for_user_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
@@ -548,7 +547,7 @@ effective_group_for_user_test(Config) ->
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))),
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserParamsOtherAddress))),
 
-    ?assertMatch(ok, rpc:call(Node, group_graph, refresh_effective_caches, [])),
+    ensure_effective_users_and_groups_updated(Config),
 
     ?assertMatch(true, is_included([GID1, GID2], get_user_effective_groups(UserReqParams))),
     ?assertMatch(true, is_included([GID1, GID2], get_user_effective_groups(UserParamsOtherAddress))).
@@ -1164,6 +1163,11 @@ end_per_suite(Config) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+ensure_effective_users_and_groups_updated(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    timer:sleep(300),
+    ?assertMatch(ok, rpc:call(Node, group_graph, refresh_effective_caches, [])).
 
 is_included(_, []) -> false;
 is_included([], _MainList) -> true;

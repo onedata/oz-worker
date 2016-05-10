@@ -16,9 +16,10 @@
 -include("datastore/oz_datastore_models_def.hrl").
 
 %% API
--export([exists/1, has_user/2, has_effective_user/2, has_privilege/3, has_effective_privilege/3]).
+-export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3]).
 -export([create/2, modify/2, join/2, set_privileges/3]).
--export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1, get_user/2, get_privileges/2]).
+-export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
+    get_user/2, get_privileges/2, get_effective_privileges/2]).
 -export([remove/1, remove_user/2, cleanup/1]).
 
 %%%===================================================================
@@ -58,16 +59,28 @@ has_user(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec has_privilege(GroupId :: binary(), UserId :: binary(),
+-spec has_effective_privilege(GroupId :: binary(), UserId :: binary(),
     Privilege :: privileges:group_privilege()) ->
     boolean().
-has_privilege(GroupId, UserId, Privilege) ->
+-include_lib("ctool/include/logging.hrl").
+
+has_effective_privilege(GroupId, UserId, Privilege) ->
     case has_user(GroupId, UserId) of
         false -> false;
         true ->
-            {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
-            {_, Privileges} = lists:keyfind(UserId, 1, Users),
-            lists:member(Privilege, Privileges)
+            {ok, #document{value = #user_group{users = Users,
+                effective_users = EUsers}}} = user_group:get(GroupId),
+
+            %% 'effective_users' do contain 'users' of the group
+            %% but are 'users' are checked for privileges regardless
+            %% as 'users' may be slightly more up-to-date
+            case lists:keyfind(UserId, 1, Users) of
+                {_, Privileges} -> lists:member(Privilege, Privileges);
+                false -> false
+            end orelse case lists:keyfind(UserId, 1, EUsers) of
+                {_, EPrivileges} -> lists:member(Privilege, EPrivileges);
+                false -> false
+            end
     end.
 
 
@@ -87,27 +100,6 @@ has_effective_user(GroupId, UserId) ->
             {ok, #document{value = #user_group{effective_users = Users}}}
                 = user_group:get(GroupId),
             lists:keymember(UserId, 1, Users)
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Returns whether the group's member identified by UserId has privilege
-%% in the group (direct or through nested groups).
-%% Shall return false in any other case (group doesn't exist,
-%% user is not group's member, etc).
-%% Throws exception when call to the datastore fails, or group doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec has_effective_privilege(GroupId :: binary(), UserId :: binary(),
-    Privilege :: privileges:group_privilege()) ->
-    boolean().
-has_effective_privilege(GroupId, UserId, Privilege) ->
-    case exists(GroupId) of
-        false -> false;
-        true ->
-            {ok, #document{value = #user_group{effective_users = Users}}}
-                = user_group:get(GroupId),
-            {_, Privileges} = lists:keyfind(UserId, 1, Users),
-            lists:member(Privilege, Privileges)
     end.
 
 %%--------------------------------------------------------------------
@@ -270,6 +262,18 @@ get_user(_GroupId, UserId) ->
     {ok, [privileges:group_privilege()]}.
 get_privileges(GroupId, UserId) ->
     {ok, #document{value = #user_group{users = UserTuples}}} = user_group:get(GroupId),
+    {_, Privileges} = lists:keyfind(UserId, 1, UserTuples),
+    {ok, Privileges}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns list of group's member privileges.
+%% Throws exception when call to the datastore fails, or group/user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_privileges(GroupId :: binary(), UserId :: binary()) ->
+    {ok, [privileges:group_privilege()]}.
+get_effective_privileges(GroupId, UserId) ->
+    {ok, #document{value = #user_group{effective_users = UserTuples}}} = user_group:get(GroupId),
     {_, Privileges} = lists:keyfind(UserId, 1, UserTuples),
     {ok, Privileges}.
 

@@ -41,6 +41,8 @@ routes() ->
     [
         {<<"/groups">>, M, S#rstate{resource = groups, methods = [post]}},
         {<<"/groups/:id">>, M, S#rstate{resource = group, methods = [get, patch, delete]}},
+        {<<"/groups/:id/effective_users">>, M, S#rstate{resource = effective_users, methods = [get]}},
+        {<<"/groups/:id/effective_users/:uid/privileges">>, M, S#rstate{resource = eupriv, methods = [get]}},
         {<<"/groups/:id/users">>, M, S#rstate{resource = users, methods = [get]}},
         {<<"/groups/:id/users/token">>, M, S#rstate{resource = uinvite, methods = [get]}},
         {<<"/groups/:id/users/:uid">>, M, S#rstate{resource = user, methods = [get, delete]}},
@@ -65,25 +67,25 @@ is_authorized(_, _, _, #client{type = ClientType}) when ClientType =/= user ->
 is_authorized(groups, post, _GroupId, _Client) ->
     true;
 is_authorized(group, patch, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_change_data);
+    group_logic:has_effective_privilege(GroupId, UserId, group_change_data);
 is_authorized(group, delete, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_remove);
+    group_logic:has_effective_privilege(GroupId, UserId, group_remove);
 is_authorized(uinvite, get, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_invite_user);
+    group_logic:has_effective_privilege(GroupId, UserId, group_invite_user);
 is_authorized(user, delete, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_remove_user);
+    group_logic:has_effective_privilege(GroupId, UserId, group_remove_user);
 is_authorized(upriv, put, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_set_privileges);
+    group_logic:has_effective_privilege(GroupId, UserId, group_set_privileges);
 is_authorized(spaces, post, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_create_space);
+    group_logic:has_effective_privilege(GroupId, UserId, group_create_space);
 is_authorized(sjoin, post, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_join_space);
+    group_logic:has_effective_privilege(GroupId, UserId, group_join_space);
 is_authorized(screate, get, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_create_space_token);
+    group_logic:has_effective_privilege(GroupId, UserId, group_create_space_token);
 is_authorized(space, delete, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_leave_space);
+    group_logic:has_effective_privilege(GroupId, UserId, group_leave_space);
 is_authorized(_, get, GroupId, #client{id = UserId}) ->
-    group_logic:has_privilege(GroupId, UserId, group_view_data);
+    group_logic:has_effective_privilege(GroupId, UserId, group_view_data);
 is_authorized(_, _, _, _) ->
     false.
 
@@ -165,6 +167,9 @@ provide_resource(group, GroupId, _Client, Req) ->
 provide_resource(users, GroupId, _Client, Req) ->
     {ok, Users} = group_logic:get_users(GroupId),
     {Users, Req};
+provide_resource(effective_users, GroupId, _Client, Req) ->
+    {ok, Users} = group_logic:get_effective_users(GroupId),
+    {Users, Req};
 provide_resource(uinvite, GroupId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, group_invite_token, {group, GroupId}),
     {[{token, Token}], Req};
@@ -177,6 +182,11 @@ provide_resource(upriv, GroupId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
     {ok, Privileges} = group_logic:get_privileges(GroupId, UID),
+    {[{privileges, Privileges}], Req2};
+provide_resource(eupriv, GroupId, _Client, Req) ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {ok, Privileges} = group_logic:get_effective_privileges(GroupId, UID),
     {[{privileges, Privileges}], Req2};
 provide_resource(spaces, GroupId, _Client, Req) ->
     {ok, Spaces} = group_logic:get_spaces(GroupId),
