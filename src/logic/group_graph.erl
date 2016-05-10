@@ -68,8 +68,8 @@ refresh_effective_caches() ->
 -spec effective_groups_update_traverse(GroupIDs :: [binary()]) -> ok.
 effective_groups_update_traverse(GroupIDs) ->
     ToVisit = topsort(GroupIDs, [], fun children/1),
-    traverse(ToVisit, fun update_effective_groups_visitor/2, #{}).
-
+    traverse(ToVisit, fun update_effective_groups_visitor/2, #{}),
+    update_effective_groups_in_users(ToVisit).
 
 -spec effective_users_update_traverse(GroupIDs :: [binary()]) -> ok.
 effective_users_update_traverse(GroupIDs) ->
@@ -208,3 +208,65 @@ update_effective_users(ID, Effective) ->
             _ -> {ok, Group#user_group{effective_users = Effective}}
         end
     end).
+
+update_effective_groups_in_users(GroupIDs) ->
+    {AffectedUsers, EffectiveGroupsMap} = gather_user_effective_groups_context(GroupIDs),
+    lists:foreach(fun(UID) ->
+        onedata_user:update(UID, fun(User) ->
+            #onedata_user{groups = GIDs, effective_groups = EGIDs} = User,
+
+            NewEGIDs = lists:usort(lists:foldl(fun(GID, Acc) ->
+                Acc ++ maps:get(GID, EffectiveGroupsMap, [])
+            end, [], GIDs)),
+
+            case lists:usort(EGIDs) of
+                NewEGIDs -> {error, update_not_needed};
+                _ -> {ok, User#onedata_user{effective_groups = NewEGIDs}}
+            end
+        end)
+    end, AffectedUsers),
+    ok.
+
+gather_user_effective_groups_context(GIDs) ->
+    AffectedUsers = gather_affected_users(GIDs),
+    RequiredGroupsIDs = gather_users_groups(AffectedUsers),
+    EffectiveGroupsMap = gather_effective_groups(RequiredGroupsIDs),
+    {AffectedUsers, EffectiveGroupsMap}.
+
+gather_affected_users(GIDs) ->
+    lists:foldl(fun(GID, UsersList) ->
+        case user_group:get(GID) of
+            {ok, #document{value = #user_group{users = Users}}} ->
+                {UIDs, _} = lists:unzip(Users),
+                UsersList ++ UIDs;
+            _Err ->
+                ?warning_stacktrace("Unable to access group ~p due to ~p", [GID, _Err]),
+                UsersList
+        end
+    end, [], GIDs).
+
+gather_users_groups(Users) ->
+    lists:foldl(fun(UID, Acc) ->
+        case onedata_user:get(UID) of
+            {ok, #document{value = #onedata_user{groups = Groups}}} ->
+                Acc ++ Groups;
+            _Err ->
+                ?warning_stacktrace("Unable to access user ~p due to ~p", [UID, _Err]),
+                Acc
+        end
+    end, [], Users).
+
+gather_effective_groups(GIDs) ->
+    lists:foldl(fun(GID, GroupsMap) ->
+        case maps:get(GID, GroupsMap, undefined) of
+            undefined ->
+                case user_group:get(GID) of
+                    {ok, #document{value = #user_group{effective_groups = Effective}}} ->
+                        maps:put(GID, Effective, GroupsMap);
+                    _Err ->
+                        ?warning_stacktrace("Unable to access group ~p due to ~p", [GID, _Err]),
+                        maps:put(GID, [], GroupsMap)
+                end;
+            _ -> GroupsMap
+        end
+    end, #{}, GIDs).

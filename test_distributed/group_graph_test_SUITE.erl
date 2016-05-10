@@ -95,6 +95,7 @@ grand_scenario_test(Config) ->
         effective_users = [U1G1],
         effective_groups = [ID1]},
     save(Node, ID1, G1),
+    save(Node, #document{key = <<"U1">>, value = #onedata_user{groups = [ID1]}}),
 
     %% given
     mark_group_changed(Node, ID1),
@@ -115,6 +116,8 @@ grand_scenario_test(Config) ->
         effective_groups = [ID2]},
     save(Node, ID2, G2),
     update(Node, user_group, ID1, #{child_groups => [{ID2, [P2, P3, P4, P6]}]}),
+    save(Node, #document{key = <<"U1">>, value = #onedata_user{groups = [ID1, ID2]}}),
+    save(Node, #document{key = <<"U2">>, value = #onedata_user{groups = [ID1]}}),
 
     %% when
     mark_group_changed(Node, ID1),
@@ -139,6 +142,8 @@ grand_scenario_test(Config) ->
         effective_groups = [ID3]},
     save(Node, ID3, G3),
     update(Node, user_group, ID2, #{child_groups => [{ID3, [P3, P4, P5, P6]}]}),
+    save(Node, #document{key = <<"U2">>, value = #onedata_user{groups = [ID1, ID3]}}),
+    save(Node, #document{key = <<"U3">>, value = #onedata_user{groups = [ID3]}}),
 
     %% when
     mark_group_changed(Node, ID2),
@@ -166,6 +171,7 @@ grand_scenario_test(Config) ->
         effective_groups = [ID4]},
     save(Node, ID4, G4),
     update(Node, user_group, ID1, #{parent_groups => [ID4]}),
+    save(Node, #document{key = <<"U4">>, value = #onedata_user{groups = [ID4]}}),
 
     %% when
     mark_group_changed(Node, ID1),
@@ -277,6 +283,9 @@ grand_scenario_test(Config) ->
     save(Node, ID6, G6),
     save(Node, ID7, G7),
     save(Node, ID8, G8),
+    save(Node, #document{key = <<"U1">>, value = #onedata_user{groups = [ID1, ID2, ID6]}}),
+    save(Node, #document{key = <<"U2">>, value = #onedata_user{groups = [ID1, ID7]}}),
+    save(Node, #document{key = <<"U3">>, value = #onedata_user{groups = [ID3, ID8]}}),
 
     %% given
     mark_group_changed(Node, ID6),
@@ -396,6 +405,14 @@ grand_scenario_test(Config) ->
     ?assertUnorderedMatch([U2G7, {<<"U3">>, [P8]}], effective_users(Doc7I)),
     ?assertUnorderedMatch([U3G8], effective_users(Doc8I)),
 
+    %% Part J - effective groups in users are coherent
+    ?assertUnorderedMatch([ID1, ID2, ID4, ID6],
+        effective_groups(get(Node, onedata_user, <<"U1">>))),
+    ?assertUnorderedMatch([ID1, ID4, ID6, ID7],
+        effective_groups(get(Node, onedata_user, <<"U2">>))),
+    ?assertUnorderedMatch([ID1, ID2, ID3, ID4, ID5, ID6, ID7, ID8],
+        effective_groups(get(Node, onedata_user, <<"U3">>))),
+    ?assertUnorderedMatch([ID4], effective_groups(get(Node, onedata_user, <<"U4">>))),
     ok.
 
 %%%===================================================================
@@ -431,12 +448,14 @@ end_per_suite(Config) ->
 get(Node, Model, ID) ->
     Result = rpc:call(Node, Model, get, [ID]),
     ?assertMatch({ok, _}, Result),
-    {ok, Doc} = Result, Doc.
-
+    {ok, Doc} = Result,
+    Doc.
 
 effective_users(#document{value = #user_group{effective_users = Users}}) ->
     Users.
 
+effective_groups(#document{value = #onedata_user{effective_groups = Groups}}) ->
+    Groups;
 effective_groups(#document{value = #user_group{effective_groups = Groups}}) ->
     Groups.
 
