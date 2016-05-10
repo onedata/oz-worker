@@ -60,7 +60,7 @@
     spaces = [] :: [SpaceId :: binary()]
 }).
 
--record(group_graph_context, {
+-record(group_graph_worker_state, {
     changed_groups = [] :: [GroupID :: binary()],
     last_rebuild = 0 :: integer()
 }).

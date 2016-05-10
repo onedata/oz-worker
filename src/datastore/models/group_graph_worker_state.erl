@@ -8,7 +8,7 @@
 %%% @doc
 %%% @end
 %%%-------------------------------------------------------------------
--module(group_graph_context).
+-module(group_graph_worker_state).
 -author("Michal Zmuda").
 -behaviour(model_behaviour).
 

@@ -15,7 +15,7 @@
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(KEY, <<"group_graph_context">>).
+-define(KEY, <<"group_graph_worker_state">>).
 -define(LOCK_ID, <<"group_graph">>).
 
 %% API
@@ -33,9 +33,9 @@
 -spec mark_group_changed(GroupID :: binary()) -> ok.
 mark_group_changed(GroupID) ->
     ensure_state_initialised(),
-    {ok, _} = group_graph_context:update(?KEY, fun(Context) ->
-        NewGroups = [GroupID | Context#group_graph_context.changed_groups],
-        {ok, Context#group_graph_context{changed_groups = NewGroups}}
+    {ok, _} = group_graph_worker_state:update(?KEY, fun(Context) ->
+        NewGroups = [GroupID | Context#group_graph_worker_state.changed_groups],
+        {ok, Context#group_graph_worker_state{changed_groups = NewGroups}}
     end), ok.
 
 -spec refresh_effective_caches() -> ok | not_applicable.
@@ -44,17 +44,17 @@ refresh_effective_caches() ->
     Interval = application:get_env(?APP_Name, group_graph_refresh_interval, 500),
     Now = erlang:system_time(),
 
-    datastore:run_synchronized(group_graph_context, ?LOCK_ID, fun() ->
-        {ok, #document{value = #group_graph_context{last_rebuild = Timestamp,
-            changed_groups = Groups}}} = group_graph_context:get(?KEY),
+    datastore:run_synchronized(group_graph_worker_state, ?LOCK_ID, fun() ->
+        {ok, #document{value = #group_graph_worker_state{last_rebuild = Timestamp,
+            changed_groups = Groups}}} = group_graph_worker_state:get(?KEY),
 
         case Timestamp + Interval < Now of
             false -> not_applicable;
             true ->
-                {ok, _} = group_graph_context:update(?KEY, fun(Val) ->
-                    {ok, Val#group_graph_context{
+                {ok, _} = group_graph_worker_state:update(?KEY, fun(Val) ->
+                    {ok, Val#group_graph_worker_state{
                         last_rebuild = Now,
-                        changed_groups = Val#group_graph_context.changed_groups -- Groups
+                        changed_groups = Val#group_graph_worker_state.changed_groups -- Groups
                     }} end),
                 effective_groups_update_traverse(Groups),
                 effective_users_update_traverse(Groups)
@@ -143,8 +143,8 @@ parents(#user_group{parent_groups = Groups}) ->
 
 -spec ensure_state_initialised() -> ok.
 ensure_state_initialised() ->
-    Result = group_graph_context:create(#document{key = ?KEY,
-        value = #group_graph_context{last_rebuild = erlang:system_time()}}),
+    Result = group_graph_worker_state:create(#document{key = ?KEY,
+        value = #group_graph_worker_state{last_rebuild = erlang:system_time()}}),
 
     case Result of
         {ok, _} ->
