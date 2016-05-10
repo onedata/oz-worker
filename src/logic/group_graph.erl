@@ -32,7 +32,7 @@
 
 -spec mark_group_changed(GroupID :: binary()) -> ok.
 mark_group_changed(GroupID) ->
-    ensure_state_present(),
+    ensure_state_initialised(),
     {ok, _} = group_graph_context:update(?KEY, fun(Context) ->
         NewGroups = [GroupID | Context#group_graph_context.changed_groups],
         {ok, Context#group_graph_context{changed_groups = NewGroups}}
@@ -40,7 +40,7 @@ mark_group_changed(GroupID) ->
 
 -spec refresh_effective_caches() -> ok | not_applicable.
 refresh_effective_caches() ->
-    ensure_state_present(),
+    ensure_state_initialised(),
     Interval = application:get_env(?APP_Name, group_graph_refresh_interval, 500),
     Now = erlang:system_time(),
 
@@ -141,11 +141,18 @@ children(#user_group{child_groups = Tuples}) ->
 parents(#user_group{parent_groups = Groups}) ->
     Groups.
 
--spec ensure_state_present() -> ok.
-ensure_state_present() ->
-    group_graph_context:create(#document{key = ?KEY,
-        value = #group_graph_context{last_rebuild = erlang:system_time()}
-    }), ok.
+-spec ensure_state_initialised() -> ok.
+ensure_state_initialised() ->
+    Result = group_graph_context:create(#document{key = ?KEY,
+        value = #group_graph_context{last_rebuild = erlang:system_time()}}),
+
+    case Result of
+        {ok, _} ->
+            lists:foreach(fun(#document{key = GID}) ->
+                mark_group_changed(GID)
+            end, user_group:all());
+        _ -> ok
+    end.
 
 %%%===================================================================
 %%% Internal: DAG functions
