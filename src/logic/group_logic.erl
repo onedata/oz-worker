@@ -16,11 +16,13 @@
 -include("datastore/oz_datastore_models_def.hrl").
 
 %% API
--export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3]).
--export([create/2, modify/2, join/2, set_privileges/3]).
+-export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
+    has_nested_group/2]).
+-export([create/2, modify/2, join/2, set_privileges/3, join_group/2]).
 -export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
-    get_user/2, get_privileges/2, get_effective_privileges/2]).
--export([remove/1, remove_user/2, cleanup/1]).
+    get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
+    get_nested_group/2, get_group_privileges/2, set_group_privileges/3]).
+-export([remove/1, remove_user/2, cleanup/1, remove_nested_group/2]).
 
 %%%===================================================================
 %%% API
@@ -50,6 +52,22 @@ has_user(GroupId, UserId) ->
         true ->
             {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
             lists:keymember(UserId, 1, Users)
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the given group is a member of the given parent group.
+%% Shall return false in any other case (group doesn't exist, etc).
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_nested_group(ParentGroupId :: binary(), GroupId :: binary()) ->
+    boolean().
+has_nested_group(ParentGroupId, GroupId) ->
+    case exists(ParentGroupId) of
+        false -> false;
+        true ->
+            {ok, #document{value = #user_group{child_groups = Groups}}} = user_group:get(ParentGroupId),
+            lists:keymember(GroupId, 1, Groups)
     end.
 
 %%--------------------------------------------------------------------
@@ -161,6 +179,31 @@ join(UserId, Macaroon) ->
     {ok, GroupId}.
 
 %%--------------------------------------------------------------------
+%% @doc Adds group as nested to a group identified by a token.
+%% Throws exception when call to the datastore fails, or token/group_from_token
+%% doesn't exist in db.
+%% @end
+%%--------------------------------------------------------------------
+-spec join_group(GroupId :: binary(), Macaroon :: macaroon:macaroon()) ->
+    {ok, ParentGroupId :: binary()}.
+join_group(GroupId, Macaroon) ->
+    {ok, {group, ParentGroupId}} = token_logic:consume(Macaroon),
+    case has_nested_group(ParentGroupId, GroupId) of
+        true -> ok;
+        false ->
+            Privileges = privileges:group_user(),
+            {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
+                #user_group{child_groups = Groups} = Group,
+                {ok, Group#user_group{child_groups = [{GroupId, Privileges} | Groups]}}
+            end),
+            {ok, _} = user_group:update(GroupId, fun(Group) ->
+                #user_group{parent_groups = Groups} = Group,
+                {ok, Group#user_group{parent_groups = [ParentGroupId | Groups]}}
+            end)
+    end,
+    {ok, ParentGroupId}.
+
+%%--------------------------------------------------------------------
 %% @doc Sets privileges for a member of the group.
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
@@ -173,6 +216,22 @@ set_privileges(GroupId, UserId, Privileges) ->
         #user_group{users = Users} = Group,
         UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, Privileges}),
         {ok, Group#user_group{users = UsersNew}}
+    end),
+    ok.
+
+%%--------------------------------------------------------------------
+%% @doc Sets privileges for a member of the group.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_group_privileges(ParentGroupId :: binary(), GroupId :: binary(),
+    Privileges :: [privileges:group_privilege()]) ->
+    ok.
+set_group_privileges(ParentGroupId, GroupId, Privileges) ->
+    {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
+        #user_group{child_groups = Groups} = Group,
+        GroupsNew = lists:keyreplace(GroupId, 1, Groups, {GroupId, Privileges}),
+        {ok, Group#user_group{child_groups = GroupsNew}}
     end),
     ok.
 
@@ -216,6 +275,19 @@ get_effective_users(GroupId) ->
     {ok, [{users, Users}]}.
 
 %%--------------------------------------------------------------------
+%% @doc Returns details about group's nested groups members.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_nested_groups(GroupId :: binary()) ->
+    {ok, [proplists:property()]}.
+get_nested_groups(GroupId) ->
+    {ok, #document{value = #user_group{child_groups = GroupTuples}}}
+        = user_group:get(GroupId),
+    {Groups, _} = lists:unzip(GroupTuples),
+    {ok, [{nested_groups, Groups}]}.
+
+%%--------------------------------------------------------------------
 %% @doc Returns details about group's spaces.
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
@@ -254,6 +326,16 @@ get_user(_GroupId, UserId) ->
     user_logic:get_data(UserId, provider).
 
 %%--------------------------------------------------------------------
+%% @doc Returns details about group's member.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_nested_group(ParentGroupId :: binary(), GroupId :: binary()) ->
+    {ok, [proplists:property()]}.
+get_nested_group(_ParentGroupId, GroupId) ->
+    get_data(GroupId).
+
+%%--------------------------------------------------------------------
 %% @doc Returns list of group's member privileges.
 %% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
@@ -263,6 +345,18 @@ get_user(_GroupId, UserId) ->
 get_privileges(GroupId, UserId) ->
     {ok, #document{value = #user_group{users = UserTuples}}} = user_group:get(GroupId),
     {_, Privileges} = lists:keyfind(UserId, 1, UserTuples),
+    {ok, Privileges}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns list of group's member privileges.
+%% Throws exception when call to the datastore fails, or group/user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_privileges(ParentGroupId :: binary(), GroupId :: binary()) ->
+    {ok, [privileges:group_privilege()]}.
+get_group_privileges(ParentGroupId, GroupId) ->
+    {ok, #document{value = #user_group{child_groups = GroupTuples}}} = user_group:get(ParentGroupId),
+    {_, Privileges} = lists:keyfind(GroupId, 1, GroupTuples),
     {ok, Privileges}.
 
 %%--------------------------------------------------------------------
@@ -318,6 +412,25 @@ remove_user(GroupId, UserId) ->
         {ok, User#onedata_user{groups = lists:delete(GroupId, Groups)}}
     end),
     cleanup(GroupId),
+    true.
+
+%%--------------------------------------------------------------------
+%% @doc Removes nested group from the group.
+%% Throws exception when call to the datastore fails, or group/user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_nested_group(ParentGroupId :: binary(), GroupId :: binary()) ->
+    true.
+remove_nested_group(ParentGroupId, GroupId) ->
+    {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
+        #user_group{child_groups = Children} = Group,
+        {ok, Group#user_group{child_groups = lists:keydelete(GroupId, 1, Children)}}
+    end),
+    {ok, _} = user_group:update(GroupId, fun(Group) ->
+        #user_group{parent_groups = Parents} = Group,
+        {ok, Group#user_group{parent_groups = lists:delete(ParentGroupId, Parents)}}
+    end),
+    cleanup(ParentGroupId),
     true.
 
 %%--------------------------------------------------------------------

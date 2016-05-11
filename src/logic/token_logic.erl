@@ -18,7 +18,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% Atoms representing types of valid tokens.
--type token_type() :: group_invite_token | space_create_token |
+-type token_type() :: group_invite_token | nested_group_invite_token | space_create_token |
 space_invite_user_token | space_invite_group_token | accounts_merge_token |
 space_support_token.
 

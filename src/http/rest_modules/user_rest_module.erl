@@ -18,7 +18,7 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: user | spaces | defspace | screate | space | groups | group | mtoken.
+-type provided_resource() :: user | spaces | defspace | screate | space | groups | group | mtoken | effective_groups.
 -type accepted_resource() :: user | auth | spaces | defspace | sjoin | groups | gjoin | merge.
 -type removable_resource() :: user | space | group.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().

@@ -14,9 +14,11 @@
 
 -behavior(rest_module_behavior).
 
--type provided_resource() :: group | users | uinvite | user | upriv | spaces | screate | space.
--type accepted_resource() :: groups | group | upriv | spaces | sjoin.
--type removable_resource() :: group | user | space.
+-type provided_resource() :: group | users | uinvite | user | upriv | spaces | screate | space
+| effective_users | eupriv | nested_groups | nested_group | ninvite | npriv.
+
+-type accepted_resource() :: groups | group | upriv | spaces | sjoin | npriv | njoin.
+-type removable_resource() :: group | user | space | nested_group.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
 %% API
@@ -47,6 +49,11 @@ routes() ->
         {<<"/groups/:id/users/token">>, M, S#rstate{resource = uinvite, methods = [get]}},
         {<<"/groups/:id/users/:uid">>, M, S#rstate{resource = user, methods = [get, delete]}},
         {<<"/groups/:id/users/:uid/privileges">>, M, S#rstate{resource = upriv, methods = [get, put]}},
+        {<<"/groups/:id/nested">>, M, S#rstate{resource = nested_groups, methods = [get]}},
+        {<<"/groups/:id/nested/token">>, M, S#rstate{resource = ninvite, methods = [get]}},
+        {<<"/groups/:id/nested/join">>, M, S#rstate{resource = njoin, methods = [post]}},
+        {<<"/groups/:id/nested/:nid">>, M, S#rstate{resource = nested_group, methods = [get, delete]}},
+        {<<"/groups/:id/nested/:nid/privileges">>, M, S#rstate{resource = npriv, methods = [get, put]}},
         {<<"/groups/:id/spaces">>, M, S#rstate{resource = spaces, methods = [get, post]}},
         {<<"/groups/:id/spaces/join">>, M, S#rstate{resource = sjoin, methods = [post]}},
         {<<"/groups/:id/spaces/token">>, M, S#rstate{resource = screate, methods = [get]}},
@@ -72,14 +79,26 @@ is_authorized(group, delete, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_remove);
 is_authorized(uinvite, get, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_invite_user);
+is_authorized(ninvite, get, GroupId, #client{id = UserId}) ->
+    group_logic:has_effective_privilege(GroupId, UserId, group_invite_group),
+    true;
 is_authorized(user, delete, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_remove_user);
+is_authorized(nested_group, delete, GroupId, #client{id = UserId}) ->
+    group_logic:has_effective_privilege(GroupId, UserId, group_remove_group),
+    true;
 is_authorized(upriv, put, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_set_privileges);
+is_authorized(npriv, put, GroupId, #client{id = UserId}) ->
+    group_logic:has_effective_privilege(GroupId, UserId, group_set_privileges),
+    true;
 is_authorized(spaces, post, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_create_space);
 is_authorized(sjoin, post, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_join_space);
+is_authorized(njoin, post, GroupId, #client{id = UserId}) ->
+    group_logic:has_effective_privilege(GroupId, UserId, group_join_group),
+    true;
 is_authorized(screate, get, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_create_space_token);
 is_authorized(space, delete, GroupId, #client{id = UserId}) ->
@@ -103,6 +122,10 @@ resource_exists(UserBound, GroupId, Req) when UserBound =:= user; UserBound =:= 
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
     {group_logic:has_user(GroupId, UID), Req2};
+resource_exists(Bound, GroupId, Req) when Bound =:= nested_group; Bound =:= npriv ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    {group_logic:has_nested_group(GroupId, NID), Req2};
 resource_exists(space, GroupId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {sid, SID} = lists:keyfind(sid, 1, Bindings),
@@ -131,13 +154,14 @@ accept_resource(group, patch, GroupId, Data, _Client, Req) ->
 accept_resource(upriv, put, GroupId, Data, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
-
-    BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
-        [atom_to_binary(P, latin1) || P <- privileges:group_privileges()], Data,
-        list_of_bin, Req2),
-
-    Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
+    Privileges = extract_member_privileges(Data, Req2),
     ok = group_logic:set_privileges(GroupId, UID, Privileges),
+    {true, Req2};
+accept_resource(npriv, put, GroupId, Data, _Client, Req) ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    Privileges = extract_member_privileges(Data, Req2),
+    ok = group_logic:set_group_privileges(GroupId, NID, Privileges),
     {true, Req2};
 accept_resource(spaces, post, GroupId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
@@ -151,6 +175,15 @@ accept_resource(sjoin, post, GroupId, Data, _Client, Req) ->
         {true, Macaroon} ->
             {ok, SpaceId} = space_logic:join({group, GroupId}, Macaroon),
             {{true, <<"/groups/", GroupId/binary, "/spaces/", SpaceId/binary>>}, Req}
+    end;
+accept_resource(njoin, post, GroupId, Data, _Client, Req) ->
+    Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
+    case token_logic:validate(Token, group_invite_group_token) of
+        false ->
+            rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
+        {true, Macaroon} ->
+            {ok, NestedId} = group_logic:join_group(GroupId, Macaroon),
+            {{true, <<"/groups/", GroupId/binary, "/nested/", NestedId/binary>>}, Req}
     end.
 
 %%--------------------------------------------------------------------
@@ -170,6 +203,17 @@ provide_resource(users, GroupId, _Client, Req) ->
 provide_resource(effective_users, GroupId, _Client, Req) ->
     {ok, Users} = group_logic:get_effective_users(GroupId),
     {Users, Req};
+provide_resource(nested_groups, GroupId, _Client, Req) ->
+    {ok, Nested} = group_logic:get_nested_groups(GroupId),
+    {Nested, Req};
+provide_resource(ninvite, GroupId, Client, Req) ->
+    {ok, Token} = token_logic:create(Client, group_invite_group_token, {group, GroupId}),
+    {[{token, Token}], Req};
+provide_resource(nested_group, GroupId, _Client, Req) ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    {ok, Group} = group_logic:get_nested_group(GroupId, NID),
+    {Group, Req2};
 provide_resource(uinvite, GroupId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, group_invite_token, {group, GroupId}),
     {[{token, Token}], Req};
@@ -178,6 +222,11 @@ provide_resource(user, GroupId, _Client, Req) ->
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
     {ok, User} = group_logic:get_user(GroupId, UID),
     {User, Req2};
+provide_resource(npriv, GroupId, _Client, Req) ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    {ok, Privileges} = group_logic:get_group_privileges(GroupId, NID),
+    {[{privileges, Privileges}], Req2};
 provide_resource(upriv, GroupId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
@@ -214,7 +263,22 @@ delete_resource(user, GroupId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
     {group_logic:remove_user(GroupId, UID), Req2};
+delete_resource(nested_group, GroupId, Req) ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    {group_logic:remove_nested_group(GroupId, NID), Req2};
 delete_resource(space, GroupId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {sid, SID} = lists:keyfind(sid, 1, Bindings),
     {space_logic:remove_group(SID, GroupId), Req2}.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+extract_member_privileges(Data, Req) ->
+    BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
+        [atom_to_binary(P, latin1) || P <- privileges:group_privileges()], Data,
+        list_of_bin, Req),
+    Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
+    Privileges.
