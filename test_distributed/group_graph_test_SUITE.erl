@@ -22,7 +22,7 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([grand_scenario_test/1, conditional_update_test/1]).
+-export([grand_scenario_test/1, conditional_update_test/1, json_config_test/1]).
 
 -define(assertUnorderedMatch(Guard, Expr), (fun() ->
     Sorted = lists:sort(Guard),
@@ -35,8 +35,45 @@ end)()).
 
 all() -> ?ALL([
     grand_scenario_test,
-    conditional_update_test
+    conditional_update_test,
+    json_config_test
 ]).
+
+json_config_test(Config) ->
+    [Node] = ?config(oz_worker_nodes, Config),
+    save(Node, #document{key = <<"user1">>, value = #onedata_user{groups = []}}),
+
+    ?assertMatch(ok, rpc:call(Node, dev_utils, set_up_test_entities, [[], [
+        {<<"group1">>, [{<<"users">>, [<<"user1">>]}, {<<"groups">>, [<<"group2">>]}]},
+        {<<"group2">>, [{<<"users">>, [<<"user1">>]}, {<<"groups">>, [<<"group3">>, <<"group4">>]}]},
+        {<<"group3">>, [{<<"users">>, [<<"user1">>]}, {<<"groups">>, []}]},
+        {<<"group4">>, [{<<"users">>, [<<"user1">>]}, {<<"groups">>, []}]}
+    ], []])),
+
+    #document{value = #user_group{child_groups = C1, parent_groups = P1, effective_groups = EG1}}
+        = get(Node, user_group, <<"group1">>),
+    #document{value = #user_group{child_groups = C2, parent_groups = P2, effective_groups = EG2}}
+        = get(Node, user_group, <<"group2">>),
+    #document{value = #user_group{child_groups = C3, parent_groups = P3, effective_groups = EG3}}
+        = get(Node, user_group, <<"group3">>),
+    #document{value = #user_group{child_groups = C4, parent_groups = P4, effective_groups = EG4}}
+        = get(Node, user_group, <<"group4">>),
+
+    ?assertUnorderedMatch([{<<"group2">>, [group_view_data]}], C1),
+    ?assertUnorderedMatch([{<<"group3">>, [group_view_data]}, {<<"group4">>, [group_view_data]}], C2),
+    ?assertUnorderedMatch([], C3),
+    ?assertUnorderedMatch([], C4),
+
+    ?assertUnorderedMatch([], P1),
+    ?assertUnorderedMatch([<<"group1">>], P2),
+    ?assertUnorderedMatch([<<"group2">>], P3),
+    ?assertUnorderedMatch([<<"group2">>], P4),
+
+    ?assertUnorderedMatch([<<"group1">>], EG1),
+    ?assertUnorderedMatch([<<"group1">>, <<"group2">>], EG2),
+    ?assertUnorderedMatch([<<"group1">>, <<"group2">>, <<"group3">>], EG3),
+    ?assertUnorderedMatch([<<"group1">>, <<"group2">>, <<"group4">>], EG4),
+    ok.
 
 conditional_update_test(Config) ->
     [Node] = ?config(oz_worker_nodes, Config),

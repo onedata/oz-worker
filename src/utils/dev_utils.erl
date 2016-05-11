@@ -100,19 +100,35 @@ set_up_test_entities(Users, Groups, Spaces) ->
             end, Users),
 
         % Create groups
-        lists:foreach(
-            fun({GroupID, Props}) ->
+        GroupCreators = lists:foldl(
+            fun({GroupID, Props}, Acc) ->
                 UserList = proplists:get_value(<<"users">>, Props),
-                [FirstUser | UsersToAdd] = UserList,
-                {ok, GroupID} = create_group_with_uuid(FirstUser, GroupID, GroupID),
+                [GroupCreator | UsersToAdd] = UserList,
+                {ok, GroupID} = create_group_with_uuid(GroupCreator, GroupID, GroupID),
                 % Add all users to group
                 lists:foreach(
                     fun(UserID) ->
                         {ok, SerializedGroupToken} = token_logic:create(#client{type = user, id = UserID}, group_invite_token, {group, GroupID}),
                         {ok, GroupToken} = macaroon:deserialize(SerializedGroupToken),
                         group_logic:join(UserID, GroupToken)
-                    end, UsersToAdd)
-            end, Groups),
+                    end, UsersToAdd),
+                maps:put(GroupID, GroupCreator, Acc)
+            end, #{}, Groups),
+
+        lists:foreach(fun({GroupID, Props}) ->
+            NestedGroups = proplists:get_value(<<"groups">>, Props),
+            GroupCreator = maps:get(GroupID, GroupCreators),
+            lists:foreach(fun(NestedGroupID) ->
+                {ok, SerializedToken} = token_logic:create(#client{type = user, id = GroupCreator}, group_invite_group_token, {group, GroupID}),
+                {ok, GroupToken} = macaroon:deserialize(SerializedToken),
+                group_logic:join_group(NestedGroupID, GroupToken)
+            end, NestedGroups),
+            % Mark group changed as normally it is done asynchronously
+            % and it could occur after refreshing
+            group_graph:mark_group_changed(GroupID)
+        end, Groups),
+
+        group_graph:refresh_effective_caches(),
 
         % Create spaces
         lists:foreach(
