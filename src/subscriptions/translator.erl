@@ -82,20 +82,25 @@ get_msg(Seq, Doc, space = Model) ->
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #user_group{name = Name, spaces = Spaces, users = Users} = Value,
+    #user_group{name = Name, spaces = Spaces, users = Users, child_groups = CGroups,
+        parent_groups = PGroups, effective_users = EUsers} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {spaces, Spaces},
-        {users, Users}
+        {users, Users},
+        {effective_users, EUsers},
+        {child_groups, CGroups},
+        {parent_groups, PGroups}
     ]}];
 get_msg(Seq, Doc, onedata_user = Model) ->
     #document{value = Value, key = ID} = Doc,
     #onedata_user{name = Name, space_names = SpaceNames, groups = Groups,
-        default_space = DefaultSpace} = Value,
+        default_space = DefaultSpace, effective_groups = EGroups} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {space_names, maps:to_list(SpaceNames)},
         {group_ids, Groups},
+        {effective_group_ids, EGroups},
         {default_space, DefaultSpace},
         {public_only, false}
     ]}];

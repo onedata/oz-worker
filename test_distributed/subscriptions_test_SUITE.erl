@@ -30,6 +30,7 @@
     user_update_test/1,
     only_public_user_update_test/1,
     group_update_through_users_test/1,
+    ancestor_group_update_through_users_test/1,
     no_group_update_test/1,
     multiple_updates_test/1,
     updates_for_added_user_test/1,
@@ -79,6 +80,7 @@ all() -> ?ALL([
     user_update_test,
     simple_delete_test,
     group_update_through_users_test,
+    ancestor_group_update_through_users_test,
     updates_for_added_user_test,
     updates_have_revisions_test,
     updates_for_added_user_have_revisions_test,
@@ -265,7 +267,8 @@ all_data_in_user_update_test(Config) ->
         name = <<"user">>,
         groups = [?ID(g1), ?ID(g2)],
         spaces = [?ID(s1), ?ID(s2)],
-        default_space = <<"s1">>
+        default_space = <<"s1">>,
+        effective_groups = [?ID(g1), ?ID(g3), ?ID(g3)]
     },
     Context = init_messages(Node, PID, [?ID(u1)]),
     save(Node, ?ID(u1), User),
@@ -285,9 +288,14 @@ all_data_in_group_update_test(Config) ->
 
     % when
     Group = #user_group{
-        name = <<"user">>,
+        name = <<"Group">>,
         users = [{?ID(u1), privileges:group_admin()},
-            {?ID(g2), privileges:group_user()}],
+            {?ID(u2), privileges:group_user()}],
+        effective_users = [{?ID(u1), privileges:group_admin()},
+            {?ID(u3), privileges:group_privileges()}],
+        child_groups = [{?ID(g1), privileges:group_admin()},
+            {?ID(g3), privileges:group_privileges()}],
+        parent_groups = [?ID(g1), ?ID(g2)],
         spaces = [?ID(s1), ?ID(s2)]
     },
     Context = init_messages(Node, PID, [?ID(u1)]),
@@ -422,6 +430,45 @@ group_update_through_users_test(Config) ->
     % then
     verify_messages_present(Context, [
         expectation(?ID(g1), G1#user_group{name = <<"updated">>})
+    ]),
+    ok.
+
+ancestor_group_update_through_users_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = create_provider(Node, ?ID(p1), []),
+    U1 = #onedata_user{name = <<"u1">>,
+        effective_groups = [?ID(g1), ?ID(g2), ?ID(g3)]},
+    G1 = #user_group{name = <<"g1">>,
+        users = [{?ID(u1), []}],
+        parent_groups = [?ID(g2)],
+        effective_users = [{?ID(u1), []}]},
+    G2 = #user_group{name = <<"g2">>,
+        users = [],
+        parent_groups = [?ID(g3)],
+        child_groups = [{?ID(g1), []}],
+        effective_users = [{?ID(u1), []}]},
+    G3 = #user_group{name = <<"g3">>,
+        users = [],
+        child_groups = [{?ID(g2), []}],
+        effective_users = [{?ID(u1), []}]},
+    save(Node, ?ID(u1), U1),
+    save(Node, ?ID(g1), G1),
+    save(Node, ?ID(g2), G2),
+    save(Node, ?ID(g3), G3),
+
+    % when
+    Context1 = init_messages(Node, PID, [?ID(u1)]),
+    Context = flush_messages(Context1, expectation(?ID(g3), G3)),
+    update_document(Node, user_group, ?ID(g1), #{name => <<"updated">>}),
+    update_document(Node, user_group, ?ID(g2), #{name => <<"updated">>}),
+    update_document(Node, user_group, ?ID(g3), #{name => <<"updated">>}),
+
+    % then
+    verify_messages_present(Context, [
+        expectation(?ID(g1), G1#user_group{name = <<"updated">>}),
+        expectation(?ID(g2), G2#user_group{name = <<"updated">>}),
+        expectation(?ID(g3), G3#user_group{name = <<"updated">>})
     ]),
     ok.
 
@@ -758,13 +805,14 @@ expectation(ID, #space{name = Name, providers_supports = Supports,
     groups = Groups, users = Users}) ->
     space_expectation(ID, Name, Users, Groups, Supports);
 expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
-    default_space = DefaultSpace}) ->
-    user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, case DefaultSpace of
+    default_space = DefaultSpace, effective_groups = EGroups}) ->
+    user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups, case DefaultSpace of
         undefined -> <<"undefined">>;
         _ -> DefaultSpace
     end);
-expectation(ID, #user_group{name = Name, users = Users, spaces = Spaces}) ->
-    group_expectation(ID, Name, Users, Spaces).
+expectation(ID, #user_group{name = Name, users = Users, spaces = Spaces,
+    effective_users = EUsers, child_groups = CGroups, parent_groups = PGroups}) ->
+    group_expectation(ID, Name, Users, EUsers, Spaces, CGroups, PGroups).
 
 space_expectation(ID, Name, Users, Groups, Supports) ->
     [{<<"id">>, ID}, {<<"space">>, [
@@ -775,11 +823,12 @@ space_expectation(ID, Name, Users, Groups, Supports) ->
         {<<"groups">>, privileges_as_binaries(Groups)}
     ]}].
 
-user_expectation(ID, Name, Spaces, Groups, DefaultSpace) ->
+user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace) ->
     [{<<"id">>, ID}, {<<"user">>, [
         {<<"name">>, Name},
         {<<"space_names">>, Spaces},
         {<<"group_ids">>, Groups},
+        {<<"effective_group_ids">>, EGroups},
         {<<"default_space">>, DefaultSpace},
         {<<"public_only">>, false}
     ]}].
@@ -789,15 +838,19 @@ public_only_user_expectation(ID, Name) ->
         {<<"name">>, Name},
         {<<"space_ids">>, []},
         {<<"group_ids">>, []},
+        {<<"effective_group_ids">>, []},
         {<<"default_space">>, <<"undefined">>},
         {<<"public_only">>, true}
     ]}].
 
-group_expectation(ID, Name, Users, Spaces) ->
+group_expectation(ID, Name, Users, EUsers, Spaces, CGroups, PGroups) ->
     [{<<"id">>, ID}, {<<"group">>, [
         {<<"name">>, Name},
         {<<"spaces">>, Spaces},
-        {<<"users">>, privileges_as_binaries(Users)}
+        {<<"users">>, privileges_as_binaries(Users)},
+        {<<"effective_users">>, privileges_as_binaries(EUsers)},
+        {<<"child_groups">>, privileges_as_binaries(CGroups)},
+        {<<"parent_groups">>, PGroups}
     ]}].
 
 privileges_as_binaries(IDsWithPrivileges) ->
