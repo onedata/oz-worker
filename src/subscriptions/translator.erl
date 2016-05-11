@@ -37,6 +37,7 @@ as_msg(Seq, Doc = #document{value = #onedata_user{}}, true) ->
         {name, Name},
         {space_ids, []},
         {group_ids, []},
+        {effective_group_ids, []},
         {default_space, undefined},
         {public_only, true}
     ]}];
