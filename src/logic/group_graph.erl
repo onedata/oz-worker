@@ -253,6 +253,7 @@ topsort(Groups, Ordered, GetNext) ->
 %%% Internal: Conditional updates
 %%%===================================================================
 
+-spec update_effective_groups(GroupID :: binary(), effective_groups()) -> ok.
 update_effective_groups(ID, Effective) ->
     user_group:update(ID, fun(Group) ->
         Current = ordsets:from_list(Group#user_group.effective_groups),
@@ -262,8 +263,9 @@ update_effective_groups(ID, Effective) ->
             {[], []} -> {error, update_not_needed};
             _ -> {ok, Group#user_group{effective_groups = Effective}}
         end
-    end).
+    end), ok.
 
+-spec update_effective_users(GroupID :: binary(), effective_users()) -> ok.
 update_effective_users(ID, Effective) ->
     user_group:update(ID, fun(Group) ->
         Current = ordsets:from_list(Group#user_group.effective_users),
@@ -273,8 +275,9 @@ update_effective_users(ID, Effective) ->
             {[], []} -> {error, update_not_needed};
             _ -> {ok, Group#user_group{effective_users = Effective}}
         end
-    end).
+    end), ok.
 
+-spec update_effective_groups_in_users(GroupIDs :: [binary()]) -> ok.
 update_effective_groups_in_users(GroupIDs) ->
     {AffectedUsers, EffectiveGroupsMap} = gather_user_effective_groups_context(GroupIDs),
     lists:foreach(fun(UID) ->
@@ -293,12 +296,16 @@ update_effective_groups_in_users(GroupIDs) ->
     end, AffectedUsers),
     ok.
 
+-spec gather_user_effective_groups_context(GIDs :: [binary()]) ->
+    {AffectedUsers :: [binary()], EffectiveGroupsMap :: #{
+    GID :: binary() => effective_groups()}}.
 gather_user_effective_groups_context(GIDs) ->
     AffectedUsers = gather_affected_users(GIDs),
     RequiredGroupsIDs = gather_users_groups(AffectedUsers),
     EffectiveGroupsMap = gather_effective_groups(RequiredGroupsIDs),
     {AffectedUsers, EffectiveGroupsMap}.
 
+-spec gather_affected_users(GIDs :: [binary()]) -> AffectedUsers :: [binary()].
 gather_affected_users(GIDs) ->
     lists:foldl(fun(GID, UsersList) ->
         case user_group:get(GID) of
@@ -311,6 +318,7 @@ gather_affected_users(GIDs) ->
         end
     end, [], GIDs).
 
+-spec gather_users_groups(UIDs :: [binary()]) -> GIDs :: [binary()].
 gather_users_groups(Users) ->
     lists:foldl(fun(UID, Acc) ->
         case onedata_user:get(UID) of
@@ -322,6 +330,8 @@ gather_users_groups(Users) ->
         end
     end, [], Users).
 
+-spec gather_effective_groups(GIDs :: [binary()]) ->
+    EffectiveGroupsMap :: #{GID :: binary() => effective_groups()}.
 gather_effective_groups(GIDs) ->
     lists:foldl(fun(GID, GroupsMap) ->
         case maps:get(GID, GroupsMap, undefined) of
