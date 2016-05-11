@@ -21,7 +21,6 @@
 %% API
 -export([mark_group_changed/1, refresh_effective_caches/0]).
 
-
 -type effective_users() :: [{UserID :: binary(), [privileges:group_privilege()]}].
 -type effective_groups() :: [GroupID :: binary()].
 -export_type([effective_users/0, effective_groups/0]).
@@ -30,6 +29,11 @@
 %%% API
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc Marks groups as changed. The group becomes a target for effective
+%% users & groups refresh.
+%% @end
+%%--------------------------------------------------------------------
 -spec mark_group_changed(GroupID :: binary()) -> ok.
 mark_group_changed(GroupID) ->
     ensure_state_initialised(),
@@ -38,6 +42,11 @@ mark_group_changed(GroupID) ->
         {ok, Context#group_graph_worker_state{changed_groups = NewGroups}}
     end), ok.
 
+%%--------------------------------------------------------------------
+%% @doc Updates effective groups in users and effective users & groups in groups.
+%% The update is not applicable if interval between updates would be too low.
+%% @end
+%%--------------------------------------------------------------------
 -spec refresh_effective_caches() -> ok | not_applicable.
 refresh_effective_caches() ->
     ensure_state_initialised(),
@@ -65,17 +74,34 @@ refresh_effective_caches() ->
 %%% Internal
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc @private performs group graph traverse & update effective groups
+%% (both in groups and users)
+%% @end
+%%--------------------------------------------------------------------
 -spec effective_groups_update_traverse(GroupIDs :: [binary()]) -> ok.
 effective_groups_update_traverse(GroupIDs) ->
     ToVisit = topsort(GroupIDs, [], fun children/1),
     traverse(ToVisit, fun update_effective_groups_visitor/2, #{}),
     update_effective_groups_in_users(ToVisit).
 
+%%--------------------------------------------------------------------
+%% @doc @private performs group graph traverse & update effective users
+%% @end
+%%--------------------------------------------------------------------
 -spec effective_users_update_traverse(GroupIDs :: [binary()]) -> ok.
 effective_users_update_traverse(GroupIDs) ->
     ToVisit = topsort(GroupIDs, [], fun parents/1),
     traverse(ToVisit, fun update_effective_users_visitor/2, #{}).
 
+%%--------------------------------------------------------------------
+%% @doc @private performs actual effective groups update
+%% (based on provided context)
+%% @end
+%%--------------------------------------------------------------------
+-spec update_effective_groups_visitor(GroupDoc :: datastore:document(),
+    InContext :: #{GID :: binary() => effective_users()}) ->
+    OutContext :: #{GID :: binary() => effective_users()}.
 update_effective_groups_visitor(GroupDoc, Context) ->
     #document{key = ID, value = #user_group{parent_groups = ParentGroups}} = GroupDoc,
     EffectiveOfParents = lists:foldl(fun(ParentID, All) ->
@@ -88,8 +114,17 @@ update_effective_groups_visitor(GroupDoc, Context) ->
     update_effective_groups(ID, Effective),
     maps:put(ID, Effective, Context).
 
+%%--------------------------------------------------------------------
+%% @doc @private performs actual effective users update
+%% (based on provided context)
+%% @end
+%%--------------------------------------------------------------------
+-spec update_effective_users_visitor(GroupDoc :: datastore:document(),
+    InContext :: #{GID :: binary() => effective_users()}) ->
+    OutContext :: #{GID :: binary() => effective_users()}.
 update_effective_users_visitor(GroupDoc, Context) ->
-    #document{key = ID, value = #user_group{child_groups = ChildGroups, users = Users}} = GroupDoc,
+    #document{key = ID, value = #user_group{child_groups = ChildGroups,
+        users = Users}} = GroupDoc,
     EffectiveFromChildren = lists:foldl(fun({ChildID, ChildPrivileges}, All) ->
         ChildEffective = case maps:get(ChildID, Context, undef) of
             undef -> get_effective_users(ChildID);
@@ -97,12 +132,17 @@ update_effective_users_visitor(GroupDoc, Context) ->
         end,
         merge_effective_users(All, ChildEffective, ChildPrivileges)
     end, [], ChildGroups),
-    Effective = merge_effective_users(EffectiveFromChildren, Users, privileges:group_privileges()),
+    Effective = merge_effective_users(EffectiveFromChildren, Users,
+        privileges:group_privileges()),
     update_effective_users(ID, Effective),
     maps:put(ID, Effective, Context).
 
-
--spec merge_effective_users(CurrentPrivileges :: effective_users(), PrivilegesToAdd :: effective_users(),
+%%--------------------------------------------------------------------
+%% @doc @private merges users with privileges accounting given privileges mask
+%% @end
+%%--------------------------------------------------------------------
+-spec merge_effective_users(CurrentPrivileges :: effective_users(),
+    PrivilegesToAdd :: effective_users(),
     PrivilegesMask :: [privileges:group_privilege()]) ->
     MergedPrivileges :: effective_users().
 merge_effective_users(CurrentPrivileges, PrivilegesToAdd, PrivilegesMask) ->
@@ -125,6 +165,7 @@ get_effective_users(ID) ->
             ?warning_stacktrace("Unable to access group ~p due to ~p", [ID, _Err]),
             []
     end.
+
 -spec get_effective_groups(GroupID :: binary()) -> effective_groups().
 get_effective_groups(ID) ->
     case user_group:get(ID) of
@@ -135,12 +176,19 @@ get_effective_groups(ID) ->
             []
     end.
 
+-spec children(#user_group{}) -> [binary()].
 children(#user_group{child_groups = Tuples}) ->
     {Groups, _} = lists:unzip(Tuples),
     Groups.
+
+-spec parents(#user_group{}) -> [binary()].
 parents(#user_group{parent_groups = Groups}) ->
     Groups.
 
+%%--------------------------------------------------------------------
+%% @doc @private ensures that shared state is properly initialised
+%% @end
+%%--------------------------------------------------------------------
 -spec ensure_state_initialised() -> ok.
 ensure_state_initialised() ->
     Result = group_graph_worker_state:create(#document{key = ?KEY,
@@ -158,7 +206,13 @@ ensure_state_initialised() ->
 %%%===================================================================
 %%% Internal: DAG functions
 %%%===================================================================
-
+-spec traverse(GroupIdsToVisit :: [binary()],
+    Visitor :: fun((GroupDoc :: datastore:document(), InContext) -> OutContext),
+    InitialContext) -> ok
+    when
+    InContext :: #{GID :: binary() => effective_users()},
+    OutContext :: #{GID :: binary() => effective_users()},
+    InitialContext :: #{GroupID :: binary() => term()}.
 traverse([], _, _) -> ok;
 traverse(ToVisit, Visitor, Context) ->
     [ID | NextIDs] = ToVisit,
@@ -172,6 +226,10 @@ traverse(ToVisit, Visitor, Context) ->
     traverse(NextIDs, Visitor, NewContext).
 
 
+%%--------------------------------------------------------------------
+%% @doc @private traverses group graph and returns ordered ids
+%% @end
+%%--------------------------------------------------------------------
 -spec topsort(Groups :: [binary()], AlreadyOrdered :: [binary()],
     GetNext :: fun((#user_group{}) -> GroupIDs :: [binary()])) ->
     OrderedGroups :: [binary()].

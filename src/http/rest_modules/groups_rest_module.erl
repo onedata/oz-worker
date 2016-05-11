@@ -157,7 +157,7 @@ accept_resource(npriv, put, GroupId, Data, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {nid, NID} = lists:keyfind(nid, 1, Bindings),
     Privileges = extract_member_privileges(Data, Req2),
-    ok = group_logic:set_group_privileges(GroupId, NID, Privileges),
+    ok = group_logic:set_nested_group_privileges(GroupId, NID, Privileges),
     {true, Req2};
 accept_resource(spaces, post, GroupId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
@@ -221,7 +221,7 @@ provide_resource(user, GroupId, _Client, Req) ->
 provide_resource(npriv, GroupId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {nid, NID} = lists:keyfind(nid, 1, Bindings),
-    {ok, Privileges} = group_logic:get_group_privileges(GroupId, NID),
+    {ok, Privileges} = group_logic:get_nested_group_privileges(GroupId, NID),
     {[{privileges, Privileges}], Req2};
 provide_resource(upriv, GroupId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),

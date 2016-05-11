@@ -86,7 +86,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(user_graph_bucket, [], ?GLOBAL_ONLY_LEVEL).
+    ?MODEL_CONFIG(group_graph_worker_state_bucket, [], ?GLOBAL_ONLY_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc

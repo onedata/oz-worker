@@ -21,7 +21,7 @@
 -export([create/2, modify/2, join/2, set_privileges/3, join_group/2]).
 -export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
     get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
-    get_nested_group/2, get_group_privileges/2, set_group_privileges/3]).
+    get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3]).
 -export([remove/1, remove_user/2, cleanup/1, remove_nested_group/2]).
 
 %%%===================================================================
@@ -224,10 +224,10 @@ set_privileges(GroupId, UserId, Privileges) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_group_privileges(ParentGroupId :: binary(), GroupId :: binary(),
+-spec set_nested_group_privileges(ParentGroupId :: binary(), GroupId :: binary(),
     Privileges :: [privileges:group_privilege()]) ->
     ok.
-set_group_privileges(ParentGroupId, GroupId, Privileges) ->
+set_nested_group_privileges(ParentGroupId, GroupId, Privileges) ->
     {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
         #user_group{child_groups = Groups} = Group,
         GroupsNew = lists:keyreplace(GroupId, 1, Groups, {GroupId, Privileges}),
@@ -352,9 +352,9 @@ get_privileges(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_privileges(ParentGroupId :: binary(), GroupId :: binary()) ->
+-spec get_nested_group_privileges(ParentGroupId :: binary(), GroupId :: binary()) ->
     {ok, [privileges:group_privilege()]}.
-get_group_privileges(ParentGroupId, GroupId) ->
+get_nested_group_privileges(ParentGroupId, GroupId) ->
     {ok, #document{value = #user_group{child_groups = GroupTuples}}} = user_group:get(ParentGroupId),
     {_, Privileges} = lists:keyfind(GroupId, 1, GroupTuples),
     {ok, Privileges}.
