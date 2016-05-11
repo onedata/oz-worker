@@ -80,25 +80,21 @@ is_authorized(group, delete, GroupId, #client{id = UserId}) ->
 is_authorized(uinvite, get, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_invite_user);
 is_authorized(ninvite, get, GroupId, #client{id = UserId}) ->
-    group_logic:has_effective_privilege(GroupId, UserId, group_invite_group),
-    true;
+    group_logic:has_effective_privilege(GroupId, UserId, group_invite_group);
 is_authorized(user, delete, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_remove_user);
 is_authorized(nested_group, delete, GroupId, #client{id = UserId}) ->
-    group_logic:has_effective_privilege(GroupId, UserId, group_remove_group),
-    true;
+    group_logic:has_effective_privilege(GroupId, UserId, group_remove_group);
 is_authorized(upriv, put, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_set_privileges);
 is_authorized(npriv, put, GroupId, #client{id = UserId}) ->
-    group_logic:has_effective_privilege(GroupId, UserId, group_set_privileges),
-    true;
+    group_logic:has_effective_privilege(GroupId, UserId, group_set_privileges);
 is_authorized(spaces, post, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_create_space);
 is_authorized(sjoin, post, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_join_space);
 is_authorized(njoin, post, GroupId, #client{id = UserId}) ->
-    group_logic:has_effective_privilege(GroupId, UserId, group_join_group),
-    true;
+    group_logic:has_effective_privilege(GroupId, UserId, group_join_group);
 is_authorized(screate, get, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_create_space_token);
 is_authorized(space, delete, GroupId, #client{id = UserId}) ->

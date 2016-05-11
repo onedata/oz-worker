@@ -50,9 +50,8 @@
         group_view_data, group_change_data, group_invite_user,
         group_remove_user, group_join_space, group_create_space,
         group_set_privileges, group_remove, group_leave_space,
-        group_create_space_token
-%%        , group_join_group,
-%%        group_create_group_token, group_remove_group
+        group_create_space_token, group_join_group,
+        group_invite_group, group_remove_group
     ]
 ).
 -define(SPACE_PRIVILEGES,
@@ -1800,6 +1799,42 @@ group_privileges_check([], _, _, _) -> ok;
 group_privileges_check([FirstPrivilege | Privileges], Users, GID, SID) ->
     group_privilege_check(FirstPrivilege, Users, GID, SID),
     group_privileges_check(Privileges, Users, GID, SID).
+
+group_privilege_check(group_invite_group, Users, GID, _SID) ->
+    [{_UserId1, User1ReqParams}, {UserId2, User2ReqParams} | _] = Users,
+    %% test if user2 lacks group_create_group_token privileges
+    ?assertMatch({request_error, ?FORBIDDEN}, get_group_invitation_group_token(GID, User2ReqParams)),
+    set_group_privileges_of_user(GID, UserId2, [group_invite_group], User1ReqParams),
+    ?assertNotMatch({request_error, _}, get_group_invitation_group_token(GID, User2ReqParams)),
+    clean_group_privileges(GID, UserId2, User1ReqParams);
+
+group_privilege_check(group_remove_group, Users, GID, _SID) ->
+    [{_UserId1, User1ReqParams}, {UserId2, User2ReqParams} | _] = Users,
+
+    NestedGID = create_group(?GROUP_NAME1, User1ReqParams),
+    Token = get_group_invitation_group_token(GID, User1ReqParams),
+    ?assertMatch(GID, join_group_to_group(Token, NestedGID, User1ReqParams)),
+    UserToken = get_group_invitation_token(GID, User1ReqParams),
+    join_user_to_group(UserToken, User2ReqParams),
+
+    %% test if user2 lacks group_remove_group privilege
+    ?assertMatch({bad_response_code, _}, check_status(delete_group_from_group(GID, NestedGID, User2ReqParams))),
+    set_group_privileges_of_user(GID, UserId2, [group_remove_group], User1ReqParams),
+    ?assertMatch(ok, check_status(delete_group_from_group(GID, NestedGID, User2ReqParams))),
+    clean_group_privileges(GID, UserId2, User1ReqParams);
+
+group_privilege_check(group_join_group, Users, GID, _SID) ->
+    [{_UserId1, User1ReqParams}, {UserId2, User2ReqParams} | _] = Users,
+    NestedGID = create_group(?GROUP_NAME1, User1ReqParams),
+    Token = get_group_invitation_group_token(GID, User1ReqParams),
+    UserToken = get_group_invitation_token(NestedGID, User1ReqParams),
+    join_user_to_group(UserToken, User2ReqParams),
+
+    %% test if user2 lacks group_join_group privileges
+    ?assertMatch({request_error, ?FORBIDDEN}, join_group_to_group(Token, NestedGID, User2ReqParams)),
+    set_group_privileges_of_user(NestedGID, UserId2, [group_join_group], User1ReqParams),
+    ?assertMatch(GID, join_group_to_group(Token, NestedGID, User2ReqParams)),
+    clean_group_privileges(GID, UserId2, User1ReqParams);
 
 group_privilege_check(group_view_data, Users, GID, _SID) ->
     [{_UserId1, _User1ReqParams}, {_UserId2, User2ReqParams} | _] = Users,
