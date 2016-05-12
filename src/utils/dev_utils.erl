@@ -116,7 +116,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
             end, #{}, Groups),
 
         lists:foreach(fun({GroupID, Props}) ->
-            NestedGroups = proplists:get_value(<<"groups">>, Props),
+            NestedGroups = proplists:get_value(<<"groups">>, Props, []),
             GroupCreator = maps:get(GroupID, GroupCreators),
             lists:foreach(fun(NestedGroupID) ->
                 {ok, SerializedToken} = token_logic:create(#client{type = user, id = GroupCreator}, group_invite_group_token, {group, GroupID}),

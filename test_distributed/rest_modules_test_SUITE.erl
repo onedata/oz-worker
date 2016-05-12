@@ -722,7 +722,7 @@ get_user_info_by_group_test(Config) ->
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
     GID = create_group(?GROUP_NAME1, User1ReqParams),
-
+    
     ?assertMatch([UserId1, ?USER_NAME1], get_user_info_by_group(GID, UserId1, User1ReqParams)),
     ?assertMatch([UserId1, ?USER_NAME1], get_user_info_by_group(GID, UserId1, User1ParamsOtherAddress)).
 

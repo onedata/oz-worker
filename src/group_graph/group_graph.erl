@@ -297,9 +297,10 @@ update_effective_groups(ID, Effective) ->
 -spec update_effective_users(GroupID :: binary(), effective_users()) -> ok.
 update_effective_users(ID, Effective) ->
     user_group:update(ID, fun(Group) ->
+        EffectiveOrdset = ordsets:from_list(Effective),
         Current = ordsets:from_list(Group#user_group.effective_users),
-        Removed = ordsets:subtract(Current, Effective),
-        Added = ordsets:subtract(Effective, Current),
+        Removed = ordsets:subtract(Current, EffectiveOrdset),
+        Added = ordsets:subtract(EffectiveOrdset, Current),
         case {Added, Removed} of
             {[], []} -> {error, update_not_needed};
             _ -> {ok, Group#user_group{effective_users = Effective}}
