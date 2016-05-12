@@ -45,6 +45,7 @@ mark_group_changed(GroupID) ->
 %%--------------------------------------------------------------------
 %% @doc Updates effective groups in users and effective users & groups in groups.
 %% The update is not applicable if interval between updates would be too low.
+%% Any encountered cycles are broken.
 %% @end
 %%--------------------------------------------------------------------
 -spec refresh_effective_caches() -> ok | not_applicable.
@@ -65,6 +66,7 @@ refresh_effective_caches() ->
                         last_rebuild = Now,
                         changed_groups = Val#group_graph_worker_state.changed_groups -- Groups
                     }} end),
+                break_cycles(Groups, []),
                 effective_groups_update_traverse(Groups),
                 effective_users_update_traverse(Groups)
         end
@@ -215,6 +217,7 @@ ensure_state_initialised() ->
     InitialContext :: #{GroupID :: binary() => term()}.
 traverse([], _, _) -> ok;
 traverse(ToVisit, Visitor, Context) ->
+    ?emergency("~p", [{ToVisit, Visitor, Context}]),
     [ID | NextIDs] = ToVisit,
     NewContext = case user_group:get(ID) of
         {ok, Doc} ->
@@ -248,6 +251,33 @@ topsort(Groups, Ordered, GetNext) ->
             end
         end
     end, Ordered, Groups).
+
+%%--------------------------------------------------------------------
+%% @doc @private Traverses group graph and breaks cycles.
+%% Cycles are broken at first encountered cycle edge. Smarter policy
+%% cannot be implemented as we are unaware of updates order (and *total*
+%% would be required to implement truly good strategy)
+%% Yet the cycles shouldn't occur often as adding edge checks for cycles
+%% (but as the check operates on cache this procedure is needed).
+%% @end
+%%--------------------------------------------------------------------
+-spec break_cycles(Groups :: [binary()], Parents :: [binary()]) -> ok.
+break_cycles(Groups, Ancestors) ->
+    lists:foreach(fun(ID) ->
+        case lists:member(ID, Ancestors) of
+            true ->
+                Parent = hd(Ancestors),
+                ?warning("Cycle detected - breaking relation: ~p - ~p", [ID, Parent]),
+                group_logic:remove_nested_group(Parent, ID);
+            false -> case user_group:get(ID) of
+                {ok, #document{value = #user_group{nested_groups = GroupsTuples}}} ->
+                    {GroupIDs, _} = lists:unzip(GroupsTuples),
+                    break_cycles(GroupIDs, [ID | Ancestors]);
+                _Err ->
+                    ?warning("Unable to access group ~p due to ~p", [ID, _Err])
+            end
+        end
+    end, Groups).
 
 %%%===================================================================
 %%% Internal: Conditional updates

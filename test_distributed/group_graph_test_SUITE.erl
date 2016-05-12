@@ -22,7 +22,7 @@
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
 -export([grand_scenario_test/1, conditional_update_test/1,
-    nested_groups_in_dev_setup_test/1]).
+    nested_groups_in_dev_setup_test/1, cycles_elimination_test/1]).
 
 -define(assertUnorderedMatch(Guard, Expr), (fun() ->
     Sorted = lists:sort(Guard),
@@ -34,6 +34,7 @@ end)()).
 %%%===================================================================
 
 all() -> ?ALL([
+    cycles_elimination_test,
     grand_scenario_test,
     conditional_update_test,
     nested_groups_in_dev_setup_test
@@ -115,6 +116,40 @@ conditional_update_test(Config) ->
     %% then
     test_utils:mock_assert_num_calls(Node, user_group, 'after',
         ['_', '_', '_', '_', {ok, '_'}], 0),
+    ok.
+
+cycles_elimination_test(Config) ->
+    [Node] = ?config(oz_worker_nodes, Config),
+
+    %% given
+    Users = [{<<"u">>, []}],
+    G1 = #user_group{users = Users, nested_groups = [{<<"2">>, [group_view_data]}], parent_groups = []},
+    G2 = #user_group{users = Users, nested_groups = [{<<"3">>, [group_view_data]}], parent_groups = [<<"1">>]},
+    G3 = #user_group{users = Users, nested_groups = [], parent_groups = [<<"2">>]},
+
+    save(Node, <<"1">>, G1),
+    save(Node, <<"2">>, G2),
+    save(Node, <<"3">>, G3),
+    mark_group_changed(Node, <<"1">>),
+    mark_group_changed(Node, <<"2">>),
+    mark_group_changed(Node, <<"3">>),
+    refresh(Node),
+
+    %% when
+    NewG1 = #user_group{users = Users, nested_groups = [{<<"2">>, [group_view_data]}], parent_groups = [<<"3">>]},
+    NewG3 = #user_group{users = Users, nested_groups = [{<<"1">>, [group_view_data]}], parent_groups = [<<"2">>]},
+    save(Node, <<"1">>, NewG1),
+    save(Node, <<"3">>, NewG3),
+    mark_group_changed(Node, <<"1">>),
+    mark_group_changed(Node, <<"3">>),
+    refresh(Node),
+
+    %% then
+    #document{value = #user_group{parent_groups = P1}} = get(Node, user_group, <<"1">>),
+    #document{value = #user_group{parent_groups = P2}} = get(Node, user_group, <<"2">>),
+    #document{value = #user_group{parent_groups = P3}} = get(Node, user_group, <<"3">>),
+
+    ?assertEqual(true, P1 =/= [<<"3">>] orelse P2 =/= [<<"1">>] orelse P3 =/= [<<"2">>]),
     ok.
 
 grand_scenario_test(Config) ->
