@@ -87,7 +87,7 @@
     set_space_privileges_test/1, set_non_existing_space_as_user_default_space_test/1,
     set_user_default_space_without_permission_test/1, create_provider_with_location_test/1,
     add_group_to_group_test/1, get_group_info_by_group_relation_test/1, delete_group_from_group_test/1,
-    get_nested_group_privileges_test/1, set_nested_group_privileges_test/1]).
+    get_nested_group_privileges_test/1, set_nested_group_privileges_test/1, group_cycle_prevented_test/1]).
 
 %%%===================================================================
 %%% API functions
@@ -167,7 +167,8 @@ groups() ->
                 get_group_info_by_group_relation_test,
                 delete_group_from_group_test,
                 get_nested_group_privileges_test,
-                set_nested_group_privileges_test
+                set_nested_group_privileges_test,
+                group_cycle_prevented_test
             ]
         },
         {
@@ -694,6 +695,24 @@ add_group_to_group_test(Config) ->
     ?assertMatch([], get_group_parent_groups(GID1, User1ReqParams)),
     ?assertMatch([], get_group_nested_groups(GID2, User2ReqParams)),
     ?assertMatch([GID1], get_group_parent_groups(GID2, User2ReqParams)),
+    ok.
+
+group_cycle_prevented_test(Config) ->
+    User1ReqParams = ?config(userReqParams, Config),
+    GID1 = create_group(?GROUP_NAME1, User1ReqParams),
+    GID2 = create_group(?GROUP_NAME2, User1ReqParams),
+    GID3 = create_group(?GROUP_NAME2, User1ReqParams),
+
+    Token1 = get_group_invitation_group_token(GID1, User1ReqParams),
+    Token2 = get_group_invitation_group_token(GID2, User1ReqParams),
+    ?assertMatch(GID1, join_group_to_group(Token1, GID2, User1ReqParams)),
+    ?assertMatch(GID2, join_group_to_group(Token2, GID3, User1ReqParams)),
+    ensure_effective_users_and_groups_updated(Config),
+
+    Token3 = get_group_invitation_group_token(GID3, User1ReqParams),
+    ?assertMatch({request_error, 500}, join_group_to_group(Token3, GID1, User1ReqParams)),
+    Token2B = get_group_invitation_group_token(GID2, User1ReqParams),
+    ?assertMatch({request_error, 500}, join_group_to_group(Token2B, GID1, User1ReqParams)),
     ok.
 
 get_user_info_by_group_test(Config) ->

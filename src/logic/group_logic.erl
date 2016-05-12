@@ -13,7 +13,6 @@
 -author("Konrad Zemek").
 
 -include("datastore/oz_datastore_models_def.hrl").
--include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
@@ -70,6 +69,23 @@ has_nested_group(ParentGroupId, GroupId) ->
             {ok, #document{value = #user_group{nested_groups = Groups}}} =
                 user_group:get(ParentGroupId),
             lists:keymember(GroupId, 1, Groups)
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the given group is a ancestor of the other given group.
+%% Shall return false in any other case (group doesn't exist, etc).
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_effective_group(GroupId :: binary(), EffectiveId :: binary()) ->
+    boolean().
+has_effective_group(GroupId, EffectiveId) ->
+    case exists(GroupId) of
+        false -> false;
+        true ->
+            {ok, #document{value = #user_group{effective_groups = Groups}}} =
+                user_group:get(GroupId),
+            lists:member(EffectiveId, Groups)
     end.
 
 %%--------------------------------------------------------------------
@@ -184,23 +200,27 @@ join(UserId, Macaroon) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_group(GroupId :: binary(), Macaroon :: macaroon:macaroon()) ->
-    {ok, ParentGroupId :: binary()}.
+    {ok, ParentGroupId :: binary()} | {error, cycle_averted}.
 join_group(GroupId, Macaroon) ->
     {ok, {group, ParentGroupId}} = token_logic:consume(Macaroon),
     case has_nested_group(ParentGroupId, GroupId) of
-        true -> ok;
+        true -> {ok, ParentGroupId};
         false ->
-            Privileges = privileges:group_user(),
-            {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
-                #user_group{nested_groups = Groups} = Group,
-                {ok, Group#user_group{nested_groups = [{GroupId, Privileges} | Groups]}}
-            end),
-            {ok, _} = user_group:update(GroupId, fun(Group) ->
-                #user_group{parent_groups = Groups} = Group,
-                {ok, Group#user_group{parent_groups = [ParentGroupId | Groups]}}
-            end)
-    end,
-    {ok, ParentGroupId}.
+            case has_effective_group(ParentGroupId, GroupId) of
+                true -> {error, cycle_averted};
+                false ->
+                    Privileges = privileges:group_user(),
+                    {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
+                        #user_group{nested_groups = Groups} = Group,
+                        {ok, Group#user_group{nested_groups = [{GroupId, Privileges} | Groups]}}
+                    end),
+                    {ok, _} = user_group:update(GroupId, fun(Group) ->
+                        #user_group{parent_groups = Groups} = Group,
+                        {ok, Group#user_group{parent_groups = [ParentGroupId | Groups]}}
+                    end),
+                    {ok, ParentGroupId}
+            end
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Sets privileges for a member of the group.

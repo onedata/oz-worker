@@ -217,7 +217,6 @@ ensure_state_initialised() ->
     InitialContext :: #{GroupID :: binary() => term()}.
 traverse([], _, _) -> ok;
 traverse(ToVisit, Visitor, Context) ->
-    ?emergency("~p", [{ToVisit, Visitor, Context}]),
     [ID | NextIDs] = ToVisit,
     NewContext = case user_group:get(ID) of
         {ok, Doc} ->
