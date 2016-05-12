@@ -343,7 +343,7 @@ get_user(_GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user(GroupId :: binary(), UserId :: binary()) ->
+-spec get_effective_user(GroupId :: binary(), UserId :: binary()) ->
     {ok, [proplists:property()]}.
 get_effective_user(_GroupId, UserId) ->
     user_logic:get_data(UserId, provider).
