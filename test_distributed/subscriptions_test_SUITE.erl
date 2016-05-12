@@ -701,10 +701,15 @@ fetches_changes_when_cache_has_gaps(Config) ->
 init_per_suite(Config) ->
     ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
 
-init_per_testcase(_, _Config) ->
-    _Config.
+init_per_testcase(_, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_new(Nodes, group_graph),
+    test_utils:mock_expect(Nodes, group_graph, refresh_effective_caches, fun() -> ok end),
+    Config.
 
-end_per_testcase(_, _Config) ->
+end_per_testcase(_, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes),
     flush(),
     ok.
 
