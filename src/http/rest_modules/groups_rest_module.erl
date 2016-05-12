@@ -15,7 +15,8 @@
 -behavior(rest_module_behavior).
 
 -type provided_resource() :: group | users | uinvite | user | upriv | spaces | screate | space
-| effective_users | eupriv | nested_groups | nested_group | ninvite | npriv.
+| effective_users | eupriv | parent_groups | parent_group
+| nested_groups | nested_group | ninvite | npriv.
 
 -type accepted_resource() :: groups | group | upriv | spaces | sjoin | npriv | njoin.
 -type removable_resource() :: group | user | space | nested_group.
@@ -49,6 +50,8 @@ routes() ->
         {<<"/groups/:id/users/token">>, M, S#rstate{resource = uinvite, methods = [get]}},
         {<<"/groups/:id/users/:uid">>, M, S#rstate{resource = user, methods = [get, delete]}},
         {<<"/groups/:id/users/:uid/privileges">>, M, S#rstate{resource = upriv, methods = [get, put]}},
+        {<<"/groups/:id/parent">>, M, S#rstate{resource = parent_groups, methods = [get]}},
+        {<<"/groups/:id/parent/:pid">>, M, S#rstate{resource = parent_group, methods = [get]}},
         {<<"/groups/:id/nested">>, M, S#rstate{resource = nested_groups, methods = [get]}},
         {<<"/groups/:id/nested/token">>, M, S#rstate{resource = ninvite, methods = [get]}},
         {<<"/groups/:id/nested/join">>, M, S#rstate{resource = njoin, methods = [post]}},
@@ -202,6 +205,9 @@ provide_resource(effective_users, GroupId, _Client, Req) ->
 provide_resource(nested_groups, GroupId, _Client, Req) ->
     {ok, Nested} = group_logic:get_nested_groups(GroupId),
     {Nested, Req};
+provide_resource(parent_groups, GroupId, _Client, Req) ->
+    {ok, Nested} = group_logic:get_parent_groups(GroupId),
+    {Nested, Req};
 provide_resource(ninvite, GroupId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, group_invite_group_token, {group, GroupId}),
     {[{token, Token}], Req};
@@ -209,6 +215,11 @@ provide_resource(nested_group, GroupId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {nid, NID} = lists:keyfind(nid, 1, Bindings),
     {ok, Group} = group_logic:get_nested_group(GroupId, NID),
+    {Group, Req2};
+provide_resource(parent_group, GroupId, _Client, Req) ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {pid, PID} = lists:keyfind(pid, 1, Bindings),
+    {ok, Group} = group_logic:get_parent_group(GroupId, PID),
     {Group, Req2};
 provide_resource(uinvite, GroupId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, group_invite_token, {group, GroupId}),

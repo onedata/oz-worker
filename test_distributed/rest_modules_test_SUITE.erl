@@ -86,7 +86,7 @@
     not_last_user_leaves_space_test/1, bad_request_test/1, get_unsupported_space_info_test/1,
     set_space_privileges_test/1, set_non_existing_space_as_user_default_space_test/1,
     set_user_default_space_without_permission_test/1, create_provider_with_location_test/1,
-    add_group_to_group_test/1, get_user_info_by_parent_group_test/1, delete_group_from_group_test/1,
+    add_group_to_group_test/1, get_group_info_by_group_relation_test/1, delete_group_from_group_test/1,
     get_nested_group_privileges_test/1, set_nested_group_privileges_test/1]).
 
 %%%===================================================================
@@ -164,7 +164,7 @@ groups() ->
                 not_last_group_leaves_space_test,
                 invite_group_to_space_test,
                 add_group_to_group_test,
-                get_user_info_by_parent_group_test,
+                get_group_info_by_group_relation_test,
                 delete_group_from_group_test,
                 get_nested_group_privileges_test,
                 set_nested_group_privileges_test
@@ -690,7 +690,10 @@ add_group_to_group_test(Config) ->
 
     Token = get_group_invitation_group_token(GID1, User1ParamsOtherAddress),
     ?assertMatch(GID1, join_group_to_group(Token, GID2, User2ReqParams)),
-    ?assertMatch(true, is_included([GID2], get_group_nested_groups(GID1, User1ReqParams))),
+    ?assertMatch([GID2], get_group_nested_groups(GID1, User1ReqParams)),
+    ?assertMatch([], get_group_parent_groups(GID1, User1ReqParams)),
+    ?assertMatch([], get_group_nested_groups(GID2, User2ReqParams)),
+    ?assertMatch([GID1], get_group_parent_groups(GID2, User2ReqParams)),
     ok.
 
 get_user_info_by_group_test(Config) ->
@@ -704,7 +707,7 @@ get_user_info_by_group_test(Config) ->
     ?assertMatch([UserId1, ?USER_NAME1], get_user_info_by_group(GID, UserId1, User1ReqParams)),
     ?assertMatch([UserId1, ?USER_NAME1], get_user_info_by_group(GID, UserId1, User1ParamsOtherAddress)).
 
-get_user_info_by_parent_group_test(Config) ->
+get_group_info_by_group_relation_test(Config) ->
     ProviderId = ?config(providerId, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
     User1ReqParams = ?config(userReqParams, Config),
@@ -718,7 +721,10 @@ get_user_info_by_parent_group_test(Config) ->
     ?assertMatch(GID1, join_group_to_group(Token, GID2, User2ReqParams)),
 
     ?assertMatch([GID2, ?GROUP_NAME2], get_group_info_by_parent_group(GID1, GID2, User1ReqParams)),
-    ?assertMatch([GID2, ?GROUP_NAME2], get_group_info_by_parent_group(GID1, GID2, User1ParamsOtherAddress)).
+    ?assertMatch([GID2, ?GROUP_NAME2], get_group_info_by_parent_group(GID1, GID2, User1ParamsOtherAddress)),
+    ?assertMatch([GID1, ?GROUP_NAME1], get_group_info_by_nested_group(GID2, GID1, User2ReqParams)),
+    User2ParamsOtherAddress = update_req_params(User2ReqParams, OtherRestAddress, address),
+    ?assertMatch([GID1, ?GROUP_NAME1], get_group_info_by_nested_group(GID2, GID1, User2ParamsOtherAddress)).
 
 delete_user_from_group_test(Config) ->
     UserId1 = ?config(userId, Config),
@@ -1679,6 +1685,13 @@ get_group_nested_groups(GID, ReqParams) ->
     Val = get_body_val([nested_groups], Response),
     fetch_value_from_list(Val).
 
+get_group_parent_groups(GID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    Encoded = binary_to_list(http_utils:url_encode(GID)),
+    Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/parent", Headers, get, [], Options),
+    Val = get_body_val([parent_groups], Response),
+    fetch_value_from_list(Val).
+
 get_user_info_by_group(GID, UID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
@@ -1692,6 +1705,14 @@ get_group_info_by_parent_group(ParentGID, GID, ReqParams) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID,
+    Response = do_request(Address, Headers, get, [], Options),
+    get_body_val([groupId, name], Response).
+
+get_group_info_by_nested_group(GID, ParentGID, ReqParams) ->
+    {RestAddress, Headers, Options} = ReqParams,
+    EncodedGID = binary_to_list(http_utils:url_encode(GID)),
+    EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
+    Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/parent/" ++ EncodedPGID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([groupId, name], Response).
 

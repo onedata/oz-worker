@@ -21,7 +21,8 @@
 -export([create/2, modify/2, join/2, set_privileges/3, join_group/2]).
 -export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
     get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
-    get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3]).
+    get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
+    get_parent_groups/1, get_parent_group/2]).
 -export([remove/1, remove_user/2, cleanup/1, remove_nested_group/2]).
 
 %%%===================================================================
@@ -286,6 +287,20 @@ get_nested_groups(GroupId) ->
     {ok, [{nested_groups, Groups}]}.
 
 %%--------------------------------------------------------------------
+%% @doc Returns details about group's nested groups members.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_parent_groups(GroupId :: binary()) ->
+    {ok, [proplists:property()]}.
+get_parent_groups(GroupId) ->
+    {ok, #document{value = #user_group{parent_groups = GroupIds}}}
+        = user_group:get(GroupId),
+    {ok, [{parent_groups, GroupIds}]}.
+
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
 %% @doc Returns details about group's spaces.
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
@@ -324,7 +339,7 @@ get_user(_GroupId, UserId) ->
     user_logic:get_data(UserId, provider).
 
 %%--------------------------------------------------------------------
-%% @doc Returns details about group's member.
+%% @doc Returns details about group's group member.
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
@@ -332,6 +347,16 @@ get_user(_GroupId, UserId) ->
     {ok, [proplists:property()]}.
 get_nested_group(_ParentGroupId, GroupId) ->
     get_data(GroupId).
+
+%%--------------------------------------------------------------------
+%% @doc Returns details about group's parent.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_parent_group(GroupId :: binary(), ParentGroupId :: binary()) ->
+    {ok, [proplists:property()]}.
+get_parent_group(_GroupId, ParentGroupId) ->
+    get_data(ParentGroupId).
 
 %%--------------------------------------------------------------------
 %% @doc Returns list of group's member privileges.
