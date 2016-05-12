@@ -22,7 +22,7 @@
 -export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
     get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
     get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
-    get_parent_groups/1, get_parent_group/2]).
+    get_parent_groups/1, get_parent_group/2, get_effective_user/2]).
 -export([remove/1, remove_user/2, cleanup/1, remove_nested_group/2]).
 
 %%%===================================================================
@@ -336,6 +336,16 @@ get_providers(GroupId) ->
 -spec get_user(GroupId :: binary(), UserId :: binary()) ->
     {ok, [proplists:property()]}.
 get_user(_GroupId, UserId) ->
+    user_logic:get_data(UserId, provider).
+
+%%--------------------------------------------------------------------
+%% @doc Returns details about group's member.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user(GroupId :: binary(), UserId :: binary()) ->
+    {ok, [proplists:property()]}.
+get_effective_user(_GroupId, UserId) ->
     user_logic:get_data(UserId, provider).
 
 %%--------------------------------------------------------------------

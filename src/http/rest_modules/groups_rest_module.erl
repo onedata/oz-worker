@@ -45,6 +45,7 @@ routes() ->
         {<<"/groups">>, M, S#rstate{resource = groups, methods = [post]}},
         {<<"/groups/:id">>, M, S#rstate{resource = group, methods = [get, patch, delete]}},
         {<<"/groups/:id/effective_users">>, M, S#rstate{resource = effective_users, methods = [get]}},
+        {<<"/groups/:id/effective_users/:uid">>, M, S#rstate{resource = effective_user, methods = [get]}},
         {<<"/groups/:id/effective_users/:uid/privileges">>, M, S#rstate{resource = eupriv, methods = [get]}},
         {<<"/groups/:id/users">>, M, S#rstate{resource = users, methods = [get]}},
         {<<"/groups/:id/users/token">>, M, S#rstate{resource = uinvite, methods = [get]}},
@@ -228,6 +229,11 @@ provide_resource(user, GroupId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
     {ok, User} = group_logic:get_user(GroupId, UID),
+    {User, Req2};
+provide_resource(effective_user, GroupId, _Client, Req) ->
+    {Bindings, Req2} = cowboy_req:bindings(Req),
+    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {ok, User} = group_logic:get_effective_user(GroupId, UID),
     {User, Req2};
 provide_resource(npriv, GroupId, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
