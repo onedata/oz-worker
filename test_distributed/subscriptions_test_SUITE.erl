@@ -293,7 +293,7 @@ all_data_in_group_update_test(Config) ->
             {?ID(u2), privileges:group_user()}],
         effective_users = [{?ID(u1), privileges:group_admin()},
             {?ID(u3), privileges:group_privileges()}],
-        child_groups = [{?ID(g1), privileges:group_admin()},
+        nested_groups = [{?ID(g1), privileges:group_admin()},
             {?ID(g3), privileges:group_privileges()}],
         parent_groups = [?ID(g1), ?ID(g2)],
         spaces = [?ID(s1), ?ID(s2)]
@@ -446,11 +446,11 @@ ancestor_group_update_through_users_test(Config) ->
     G2 = #user_group{name = <<"g2">>,
         users = [],
         parent_groups = [?ID(g3)],
-        child_groups = [{?ID(g1), []}],
+        nested_groups = [{?ID(g1), []}],
         effective_users = [{?ID(u1), []}]},
     G3 = #user_group{name = <<"g3">>,
         users = [],
-        child_groups = [{?ID(g2), []}],
+        nested_groups = [{?ID(g2), []}],
         effective_users = [{?ID(u1), []}]},
     save(Node, ?ID(u1), U1),
     save(Node, ?ID(g1), G1),
@@ -811,8 +811,8 @@ expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceN
         _ -> DefaultSpace
     end);
 expectation(ID, #user_group{name = Name, users = Users, spaces = Spaces,
-    effective_users = EUsers, child_groups = CGroups, parent_groups = PGroups}) ->
-    group_expectation(ID, Name, Users, EUsers, Spaces, CGroups, PGroups).
+    effective_users = EUsers, nested_groups = NGroups, parent_groups = PGroups}) ->
+    group_expectation(ID, Name, Users, EUsers, Spaces, NGroups, PGroups).
 
 space_expectation(ID, Name, Users, Groups, Supports) ->
     [{<<"id">>, ID}, {<<"space">>, [
@@ -843,13 +843,13 @@ public_only_user_expectation(ID, Name) ->
         {<<"public_only">>, true}
     ]}].
 
-group_expectation(ID, Name, Users, EUsers, Spaces, CGroups, PGroups) ->
+group_expectation(ID, Name, Users, EUsers, Spaces, NGroups, PGroups) ->
     [{<<"id">>, ID}, {<<"group">>, [
         {<<"name">>, Name},
         {<<"spaces">>, Spaces},
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"effective_users">>, privileges_as_binaries(EUsers)},
-        {<<"child_groups">>, privileges_as_binaries(CGroups)},
+        {<<"nested_groups">>, privileges_as_binaries(NGroups)},
         {<<"parent_groups">>, PGroups}
     ]}].
 

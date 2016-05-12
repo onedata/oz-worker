@@ -123,7 +123,7 @@ update_effective_groups_visitor(GroupDoc, Context) ->
     InContext :: #{GID :: binary() => effective_users()}) ->
     OutContext :: #{GID :: binary() => effective_users()}.
 update_effective_users_visitor(GroupDoc, Context) ->
-    #document{key = ID, value = #user_group{child_groups = ChildGroups,
+    #document{key = ID, value = #user_group{nested_groups = ChildGroups,
         users = Users}} = GroupDoc,
     EffectiveFromChildren = lists:foldl(fun({ChildID, ChildPrivileges}, All) ->
         ChildEffective = case maps:get(ChildID, Context, undef) of
@@ -177,7 +177,7 @@ get_effective_groups(ID) ->
     end.
 
 -spec children(#user_group{}) -> [binary()].
-children(#user_group{child_groups = Tuples}) ->
+children(#user_group{nested_groups = Tuples}) ->
     {Groups, _} = lists:unzip(Tuples),
     Groups.
 

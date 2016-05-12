@@ -5,14 +5,13 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc
+%%% @doc This test suite covers group graph related behaviour.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(group_graph_test_SUITE).
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
--include("subscriptions/subscriptions.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -22,7 +21,8 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([grand_scenario_test/1, conditional_update_test/1, json_config_test/1]).
+-export([grand_scenario_test/1, conditional_update_test/1,
+    nested_groups_in_dev_setup_test/1]).
 
 -define(assertUnorderedMatch(Guard, Expr), (fun() ->
     Sorted = lists:sort(Guard),
@@ -36,10 +36,10 @@ end)()).
 all() -> ?ALL([
     grand_scenario_test,
     conditional_update_test,
-    json_config_test
+    nested_groups_in_dev_setup_test
 ]).
 
-json_config_test(Config) ->
+nested_groups_in_dev_setup_test(Config) ->
     [Node] = ?config(oz_worker_nodes, Config),
     save(Node, #document{key = <<"user1">>, value = #onedata_user{groups = []}}),
 
@@ -50,13 +50,13 @@ json_config_test(Config) ->
         {<<"group4">>, [{<<"users">>, [<<"user1">>]}, {<<"groups">>, []}]}
     ], []])),
 
-    #document{value = #user_group{child_groups = C1, parent_groups = P1, effective_groups = EG1}}
+    #document{value = #user_group{nested_groups = C1, parent_groups = P1, effective_groups = EG1}}
         = get(Node, user_group, <<"group1">>),
-    #document{value = #user_group{child_groups = C2, parent_groups = P2, effective_groups = EG2}}
+    #document{value = #user_group{nested_groups = C2, parent_groups = P2, effective_groups = EG2}}
         = get(Node, user_group, <<"group2">>),
-    #document{value = #user_group{child_groups = C3, parent_groups = P3, effective_groups = EG3}}
+    #document{value = #user_group{nested_groups = C3, parent_groups = P3, effective_groups = EG3}}
         = get(Node, user_group, <<"group3">>),
-    #document{value = #user_group{child_groups = C4, parent_groups = P4, effective_groups = EG4}}
+    #document{value = #user_group{nested_groups = C4, parent_groups = P4, effective_groups = EG4}}
         = get(Node, user_group, <<"group4">>),
 
     ?assertUnorderedMatch([{<<"group2">>, [group_view_data]}], C1),
@@ -80,13 +80,13 @@ conditional_update_test(Config) ->
 
     G1 = #user_group{
         users = [{<<"U1">>, [group_change_data]}],
-        child_groups = [{<<"2">>, [group_change_data]}],
+        nested_groups = [{<<"2">>, [group_change_data]}],
         parent_groups = [],
         effective_users = [{<<"U1">>, [group_change_data]}],
         effective_groups = [<<"1">>]},
     G2 = #user_group{
         users = [{<<"U2">>, [group_change_data]}],
-        child_groups = [],
+        nested_groups = [],
         parent_groups = [<<"1">>],
         effective_users = [{<<"U2">>, [group_change_data]}],
         effective_groups = [<<"2">>]},
@@ -101,7 +101,8 @@ conditional_update_test(Config) ->
     Doc2 = get(Node, user_group, <<"2">>),
     ?assertUnorderedMatch([<<"1">>], effective_groups(Doc1)),
     ?assertUnorderedMatch([<<"1">>, <<"2">>], effective_groups(Doc2)),
-    ?assertUnorderedMatch([{<<"U1">>, [group_change_data]}, {<<"U2">>, [group_change_data]}], effective_users(Doc1)),
+    ?assertUnorderedMatch([{<<"U1">>, [group_change_data]}, {<<"U2">>,
+        [group_change_data]}], effective_users(Doc1)),
     ?assertUnorderedMatch([{<<"U2">>, [group_change_data]}], effective_users(Doc2)),
 
     %% when
@@ -112,7 +113,8 @@ conditional_update_test(Config) ->
     refresh(Node),
 
     %% then
-    test_utils:mock_assert_num_calls(Node, user_group, 'after', ['_', '_', '_', '_', {ok, '_'}], 0),
+    test_utils:mock_assert_num_calls(Node, user_group, 'after',
+        ['_', '_', '_', '_', {ok, '_'}], 0),
     ok.
 
 grand_scenario_test(Config) ->
@@ -127,7 +129,7 @@ grand_scenario_test(Config) ->
     %% Part A - single group
     %% given
     U1G1 = {<<"U1">>, [P1, P2]},
-    G1 = #user_group{users = [U1G1], child_groups = [], parent_groups = []},
+    G1 = #user_group{users = [U1G1], nested_groups = [], parent_groups = []},
     save(Node, ID1, G1),
     save(Node, #document{key = <<"U1">>, value = #onedata_user{groups = [ID1]}}),
 
@@ -144,9 +146,9 @@ grand_scenario_test(Config) ->
     %% given
     U1G2 = {<<"U1">>, [P1, P3, P10]},
     U2G2 = {<<"U2">>, [P1, P2]},
-    G2 = #user_group{users = [U1G2, U2G2], child_groups = [], parent_groups = [ID1]},
+    G2 = #user_group{users = [U1G2, U2G2], nested_groups = [], parent_groups = [ID1]},
     save(Node, ID2, G2),
-    update(Node, user_group, ID1, #{child_groups => [{ID2, [P2, P3, P4, P6]}]}),
+    update(Node, user_group, ID1, #{nested_groups => [{ID2, [P2, P3, P4, P6]}]}),
     save(Node, #document{key = <<"U1">>, value = #onedata_user{groups = [ID1, ID2]}}),
     save(Node, #document{key = <<"U2">>, value = #onedata_user{groups = [ID1]}}),
 
@@ -159,7 +161,8 @@ grand_scenario_test(Config) ->
     Doc1B = get(Node, user_group, ID1),
     Doc2B = get(Node, user_group, ID2),
     ?assertUnorderedMatch([ID1], effective_groups(Doc1B)),
-    ?assertUnorderedMatch([{<<"U1">>, [P1, P2, P3]}, {<<"U2">>, [P2]}], effective_users(Doc1B)),
+    ?assertUnorderedMatch([{<<"U1">>, [P1, P2, P3]},
+        {<<"U2">>, [P2]}], effective_users(Doc1B)),
     ?assertUnorderedMatch([ID1, ID2], effective_groups(Doc2B)),
     ?assertUnorderedMatch([U1G2, U2G2], effective_users(Doc2B)),
 
@@ -167,9 +170,9 @@ grand_scenario_test(Config) ->
     %% given
     U2G3 = {<<"U2">>, [P1, P2, P3, P4, P6]},
     U3G3 = {<<"U3">>, [P1, P2, P5, P6]},
-    G3 = #user_group{users = [U2G3, U3G3], child_groups = [], parent_groups = [ID2]},
+    G3 = #user_group{users = [U2G3, U3G3], nested_groups = [], parent_groups = [ID2]},
     save(Node, ID3, G3),
-    update(Node, user_group, ID2, #{child_groups => [{ID3, [P3, P4, P5, P6]}]}),
+    update(Node, user_group, ID2, #{nested_groups => [{ID3, [P3, P4, P5, P6]}]}),
     save(Node, #document{key = <<"U2">>, value = #onedata_user{groups = [ID1, ID3]}}),
     save(Node, #document{key = <<"U3">>, value = #onedata_user{groups = [ID3]}}),
 
@@ -183,9 +186,11 @@ grand_scenario_test(Config) ->
     Doc2C = get(Node, user_group, ID2),
     Doc3C = get(Node, user_group, ID3),
     ?assertUnorderedMatch([ID1], effective_groups(Doc1C)),
-    ?assertUnorderedMatch([{<<"U1">>, [P1, P2, P3]}, {<<"U2">>, [P2, P3, P4, P6]}, {<<"U3">>, [P6]}], effective_users(Doc1C)),
+    ?assertUnorderedMatch([{<<"U1">>, [P1, P2, P3]}, {<<"U2">>, [P2, P3, P4, P6]},
+        {<<"U3">>, [P6]}], effective_users(Doc1C)),
     ?assertUnorderedMatch([ID1, ID2], effective_groups(Doc2C)),
-    ?assertUnorderedMatch([U1G2, {<<"U2">>, [P1, P2, P3, P4, P6]}, {<<"U3">>, [P5, P6]}], effective_users(Doc2C)),
+    ?assertUnorderedMatch([U1G2, {<<"U2">>, [P1, P2, P3, P4, P6]},
+        {<<"U3">>, [P5, P6]}], effective_users(Doc2C)),
     ?assertUnorderedMatch([ID1, ID2, ID3], effective_groups(Doc3C)),
     ?assertUnorderedMatch([U2G3, U3G3], effective_users(Doc3C)),
 
@@ -193,7 +198,8 @@ grand_scenario_test(Config) ->
     %% given
     U1G4 = {<<"U1">>, [P3]},
     U4G4 = {<<"U4">>, [P4]},
-    G4 = #user_group{users = [U1G4, U4G4], child_groups = [{ID1, [P1, P2, P9]}], parent_groups = []},
+    G4 = #user_group{users = [U1G4, U4G4], nested_groups = [
+        {ID1, [P1, P2, P9]}], parent_groups = []},
     save(Node, ID4, G4),
     update(Node, user_group, ID1, #{parent_groups => [ID4]}),
     save(Node, #document{key = <<"U4">>, value = #onedata_user{groups = [ID4]}}),
@@ -225,9 +231,11 @@ grand_scenario_test(Config) ->
     %% given
     U2G5 = {<<"U2">>, [P3]},
     U4G5 = {<<"U4">>, [P4, P5]},
-    G5 = #user_group{users = [U2G5, U4G5], child_groups = [], parent_groups = [ID4]},
+    G5 = #user_group{users = [U2G5, U4G5], nested_groups = [],
+        parent_groups = [ID4]},
     save(Node, ID5, G5),
-    update(Node, user_group, ID4, #{child_groups => [{ID1, [P1, P2, P9]}, {ID5, [P2, P3, P4, P5, P6]}]}),
+    update(Node, user_group, ID4, #{nested_groups => [
+        {ID1, [P1, P2, P9]}, {ID5, [P2, P3, P4, P5, P6]}]}),
 
     %% when
     mark_group_changed(Node, ID4),
@@ -256,7 +264,7 @@ grand_scenario_test(Config) ->
 
     %% Part F - sibling-grandchild link
     %% given
-    update(Node, user_group, ID5, #{child_groups => [{ID3, [P1, P5, P6]}]}),
+    update(Node, user_group, ID5, #{nested_groups => [{ID3, [P1, P5, P6]}]}),
     update(Node, user_group, ID3, #{parent_groups => [ID2, ID5]}),
 
     %% when
@@ -290,9 +298,12 @@ grand_scenario_test(Config) ->
     U1G6 = {<<"U1">>, [P1, P2, P7, P8, P9]},
     U2G7 = {<<"U2">>, [P2, P7, P9]},
     U3G8 = {<<"U3">>, [P3, P8]},
-    G6 = #user_group{users = [U1G6], child_groups = [{ID7, [P1, P2, P6, P7, P8]}], parent_groups = []},
-    G7 = #user_group{users = [U2G7], child_groups = [{ID8, [P1, P2, P6, P8, P9]}], parent_groups = [ID6]},
-    G8 = #user_group{users = [U3G8], child_groups = [], parent_groups = [ID7]},
+    G6 = #user_group{users = [U1G6], nested_groups = [
+        {ID7, [P1, P2, P6, P7, P8]}], parent_groups = []},
+    G7 = #user_group{users = [U2G7], nested_groups = [
+        {ID8, [P1, P2, P6, P8, P9]}], parent_groups = [ID6]},
+    G8 = #user_group{users = [U3G8], nested_groups = [],
+        parent_groups = [ID7]},
     save(Node, ID6, G6),
     save(Node, ID7, G7),
     save(Node, ID8, G8),
@@ -333,13 +344,15 @@ grand_scenario_test(Config) ->
     ?assertUnorderedMatch([ID6], effective_groups(Doc6G)),
     ?assertUnorderedMatch([ID7, ID6], effective_groups(Doc7G)),
     ?assertUnorderedMatch([ID8, ID7, ID6], effective_groups(Doc8G)),
-    ?assertUnorderedMatch([U1G6, {<<"U2">>, [P2, P7]}, {<<"U3">>, [P8]}], effective_users(Doc6G)),
+    ?assertUnorderedMatch([U1G6, {<<"U2">>, [P2, P7]},
+        {<<"U3">>, [P8]}], effective_users(Doc6G)),
     ?assertUnorderedMatch([U2G7, {<<"U3">>, [P8]}], effective_users(Doc7G)),
     ?assertUnorderedMatch([U3G8], effective_users(Doc8G)),
 
     %% Part H - components linked
     %% given
-    update(Node, user_group, ID1, #{child_groups => [{ID2, [P2, P3, P4, P6]}, {ID7, [P7, P8, P9]}]}),
+    update(Node, user_group, ID1, #{nested_groups => [
+        {ID2, [P2, P3, P4, P6]}, {ID7, [P7, P8, P9]}]}),
     update(Node, user_group, ID7, #{parent_groups => [ID6, ID1]}),
 
     %% when
@@ -357,7 +370,8 @@ grand_scenario_test(Config) ->
     Doc7H = get(Node, user_group, ID7),
     Doc8H = get(Node, user_group, ID8),
     ?assertUnorderedMatch([ID1, ID4], effective_groups(Doc1H)),
-    ?assertUnorderedMatch([{<<"U1">>, [P1, P2, P3]}, {<<"U2">>, [P2, P3, P4, P6, P7, P9]},
+    ?assertUnorderedMatch([{<<"U1">>, [P1, P2, P3]},
+        {<<"U2">>, [P2, P3, P4, P6, P7, P9]},
         {<<"U3">>, [P6, P8]}], effective_users(Doc1H)),
     ?assertUnorderedMatch([ID1, ID2, ID4], effective_groups(Doc2H)),
     ?assertUnorderedMatch([U1G2, {<<"U2">>, [P1, P2, P3, P4, P6]},
@@ -373,14 +387,15 @@ grand_scenario_test(Config) ->
     ?assertUnorderedMatch([ID6], effective_groups(Doc6H)),
     ?assertUnorderedMatch([ID7, ID6, ID1, ID4], effective_groups(Doc7H)),
     ?assertUnorderedMatch([ID8, ID7, ID6, ID1, ID4], effective_groups(Doc8H)),
-    ?assertUnorderedMatch([U1G6, {<<"U2">>, [P2, P7]}, {<<"U3">>, [P8]}], effective_users(Doc6H)),
+    ?assertUnorderedMatch([U1G6, {<<"U2">>, [P2, P7]},
+        {<<"U3">>, [P8]}], effective_users(Doc6H)),
     ?assertUnorderedMatch([U2G7, {<<"U3">>, [P8]}], effective_users(Doc7H)),
     ?assertUnorderedMatch([U3G8], effective_users(Doc8H)),
 
 
     %% Part I - new components as links lost
     %% given
-    update(Node, user_group, ID1, #{child_groups => [{ID2, [P2, P3, P4, P6]}]}),
+    update(Node, user_group, ID1, #{nested_groups => [{ID2, [P2, P3, P4, P6]}]}),
     update(Node, user_group, ID7, #{parent_groups => [ID6]}),
 
     %% when
@@ -414,7 +429,8 @@ grand_scenario_test(Config) ->
     ?assertUnorderedMatch([ID6], effective_groups(Doc6I)),
     ?assertUnorderedMatch([ID7, ID6], effective_groups(Doc7I)),
     ?assertUnorderedMatch([ID8, ID7, ID6], effective_groups(Doc8I)),
-    ?assertUnorderedMatch([U1G6, {<<"U2">>, [P2, P7]}, {<<"U3">>, [P8]}], effective_users(Doc6I)),
+    ?assertUnorderedMatch([U1G6, {<<"U2">>, [P2, P7]},
+        {<<"U3">>, [P8]}], effective_users(Doc6I)),
     ?assertUnorderedMatch([U2G7, {<<"U3">>, [P8]}], effective_users(Doc7I)),
     ?assertUnorderedMatch([U3G8], effective_users(Doc8I)),
 
@@ -425,7 +441,8 @@ grand_scenario_test(Config) ->
         effective_groups(get(Node, onedata_user, <<"U2">>))),
     ?assertUnorderedMatch([ID1, ID2, ID3, ID4, ID5, ID6, ID7, ID8],
         effective_groups(get(Node, onedata_user, <<"U3">>))),
-    ?assertUnorderedMatch([ID4], effective_groups(get(Node, onedata_user, <<"U4">>))),
+    ?assertUnorderedMatch([ID4],
+        effective_groups(get(Node, onedata_user, <<"U4">>))),
     ok.
 
 %%%===================================================================
@@ -441,7 +458,8 @@ init_per_testcase(_, _Config) ->
     test_utils:mock_expect(Node, user_group, 'after', fun(_, _, _, _, _) ->
         ok
     end),
-    ok = rpc:call(Node, application, set_env, [?APP_Name, group_graph_refresh_interval, -1]),
+    ok = rpc:call(Node, application, set_env, [?APP_Name,
+        group_graph_refresh_interval, -1]),
     reset_state(Node),
     _Config.
 

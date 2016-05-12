@@ -55,7 +55,7 @@
     users = [] :: [{UserID :: binary(), [privileges:group_privilege()]}],
     effective_users = [] :: group_graph:effective_users(),
     effective_groups = [] :: group_graph:effective_groups(),
-    child_groups = [] :: [{GroupID :: binary(), [privileges:group_privilege()]}],
+    nested_groups = [] :: [{GroupID :: binary(), [privileges:group_privilege()]}],
     parent_groups = [] :: [GroupID :: binary()],
     spaces = [] :: [SpaceId :: binary()]
 }).

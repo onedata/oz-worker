@@ -66,7 +66,8 @@ has_nested_group(ParentGroupId, GroupId) ->
     case exists(ParentGroupId) of
         false -> false;
         true ->
-            {ok, #document{value = #user_group{child_groups = Groups}}} = user_group:get(ParentGroupId),
+            {ok, #document{value = #user_group{nested_groups = Groups}}} =
+                user_group:get(ParentGroupId),
             lists:keymember(GroupId, 1, Groups)
     end.
 
@@ -78,10 +79,7 @@ has_nested_group(ParentGroupId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_effective_privilege(GroupId :: binary(), UserId :: binary(),
-    Privilege :: privileges:group_privilege()) ->
-    boolean().
--include_lib("ctool/include/logging.hrl").
-
+    Privilege :: privileges:group_privilege()) -> boolean().
 has_effective_privilege(GroupId, UserId, Privilege) ->
     case has_user(GroupId, UserId) of
         false -> false;
@@ -179,7 +177,7 @@ join(UserId, Macaroon) ->
     {ok, GroupId}.
 
 %%--------------------------------------------------------------------
-%% @doc Adds group as nested to a group identified by a token.
+%% @doc Adds group as nested to a group identified by the given token.
 %% Throws exception when call to the datastore fails, or token/group_from_token
 %% doesn't exist in db.
 %% @end
@@ -193,8 +191,8 @@ join_group(GroupId, Macaroon) ->
         false ->
             Privileges = privileges:group_user(),
             {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
-                #user_group{child_groups = Groups} = Group,
-                {ok, Group#user_group{child_groups = [{GroupId, Privileges} | Groups]}}
+                #user_group{nested_groups = Groups} = Group,
+                {ok, Group#user_group{nested_groups = [{GroupId, Privileges} | Groups]}}
             end),
             {ok, _} = user_group:update(GroupId, fun(Group) ->
                 #user_group{parent_groups = Groups} = Group,
@@ -229,9 +227,9 @@ set_privileges(GroupId, UserId, Privileges) ->
     ok.
 set_nested_group_privileges(ParentGroupId, GroupId, Privileges) ->
     {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
-        #user_group{child_groups = Groups} = Group,
+        #user_group{nested_groups = Groups} = Group,
         GroupsNew = lists:keyreplace(GroupId, 1, Groups, {GroupId, Privileges}),
-        {ok, Group#user_group{child_groups = GroupsNew}}
+        {ok, Group#user_group{nested_groups = GroupsNew}}
     end),
     ok.
 
@@ -282,7 +280,7 @@ get_effective_users(GroupId) ->
 -spec get_nested_groups(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_nested_groups(GroupId) ->
-    {ok, #document{value = #user_group{child_groups = GroupTuples}}}
+    {ok, #document{value = #user_group{nested_groups = GroupTuples}}}
         = user_group:get(GroupId),
     {Groups, _} = lists:unzip(GroupTuples),
     {ok, [{nested_groups, Groups}]}.
@@ -355,7 +353,7 @@ get_privileges(GroupId, UserId) ->
 -spec get_nested_group_privileges(ParentGroupId :: binary(), GroupId :: binary()) ->
     {ok, [privileges:group_privilege()]}.
 get_nested_group_privileges(ParentGroupId, GroupId) ->
-    {ok, #document{value = #user_group{child_groups = GroupTuples}}} = user_group:get(ParentGroupId),
+    {ok, #document{value = #user_group{nested_groups = GroupTuples}}} = user_group:get(ParentGroupId),
     {_, Privileges} = lists:keyfind(GroupId, 1, GroupTuples),
     {ok, Privileges}.
 
@@ -423,8 +421,8 @@ remove_user(GroupId, UserId) ->
     true.
 remove_nested_group(ParentGroupId, GroupId) ->
     {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
-        #user_group{child_groups = Children} = Group,
-        {ok, Group#user_group{child_groups = lists:keydelete(GroupId, 1, Children)}}
+        #user_group{nested_groups = Nested} = Group,
+        {ok, Group#user_group{nested_groups = lists:keydelete(GroupId, 1, Nested)}}
     end),
     {ok, _} = user_group:update(GroupId, fun(Group) ->
         #user_group{parent_groups = Parents} = Group,

@@ -272,6 +272,8 @@ delete_resource(space, GroupId, Req) ->
 %%% Internal functions
 %%%===================================================================
 
+-spec extract_member_privileges(Data :: data(), Req :: cowboy_req:req()) ->
+    Privileges :: [privileges:group_privilege()].
 extract_member_privileges(Data, Req) ->
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
         [atom_to_binary(P, latin1) || P <- privileges:group_privileges()], Data,
