@@ -83,7 +83,7 @@ refresh_effective_caches() ->
 %%--------------------------------------------------------------------
 -spec effective_groups_update_traverse(GroupIDs :: [binary()]) -> ok.
 effective_groups_update_traverse(GroupIDs) ->
-    ToVisit = topsort(GroupIDs, [], fun children/1),
+    ToVisit = topsort(GroupIDs, fun children/1),
     traverse(ToVisit, fun update_effective_groups_visitor/2, #{}),
     update_effective_groups_in_users(ToVisit).
 
@@ -93,7 +93,7 @@ effective_groups_update_traverse(GroupIDs) ->
 %%--------------------------------------------------------------------
 -spec effective_users_update_traverse(GroupIDs :: [binary()]) -> ok.
 effective_users_update_traverse(GroupIDs) ->
-    ToVisit = topsort(GroupIDs, [], fun parents/1),
+    ToVisit = topsort(GroupIDs, fun parents/1),
     traverse(ToVisit, fun update_effective_users_visitor/2, #{}).
 
 %%--------------------------------------------------------------------
@@ -232,17 +232,28 @@ traverse(ToVisit, Visitor, Context) ->
 %% @doc @private traverses group graph and returns ordered ids
 %% @end
 %%--------------------------------------------------------------------
--spec topsort(Groups :: [binary()], AlreadyOrdered :: [binary()],
-    GetNext :: fun((#user_group{}) -> GroupIDs :: [binary()])) ->
+-spec topsort(StartingIDs :: [binary()], fun((#user_group{}) -> NextIDs :: [binary()])) ->
     OrderedGroups :: [binary()].
-topsort(Groups, Ordered, GetNext) ->
+topsort(StartingIDs, GetNext) ->
+    topsort(StartingIDs, GetNext, [], []).
+
+-spec topsort(Groups :: [binary()], fun((#user_group{}) -> NextIDs :: [binary()]),
+    AlreadyOrdered :: [binary()], Parents :: [binary()]) ->
+    OrderedGroups :: [binary()].
+topsort(Groups, GetNext, Ordered, Parents) ->
     lists:foldl(fun(ID, AlreadyOrdered) ->
+        case lists:member(ID, Parents) of
+            true ->
+                ?error("Cycle introduced during update - update aborted"),
+                throw(cycle_introduced_during_update);
+            false -> ok
+        end,
         case lists:member(ID, AlreadyOrdered) of
             true -> AlreadyOrdered;
             false -> case user_group:get(ID) of
                 {ok, #document{value = Val}} ->
                     Children = GetNext(Val),
-                    OrderedUpdated = topsort(Children, AlreadyOrdered, GetNext),
+                    OrderedUpdated = topsort(Children, GetNext, AlreadyOrdered, [ID | Parents]),
                     [ID | OrderedUpdated];
                 _Err ->
                     ?warning("Unable to access group ~p due to ~p", [ID, _Err]),
