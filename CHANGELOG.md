@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 3.0.0-beta4
+
+* Minor updates.
+
+
 ### 3.0.0-beta3
 
 * VFS-1860 explicit default space added
