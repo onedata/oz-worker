@@ -49,10 +49,14 @@ find(<<"space">>, SpaceIds) ->
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, GetSpaces} = user_logic:get_spaces(UserId),
     Default = proplists:get_value(default, GetSpaces),
+    {ok, #document{
+        value = #onedata_user{
+            space_names = SpaceNames
+        }}} = onedata_user:get(UserId),
+
     Res = lists:map(
         fun(SpaceId) ->
-            {ok, SpaceData} = space_logic:get_data(SpaceId, provider),
-            Name = proplists:get_value(name, SpaceData),
+            Name = maps:get(SpaceId, SpaceNames),
             {ok, [{providers, Providers}]} =
                 space_logic:get_providers(SpaceId, provider),
             ProvidersToDisplay = lists:filter(
