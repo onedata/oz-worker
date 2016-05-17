@@ -44,7 +44,8 @@
     provider_connection_checks_test/1,
     all_data_in_space_update_test/1,
     all_data_in_user_update_test/1,
-    all_data_in_group_update_test/1]).
+    all_data_in_group_update_test/1,
+    child_group_update_through_users_test/1]).
 
 -define(MESSAGES_WAIT_TIMEOUT, timer:seconds(2)).
 -define(MESSAGES_RECEIVE_ATTEMPTS, 60).
@@ -80,6 +81,7 @@ all() -> ?ALL([
     user_update_test,
     simple_delete_test,
     group_update_through_users_test,
+    child_group_update_through_users_test,
     ancestor_group_update_through_users_test,
     updates_for_added_user_test,
     updates_have_revisions_test,
@@ -469,6 +471,43 @@ ancestor_group_update_through_users_test(Config) ->
         expectation(?ID(g1), G1#user_group{name = <<"updated">>}),
         expectation(?ID(g2), G2#user_group{name = <<"updated">>}),
         expectation(?ID(g3), G3#user_group{name = <<"updated">>})
+    ]),
+    ok.
+
+child_group_update_through_users_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = create_provider(Node, ?ID(p1), []),
+
+    U1 = #onedata_user{name = <<"u1">>,
+        effective_groups = [?ID(g1)]},
+    U2 = #onedata_user{name = <<"u2">>,
+        effective_groups = [?ID(g2)]},
+
+    G1 = #user_group{name = <<"g1">>,
+        users = [{?ID(u1), []}],
+        parent_groups = [?ID(g2)],
+        effective_groups = [?ID(g2), ?ID(g1)],
+        effective_users = [{?ID(u1), []}]},
+    G2 = #user_group{name = <<"g2">>,
+        users = [{?ID(u2), []}],
+        nested_groups = [{?ID(g1), []}],
+        effective_groups = [?ID(g1)],
+        effective_users = [{?ID(u1), []}, {?ID(u2), []}]},
+
+    save(Node, ?ID(u1), U1),
+    save(Node, ?ID(u2), U2),
+    save(Node, ?ID(g2), G2),
+    save(Node, ?ID(g1), G1),
+
+    % when
+    Context1 = init_messages(Node, PID, [?ID(u1)]),
+    Context = flush_messages(Context1, expectation(?ID(g1), G1)),
+    update_document(Node, user_group, ?ID(g1), #{name => <<"updated">>}),
+
+    % then
+    verify_messages_present(Context, [
+        expectation(?ID(g1), G1#user_group{name = <<"updated">>})
     ]),
     ok.
 

@@ -44,10 +44,17 @@ providers(Doc, space) ->
 
 providers(Doc, user_group) ->
     #document{value = #user_group{users = UsersWithPrivileges,
-        effective_users = EUsersWithPrivileges}} = Doc,
+        effective_users = EUsersWithPrivileges, effective_groups = EGroups}} = Doc,
     {Users, _} = lists:unzip(UsersWithPrivileges),
     {EUsers, _} = lists:unzip(EUsersWithPrivileges),
-    through_users(Users ++ EUsers);
+    AncestorsUsers = lists:map(fun(AncestorID) -> case user_group:get(AncestorID) of
+        {ok, #document{value = #user_group{effective_users = AncestorUsers}}} ->
+            AncestorUsers;
+        {error, Reason} ->
+            ?warning("Refferenced group ~p not found due to ~p", [AncestorID, Reason]),
+            []
+    end end, EGroups -- [Doc#document.key]),
+    through_users(Users ++ EUsers ++ AncestorsUsers);
 
 providers(Doc, onedata_user) ->
     through_users([Doc#document.key]);
