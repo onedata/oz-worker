@@ -90,7 +90,19 @@ get_spaces(ProviderID, UserChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_groups(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        #document{value = #onedata_user{groups = Groups}} = UserDoc,
+        #document{value = #onedata_user{effective_groups = Groups}} = UserDoc,
+
+        AllGroups = lists:usort(lists:flatmap(fun(GroupID) ->
+            case user_group:get(GroupID) of
+                {ok, #document{value = #user_group{nested_groups = Tuples}}} ->
+                    {NestedIDs, _} = lists:unzip(Tuples),
+                    [GroupID | NestedIDs];
+                {error, _} ->
+                    ?warning("Missing group ~p; provider ~p", [GroupID, ProviderID]),
+                    [GroupID]
+            end
+        end, Groups)),
+
         lists:filtermap(fun(GroupID) ->
             case get_with_revs(user_group, GroupID) of
                 {ok, Doc} -> {true, {-1, Doc, user_group}};
@@ -98,7 +110,7 @@ get_groups(ProviderID, UserChanges) ->
                     ?warning("Missing group ~p; provider ~p", [GroupID, ProviderID]),
                     false
             end
-        end, Groups)
+        end, AllGroups)
     end, UserChanges).
 
 %%--------------------------------------------------------------------
