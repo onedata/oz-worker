@@ -854,9 +854,9 @@ expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceN
         undefined -> <<"undefined">>;
         _ -> DefaultSpace
     end);
-expectation(ID, #user_group{name = Name, users = Users, spaces = Spaces,
+expectation(ID, #user_group{name = Name, type = Type, users = Users, spaces = Spaces,
     effective_users = EUsers, nested_groups = NGroups, parent_groups = PGroups}) ->
-    group_expectation(ID, Name, Users, EUsers, Spaces, NGroups, PGroups).
+    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups).
 
 space_expectation(ID, Name, Users, Groups, Supports) ->
     [{<<"id">>, ID}, {<<"space">>, [
@@ -887,9 +887,10 @@ public_only_user_expectation(ID, Name) ->
         {<<"public_only">>, true}
     ]}].
 
-group_expectation(ID, Name, Users, EUsers, Spaces, NGroups, PGroups) ->
+group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups) ->
     [{<<"id">>, ID}, {<<"group">>, [
         {<<"name">>, Name},
+        {<<"type">>, atom_to_binary(Type, latin1)},
         {<<"spaces">>, Spaces},
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"effective_users">>, privileges_as_binaries(EUsers)},

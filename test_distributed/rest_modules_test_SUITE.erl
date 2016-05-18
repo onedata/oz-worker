@@ -36,6 +36,10 @@
 -define(SPACE_NAME2, <<"space2">>).
 -define(GROUP_NAME1, <<"group1">>).
 -define(GROUP_NAME2, <<"group2">>).
+-define(GROUP_TYPE1, unit).
+-define(GROUP_TYPE2, team).
+-define(GROUP_TYPE1_BIN, <<"unit">>).
+-define(GROUP_TYPE2_BIN, <<"team">>).
 -define(SPACE_SIZE1, <<"1024">>).
 -define(SPACE_SIZE2, <<"4096">>).
 
@@ -539,8 +543,8 @@ create_group_for_user_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
-    GID2 = create_group_for_user(?GROUP_NAME2, UserReqParams),
+    GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
+    GID2 = create_group_for_user(?GROUP_NAME2, ?GROUP_TYPE1, UserReqParams),
 
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))),
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserParamsOtherAddress))).
@@ -550,8 +554,8 @@ effective_group_for_user_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
-    GID2 = create_group_for_user(?GROUP_NAME2, UserReqParams),
+    GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
+    GID2 = create_group_for_user(?GROUP_NAME2, ?GROUP_TYPE1, UserReqParams),
 
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))),
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserParamsOtherAddress))),
@@ -566,16 +570,16 @@ get_group_info_by_user_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
-    ?assertMatch([GID1, ?GROUP_NAME1], get_group_info_by_user(GID1, UserReqParams)),
-    ?assertMatch([GID1, ?GROUP_NAME1], get_group_info_by_user(GID1, UserParamsOtherAddress)).
+    GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
+    ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserReqParams)),
+    ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserParamsOtherAddress)).
 
 last_user_leaves_group_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID1 = create_group_for_user(?GROUP_NAME1, UserReqParams),
+    GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
 
     ?assertMatch(ok, check_status(user_leaves_group(GID1, UserReqParams))),
     ?assertMatch(false, is_included([GID1], get_user_groups(UserReqParams))),
@@ -591,7 +595,7 @@ non_last_user_leaves_group_test(Config) ->
 
     {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId1, Config, ProviderReqParams1),
 
-    GID1 = create_group_for_user(?GROUP_NAME1, User1ReqParams),
+    GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
 
     InvitationToken = get_group_invitation_token(GID1, User1ReqParams),
 
@@ -616,14 +620,14 @@ group_invitation_test(Config) ->
     {UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
     User2ParamsOtherAddress = update_req_params(User2ReqParams, OtherRestAddress, address),
 
-    GID1 = create_group_for_user(?GROUP_NAME1, User1ParamsOtherAddress),
+    GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, User1ParamsOtherAddress),
 
     InvitationToken = get_group_invitation_token(GID1, User1ReqParams),
 
     %% check if GID returned for user2 is the same as GID1
     ?assertMatch(GID1, join_user_to_group(InvitationToken, User2ParamsOtherAddress)),
-    ?assertMatch([GID1, ?GROUP_NAME1], get_group_info_by_user(GID1, User2ReqParams)),
-    ?assertMatch([GID1, ?GROUP_NAME1], get_group_info_by_user(GID1, User2ParamsOtherAddress)),
+    ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ReqParams)),
+    ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ParamsOtherAddress)),
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID1, User1ReqParams))),
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID1, User1ParamsOtherAddress))).
 
@@ -634,28 +638,28 @@ create_group_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID = create_group(?GROUP_NAME1, UserReqParams),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
 
-    ?assertMatch([GID, ?GROUP_NAME1], get_group_info(GID, UserReqParams)),
-    ?assertMatch([GID, ?GROUP_NAME1], get_group_info(GID, UserParamsOtherAddress)).
+    ?assertMatch([GID, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info(GID, UserReqParams)),
+    ?assertMatch([GID, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info(GID, UserParamsOtherAddress)).
 
 update_group_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID = create_group(?GROUP_NAME1, UserReqParams),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
 
-    ?assertMatch(ok, check_status(update_group(GID, ?GROUP_NAME2, UserParamsOtherAddress))),
-    ?assertMatch([GID, ?GROUP_NAME2], get_group_info(GID, UserReqParams)),
-    ?assertMatch([GID, ?GROUP_NAME2], get_group_info(GID, UserParamsOtherAddress)).
+    ?assertMatch(ok, check_status(update_group(GID, ?GROUP_NAME2, ?GROUP_TYPE2, UserParamsOtherAddress))),
+    ?assertMatch([GID, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info(GID, UserReqParams)),
+    ?assertMatch([GID, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info(GID, UserParamsOtherAddress)).
 
 delete_group_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID = create_group(?GROUP_NAME1, UserReqParams),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
 
     ?assertMatch(ok, check_status(delete_group(GID, UserParamsOtherAddress))),
     ?assertMatch({request_error, ?FORBIDDEN}, get_group_info(GID, UserReqParams)),
@@ -671,7 +675,7 @@ invite_user_to_group_test(Config) ->
 
     {UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
-    GID = create_group(?GROUP_NAME1, User1ReqParams),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
 
     Token = get_group_invitation_token(GID, User1ParamsOtherAddress),
     ?assertMatch(GID, join_user_to_group(Token, User2ReqParams)),
@@ -686,8 +690,8 @@ add_group_to_group_test(Config) ->
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
     {_, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
-    GID1 = create_group(?GROUP_NAME1, User1ReqParams),
-    GID2 = create_group(?GROUP_NAME2, User2ReqParams),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
+    GID2 = create_group(?GROUP_NAME2, ?GROUP_TYPE2, User2ReqParams),
 
     Token = get_group_invitation_group_token(GID1, User1ParamsOtherAddress),
     ?assertMatch(GID1, join_group_to_group(Token, GID2, User2ReqParams)),
@@ -699,9 +703,9 @@ add_group_to_group_test(Config) ->
 
 group_cycle_prevented_test(Config) ->
     User1ReqParams = ?config(userReqParams, Config),
-    GID1 = create_group(?GROUP_NAME1, User1ReqParams),
-    GID2 = create_group(?GROUP_NAME2, User1ReqParams),
-    GID3 = create_group(?GROUP_NAME2, User1ReqParams),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
+    GID2 = create_group(?GROUP_NAME2, ?GROUP_TYPE2, User1ReqParams),
+    GID3 = create_group(?GROUP_NAME2, ?GROUP_TYPE2, User1ReqParams),
 
     Token1 = get_group_invitation_group_token(GID1, User1ReqParams),
     Token2 = get_group_invitation_group_token(GID2, User1ReqParams),
@@ -721,8 +725,8 @@ get_user_info_by_group_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
-    GID = create_group(?GROUP_NAME1, User1ReqParams),
-    
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
+
     ?assertMatch([UserId1, ?USER_NAME1], get_user_info_by_group(GID, UserId1, User1ReqParams)),
     ?assertMatch([UserId1, ?USER_NAME1], get_user_info_by_group(GID, UserId1, User1ParamsOtherAddress)).
 
@@ -734,16 +738,16 @@ get_group_info_by_group_relation_test(Config) ->
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
     {_, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
-    GID1 = create_group(?GROUP_NAME1, User1ReqParams),
-    GID2 = create_group(?GROUP_NAME2, User2ReqParams),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
+    GID2 = create_group(?GROUP_NAME2, ?GROUP_TYPE2, User2ReqParams),
     Token = get_group_invitation_group_token(GID1, User1ParamsOtherAddress),
     ?assertMatch(GID1, join_group_to_group(Token, GID2, User2ReqParams)),
 
-    ?assertMatch([GID2, ?GROUP_NAME2], get_group_info_by_parent_group(GID1, GID2, User1ReqParams)),
-    ?assertMatch([GID2, ?GROUP_NAME2], get_group_info_by_parent_group(GID1, GID2, User1ParamsOtherAddress)),
-    ?assertMatch([GID1, ?GROUP_NAME1], get_group_info_by_nested_group(GID2, GID1, User2ReqParams)),
+    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_parent_group(GID1, GID2, User1ReqParams)),
+    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_parent_group(GID1, GID2, User1ParamsOtherAddress)),
+    ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_nested_group(GID2, GID1, User2ReqParams)),
     User2ParamsOtherAddress = update_req_params(User2ReqParams, OtherRestAddress, address),
-    ?assertMatch([GID1, ?GROUP_NAME1], get_group_info_by_nested_group(GID2, GID1, User2ParamsOtherAddress)).
+    ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_nested_group(GID2, GID1, User2ParamsOtherAddress)).
 
 delete_user_from_group_test(Config) ->
     UserId1 = ?config(userId, Config),
@@ -751,7 +755,7 @@ delete_user_from_group_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
-    GID = create_group(?GROUP_NAME1, User1ParamsOtherAddress),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ParamsOtherAddress),
 
     ?assertMatch(ok, check_status(delete_user_from_group(GID, UserId1, User1ReqParams))).
 
@@ -763,8 +767,8 @@ delete_group_from_group_test(Config) ->
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
     {_, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
-    GID1 = create_group(?GROUP_NAME1, User1ReqParams),
-    GID2 = create_group(?GROUP_NAME2, User2ReqParams),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
+    GID2 = create_group(?GROUP_NAME2, ?GROUP_TYPE2, User2ReqParams),
     Token = get_group_invitation_group_token(GID1, User1ParamsOtherAddress),
     ?assertMatch(GID1, join_group_to_group(Token, GID2, User2ReqParams)),
 
@@ -780,7 +784,7 @@ get_group_privileges_test(Config) ->
 
     {UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
 
-    GID = create_group(?GROUP_NAME1, User1ReqParams),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
 
     InvitationToken = get_group_invitation_token(GID, User1ParamsOtherAddress),
 
@@ -804,8 +808,8 @@ get_nested_group_privileges_test(Config) ->
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
     {_, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
-    GID1 = create_group(?GROUP_NAME1, User1ReqParams),
-    GID2 = create_group(?GROUP_NAME2, User2ReqParams),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
+    GID2 = create_group(?GROUP_NAME2, ?GROUP_TYPE2, User2ReqParams),
     Token = get_group_invitation_group_token(GID1, User1ParamsOtherAddress),
     ?assertMatch(GID1, join_group_to_group(Token, GID2, User2ReqParams)),
 
@@ -824,7 +828,7 @@ set_group_privileges_test(Config) ->
     {UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
     {UserId3, UserReqParams3} = register_user(?USER_NAME3, ProviderId, Config, ProvParamsOtherAddress),
 
-    GID = create_group(?GROUP_NAME1, User1ReqParams),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
 
     InvitationToken = get_group_invitation_token(GID, User1ParamsOtherAddress),
 
@@ -848,8 +852,8 @@ set_nested_group_privileges_test(Config) ->
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
     {_, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
-    GID1 = create_group(?GROUP_NAME1, User1ReqParams),
-    GID2 = create_group(?GROUP_NAME2, User2ReqParams),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
+    GID2 = create_group(?GROUP_NAME2, ?GROUP_TYPE2, User2ReqParams),
     Token = get_group_invitation_group_token(GID1, User1ParamsOtherAddress),
     ?assertMatch(GID1, join_group_to_group(Token, GID2, User2ReqParams)),
 
@@ -870,7 +874,7 @@ group_creates_space_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
-    GID = create_group(?GROUP_NAME1, User1ReqParams),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
     SID1 = create_space_for_group(?SPACE_NAME1, GID, User1ParamsOtherAddress),
 
     ?assertMatch([SID1], get_group_spaces(GID, User1ReqParams)),
@@ -881,7 +885,7 @@ get_space_info_by_group_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
-    GID = create_group(?GROUP_NAME1, User1ParamsOtherAddress),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ParamsOtherAddress),
     SID1 = create_space_for_group(?SPACE_NAME1, GID, User1ReqParams),
 
     ?assertMatch([SID1, ?SPACE_NAME1], get_space_info_by_group(GID, SID1, User1ReqParams)),
@@ -892,7 +896,7 @@ last_group_leaves_space_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
-    GID = create_group(?GROUP_NAME1, User1ReqParams),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
     SID1 = create_space_for_group(?SPACE_NAME1, GID, User1ParamsOtherAddress),
 
     ?assertMatch(ok, check_status(group_leaves_space(GID, SID1, User1ReqParams))),
@@ -909,8 +913,8 @@ not_last_group_leaves_space_test(Config) ->
     {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId1, Config, ProviderReqParams1),
     User2ParamsOtherAddress = update_req_params(User2ReqParams, OtherRestAddress, address),
 
-    GID1 = create_group(?GROUP_NAME1, User1ReqParams),
-    GID2 = create_group(?GROUP_NAME1, User2ParamsOtherAddress),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
+    GID2 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User2ParamsOtherAddress),
 
     SID1 = create_space_for_group(?SPACE_NAME1, GID1, User1ParamsOtherAddress),
 
@@ -928,7 +932,7 @@ invite_group_to_space_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
-    GID = create_group(?GROUP_NAME1, User1ReqParams),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
     SID = create_space_for_user(?SPACE_NAME2, User1ParamsOtherAddress),
 
     InvitationToken = get_space_invitation_token(groups, SID, User1ReqParams),
@@ -1032,7 +1036,7 @@ get_groups_from_space_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID1 = create_group(?GROUP_NAME1, UserReqParams),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserParamsOtherAddress),
 
     ?assertMatch(true, is_included([GID1], get_space_groups(SID, UserReqParams))),
@@ -1043,18 +1047,18 @@ get_group_info_from_space_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID1 = create_group(?GROUP_NAME1, UserReqParams),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserParamsOtherAddress),
 
-    ?assertMatch([GID1, ?GROUP_NAME1], get_group_from_space(SID, GID1, UserReqParams)),
-    ?assertMatch([GID1, ?GROUP_NAME1], get_group_from_space(SID, GID1, UserParamsOtherAddress)).
+    ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_from_space(SID, GID1, UserReqParams)),
+    ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_from_space(SID, GID1, UserParamsOtherAddress)).
 
 delete_group_from_space_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    GID1 = create_group(?GROUP_NAME1, UserParamsOtherAddress),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, UserParamsOtherAddress),
     SID = create_space_for_group(?SPACE_NAME1, GID1, UserReqParams),
 
     ?assertMatch(ok, check_status(delete_group_from_space(SID, GID1, UserParamsOtherAddress))).
@@ -1133,7 +1137,7 @@ set_space_privileges_test(Config) ->
     {UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
     {UserId3, UserReqParams3} = register_user(?USER_NAME3, ProviderId, Config, ProviderReqParams),
 
-    GID = create_group(?GROUP_NAME1, User1ParamsOtherAddress),
+    GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ParamsOtherAddress),
     SID = create_space_for_user(?SPACE_NAME1, User1ReqParams),
     InvitationToken = get_space_invitation_token(users, SID, User1ParamsOtherAddress),
     join_user_to_space(InvitationToken, User2ReqParams),
@@ -1608,10 +1612,11 @@ join_user_to_space(Token, ReqParams) ->
     Response = do_request(RestAddress ++ "/user/spaces/join", Headers, post, Body, Options),
     get_header_val(<<"user/spaces">>, Response).
 
-create_group_for_user(GroupName, ReqParams) ->
+create_group_for_user(GroupName, GroupType, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Body = json_utils:encode([
-        {<<"name">>, GroupName}
+        {<<"name">>, GroupName},
+        {<<"type">>, GroupType}
     ]),
     Response = do_request(RestAddress ++ "/user/groups", Headers, post, Body, Options),
     get_header_val(<<"groups">>, Response).
@@ -1632,7 +1637,7 @@ get_group_info_by_user(GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/user/groups/" ++ Encoded, Headers, get, [], Options),
-    get_body_val([groupId, name], Response).
+    get_body_val([groupId, name, type], Response).
 
 user_leaves_group(GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
@@ -1649,10 +1654,11 @@ join_user_to_group(Token, ReqParams) ->
 
 %% Group functions ==============================================================
 
-create_group(GroupName, ReqParams) ->
+create_group(GroupName, GroupType, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Body = json_utils:encode([
-        {<<"name">>, GroupName}
+        {<<"name">>, GroupName},
+        {<<"type">>, GroupType}
     ]),
     Response = do_request(RestAddress ++ "/groups", Headers, post, Body, Options),
     get_header_val(<<"groups">>, Response).
@@ -1661,12 +1667,13 @@ get_group_info(GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded, Headers, get, [], Options),
-    get_body_val([groupId, name], Response).
+    get_body_val([groupId, name, type], Response).
 
-update_group(GID, NewGroupName, ReqParams) ->
+update_group(GID, NewGroupName, NewGroupType, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Body = json_utils:encode([
-        {<<"name">>, NewGroupName}
+        {<<"name">>, NewGroupName},
+        {<<"type">>, NewGroupType}
     ]),
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     do_request(RestAddress ++ "/groups/" ++ Encoded, Headers, patch, Body, Options).
@@ -1725,7 +1732,7 @@ get_group_info_by_parent_group(ParentGID, GID, ReqParams) ->
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID,
     Response = do_request(Address, Headers, get, [], Options),
-    get_body_val([groupId, name], Response).
+    get_body_val([groupId, name, type], Response).
 
 get_group_info_by_nested_group(GID, ParentGID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
@@ -1733,7 +1740,7 @@ get_group_info_by_nested_group(GID, ParentGID, ReqParams) ->
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/parent/" ++ EncodedPGID,
     Response = do_request(Address, Headers, get, [], Options),
-    get_body_val([groupId, name], Response).
+    get_body_val([groupId, name, type], Response).
 
 delete_user_from_group(GID, UID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
@@ -1851,7 +1858,7 @@ group_privilege_check(group_invite_group, Users, GID, _SID) ->
 group_privilege_check(group_remove_group, Users, GID, _SID) ->
     [{_UserId1, User1ReqParams}, {UserId2, User2ReqParams} | _] = Users,
 
-    NestedGID = create_group(?GROUP_NAME1, User1ReqParams),
+    NestedGID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
     Token = get_group_invitation_group_token(GID, User1ReqParams),
     ?assertMatch(GID, join_group_to_group(Token, NestedGID, User1ReqParams)),
     UserToken = get_group_invitation_token(GID, User1ReqParams),
@@ -1865,7 +1872,7 @@ group_privilege_check(group_remove_group, Users, GID, _SID) ->
 
 group_privilege_check(group_join_group, Users, GID, _SID) ->
     [{_UserId1, User1ReqParams}, {UserId2, User2ReqParams} | _] = Users,
-    NestedGID = create_group(?GROUP_NAME1, User1ReqParams),
+    NestedGID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
     Token = get_group_invitation_group_token(GID, User1ReqParams),
     UserToken = get_group_invitation_token(NestedGID, User1ReqParams),
     join_user_to_group(UserToken, User2ReqParams),
@@ -1879,15 +1886,15 @@ group_privilege_check(group_join_group, Users, GID, _SID) ->
 group_privilege_check(group_view_data, Users, GID, _SID) ->
     [{_UserId1, _User1ReqParams}, {_UserId2, User2ReqParams} | _] = Users,
     %% user who belongs to group should have group_view_data privilege by default
-    ?assertMatch([GID, ?GROUP_NAME1], get_group_info(GID, User2ReqParams));
+    ?assertMatch([GID, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info(GID, User2ReqParams));
 
 group_privilege_check(group_change_data, Users, GID, _SID) ->
     [{_UserId1, User1ReqParams}, {UserId2, User2ReqParams} | _] = Users,
     %% test if user2 lacks group_change_data privileges
     ?assertMatch({bad_response_code, _},
-        check_status(update_group(GID, ?GROUP_NAME2, User2ReqParams))),
+        check_status(update_group(GID, ?GROUP_NAME2, ?GROUP_TYPE2, User2ReqParams))),
     set_group_privileges_of_user(GID, UserId2, [group_change_data], User1ReqParams),
-    ?assertMatch(ok, check_status(update_group(GID, ?GROUP_NAME2, User2ReqParams))),
+    ?assertMatch(ok, check_status(update_group(GID, ?GROUP_NAME2, ?GROUP_TYPE2, User2ReqParams))),
     clean_group_privileges(GID, UserId2, User1ReqParams);
 
 group_privilege_check(group_invite_user, Users, GID, _SID) ->
@@ -2065,7 +2072,7 @@ get_group_from_space(SID, GID, ReqParams) ->
             RestAddress ++ "/spaces/" ++ binary_to_list(http_utils:url_encode(SID)) ++ "/groups/" ++ binary_to_list(http_utils:url_encode(GID)),
             Headers, get, [], Options
         ),
-    get_body_val([groupId, name], Response).
+    get_body_val([groupId, name, type], Response).
 
 delete_group_from_space(SID, GID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,

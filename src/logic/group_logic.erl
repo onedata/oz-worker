@@ -17,7 +17,7 @@
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
     has_nested_group/2]).
--export([create/2, modify/2, join/2, set_privileges/3, join_group/2]).
+-export([create/3, modify/2, join/2, set_privileges/3, join_group/2]).
 -export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
     get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
     get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
@@ -140,14 +140,14 @@ has_effective_user(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create(UserId :: binary(), Name :: binary()) ->
+-spec create(UserId :: binary(), Name :: binary(), Type :: user_group:type()) ->
     {ok, GroupId :: binary()}.
-create(UserId, Name) ->
+create(UserId, Name, Type) ->
     {ok, UserDoc} = onedata_user:get(UserId),
     #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
 
     Privileges = privileges:group_admin(),
-    Group = #user_group{name = Name, users = [{UserId, Privileges}]},
+    Group = #user_group{name = Name, type = Type, users = [{UserId, Privileges}]},
     {ok, GroupId} = user_group:save(#document{value = Group}),
 
     UserNew = User#onedata_user{groups = [GroupId | Groups]},
@@ -160,12 +160,10 @@ create(UserId, Name) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(GroupId :: binary(), Name :: binary()) ->
+-spec modify(GroupId :: binary(), Data :: #{}) ->
     ok.
-modify(GroupId, Name) ->
-    {ok, _} = user_group:update(GroupId, fun(Group) ->
-        {ok, Group#user_group{name = Name}}
-    end),
+modify(GroupId, Data) ->
+    {ok, _} = user_group:update(GroupId, Data),
     ok.
 
 %%--------------------------------------------------------------------
@@ -262,10 +260,12 @@ set_nested_group_privileges(ParentGroupId, GroupId, Privileges) ->
 -spec get_data(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_data(GroupId) ->
-    {ok, #document{value = #user_group{name = Name}}} = user_group:get(GroupId),
+    {ok, #document{value = #user_group{name = Name, type = Type}}} =
+        user_group:get(GroupId),
     {ok, [
         {groupId, GroupId},
-        {name, Name}
+        {name, Name},
+        {type, Type}
     ]}.
 
 %%--------------------------------------------------------------------

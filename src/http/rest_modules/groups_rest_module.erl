@@ -145,11 +145,13 @@ resource_exists(_, GroupId, Req) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    {ok, GroupId} = group_logic:create(UserId, Name),
+    Type = rest_module_helper:assert_key(<<"type">>, Data, binary, Req),
+    {ok, GroupId} = group_logic:create(UserId, Name, binary_to_atom(Type, latin1)),
     {{true, <<"/groups/", GroupId/binary>>}, Req};
 accept_resource(group, patch, GroupId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    ok = group_logic:modify(GroupId, Name),
+    Type = rest_module_helper:assert_key(<<"type">>, Data, binary, Req),
+    ok = group_logic:modify(GroupId, #{name => Name, type => binary_to_atom(Type, latin1)}),
     {true, Req};
 accept_resource(upriv, put, GroupId, Data, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),

@@ -23,7 +23,7 @@
 %% API
 -export([all/0]).
 
--type type() :: 'Organization' | 'Unit' | 'Team' | 'Role'.
+-type type() :: 'organization' | 'unit' | 'team' | 'role'.
 -export_type([type/0]).
 
 %%%===================================================================

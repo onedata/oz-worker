@@ -84,9 +84,10 @@ get_msg(Seq, Doc, space = Model) ->
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
     #user_group{name = Name, spaces = Spaces, users = Users, nested_groups = NGroups,
-        parent_groups = PGroups, effective_users = EUsers} = Value,
+        parent_groups = PGroups, effective_users = EUsers, type = Type} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
+        {type, Type},
         {spaces, Spaces},
         {users, Users},
         {effective_users, EUsers},
