@@ -216,8 +216,7 @@ ensure_state_initialised() ->
     OutContext :: #{GID :: binary() => effective_users()},
     InitialContext :: #{GroupID :: binary() => term()}.
 traverse([], _, _) -> ok;
-traverse(ToVisit, Visitor, Context) ->
-    [ID | NextIDs] = ToVisit,
+traverse([ID | NextIDsToVisit], Visitor, Context) ->
     NewContext = case user_group:get(ID) of
         {ok, Doc} ->
             Visitor(Doc, Context);
@@ -225,7 +224,7 @@ traverse(ToVisit, Visitor, Context) ->
             ?warning_stacktrace("Unable to access group ~p due to ~p", [ID, _Err]),
             Context
     end,
-    traverse(NextIDs, Visitor, NewContext).
+    traverse(NextIDsToVisit, Visitor, NewContext).
 
 
 %%--------------------------------------------------------------------
