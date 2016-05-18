@@ -515,12 +515,23 @@ updates_for_added_user_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = create_provider(Node, ?ID(p1), [?ID(s1), ?ID(s2)]),
-    U1 = #onedata_user{name = <<"u1">>, groups = [?ID(g1)], spaces = [?ID(s2)]},
-    G1 = #user_group{name = <<"g1">>, users = [{?ID(u1), []}], spaces = [?ID(s1)]},
+    U1 = #onedata_user{name = <<"u1">>, groups = [?ID(g1)],
+        effective_groups = [?ID(g1), ?ID(g2)], spaces = [?ID(s2)]},
+    G1 = #user_group{name = <<"g1">>, users = [{?ID(u1), []}],
+        spaces = [?ID(s1)], effective_groups = [?ID(g1), ?ID(g2)],
+        parent_groups = [?ID(g2)]},
+    G2 = #user_group{name = <<"g1">>, users = [],
+        spaces = [], effective_groups = [?ID(g2)],
+        nested_groups = [{?ID(g1), []}, {?ID(g3), []}]},
+    G3 = #user_group{name = <<"g1">>, users = [],
+        spaces = [], effective_groups = [?ID(g3), ?ID(g2)],
+        parent_groups = [?ID(g2)]},
     S1 = #space{name = <<"s1">>, providers_supports = [{PID, 0}], groups = [{?ID(g1), []}]},
     S2 = #space{name = <<"s2">>, providers_supports = [{PID, 0}], users = [{?ID(u1), []}]},
     save(Node, ?ID(u1), U1),
     save(Node, ?ID(g1), G1),
+    save(Node, ?ID(g2), G2),
+    save(Node, ?ID(g3), G3),
     save(Node, ?ID(s1), S1),
     save(Node, ?ID(s2), S2),
 
@@ -532,6 +543,8 @@ updates_for_added_user_test(Config) ->
     verify_messages_present(Context#subs_ctx{users = [?ID(u1)]}, [
         expectation(?ID(u1), U1),
         expectation(?ID(g1), G1),
+        expectation(?ID(g2), G2),
+        expectation(?ID(g3), G3),
         expectation(?ID(s1), S1),
         expectation(?ID(s2), S2)
     ]),
@@ -958,6 +971,8 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_users, ProviderID, Users}),
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
+
+    ct:run("~p", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),
