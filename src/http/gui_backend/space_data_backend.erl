@@ -52,7 +52,7 @@ find(<<"space">>, SpaceId) ->
             space_names = SpaceNamesMap,
             default_space = DefaultSpaceId
         }}} = onedata_user:get(UserId),
-    Res = space_record(SpaceId, SpaceNamesMap, UserProviders, DefaultSpaceId),
+    Res = space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders),
     {ok, Res}.
 
 
@@ -74,7 +74,7 @@ find_all(<<"space">>) ->
         }}} = onedata_user:get(UserId),
     Res = lists:map(
         fun(SpaceId) ->
-            space_record(SpaceId, SpaceNamesMap, UserProviders, DefaultSpaceId)
+            space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders)
         end, SpaceIds),
     {ok, Res}.
 
@@ -151,9 +151,9 @@ delete_record(<<"space">>, _Id) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_record(SpaceId :: binary(), SpaceNamesMap :: #{},
-    UserProviders :: [binary()], DefaultSpaceId :: binary()) ->
+    DefaultSpaceId :: binary(), UserProviders :: [binary()]) ->
     proplists:proplist().
-space_record(SpaceId, SpaceNamesMap, UserProviders, DefaultSpaceId) ->
+space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
     Name = maps:get(SpaceId, SpaceNamesMap),
     {ok, [{providers, Providers}]} =
         space_logic:get_providers(SpaceId, provider),

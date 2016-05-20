@@ -51,7 +51,7 @@ find(<<"provider">>, ProviderId) ->
             default_provider = DefaultProvider,
             spaces = UserSpaces
         }}} = user_logic:get_user_doc(UserId),
-    Res = provider_record(ProviderId, UserSpaces, DefaultProvider),
+    Res = provider_record(ProviderId, DefaultProvider, UserSpaces),
     {ok, Res}.
 
 
@@ -72,7 +72,7 @@ find_all(<<"provider">>) ->
         }}} = user_logic:get_user_doc(UserId),
     Res = lists:map(
         fun(ProviderId) ->
-            provider_record(ProviderId, UserSpaces, DefaultProvider)
+            provider_record(ProviderId, DefaultProvider, UserSpaces)
         end, ProviderIds),
     {ok, Res}.
 
@@ -135,9 +135,9 @@ delete_record(<<"provider">>, _Id) ->
 %% Returns a client-compliant space record.
 %% @end
 %%--------------------------------------------------------------------
--spec provider_record(ProviderId :: binary(), UserSpaces :: [binary()],
-    DefaultProvider :: binary()) -> proplists:proplist().
-provider_record(ProviderId, UserSpaces, DefaultProvider) ->
+-spec provider_record(ProviderId :: binary(), DefaultProvider :: binary(),
+    UserSpaces :: [binary()]) -> proplists:proplist().
+provider_record(ProviderId, DefaultProvider, UserSpaces) ->
     {ok, ProviderData} = provider_logic:get_data(ProviderId),
     Name = proplists:get_value(clientName, ProviderData),
     Latitude = proplists:get_value(latitude, ProviderData, 0.0),
