@@ -42,39 +42,16 @@ init() ->
 %% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
--spec find(ResourceType :: binary(), Ids :: [binary()]) ->
+-spec find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find(<<"provider">>, ProviderIds) ->
+find(<<"provider">>, ProviderId) ->
     UserId = g_session:get_user_id(),
-    {ok, GetSpaces} = user_logic:get_spaces(UserId),
-    UserSpaces = proplists:get_value(spaces, GetSpaces),
-    Res = lists:map(
-        fun(ProviderId) ->
-            {ok, ProviderData} = provider_logic:get_data(ProviderId),
-            Name = proplists:get_value(clientName, ProviderData),
-            Latitude = proplists:get_value(latitude, ProviderData, 0.0),
-            Longitude = proplists:get_value(longitude, ProviderData, 0.0),
-            IsWorking = provider_logic:check_provider_connectivity(ProviderId),
-            {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
-            SpacesToDisplay = lists:filter(
-                fun(Space) ->
-                    lists:member(Space, UserSpaces)
-                end, Spaces),
-            {ok, #document{
-                value = #onedata_user{
-                    default_provider = DefaultProvider
-                }
-            }} = user_logic:get_user_doc(UserId),
-            [
-                {<<"id">>, ProviderId},
-                {<<"name">>, Name},
-                {<<"isDefault">>, ProviderId =:= DefaultProvider},
-                {<<"isWorking">>, IsWorking},
-                {<<"spaces">>, SpacesToDisplay},
-                {<<"latitude">>, Latitude},
-                {<<"longitude">>, Longitude}
-            ]
-        end, ProviderIds),
+    {ok, #document{
+        value = #onedata_user{
+            default_provider = DefaultProvider,
+            spaces = UserSpaces
+        }}} = user_logic:get_user_doc(UserId),
+    Res = provider_record(ProviderId, UserSpaces, DefaultProvider),
     {ok, Res}.
 
 
@@ -88,7 +65,16 @@ find(<<"provider">>, ProviderIds) ->
 find_all(<<"provider">>) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
-    {ok, _Res} = find(<<"provider">>, ProviderIds).
+    {ok, #document{
+        value = #onedata_user{
+            default_provider = DefaultProvider,
+            spaces = UserSpaces
+        }}} = user_logic:get_user_doc(UserId),
+    Res = lists:map(
+        fun(ProviderId) ->
+            provider_record(ProviderId, UserSpaces, DefaultProvider)
+        end, ProviderIds),
+    {ok, Res}.
 
 
 %%--------------------------------------------------------------------
@@ -137,3 +123,37 @@ update_record(<<"provider">>, ProviderId, Data) ->
     ok | gui_error:error_result().
 delete_record(<<"provider">>, _Id) ->
     gui_error:report_error(<<"Not iplemented">>).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns a client-compliant space record.
+%% @end
+%%--------------------------------------------------------------------
+-spec provider_record(ProviderId :: binary(), UserSpaces :: [binary()],
+    DefaultProvider :: binary()) -> proplists:proplist().
+provider_record(ProviderId, UserSpaces, DefaultProvider) ->
+    {ok, ProviderData} = provider_logic:get_data(ProviderId),
+    Name = proplists:get_value(clientName, ProviderData),
+    Latitude = proplists:get_value(latitude, ProviderData, 0.0),
+    Longitude = proplists:get_value(longitude, ProviderData, 0.0),
+    IsWorking = provider_logic:check_provider_connectivity(ProviderId),
+    {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
+    SpacesToDisplay = lists:filter(
+        fun(Space) ->
+            lists:member(Space, UserSpaces)
+        end, Spaces),
+    [
+        {<<"id">>, ProviderId},
+        {<<"name">>, Name},
+        {<<"isDefault">>, ProviderId =:= DefaultProvider},
+        {<<"isWorking">>, IsWorking},
+        {<<"spaces">>, SpacesToDisplay},
+        {<<"latitude">>, Latitude},
+        {<<"longitude">>, Longitude}
+    ].

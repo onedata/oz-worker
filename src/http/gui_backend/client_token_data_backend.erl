@@ -42,9 +42,9 @@ init() ->
 %% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
--spec find(ResourceType :: binary(), Ids :: [binary()]) ->
+-spec find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find(<<"clienttoken">>, _Ids) ->
+find(<<"clienttoken">>, _Id) ->
     gui_error:report_error(<<"Not iplemented">>).
 
 
