@@ -537,8 +537,8 @@ mark_group_changed(Node, ID) ->
     ?assertMatch(ok, rpc:call(Node, group_graph, mark_group_changed, [ID])).
 
 reset_state(Node) ->
-    save(Node, #document{key = <<"group_graph_worker_state">>,
-        value = #group_graph_worker_state{last_rebuild = 0}
+    save(Node, #document{key = <<"groups_graph_caches_state">>,
+        value = #groups_graph_caches_state{last_rebuild = 0}
     }).
 
 refresh(Node) ->

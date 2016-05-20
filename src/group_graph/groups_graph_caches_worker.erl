@@ -10,7 +10,7 @@
 %%% effective users and groups across all the group graph and related users.
 %%% @end
 %%%-------------------------------------------------------------------
--module(groups_effective_worker).
+-module(groups_graph_caches_worker).
 -author("Michal Zmuda").
 
 -behaviour(worker_plugin_behaviour).
@@ -22,7 +22,7 @@
 %% worker_plugin_behaviour callbacks
 -export([init/1, handle/1, cleanup/0]).
 
--define(STATE_KEY, <<"group_graph_worker_state">>).
+-define(STATE_KEY, <<"groups_graph_caches_state">>).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -46,8 +46,8 @@ init(_Args) ->
 %%--------------------------------------------------------------------
 -spec handle(Request :: term()) -> ok | {error, Reason :: term()} | no_return().
 handle(healthcheck) ->
-    case group_graph_worker_state:get(?STATE_KEY) of
-        {ok, #document{value = #group_graph_worker_state{last_rebuild = Last}}} ->
+    case groups_graph_caches_state:get(?STATE_KEY) of
+        {ok, #document{value = #groups_graph_caches_state{last_rebuild = Last}}} ->
             HighTimeForUpdate = Last + (3 * refresh_interval()),
             case erlang:system_time() > HighTimeForUpdate of
                 true -> {error, no_recent_updates};
@@ -85,7 +85,6 @@ cleanup() ->
 %% Schedules group graph refresh.
 %% @end
 %%--------------------------------------------------------------------
-
 -spec schedule_graph_refresh() -> ok.
 schedule_graph_refresh() ->
     {ok, _} = timer:send_interval(refresh_interval(), whereis(?MODULE),

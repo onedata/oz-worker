@@ -6,6 +6,12 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This module is responsible for refreshment of effective users and groups
+%%% in both user and group documents.
+%%% It gathers 'group changed' reports and is periodically invoked to update
+%%% documents related to the changed groups.
+%%% The 'refresh' is to be executed only by one process at the time (and
+%%% the lock protects that property).
 %%% @end
 %%%-------------------------------------------------------------------
 -module(group_graph).
@@ -15,7 +21,7 @@
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(KEY, <<"group_graph_worker_state">>).
+-define(KEY, <<"groups_graph_caches_state">>).
 -define(LOCK_ID, <<"group_graph">>).
 
 %% API
@@ -37,9 +43,9 @@
 -spec mark_group_changed(GroupID :: binary()) -> ok.
 mark_group_changed(GroupID) ->
     ensure_state_initialised(),
-    {ok, _} = group_graph_worker_state:update(?KEY, fun(Context) ->
-        NewGroups = [GroupID | Context#group_graph_worker_state.changed_groups],
-        {ok, Context#group_graph_worker_state{changed_groups = NewGroups}}
+    {ok, _} = groups_graph_caches_state:update(?KEY, fun(Context) ->
+        NewGroups = [GroupID | Context#groups_graph_caches_state.changed_groups],
+        {ok, Context#groups_graph_caches_state{changed_groups = NewGroups}}
     end), ok.
 
 %%--------------------------------------------------------------------
@@ -51,20 +57,20 @@ mark_group_changed(GroupID) ->
 -spec refresh_effective_caches() -> ok | not_applicable.
 refresh_effective_caches() ->
     ensure_state_initialised(),
-    Interval = application:get_env(?APP_Name, group_graph_refresh_interval, 500),
+    Interval = application:get_env(?APP_Name, group_graph_refresh_interval),
     Now = erlang:system_time(),
 
-    datastore:run_synchronized(group_graph_worker_state, ?LOCK_ID, fun() ->
-        {ok, #document{value = #group_graph_worker_state{last_rebuild = Timestamp,
-            changed_groups = Groups}}} = group_graph_worker_state:get(?KEY),
+    datastore:run_synchronized(groups_graph_caches_state, ?LOCK_ID, fun() ->
+        {ok, #document{value = #groups_graph_caches_state{last_rebuild = Timestamp,
+            changed_groups = Groups}}} = groups_graph_caches_state:get(?KEY),
 
         case Timestamp + Interval < Now of
             false -> not_applicable;
             true ->
-                {ok, _} = group_graph_worker_state:update(?KEY, fun(Val) ->
-                    {ok, Val#group_graph_worker_state{
+                {ok, _} = groups_graph_caches_state:update(?KEY, fun(Val) ->
+                    {ok, Val#groups_graph_caches_state{
                         last_rebuild = Now,
-                        changed_groups = Val#group_graph_worker_state.changed_groups -- Groups
+                        changed_groups = Val#groups_graph_caches_state.changed_groups -- Groups
                     }} end),
                 break_cycles(Groups, []),
                 effective_groups_update_traverse(Groups),
@@ -193,8 +199,8 @@ parents(#user_group{parent_groups = Groups}) ->
 %%--------------------------------------------------------------------
 -spec ensure_state_initialised() -> ok.
 ensure_state_initialised() ->
-    Result = group_graph_worker_state:create(#document{key = ?KEY,
-        value = #group_graph_worker_state{last_rebuild = erlang:system_time()}}),
+    Result = groups_graph_caches_state:create(#document{key = ?KEY,
+        value = #groups_graph_caches_state{last_rebuild = erlang:system_time()}}),
 
     case Result of
         {ok, _} ->

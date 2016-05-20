@@ -107,13 +107,8 @@ has_effective_privilege(GroupId, UserId, Privilege) ->
             %% 'effective_users' do contain 'users' of the group
             %% but are 'users' are checked for privileges regardless
             %% as 'users' may be slightly more up-to-date
-            case lists:keyfind(UserId, 1, Users) of
-                {_, Privileges} -> lists:member(Privilege, Privileges);
-                false -> false
-            end orelse case lists:keyfind(UserId, 1, EUsers) of
-                {_, EPrivileges} -> lists:member(Privilege, EPrivileges);
-                false -> false
-            end
+            lists:member(Privilege, proplists:get_value(UserId, Users, [])) orelse
+                lists:member(Privilege, proplists:get_value(UserId, EUsers, []))
     end.
 
 

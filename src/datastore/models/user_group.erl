@@ -6,6 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% Contains info about groups in the system.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(user_group).
@@ -19,9 +20,6 @@
 %% model_behaviour callbacks
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
-
-%% API
--export([all/0]).
 
 -type type() :: 'organization' | 'unit' | 'team' | 'role'.
 -export_type([type/0]).
@@ -119,16 +117,3 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
-
-%%%===================================================================
-%%% API callbacks
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Return all documents
-%% @end
-%%--------------------------------------------------------------------
--spec all() -> {ok, [datastore:document()]} | no_return().
-all() ->
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).

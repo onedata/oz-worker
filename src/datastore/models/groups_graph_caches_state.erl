@@ -6,9 +6,12 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This document contains info needed to perform periodical
+%%% effective users and groups updates.
+%%% Should not be used directly (see group_graph module).
 %%% @end
 %%%-------------------------------------------------------------------
--module(group_graph_worker_state).
+-module(groups_graph_caches_state).
 -author("Michal Zmuda").
 -behaviour(model_behaviour).
 
@@ -86,7 +89,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(group_graph_worker_state_bucket, [], ?GLOBAL_ONLY_LEVEL).
+    ?MODEL_CONFIG(groups_graph_caches_state_bucket, [], ?GLOBALLY_CACHED_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc
