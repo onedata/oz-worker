@@ -22,7 +22,8 @@
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
 -export([grand_scenario_test/1, conditional_update_test/1,
-    nested_groups_in_dev_setup_test/1, cycles_elimination_test/1]).
+    nested_groups_in_dev_setup_test/1, cycles_elimination_test/1,
+    user_becoming_groupless_test/1]).
 
 -define(assertUnorderedMatch(Guard, Expr), (fun() ->
     Sorted = lists:sort(Guard),
@@ -34,6 +35,7 @@ end)()).
 %%%===================================================================
 
 all() -> ?ALL([
+    user_becoming_groupless_test,
     cycles_elimination_test,
     grand_scenario_test,
     conditional_update_test,
@@ -151,6 +153,28 @@ cycles_elimination_test(Config) ->
 
     ?assertEqual(true, P1 =/= [<<"3">>] orelse P2 =/= [<<"1">>] orelse P3 =/= [<<"2">>]),
     ok.
+
+user_becoming_groupless_test(Config) ->
+    [Node] = ?config(oz_worker_nodes, Config),
+    GID = <<"group@user_becoming_groupless_test">>,
+    UID = <<"user@user_becoming_groupless_test">>,
+
+    %% given
+    save(Node, #document{key = GID, value = #user_group{users = [{UID, []}]}}),
+    save(Node, #document{key = UID, value = #onedata_user{groups = [GID]}}),
+    mark_group_changed(Node, GID),
+    mark_user_changed(Node, UID),
+    refresh(Node),
+    ?assertMatch([GID], effective_groups(get(Node, onedata_user, UID))),
+
+    %% when
+    ?assertMatch(ok, rpc:call(Node, user_group, delete, [GID])),
+    update(Node, onedata_user, UID, #{groups => []}),
+    mark_user_changed(Node, UID),
+    refresh(Node),
+
+    %% then
+    ?assertMatch([], effective_groups(get(Node, onedata_user, UID))).
 
 grand_scenario_test(Config) ->
     [Node] = ?config(oz_worker_nodes, Config),
@@ -535,6 +559,9 @@ save(Node, ID, Value) ->
 
 mark_group_changed(Node, ID) ->
     ?assertMatch(ok, rpc:call(Node, group_graph, mark_group_changed, [ID])).
+
+mark_user_changed(Node, ID) ->
+    ?assertMatch(ok, rpc:call(Node, group_graph, mark_user_changed, [ID])).
 
 reset_state(Node) ->
     save(Node, #document{key = <<"groups_graph_caches_state">>,

@@ -62,6 +62,7 @@
 
 -record(groups_graph_caches_state, {
     changed_groups = [] :: [GroupID :: binary()],
+    changed_users = [] :: [UserID :: binary()],
     last_rebuild = 0 :: integer()
 }).
 

@@ -25,7 +25,7 @@
 -define(LOCK_ID, <<"group_graph">>).
 
 %% API
--export([mark_group_changed/1, refresh_effective_caches/0]).
+-export([mark_group_changed/1, mark_user_changed/1, refresh_effective_caches/0]).
 
 -type effective_users() :: [{UserID :: binary(), [privileges:group_privilege()]}].
 -type effective_groups() :: [GroupID :: binary()].
@@ -49,6 +49,18 @@ mark_group_changed(GroupID) ->
     end), ok.
 
 %%--------------------------------------------------------------------
+%% @doc Marks user as changed. The user will have it's effective groups updated.
+%% @end
+%%--------------------------------------------------------------------
+-spec mark_user_changed(UserID :: binary()) -> ok.
+mark_user_changed(UserID) ->
+    ensure_state_initialised(),
+    {ok, _} = groups_graph_caches_state:update(?KEY, fun(Context) ->
+        NewUsers = [UserID | Context#groups_graph_caches_state.changed_users],
+        {ok, Context#groups_graph_caches_state{changed_users = NewUsers}}
+    end), ok.
+
+%%--------------------------------------------------------------------
 %% @doc Updates effective groups in users and effective users & groups in groups.
 %% The update is not applicable if interval between updates would be too low.
 %% Any encountered cycles are broken.
@@ -57,12 +69,15 @@ mark_group_changed(GroupID) ->
 -spec refresh_effective_caches() -> ok | not_applicable.
 refresh_effective_caches() ->
     ensure_state_initialised(),
-    Interval = application:get_env(?APP_Name, group_graph_refresh_interval),
+    {ok, Interval} = application:get_env(?APP_Name, group_graph_refresh_interval),
     Now = erlang:system_time(),
 
     datastore:run_synchronized(groups_graph_caches_state, ?LOCK_ID, fun() ->
-        {ok, #document{value = #groups_graph_caches_state{last_rebuild = Timestamp,
-            changed_groups = Groups}}} = groups_graph_caches_state:get(?KEY),
+        {ok, #document{value = #groups_graph_caches_state{
+            last_rebuild = Timestamp,
+            changed_groups = Groups,
+            changed_users = Users
+        }}} = groups_graph_caches_state:get(?KEY),
 
         case Timestamp + Interval < Now of
             false -> not_applicable;
@@ -73,7 +88,7 @@ refresh_effective_caches() ->
                         changed_groups = Val#groups_graph_caches_state.changed_groups -- Groups
                     }} end),
                 break_cycles(Groups, []),
-                effective_groups_update_traverse(Groups),
+                effective_groups_update_traverse(Users, Groups),
                 effective_users_update_traverse(Groups)
         end
     end).
@@ -87,11 +102,11 @@ refresh_effective_caches() ->
 %% (both in groups and users)
 %% @end
 %%--------------------------------------------------------------------
--spec effective_groups_update_traverse(GroupIDs :: [binary()]) -> ok.
-effective_groups_update_traverse(GroupIDs) ->
+-spec effective_groups_update_traverse(UserIDs :: [binary()], GroupIDs :: [binary()]) -> ok.
+effective_groups_update_traverse(Users, GroupIDs) ->
     ToVisit = topsort(GroupIDs, fun children/1),
     traverse(ToVisit, fun update_effective_groups_visitor/2, #{}),
-    update_effective_groups_in_users(ToVisit).
+    update_effective_groups_in_users(Users, ToVisit).
 
 %%--------------------------------------------------------------------
 %% @doc @private performs group graph traverse & update effective users
@@ -323,9 +338,12 @@ update_effective_users(ID, Effective) ->
         end
     end), ok.
 
--spec update_effective_groups_in_users(GroupIDs :: [binary()]) -> ok.
-update_effective_groups_in_users(GroupIDs) ->
-    {AffectedUsers, EffectiveGroupsMap} = gather_user_effective_groups_context(GroupIDs),
+-spec update_effective_groups_in_users(UserIDs :: [binary()],
+    ChangedGroupIDs :: [binary()]) -> ok.
+update_effective_groups_in_users(UserIDs, ChangedGroupIDs) ->
+    {AffectedUsers, EffectiveGroupsMap} =
+        gather_user_effective_groups_context(ChangedGroupIDs, UserIDs),
+
     lists:foreach(fun(UID) ->
         onedata_user:update(UID, fun(User) ->
             #onedata_user{groups = GIDs, effective_groups = EGIDs} = User,
@@ -342,11 +360,11 @@ update_effective_groups_in_users(GroupIDs) ->
     end, AffectedUsers),
     ok.
 
--spec gather_user_effective_groups_context(GIDs :: [binary()]) ->
+-spec gather_user_effective_groups_context(GIDs :: [binary()], UIDs :: [binary()]) ->
     {AffectedUsers :: [binary()], EffectiveGroupsMap :: #{
     GID :: binary() => effective_groups()}}.
-gather_user_effective_groups_context(GIDs) ->
-    AffectedUsers = gather_affected_users(GIDs),
+gather_user_effective_groups_context(GIDs, UIDs) ->
+    AffectedUsers = gather_affected_users(GIDs) ++ UIDs,
     RequiredGroupsIDs = gather_users_groups(AffectedUsers),
     EffectiveGroupsMap = gather_effective_groups(RequiredGroupsIDs),
     {AffectedUsers, EffectiveGroupsMap}.
