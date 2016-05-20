@@ -58,8 +58,15 @@ handle(healthcheck) ->
     end;
 
 handle(refresh_group_graph) ->
-    ?debug("Refreshing effective in group graph"),
-    group_graph:refresh_effective_caches();
+    try
+        ?debug("Refreshing effective in group graph"),
+        group_graph:refresh_effective_caches()
+    catch
+        E:R ->
+            %% exceptions are handled as we have to ensure refresh is scheduled
+            ?error_stacktrace("Unexpected refresh failure due to ~p:~p", [E, R])
+    end,
+    schedule_graph_refresh();
 
 handle(_Request) ->
     ?log_bad_request(_Request).
@@ -87,7 +94,7 @@ cleanup() ->
 %%--------------------------------------------------------------------
 -spec schedule_graph_refresh() -> ok.
 schedule_graph_refresh() ->
-    {ok, _} = timer:send_interval(refresh_interval(), whereis(?MODULE),
+    {ok, _} = timer:send_after(refresh_interval(), whereis(?MODULE),
         {timer, refresh_group_graph}),
     ok.
 
