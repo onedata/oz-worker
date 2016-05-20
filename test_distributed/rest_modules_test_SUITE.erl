@@ -714,9 +714,9 @@ group_cycle_prevented_test(Config) ->
     ensure_effective_users_and_groups_updated(Config),
 
     Token3 = get_group_invitation_group_token(GID3, User1ReqParams),
-    ?assertMatch({request_error, 500}, join_group_to_group(Token3, GID1, User1ReqParams)),
+    ?assertMatch({request_error, 400}, join_group_to_group(Token3, GID1, User1ReqParams)),
     Token2B = get_group_invitation_group_token(GID2, User1ReqParams),
-    ?assertMatch({request_error, 500}, join_group_to_group(Token2B, GID1, User1ReqParams)),
+    ?assertMatch({request_error, 400}, join_group_to_group(Token2B, GID1, User1ReqParams)),
     ok.
 
 get_user_info_by_group_test(Config) ->

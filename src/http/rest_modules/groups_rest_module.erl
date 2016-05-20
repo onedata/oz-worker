@@ -184,8 +184,13 @@ accept_resource(njoin, post, GroupId, Data, _Client, Req) ->
         false ->
             rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         {true, Macaroon} ->
-            {ok, NestedId} = group_logic:join_group(GroupId, Macaroon),
-            {{true, <<"/groups/", GroupId/binary, "/nested/", NestedId/binary>>}, Req}
+            case group_logic:join_group(GroupId, Macaroon) of
+                {ok, NestedId} ->
+                    {{true, <<"/groups/", GroupId/binary, "/nested/",
+                        NestedId/binary>>}, Req};
+                _ ->
+                    rest_module_helper:report_error(would_introduce_cycle, Req)
+            end
     end.
 
 %%--------------------------------------------------------------------
