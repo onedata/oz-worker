@@ -19,7 +19,7 @@
 
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
--export([get_data/2, get_spaces/1, get_groups/1, get_providers/1]).
+-export([get_data/2, get_spaces/1, get_groups/1, get_effective_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
@@ -251,6 +251,17 @@ get_spaces(UserId) ->
         {spaces, AllUserSpaces},
         {default, EffectiveDefaultSpace}
     ]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns user's groups.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_groups(UserId :: binary()) ->
+    {ok, [proplists:property()]}.
+get_effective_groups(UserId) ->
+    {ok, #document{value = #onedata_user{effective_groups = Groups}}} = onedata_user:get(UserId),
+    {ok, [{effective_groups, Groups}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns user's groups.

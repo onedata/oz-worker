@@ -62,7 +62,7 @@ create_user(Config, User) ->
 create_group(Config, UserId, Name) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
-        rpc:call(Node, group_logic, create, [UserId, Name])
+        rpc:call(Node, group_logic, create, [UserId, Name, undefined])
     catch
         _:Reason ->
             {error, Reason}

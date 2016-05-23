@@ -51,8 +51,19 @@
 %% This record defines a group of users, it has: name, list of users that belongs to it, list of spaces that are used by this group
 -record(user_group, {
     name :: binary(),
-    users = [] :: [{UserId :: binary(), [privileges:group_privilege()]}],
+    type :: user_group:type(),
+    users = [] :: [{UserID :: binary(), [privileges:group_privilege()]}],
+    effective_users = [] :: group_graph:effective_users(),
+    effective_groups = [] :: group_graph:effective_groups(),
+    nested_groups = [] :: [{GroupID :: binary(), [privileges:group_privilege()]}],
+    parent_groups = [] :: [GroupID :: binary()],
     spaces = [] :: [SpaceId :: binary()]
+}).
+
+-record(groups_graph_caches_state, {
+    changed_groups = [] :: [GroupID :: binary()],
+    changed_users = [] :: [UserID :: binary()],
+    last_rebuild = 0 :: integer()
 }).
 
 %% This record defines a provider who support spaces and can be reached via url
@@ -120,6 +131,7 @@
     space_names = #{} :: #{SpaceId :: binary() => SpaceName :: binary()},
     default_space :: binary() | undefined,
     groups = [] :: [GroupId :: binary()],
+    effective_groups = [] :: group_graph:effective_groups(),
     % TODO this is a mock
     first_space_support_token = <<"">> :: binary(),
     % This allows to remember the provider which was selected for user, so DNS knows where to redirect
