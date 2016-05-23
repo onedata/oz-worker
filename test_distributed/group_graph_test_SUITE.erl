@@ -23,7 +23,7 @@
 -export([init_per_testcase/2, end_per_testcase/2]).
 -export([grand_scenario_test/1, conditional_update_test/1,
     nested_groups_in_dev_setup_test/1, cycles_elimination_test/1,
-    user_becoming_groupless_test/1]).
+    user_becoming_groupless_test/1, concurrent_updates_test/1]).
 
 -define(assertUnorderedMatch(Guard, Expr), (fun() ->
     Sorted = lists:sort(Guard),
@@ -35,6 +35,7 @@ end)()).
 %%%===================================================================
 
 all() -> ?ALL([
+    concurrent_updates_test,
     user_becoming_groupless_test,
     cycles_elimination_test,
     grand_scenario_test,
@@ -76,6 +77,174 @@ nested_groups_in_dev_setup_test(Config) ->
     ?assertUnorderedMatch([<<"group1">>, <<"group2">>], EG2),
     ?assertUnorderedMatch([<<"group1">>, <<"group2">>, <<"group3">>], EG3),
     ?assertUnorderedMatch([<<"group1">>, <<"group2">>, <<"group4">>], EG4),
+    ok.
+
+concurrent_updates_test(Config) ->
+    [Node] = ?config(oz_worker_nodes, Config),
+
+    GIDs = [A, B, C, D, E, F, G, H, I, J, K, L, M, N] = [<<"A">>, <<"B">>, <<"C">>, <<"D">>,
+        <<"E">>, <<"F">>, <<"G">>, <<"H">>, <<"I">>, <<"J">>, <<"K">>, <<"L">>, <<"M">>, <<"N">>],
+    UIDs = [U1, U2, U3, U4, U5, U6, U7, U8, U9, U10, U11, U12, U13, U14] = [<<"U1">>, <<"U2">>, <<"U3">>, <<"U4">>,
+        <<"U5">>, <<"U6">>, <<"U7">>, <<"U8">>, <<"U9">>, <<"U10">>, <<"U11">>, <<"U12">>, <<"U13">>, <<"U14">>],
+
+    User = privileges:group_user(),
+    Manager = privileges:group_manager(),
+
+    save(Node, #document{key = U1, value = #onedata_user{}}),
+    save(Node, #document{key = U2, value = #onedata_user{}}),
+    save(Node, #document{key = U3, value = #onedata_user{}}),
+    save(Node, #document{key = U4, value = #onedata_user{}}),
+    save(Node, #document{key = U5, value = #onedata_user{}}),
+    save(Node, #document{key = U6, value = #onedata_user{}}),
+    save(Node, #document{key = U7, value = #onedata_user{}}),
+    save(Node, #document{key = U8, value = #onedata_user{}}),
+    save(Node, #document{key = U9, value = #onedata_user{}}),
+    save(Node, #document{key = U10, value = #onedata_user{}}),
+    save(Node, #document{key = U11, value = #onedata_user{}}),
+    save(Node, #document{key = U12, value = #onedata_user{}}),
+    save(Node, #document{key = U13, value = #onedata_user{}}),
+    save(Node, #document{key = U14, value = #onedata_user{}}),
+
+    save(Node, #document{key = A, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = B, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = C, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = D, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = E, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = F, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = G, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = H, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = I, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = J, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = K, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = L, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = M, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = N, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+
+    FirstLinkOps = [
+        {user_group, A, #{parent_groups => [], nested_groups => [{B, User}], users => []}},
+        {user_group, B, #{parent_groups => [A], nested_groups => [], users => []}},
+        {user_group, C, #{parent_groups => [], nested_groups => [{D, User}], users => []}},
+        {user_group, D, #{parent_groups => [C], nested_groups => [], users => []}},
+        {user_group, E, #{parent_groups => [], nested_groups => [{F, User}], users => []}},
+        {user_group, F, #{parent_groups => [E], nested_groups => [], users => []}},
+        {user_group, G, #{parent_groups => [], nested_groups => [{H, User}], users => []}},
+        {user_group, H, #{parent_groups => [G], nested_groups => [], users => []}},
+        {user_group, I, #{parent_groups => [], nested_groups => [{J, User}], users => []}},
+        {user_group, J, #{parent_groups => [I], nested_groups => [], users => []}},
+        {user_group, K, #{parent_groups => [], nested_groups => [{L, User}], users => []}},
+        {user_group, L, #{parent_groups => [K], nested_groups => [], users => []}},
+        {user_group, M, #{parent_groups => [], nested_groups => [{N, User}], users => []}},
+        {user_group, N, #{parent_groups => [M], nested_groups => [], users => []}}
+    ],
+    SecondLinkOps = [
+        {user_group, A, #{parent_groups => [], nested_groups => [{B, User}], users => []}},
+        {user_group, B, #{parent_groups => [A], nested_groups => [{C, User}], users => []}},
+        {user_group, C, #{parent_groups => [B], nested_groups => [{D, User}], users => []}},
+        {user_group, D, #{parent_groups => [C], nested_groups => [{E, User}], users => []}},
+        {user_group, E, #{parent_groups => [D], nested_groups => [{F, User}], users => []}},
+        {user_group, F, #{parent_groups => [E], nested_groups => [{G, User}], users => []}},
+        {user_group, G, #{parent_groups => [F], nested_groups => [{H, User}], users => []}},
+        {user_group, H, #{parent_groups => [G], nested_groups => [{I, User}], users => []}},
+        {user_group, I, #{parent_groups => [H], nested_groups => [{J, User}], users => []}},
+        {user_group, J, #{parent_groups => [I], nested_groups => [{K, User}], users => []}},
+        {user_group, K, #{parent_groups => [J], nested_groups => [{L, User}], users => []}},
+        {user_group, L, #{parent_groups => [K], nested_groups => [{M, User}], users => []}},
+        {user_group, M, #{parent_groups => [L], nested_groups => [{N, User}], users => []}},
+        {user_group, N, #{parent_groups => [M], nested_groups => [], users => []}}
+    ],
+    FirstBreakOps = [
+        {user_group, E, #{parent_groups => [D], nested_groups => [], users => []}},
+        {user_group, F, #{parent_groups => [], nested_groups => [{G, User}], users => []}},
+
+        {user_group, K, #{parent_groups => [J], nested_groups => [], users => []}},
+        {user_group, L, #{parent_groups => [], nested_groups => [{M, User}], users => []}}
+    ],
+    SecondBreakOps = [
+        {user_group, B, #{parent_groups => [A], nested_groups => [], users => []}},
+        {user_group, C, #{parent_groups => [], nested_groups => [{D, User}], users => []}},
+
+        {user_group, G, #{parent_groups => [F], nested_groups => [], users => []}},
+        {user_group, H, #{parent_groups => [], nested_groups => [{I, User}], users => []}}
+    ],
+
+    UIDsWithManagerPrivileges = lists:map(fun(UID) -> {UID, Manager} end, UIDs),
+    UIDsWithViewPrivileges = lists:map(fun(UID) -> {UID, User} end, UIDs),
+
+    JoinUsersOps = lists:foldl(fun(NN, All) ->
+        All ++ [
+            {user_group, B, #{users => lists:nthtail(NN, UIDsWithManagerPrivileges)}},
+            {user_group, E, #{users => lists:nthtail(NN, UIDsWithManagerPrivileges)}},
+            {user_group, G, #{users => lists:nthtail(NN, UIDsWithManagerPrivileges)}},
+            {user_group, K, #{users => lists:nthtail(NN, UIDsWithManagerPrivileges)}},
+            {user_group, N, #{users => lists:nthtail(NN, UIDsWithManagerPrivileges)}}
+        ] ++ lists:map(fun(UID) -> {onedata_user, UID, #{groups => [B, E, G, K, N]}} end, lists:nthtail(NN, UIDs))
+
+    end, [], lists:reverse(lists:seq(0, 13))),
+
+
+    Data = [
+        {mangle, FirstLinkOps ++ SecondLinkOps ++ FirstBreakOps ++ SecondBreakOps ++ JoinUsersOps},
+        {refresh, lists:seq(1, 700)}
+    ],
+
+    Fun = fun
+        ({mangle, Docs}) -> lists:foreach(fun({Type, ID, Diff}) ->
+            update(Node, Type, ID, Diff),
+            case Type of
+                user_group -> mark_group_changed(Node, ID);
+                onedata_user -> mark_user_changed(Node, ID)
+            end
+        end, Docs);
+        ({refresh, Seq}) -> lists:foreach(fun(_S) -> refresh(Node) end, Seq)
+    end,
+
+    %% when
+    utils:pforeach(Fun, Data),
+    refresh(Node),
+
+    %% then
+    GroupsDocs = lists:map(fun(GID) -> get(Node, user_group, GID) end, GIDs),
+    UserDocs = lists:map(fun(UID) -> get(Node, onedata_user, UID) end, UIDs),
+    EffectiveGroupsOfGroups = lists:map(fun effective_groups/1, GroupsDocs),
+    EffectiveGroupsOfUsers = lists:map(fun effective_groups/1, UserDocs),
+    EffectiveUsersOfGroups = lists:map(fun effective_users/1, GroupsDocs),
+
+    ?assertMatch([
+        [<<"A">>],
+        [<<"A">>, <<"B">>],
+        [<<"C">>],
+        [<<"C">>, <<"D">>],
+        [<<"C">>, <<"D">>, <<"E">>],
+        [<<"F">>],
+        [<<"F">>, <<"G">>],
+        [<<"H">>],
+        [<<"H">>, <<"I">>],
+        [<<"H">>, <<"I">>, <<"J">>],
+        [<<"H">>, <<"I">>, <<"J">>, <<"K">>],
+        [<<"L">>],
+        [<<"L">>, <<"M">>],
+        [<<"L">>, <<"M">>, <<"N">>]
+    ], EffectiveGroupsOfGroups),
+
+    Zipped = lists:zip([
+        UIDsWithViewPrivileges,
+        UIDsWithManagerPrivileges,
+        UIDsWithViewPrivileges,
+        UIDsWithViewPrivileges,
+        UIDsWithManagerPrivileges,
+        UIDsWithViewPrivileges,
+        UIDsWithManagerPrivileges,
+        UIDsWithViewPrivileges,
+        UIDsWithViewPrivileges,
+        UIDsWithViewPrivileges,
+        UIDsWithManagerPrivileges,
+        UIDsWithViewPrivileges,
+        UIDsWithViewPrivileges,
+        UIDsWithManagerPrivileges
+    ], EffectiveUsersOfGroups),
+
+    lists:foreach(fun({Expected, Actual}) -> ?assertUnorderedMatch(Expected, Actual) end, Zipped),
+    lists:foreach(fun(EGoU) -> ?assertUnorderedMatch(GIDs, EGoU) end, EffectiveGroupsOfUsers),
     ok.
 
 conditional_update_test(Config) ->
