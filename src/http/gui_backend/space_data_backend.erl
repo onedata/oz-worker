@@ -42,8 +42,8 @@ init() ->
 %% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
--spec find_all(ResourceType :: binary()) ->
-    {ok, [proplists:proplist()]} | gui_error:error_result().
+-spec find(ResourceType :: binary(), Id :: binary()) ->
+    {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"space">>, SpaceId) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
@@ -62,7 +62,7 @@ find(<<"space">>, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec find_all(ResourceType :: binary()) ->
-    {ok, proplists:proplist()} | gui_error:error_result().
+    {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"space">>) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
