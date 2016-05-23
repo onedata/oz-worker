@@ -61,7 +61,7 @@ find(<<"provider">>, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec find_all(ResourceType :: binary()) ->
-    {ok, proplists:proplist()} | gui_error:error_result().
+    {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"provider">>) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),

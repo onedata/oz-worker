@@ -54,7 +54,7 @@ find(<<"clienttoken">>, _Id) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec find_all(ResourceType :: binary()) ->
-    {ok, proplists:proplist()} | gui_error:error_result().
+    {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"clienttoken">>) ->
     UserId = g_session:get_user_id(),
     {ok, ClientTokens} = user_logic:get_client_tokens(UserId),
