@@ -42,9 +42,9 @@ init() ->
 %% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
--spec find(ResourceType :: binary(), Ids :: [binary()]) ->
+-spec find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find(<<"authorizer">>, [_AuthorizerId]) ->
+find(<<"authorizer">>, _AuthorizerId) ->
     gui_error:report_error(<<"Not iplemented">>).
 
 
@@ -54,7 +54,7 @@ find(<<"authorizer">>, [_AuthorizerId]) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec find_all(ResourceType :: binary()) ->
-    {ok, proplists:proplist()} | gui_error:error_result().
+    {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"authorizer">>) ->
     {ok, #document{value = #onedata_user{connected_accounts = OAuthAccounts}}} =
         onedata_user:get(g_session:get_user_id()),
