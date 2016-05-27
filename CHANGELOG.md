@@ -4,6 +4,22 @@
 CHANGELOG
 ---------
 
+### 3.0.0-beta5
+
+* VFS-2068 adjust to new webscoket adapter API
+* VFS-1987 concurrent refreshes and updates test
+* VFS-1987 subscriptions updates with nested groups of users groups
+* VFS-1987 set & get for nested group privileges
+* VFS-1987 get effective user in rest
+* VFS-1987 nested groups in global config (json)
+* VFS-1987 nested groups rest privileges
+* VFS-1987 nested groups in subscriptions
+* VFS-1987 effective groups in user document
+* VFS-1987 general graph traversal
+* VFS-1987 effective users in logic
+* VFS-1987 model changes
+
+
 ### 3.0.0-beta4
 
 * Minor updates.
