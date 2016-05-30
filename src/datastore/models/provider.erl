@@ -16,6 +16,9 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
+%% API
+-export([list/0]).
+
 %% model_behaviour callbacks
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
@@ -108,3 +111,12 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Return all documents
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [datastore:document()]} | no_return().
+list() ->
+    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).

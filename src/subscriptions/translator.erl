@@ -106,6 +106,14 @@ get_msg(Seq, Doc, onedata_user = Model) ->
         {default_space, DefaultSpace},
         {public_only, false}
     ]}];
+get_msg(Seq, Doc, provider = Model) ->
+    #document{value = Value, key = ID} = Doc,
+    #provider{client_name = Name, urls = URLs, spaces = SpaceIDs} = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {client_name, Name},
+        {urls, URLs},
+        {space_ids, SpaceIDs}
+    ]}];
 get_msg(_Seq, _Doc, _Model) ->
     ?warning("Requesting message for unexpected model ~p", [_Model]),
     [].
@@ -126,5 +134,6 @@ revs_prop(#document{rev = Rev}) ->
 
 -spec message_model(subscriptions:model()) -> atom().
 message_model(space) -> space;
+message_model(provider) -> provider;
 message_model(onedata_user) -> user;
 message_model(user_group) -> group.

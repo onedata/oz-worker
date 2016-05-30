@@ -45,6 +45,8 @@
     all_data_in_space_update_test/1,
     all_data_in_user_update_test/1,
     all_data_in_group_update_test/1,
+    all_data_in_provider_update_test/1,
+    updates_for_with_providers_test/1,
     child_group_update_through_users_test/1]).
 
 -define(MESSAGES_WAIT_TIMEOUT, timer:seconds(2)).
@@ -78,9 +80,11 @@ all() -> ?ALL([
     all_data_in_space_update_test,
     all_data_in_user_update_test,
     all_data_in_group_update_test,
+    all_data_in_provider_update_test,
     user_update_test,
     simple_delete_test,
     group_update_through_users_test,
+    updates_for_with_providers_test,
     child_group_update_through_users_test,
     ancestor_group_update_through_users_test,
     updates_for_added_user_test,
@@ -306,6 +310,44 @@ all_data_in_group_update_test(Config) ->
     % then
     verify_messages_present(Context, [
         expectation(?ID(g1), Group)
+    ]),
+    ok.
+
+all_data_in_provider_update_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    Spaces = [?ID(s1), ?ID(s2), ?ID(s3)],
+    Urls = [<<"url1">>, <<"url2">>],
+    Name = <<"name">>,
+    PID = create_provider(Node, ?ID(p1), Spaces, Urls),
+
+    % when
+    Context = init_messages(Node, PID, []),
+    update_document(Node, provider, PID, #{client_name => Name}),
+
+    % then
+    verify_messages_present(Context, [
+        expectation(PID, #provider{spaces = Spaces, urls = Urls, client_name = Name})
+    ]).
+
+updates_for_with_providers_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = create_provider(Node, ?ID(p1), [?ID(s1), ?ID(s2)], [<<"p1-url1">>]),
+    P2 = #provider{spaces = [?ID(s2)], urls = [<<"p2-url1">>, <<"p2-url2">>], client_name = <<"p2">>},
+    P3 = #provider{spaces = [?ID(s1)], urls = [<<"p3-url1">>], client_name = <<"p3">>},
+
+
+    % when
+    Context = init_messages(Node, PID, []),
+    save(Node, ?ID(p2), P2),
+    save(Node, ?ID(p3), P3),
+
+    % then
+    verify_messages_present(Context, [
+        expectation(PID, #provider{spaces = [?ID(s1), ?ID(s2)], urls = [<<"p1-url1">>], client_name = ?ID(p1)}),
+        expectation(?ID(p2), P2),
+        expectation(?ID(p3), P3)
     ]),
     ok.
 
@@ -834,9 +876,11 @@ get_rev(Node, Model, ID) ->
     Rev.
 
 create_provider(Node, Name, Spaces) ->
+    create_provider(Node, Name, Spaces, [<<"127.0.0.1">>]).
+create_provider(Node, Name, Spaces, URLs) ->
     {_, CSRFile, _} = generate_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
-    Params = [Name, [<<"127.0.0.1">>], <<"https://127.0.0.1:443">>, CSR],
+    Params = [Name, URLs, <<"https://127.0.0.1:443">>, CSR],
     {ok, ID, _} = rpc:call(Node, provider_logic, create, Params),
     {ok, ID} = rpc:call(Node, provider, update, [ID, #{spaces => Spaces}]),
     ID.
@@ -869,7 +913,14 @@ expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceN
     end);
 expectation(ID, #user_group{name = Name, type = Type, users = Users, spaces = Spaces,
     effective_users = EUsers, nested_groups = NGroups, parent_groups = PGroups}) ->
-    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups).
+    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups);
+
+expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) ->
+    [{<<"id">>, ID}, {<<"provider">>, [
+        {<<"client_name">>, Name},
+        {<<"urls">>, URLs},
+        {<<"space_ids">>, SpaceIDs}
+    ]}].
 
 space_expectation(ID, Name, Users, Groups, Supports) ->
     [{<<"id">>, ID}, {<<"space">>, [
@@ -971,8 +1022,6 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_users, ProviderID, Users}),
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
-
-    ct:run("~p", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),

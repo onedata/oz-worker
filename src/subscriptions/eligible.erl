@@ -68,6 +68,12 @@ providers(Doc, user_group) ->
 providers(Doc, onedata_user) ->
     through_users([Doc#document.key]);
 
+providers(_Doc, provider) ->
+    {ok, Providers} = provider:list(),
+    ordsets:from_list(lists:map(fun(Doc) ->
+        Doc#document.key
+    end, Providers));
+
 providers(_Doc, _Type) ->
     [].
 
