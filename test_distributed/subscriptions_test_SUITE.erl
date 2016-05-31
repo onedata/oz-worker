@@ -346,8 +346,8 @@ updates_for_with_providers_test(Config) ->
     % then
     verify_messages_present(Context, [
         expectation(PID, #provider{spaces = [?ID(s1), ?ID(s2)], urls = [<<"p1-url1">>], client_name = ?ID(p1)}),
-        expectation(?ID(p2), P2),
-        expectation(?ID(p3), P3)
+        public_only_provider_expectation(?ID(p2), P2#provider.client_name, P2#provider.urls),
+        public_only_provider_expectation(?ID(p3), P3#provider.client_name, P3#provider.urls)
     ]),
     ok.
 
@@ -919,7 +919,8 @@ expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) -
     [{<<"id">>, ID}, {<<"provider">>, [
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
-        {<<"space_ids">>, SpaceIDs}
+        {<<"space_ids">>, SpaceIDs},
+        {<<"public_only">>, false}
     ]}].
 
 space_expectation(ID, Name, Users, Groups, Supports) ->
@@ -939,6 +940,14 @@ user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace) ->
         {<<"effective_group_ids">>, EGroups},
         {<<"default_space">>, DefaultSpace},
         {<<"public_only">>, false}
+    ]}].
+
+public_only_provider_expectation(ID, Name, URLs) ->
+    [{<<"id">>, ID}, {<<"provider">>, [
+        {<<"client_name">>, Name},
+        {<<"urls">>, URLs},
+        {<<"space_ids">>, []},
+        {<<"public_only">>, true}
     ]}].
 
 public_only_user_expectation(ID, Name) ->
