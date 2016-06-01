@@ -155,33 +155,41 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
 
     try
         case lists:member(Method, NoAuth) of
-            true -> {true, Req, State#rstate{client = #client{}}};
+            true ->
+                % No authorization required for this method,
+                % accept every request
+                {true, Req, State#rstate{client = #client{}}};
             false ->
-                PeerCert = case ssl:peercert(cowboy_req:get(socket, Req2)) of
-                    {ok, PeerCert1} -> PeerCert1;
-                    {error, no_peercert} ->
-                        throw({silent_error, Req2})
-                end,
-
-                ProviderId = case worker_proxy:call(ozpca_worker,
-                    {verify_provider, PeerCert}) of
-                    {ok, ProviderId1} -> ProviderId1;
-                    {error, {bad_cert, Reason}} ->
-                        ?warning("Attempted authentication with "
-                        "bad peer certificate: ~p", [Reason]),
-                        throw({silent_error, Req2})
-                end,
-
+                % This method requires authorization. First, check if macaroon
+                % is present
                 {Macaroon, DischargeMacaroons, Req3} =
                     parse_macaroons_from_headers(Req2),
 
                 case Macaroon of
                     undefined ->
+                        PeerCert = case ssl:peercert(cowboy_req:get(socket, Req2)) of
+                            {ok, PeerCert1} -> PeerCert1;
+                            {error, no_peercert} ->
+                                throw({silent_error, Req2})
+                        end,
+
+                        ProviderId = case worker_proxy:call(ozpca_worker,
+                            {verify_provider, PeerCert}) of
+                            {ok, ProviderId1} -> ProviderId1;
+                            {error, {bad_cert, Reason}} ->
+                                ?warning("Attempted authentication with "
+                                "bad peer certificate: ~p", [Reason]),
+                                throw({silent_error, Req2})
+                        end,
                         Client = #client{type = provider, id = ProviderId},
                         {true, Req3, State#rstate{client = Client}};
 
                     _ ->
-                        case auth_logic:validate_token(ProviderId, Macaroon,
+                        %% @todo: VFS-1869
+                        %% Pass empty string as providerId because we do
+                        %% not expect the macaroon to have provider caveat
+                        %% (it is an authorization code for client).
+                        case auth_logic:validate_token(<<>>, Macaroon,
                             DischargeMacaroons, BinMethod, Root) of
 
                             {ok, UserId} ->

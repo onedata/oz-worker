@@ -18,8 +18,8 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: user | spaces | defspace | screate | space | groups | group | mtoken | effective_groups.
--type accepted_resource() :: user | auth | spaces | defspace | sjoin | groups | gjoin | merge.
+-type provided_resource() :: user | client_token | spaces | defspace | screate | space | groups | group | effective_groups.
+-type accepted_resource() :: user | auth | spaces | defspace | sjoin | groups | gjoin.
 -type removable_resource() :: user | space | group.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
@@ -43,8 +43,9 @@ routes() ->
     S = #rstate{module = ?MODULE, root = user},
     M = rest_handler,
     [
-        {<<"/user">>, M, S#rstate{resource = user, methods = [get, post, patch, delete]}},
+        {<<"/user">>, M, S#rstate{resource = user, methods = [get, patch, delete]}},
         {<<"/user/authorize">>, M, S#rstate{resource = auth, methods = [post], noauth = [post]}},
+        {<<"/user/client_token">>, M, S#rstate{resource = client_token, methods = [get]}},
         {<<"/user/spaces">>, M, S#rstate{resource = spaces, methods = [get, post]}},
         {<<"/user/spaces/default">>, M, S#rstate{resource = defspace, methods = [get, put]}},
         {<<"/user/spaces/join">>, M, S#rstate{resource = sjoin, methods = [post]}},
@@ -53,9 +54,7 @@ routes() ->
         {<<"/user/effective_groups">>, M, S#rstate{resource = effective_groups, methods = [get]}},
         {<<"/user/groups">>, M, S#rstate{resource = groups, methods = [get, post]}},
         {<<"/user/groups/join">>, M, S#rstate{resource = gjoin, methods = [post]}},
-        {<<"/user/groups/:gid">>, M, S#rstate{resource = group, methods = [get, delete]}},
-        {<<"/user/merge">>, M, S#rstate{resource = merge, methods = [post]}},
-        {<<"/user/merge/token">>, M, S#rstate{resource = mtoken, methods = [get]}}
+        {<<"/user/groups/:gid">>, M, S#rstate{resource = group, methods = [get, delete]}}
     ].
 
 %%--------------------------------------------------------------------
@@ -67,8 +66,6 @@ routes() ->
 -spec is_authorized(Resource :: resource(), Method :: method(),
     UserId :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
-is_authorized(user, post, _UserId, #client{type = undefined}) ->
-    true;
 is_authorized(auth, post, _, _) ->
     true;
 is_authorized(_, _, _, #client{type = user}) ->
@@ -91,7 +88,7 @@ resource_exists(space, UserId, Req) ->
 resource_exists(group, UserId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {gid, GID} = lists:keyfind(gid, 1, Bindings),
-    {group_logic:has_user(GID, UserId), Req2};
+    {group_logic:has_effective_user(GID, UserId), Req2};
 resource_exists(_, _, Req) ->
     {true, Req}.
 
@@ -105,10 +102,6 @@ resource_exists(_, _, Req) ->
     UserId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
-accept_resource(user, post, _UserId, Data, _Client, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    {ok, _} = user_logic:create(#onedata_user{name = Name}),
-    {true, Req};
 accept_resource(user, patch, UserId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ok = user_logic:modify(UserId, [{name, Name}]),
@@ -147,15 +140,6 @@ accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
         {true, Macaroon} ->
             {ok, GroupId} = group_logic:join(UserId, Macaroon),
             {{true, <<"/user/groups/", GroupId/binary>>}, Req}
-    end;
-accept_resource(merge, post, UserId, Data, _Client, Req) ->
-    Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
-    case token_logic:validate(Token, accounts_merge_token) of
-        false ->
-            rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
-        {true, Macaroon} ->
-            ok = user_logic:merge(UserId, Macaroon),
-            {true, Req}
     end.
 
 %%--------------------------------------------------------------------
@@ -194,8 +178,9 @@ provide_resource(group, _UserId, _Client, Req) ->
     {gid, GID} = lists:keyfind(gid, 1, Bindings),
     {ok, Group} = group_logic:get_data(GID),
     {Group, Req2};
-provide_resource(mtoken, UserId, Client, Req) ->
-    {ok, Token} = token_logic:create(Client, accounts_merge_token, {user, UserId}),
+provide_resource(client_token, UserId, _Client, Req) ->
+    Token = auth_logic:gen_token(UserId),
+    user_logic:add_client_token(UserId, Token),
     {[{token, Token}], Req}.
 
 %%--------------------------------------------------------------------

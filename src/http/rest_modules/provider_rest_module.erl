@@ -47,7 +47,6 @@ routes() ->
         {<<"/provider/:pid">>, M, S#rstate{resource = nprovider, methods = [get]}},
         {<<"/provider/spaces/support">>, M, S#rstate{resource = ssupport, methods = [post]}},
         {<<"/provider/spaces/:sid">>, M, S#rstate{resource = space, methods = [get, delete]}},
-        {<<"/provider/token/:token">>, M, S#rstate{resource = token, methods = [get]}},
         {<<"/provider/test/check_my_ip">>, M, S#rstate{resource = ip, methods = [get], noauth = [get]}},
         {<<"/provider/test/check_my_ports">>, M, S#rstate{resource = ports, methods = [post], noauth = [post]}}
     ].
@@ -193,12 +192,7 @@ provide_resource(space, _ProviderId, _Client, Req) ->
     {Space, Req2};
 provide_resource(ip, _ProviderId, _Client, Req) ->
     {{Ip, _Port}, Req2} = cowboy_req:peer(Req),
-    {list_to_binary(inet_parse:ntoa(Ip)), Req2};
-provide_resource(token, _UserId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {token, Token} = lists:keyfind(token, 1, Bindings),
-    {ok, Issuer} = token_logic:get_issuer(Token),
-    {Issuer, Req2}.
+    {list_to_binary(inet_parse:ntoa(Ip)), Req2}.
 
 %%--------------------------------------------------------------------
 %% @doc Deletes the resource identified by the SpaceId parameter.
