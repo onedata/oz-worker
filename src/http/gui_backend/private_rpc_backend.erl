@@ -80,7 +80,7 @@ handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
         {<<"url">>, URL}
     ]};
 
-handle(<<"getSupportToken">>, [{<<"spaceId">>, SpaceId}]) ->
+handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     Client = #client{type = user, id = g_session:get_user_id()},
     {ok, Token} = token_logic:create(
         Client, space_support_token, {space, SpaceId}),
@@ -88,7 +88,7 @@ handle(<<"getSupportToken">>, [{<<"spaceId">>, SpaceId}]) ->
         {<<"token">>, Token}
     ]};
 
-handle(<<"getRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
+handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     UserId = g_session:get_user_id(),
     % @todo check if provider is online, if not push update of model
     {ok, [
