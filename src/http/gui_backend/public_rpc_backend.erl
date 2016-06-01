@@ -34,20 +34,29 @@
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
 handle(<<"getZoneName">>, _) ->
     {ok, ZoneName} = application:get_env(?APP_Name, oz_name),
-    {ok, str_utils:to_binary(ZoneName)};
+    {ok, [
+        {<<"zoneName">>, str_utils:to_binary(ZoneName)}
+    ]};
 
 handle(<<"getSupportedAuthorizers">>, _) ->
-    Providers = auth_config:get_auth_providers(),
-    % Providers is a list of atoms
-    {ok, [str_utils:to_binary(Provider) || Provider <- Providers]};
+    % get_auth_providers() returns list of atoms
+    ProvidersAtoms = auth_config:get_auth_providers(),
+    Providers = [str_utils:to_binary(Provider) || Provider <- ProvidersAtoms],
+    {ok, [
+        {<<"authorizers">>, Providers}
+    ]};
 
 handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     case application:get_env(?APP_Name, dev_mode) of
         {ok, true} ->
-            {ok, <<"/dev_login">>};
+            {ok, [
+                {<<"url">>, <<"/dev_login">>}
+            ]};
         _ ->
             Provider = binary_to_atom(ProviderBin, utf8),
             HandlerModule = auth_config:get_provider_module(Provider),
             {ok, URL} = HandlerModule:get_redirect_url(false),
-            {ok, URL}
+            {ok, [
+                {<<"url">>, URL}
+            ]}
     end.

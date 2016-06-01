@@ -39,16 +39,22 @@ handle(<<"getUserAlias">>, _) ->
     }} = user_logic:get_user(UserId),
     case str_utils:to_binary(Alias) of
         <<"">> ->
-            {ok, null};
+            {ok, [
+                {<<"alias">>, null}
+            ]};
         Bin ->
-            {ok, Bin}
+            {ok, [
+                {<<"alias">>, Bin}
+            ]}
     end;
 
 handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
     UserId = g_session:get_user_id(),
     case user_logic:modify(UserId, [{alias, NewAlias}]) of
         ok ->
-            {ok, NewAlias};
+            {ok, [
+                {<<"alias">>, NewAlias}
+            ]};
         {error, disallowed_prefix} ->
             gui_error:report_warning(
                 <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
@@ -73,15 +79,21 @@ handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     Provider = binary_to_atom(ProviderBin, utf8),
     HandlerModule = auth_config:get_provider_module(Provider),
     {ok, URL} = HandlerModule:get_redirect_url(true),
-    {ok, URL};
+    {ok, [
+        {<<"url">>, URL}
+    ]};
 
 handle(<<"getSupportToken">>, [{<<"spaceId">>, SpaceId}]) ->
     Client = #client{type = user, id = g_session:get_user_id()},
     {ok, Token} = token_logic:create(
         Client, space_support_token, {space, SpaceId}),
-    {ok, Token};
+    {ok, [
+        {<<"token">>, Token}
+    ]};
 
 handle(<<"getRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     UserId = g_session:get_user_id(),
     % @todo check if provider is online, if not push update of model
-    auth_logic:get_redirection_uri(UserId, ProviderId).
+    {ok, [
+        {<<"url">>, auth_logic:get_redirection_uri(UserId, ProviderId)}
+    ]}.
