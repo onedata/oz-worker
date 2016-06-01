@@ -37,23 +37,20 @@ handle(<<"getUserAlias">>, _) ->
     {ok, #onedata_user{
         alias = Alias
     }} = user_logic:get_user(UserId),
-    case str_utils:to_binary(Alias) of
-        <<"">> ->
-            {ok, [
-                {<<"alias">>, null}
-            ]};
-        Bin ->
-            {ok, [
-                {<<"alias">>, Bin}
-            ]}
-    end;
+    UserAlias = case str_utils:to_binary(Alias) of
+        <<"">> -> null;
+        Bin -> Bin
+    end,
+    {ok, [
+        {<<"userAlias">>, UserAlias}
+    ]};
 
 handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
     UserId = g_session:get_user_id(),
     case user_logic:modify(UserId, [{alias, NewAlias}]) of
         ok ->
             {ok, [
-                {<<"alias">>, NewAlias}
+                {<<"userAlias">>, NewAlias}
             ]};
         {error, disallowed_prefix} ->
             gui_error:report_warning(
