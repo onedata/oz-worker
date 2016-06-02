@@ -25,7 +25,7 @@
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
 -export([set_space_name_mapping/3, clean_space_name_mapping/2]).
--export([authenticate_by_password/2]).
+-export([authenticate_by_basic_credentials/1, basic_auth_header/2]).
 
 %%%===================================================================
 %%% API functions
@@ -518,20 +518,40 @@ clean_space_name_mapping(UserId, SpaceId) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Removes space name mapping if user does not effectively belongs to the space.
-%% Returns true if space name has been removed from the map, otherwise false.
-%% Throws exception when call to dao fails, or user doesn't exist.
+%% @doc
+%% Contacts onepanel to authenticate a user using basic authorization
+%% headers. The argument must be in base64 encoded form, for example:
+%%   <<"Basic dXNlcjpwYXNzd29yZA==">>
+%% for credentials user:password, i.e. "Basic base64(user:password)"
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate_by_password(Login :: binary(), Password :: binary()) ->
+-spec authenticate_by_basic_credentials(BasicAuthHeaderValue :: binary()) ->
     {ok, UserId :: binary()} | {error, term()}.
-authenticate_by_password(Login, Password) ->
-    case {Login, Password} of
-        {<<"user1">>, <<"password">>} ->
-            {ok, <<"user1fakemockid">>};
+authenticate_by_basic_credentials(BasicAuthHeaderValue) ->
+    case BasicAuthHeaderValue of
+        <<"Basic dXNlcjE6cGFzc3dvcmQ=">> ->
+            {ok, <<"user1">>};
+        <<"Basic dXNlcjI6cGFzc3dvcmQ=">> ->
+            {ok, <<"user2">>};
+        <<"Basic dXNlcjM6cGFzc3dvcmQ=">> ->
+            {ok, <<"user3">>};
         _ ->
             {error, not_found}
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns basic auth header for given username and password.
+%% For example, returns:
+%%   <<"Basic dXNlcjpwYXNzd29yZA==">>
+%% for credentials user:password, i.e. "Basic base64(user:password)"
+%% @end
+%%--------------------------------------------------------------------
+-spec basic_auth_header(Login :: binary(), Password :: binary()) ->
+    binary().
+basic_auth_header(Login, Password) ->
+    B64 = base64:encode(<<Login/binary, ":", Password/binary>>),
+    <<"Basic ", B64/binary>>.
 
 %%%===================================================================
 %%% Internal functions
