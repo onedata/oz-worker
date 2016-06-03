@@ -124,6 +124,7 @@
 %% This record defines a user and is handled as a database document
 -record(onedata_user, {
     name = <<"">> :: binary(),
+    login = <<"">> :: binary(),
     alias = ?EMPTY_ALIAS :: binary(),
     email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],

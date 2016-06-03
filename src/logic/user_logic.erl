@@ -25,7 +25,7 @@
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
 -export([set_space_name_mapping/3, clean_space_name_mapping/2]).
--export([authenticate_by_basic_credentials/1, basic_auth_header/2]).
+-export([authenticate_by_basic_credentials/2]).
 
 %%%===================================================================
 %%% API functions
@@ -218,18 +218,29 @@ merge(_UserId, _Macaroon) ->
 -spec get_data(UserId :: binary(), Type :: provider | user) ->
     {ok, [proplists:property()]}.
 get_data(UserId, provider) ->
-    {ok, #document{value = #onedata_user{name = Name}}} = onedata_user:get(UserId),
+    {ok, #document{
+        value = #onedata_user{
+            name = Name, login = Login
+        }}} = onedata_user:get(UserId),
     {ok, [
         {userId, UserId},
+        {login, Login},
         {name, Name}
     ]};
 get_data(UserId, user) ->
-    {ok, #document{value = #onedata_user{name = Name, connected_accounts = ConnectedAccounts,
-        alias = Alias, email_list = EmailList}}} = onedata_user:get(UserId),
+    {ok, #document{
+        value = #onedata_user{
+            name = Name,
+            login = Login,
+            connected_accounts = ConnectedAccounts,
+            alias = Alias,
+            email_list = EmailList
+        }}} = onedata_user:get(UserId),
     ConnectedAccountsMaps = lists:map(fun(Account) ->
         ?record_to_list(oauth_account, Account) end, ConnectedAccounts),
     {ok, [
         {userId, UserId},
+        {login, Login},
         {name, Name},
         {connectedAccounts, ConnectedAccountsMaps},
         {alias, Alias},
@@ -520,15 +531,18 @@ clean_space_name_mapping(UserId, SpaceId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Contacts onepanel to authenticate a user using basic authorization
-%% headers. The argument must be in base64 encoded form, for example:
+%% headers. The are sent in base64 encoded form, for example:
 %%   <<"Basic dXNlcjpwYXNzd29yZA==">>
 %% for credentials user:password, i.e. "Basic base64(user:password)"
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate_by_basic_credentials(BasicAuthHeaderValue :: binary()) ->
+-spec authenticate_by_basic_credentials(Login :: binary(),
+    Password :: binary()) ->
     {ok, UserId :: binary()} | {error, term()}.
-authenticate_by_basic_credentials(BasicAuthHeaderValue) ->
-    case BasicAuthHeaderValue of
+authenticate_by_basic_credentials(Login, Password) ->
+    UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
+    BasicAuthHeader = <<"Basic ", UserAndPassword/binary>>,
+    case BasicAuthHeader of
         <<"Basic dXNlcjE6cGFzc3dvcmQ=">> ->
             {ok, <<"user1">>};
         <<"Basic dXNlcjI6cGFzc3dvcmQ=">> ->
@@ -538,20 +552,6 @@ authenticate_by_basic_credentials(BasicAuthHeaderValue) ->
         _ ->
             {error, not_found}
     end.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns basic auth header for given username and password.
-%% For example, returns:
-%%   <<"Basic dXNlcjpwYXNzd29yZA==">>
-%% for credentials user:password, i.e. "Basic base64(user:password)"
-%% @end
-%%--------------------------------------------------------------------
--spec basic_auth_header(Login :: binary(), Password :: binary()) ->
-    binary().
-basic_auth_header(Login, Password) ->
-    B64 = base64:encode(<<Login/binary, ":", Password/binary>>),
-    <<"Basic ", B64/binary>>.
 
 %%%===================================================================
 %%% Internal functions

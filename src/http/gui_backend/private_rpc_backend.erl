@@ -45,6 +45,30 @@ handle(<<"getUserAlias">>, _) ->
         {<<"userAlias">>, UserAlias}
     ]};
 
+handle(<<"changePassword">>, Props) ->
+    random:seed(now()),
+    case random:uniform(2) of
+        1 ->
+            ok;
+        2 ->
+            gui_error:report_error(<<"random error">>)
+    end;
+%%    OldPassword = proplists:get_value(<<"oldPassword">>, Props),
+%%    NewPassword = proplists:get_value(<<"newPassword">>, Props),
+%%    {ok, UserData} = user_logic:get_data()
+%%
+%%    UserId = g_session:get_user_id(),
+%%    {ok, #onedata_user{
+%%        alias = Alias
+%%    }} = user_logic:get_user(UserId),
+%%    UserAlias = case str_utils:to_binary(Alias) of
+%%        <<"">> -> null;
+%%        Bin -> Bin
+%%    end,
+%%    {ok, [
+%%        {<<"userAlias">>, UserAlias}
+%%    ]};
+
 handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
     UserId = g_session:get_user_id(),
     case user_logic:modify(UserId, [{alias, NewAlias}]) of
