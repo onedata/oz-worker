@@ -32,6 +32,7 @@ models() -> [
   ozpca_state,
   onedata_auth,
   onedata_user,
+  oz_api_privileges,
   provider,
   session,
   space,

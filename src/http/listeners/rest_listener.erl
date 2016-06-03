@@ -46,6 +46,8 @@ start() ->
         % Get rest config
         RestPort = port(),
         {ok, RestHttpsAcceptors} = application:get_env(?APP_Name, rest_https_acceptors),
+        {ok, RESTAPIPrefixStr} = application:get_env(?APP_Name, rest_api_prefix),
+        RESTAPIPrefix = str_utils:to_binary(RESTAPIPrefixStr),
 
         % Get cert paths
         {ok, ZoneCADir} = application:get_env(?APP_Name, ozpca_dir),
@@ -68,15 +70,23 @@ start() ->
 
         GRHostname = dns_query_handler:get_canonical_hostname(),
 
+        RESTRoutes = lists:append([
+            user_rest_module:routes(),
+            provider_rest_module:routes(),
+            spaces_rest_module:routes(),
+            groups_rest_module:routes()
+        ]),
+        RESTRoutesWithPrefix = lists:map(
+            fun({Path, Module, InitialState}) ->
+                {<<RESTAPIPrefix/binary, Path/binary>>, Module, InitialState}
+            end, RESTRoutes),
+
         Dispatch = cowboy_router:compile([
             % Redirect requests in form: alias.onedata.org
             {":alias." ++ GRHostname, [{'_', client_redirect_handler, [RestPort]}]},
             {'_', lists:append([
                 [{<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}}],
-                user_rest_module:routes(),
-                provider_rest_module:routes(),
-                spaces_rest_module:routes(),
-                groups_rest_module:routes()
+                RESTRoutesWithPrefix
             ])}
         ]),
 

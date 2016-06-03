@@ -305,7 +305,7 @@ get_providers(UserId) ->
     {ok, [{providers, UserProviders}]}.
 
 %%--------------------------------------------------------------------
-%% @doc Rreturns true if user was found by a given key.
+%% @doc Returns true if user was found by a given key.
 %%--------------------------------------------------------------------
 -spec exists(Key :: binary() | {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
@@ -533,24 +533,61 @@ clean_space_name_mapping(UserId, SpaceId) ->
 %% Contacts onepanel to authenticate a user using basic authorization
 %% headers. The are sent in base64 encoded form, for example:
 %%   <<"Basic dXNlcjpwYXNzd29yZA==">>
-%% for credentials user:password, i.e. "Basic base64(user:password)"
+%% for credentials user:password, i.e. "Basic base64(user:password)".
+%% If the user does not exist in OZ, it is created.
+%% Onepanel returns the type of user, i.e. admin|regular. Based on this,
+%% the user is added to or removed from admins group (we have to assume that
+%% the type can change in time, so when admin type is revoked we should
+%% take the admin rights away from the user).
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate_by_basic_credentials(Login :: binary(),
     Password :: binary()) ->
-    {ok, UserId :: binary()} | {error, term()}.
+    {ok, UserDoc :: #document{}} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
     UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
     BasicAuthHeader = <<"Basic ", UserAndPassword/binary>>,
-    case BasicAuthHeader of
+    RestCallResult = case BasicAuthHeader of
         <<"Basic dXNlcjE6cGFzc3dvcmQ=">> ->
-            {ok, <<"user1">>};
+            {ok, [
+                {<<"userId">>, <<"user1">>},
+                {<<"userType">>, <<"admin">>}
+            ]};
         <<"Basic dXNlcjI6cGFzc3dvcmQ=">> ->
-            {ok, <<"user2">>};
-        <<"Basic dXNlcjM6cGFzc3dvcmQ=">> ->
-            {ok, <<"user3">>};
+            {ok, [
+                {<<"userId">>, <<"user2">>},
+                {<<"userType">>, <<"regular">>}
+            ]};
+        <<"Basic dXNlcjQ6cGFzc3dvcmQ=">> ->
+            {ok, [
+                {<<"userId">>, <<"user4">>},
+                {<<"userType">>, <<"regular">>}
+            ]};
         _ ->
             {error, not_found}
+    end,
+    case RestCallResult of
+        {error, Reason} ->
+            {error, Reason};
+        {ok, Props} ->
+            UserId = proplists:get_value(<<"userId">>, Props),
+            _UserType = proplists:get_value(<<"userType">>, Props),
+            case onedata_user:get(UserId) of
+                {error, {not_found, onedata_user}} ->
+                    UserDoc = #document{
+                        key = UserId,
+                        value = #onedata_user{
+                            name = Login,
+                            login = Login,
+                            basic_auth_enabled = true
+                        }},
+                    {ok, UserId} = onedata_user:save(UserDoc),
+                    {ok, UserDoc};
+                {ok, UserDoc} ->
+                    % TODO add to admin group or remove if not any longer?
+                    % TODO set basic_auth_enabled
+                    {ok, UserDoc}
+            end
     end.
 
 %%%===================================================================
@@ -561,7 +598,8 @@ authenticate_by_basic_credentials(Login, Password) ->
 %% @private
 %% @doc Returns a list of all spaces that a user belongs to, directly or through
 %% a group.
-%% Throws exception when call to the datastore fails, or user's groups don't exist.
+%% Throws exception when call to the datastore fails, or user's groups don't
+%% exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_all_spaces(Doc :: datastore:document()) ->

@@ -12,6 +12,7 @@
 -module(rest_handler).
 -author("Konrad Zemek").
 
+-include("datastore/oz_datastore_models_def.hrl").
 -include("http/handlers/rest_handler.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -298,7 +299,7 @@ authorize_by_basic_auth(Req) ->
             UserPasswd = base64:decode(UserPasswdB64),
             [User, Passwd] = binary:split(UserPasswd, <<":">>),
             case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-                {ok, UserId} ->
+                {ok, #document{key = UserId}} ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};
                 _ ->
