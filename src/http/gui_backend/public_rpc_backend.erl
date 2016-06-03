@@ -43,7 +43,7 @@ handle(<<"getSupportedAuthorizers">>, _) ->
     ProvidersAtoms = auth_config:get_auth_providers(),
     Providers = [str_utils:to_binary(Provider) || Provider <- ProvidersAtoms],
     {ok, [
-        {<<"authorizers">>, Providers}
+        {<<"authorizers">>, Providers ++ [<<"indigo">>, <<"basicAuth">>]}
     ]};
 
 handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->

@@ -293,10 +293,17 @@ authorize_by_provider_certs(Req) ->
 
 authorize_by_basic_auth(Req) ->
     {Header, _} = cowboy_req:header(<<"authorization">>, Req),
-    case user_logic:authenticate_by_basic_credentials(Header) of
-        {ok, UserId} ->
-            Client = #client{type = user, id = UserId},
-            {true, Client};
+    case Header of
+        <<"Basic ", UserPasswdB64/binary>> ->
+            UserPasswd = base64:decode(UserPasswdB64),
+            [User, Passwd] = binary:split(UserPasswd, <<":">>),
+            case user_logic:authenticate_by_basic_credentials(User, Passwd) of
+                {ok, UserId} ->
+                    Client = #client{type = user, id = UserId},
+                    {true, Client};
+                _ ->
+                    false
+            end;
         _ ->
             false
     end.
