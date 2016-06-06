@@ -162,7 +162,7 @@ remove(ProviderId) ->
     worker_proxy:call(ozpca_worker, {revoke, Serial}),
     case (provider:delete(ProviderId)) of
         ok -> true;
-        _ -> flase
+        _ -> false
     end.
 
 %%--------------------------------------------------------------------

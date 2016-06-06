@@ -24,12 +24,15 @@
 
 %% model_behaviour callbacks
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
+    model_init/0, 'after'/5, before/4, create_or_update/2]).
 %% Model specific functions
--export([get/2, privileges/0]).
+-export([all_privileges/0]).
 
+% Possible privileges
 -type privilege() :: list_spaces | list_providers | list_spaces_providers.
--export_type([privilege/0]).
+% Types of entities that can possess those privileges.
+-type entity_type() :: onedata_user | user_group.
+-export_type([privilege/0, entity_type/0]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -70,22 +73,6 @@ create(Document) ->
 %%--------------------------------------------------------------------
 -spec get(datastore:ext_key()) -> {ok, datastore:document()} | datastore:get_error().
 get(Key) ->
-    datastore:get(?STORE_LEVEL, ?MODULE, Key).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns onezone_api_privileges for given user/group by their ID.
-%% @end
-%%--------------------------------------------------------------------
--spec get(EntityKey :: datastore:ext_key(), EntityType :: user | group) ->
-    {ok, datastore:document()} | datastore:get_error().
-get(EntityKey, EntityType) ->
-    Key = case EntityType of
-        user ->
-            <<"user:", EntityKey/binary>>;
-        group ->
-            <<"group:", EntityKey/binary>>
-    end,
     datastore:get(?STORE_LEVEL, ?MODULE, Key).
 
 %%--------------------------------------------------------------------
@@ -137,13 +124,30 @@ model_init() ->
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
 
+%%%===================================================================
+%%% API callbacks
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates document with using ID from document. If such object does not exist,
+%% it initialises the object with the document.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_or_update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
+    {ok, datastore:ext_key()} | datastore:update_error().
+create_or_update(Doc, Diff) ->
+    datastore:create_or_update(?STORE_LEVEL, Doc, Diff).
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns all possible privileges for onezone API.
 %% @end
 %%--------------------------------------------------------------------
-privileges() -> [
+-spec all_privileges() -> [privilege()].
+all_privileges() -> [
+    set_privileges,
     list_spaces,
     list_providers,
-    list_providers_of_spaces
+    list_providers_of_space
 ].

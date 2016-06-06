@@ -14,11 +14,12 @@
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/utils/utils.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
--export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
+-export([create/1, get_user/1, get_user_doc/1, modify/2]).
 -export([get_data/2, get_spaces/1, get_groups/1, get_effective_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
@@ -200,15 +201,6 @@ modify(UserId, Proplist) ->
         T:M ->
             {error, {T, M}}
     end.
-
-%%--------------------------------------------------------------------
-%% @doc Merges an account identified by token into current user's account.
-%%--------------------------------------------------------------------
--spec merge(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
-    ok.
-merge(_UserId, _Macaroon) ->
-    %% @todo: a functional merge
-    ok.
 
 %%--------------------------------------------------------------------
 %% @doc Returns user details.
@@ -574,6 +566,8 @@ authenticate_by_basic_credentials(Login, Password) ->
             _UserType = proplists:get_value(<<"userType">>, Props),
             case onedata_user:get(UserId) of
                 {error, {not_found, onedata_user}} ->
+                    ?info("Creating new account for user '~s' (from onepanel)",
+                        [Login]),
                     UserDoc = #document{
                         key = UserId,
                         value = #onedata_user{
