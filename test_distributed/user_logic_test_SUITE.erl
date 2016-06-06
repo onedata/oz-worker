@@ -20,12 +20,14 @@
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
--export([set_space_name_mapping_test/1, clean_space_name_mapping_test/1]).
+-export([set_space_name_mapping_test/1, clean_space_name_mapping_test/1,
+    remove_space_test/1]).
 
 all() ->
     ?ALL([
         set_space_name_mapping_test,
-        clean_space_name_mapping_test
+        clean_space_name_mapping_test,
+        remove_space_test
     ]).
 
 %%%===================================================================
@@ -40,17 +42,17 @@ set_space_name_mapping_test(Config) ->
     SpaceName1 = <<"space_name">>,
     {ok, SpaceId1} = ?assertMatch({ok, _},
         oz_test_utils:create_space(Config, {user, UserId}, SpaceName1)),
-    ?assertEqual({ok, SpaceName1}, get_space_name_mapping(Node, UserId, SpaceId1)),
+    ?assertEqual(SpaceName1, get_space_name_mapping(Node, UserId, SpaceId1)),
 
     SpaceName2 = <<"different_space_name">>,
     {ok, SpaceId2} = ?assertMatch({ok, _},
         oz_test_utils:create_space(Config, {user, UserId}, SpaceName2)),
-    ?assertEqual({ok, SpaceName2}, get_space_name_mapping(Node, UserId, SpaceId2)),
+    ?assertEqual(SpaceName2, get_space_name_mapping(Node, UserId, SpaceId2)),
 
     SpaceName3 = <<"space_name">>,
     {ok, SpaceId3} = ?assertMatch({ok, _},
         oz_test_utils:create_space(Config, {user, UserId}, SpaceName3)),
-    ?assertEqual({ok, <<SpaceName3/binary, "#", SpaceId3:6/binary>>},
+    ?assertEqual(<<SpaceName3/binary, "#", SpaceId3:6/binary>>,
         get_space_name_mapping(Node, UserId, SpaceId3)),
 
     SpaceName4 = <<"space_name">>,
@@ -58,12 +60,12 @@ set_space_name_mapping_test(Config) ->
     space_save_mock(Nodes, SpaceId4),
     {ok, SpaceId4} = ?assertMatch({ok, _},
         oz_test_utils:create_space(Config, {user, UserId}, SpaceName4)),
-    ?assertEqual({ok, <<SpaceName4/binary, "#", SpaceId4:7/binary>>},
+    ?assertEqual(<<SpaceName4/binary, "#", SpaceId4:7/binary>>,
         get_space_name_mapping(Node, UserId, SpaceId4)),
 
     SpaceName5 = <<"modified_space_name">>,
     ?assertEqual(ok, oz_test_utils:modify_space(Config, SpaceId4, {user, UserId}, SpaceName5)),
-    ?assertEqual({ok, SpaceName5}, get_space_name_mapping(Node, UserId, SpaceId4)).
+    ?assertEqual(SpaceName5, get_space_name_mapping(Node, UserId, SpaceId4)).
 
 clean_space_name_mapping_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
@@ -75,16 +77,29 @@ clean_space_name_mapping_test(Config) ->
     ?assertEqual(ok, oz_test_utils:join_space(Config, {user, UserId}, SpaceId)),
 
     ?assertNot(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertEqual({ok, SpaceName}, get_space_name_mapping(Node, UserId, SpaceId)),
+    ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
 
     ?assert(oz_test_utils:leave_space(Config, {group, GroupId}, SpaceId)),
     ?assertNot(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertEqual({ok, SpaceName}, get_space_name_mapping(Node, UserId, SpaceId)),
+    ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
 
     ?assert(oz_test_utils:leave_space(Config, {user, UserId}, SpaceId)),
     ?assert(clean_space_name_mapping(Node, UserId, SpaceId)),
     ?assertMatch({ok, #document{value = #onedata_user{space_names = #{}}}},
         rpc:call(Node, onedata_user, get, [UserId])).
+
+remove_space_test(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
+
+    SpaceName = <<"space_name">>,
+    {ok, UserId} = ?assertMatch({ok, _}, oz_test_utils:create_user(Config, #onedata_user{})),
+    {ok, SpaceId} = ?assertMatch({ok, _}, oz_test_utils:create_space(Config, {user, UserId}, SpaceName)),
+
+    ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
+    oz_test_utils:remove_space(Config, SpaceId),
+    ?assertMatch({ok, #document{value = #onedata_user{
+        spaces = [], space_names = #{}
+    }}}, rpc:call(Node, onedata_user, get, [UserId])).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -117,8 +132,7 @@ space_save_mock(Nodes, SpaceId) ->
 get_space_name_mapping(Node, UserId, SpaceId) ->
     {ok, Data} = ?assertMatch({ok, _},
         rpc:call(Node, space_logic, get_data, [SpaceId, {user, UserId}])),
-    Name = ?assertMatch(<<_/binary>>, proplists:get_value(name, Data)),
-    {ok, Name}.
+    proplists:get_value(name, Data).
 
 clean_space_name_mapping(Node, UserId, SpaceId) ->
     rpc:call(Node, user_logic, clean_space_name_mapping, [UserId, SpaceId]).
