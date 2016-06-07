@@ -42,7 +42,7 @@ page_init() ->
                 {ok, ProvId} ->
                     ?debug("Automatically redirecting user `~s` "
                     "to default provider `~s`", [UserId, ProvId]),
-                    ProvURL = auth_logic:get_redirection_uri(UserId, ProvId),
+                    {ok, ProvURL} = auth_logic:get_redirection_uri(UserId, ProvId),
                     {redirect_relative, ProvURL}
             end;
         new_user ->

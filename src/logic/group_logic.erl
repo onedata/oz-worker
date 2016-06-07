@@ -17,7 +17,7 @@
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
     has_nested_group/2]).
--export([create/3, modify/2, join/2, set_privileges/3, join_group/2]).
+-export([create/3, modify/2, add_user/2, join/2, set_privileges/3, join_group/2]).
 -export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
     get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
     get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
@@ -160,6 +160,30 @@ create(UserId, Name, Type) ->
 modify(GroupId, Data) ->
     {ok, _} = user_group:update(GroupId, Data),
     ok.
+
+%%--------------------------------------------------------------------
+%% @doc Adds user to a group. Does not check authorization - use join/2 for
+%% user adding based on authorization!
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_user(GroupId :: binary(), UserId :: binary()) ->
+    ok.
+add_user(GroupId, UserId) ->
+    case has_user(GroupId, UserId) of
+        true -> ok;
+        false ->
+            Privileges = privileges:group_user(),
+            {ok, _} = user_group:update(GroupId, fun(Group) ->
+                #user_group{users = Users} = Group,
+                {ok, Group#user_group{users = [{UserId, Privileges} | Users]}}
+            end),
+            {ok, _} = onedata_user:update(UserId, fun(User) ->
+                #onedata_user{groups = Groups} = User,
+                {ok, User#onedata_user{groups = [GroupId | Groups]}}
+            end),
+            ok
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Adds user to a group identified by a token.

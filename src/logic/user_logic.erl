@@ -12,6 +12,7 @@
 -module(user_logic).
 -author("Konrad Zemek").
 
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/utils/utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -543,17 +544,17 @@ authenticate_by_basic_credentials(Login, Password) ->
         <<"Basic dXNlcjE6cGFzc3dvcmQ=">> ->
             {ok, [
                 {<<"userId">>, <<"user1">>},
-                {<<"userType">>, <<"admin">>}
+                {<<"userRole">>, <<"admin">>}
             ]};
         <<"Basic dXNlcjI6cGFzc3dvcmQ=">> ->
             {ok, [
                 {<<"userId">>, <<"user2">>},
-                {<<"userType">>, <<"regular">>}
+                {<<"userRole">>, <<"regular">>}
             ]};
         <<"Basic dXNlcjQ6cGFzc3dvcmQ=">> ->
             {ok, [
                 {<<"userId">>, <<"user4">>},
-                {<<"userType">>, <<"regular">>}
+                {<<"userRole">>, <<"regular">>}
             ]};
         _ ->
             {error, not_found}
@@ -563,11 +564,9 @@ authenticate_by_basic_credentials(Login, Password) ->
             {error, Reason};
         {ok, Props} ->
             UserId = proplists:get_value(<<"userId">>, Props),
-            _UserType = proplists:get_value(<<"userType">>, Props),
-            case onedata_user:get(UserId) of
+            UserRole = proplists:get_value(<<"userRole">>, Props),
+            UserDocument = case onedata_user:get(UserId) of
                 {error, {not_found, onedata_user}} ->
-                    ?info("Creating new account for user '~s' (from onepanel)",
-                        [Login]),
                     UserDoc = #document{
                         key = UserId,
                         value = #onedata_user{
@@ -576,12 +575,31 @@ authenticate_by_basic_credentials(Login, Password) ->
                             basic_auth_enabled = true
                         }},
                     {ok, UserId} = onedata_user:save(UserDoc),
-                    {ok, UserDoc};
+                    ?info("Created new account for user '~s' from onepanel",
+                        [Login, UserRole]),
+                    UserDoc;
                 {ok, UserDoc} ->
-                    % TODO add to admin group or remove if not any longer?
-                    % TODO set basic_auth_enabled
-                    {ok, UserDoc}
-            end
+                    UserDoc
+            end,
+            % Check if user's role entitles him to belong to any groups
+            {ok, GroupMapping} = application:get_env(
+                ?APP_Name, onepanel_role_to_group_mapping),
+            Groups = proplists:get_value(UserRole, GroupMapping, []),
+            lists:foreach(
+                fun(GroupId) ->
+                    case group_logic:has_user(GroupId, UserId) of
+                        true ->
+                            ok;
+                        false ->
+                            {ok, GroupData} = group_logic:get_data(GroupId),
+                            GroupName = proplists:get_value(name, GroupData),
+                            ok = group_logic:add_user(GroupId, UserId),
+                            ?info("Added user '~s' to group '~s' based on "
+                            "role '~s'", [Login, GroupName, UserRole])
+                    end
+                end, Groups),
+            {ok, UserDocument}
+        % @TODO ADD GROUPS!
     end.
 
 %%%===================================================================
