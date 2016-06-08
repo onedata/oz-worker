@@ -62,7 +62,7 @@ subscriptions_stress_test(Config) ->
         {description, "Performs document saves and gathers subscription updated for many providers"}
     ]).
 subscriptions_stress_test_base(Config) ->
-    subscriptions_test_SUITE:stress_test(Config).
+    subscriptions_performance_test_SUITE:generate_spaces_test(Config).
 
 %%%===================================================================
 %%% SetUp and TearDown functions
