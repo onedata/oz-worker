@@ -68,6 +68,9 @@ providers(Doc, user_group) ->
 providers(Doc, onedata_user) ->
     through_users([Doc#document.key]);
 
+providers(Doc, provider) ->
+    [Doc#document.key];
+
 providers(_Doc, _Type) ->
     [].
 
