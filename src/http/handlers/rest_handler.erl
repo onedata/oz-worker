@@ -184,50 +184,6 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
                         end
                 end
         end
-
-%%                % check if macaroon
-%%                % is present
-%%                {Macaroon, DischargeMacaroons, Req3} =
-%%                    parse_macaroons_from_headers(Req2),
-%%
-%%                case Macaroon of
-%%                    undefined ->
-%%                        PeerCert = case ssl:peercert(cowboy_req:get(socket, Req2)) of
-%%                            {ok, PeerCert1} -> PeerCert1;
-%%                            {error, no_peercert} ->
-%%                                throw({silent_error, Req2})
-%%                        end,
-%%
-%%                        ProviderId = case worker_proxy:call(ozpca_worker,
-%%                            {verify_provider, PeerCert}) of
-%%                            {ok, ProviderId1} -> ProviderId1;
-%%                            {error, {bad_cert, Reason}} ->
-%%                                ?warning("Attempted authentication with "
-%%                                "bad peer certificate: ~p", [Reason]),
-%%                                throw({silent_error, Req2})
-%%                        end,
-%%                        Client = #client{type = provider, id = ProviderId},
-%%                        {true, Req3, State#rstate{client = Client}};
-%%
-%%                    _ ->
-%%                        %% @todo: VFS-1869
-%%                        %% Pass empty string as providerId because we do
-%%                        %% not expect the macaroon to have provider caveat
-%%                        %% (it is an authorization code for client).
-%%                        case auth_logic:validate_token(<<>>, Macaroon,
-%%                            DischargeMacaroons, BinMethod, Root) of
-%%
-%%                            {ok, UserId} ->
-%%                                Client = #client{type = user, id = UserId},
-%%                                {true, Req3, State#rstate{client = Client}};
-%%
-%%                            {error, Reason1} ->
-%%                                ?info("Bad auth: ~p", [Reason1]),
-%%                                throw({invalid_token, <<"access denied">>,
-%%                                    Req3})
-%%                        end
-%%                end
-%%        end
     catch
         {silent_error, ReqX} -> %% As per RFC 6750 section 3.1
             {{false, <<"">>}, ReqX, State};

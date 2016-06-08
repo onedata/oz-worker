@@ -27,7 +27,7 @@
 %% @doc Loads auth config from predefined file.
 %% @end
 %%--------------------------------------------------------------------
--spec load_auth_config() -> ok.
+-spec load_auth_config() -> ok | no_return().
 load_auth_config() ->
     {ok, AuthConfigFile} = application:get_env(?APP_Name, auth_config_file),
     Config = case file:consult(AuthConfigFile) of
@@ -36,8 +36,8 @@ load_auth_config() ->
                  {ok, [Cfg]} when is_list(Cfg) ->
                      Cfg;
                  Other ->
-                     ?error("Cannot parse auth config: ~p", [Other]),
-                     []
+                     ?error("Cannot parse auth config: ~p.", [Other]),
+                     throw(cannot_parse_auth_config)
              end,
     application:set_env(?APP_Name, auth_config, Config).
 

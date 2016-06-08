@@ -27,7 +27,7 @@
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
 -export([set_space_name_mapping/3, clean_space_name_mapping/2]).
--export([authenticate_by_basic_credentials/2]).
+-export([authenticate_by_basic_credentials/2, change_user_password/3]).
 
 %%%===================================================================
 %%% API functions
@@ -524,7 +524,7 @@ clean_space_name_mapping(UserId, SpaceId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Contacts onepanel to authenticate a user using basic authorization
-%% headers. The are sent in base64 encoded form, for example:
+%% headers. They are sent in base64 encoded form, for example:
 %%   <<"Basic dXNlcjpwYXNzd29yZA==">>
 %% for credentials user:password, i.e. "Basic base64(user:password)".
 %% If the user does not exist in OZ, it is created.
@@ -535,11 +535,11 @@ clean_space_name_mapping(UserId, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate_by_basic_credentials(Login :: binary(),
-    Password :: binary()) ->
-    {ok, UserDoc :: #document{}} | {error, term()}.
+    Password :: binary()) -> {ok, UserDoc :: #document{}} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
     UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
     BasicAuthHeader = <<"Basic ", UserAndPassword/binary>>,
+    % TODO connect to onepanel
     RestCallResult = case BasicAuthHeader of
         <<"Basic dXNlcjE6cGFzc3dvcmQ=">> ->
             {ok, [
@@ -582,11 +582,13 @@ authenticate_by_basic_credentials(Login, Password) ->
                     % Make sure user login is up to date (it might have changed
                     % in onepanel since last login). Also enable basic auth for
                     % him.
-                    UserDoc#document{
+                    NewDoc = UserDoc#document{
                         value = UserInfo#onedata_user{
                             login = Login,
                             basic_auth_enabled = true
-                        }}
+                        }},
+                    {ok, UserId} = onedata_user:save(NewDoc),
+                    NewDoc
             end,
             % Check if user's role entitles him to belong to any groups
             {ok, GroupMapping} = application:get_env(
@@ -606,6 +608,27 @@ authenticate_by_basic_credentials(Login, Password) ->
                     end
                 end, Groups),
             {ok, UserDocument}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Contacts onepanel to change user's password using basic authorization
+%% headers. They are sent in base64 encoded form, for example:
+%%   <<"Basic dXNlcjpwYXNzd29yZA==">>
+%% for credentials user:password, i.e. "Basic base64(user:password)".
+%% New password is sent in request body.
+%% @end
+%%--------------------------------------------------------------------
+-spec change_user_password(Login :: binary(), OldPassword :: binary(),
+    Password :: binary()) -> ok | {error, term()}.
+change_user_password(Login, OldPassword, NewPassword) ->
+    % TODO connect to onepanel
+    random:seed(now()),
+    case random:uniform(2) of
+        1 ->
+            ok;
+        2 ->
+            {error, random_error}
     end.
 
 %%%===================================================================

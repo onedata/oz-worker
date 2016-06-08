@@ -42,7 +42,6 @@ page_init() ->
             user_logic:authenticate_by_basic_credentials(User, Passwd),
         g_session:log_in(UserId),
         {reply, 200}
-
     catch T:M ->
         ?error_stacktrace("Login by credentials failed - ~p:~p", [T, M]),
         {reply, 401}
