@@ -15,8 +15,8 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: space | users | uinvite | user | upriv | groups |
-ginvite | group | gpriv | providers | pinvite | provider.
+-type provided_resource() :: spaces | space | users | uinvite | user | upriv |
+groups | ginvite | group | gpriv | providers | pinvite | provider.
 -type accepted_resource() :: spaces | space | upriv | gpriv.
 -type removable_resource() :: space | user | group | provider.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
@@ -42,7 +42,7 @@ routes() ->
     S = #rstate{module = ?MODULE, root = spaces},
     M = rest_handler,
     [
-        {<<"/spaces">>, M, S#rstate{resource = spaces, methods = [post]}},
+        {<<"/spaces">>, M, S#rstate{resource = spaces, methods = [post, get]}},
         {<<"/spaces/:id">>, M, S#rstate{resource = space, methods = [get, patch, delete]}},
         {<<"/spaces/:id/users">>, M, S#rstate{resource = users, methods = [get]}},
         {<<"/spaces/:id/users/token">>, M, S#rstate{resource = uinvite, methods = [get]}},
@@ -70,6 +70,8 @@ is_authorized(_, _, _, #client{type = undefined}) ->
     false;
 is_authorized(spaces, post, _SpaceId, _Client) ->
     true;
+is_authorized(spaces, get, _EntityId, #client{type = user, id = UserId}) ->
+    oz_api_privileges_logic:has_effective_privilege(UserId, list_spaces);
 is_authorized(space, patch, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_change_data);
 is_authorized(space, delete, SpaceId, #client{type = user, id = UserId}) ->
@@ -89,8 +91,18 @@ is_authorized(provider, delete, SpaceId, #client{type = user, id = UserId}) ->
 is_authorized(R, put, SpaceId, #client{type = user, id = UserId})
     when R =:= upriv; R =:= gpriv ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_set_privileges);
-is_authorized(_, get, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_effective_privilege(SpaceId, UserId, space_view_data);
+is_authorized(Resource, get, SpaceId, #client{type = user, id = UserId}) ->
+    Result = space_logic:has_effective_privilege(SpaceId, UserId, space_view_data),
+    % If the user is not authorized by perms in space to view it,
+    % check if he has oz_api_privileges to list spaces.
+    case {Resource, Result} of
+        {space, false} ->
+            oz_api_privileges_logic:has_effective_privilege(UserId, list_spaces);
+        {providers, false} ->
+            oz_api_privileges_logic:has_effective_privilege(UserId, list_providers_of_space);
+        _ ->
+            Result
+    end;
 is_authorized(R, get, SpaceId, #client{type = provider, id = ProviderId})
     when R =/= ginvite ->
     space_logic:has_provider(SpaceId, ProviderId);
@@ -189,8 +201,21 @@ accept_resource(gpriv, put, SpaceId, Data, _Client, Req) ->
 -spec provide_resource(Resource :: provided_resource(), SpaceId :: binary() | undefined,
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
+provide_resource(spaces, _EntityId, _Client, Req) ->
+    {ok, SpaceIds} = space_logic:list(),
+    {[{spaces, SpaceIds}], Req};
 provide_resource(space, SpaceId, #client{type = user, id = UserId}, Req) ->
-    {ok, Data} = space_logic:get_data(SpaceId, {user, UserId}),
+    % Check if the user has view permissions to given space. If yes, return the
+    % space data as he sees it. If not, it means that he used his OZ API
+    % privileges to access it (use 'provider' client for public space data).
+    Client = case space_logic:has_effective_privilege(
+        SpaceId, UserId, space_view_data) of
+        true ->
+            {user, UserId};
+        false ->
+            provider
+    end,
+    {ok, Data} = space_logic:get_data(SpaceId, Client),
     {Data, Req};
 provide_resource(space, SpaceId, #client{type = provider}, Req) ->
     {ok, Data} = space_logic:get_data(SpaceId, provider),

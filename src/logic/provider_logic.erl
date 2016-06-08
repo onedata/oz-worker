@@ -26,6 +26,7 @@
 -export([remove/1]).
 -export([test_connection/1, check_provider_connectivity/1]).
 -export([choose_provider_for_user/1]).
+-export([list/0]).
 
 %%%===================================================================
 %%% API
@@ -277,3 +278,14 @@ choose_provider_for_user(UserID) ->
                     {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
             end
     end.
+
+%%--------------------------------------------------------------------
+%% @doc Returns a list of all providers (their ids).
+%%--------------------------------------------------------------------
+-spec list() -> [binary()].
+list() ->
+    {ok, ProviderDocs} = provider:list(),
+    ProviderIds = lists:map(fun(#document{key = ProviderId}) ->
+        ProviderId
+    end, ProviderDocs),
+    {ok, ProviderIds}.

@@ -146,6 +146,7 @@ create_or_update(Doc, Diff) ->
 %%--------------------------------------------------------------------
 -spec all_privileges() -> [privilege()].
 all_privileges() -> [
+    view_privileges,
     set_privileges,
     list_spaces,
     list_providers,
