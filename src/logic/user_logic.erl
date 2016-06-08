@@ -578,8 +578,15 @@ authenticate_by_basic_credentials(Login, Password) ->
                     ?info("Created new account for user '~s' from onepanel",
                         [Login, UserRole]),
                     UserDoc;
-                {ok, UserDoc} ->
-                    UserDoc
+                {ok, #document{value = #onedata_user{} = UserInfo} = UserDoc} ->
+                    % Make sure user login is up to date (it might have changed
+                    % in onepanel since last login). Also enable basic auth for
+                    % him.
+                    UserDoc#document{
+                        value = UserInfo#onedata_user{
+                            login = Login,
+                            basic_auth_enabled = true
+                        }}
             end,
             % Check if user's role entitles him to belong to any groups
             {ok, GroupMapping} = application:get_env(
@@ -599,7 +606,6 @@ authenticate_by_basic_credentials(Login, Password) ->
                     end
                 end, Groups),
             {ok, UserDocument}
-        % @TODO ADD GROUPS!
     end.
 
 %%%===================================================================

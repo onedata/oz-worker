@@ -137,16 +137,12 @@ public_rpc_backend() -> public_rpc_backend.
 -spec session_details() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 session_details() ->
-    {ok, #document{value = #onedata_user{name = Name}}} =
-        onedata_user:get(g_session:get_user_id()),
+    {ok, #document{
+        value = #onedata_user{
+            name = Name,
+            basic_auth_enabled = BasicAuthEnabled
+        }}} = onedata_user:get(g_session:get_user_id()),
     FirstLogin = g_session:get_value(firstLogin, false),
-    random:seed(now()),
-    BasicAuthEnabled = case random:uniform(2) of
-        1 ->
-            true;
-        2 ->
-            false
-    end,
     Res = [
         {<<"userName">>, Name},
         {<<"firstLogin">>, FirstLogin},

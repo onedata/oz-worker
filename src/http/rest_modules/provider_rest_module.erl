@@ -42,7 +42,7 @@ routes() ->
     S = #rstate{module = ?MODULE, root = provider},
     M = rest_handler,
     [
-        {<<"providers/">>, M, S#rstate{resource = providers, methods = [get]}},
+        {<<"/providers/">>, M, S#rstate{resource = providers, methods = [get]}},
         {<<"/provider">>, M, S#rstate{resource = provider, methods = [get, post, patch, delete], noauth = [post]}},
         {<<"/provider_dev">>, M, S#rstate{resource = provider_dev, methods = [post], noauth = [post]}},
         {<<"/provider/spaces">>, M, S#rstate{resource = spaces, methods = [get, post]}},
