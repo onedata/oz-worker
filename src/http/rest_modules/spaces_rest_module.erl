@@ -93,12 +93,13 @@ is_authorized(R, put, SpaceId, #client{type = user, id = UserId})
     space_logic:has_effective_privilege(SpaceId, UserId, space_set_privileges);
 is_authorized(Resource, get, SpaceId, #client{type = user, id = UserId}) ->
     Result = space_logic:has_effective_privilege(SpaceId, UserId, space_view_data),
-    % If the user is not authorized by perms in space to view it,
-    % check if he has oz_api_privileges to list spaces.
     case {Resource, Result} of
         {space, false} ->
+            % If the user is not authorized by perms in space to view it,
+            % check if he has oz_api_privileges to list spaces...
             oz_api_privileges_logic:has_effective_privilege(UserId, list_spaces);
         {providers, false} ->
+            % ... or to list providers of space.
             oz_api_privileges_logic:has_effective_privilege(UserId, list_providers_of_space);
         _ ->
             Result

@@ -171,7 +171,8 @@ modify(GroupId, Data) ->
     ok.
 add_user(GroupId, UserId) ->
     case has_user(GroupId, UserId) of
-        true -> ok;
+        true ->
+            ok;
         false ->
             Privileges = privileges:group_user(),
             {ok, _} = user_group:update(GroupId, fun(Group) ->
@@ -195,19 +196,7 @@ add_user(GroupId, UserId) ->
     {ok, GroupId :: binary()}.
 join(UserId, Macaroon) ->
     {ok, {group, GroupId}} = token_logic:consume(Macaroon),
-    case has_user(GroupId, UserId) of
-        true -> ok;
-        false ->
-            Privileges = privileges:group_user(),
-            {ok, _} = user_group:update(GroupId, fun(Group) ->
-                #user_group{users = Users} = Group,
-                {ok, Group#user_group{users = [{UserId, Privileges} | Users]}}
-            end),
-            {ok, _} = onedata_user:update(UserId, fun(User) ->
-                #onedata_user{groups = Groups} = User,
-                {ok, User#onedata_user{groups = [GroupId | Groups]}}
-            end)
-    end,
+    ok = add_user(GroupId, UserId),
     {ok, GroupId}.
 
 %%--------------------------------------------------------------------

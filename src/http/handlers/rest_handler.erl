@@ -179,6 +179,7 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
                                         {true, Req, State#rstate{
                                             client = ProviderClient}};
                                     false ->
+                                        %% Not authorized
                                         {{false, <<"">>}, Req, State}
                                 end
                         end
@@ -208,7 +209,39 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
             {halt, ReqY, State}
     end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authenticate client by basic auth headers.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_basic_auth(Req :: cowboy_req:req()) ->
+    false | {true, #client{}}.
+authorize_by_basic_auth(Req) ->
+    {Header, _} = cowboy_req:header(<<"authorization">>, Req),
+    case Header of
+        <<"Basic ", UserPasswdB64/binary>> ->
+            UserPasswd = base64:decode(UserPasswdB64),
+            [User, Passwd] = binary:split(UserPasswd, <<":">>),
+            case user_logic:authenticate_by_basic_credentials(User, Passwd) of
+                {ok, #document{key = UserId}} ->
+                    Client = #client{type = user, id = UserId},
+                    {true, Client};
+                _ ->
+                    false
+            end;
+        _ ->
+            false
+    end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authenticate client by macaroons.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_macaroons(Req :: cowboy_req:req(), BinMethod :: binary(),
+    Root :: atom()) -> false | {true, #client{}}.
 authorize_by_macaroons(Req, BinMethod, Root) ->
     {Macaroon, DischargeMacaroons, _} = parse_macaroons_from_headers(Req),
     %% @todo: VFS-1869
@@ -231,6 +264,14 @@ authorize_by_macaroons(Req, BinMethod, Root) ->
             end
     end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authenticate client by provider certs.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_provider_certs(Req :: cowboy_req:req()) ->
+    false | {true, #client{}}.
 authorize_by_provider_certs(Req) ->
     case ssl:peercert(cowboy_req:get(socket, Req)) of
         {ok, PeerCert} ->
@@ -245,23 +286,6 @@ authorize_by_provider_certs(Req) ->
                     false
             end;
         {error, no_peercert} ->
-            false
-    end.
-
-authorize_by_basic_auth(Req) ->
-    {Header, _} = cowboy_req:header(<<"authorization">>, Req),
-    case Header of
-        <<"Basic ", UserPasswdB64/binary>> ->
-            UserPasswd = base64:decode(UserPasswdB64),
-            [User, Passwd] = binary:split(UserPasswd, <<":">>),
-            case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-                {ok, #document{key = UserId}} ->
-                    Client = #client{type = user, id = UserId},
-                    {true, Client};
-                _ ->
-                    false
-            end;
-        _ ->
             false
     end.
 
