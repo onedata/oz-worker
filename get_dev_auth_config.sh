@@ -37,8 +37,8 @@ fi
 echo -e "\t[  OK  ]"
 cd onedev
 git fetch
-git checkout develop
-git pull origin develop
+git checkout feature/VFS-2133-implement-openid-auth-with-indigo
+git pull origin feature/VFS-2133-implement-openid-auth-with-indigo
 
 # Replace auth.config
 cd ${RUNNER_SCRIPT_DIR}

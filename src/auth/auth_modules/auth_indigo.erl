@@ -9,14 +9,14 @@
 %%% via Github.
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_google).
+-module(auth_indigo).
 -behaviour(auth_module_behaviour).
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 
--define(PROVIDER_NAME, google).
+-define(PROVIDER_NAME, indigo).
 
 %% API
 -export([get_redirect_url/1, validate_login/0]).
@@ -68,26 +68,25 @@ validate_login() ->
         ParamsProplist = g_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
+        ClientId = auth_config:get_provider_app_id(?PROVIDER_NAME),
+        ClientSecret = auth_config:get_provider_app_secret(?PROVIDER_NAME),
         % Form access token request
         NewParamsProplist = [
-            {<<"code">>,
-                Code},
-            {<<"client_id">>,
-                auth_config:get_provider_app_id(?PROVIDER_NAME)},
-            {<<"client_secret">>,
-                auth_config:get_provider_app_secret(?PROVIDER_NAME)},
-            {<<"redirect_uri">>,
-                auth_utils:local_auth_endpoint()},
-            {<<"grant_type">>,
-                <<"authorization_code">>}
+            {<<"code">>, Code},
+%%            {<<"client_id">>, ClientId},
+%%            {<<"client_secret">>, ClientSecret},
+            {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
+            {<<"grant_type">>, <<"authorization_code">>}
         ],
         % Convert proplist to params string
         Params = http_utils:proplist_to_url_params(NewParamsProplist),
         % Send request to Google endpoint
         XRDS = get_xrds(),
+        B64 = base64:encode(<<ClientId/binary, ":", ClientSecret/binary>>),
         {ok, 200, _, ResponseBinary} = http_client:post(
             access_token_endpoint(XRDS),
-            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}],
+            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>},
+                {<<"Authorization">>, <<"Basic ", B64/binary>>}],
             Params
         ),
 
@@ -113,7 +112,7 @@ validate_login() ->
         {ok, ProvUserInfo}
     catch
         Type:Message ->
-            ?debug_stacktrace("Error in ~p:validate_login - ~p:~p",
+            ?error_stacktrace("Error in ~p:validate_login - ~p:~p",
                 [?MODULE, Type, Message]),
             {error, {Type, Message}}
     end.
