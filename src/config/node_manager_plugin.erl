@@ -267,7 +267,6 @@ create_predefined_group(Id, Name, Privileges) ->
                     Other ->
                         ?error("Cannot create predefined group '~s' - ~p",
                             [Id, Other])
-
                 end
         end,
         ok
