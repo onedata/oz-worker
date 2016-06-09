@@ -126,4 +126,4 @@ provide_resource(Resource, EntityId, _Client, Req) ->
     {boolean(), cowboy_req:req()}.
 delete_resource(Resource, EntityId, Req) ->
     % Resource is (onedata_user | user_group) so it can be used directly here.
-    {oz_api_privileges_logic:remove(Resource, EntityId), Req}.
+    {oz_api_privileges_logic:remove(EntityId, Resource), Req}.

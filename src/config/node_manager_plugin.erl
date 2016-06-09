@@ -261,18 +261,12 @@ create_predefined_group(Id, Name, Privileges) ->
                     }},
                 case user_group:create(NewGroup) of
                     {ok, Id} ->
-                        case oz_api_privileges_logic:modify(
-                            Id, user_group, Privileges) of
-                            ok ->
-                                ?info("Created predefined group '~s'", [Name]);
-                            Other ->
-                                ?error("Cannot set privileges for predefined "
-                                "group '~s' - ~p", [Id, Other])
-                        end;
+                        oz_api_privileges_logic:modify(
+                            Id, user_group, Privileges),
+                        ?info("Created predefined group '~s'", [Name]);
                     Other ->
                         ?error("Cannot create predefined group '~s' - ~p",
                             [Id, Other])
-
                 end
         end,
         ok
