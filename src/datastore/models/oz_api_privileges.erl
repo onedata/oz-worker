@@ -31,7 +31,7 @@
 
 % Possible privileges
 -type privilege() :: view_privileges | set_privileges | list_spaces |
-list_providers | list_spaces_providers.
+list_providers | list_providers_of_space.
 % Types of entities that can possess those privileges.
 -type entity_type() :: onedata_user | user_group.
 -export_type([privilege/0, entity_type/0]).
