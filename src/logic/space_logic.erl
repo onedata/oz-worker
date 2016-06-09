@@ -406,7 +406,13 @@ remove(SpaceId) ->
     #space{users = Users, groups = Groups, providers_supports = Supports} = Space,
 
     lists:foreach(fun({UserId, _}) ->
-        user_logic:clean_space_name_mapping(UserId, SpaceId)
+        {ok, _} = onedata_user:update(UserId, fun(User) ->
+            #onedata_user{spaces = USpaces, space_names = SpaceNames} = User,
+            {ok, User#onedata_user{
+                spaces = lists:delete(SpaceId, USpaces),
+                space_names = maps:remove(SpaceId, SpaceNames)
+            }}
+        end)
     end, Users),
 
     lists:foreach(fun({GroupId, _}) ->
