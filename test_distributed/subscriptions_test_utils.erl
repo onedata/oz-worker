@@ -188,7 +188,7 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
 
-    ct:run("~p", [All, Expected, Forbidden]),
+    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),
@@ -227,4 +227,3 @@ remove_matched_expectations(Expected, Messages) ->
     lists:filter(fun(Exp) ->
         lists:all(fun(Msg) -> length(Exp -- Msg) =/= 0 end, Messages)
                  end, Expected).
-
