@@ -89,7 +89,7 @@ resource_exists(space, UserId, Req) ->
 resource_exists(group, UserId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {gid, GID} = lists:keyfind(gid, 1, Bindings),
-    {group_logic:has_effective_user(GID, UserId), Req2};
+    {group_logic:has_user(GID, UserId), Req2};
 resource_exists(_, _, Req) ->
     {true, Req}.
 
