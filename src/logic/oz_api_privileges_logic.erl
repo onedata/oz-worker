@@ -27,8 +27,8 @@
 %% If such record does not exist, an empty list of privileges is returned.
 %% @end
 %%--------------------------------------------------------------------
--spec get(EntityId :: datastore:ext_key(), EntityType :: user | group) ->
-    {ok, [oz_api_privileges:privilege()]} | datastore:get_error().
+-spec get(EntityId :: binary(), EntityType :: user | group) ->
+    {ok, [oz_api_privileges:privilege()]}.
 get(EntityId, EntityType) ->
     Key = resolve_id(EntityId, EntityType),
     Privs = case oz_api_privileges:get(Key) of
@@ -47,7 +47,7 @@ get(EntityId, EntityType) ->
 %% If provided privileges are empty, the record (if exists) is deleted.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(EntityId :: datastore:ext_key(),
+-spec modify(EntityId :: binary(),
     EntityType :: oz_api_privileges:entity_type(),
     NewPrivileges :: [oz_api_privileges:privilege()]) -> ok.
 modify(EntityId, EntityType, NewPrivileges) ->
@@ -75,8 +75,8 @@ modify(EntityId, EntityType, NewPrivileges) ->
 %% oz_api_privileges record (succeeds as well when the record is not present).
 %% @end
 %%--------------------------------------------------------------------
--spec remove(EntityId :: datastore:ext_key(), EntityType :: user | group) ->
-    true.
+-spec remove(EntityId :: binary(), EntityType :: user | group) ->
+    boolean().
 remove(EntityId, EntityType) ->
     Key = resolve_id(EntityId, EntityType),
     ok = oz_api_privileges:delete(Key),
@@ -89,8 +89,8 @@ remove(EntityId, EntityType) ->
 %% privileges of the user and privileges of all his effective groups.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_privilege(UserId :: datastore:ext_key(),
-    Privilege :: oz_api_privileges:privilege()) -> boolean() | no_return().
+-spec has_effective_privilege(UserId :: binary(),
+    Privilege :: oz_api_privileges:privilege()) -> boolean().
 has_effective_privilege(UserId, Privilege) ->
     {ok, UserPrivileges} = get(UserId, onedata_user),
     case lists:member(Privilege, UserPrivileges) of
@@ -122,7 +122,7 @@ has_effective_privilege(UserId, Privilege) ->
 %% Returns record key based on entity ID and type (user/group).
 %% @end
 %%--------------------------------------------------------------------
--spec resolve_id(EntityId :: datastore:ext_key(),
+-spec resolve_id(EntityId :: binary(),
     EntityType :: oz_api_privileges:entity_type()) -> binary().
 resolve_id(EntityId, EntityType) ->
     case EntityType of

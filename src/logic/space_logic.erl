@@ -608,7 +608,7 @@ set_privileges_aux(#space{groups = Groups} = Space, {group, GroupId}, Privileges
 %%--------------------------------------------------------------------
 %% @doc Returns a list of all spaces (their ids).
 %%--------------------------------------------------------------------
--spec list() -> [binary()].
+-spec list() -> {ok, [binary()]}.
 list() ->
     {ok, SpaceDocs} = space:list(),
     SpaceIds = lists:map(fun(#document{key = SpaceId}) ->

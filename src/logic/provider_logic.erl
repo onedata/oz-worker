@@ -282,7 +282,7 @@ choose_provider_for_user(UserID) ->
 %%--------------------------------------------------------------------
 %% @doc Returns a list of all providers (their ids).
 %%--------------------------------------------------------------------
--spec list() -> [binary()].
+-spec list() -> {ok, [binary()]}.
 list() ->
     {ok, ProviderDocs} = provider:list(),
     ProviderIds = lists:map(fun(#document{key = ProviderId}) ->

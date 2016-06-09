@@ -122,7 +122,7 @@ provide_resource(Resource, EntityId, _Client, Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_resource(Resource :: removable_resource(),
-    ProviderId :: binary() | undefined, Req :: cowboy_req:req()) ->
+    EntityId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 delete_resource(Resource, EntityId, Req) ->
     % Resource is (onedata_user | user_group) so it can be used directly here.
