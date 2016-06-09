@@ -537,32 +537,35 @@ clean_space_name_mapping(UserId, SpaceId) ->
 -spec authenticate_by_basic_credentials(Login :: binary(),
     Password :: binary()) -> {ok, UserDoc :: #document{}} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
-    UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
-    BasicAuthHeader = <<"Basic ", UserAndPassword/binary>>,
-    % TODO connect to onepanel
-    RestCallResult = case BasicAuthHeader of
-        <<"Basic dXNlcjE6cGFzc3dvcmQ=">> ->
-            {ok, [
-                {<<"userId">>, <<"user1">>},
-                {<<"userRole">>, <<"admin">>}
-            ]};
-        <<"Basic dXNlcjI6cGFzc3dvcmQ=">> ->
-            {ok, [
-                {<<"userId">>, <<"user2">>},
-                {<<"userRole">>, <<"regular">>}
-            ]};
-        <<"Basic dXNlcjQ6cGFzc3dvcmQ=">> ->
-            {ok, [
-                {<<"userId">>, <<"user4">>},
-                {<<"userRole">>, <<"regular">>}
-            ]};
-        _ ->
-            {error, not_found}
+    Headers = [basic_auth_header(Login, Password)],
+    {ok, OnepanelRESTURL} =
+        application:get_env(?APP_Name, onepanel_rest_url),
+    {ok, OnepanelGetUserEndpoint} =
+        application:get_env(?APP_Name, onepanel_user_endpoint),
+    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    RestCallResult = case http_client:get(URL, Headers, <<"">>, [insecure]) of
+        {ok, 200, _, JSON} ->
+            json_utils:decode(JSON);
+        {ok, 401, _, _} ->
+            {error, <<"Invalid login or password">>};
+        {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
+            try
+                ErrorProps = json_utils:decode(ErrorJSON),
+                Message = proplists:get_value(<<"description">>, ErrorProps,
+                    <<"Invalid login or password">>),
+                {error, Message}
+            catch _:_ ->
+                {error, bad_request}
+            end;
+        {ok, _, _, _} ->
+            {error, bad_request};
+        {error, Error} ->
+            {error, Error}
     end,
     case RestCallResult of
         {error, Reason} ->
             {error, Reason};
-        {ok, Props} ->
+        Props ->
             UserId = proplists:get_value(<<"userId">>, Props),
             UserRole = proplists:get_value(<<"userRole">>, Props),
             UserDocument = case onedata_user:get(UserId) of
@@ -575,8 +578,8 @@ authenticate_by_basic_credentials(Login, Password) ->
                             basic_auth_enabled = true
                         }},
                     {ok, UserId} = onedata_user:save(UserDoc),
-                    ?info("Created new account for user '~s' from onepanel",
-                        [Login, UserRole]),
+                    ?info("Created new account for user '~s' from onepanel "
+                    "(role: '~s')", [Login, UserRole]),
                     UserDoc;
                 {ok, #document{value = #onedata_user{} = UserInfo} = UserDoc} ->
                     % Make sure user login is up to date (it might have changed
@@ -622,18 +625,52 @@ authenticate_by_basic_credentials(Login, Password) ->
 -spec change_user_password(Login :: binary(), OldPassword :: binary(),
     Password :: binary()) -> ok | {error, term()}.
 change_user_password(Login, OldPassword, NewPassword) ->
-    % TODO connect to onepanel
-    random:seed(now()),
-    case random:uniform(2) of
-        1 ->
+    Headers = [
+        {<<"content-type">>, <<"application/json">>},
+        basic_auth_header(Login, OldPassword)
+    ],
+    {ok, OnepanelRESTURL} =
+        application:get_env(?APP_Name, onepanel_rest_url),
+    {ok, OnepanelGetUserEndpoint} =
+        application:get_env(?APP_Name, onepanel_user_endpoint),
+    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    Body = json_utils:encode([{<<"password">>, base64:encode(NewPassword)}]),
+    case http_client:put(URL, Headers, Body, [insecure]) of
+        {ok, 204, _, _} ->
             ok;
-        2 ->
-            {error, random_error}
+        {ok, 401, _, _} ->
+            {error, <<"Invalid password">>};
+        {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
+            try
+                ErrorProps = json_utils:decode(ErrorJSON),
+                Message = proplists:get_value(<<"description">>, ErrorProps,
+                    <<"Cannot change password">>),
+                {error, Message}
+            catch _:_ ->
+                {error, bad_request}
+            end;
+        {ok, _, _, _} ->
+            {error, bad_request};
+        {error, Error} ->
+            {error, Error}
     end.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns basic authorization headers based on login and password.
+%% @end
+%%--------------------------------------------------------------------
+-spec basic_auth_header(Login :: binary(), Password :: binary()) ->
+    {Key :: binary(), Value :: binary()}.
+basic_auth_header(Login, Password) ->
+    UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
+    {<<"Authorization">>, <<"Basic ", UserAndPassword/binary>>}.
+
 
 %%--------------------------------------------------------------------
 %% @private

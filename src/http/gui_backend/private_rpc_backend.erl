@@ -55,6 +55,8 @@ handle(<<"changePassword">>, Props) ->
     case user_logic:change_user_password(Login, OldPassword, NewPassword) of
         ok ->
             ok;
+        {error, Binary} when is_binary(Binary) ->
+            gui_error:report_warning(Binary);
         _ ->
             gui_error:report_warning(
                 <<"Cannot change user password - old password incorrect.">>)
