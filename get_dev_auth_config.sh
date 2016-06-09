@@ -37,8 +37,8 @@ fi
 echo -e "\t[  OK  ]"
 cd onedev
 git fetch
-git checkout feature/VFS-2111-oz-supports-user-and-admin-accounts
-git pull origin feature/VFS-2111-oz-supports-user-and-admin-accounts
+git checkout develop
+git pull origin develop
 
 # Replace auth.config
 cd ${RUNNER_SCRIPT_DIR}
