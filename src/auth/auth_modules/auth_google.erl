@@ -32,7 +32,8 @@
 %%--------------------------------------------------------------------
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 get_redirect_url(ConnectAccount) ->
-    auth_oauth2_common:get_redirect_url(ConnectAccount, ?PROVIDER_NAME).
+    auth_oauth2_common:get_redirect_url(
+        ConnectAccount, ?PROVIDER_NAME, ?MODULE).
 
 %%--------------------------------------------------------------------
 %% @doc Validates login request that came back from the provider.
