@@ -20,14 +20,15 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([init_per_testcase/2, end_per_testcase/2]).
--export([generate_spaces_test/1, modify_space_record_test/1, space_update_test/1]).
--export([generate_spaces_test_base/1, modify_space_record_test_base/1, space_update_test_base/1, id/1]).
+-export([generate_spaces_test/1, space_update_test/1]).
+-export([generate_spaces_test_base/1, space_update_test_base/1]).
 
-all() -> ?ALL([space_update_test], [
-%%    generate_spaces_test
+all() -> ?ALL([], [
+    generate_spaces_test,
+    space_update_test
+]).
 %%        ,
 %%    modify_space_record_test
-    space_update_test]).
 
 
 -define(PROVIDERS_COUNT(Value), [
@@ -183,77 +184,76 @@ generate_spaces_test_base(Config) ->
             description = "Time until every update arrived (providers mean)"}
     ].
 
-modify_space_record_test(Config) ->
-    ?PERFORMANCE(Config, [
-        {repeats, 1},
-        {success_rate, 95},
-        {description, "Performs document saves and gathers subscription updated for many providers"},
-        ?MOD_CFG(one_provider, "One provider modifying document 10 times", 1, 10)
-
-    ]).
-
-modify_space_record_test_base(Config) ->
-    % given
-    [Node | _] = ?config(oz_worker_nodes, Config),
-
-    ProvidersCount = ?config(providers_count, Config),
-    DocModificationsCount = ?config(docs_modifications_count, Config),
-
-    {ok, UserId} = ?assertMatch({ok, _},
-        oz_test_utils:create_user(Config, #onedata_user{})),
-
-    InitialSpaceName = <<"space_name">>,
-    {ok, SpaceId} = ?assertMatch({ok, _},
-        oz_test_utils:create_space(Config, {user, UserId}, InitialSpaceName)),
-
-    Results = utils:pmap(fun(ID) ->
-        %% given
-        PNameList = "provider_" ++ integer_to_list(ID),
-        PName = list_to_binary(PNameList),
-
-        SpaceNames = lists:map(fun(ID1) ->
-            list_to_binary("space_" ++ integer_to_list(ID1) ++ "@" ++ PNameList)
-        end, lists:seq(1, DocModificationsCount)),
-
-        %% when
-        PID = subscriptions_test_utils:create_provider(Node, PName, [SpaceId]),
-        Context = subscriptions_test_utils:init_messages(Node, PID, []),
-
-        Spaces = lists:map(fun(SpaceName) ->
-            Space = #space{name = SpaceName, providers_supports = [{PID, 0}]},
-            subscriptions_test_utils:save(Node, SpaceId, Space),
-            Space
-        end, SpaceNames),
-
-        %% then
-        Start = erlang:system_time(milli_seconds),
-        subscriptions_test_utils:verify_messages_present(Context,
-            lists:map(fun(Space) ->
-                subscriptions_test_utils:expectation(SpaceId, Space)
-            end, Spaces)
-        ),
-        {ok, erlang:system_time(milli_seconds) - Start}
-    end, lists:seq(1, ProvidersCount)),
-
-    lists:map(fun(Res) ->
-        ?assertMatch({ok, _}, Res)
-    end, Results),
-
-    UpdatesMeanTime = lists:sum(lists:map(fun({ok, Time}) -> Time end, Results)) / length(Results),
-
-    [
-        #parameter{name = updates_await, value = UpdatesMeanTime, unit = "ms",
-            description = "Time until every update arrived (providers mean)"}
-    ].
+%%modify_space_record_test(Config) ->
+%%    ?PERFORMANCE(Config, [
+%%        {repeats, 1},
+%%        {success_rate, 95},
+%%        {description, "Performs document saves and gathers subscription updated for many providers"},
+%%        ?MOD_CFG(one_provider, "One provider modifying document 10 times", 1, 10)
+%%
+%%    ]).
+%%
+%%modify_space_record_test_base(Config) ->
+%%    % given
+%%    [Node | _] = ?config(oz_worker_nodes, Config),
+%%
+%%    ProvidersCount = ?config(providers_count, Config),
+%%    DocModificationsCount = ?config(docs_modifications_count, Config),
+%%
+%%    {ok, UserId} = ?assertMatch({ok, _},
+%%        oz_test_utils:create_user(Config, #onedata_user{})),
+%%
+%%    InitialSpaceName = <<"space_name">>,
+%%    {ok, SpaceId} = ?assertMatch({ok, _},
+%%        oz_test_utils:create_space(Config, {user, UserId}, InitialSpaceName)),
+%%
+%%    Results = utils:pmap(fun(ID) ->
+%%        %% given
+%%        PNameList = "provider_" ++ integer_to_list(ID),
+%%        PName = list_to_binary(PNameList),
+%%
+%%        SpaceNames = lists:map(fun(ID1) ->
+%%            list_to_binary("space_" ++ integer_to_list(ID1) ++ "@" ++ PNameList)
+%%        end, lists:seq(1, DocModificationsCount)),
+%%
+%%        %% when
+%%        PID = subscriptions_test_utils:create_provider(Node, PName, [SpaceId]),
+%%        Context = subscriptions_test_utils:init_messages(Node, PID, []),
+%%
+%%        Spaces = lists:map(fun(SpaceName) ->
+%%            Space = #space{name = SpaceName, providers_supports = [{PID, 0}]},
+%%            subscriptions_test_utils:save(Node, SpaceId, Space),
+%%            Space
+%%        end, SpaceNames),
+%%
+%%        %% then
+%%        Start = erlang:system_time(milli_seconds),
+%%        subscriptions_test_utils:verify_messages_present(Context,
+%%            lists:map(fun(Space) ->
+%%                subscriptions_test_utils:expectation(SpaceId, Space)
+%%            end, Spaces)
+%%        ),
+%%        {ok, erlang:system_time(milli_seconds) - Start}
+%%    end, lists:seq(1, ProvidersCount)),
+%%
+%%    lists:map(fun(Res) ->
+%%        ?assertMatch({ok, _}, Res)
+%%    end, Results),
+%%
+%%    UpdatesMeanTime = lists:sum(lists:map(fun({ok, Time}) -> Time end, Results)) / length(Results),
+%%
+%%    [
+%%        #parameter{name = updates_await, value = UpdatesMeanTime, unit = "ms",
+%%            description = "Time until every update arrived (providers mean)"}
+%%    ].
 
 space_update_test(Config) ->
     ?PERFORMANCE(Config, [
-        {repeats, 1},
+        {repeats, 10},
         {parameters, [?DOCS_MODIFICATIONS_COUNT(10), ?USERS_NUM(2), ?GROUPS_NUM(4)]},
         {success_rate, 95},
         {description, "Performs document updates and gathers subscription updated for provider"},
         ?UPDATE_CFG(one_provider, "One provider modifying document 10 times", 10, 2, 4)
-
     ]).
 
 space_update_test_base(Config) ->
@@ -264,72 +264,27 @@ space_update_test_base(Config) ->
     GroupsNum = ?config(groups_num, Config),
     UpdatesNum = ?config(docs_modifications_count, Config),
 
-    %TODO cleanup and generate groups and users
+    PID = subscriptions_test_utils:create_provider(Node, subscriptions_test_utils:id("p1"), []),
+    GIDs = subscriptions_test_utils:generate_group_ids(GroupsNum),
+    UIDs = subscriptions_test_utils:generate_user_ids(UsersNum),
+    SIDs = subscriptions_test_utils:generate_space_ids(1),
 
-    PID = subscriptions_test_utils:create_provider(Node, id("p1"), []),
-    S1 = #space{
-        name = <<"initial">>,
-        groups = [
-            {id(g1), []},
-            {id(g2), []},
-            {id(g3), []}
-        ]
-    },
+    [{SID1, S1} | _] = subscriptions_test_utils:create_spaces(SIDs, UIDs, GIDs, Node),
+    Users = subscriptions_test_utils:create_users(UIDs, GIDs, Node),
+    _Groups = subscriptions_test_utils:create_groups(GIDs, UIDs, SIDs, Node),
 
-    Users = lists:map(fun(N) ->
-        Name = "u" ++ integer_to_list(N),
-        User = #onedata_user{
-            name=list_to_binary(Name),
-            groups = [id(g1), id(g2), id(g3)]},
-        UserId = id(Name),
-        subscriptions_test_utils:save(Node, UserId, User),
-        {UserId, User}
-    end, lists:seq(1, UsersNum)),
-
-    G1 = #user_group{
-        name = <<"g1">>,
-        users = [{UserId, []} || {UserId, _} <- Users],
-        spaces = [id(s1)]
-    },
-    G2 = #user_group{
-        name = <<"g2">>,
-        users = [{UserId, []} || {UserId, _} <- Users],
-        spaces = [id(s1)]
-    },
-    G3 = #user_group{
-        name = <<"g3">>,
-        users = [{UserId, []} || {UserId, _} <- Users],
-        spaces = [id(s1)]
-    },
-
-%%    TODO generate full groups
-    EmptyGroups = lists:map(fun(N) ->
-        Name = "g" ++ integer_to_list(N),
-        Group = #user_group{
-            name = list_to_binary("g" ++ integer_to_list(N)),
-            users = [],
-            spaces = []
-        },
-        GID = id(Name),
-        {GID, Group}
-    end, lists:seq(4,GroupsNum)),
-
-    Groups = [{id(g1), G1}, {id(g2), G2}, {id(g3), G3}] ++ EmptyGroups,
-    subscriptions_test_utils:save(Node, id(s1), S1),
-
-    lists:foreach(fun({GID, Group}) ->
-        subscriptions_test_utils:save(Node, GID, Group)
-    end, Groups),
     % when
-    Context1 = subscriptions_test_utils:init_messages(Node, PID, [id(u1)]),
+    {UID1, _} = hd(Users),
+    Context1 = subscriptions_test_utils:init_messages(Node, PID, [UID1]),
+    Context = subscriptions_test_utils:flush_messages(
+        Context1, subscriptions_test_utils:expectation(SID1, S1)),
 
-    Context = subscriptions_test_utils:flush_messages(Context1,
-        subscriptions_test_utils:expectation(id(s1), S1)),
+    %% ensure sequence number won't be repeated when more entities are created
+    SeqStart = UsersNum + GroupsNum + 100,
 
     ModifiedSpaces = lists:map(fun(N) ->
-        {N + 100, S1#space{name=list_to_binary("modified" ++ integer_to_list(N))}}
+        {N + SeqStart, S1#space{name=list_to_binary("modified" ++ integer_to_list(N))}}
     end, lists:seq(1, UpdatesNum)),
-
 
     Start = erlang:system_time(milli_seconds),
 
@@ -337,17 +292,15 @@ space_update_test_base(Config) ->
         rpc:cast(Node, worker_proxy, cast, [
             ?SUBSCRIPTIONS_WORKER_NAME, {
                 handle_change, Seq,
-                #document{key= id(s1), value=Space},
+                #document{key= SID1, value=Space},
                 space
             }])
     end, ModifiedSpaces),
 
     % then
-%%    lists:foreach(fun({_Seq, Space}) ->
     subscriptions_test_utils:verify_messages_present(Context, [
-            subscriptions_test_utils:expectation(id(s1), Space) || {_Seq, Space} <- ModifiedSpaces
+            subscriptions_test_utils:expectation(SID1, Space) || {_Seq, Space} <- ModifiedSpaces
     ]),
-%%    end, ModifiedSpaces),
     Time = erlang:system_time(milli_seconds) - Start,
 
     [
@@ -386,7 +339,3 @@ end_per_suite(Config) ->
 %%% Internal functions
 %%%===================================================================
 
-id(Id) when is_atom(Id) ->
-    ?ID(Id);
-id(Id) ->
-    ?ID(list_to_atom(Id)).

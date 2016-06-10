@@ -18,7 +18,8 @@
 
 %% API
 -export([save/3, update_document/4, delete_document/3, get_rev/3,
-    create_provider/3, call_worker/2]).
+    create_provider/3, call_worker/2, generate_group_ids/1, generate_user_ids/1,
+    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1]).
 -export([expectation/2, public_only_user_expectation/2, group_expectation/8,
     privileges_as_binaries/1, expectation_with_rev/2]).
 -export([verify_messages_present/2, verify_messages_absent/2, init_messages/3,
@@ -55,6 +56,53 @@ create_provider(Node, Name, Spaces) ->
     {ok, ID, _} = rpc:call(Node, provider_logic, create, Params),
     {ok, ID} = rpc:call(Node, provider, update, [ID, #{spaces => Spaces}]),
     ID.
+
+generate_space_ids(Number) ->
+    generate_ids("s", Number).
+
+generate_group_ids(Number) ->
+    generate_ids("g", Number).
+
+generate_user_ids(Number) ->
+    generate_ids("u", Number).
+
+generate_ids(Prefix, Number) ->
+    [id(Prefix ++ integer_to_list(N)) || N <- lists:seq(1, Number)].
+
+create_spaces(SIDs, UIDs, GIDs, Node) ->
+    Groups = [{GID, []} || GID <- GIDs],
+    Users =  [{UID, []} || UID <- UIDs],
+    lists:map(fun({SID, N}) -> {
+        Space = #space{
+            name = list_to_binary("s" ++ integer_to_list(N)),
+            groups = Groups,
+            users = Users
+        }},
+        subscriptions_test_utils:save(Node, SID, Space),
+        {SID, Space}
+    end, lists:zip(SIDs, lists:seq(1, length(SIDs)))).
+
+create_users(UIDs, GIDs, Node) ->
+    lists:map(fun({UID, N}) ->{
+        User = #onedata_user{
+            name=list_to_binary("u" ++ integer_to_list(N)),
+            groups = GIDs
+        }},
+        subscriptions_test_utils:save(Node, UID, User),
+        {UID, User}
+    end, lists:zip(UIDs, lists:seq(1, length(UIDs)))).
+
+create_groups(GIDs, UIDs, SIDs, Node) ->
+    Users = [{UID, []} || UID <- UIDs],
+    lists:map(fun({GID, N}) ->{
+        Group = #user_group{
+            name = list_to_binary("g" ++ integer_to_list(N)),
+            users = Users,
+            spaces = SIDs
+        }},
+        subscriptions_test_utils:save(Node, GID, Group),
+        {GID, Group}
+end, lists:zip(GIDs, lists:seq(1, length(GIDs)))).
 
 
 generate_cert_files() ->
@@ -227,3 +275,9 @@ remove_matched_expectations(Expected, Messages) ->
     lists:filter(fun(Exp) ->
         lists:all(fun(Msg) -> length(Exp -- Msg) =/= 0 end, Messages)
                  end, Expected).
+
+
+id(Id) when is_atom(Id) ->
+    ?ID(Id);
+id(Id) ->
+    ?ID(list_to_atom(Id)).
