@@ -16,7 +16,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 
 %% API
--export([get_redirect_url/2, validate_login/2]).
+-export([get_redirect_url/3, validate_login/2]).
 
 %%%===================================================================
 %%% API functions
@@ -27,9 +27,9 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(boolean(), ProviderName :: atom()) ->
-    {ok, binary()} | {error, term()}.
-get_redirect_url(ConnectAccount, ProviderName) ->
+-spec get_redirect_url(boolean(), ProviderName :: atom(),
+    HandlerModule :: atom()) -> {ok, binary()} | {error, term()}.
+get_redirect_url(ConnectAccount, ProviderName, HandlerModule) ->
     try
         ParamsProplist = [
             {<<"client_id">>,
@@ -41,7 +41,7 @@ get_redirect_url(ConnectAccount, ProviderName) ->
             {<<"redirect_uri">>,
                 auth_utils:local_auth_endpoint()},
             {<<"state">>,
-                auth_logic:generate_state_token(?MODULE, ConnectAccount)}
+                auth_logic:generate_state_token(HandlerModule, ConnectAccount)}
         ],
         Params = http_utils:proplist_to_url_params(ParamsProplist),
         AuthorizeEndpoint = authorize_endpoint(get_xrds(ProviderName)),
@@ -129,8 +129,8 @@ validate_login(ProviderName, SecretSendMethod) ->
         {ok, ProvUserInfo}
     catch
         Type:Message ->
-            ?debug_stacktrace("Error in ~p:validate_login - ~p:~p",
-                [?MODULE, Type, Message]),
+            ?debug_stacktrace("Error in OpenID validate_login (~p) - ~p:~p",
+                [ProviderName, Type, Message]),
             {error, {Type, Message}}
     end.
 
