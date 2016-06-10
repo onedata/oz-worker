@@ -6,17 +6,17 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc: This module implements auth_module_behaviour and handles signing in
-%%% via Google OpenID.
+%%% via Indigo OpenID.
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_google).
+-module(auth_indigo).
 -behaviour(auth_module_behaviour).
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 
--define(PROVIDER_NAME, google).
+-define(PROVIDER_NAME, indigo).
 
 %% API
 -export([get_redirect_url/1, validate_login/0]).
@@ -42,4 +42,4 @@ get_redirect_url(ConnectAccount) ->
 -spec validate_login() ->
     {ok, #oauth_account{}} | {error, term()}.
 validate_login() ->
-    auth_oauth2_common:validate_login(?PROVIDER_NAME, secret_over_http_post).
+    auth_oauth2_common:validate_login(?PROVIDER_NAME, secret_over_http_basic).

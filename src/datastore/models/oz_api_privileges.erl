@@ -1,15 +1,22 @@
 %%%-------------------------------------------------------------------
-%%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @author Lukasz Opiola
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This document contains a list of privileges possessed by certain entity
+%%% (user / group) to use onezone API. Record IDs are formed by adding
+%%% a prefix to an entity id, like this:
+%%%     user:ZjIS8hhvN5Z_rr94Hjiuw5vcsDkpwiMOv7_lnHMm2vw
+%%%     group:Z4rRalGhBhRZ1gTOitlXxVe0PRGLUzgTzlevlNkc1FY
+%%% If a given user / group does not have such record, it means that it does
+%%% not have any privileges.
 %%% @end
 %%%-------------------------------------------------------------------
--module(space).
--author("Michal Zmuda").
+-module(oz_api_privileges).
+-author("Lukasz Opiola").
 -behaviour(model_behaviour).
 
 -include("registered_names.hrl").
@@ -17,8 +24,17 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
 %% model_behaviour callbacks
--export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
+-export([save/1, get/1, exists/1, delete/1, update/2, create/1,
+    model_init/0, 'after'/5, before/4, create_or_update/2]).
+%% Model specific functions
+-export([all_privileges/0]).
+
+% Possible privileges
+-type privilege() :: view_privileges | set_privileges | list_spaces |
+list_providers | list_providers_of_space.
+% Types of entities that can possess those privileges.
+-type entity_type() :: onedata_user | user_group.
+-export_type([privilege/0, entity_type/0]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -63,15 +79,6 @@ get(Key) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns list of all records.
-%% @end
-%%--------------------------------------------------------------------
--spec list() -> {ok, [datastore:document()]} | datastore:generic_error() | no_return().
-list() ->
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).
-
-%%--------------------------------------------------------------------
-%% @doc
 %% {@link model_behaviour} callback delete/1.
 %% @end
 %%--------------------------------------------------------------------
@@ -96,8 +103,8 @@ exists(Key) ->
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_Name, space_store_level, ?DISK_ONLY_LEVEL),
-    ?MODEL_CONFIG(space_bucket, [], StoreLevel).
+    StoreLevel = application:get_env(?APP_Name, oz_api_privileges_store_level, ?DISK_ONLY_LEVEL),
+    ?MODEL_CONFIG(oz_api_privileges_bucket, [], StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -119,3 +126,32 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
+
+%%%===================================================================
+%%% API callbacks
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates document with using ID from document. If such object does not exist,
+%% it initialises the object with the document.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_or_update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
+    {ok, datastore:ext_key()} | datastore:update_error().
+create_or_update(Doc, Diff) ->
+    datastore:create_or_update(?STORE_LEVEL, Doc, Diff).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all possible privileges for onezone API.
+%% @end
+%%--------------------------------------------------------------------
+-spec all_privileges() -> [privilege()].
+all_privileges() -> [
+    view_privileges,
+    set_privileges,
+    list_spaces,
+    list_providers,
+    list_providers_of_space
+].

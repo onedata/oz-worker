@@ -12,19 +12,22 @@
 -module(user_logic).
 -author("Konrad Zemek").
 
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/utils/utils.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
--export([create/1, get_user/1, get_user_doc/1, modify/2, merge/2]).
+-export([create/1, get_user/1, get_user_doc/1, modify/2]).
 -export([get_data/2, get_spaces/1, get_groups/1, get_effective_groups/1, get_providers/1]).
 -export([get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
 -export([set_space_name_mapping/3, clean_space_name_mapping/2]).
+-export([authenticate_by_basic_credentials/2, change_user_password/3]).
 
 %%%===================================================================
 %%% API functions
@@ -201,15 +204,6 @@ modify(UserId, Proplist) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Merges an account identified by token into current user's account.
-%%--------------------------------------------------------------------
--spec merge(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
-    ok.
-merge(_UserId, _Macaroon) ->
-    %% @todo: a functional merge
-    ok.
-
-%%--------------------------------------------------------------------
 %% @doc Returns user details.
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
@@ -217,18 +211,29 @@ merge(_UserId, _Macaroon) ->
 -spec get_data(UserId :: binary(), Type :: provider | user) ->
     {ok, [proplists:property()]}.
 get_data(UserId, provider) ->
-    {ok, #document{value = #onedata_user{name = Name}}} = onedata_user:get(UserId),
+    {ok, #document{
+        value = #onedata_user{
+            name = Name, login = Login
+        }}} = onedata_user:get(UserId),
     {ok, [
         {userId, UserId},
+        {login, Login},
         {name, Name}
     ]};
 get_data(UserId, user) ->
-    {ok, #document{value = #onedata_user{name = Name, connected_accounts = ConnectedAccounts,
-        alias = Alias, email_list = EmailList}}} = onedata_user:get(UserId),
+    {ok, #document{
+        value = #onedata_user{
+            name = Name,
+            login = Login,
+            connected_accounts = ConnectedAccounts,
+            alias = Alias,
+            email_list = EmailList
+        }}} = onedata_user:get(UserId),
     ConnectedAccountsMaps = lists:map(fun(Account) ->
         ?record_to_list(oauth_account, Account) end, ConnectedAccounts),
     {ok, [
         {userId, UserId},
+        {login, Login},
         {name, Name},
         {connectedAccounts, ConnectedAccountsMaps},
         {alias, Alias},
@@ -293,7 +298,7 @@ get_providers(UserId) ->
     {ok, [{providers, UserProviders}]}.
 
 %%--------------------------------------------------------------------
-%% @doc Rreturns true if user was found by a given key.
+%% @doc Returns true if user was found by a given key.
 %%--------------------------------------------------------------------
 -spec exists(Key :: binary() | {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
@@ -516,15 +521,163 @@ clean_space_name_mapping(UserId, SpaceId) ->
             true
     end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Contacts onepanel to authenticate a user using basic authorization
+%% headers. They are sent in base64 encoded form, for example:
+%%   <<"Basic dXNlcjpwYXNzd29yZA==">>
+%% for credentials user:password, i.e. "Basic base64(user:password)".
+%% If the user does not exist in OZ, it is created.
+%% Onepanel returns the type of user, i.e. admin|regular. Based on this,
+%% the user is added to or removed from admins group (we have to assume that
+%% the type can change in time, so when admin type is revoked we should
+%% take the admin rights away from the user).
+%% @end
+%%--------------------------------------------------------------------
+-spec authenticate_by_basic_credentials(Login :: binary(),
+    Password :: binary()) -> {ok, UserDoc :: #document{}} | {error, term()}.
+authenticate_by_basic_credentials(Login, Password) ->
+    Headers = [basic_auth_header(Login, Password)],
+    {ok, OnepanelRESTURL} =
+        application:get_env(?APP_Name, onepanel_rest_url),
+    {ok, OnepanelGetUserEndpoint} =
+        application:get_env(?APP_Name, onepanel_user_endpoint),
+    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    RestCallResult = case http_client:get(URL, Headers, <<"">>, [insecure]) of
+        {ok, 200, _, JSON} ->
+            json_utils:decode(JSON);
+        {ok, 401, _, _} ->
+            {error, <<"Invalid login or password">>};
+        {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
+            try
+                ErrorProps = json_utils:decode(ErrorJSON),
+                Message = proplists:get_value(<<"description">>, ErrorProps,
+                    <<"Invalid login or password">>),
+                {error, Message}
+            catch _:_ ->
+                {error, bad_request}
+            end;
+        {ok, _, _, _} ->
+            {error, bad_request};
+        {error, Error} ->
+            {error, Error}
+    end,
+    case RestCallResult of
+        {error, Reason} ->
+            {error, Reason};
+        Props ->
+            UserId = proplists:get_value(<<"userId">>, Props),
+            UserRole = proplists:get_value(<<"userRole">>, Props),
+            UserDocument = case onedata_user:get(UserId) of
+                {error, {not_found, onedata_user}} ->
+                    UserDoc = #document{
+                        key = UserId,
+                        value = #onedata_user{
+                            name = Login,
+                            login = Login,
+                            basic_auth_enabled = true
+                        }},
+                    {ok, UserId} = onedata_user:save(UserDoc),
+                    ?info("Created new account for user '~s' from onepanel "
+                    "(role: '~s')", [Login, UserRole]),
+                    UserDoc;
+                {ok, #document{value = #onedata_user{} = UserInfo} = UserDoc} ->
+                    % Make sure user login is up to date (it might have changed
+                    % in onepanel since last login). Also enable basic auth for
+                    % him.
+                    NewDoc = UserDoc#document{
+                        value = UserInfo#onedata_user{
+                            login = Login,
+                            basic_auth_enabled = true
+                        }},
+                    {ok, UserId} = onedata_user:save(NewDoc),
+                    NewDoc
+            end,
+            % Check if user's role entitles him to belong to any groups
+            {ok, GroupMapping} = application:get_env(
+                ?APP_Name, onepanel_role_to_group_mapping),
+            Groups = proplists:get_value(UserRole, GroupMapping, []),
+            lists:foreach(
+                fun(GroupId) ->
+                    case group_logic:has_user(GroupId, UserId) of
+                        true ->
+                            ok;
+                        false ->
+                            {ok, GroupData} = group_logic:get_data(GroupId),
+                            GroupName = proplists:get_value(name, GroupData),
+                            ok = group_logic:add_user(GroupId, UserId),
+                            ?info("Added user '~s' to group '~s' based on "
+                            "role '~s'", [Login, GroupName, UserRole])
+                    end
+                end, Groups),
+            {ok, UserDocument}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Contacts onepanel to change user's password using basic authorization
+%% headers. They are sent in base64 encoded form, for example:
+%%   <<"Basic dXNlcjpwYXNzd29yZA==">>
+%% for credentials user:password, i.e. "Basic base64(user:password)".
+%% New password is sent in request body.
+%% @end
+%%--------------------------------------------------------------------
+-spec change_user_password(Login :: binary(), OldPassword :: binary(),
+    Password :: binary()) -> ok | {error, term()}.
+change_user_password(Login, OldPassword, NewPassword) ->
+    Headers = [
+        {<<"content-type">>, <<"application/json">>},
+        basic_auth_header(Login, OldPassword)
+    ],
+    {ok, OnepanelRESTURL} =
+        application:get_env(?APP_Name, onepanel_rest_url),
+    {ok, OnepanelGetUserEndpoint} =
+        application:get_env(?APP_Name, onepanel_user_endpoint),
+    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    Body = json_utils:encode([{<<"password">>, base64:encode(NewPassword)}]),
+    case http_client:put(URL, Headers, Body, [insecure]) of
+        {ok, 204, _, _} ->
+            ok;
+        {ok, 401, _, _} ->
+            {error, <<"Invalid password">>};
+        {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
+            try
+                ErrorProps = json_utils:decode(ErrorJSON),
+                Message = proplists:get_value(<<"description">>, ErrorProps,
+                    <<"Cannot change password">>),
+                {error, Message}
+            catch _:_ ->
+                {error, bad_request}
+            end;
+        {ok, _, _, _} ->
+            {error, bad_request};
+        {error, Error} ->
+            {error, Error}
+    end.
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @private
+%% @doc
+%% Returns basic authorization headers based on login and password.
+%% @end
+%%--------------------------------------------------------------------
+-spec basic_auth_header(Login :: binary(), Password :: binary()) ->
+    {Key :: binary(), Value :: binary()}.
+basic_auth_header(Login, Password) ->
+    UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
+    {<<"Authorization">>, <<"Basic ", UserAndPassword/binary>>}.
+
+
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Returns a list of all spaces that a user belongs to, directly or through
 %% a group.
-%% Throws exception when call to the datastore fails, or user's groups don't exist.
+%% Throws exception when call to the datastore fails, or user's groups don't
+%% exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_all_spaces(Doc :: datastore:document()) ->

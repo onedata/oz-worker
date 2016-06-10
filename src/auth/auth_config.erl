@@ -12,6 +12,7 @@
 
 -include("auth_common.hrl").
 -include("registered_names.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 % Loading and managing auth config
 -export([load_auth_config/0, get_auth_config/1, get_auth_providers/0]).
@@ -26,13 +27,17 @@
 %% @doc Loads auth config from predefined file.
 %% @end
 %%--------------------------------------------------------------------
--spec load_auth_config() -> ok.
+-spec load_auth_config() -> ok | no_return().
 load_auth_config() ->
     {ok, AuthConfigFile} = application:get_env(?APP_Name, auth_config_file),
     Config = case file:consult(AuthConfigFile) of
-                 {ok, []} -> [];
-                 {ok, [Cfg]} when is_list(Cfg) -> Cfg;
-                 _ -> []
+                 {ok, []} ->
+                     [];
+                 {ok, [Cfg]} when is_list(Cfg) ->
+                     Cfg;
+                 Other ->
+                     ?error("Cannot parse auth config: ~p.", [Other]),
+                     throw(cannot_parse_auth_config)
              end,
     application:set_env(?APP_Name, auth_config, Config).
 

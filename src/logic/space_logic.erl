@@ -23,6 +23,7 @@
     get_providers/2, get_user/3, get_group/2, get_provider/3, get_privileges/2,
     get_effective_privileges/2]).
 -export([remove/1, remove_user/2, remove_group/2, remove_provider/2, cleanup/1]).
+-export([list/0]).
 
 %%%===================================================================
 %%% API
@@ -609,3 +610,14 @@ set_privileges_aux(#space{users = Users} = Space, {user, UserId}, Privileges) ->
 set_privileges_aux(#space{groups = Groups} = Space, {group, GroupId}, Privileges) ->
     GroupsNew = lists:keyreplace(GroupId, 1, Groups, {GroupId, Privileges}),
     Space#space{groups = GroupsNew}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns a list of all spaces (their ids).
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [binary()]}.
+list() ->
+    {ok, SpaceDocs} = space:list(),
+    SpaceIds = lists:map(fun(#document{key = SpaceId}) ->
+        SpaceId
+    end, SpaceDocs),
+    {ok, SpaceIds}.

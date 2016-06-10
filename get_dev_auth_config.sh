@@ -36,8 +36,9 @@ fi
 # The repo was either cloned or existed. Update to the newest version.
 echo -e "\t[  OK  ]"
 cd onedev
+git fetch
 git checkout develop
-git pull
+git pull origin develop
 
 # Replace auth.config
 cd ${RUNNER_SCRIPT_DIR}

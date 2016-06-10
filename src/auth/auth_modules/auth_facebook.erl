@@ -5,8 +5,8 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc: This module implements auth_module_behaviour and handles singning in
-%%% via Facebook.
+%%% @doc: This module implements auth_module_behaviour and handles signing in
+%%% via Facebook OpenID.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(auth_facebook).
