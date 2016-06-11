@@ -634,7 +634,7 @@ change_user_password(Login, OldPassword, NewPassword) ->
     {ok, OnepanelGetUserEndpoint} =
         application:get_env(?APP_Name, onepanel_user_endpoint),
     URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
-    Body = json_utils:encode([{<<"password">>, base64:encode(NewPassword)}]),
+    Body = json_utils:encode([{<<"password">>, NewPassword}]),
     case http_client:put(URL, Headers, Body, [insecure]) of
         {ok, 204, _, _} ->
             ok;
