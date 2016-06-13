@@ -11,7 +11,7 @@
 
 {application, oz_worker, [
     {description, "Global registry of data."},
-    {vsn, "3.0.0-beta5"},
+    {vsn, "3.0.0-beta6"},
     {registered, [oz_worker_sup]},
     {applications, [
         kernel,
