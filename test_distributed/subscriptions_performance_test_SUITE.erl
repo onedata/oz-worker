@@ -24,7 +24,7 @@
 -export([generate_spaces_test_base/1, space_update_test_base/1]).
 
 all() -> ?ALL([], [
-    generate_spaces_test,
+%%    generate_spaces_test,
     space_update_test
 ]).
 %%        ,
@@ -118,25 +118,26 @@ generate_spaces_test(Config) ->
         ?GEN_CFG(five_providers, "Five providers saving 100 documents", 5,
             ?DOCS_NUM),
         ?GEN_CFG(six_providers, "Six providers saving 100 documents", 6,
-            ?DOCS_NUM),
-        ?GEN_CFG(seven_providers, "Seven providers saving 100 documents", 7,
-            ?DOCS_NUM),
-        ?GEN_CFG(eight_providers, "Eight providers saving 100 documents", 8,
-            ?DOCS_NUM),
-        ?GEN_CFG(nine_providers, "Nine providers saving 100 documents", 9,
-            ?DOCS_NUM),
-        ?GEN_CFG(ten_providers, "Ten providers saving 100 documents", 10,
-            ?DOCS_NUM),
-        ?GEN_CFG(fifteen_providers, "Fifteen providers saving 100 documents",
-            15, ?DOCS_NUM),
-        ?GEN_CFG(twenty_providers, "Twenty providers saving 100 documents", 20,
-            ?DOCS_NUM),
-        ?GEN_CFG(twenty_five_providers,
-            "Twenty five providers saving 100 documents", 25, ?DOCS_NUM),
-        ?GEN_CFG(fifty_providers, "Fifty providers saving 100 documents", 50,
-            ?DOCS_NUM),
-        ?GEN_CFG(hundred_providers, "Hundred providers saving 100 documents",
-            100, ?DOCS_NUM)
+            ?DOCS_NUM)
+%%        ,
+%%        ?GEN_CFG(seven_providers, "Seven providers saving 100 documents", 7,
+%%            ?DOCS_NUM),
+%%        ?GEN_CFG(eight_providers, "Eight providers saving 100 documents", 8,
+%%            ?DOCS_NUM),
+%%        ?GEN_CFG(nine_providers, "Nine providers saving 100 documents", 9,
+%%            ?DOCS_NUM),
+%%        ?GEN_CFG(ten_providers, "Ten providers saving 100 documents", 10,
+%%            ?DOCS_NUM),
+%%        ?GEN_CFG(fifteen_providers, "Fifteen providers saving 100 documents",
+%%            15, ?DOCS_NUM),
+%%        ?GEN_CFG(twenty_providers, "Twenty providers saving 100 documents", 20,
+%%            ?DOCS_NUM),
+%%        ?GEN_CFG(twenty_five_providers,
+%%            "Twenty five providers saving 100 documents", 25, ?DOCS_NUM),
+%%        ?GEN_CFG(fifty_providers, "Fifty providers saving 100 documents", 50,
+%%            ?DOCS_NUM),
+%%        ?GEN_CFG(hundred_providers, "Hundred providers saving 100 documents",
+%%            100, ?DOCS_NUM)
     ]).
 
 generate_spaces_test_base(Config) ->
@@ -184,76 +185,19 @@ generate_spaces_test_base(Config) ->
             description = "Time until every update arrived (providers mean)"}
     ].
 
-%%modify_space_record_test(Config) ->
-%%    ?PERFORMANCE(Config, [
-%%        {repeats, 1},
-%%        {success_rate, 95},
-%%        {description, "Performs document saves and gathers subscription updated for many providers"},
-%%        ?MOD_CFG(one_provider, "One provider modifying document 10 times", 1, 10)
-%%
-%%    ]).
-%%
-%%modify_space_record_test_base(Config) ->
-%%    % given
-%%    [Node | _] = ?config(oz_worker_nodes, Config),
-%%
-%%    ProvidersCount = ?config(providers_count, Config),
-%%    DocModificationsCount = ?config(docs_modifications_count, Config),
-%%
-%%    {ok, UserId} = ?assertMatch({ok, _},
-%%        oz_test_utils:create_user(Config, #onedata_user{})),
-%%
-%%    InitialSpaceName = <<"space_name">>,
-%%    {ok, SpaceId} = ?assertMatch({ok, _},
-%%        oz_test_utils:create_space(Config, {user, UserId}, InitialSpaceName)),
-%%
-%%    Results = utils:pmap(fun(ID) ->
-%%        %% given
-%%        PNameList = "provider_" ++ integer_to_list(ID),
-%%        PName = list_to_binary(PNameList),
-%%
-%%        SpaceNames = lists:map(fun(ID1) ->
-%%            list_to_binary("space_" ++ integer_to_list(ID1) ++ "@" ++ PNameList)
-%%        end, lists:seq(1, DocModificationsCount)),
-%%
-%%        %% when
-%%        PID = subscriptions_test_utils:create_provider(Node, PName, [SpaceId]),
-%%        Context = subscriptions_test_utils:init_messages(Node, PID, []),
-%%
-%%        Spaces = lists:map(fun(SpaceName) ->
-%%            Space = #space{name = SpaceName, providers_supports = [{PID, 0}]},
-%%            subscriptions_test_utils:save(Node, SpaceId, Space),
-%%            Space
-%%        end, SpaceNames),
-%%
-%%        %% then
-%%        Start = erlang:system_time(milli_seconds),
-%%        subscriptions_test_utils:verify_messages_present(Context,
-%%            lists:map(fun(Space) ->
-%%                subscriptions_test_utils:expectation(SpaceId, Space)
-%%            end, Spaces)
-%%        ),
-%%        {ok, erlang:system_time(milli_seconds) - Start}
-%%    end, lists:seq(1, ProvidersCount)),
-%%
-%%    lists:map(fun(Res) ->
-%%        ?assertMatch({ok, _}, Res)
-%%    end, Results),
-%%
-%%    UpdatesMeanTime = lists:sum(lists:map(fun({ok, Time}) -> Time end, Results)) / length(Results),
-%%
-%%    [
-%%        #parameter{name = updates_await, value = UpdatesMeanTime, unit = "ms",
-%%            description = "Time until every update arrived (providers mean)"}
-%%    ].
 
 space_update_test(Config) ->
     ?PERFORMANCE(Config, [
         {repeats, 10},
-        {parameters, [?DOCS_MODIFICATIONS_COUNT(10), ?USERS_NUM(2), ?GROUPS_NUM(4)]},
+        {parameters, [?DOCS_MODIFICATIONS_COUNT(10), ?USERS_NUM(10), ?GROUPS_NUM(5)]},
         {success_rate, 95},
         {description, "Performs document updates and gathers subscription updated for provider"},
-        ?UPDATE_CFG(one_provider, "One provider modifying document 10 times", 10, 2, 4)
+        ?UPDATE_CFG(one_provider_ten_users, "One provider modifying document 100 times", 100, 10, 5), % TODO write description
+        ?UPDATE_CFG(one_provider_twenty_users, "One provider modifying document 100 times", 100, 20, 10),
+        ?UPDATE_CFG(one_provider_thirty_users, "One provider modifying document 100 times", 100, 30, 15),
+        ?UPDATE_CFG(one_provider_forty_users, "One provider modifying document 100 times", 100, 40, 20),
+        ?UPDATE_CFG(one_provider_fifty_users, "One provider modifying document 100 times", 100, 50, 25),
+        ?UPDATE_CFG(one_provider_hundred_users, "One provider modifying document 100 times", 100, 100, 50)
     ]).
 
 space_update_test_base(Config) ->
