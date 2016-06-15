@@ -206,34 +206,14 @@ test_connection(_, _) ->
     {error, bad_data}.
 
 
-% Checks if given provider (by ID) is alive and responding.
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks if given provider (by ID) is alive and responding.
+%% @end
+%%--------------------------------------------------------------------
 -spec check_provider_connectivity(ProviderId :: binary()) -> boolean().
 check_provider_connectivity(ProviderId) ->
-    case subscriptions:any_connection_active(ProviderId) of
-        true ->
-            true;
-        false ->
-            try
-                % Sometimes it may happen that there is no websocket connection
-                % but the worker is fully operational. For example, when the
-                % connection has timed out and provider hasn't reconnected yet.
-                % In such case, make sure it is really inoperable by making
-                % a http request.
-                {ok, Data} = provider_logic:get_data(ProviderId),
-                RedirectionPoint = proplists:get_value(redirectionPoint, Data),
-                #hackney_url{
-                    host = Host
-                } = hackney_url:parse_url(RedirectionPoint),
-                ConnCheckEndpoint = str_utils:format_bin("https://~s~s", [
-                    Host, ?provider_id_endpoint
-                ]),
-                {ok, _, _, ProviderId} =
-                    http_client:get(ConnCheckEndpoint, [], <<>>, [insecure]),
-                true
-            catch _:_ ->
-                false
-            end
-    end.
+    subscriptions:any_connection_active(ProviderId).
 
 %%--------------------------------------------------------------------
 %% @doc Returns provider id of provider that has been chosen

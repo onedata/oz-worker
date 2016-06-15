@@ -19,16 +19,16 @@
 -define(provider_auth_endpoint, "/validate_login.html").
 
 % Error atom indicating that login request is invalid
--define(error_auth_invalid_request, "invalid_request").
+-define(error_auth_invalid_request, "openid_invalid_request").
 
 % Error atom indicating that email address is occupied (while creating new acc)
--define(error_auth_new_email_occupied, "new_email_occupied").
+-define(error_auth_new_email_occupied, "new_account_email_occupied").
 
 % Error atom indicating that email address is occupied (while connecting an acc)
--define(error_auth_connect_email_occupied, "connect_email_occupied").
+-define(error_auth_connect_email_occupied, "connect_account_email_occupied").
 
 % Error atom indicating that account has already been connected to other profile
--define(error_auth_account_already_connected, "account_already_connected").
+-define(error_auth_account_already_connected, "connect_account_already_connected").
 
 -endif.
 
