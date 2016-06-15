@@ -50,6 +50,12 @@ page_init() ->
             ?info("User ~p logged in for the first time", [UserId]),
             {redirect_relative, <<?page_after_login>>};
         {error, ErrorId} ->
-            ?info("Error: ~p", [ErrorId]),
-            {redirect_relative, <<"/">>}
+            ?info("Error in validate login: ~p", [ErrorId]),
+            % ErrorId can be one of:
+            %     openid_invalid_request
+            %     new_account_email_occupied
+            %     connect_account_email_occupied
+            %     connect_account_already_connected
+            ErrorParam = list_to_binary(ErrorId),
+            {redirect_relative, <<"/#/home/login?error=", ErrorParam/binary>>}
     end.
