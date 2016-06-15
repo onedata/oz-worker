@@ -23,8 +23,14 @@
 % Relative suffix of GUI address, leading to page with info about providers
 -define(become_a_provider_url, "/become_a_provider").
 
+% URL (relative) with login page.
+-define(page_login, "/#/home/login").
+
 % URL (relative) to redirect to after login.
 -define(page_after_login, "/#/onezone").
+
+% URL (relative) to redirect to after login.
+-define(page_after_login_expand_accounts, "/#/onezone?expand_accounts=true").
 
 % Macros used as ids of errors that can appear on GUI pages
 -define(error_internal_server_error, "internal_server_error").
