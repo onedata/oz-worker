@@ -15,6 +15,7 @@
 -author("Lukasz Opiola").
 -behaviour(page_backend_behaviour).
 
+-include("auth_common.hrl").
 -include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -49,7 +50,7 @@ page_init() ->
             UserId = g_session:get_user_id(),
             ?info("User ~p logged in for the first time", [UserId]),
             {redirect_relative, <<?page_after_login>>};
-        {error, ErrorId} ->
+        {error, ErrorId, RedirectPage} ->
             ?info("Error in validate login: ~p", [ErrorId]),
             % ErrorId can be one of:
             %     openid_invalid_request
@@ -57,5 +58,13 @@ page_init() ->
             %     connect_account_email_occupied
             %     connect_account_already_connected
             ErrorParam = list_to_binary(ErrorId),
-            {redirect_relative, <<"/#/home/login?error=", ErrorParam/binary>>}
+            % Check if redirect page already contains URL params and
+            % concatenate the error param accordingly.
+            RedirectURL = case binary:split(RedirectPage, <<"?">>) of
+                [RedirectPage] ->
+                    <<RedirectPage/binary, "?error=", ErrorParam/binary>>;
+                [_, _] ->
+                    <<RedirectPage/binary, "&error=", ErrorParam/binary>>
+            end,
+            {redirect_relative, RedirectURL}
     end.
