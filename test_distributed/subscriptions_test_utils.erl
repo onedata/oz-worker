@@ -19,7 +19,7 @@
 %% API
 -export([save/3, update_document/4, delete_document/3, get_rev/3,
     create_provider/3, call_worker/2, generate_group_ids/1, generate_user_ids/1,
-    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1]).
+    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1, empty_cache/1]).
 -export([expectation/2, public_only_user_expectation/2, group_expectation/8,
     privileges_as_binaries/1, expectation_with_rev/2]).
 -export([verify_messages_present/2, verify_messages_absent/2, init_messages/3,
@@ -67,14 +67,14 @@ generate_user_ids(Number) ->
     generate_ids("u", Number).
 
 generate_ids(Prefix, Number) ->
-    [id(Prefix ++ integer_to_list(N)) || N <- lists:seq(1, Number)].
+    [?ID(list_to_atom(Prefix ++ integer_to_list(N))) || N <- lists:seq(1, Number)].
 
 create_spaces(SIDs, UIDs, GIDs, Node) ->
     Groups = [{GID, []} || GID <- GIDs],
     Users =  [{UID, []} || UID <- UIDs],
     lists:map(fun({SID, N}) -> {
         Space = #space{
-            name = list_to_binary("s" ++ integer_to_list(N)),
+            name = list_to_binary("s" ++ integer_to_list(N) ++ integer_to_list(erlang:system_time(micro_seconds))),
             groups = Groups,
             users = Users
         }},
@@ -281,3 +281,8 @@ id(Id) when is_atom(Id) ->
     ?ID(Id);
 id(Id) ->
     ?ID(list_to_atom(Id)).
+
+empty_cache(Node) ->
+    subscriptions_test_utils:update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{
+        cache => gb_trees:empty()
+    }).

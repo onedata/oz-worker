@@ -58,7 +58,7 @@
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-
+%%TODO move init_messages befor save
 all() -> ?ALL([
     provider_connection_checks_test,
     multiple_updates_test,
@@ -611,7 +611,7 @@ fetches_changes_older_than_in_cache(Config) ->
     _ForgottenContext = subscriptions_test_utils:flush_messages(Context,
         subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>})),
 
-    empty_cache(Node),
+    subscriptions_test_utils:empty_cache(Node),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -718,11 +718,6 @@ end_per_suite(Config) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-empty_cache(Node) ->
-    subscriptions_test_utils:update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{
-        cache => gb_trees:empty()
-    }).
 
 empty_first_half_of_cache(Node) ->
     {ok, #document{value = #subscriptions_state{cache = Cache}}} =

@@ -24,27 +24,25 @@
 -export([generate_spaces_test_base/1, space_update_test_base/1]).
 
 all() -> ?ALL([], [
-%%    generate_spaces_test,
+    generate_spaces_test,
     space_update_test
 ]).
-%%        ,
-%%    modify_space_record_test
 
 
--define(PROVIDERS_COUNT(Value), [
-    {name, providers_count},
+-define(PROVIDERS_NUM(Value), [
+    {name, providers_num},
     {value, Value},
     {description, "Number of providers (threads) used during the test."}
 ]).
 
--define(DOCS_COUNT(Value), [
-    {name, docs_count},
+-define(DOCS_NUM(Value), [
+    {name, docs_num},
     {value, Value},
     {description, "Number of documents used by a single thread/provider."}
 ]).
 
--define(DOCS_MODIFICATIONS_COUNT(Value), [
-    {name, docs_modifications_count},
+-define(DOCUMENT_MODIFICATIONS_NUM(Value), [
+    {name, docs_modifications_num},
     {value, Value},
     {description, "Number of modifications on document, performed by a single thread/provider."}
 ]).
@@ -61,35 +59,23 @@ all() -> ?ALL([], [
     {description, "Number of groups."}
 ]).
 
+-define(DOCS_NUM, 10).
 
--define(GEN_CFG(CfgName, Descr, ProvCount, DocsCount), {config,
+-define(GENERATE_TEST_CFG(ProvidersNum, DocumentsNum), {config,
     [
-        {name, CfgName},
-        {description, Descr},
-        {parameters, [?PROVIDERS_COUNT(ProvCount), ?DOCS_COUNT(DocsCount)]}
+        {name, list_to_atom(lists:flatten(io_lib:format("~p providers ~p documents", [ProvidersNum, DocumentsNum])))},
+        {description, lists:flatten(io_lib:format("~p providers saving ~p documents", [ProvidersNum, DocumentsNum]))},
+        {parameters, [?PROVIDERS_NUM(ProvidersNum), ?DOCS_NUM(DocumentsNum)]}
     ]
 }).
 
--define(MOD_CFG(CfgName, Descr, ProvCount, ModsCount), {config,
+-define(UPDATE_TEST_CFG(ModificationsNum, UsersNum, GroupsNum), {config,
     [
-        {name, CfgName},
-        {description, Descr},
+        {name, list_to_atom(lists:flatten(io_lib:format("~p modifications ~p users ~p groups", [ModificationsNum, UsersNum, GroupsNum])))},
+        {description, lists:flatten(io_lib:format("Single provider modifying document ~p times, ~p users, ~p group", [ModificationsNum, UsersNum, GroupsNum]))},
         {parameters,
             [
-                ?PROVIDERS_COUNT(ProvCount),
-                ?DOCS_MODIFICATIONS_COUNT(ModsCount)
-            ]
-        }
-    ]
-}).
-
--define(UPDATE_CFG(CfgName, Descr, ModsCount, UsersNum, GroupsNum), {config,
-    [
-        {name, CfgName},
-        {description, Descr},
-        {parameters,
-            [
-                ?DOCS_MODIFICATIONS_COUNT(ModsCount),
+                ?DOCUMENT_MODIFICATIONS_NUM(ModificationsNum),
                 ?USERS_NUM(UsersNum),
                 ?GROUPS_NUM(GroupsNum)
             ]
@@ -97,7 +83,6 @@ all() -> ?ALL([], [
     ]
 }).
 
--define(DOCS_NUM, 10).
 
 %%%===================================================================
 %%% Test functions
@@ -107,45 +92,30 @@ generate_spaces_test(Config) ->
         {repeats, 10},
         {success_rate, 95},
         {description, "Performs document saves and gathers subscription updated for many providers"},
-        ?GEN_CFG(one_provider, "One provider saving 100 documents", 1,
-            ?DOCS_NUM),
-        ?GEN_CFG(two_providers, "Two providers saving 100 documents", 2,
-            ?DOCS_NUM),
-        ?GEN_CFG(three_providers, "Three providers saving 100 documents", 3,
-            ?DOCS_NUM),
-        ?GEN_CFG(four_providers, "Four providers saving 100 documents", 4,
-            ?DOCS_NUM),
-        ?GEN_CFG(five_providers, "Five providers saving 100 documents", 5,
-            ?DOCS_NUM),
-        ?GEN_CFG(six_providers, "Six providers saving 100 documents", 6,
-            ?DOCS_NUM)
-%%        ,
-%%        ?GEN_CFG(seven_providers, "Seven providers saving 100 documents", 7,
-%%            ?DOCS_NUM),
-%%        ?GEN_CFG(eight_providers, "Eight providers saving 100 documents", 8,
-%%            ?DOCS_NUM),
-%%        ?GEN_CFG(nine_providers, "Nine providers saving 100 documents", 9,
-%%            ?DOCS_NUM),
-%%        ?GEN_CFG(ten_providers, "Ten providers saving 100 documents", 10,
-%%            ?DOCS_NUM),
-%%        ?GEN_CFG(fifteen_providers, "Fifteen providers saving 100 documents",
-%%            15, ?DOCS_NUM),
-%%        ?GEN_CFG(twenty_providers, "Twenty providers saving 100 documents", 20,
-%%            ?DOCS_NUM),
-%%        ?GEN_CFG(twenty_five_providers,
-%%            "Twenty five providers saving 100 documents", 25, ?DOCS_NUM),
-%%        ?GEN_CFG(fifty_providers, "Fifty providers saving 100 documents", 50,
-%%            ?DOCS_NUM),
-%%        ?GEN_CFG(hundred_providers, "Hundred providers saving 100 documents",
-%%            100, ?DOCS_NUM)
+        ?GENERATE_TEST_CFG(1, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(1, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(2, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(3, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(4, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(5, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(6, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(7, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(8, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(9, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(10, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(15, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(20, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(25, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(50, ?DOCS_NUM),
+        ?GENERATE_TEST_CFG(100, ?DOCS_NUM)
     ]).
 
 generate_spaces_test_base(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
 
-    ProvidersCount = ?config(providers_count, Config),
-    DocsCount = ?config(docs_count, Config),
+    ProvidersCount = ?config(providers_num, Config),
+    DocsCount = ?config(docs_num, Config),
 
     Results = utils:pmap(fun(ID) ->
         %% given
@@ -189,15 +159,17 @@ generate_spaces_test_base(Config) ->
 space_update_test(Config) ->
     ?PERFORMANCE(Config, [
         {repeats, 10},
-        {parameters, [?DOCS_MODIFICATIONS_COUNT(10), ?USERS_NUM(10), ?GROUPS_NUM(5)]},
+        {parameters, [?DOCUMENT_MODIFICATIONS_NUM(2), ?USERS_NUM(1), ?GROUPS_NUM(1)]},
         {success_rate, 95},
         {description, "Performs document updates and gathers subscription updated for provider"},
-        ?UPDATE_CFG(one_provider_ten_users, "One provider modifying document 100 times", 100, 10, 5), % TODO write description
-        ?UPDATE_CFG(one_provider_twenty_users, "One provider modifying document 100 times", 100, 20, 10),
-        ?UPDATE_CFG(one_provider_thirty_users, "One provider modifying document 100 times", 100, 30, 15),
-        ?UPDATE_CFG(one_provider_forty_users, "One provider modifying document 100 times", 100, 40, 20),
-        ?UPDATE_CFG(one_provider_fifty_users, "One provider modifying document 100 times", 100, 50, 25),
-        ?UPDATE_CFG(one_provider_hundred_users, "One provider modifying document 100 times", 100, 100, 50)
+        ?UPDATE_TEST_CFG(10, 2, 1),
+        ?UPDATE_TEST_CFG(10, 10, 5),
+        ?UPDATE_TEST_CFG(10, 20, 10),
+        ?UPDATE_TEST_CFG(10, 50, 25),
+        ?UPDATE_TEST_CFG(100, 2, 1),
+        ?UPDATE_TEST_CFG(100, 10, 5),
+        ?UPDATE_TEST_CFG(100, 20, 10),
+        ?UPDATE_TEST_CFG(100, 50, 25)
     ]).
 
 space_update_test_base(Config) ->
@@ -206,31 +178,36 @@ space_update_test_base(Config) ->
 
     UsersNum = ?config(users_num, Config),
     GroupsNum = ?config(groups_num, Config),
-    UpdatesNum = ?config(docs_modifications_count, Config),
+    UpdatesNum = ?config(docs_modifications_num, Config),
 
-    PID = subscriptions_test_utils:create_provider(Node, subscriptions_test_utils:id("p1"), []),
+    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
     GIDs = subscriptions_test_utils:generate_group_ids(GroupsNum),
     UIDs = subscriptions_test_utils:generate_user_ids(UsersNum),
     SIDs = subscriptions_test_utils:generate_space_ids(1),
 
+    Context1 = subscriptions_test_utils:init_messages(Node, PID, [hd(UIDs)]),
+
+    {ok, Start, _} = rpc:call(Node, couchdb_datastore_driver, db_run, [couchbeam_changes,follow_once, [], 30]),
+    NewContext = Context1#subs_ctx{resume_at=binary_to_integer(Start)},
+
     [{SID1, S1} | _] = subscriptions_test_utils:create_spaces(SIDs, UIDs, GIDs, Node),
-    Users = subscriptions_test_utils:create_users(UIDs, GIDs, Node),
-    _Groups = subscriptions_test_utils:create_groups(GIDs, UIDs, SIDs, Node),
+    subscriptions_test_utils:create_users(UIDs, GIDs, Node),
+    subscriptions_test_utils:create_groups(GIDs, UIDs, SIDs, Node),
 
     % when
-    {UID1, _} = hd(Users),
-    Context1 = subscriptions_test_utils:init_messages(Node, PID, [UID1]),
     Context = subscriptions_test_utils:flush_messages(
-        Context1, subscriptions_test_utils:expectation(SID1, S1)),
+        NewContext, subscriptions_test_utils:expectation(SID1, S1)),
+
+    #subs_ctx{resume_at = Start1} = Context,
 
     %% ensure sequence number won't be repeated when more entities are created
-    SeqStart = UsersNum + GroupsNum + 100,
+    SeqStart = Start1 + 100,
 
     ModifiedSpaces = lists:map(fun(N) ->
         {N + SeqStart, S1#space{name=list_to_binary("modified" ++ integer_to_list(N))}}
     end, lists:seq(1, UpdatesNum)),
 
-    Start = erlang:system_time(milli_seconds),
+    StartTime = erlang:system_time(milli_seconds),
 
     utils:pforeach(fun({Seq, Space}) ->
         rpc:cast(Node, worker_proxy, cast, [
@@ -242,10 +219,12 @@ space_update_test_base(Config) ->
     end, ModifiedSpaces),
 
     % then
-    subscriptions_test_utils:verify_messages_present(Context, [
+    Context2 = subscriptions_test_utils:verify_messages_present(Context, [
             subscriptions_test_utils:expectation(SID1, Space) || {_Seq, Space} <- ModifiedSpaces
     ]),
-    Time = erlang:system_time(milli_seconds) - Start,
+
+    Time = erlang:system_time(milli_seconds) - StartTime,
+    subscriptions_test_utils:empty_cache(Node),
 
     [
         #parameter{name = updates_await, value = Time, unit = "ms",
