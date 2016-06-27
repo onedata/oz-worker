@@ -558,6 +558,8 @@ get_group_info_by_user_test(Config) ->
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
+    ensure_effective_users_and_groups_updated(Config),
+
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserReqParams)),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserParamsOtherAddress)).
 
@@ -588,6 +590,7 @@ last_user_leaves_group_test(Config) ->
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
+    ensure_effective_users_and_groups_updated(Config),
 
     ?assertMatch(ok, check_status(user_leaves_group(GID1, UserReqParams))),
     ?assertMatch(false, is_included([GID1], get_user_groups(UserReqParams))),
@@ -604,10 +607,9 @@ non_last_user_leaves_group_test(Config) ->
     {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId1, Config, ProviderReqParams1),
 
     GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
-
     InvitationToken = get_group_invitation_token(GID1, User1ReqParams),
-
     join_user_to_group(InvitationToken, User2ReqParams),
+    ensure_effective_users_and_groups_updated(Config),
 
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
     User2ParamsOtherAddress = update_req_params(User2ReqParams, OtherRestAddress, address),
