@@ -4,6 +4,15 @@
 CHANGELOG
 ---------
 
+### New Version Tag do not change this line
+
+* VFS-2225 Update GUI docker image
+
+
+### beta7
+
+
+
 ### beta7
 
 * bugfix - cleaning changed users list
