@@ -4,7 +4,17 @@
 CHANGELOG
 ---------
 
-### New Version Tag do not change this line
+### 3.0.0-beta7
+
+* Deps update
+* VFS-2225 Update GUI docker image
+
+
+### beta7
+
+
+
+### 3.0.0-beta7
 
 * VFS-2225 Update GUI docker image
 
