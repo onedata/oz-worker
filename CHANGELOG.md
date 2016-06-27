@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### beta7
+
+* bugfix - cleaning changed users list
+
+
 ### 3.0.0-beta6
 
 * Update erlang tls
