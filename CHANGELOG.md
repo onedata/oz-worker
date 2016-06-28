@@ -4,6 +4,12 @@
 CHANGELOG
 ---------
 
+### 3.0.0-beta7
+
+* VFS-2225 Update GUI docker image
+* bugfix - cleaning changed users list
+
+
 ### 3.0.0-beta6
 
 * Update erlang tls
