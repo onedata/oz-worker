@@ -4,6 +4,29 @@
 CHANGELOG
 ---------
 
+### 3.0.0-beta7
+
+* VFS-2225 Update GUI docker image
+* bugfix - cleaning changed users list
+
+
+### 3.0.0-beta6
+
+* Update erlang tls
+* VFS-2133 Rework google and indigo auth logic
+* VFS-2111 Integrate user management with onepanel
+* VFS-2111 Enable changing password only if user has basic auth enabled
+* VFS-2111 Add several funcitons to admin API - list spaces, list providers, list providers of space
+* VFS-2111 Add rest handler for OZ API privileges manipulation
+* Fix space name mapping after space removal
+* VFS-2111 Implement basic login backend
+* VFS-2111 allow basic auth in all user requests
+* VFS-2111 Allow using client token for authorization in REST, provider certs are no longer obligatory when not required, add REST API to get client_token
+* VFS-2111 Change values returned from rpc_backends to JSON objects rather than strings
+* VFS-2087 supported spaces are not public
+* VFS-2087 push provider updates to all
+
+
 ### 3.0.0-beta5
 
 * VFS-2068 adjust to new webscoket adapter API

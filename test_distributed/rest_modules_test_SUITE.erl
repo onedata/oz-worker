@@ -73,10 +73,10 @@
     delete_provider_test/1, create_and_support_space_by_provider/1, get_supported_space_info_test/1,
     unsupport_space_test/1, provider_check_port_test/1, provider_check_ip_test/1,
     support_space_test/1, user_authorize_test/1, update_user_test/1, delete_user_test/1,
-    request_merging_users_test/1, create_space_for_user_test/1, set_user_default_space_test/1,
+    create_space_for_user_test/1, set_user_default_space_test/1,
     last_user_leaves_space_test/1, user_gets_space_info_test/1, invite_user_to_space_test/1,
-    get_group_info_by_user_test/1, last_user_leaves_group_test/1, non_last_user_leaves_group_test/1,
-    group_invitation_test/1, create_group_test/1, update_group_test/1,
+    get_group_info_by_user_test/1, get_ancestor_group_info_by_user_test/1, last_user_leaves_group_test/1,
+    non_last_user_leaves_group_test/1, group_invitation_test/1, create_group_test/1, update_group_test/1,
     delete_group_test/1, create_group_for_user_test/1, effective_group_for_user_test/1, invite_user_to_group_test/1,
     get_user_info_by_group_test/1, delete_user_from_group_test/1, get_group_privileges_test/1,
     set_group_privileges_test/1, group_creates_space_test/1, get_space_info_by_group_test/1,
@@ -133,7 +133,6 @@ groups() ->
                 user_authorize_test,
                 update_user_test,
                 delete_user_test,
-                request_merging_users_test,
                 create_space_for_user_test,
                 set_user_default_space_test,
                 set_user_default_space_without_permission_test,
@@ -143,6 +142,7 @@ groups() ->
                 user_gets_space_info_test,
                 invite_user_to_space_test,
                 get_group_info_by_user_test,
+                get_ancestor_group_info_by_user_test,
                 last_user_leaves_group_test,
                 non_last_user_leaves_group_test,
                 invite_user_to_group_test
@@ -394,19 +394,6 @@ delete_user_test(Config) ->
     ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(UserReqParams)),
     ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(ParamsWithOtherAddress)).
 
-request_merging_users_test(Config) ->
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-    User1ReqParams = ?config(userReqParams, Config),
-    OtherRestAddress = ?config(otherRestAddress, Config),
-    ParamsWithOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
-
-    {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ParamsWithOtherAddress),
-
-    MergeToken = get_user_merge_token(User2ReqParams),
-
-    ?assertMatch(ok, check_status(merge_users(MergeToken, User1ReqParams))).
-
 create_space_for_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
@@ -571,8 +558,31 @@ get_group_info_by_user_test(Config) ->
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
+    ensure_effective_users_and_groups_updated(Config),
+
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserReqParams)),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserParamsOtherAddress)).
+
+get_ancestor_group_info_by_user_test(Config) ->
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
+    User1ReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
+
+    {_, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    GID1 = create_group(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
+    GID2 = create_group(?GROUP_NAME2, ?GROUP_TYPE2, User2ReqParams),
+
+    ?assertMatch({request_error, ?NOT_FOUND}, get_group_info_by_user(GID2, User1ReqParams)),
+    ?assertMatch({request_error, ?NOT_FOUND}, get_group_info_by_user(GID2, User1ParamsOtherAddress)),
+
+    Token = get_group_invitation_group_token(GID2, User2ReqParams),
+    ?assertMatch(GID2, join_group_to_group(Token, GID1, User1ReqParams)),
+    ensure_effective_users_and_groups_updated(Config),
+
+    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_user(GID2, User1ReqParams)),
+    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_user(GID2, User1ParamsOtherAddress)).
 
 last_user_leaves_group_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -580,6 +590,7 @@ last_user_leaves_group_test(Config) ->
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
+    ensure_effective_users_and_groups_updated(Config),
 
     ?assertMatch(ok, check_status(user_leaves_group(GID1, UserReqParams))),
     ?assertMatch(false, is_included([GID1], get_user_groups(UserReqParams))),
@@ -596,10 +607,9 @@ non_last_user_leaves_group_test(Config) ->
     {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId1, Config, ProviderReqParams1),
 
     GID1 = create_group_for_user(?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
-
     InvitationToken = get_group_invitation_token(GID1, User1ReqParams),
-
     join_user_to_group(InvitationToken, User2ReqParams),
+    ensure_effective_users_and_groups_updated(Config),
 
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
     User2ParamsOtherAddress = update_req_params(User2ReqParams, OtherRestAddress, address),
@@ -1163,7 +1173,7 @@ bad_request_test(Config) ->
     %% They should all fail if no such macaroons are given.
     RequireMacaroons = [
         "/user", "/user/spaces", "/user/spaces/default", "/user/spaces/token",
-        "/user/groups", "/user/merge/token"
+        "/user/groups"
     ],
     check_bad_requests(RequireMacaroons, get, <<"">>, ProviderReqParams),
 
@@ -1186,18 +1196,8 @@ bad_request_test(Config) ->
     %% Endpoints that require provider certs in request. They should all fail
     %% when no certs are presented.
     RequireCerts = [
-        "/provider", "/provider/spaces", "/provider/spaces/0", "/groups/0",
-        "/groups/0/users", "/groups/0/users/token", "/groups/0/users/0",
-        "/groups/0/users/0/privileges", "/groups/0/spaces",
-        "/groups/0/spaces/token", "/groups/0/spaces/0", "/user", "/user/spaces",
-        "/user/spaces/default", "/user/spaces/token", "/user/spaces/0",
-        "/user/groups", "/user/groups/join", "/user/groups/0",
-        "/user/merge/token", "/spaces/0", "/spaces/0/users",
-        "/spaces/0/users/token", "/spaces/0/users/0",
-        "/spaces/0/users/0/privileges",
-        "/spaces/0/groups", "/spaces/0/groups/token", "/spaces/0/groups/0",
-        "/spaces/0/groups/0/privileges", "/spaces/0/providers",
-        "/spaces/0/providers/token", "/spaces/0/providers/0"
+        "/provider", "/provider/spaces", "/provider/spaces/0",
+        "/spaces/0", "/spaces/0/users"
     ],
     {RestAddress, Headers, _Options} = ProviderReqParams,
     %% Send requests without certs (no options)
@@ -1207,9 +1207,9 @@ bad_request_test(Config) ->
     %% They should all fail if no such body is given.
     RequireBody =
         [
-            "/provider/0", "/provider/spaces/support",
+            "/provider", "/provider/spaces/support",
             "/provider/test/check_my_ports", "/groups", "/groups/0/spaces/join",
-            "/user/authorize", "/user/spaces/join", "/user/merge", "/spaces"
+            "/user/authorize", "/user/spaces/join", "/spaces"
         ],
     BadBody = json_utils:encode([
         {<<"wrong_body">>, <<"WRONG BODY">>}
@@ -1230,8 +1230,9 @@ init_per_suite(Config) ->
     OZ_IP_1 = get_node_ip(Node1),
     OZ_IP_2 = get_node_ip(Node2),
     RestPort = get_rest_port(Node1),
-    RestAddress = "https://" ++ OZ_IP_1 ++ ":" ++ integer_to_list(RestPort),
-    OtherRestAddress = "https://" ++ OZ_IP_2 ++ ":" ++ integer_to_list(RestPort),
+    RestAPIPrefix = get_rest_api_prefix(Node1),
+    RestAddress = str_utils:format("https://~s:~B~s", [OZ_IP_1, RestPort, RestAPIPrefix]),
+    OtherRestAddress = str_utils:format("https://~s:~B~s", [OZ_IP_2, RestPort, RestAPIPrefix]),
     [{otherRestAddress, OtherRestAddress} | [{restAddress, RestAddress} | NewConfig]].
 
 init_per_testcase(create_provider_test, Config) ->
@@ -1307,6 +1308,10 @@ is_included([H | T], MainList) ->
 get_rest_port(Node) ->
     {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
     RestPort.
+
+get_rest_api_prefix(Node) ->
+    {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_Name, rest_api_prefix]),
+    RestAPIPrefix.
 
 %% returns ip (as a string) of given node
 get_node_ip(Node) ->
@@ -1587,19 +1592,6 @@ set_default_space_for_user(SID, ReqParams) ->
         {<<"spaceId">>, SID}
     ]),
     do_request(RestAddress ++ "/user/spaces/default", Headers, put, Body, Options).
-
-get_user_merge_token(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
-    Response = do_request(RestAddress ++ "/user/merge/token", Headers, get, [], Options),
-    Val = get_body_val([token], Response),
-    fetch_value_from_list(Val).
-
-merge_users(Token, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
-    Body = json_utils:encode([
-        {<<"token">>, Token}
-    ]),
-    do_request(RestAddress ++ "/user/merge", Headers, post, Body, Options).
 
 user_leaves_space(SID, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,

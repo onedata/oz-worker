@@ -69,24 +69,23 @@ mark_user_changed(UserID) ->
 -spec refresh_effective_caches() -> ok | not_applicable.
 refresh_effective_caches() ->
     ensure_state_initialised(),
-    {ok, Interval} = application:get_env(?APP_Name, group_graph_refresh_interval),
     Now = erlang:system_time(),
+    {ok, Interval} = application:get_env(?APP_Name, group_graph_refresh_interval),
 
     datastore:run_synchronized(groups_graph_caches_state, ?LOCK_ID, fun() ->
         {ok, #document{value = #groups_graph_caches_state{
             last_rebuild = Timestamp,
-            changed_groups = Groups,
-            changed_users = Users
+            changed_groups = GroupsWithDuplicates,
+            changed_users = UsersWithDuplicates
         }}} = groups_graph_caches_state:get(?KEY),
+
+        Groups = ordsets:from_list(GroupsWithDuplicates),
+        Users = ordsets:from_list(UsersWithDuplicates),
 
         case Timestamp + Interval < Now of
             false -> not_applicable;
             true ->
-                {ok, _} = groups_graph_caches_state:update(?KEY, fun(Val) ->
-                    {ok, Val#groups_graph_caches_state{
-                        last_rebuild = Now,
-                        changed_groups = Val#groups_graph_caches_state.changed_groups -- Groups
-                    }} end),
+                remove_from_changed(Users, Groups, Now),
                 break_cycles(Groups, []),
                 effective_groups_update_traverse(Users, Groups),
                 effective_users_update_traverse(Groups)
@@ -96,6 +95,26 @@ refresh_effective_caches() ->
 %%%===================================================================
 %%% Internal
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc @private Updates state removing groups & users which are to be
+%% processed during current iteration.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_from_changed(UserIDs :: [binary()], GroupIDs :: [binary()],
+    ModificationTime :: integer()) -> ok.
+remove_from_changed(UserIDs, GroupIDs, ModificationTime) ->
+    {ok, _} = groups_graph_caches_state:update(?KEY, fun(Val) ->
+        #groups_graph_caches_state{changed_groups = ChangedGroups,
+            changed_users = ChangedUsers} = Val,
+
+        {ok, Val#groups_graph_caches_state{
+            last_rebuild = ModificationTime,
+            changed_groups = ordsets:from_list(ChangedGroups) -- GroupIDs,
+            changed_users = ordsets:from_list(ChangedUsers) -- UserIDs
+        }}
+    end),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc @private performs group graph traverse & update effective groups

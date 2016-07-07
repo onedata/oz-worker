@@ -26,6 +26,7 @@
 -export([remove/1]).
 -export([test_connection/1, check_provider_connectivity/1]).
 -export([choose_provider_for_user/1]).
+-export([list/0]).
 
 %%%===================================================================
 %%% API
@@ -162,7 +163,7 @@ remove(ProviderId) ->
     worker_proxy:call(ozpca_worker, {revoke, Serial}),
     case (provider:delete(ProviderId)) of
         ok -> true;
-        _ -> flase
+        _ -> false
     end.
 
 %%--------------------------------------------------------------------
@@ -277,3 +278,14 @@ choose_provider_for_user(UserID) ->
                     {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
             end
     end.
+
+%%--------------------------------------------------------------------
+%% @doc Returns a list of all providers (their ids).
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [binary()]}.
+list() ->
+    {ok, ProviderDocs} = provider:list(),
+    ProviderIds = lists:map(fun(#document{key = ProviderId}) ->
+        ProviderId
+    end, ProviderDocs),
+    {ok, ProviderIds}.

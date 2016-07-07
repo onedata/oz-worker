@@ -124,6 +124,10 @@
 %% This record defines a user and is handled as a database document
 -record(onedata_user, {
     name = <<"">> :: binary(),
+    login = <<"">> :: binary(),
+    % Decides if this user can login via login:password, only users created in
+    % onepanel are currently allowed to do that.
+    basic_auth_enabled = false :: boolean(),
     alias = ?EMPTY_ALIAS :: binary(),
     email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],
@@ -141,6 +145,13 @@
     chosen_provider = undefined :: binary() | undefined,
     % List of user's client tokens
     client_tokens = [] :: [binary()]
+}).
+
+%% This record contains a list of privileges possessed by certain entity
+%% (user / group) to use onezone API.
+-record(oz_api_privileges, {
+    type = user :: user | group,
+    privileges = [] :: [oz_api_privileges:privilege()]
 }).
 
 -type user_info() :: #onedata_user{}.

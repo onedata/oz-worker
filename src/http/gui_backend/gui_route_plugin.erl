@@ -36,6 +36,12 @@
     page_backend = logout_backend
 }).
 
+-define(BASIC_LOGIN, #gui_route{
+    requires_session = ?SESSION_NOT_LOGGED_IN,
+    html_file = undefined,
+    page_backend = basic_login_backend
+}).
+
 -define(VALIDATE_LOGIN, #gui_route{
     requires_session = ?SESSION_ANY,  % Can be used to log in or connect account
     html_file = undefined,
@@ -73,6 +79,7 @@
 %%--------------------------------------------------------------------
 -spec route(Path :: binary()) -> #gui_route{}.
 route(<<"/do_logout">>) -> ?LOGOUT;
+route(<<"/do_login">>) -> ?BASIC_LOGIN;
 route(<<"/validate_login">>) -> ?VALIDATE_LOGIN;
 route(<<"/dev_login">>) ->
     case application:get_env(?APP_Name, dev_mode) of
@@ -130,12 +137,16 @@ public_rpc_backend() -> public_rpc_backend.
 -spec session_details() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 session_details() ->
-    {ok, #document{value = #onedata_user{name = Name}}} =
-        onedata_user:get(g_session:get_user_id()),
+    {ok, #document{
+        value = #onedata_user{
+            name = Name,
+            basic_auth_enabled = BasicAuthEnabled
+        }}} = onedata_user:get(g_session:get_user_id()),
     FirstLogin = g_session:get_value(firstLogin, false),
     Res = [
         {<<"userName">>, Name},
-        {<<"firstLogin">>, FirstLogin}
+        {<<"firstLogin">>, FirstLogin},
+        {<<"basicAuthEnabled">>, BasicAuthEnabled}
     ],
     {ok, Res}.
 

@@ -32,7 +32,8 @@
 
 %%--------------------------------------------------------------------
 %% @doc Returns a Cowboy-understandable PathList of routes supported by a module
-%% implementing this behavior.
+%% implementing this behavior. The paths should not include rest_api_prefix, as
+%% it is added automatically.
 %% @see rest_module_behavior
 %% @end
 %%--------------------------------------------------------------------
