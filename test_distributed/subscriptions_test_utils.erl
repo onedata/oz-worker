@@ -19,7 +19,7 @@
 %% API
 -export([save/3, update_document/4, delete_document/3, get_rev/3,
     create_provider/3, call_worker/2, generate_group_ids/1, generate_user_ids/1,
-    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1, empty_cache/1, create_provider/4, delete_all/2, list/2]).
+    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1, empty_cache/1, create_provider/4, delete_all/2, list/2, get_last_sequence_number/1]).
 -export([expectation/2, public_only_user_expectation/2, group_expectation/8,
     privileges_as_binaries/1, expectation_with_rev/2, public_only_provider_expectation/3]).
 -export([verify_messages_present/2, verify_messages_absent/2, init_messages/3,
@@ -126,6 +126,13 @@ generate_cert_files() ->
     os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
     os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
     {KeyFile, CSRFile, CertFile}.
+
+
+get_last_sequence_number(Node) ->
+    {ok, Start, _} =
+        rpc:call(Node, couchdb_datastore_driver, db_run, [couchbeam_changes,follow_once, [], 30]),
+    Start.
+
 
 
 %%%===================================================================

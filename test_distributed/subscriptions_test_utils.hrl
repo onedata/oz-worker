@@ -29,6 +29,9 @@
     missing :: [subscriptions:seq()]
 }).
 
+-define(ATOM_FORMAT(Format, Data),
+    list_to_atom(str_utils:format(Format, Data))).
+
 -define(PROVIDERS_NUM(Value), [
     {name, providers_num},
     {value, Value},
@@ -62,8 +65,8 @@
 
 -define(GENERATE_TEST_CFG(ProvidersNum, DocumentsNum), {config,
     [
-        {name, list_to_atom(lists:flatten(io_lib:format("~p providers ~p documents", [ProvidersNum, DocumentsNum])))},
-        {description, lists:flatten(io_lib:format("~p providers saving ~p documents", [ProvidersNum, DocumentsNum]))},
+        {name, ?ATOM_FORMAT("~p providers ~p documents", [ProvidersNum, DocumentsNum])},
+        {description, str_utils:format("~p providers saving ~p documents", [ProvidersNum, DocumentsNum])},
         {parameters, [
             ?PROVIDERS_NUM(ProvidersNum),
             ?DOCS_NUM(DocumentsNum)
@@ -73,8 +76,8 @@
 
 -define(UPDATE_TEST_CFG(ModificationsNum, UsersNum, GroupsNum), {config,
     [
-        {name, list_to_atom(lists:flatten(io_lib:format("~p modifications ~p users ~p groups", [ModificationsNum, UsersNum, GroupsNum])))},
-        {description, lists:flatten(io_lib:format("Single provider modifying document ~p times, ~p users, ~p group", [ModificationsNum, UsersNum, GroupsNum]))},
+        {name, ?ATOM_FORMAT("~p modifications ~p users ~p groups", [ModificationsNum, UsersNum, GroupsNum])},
+        {description, str_utils:format("Single provider modifying document ~p times, ~p users, ~p group", [ModificationsNum, UsersNum, GroupsNum])},
         {parameters, [
             ?DOCUMENT_MODIFICATIONS_NUM(ModificationsNum),
             ?USERS_NUM(UsersNum),

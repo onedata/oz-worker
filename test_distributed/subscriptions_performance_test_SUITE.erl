@@ -28,7 +28,7 @@ all() -> ?ALL([], [
     space_update_test
 ]).
 
--define(DOCS_NUM, 10).
+-define(NUMBER_OF_DOCS, 10).
 
 -define(MODELS_TO_CLEAN, [provider, space, user_group, onedata_user]).
 
@@ -43,22 +43,22 @@ generate_spaces_test(Config) ->
             ?PROVIDERS_NUM(1),
             ?DOCS_NUM(10)
         ]},
-        {description, "Performs document saves and gathers subscription updated for many providers"},
-        ?GENERATE_TEST_CFG(1, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(2, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(3, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(4, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(5, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(6, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(7, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(8, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(9, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(10, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(15, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(20, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(25, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(50, ?DOCS_NUM),
-        ?GENERATE_TEST_CFG(100, ?DOCS_NUM)
+        {description, "Generates spaces documents, saves them and gathers subscription updates for many providers"},
+        ?GENERATE_TEST_CFG(1, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(2, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(3, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(4, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(5, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(6, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(7, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(8, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(9, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(10, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(15, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(20, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(25, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(50, ?NUMBER_OF_DOCS),
+        ?GENERATE_TEST_CFG(100, ?NUMBER_OF_DOCS)
     ]).
 
 generate_spaces_test_base(Config) ->
@@ -113,7 +113,7 @@ space_update_test(Config) ->
     ?PERFORMANCE(Config, [
         {repeats, 10},
         {success_rate, 95},
-        {description, "Performs document updates and gathers subscription updated for provider"},
+        {description, "Performs document updates and gathers subscription updates for provider"},
         ?UPDATE_TEST_CFG(10, 2, 1),
         ?UPDATE_TEST_CFG(10, 10, 5),
         ?UPDATE_TEST_CFG(10, 20, 10),
@@ -140,8 +140,7 @@ space_update_test_base(Config) ->
     SIDs = subscriptions_test_utils:generate_space_ids(1),
 
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [hd(UIDs)]),
-
-    {ok, Start, _} = rpc:call(Node, couchdb_datastore_driver, db_run, [couchbeam_changes,follow_once, [], 30]),
+    Start = subscriptions_test_utils:get_last_sequence_number(Node),
     NewContext = Context1#subs_ctx{resume_at=binary_to_integer(Start)},
 
     [{SID1, S1} | _] = subscriptions_test_utils:create_spaces(SIDs, UIDs, GIDs, Node),
@@ -152,7 +151,7 @@ space_update_test_base(Config) ->
     Context = subscriptions_test_utils:flush_messages(
         NewContext, subscriptions_test_utils:expectation(SID1, S1)),
 
-    #subs_ctx{resume_at = Start1} = Context,
+    Start1 = Context#subs_ctx.resume_at,
 
     %% ensure sequence number won't be repeated when more entities are created
     SeqStart = Start1 + 100,
