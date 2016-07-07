@@ -65,7 +65,10 @@ all() -> ?ALL([], [
     [
         {name, list_to_atom(lists:flatten(io_lib:format("~p providers ~p documents", [ProvidersNum, DocumentsNum])))},
         {description, lists:flatten(io_lib:format("~p providers saving ~p documents", [ProvidersNum, DocumentsNum]))},
-        {parameters, [?PROVIDERS_NUM(ProvidersNum), ?DOCS_NUM(DocumentsNum)]}
+        {parameters, [
+            ?PROVIDERS_NUM(ProvidersNum),
+            ?DOCS_NUM(DocumentsNum)
+        ]}
     ]
 }).
 
@@ -73,13 +76,11 @@ all() -> ?ALL([], [
     [
         {name, list_to_atom(lists:flatten(io_lib:format("~p modifications ~p users ~p groups", [ModificationsNum, UsersNum, GroupsNum])))},
         {description, lists:flatten(io_lib:format("Single provider modifying document ~p times, ~p users, ~p group", [ModificationsNum, UsersNum, GroupsNum]))},
-        {parameters,
-            [
-                ?DOCUMENT_MODIFICATIONS_NUM(ModificationsNum),
-                ?USERS_NUM(UsersNum),
-                ?GROUPS_NUM(GroupsNum)
-            ]
-        }
+        {parameters, [
+            ?DOCUMENT_MODIFICATIONS_NUM(ModificationsNum),
+            ?USERS_NUM(UsersNum),
+            ?GROUPS_NUM(GroupsNum)
+        ]}
     ]
 }).
 
@@ -92,7 +93,6 @@ generate_spaces_test(Config) ->
         {repeats, 10},
         {success_rate, 95},
         {description, "Performs document saves and gathers subscription updated for many providers"},
-        ?GENERATE_TEST_CFG(1, ?DOCS_NUM),
         ?GENERATE_TEST_CFG(1, ?DOCS_NUM),
         ?GENERATE_TEST_CFG(2, ?DOCS_NUM),
         ?GENERATE_TEST_CFG(3, ?DOCS_NUM),
@@ -114,7 +114,7 @@ generate_spaces_test_base(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
 
-    ProvidersCount = ?config(providers_num, Config),
+    ProvidersNum = ?config(providers_num, Config),
     DocsCount = ?config(docs_num, Config),
 
     Results = utils:pmap(fun(ID) ->
@@ -142,7 +142,7 @@ generate_spaces_test_base(Config) ->
             end, SIDs)
         ),
         {ok, erlang:system_time(milli_seconds) - Start}
-    end, lists:seq(1, ProvidersCount)),
+    end, lists:seq(1, ProvidersNum)),
 
     lists:map(fun(Res) ->
         ?assertMatch({ok, _}, Res)
@@ -159,7 +159,6 @@ generate_spaces_test_base(Config) ->
 space_update_test(Config) ->
     ?PERFORMANCE(Config, [
         {repeats, 10},
-        {parameters, [?DOCUMENT_MODIFICATIONS_NUM(2), ?USERS_NUM(1), ?GROUPS_NUM(1)]},
         {success_rate, 95},
         {description, "Performs document updates and gathers subscription updated for provider"},
         ?UPDATE_TEST_CFG(10, 2, 1),
