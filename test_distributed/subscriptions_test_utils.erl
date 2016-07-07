@@ -19,9 +19,9 @@
 %% API
 -export([save/3, update_document/4, delete_document/3, get_rev/3,
     create_provider/3, call_worker/2, generate_group_ids/1, generate_user_ids/1,
-    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1, empty_cache/1]).
+    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1, empty_cache/1, create_provider/4]).
 -export([expectation/2, public_only_user_expectation/2, group_expectation/8,
-    privileges_as_binaries/1, expectation_with_rev/2]).
+    privileges_as_binaries/1, expectation_with_rev/2, public_only_provider_expectation/3]).
 -export([verify_messages_present/2, verify_messages_absent/2, init_messages/3,
     flush_messages/2, flush/0, verify_messages/3]).
 
@@ -50,9 +50,11 @@ get_rev(Node, Model, ID) ->
     Rev.
 
 create_provider(Node, Name, Spaces) ->
+    create_provider(Node, Name, Spaces, [<<"127.0.0.1">>]).
+create_provider(Node, Name, Spaces, URLs) ->
     {_, CSRFile, _} = generate_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
-    Params = [Name, [<<"127.0.0.1">>], <<"https://127.0.0.1:443">>, CSR],
+    Params = [Name, URLs, <<"https://127.0.0.1:443">>, CSR],
     {ok, ID, _} = rpc:call(Node, provider_logic, create, Params),
     {ok, ID} = rpc:call(Node, provider, update, [ID, #{spaces => Spaces}]),
     ID.
@@ -127,12 +129,20 @@ expectation(ID, #space{name = Name, providers_supports = Supports,
 expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
     default_space = DefaultSpace, effective_groups = EGroups}) ->
     user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups, case DefaultSpace of
-                                                                              undefined -> <<"undefined">>;
-                                                                              _ -> DefaultSpace
-                                                                          end);
+        undefined -> <<"undefined">>;
+        _ -> DefaultSpace
+    end);
 expectation(ID, #user_group{name = Name, type = Type, users = Users, spaces = Spaces,
     effective_users = EUsers, nested_groups = NGroups, parent_groups = PGroups}) ->
-    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups).
+    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups);
+
+expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) ->
+    [{<<"id">>, ID}, {<<"provider">>, [
+        {<<"client_name">>, Name},
+        {<<"urls">>, URLs},
+        {<<"space_ids">>, SpaceIDs},
+        {<<"public_only">>, false}
+    ]}].
 
 space_expectation(ID, Name, Users, Groups, Supports) ->
     [{<<"id">>, ID}, {<<"space">>, [
@@ -151,6 +161,14 @@ user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace) ->
         {<<"effective_group_ids">>, EGroups},
         {<<"default_space">>, DefaultSpace},
         {<<"public_only">>, false}
+    ]}].
+
+public_only_provider_expectation(ID, Name, URLs) ->
+    [{<<"id">>, ID}, {<<"provider">>, [
+        {<<"client_name">>, Name},
+        {<<"urls">>, URLs},
+        {<<"space_ids">>, []},
+        {<<"public_only">>, true}
     ]}].
 
 public_only_user_expectation(ID, Name) ->
@@ -178,8 +196,8 @@ privileges_as_binaries(IDsWithPrivileges) ->
     lists:map(fun({ID, Privileges}) ->
         {ID, lists:map(fun(Privilege) ->
             atom_to_binary(Privilege, latin1)
-                       end, Privileges)}
-              end, IDsWithPrivileges).
+        end, Privileges)}
+    end, IDsWithPrivileges).
 
 expectation_with_rev(Revs, Expectation) ->
     [{<<"revs">>, Revs} | Expectation].
@@ -202,8 +220,8 @@ init_messages(Node, ProviderID, Users) ->
     call_worker(Node, {add_connection, ProviderID, self()}),
 
     Start = case rpc:call(Node, changes_cache, newest_seq, []) of
-                {ok, Val} -> Val; _ -> 0
-            end,
+        {ok, Val} -> Val; _ -> 0
+    end,
 
 
     #subs_ctx{node = Node, provider = ProviderID,
