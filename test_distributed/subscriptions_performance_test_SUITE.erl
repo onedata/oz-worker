@@ -28,62 +28,9 @@ all() -> ?ALL([], [
     space_update_test
 ]).
 
-
--define(PROVIDERS_NUM(Value), [
-    {name, providers_num},
-    {value, Value},
-    {description, "Number of providers (threads) used during the test."}
-]).
-
--define(DOCS_NUM(Value), [
-    {name, docs_num},
-    {value, Value},
-    {description, "Number of documents used by a single thread/provider."}
-]).
-
--define(DOCUMENT_MODIFICATIONS_NUM(Value), [
-    {name, docs_modifications_num},
-    {value, Value},
-    {description, "Number of modifications on document, performed by a single thread/provider."}
-]).
-
--define(USERS_NUM(Value), [
-    {name, users_num},
-    {value, Value},
-    {description, "Number of users."}
-]).
-
--define(GROUPS_NUM(Value), [
-    {name, groups_num},
-    {value, Value},
-    {description, "Number of groups."}
-]).
-
 -define(DOCS_NUM, 10).
 
--define(GENERATE_TEST_CFG(ProvidersNum, DocumentsNum), {config,
-    [
-        {name, list_to_atom(lists:flatten(io_lib:format("~p providers ~p documents", [ProvidersNum, DocumentsNum])))},
-        {description, lists:flatten(io_lib:format("~p providers saving ~p documents", [ProvidersNum, DocumentsNum]))},
-        {parameters, [
-            ?PROVIDERS_NUM(ProvidersNum),
-            ?DOCS_NUM(DocumentsNum)
-        ]}
-    ]
-}).
-
--define(UPDATE_TEST_CFG(ModificationsNum, UsersNum, GroupsNum), {config,
-    [
-        {name, list_to_atom(lists:flatten(io_lib:format("~p modifications ~p users ~p groups", [ModificationsNum, UsersNum, GroupsNum])))},
-        {description, lists:flatten(io_lib:format("Single provider modifying document ~p times, ~p users, ~p group", [ModificationsNum, UsersNum, GroupsNum]))},
-        {parameters, [
-            ?DOCUMENT_MODIFICATIONS_NUM(ModificationsNum),
-            ?USERS_NUM(UsersNum),
-            ?GROUPS_NUM(GroupsNum)
-        ]}
-    ]
-}).
-
+-define(MODELS_TO_CLEAN, [provider, space, user_group, onedata_user]).
 
 %%%===================================================================
 %%% Test functions
@@ -92,6 +39,10 @@ generate_spaces_test(Config) ->
     ?PERFORMANCE(Config, [
         {repeats, 10},
         {success_rate, 95},
+        {parameters, [
+            ?PROVIDERS_NUM(1),
+            ?DOCS_NUM(10)
+        ]},
         {description, "Performs document saves and gathers subscription updated for many providers"},
         ?GENERATE_TEST_CFG(1, ?DOCS_NUM),
         ?GENERATE_TEST_CFG(2, ?DOCS_NUM),
@@ -116,6 +67,8 @@ generate_spaces_test_base(Config) ->
 
     ProvidersNum = ?config(providers_num, Config),
     DocsCount = ?config(docs_num, Config),
+
+    maybe_clear(Config),
 
     Results = utils:pmap(fun(ID) ->
         %% given
@@ -175,6 +128,8 @@ space_update_test_base(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
 
+    maybe_clear(Config),
+
     UsersNum = ?config(users_num, Config),
     GroupsNum = ?config(groups_num, Config),
     UpdatesNum = ?config(docs_modifications_num, Config),
@@ -218,7 +173,7 @@ space_update_test_base(Config) ->
     end, ModifiedSpaces),
 
     % then
-    Context2 = subscriptions_test_utils:verify_messages_present(Context, [
+    subscriptions_test_utils:verify_messages_present(Context, [
             subscriptions_test_utils:expectation(SID1, Space) || {_Seq, Space} <- ModifiedSpaces
     ]),
 
@@ -229,9 +184,6 @@ space_update_test_base(Config) ->
         #parameter{name = updates_await, value = Time, unit = "ms",
             description = "Time until every update arrived (providers mean)"}
     ].
-
-
-
 
 
 %%%===================================================================
@@ -261,3 +213,21 @@ end_per_suite(Config) ->
 %%% Internal functions
 %%%===================================================================
 
+
+
+maybe_clear(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    case performance:should_clear(Config) of
+        true -> clear_db_all(Nodes);
+        _ -> ok
+    end.
+
+clear_db_all(Nodes) ->
+    lists:foreach(fun(Node) -> clear_db(Node) end, Nodes).
+
+clear_db(Node) ->
+    Docs = lists:flatmap(fun(Model) ->
+        subscriptions_test_utils:list(Node, Model)
+    end, ?MODELS_TO_CLEAN),
+
+    subscriptions_test_utils:delete_all(Node, Docs).

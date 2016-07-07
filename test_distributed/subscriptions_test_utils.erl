@@ -19,7 +19,7 @@
 %% API
 -export([save/3, update_document/4, delete_document/3, get_rev/3,
     create_provider/3, call_worker/2, generate_group_ids/1, generate_user_ids/1,
-    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1, empty_cache/1, create_provider/4]).
+    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1, empty_cache/1, create_provider/4, delete_all/2, list/2]).
 -export([expectation/2, public_only_user_expectation/2, group_expectation/8,
     privileges_as_binaries/1, expectation_with_rev/2, public_only_provider_expectation/3]).
 -export([verify_messages_present/2, verify_messages_absent/2, init_messages/3,
@@ -36,6 +36,15 @@ call_worker(Node, Req) ->
 save(Node, ID, Value) ->
     ?assertMatch({ok, ID}, rpc:call(Node, element(1, Value), save,
         [#document{key = ID, value = Value}])).
+
+delete_all(Node, Documents) ->
+    lists:foreach(fun(#document{key= Key, value=Value}) ->
+        subscriptions_test_utils:delete_document(Node, element(1, Value), Key)
+    end, Documents).
+
+list(Node, Model) ->
+    {ok, Documents} = rpc:call(Node, Model, list, []),
+    Documents.
 
 update_document(Node, Model, ID, Diff) ->
     ?assertMatch({ok, _}, rpc:call(Node, Model, update, [ID, Diff])).
