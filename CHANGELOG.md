@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 3.0.0-beta8
+
+* minor changes and improvements
+
+
 ### 3.0.0-beta7
 
 * VFS-2225 Update GUI docker image
