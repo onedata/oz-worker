@@ -18,6 +18,7 @@
 -export([create_space/3, create_user/2, create_group/3]).
 -export([join_group/3, join_space/3, leave_space/3, support_space/4]).
 -export([modify_space/4]).
+-export([remove_space/2]).
 
 %%%===================================================================
 %%% API functions
@@ -62,7 +63,7 @@ create_user(Config, User) ->
 create_group(Config, UserId, Name) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
-        rpc:call(Node, group_logic, create, [UserId, Name])
+        rpc:call(Node, group_logic, create, [UserId, Name, undefined])
     catch
         _:Reason ->
             {error, Reason}
@@ -177,6 +178,21 @@ modify_space(Config, SpaceId, Member, Name) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, space_logic, modify, [SpaceId, Member, Name])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Removes space.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_space(Config :: term(), SpaceId :: binary()) ->
+    ok | {error, Reason :: term()}.
+remove_space(Config, SpaceId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, space_logic, remove, [SpaceId])
     catch
         _:Reason ->
             {error, Reason}

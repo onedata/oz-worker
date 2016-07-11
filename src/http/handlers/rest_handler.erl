@@ -12,6 +12,7 @@
 -module(rest_handler).
 -author("Konrad Zemek").
 
+-include("datastore/oz_datastore_models_def.hrl").
 -include("http/handlers/rest_handler.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -150,48 +151,37 @@ forbidden(Req, State) ->
 -spec is_authorized(Req :: cowboy_req:req(), State :: rstate()) ->
     {true | {false, binary()}, cowboy_req:req(), rstate()}.
 is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
-    {BinMethod, Req2} = cowboy_req:method(Req),
+    {BinMethod, _} = cowboy_req:method(Req),
     Method = binary_to_method(BinMethod),
 
     try
         case lists:member(Method, NoAuth) of
-            true -> {true, Req, State#rstate{client = #client{}}};
+            true ->
+                % No authorization required for this method,
+                % accept every request
+                {true, Req, State#rstate{client = #client{}}};
             false ->
-                PeerCert = case ssl:peercert(cowboy_req:get(socket, Req2)) of
-                    {ok, PeerCert1} -> PeerCert1;
-                    {error, no_peercert} ->
-                        throw({silent_error, Req2})
-                end,
-
-                ProviderId = case worker_proxy:call(ozpca_worker,
-                    {verify_provider, PeerCert}) of
-                    {ok, ProviderId1} -> ProviderId1;
-                    {error, {bad_cert, Reason}} ->
-                        ?warning("Attempted authentication with "
-                        "bad peer certificate: ~p", [Reason]),
-                        throw({silent_error, Req2})
-                end,
-
-                {Macaroon, DischargeMacaroons, Req3} =
-                    parse_macaroons_from_headers(Req2),
-
-                case Macaroon of
-                    undefined ->
-                        Client = #client{type = provider, id = ProviderId},
-                        {true, Req3, State#rstate{client = Client}};
-
-                    _ ->
-                        case auth_logic:validate_token(ProviderId, Macaroon,
-                            DischargeMacaroons, BinMethod, Root) of
-
-                            {ok, UserId} ->
-                                Client = #client{type = user, id = UserId},
-                                {true, Req3, State#rstate{client = Client}};
-
-                            {error, Reason1} ->
-                                ?info("Bad auth: ~p", [Reason1]),
-                                throw({invalid_token, <<"access denied">>,
-                                    Req3})
+                % This method requires authorization. First, check for basic
+                % auth headers.
+                case authorize_by_basic_auth(Req) of
+                    {true, BasicClient} ->
+                        {true, Req, State#rstate{client = BasicClient}};
+                    false ->
+                        % Basic auth not found, try macaroons
+                        case authorize_by_macaroons(Req, BinMethod, Root) of
+                            {true, McrnClient} ->
+                                {true, Req, State#rstate{client = McrnClient}};
+                            false ->
+                                % Macaroon auth not found,
+                                % try to authorize as provider
+                                case authorize_by_provider_certs(Req) of
+                                    {true, ProviderClient} ->
+                                        {true, Req, State#rstate{
+                                            client = ProviderClient}};
+                                    false ->
+                                        %% Not authorized
+                                        {{false, <<"">>}, Req, State}
+                                end
                         end
                 end
         end
@@ -218,6 +208,87 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
             {ok, ReqY} = cowboy_req:reply(StatusCode, [], Body, ReqX),
             {halt, ReqY, State}
     end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authenticate client by basic auth headers.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_basic_auth(Req :: cowboy_req:req()) ->
+    false | {true, #client{}}.
+authorize_by_basic_auth(Req) ->
+    {Header, _} = cowboy_req:header(<<"authorization">>, Req),
+    case Header of
+        <<"Basic ", UserPasswdB64/binary>> ->
+            UserPasswd = base64:decode(UserPasswdB64),
+            [User, Passwd] = binary:split(UserPasswd, <<":">>),
+            case user_logic:authenticate_by_basic_credentials(User, Passwd) of
+                {ok, #document{key = UserId}} ->
+                    Client = #client{type = user, id = UserId},
+                    {true, Client};
+                _ ->
+                    false
+            end;
+        _ ->
+            false
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authenticate client by macaroons.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_macaroons(Req :: cowboy_req:req(), BinMethod :: binary(),
+    Root :: atom()) -> false | {true, #client{}}.
+authorize_by_macaroons(Req, BinMethod, Root) ->
+    {Macaroon, DischargeMacaroons, _} = parse_macaroons_from_headers(Req),
+    %% @todo: VFS-1869
+    %% Pass empty string as providerId because we do
+    %% not expect the macaroon to have provider caveat
+    %% (it is an authorization code for client).
+    case Macaroon of
+        undefined ->
+            false;
+        _ ->
+            case auth_logic:validate_token(<<>>, Macaroon,
+                DischargeMacaroons, BinMethod, Root) of
+                {ok, UserId} ->
+                    Client = #client{type = user, id = UserId},
+                    {true, Client};
+                {error, Reason1} ->
+                    ?info("Bad auth: ~p", [Reason1]),
+                    throw({invalid_token, <<"access denied">>,
+                        Req})
+            end
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authenticate client by provider certs.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_provider_certs(Req :: cowboy_req:req()) ->
+    false | {true, #client{}}.
+authorize_by_provider_certs(Req) ->
+    case ssl:peercert(cowboy_req:get(socket, Req)) of
+        {ok, PeerCert} ->
+            case worker_proxy:call(ozpca_worker,
+                {verify_provider, PeerCert}) of
+                {ok, ProviderId} ->
+                    Client = #client{type = provider, id = ProviderId},
+                    {true, Client};
+                {error, {bad_cert, Reason}} ->
+                    ?warning("Attempted authentication with "
+                    "bad peer certificate: ~p", [Reason]),
+                    false
+            end;
+        {error, no_peercert} ->
+            false
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.

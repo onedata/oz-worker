@@ -31,7 +31,8 @@ providers(Doc, space) ->
     {SpaceProviders, _} = lists:unzip(ProvidersSupports),
 
     GroupUsersSets = lists:flatmap(fun({GroupId, _}) ->
-        {ok, #document{value = #user_group{users = GroupUserTuples}}} = user_group:get(GroupId),
+        {ok, #document{value = #user_group{users = GroupUserTuples}}} =
+            user_group:get(GroupId),
         {GroupUsers, _} = lists:unzip(GroupUserTuples),
         GroupUsers
     end, GroupTuples),
@@ -42,12 +43,33 @@ providers(Doc, space) ->
     SpaceProviders ++ through_users(SpaceUsersSet ++ GroupUsersSets);
 
 providers(Doc, user_group) ->
-    #document{value = #user_group{users = UsersWithPrivileges}} = Doc,
+    #document{
+        value = #user_group{
+            users = UsersWithPrivileges,
+            effective_users = EUsersWithPrivileges,
+            effective_groups = EGroups}} = Doc,
     {Users, _} = lists:unzip(UsersWithPrivileges),
-    through_users(Users);
+    {EUsers, _} = lists:unzip(EUsersWithPrivileges),
+    AncestorsUsers = lists:foldl(
+        fun(AncestorID, Acc) ->
+            case user_group:get(AncestorID) of
+                {ok, #document{
+                    value = #user_group{effective_users = AncUsersAndPerms}}} ->
+                    {AncestorUsers, _} = lists:unzip(AncUsersAndPerms),
+                    Acc ++ AncestorUsers;
+                {error, Reason} ->
+                    ?warning("Refferenced group ~p not found due to ~p",
+                        [AncestorID, Reason]),
+                    Acc
+            end
+        end, [], EGroups -- [Doc#document.key]),
+    through_users(Users ++ EUsers ++ AncestorsUsers);
 
 providers(Doc, onedata_user) ->
     through_users([Doc#document.key]);
+
+providers(Doc, provider) ->
+    [Doc#document.key];
 
 providers(_Doc, _Type) ->
     [].

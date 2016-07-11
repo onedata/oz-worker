@@ -20,6 +20,14 @@
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
 
+-define(USER_MODULE, onedata_user).
+
+%% API
+-export([all/0]).
+
+-type type() :: 'organization' | 'unit' | 'team' | 'role'.
+-export_type([type/0]).
+
 %%%===================================================================
 %%% model_behaviour callbacks
 %%%===================================================================
@@ -88,7 +96,10 @@ exists(Key) ->
 model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
     StoreLevel = application:get_env(?APP_Name, group_store_level, ?DISK_ONLY_LEVEL),
-    ?MODEL_CONFIG(user_group_bucket, [], StoreLevel).
+    UserHooks = [{?USER_MODULE, save}, {?USER_MODULE, update}, {?USER_MODULE, create},
+        {?USER_MODULE, create_or_opdate}],
+    Hooks = [{?MODULE, save}, {?MODULE, update}, {?MODULE, create}, {?MODULE, create_or_opdate}],
+    ?MODEL_CONFIG(user_group_bucket, Hooks ++ UserHooks, StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -98,6 +109,10 @@ model_init() ->
 -spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term(),
     ReturnValue :: term()) -> ok.
+'after'(?MODULE, _Method, _Level, _Context, {ok, ID}) ->
+    group_graph:mark_group_changed(ID);
+'after'(?USER_MODULE, _Method, _Level, _Context, {ok, ID}) ->
+    group_graph:mark_user_changed(ID);
 'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
     ok.
 
@@ -110,3 +125,16 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
+
+%%%===================================================================
+%%% API callbacks
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Return all documents
+%% @end
+%%--------------------------------------------------------------------
+-spec all() -> {ok, [datastore:document()]} | no_return().
+all() ->
+    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).

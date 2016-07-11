@@ -30,16 +30,10 @@ as_msg(Seq, Doc = #document{value = Value}, false) ->
     get_msg(Seq, Doc, element(1, Value));
 as_msg(-1, Doc = #document{value = Value}, _) ->
     get_msg(-1, Doc, element(1, Value));
-as_msg(Seq, Doc = #document{value = #onedata_user{}}, true) ->
-    #document{value = Value = #onedata_user{name = Name}, key = ID} = Doc,
-    Model = element(1, Value),
-    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
-        {name, Name},
-        {space_ids, []},
-        {group_ids, []},
-        {default_space, undefined},
-        {public_only, true}
-    ]}];
+as_msg(Seq, Doc = #document{value = Val = #onedata_user{}}, true) ->
+    get_public_msg(Seq, Doc, element(1, Val));
+as_msg(Seq, Doc = #document{value = Val = #provider{}}, true) ->
+    get_public_msg(Seq, Doc, element(1, Val));
 as_msg(Seq, _Doc, _Ignore) ->
     get_ignore_msg(Seq).
 
@@ -82,26 +76,73 @@ get_msg(Seq, Doc, space = Model) ->
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #user_group{name = Name, spaces = Spaces, users = Users} = Value,
+    #user_group{name = Name, spaces = Spaces, users = Users, nested_groups = NGroups,
+        parent_groups = PGroups, effective_users = EUsers, type = Type} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
+        {type, Type},
         {spaces, Spaces},
-        {users, Users}
+        {users, Users},
+        {effective_users, EUsers},
+        {nested_groups, NGroups},
+        {parent_groups, PGroups}
     ]}];
 get_msg(Seq, Doc, onedata_user = Model) ->
     #document{value = Value, key = ID} = Doc,
     #onedata_user{name = Name, space_names = SpaceNames, groups = Groups,
-        default_space = DefaultSpace} = Value,
+        default_space = DefaultSpace, effective_groups = EGroups} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {space_names, maps:to_list(SpaceNames)},
         {group_ids, Groups},
+        {effective_group_ids, EGroups},
         {default_space, DefaultSpace},
+        {public_only, false}
+    ]}];
+get_msg(Seq, Doc, provider = Model) ->
+    #document{value = Value, key = ID} = Doc,
+    #provider{client_name = Name, urls = URLs, spaces = SpaceIDs} = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {client_name, Name},
+        {urls, URLs},
+        {space_ids, SpaceIDs},
         {public_only, false}
     ]}];
 get_msg(_Seq, _Doc, _Model) ->
     ?warning("Requesting message for unexpected model ~p", [_Model]),
     [].
+
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% @private
+%%% Translates documents to structures required by the provider.
+%%% Only public information is included.
+%%% Those structures are serializable to json and provide details from documents.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec get_public_msg(Seq :: subscriptions:seq(), Doc :: datastore:document(),
+    Model :: subscriptions:model()) -> term().
+
+get_public_msg(Seq, Doc, onedata_user = Model) ->
+    #document{value = #onedata_user{name = Name}, key = ID} = Doc,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {name, Name},
+        {space_ids, []},
+        {group_ids, []},
+        {effective_group_ids, []},
+        {default_space, undefined},
+        {public_only, true}
+    ]}];
+
+get_public_msg(Seq, Doc, provider = Model) ->
+    #document{key = ID, value = #provider{client_name = Name, urls = URLs}} = Doc,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {client_name, Name},
+        {urls, URLs},
+        {space_ids, []},
+        {public_only, true}
+    ]}].
 
 -spec revs_prop(Doc :: datastore:document()) -> term().
 revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
@@ -119,5 +160,6 @@ revs_prop(#document{rev = Rev}) ->
 
 -spec message_model(subscriptions:model()) -> atom().
 message_model(space) -> space;
+message_model(provider) -> provider;
 message_model(onedata_user) -> user;
 message_model(user_group) -> group.

@@ -42,30 +42,17 @@ init() ->
 %% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
--spec find(ResourceType :: binary(), Ids :: [binary()]) ->
+-spec find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find(<<"space">>, SpaceIds) ->
+find(<<"space">>, SpaceId) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-    {ok, GetSpaces} = user_logic:get_spaces(UserId),
-    Default = proplists:get_value(default, GetSpaces),
-    Res = lists:map(
-        fun(SpaceId) ->
-            {ok, SpaceData} = space_logic:get_data(SpaceId, provider),
-            Name = proplists:get_value(name, SpaceData),
-            {ok, [{providers, Providers}]} =
-                space_logic:get_providers(SpaceId, provider),
-            ProvidersToDisplay = lists:filter(
-                fun(Provider) ->
-                    lists:member(Provider, UserProviders)
-                end, Providers),
-            [
-                {<<"id">>, SpaceId},
-                {<<"name">>, Name},
-                {<<"isDefault">>, SpaceId =:= Default},
-                {<<"providers">>, ProvidersToDisplay}
-            ]
-        end, SpaceIds),
+    {ok, #document{
+        value = #onedata_user{
+            space_names = SpaceNamesMap,
+            default_space = DefaultSpaceId
+        }}} = onedata_user:get(UserId),
+    Res = space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders),
     {ok, Res}.
 
 
@@ -75,12 +62,21 @@ find(<<"space">>, SpaceIds) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec find_all(ResourceType :: binary()) ->
-    {ok, proplists:proplist()} | gui_error:error_result().
+    {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"space">>) ->
     UserId = g_session:get_user_id(),
-    {ok, GetSpaces} = user_logic:get_spaces(UserId),
-    SpaceIds = proplists:get_value(spaces, GetSpaces),
-    {ok, _Res} = find(<<"space">>, SpaceIds).
+    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
+    {ok, #document{
+        value = #onedata_user{
+            spaces = SpaceIds,
+            space_names = SpaceNamesMap,
+            default_space = DefaultSpaceId
+        }}} = onedata_user:get(UserId),
+    Res = lists:map(
+        fun(SpaceId) ->
+            space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders)
+        end, SpaceIds),
+    {ok, Res}.
 
 
 %%--------------------------------------------------------------------
@@ -142,3 +138,32 @@ update_record(<<"space">>, SpaceId, Data) ->
     ok | gui_error:error_result().
 delete_record(<<"space">>, _Id) ->
     gui_error:report_error(<<"Not iplemented">>).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns a client-compliant space record.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_record(SpaceId :: binary(), SpaceNamesMap :: #{},
+    DefaultSpaceId :: binary(), UserProviders :: [binary()]) ->
+    proplists:proplist().
+space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
+    Name = maps:get(SpaceId, SpaceNamesMap),
+    {ok, [{providers, Providers}]} =
+        space_logic:get_providers(SpaceId, provider),
+    ProvidersToDisplay = lists:filter(
+        fun(Provider) ->
+            lists:member(Provider, UserProviders)
+        end, Providers),
+    [
+        {<<"id">>, SpaceId},
+        {<<"name">>, Name},
+        {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
+        {<<"providers">>, ProvidersToDisplay}
+    ].

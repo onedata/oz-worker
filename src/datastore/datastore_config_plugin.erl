@@ -25,12 +25,14 @@
 %%--------------------------------------------------------------------
 -spec models() -> Models :: [model_behaviour:model_type()].
 models() -> [
+  groups_graph_caches_state,
   outbox,
   provider_subscription,
   subscriptions_state,
   ozpca_state,
   onedata_auth,
   onedata_user,
+  oz_api_privileges,
   provider,
   session,
   space,

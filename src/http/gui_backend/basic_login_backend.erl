@@ -7,15 +7,16 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module implements page_backend_behaviour and is called
-%%% when validate_login page is visited. It is used to verify the data
+%%% when /do_login page is visited. It is used to verify the data
 %%% returned by auth providers and log the user in.
 %%% @end
 %%%-------------------------------------------------------------------
--module(validate_login_backend).
+-module(basic_login_backend).
 -author("Lukasz Opiola").
 -behaviour(page_backend_behaviour).
 
 -include("gui/common.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -32,24 +33,21 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
-    case auth_utils:validate_login() of
-        {redirect, URL} ->
-            UserId = g_session:get_user_id(),
-            ?info("User ~p logged in", [UserId]),
-            case user_logic:get_default_provider(UserId) of
-                {ok, undefined} ->
-                    {redirect_relative, URL};
-                {ok, ProvId} ->
-                    ?debug("Automatically redirecting user `~s` "
-                    "to default provider `~s`", [UserId, ProvId]),
-                    {ok, ProvURL} = auth_logic:get_redirection_uri(UserId, ProvId),
-                    {redirect_relative, ProvURL}
-            end;
-        new_user ->
-            UserId = g_session:get_user_id(),
-            ?info("User ~p logged in for the first time", [UserId]),
-            {redirect_relative, <<?page_after_login>>};
-        {error, ErrorId} ->
-            ?info("Error: ~p", [ErrorId]),
-            {redirect_relative, <<"/">>}
+    Req = g_ctx:get_cowboy_req(),
+    try
+        {<<"Basic ", UserAndPassword/binary>>, _} =
+            cowboy_req:header(<<"authorization">>, Req),
+        [User, Passwd] = binary:split(base64:decode(UserAndPassword), <<":">>),
+        case user_logic:authenticate_by_basic_credentials(User, Passwd) of
+            {ok, #document{key = UserId}} ->
+                g_session:log_in(UserId),
+                {reply, 200};
+            {error, Binary} when is_binary(Binary) ->
+                {reply, 401, [], Binary};
+            _ ->
+                {reply, 401}
+        end
+    catch T:M ->
+        ?error_stacktrace("Login by credentials failed - ~p:~p", [T, M]),
+        {reply, 401}
     end.

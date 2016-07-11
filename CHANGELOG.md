@@ -4,6 +4,55 @@
 CHANGELOG
 ---------
 
+### 3.0.0-beta8
+
+* minor changes and improvements
+
+
+### 3.0.0-beta7
+
+* VFS-2225 Update GUI docker image
+* bugfix - cleaning changed users list
+
+
+### 3.0.0-beta6
+
+* Update erlang tls
+* VFS-2133 Rework google and indigo auth logic
+* VFS-2111 Integrate user management with onepanel
+* VFS-2111 Enable changing password only if user has basic auth enabled
+* VFS-2111 Add several funcitons to admin API - list spaces, list providers, list providers of space
+* VFS-2111 Add rest handler for OZ API privileges manipulation
+* Fix space name mapping after space removal
+* VFS-2111 Implement basic login backend
+* VFS-2111 allow basic auth in all user requests
+* VFS-2111 Allow using client token for authorization in REST, provider certs are no longer obligatory when not required, add REST API to get client_token
+* VFS-2111 Change values returned from rpc_backends to JSON objects rather than strings
+* VFS-2087 supported spaces are not public
+* VFS-2087 push provider updates to all
+
+
+### 3.0.0-beta5
+
+* VFS-2068 adjust to new webscoket adapter API
+* VFS-1987 concurrent refreshes and updates test
+* VFS-1987 subscriptions updates with nested groups of users groups
+* VFS-1987 set & get for nested group privileges
+* VFS-1987 get effective user in rest
+* VFS-1987 nested groups in global config (json)
+* VFS-1987 nested groups rest privileges
+* VFS-1987 nested groups in subscriptions
+* VFS-1987 effective groups in user document
+* VFS-1987 general graph traversal
+* VFS-1987 effective users in logic
+* VFS-1987 model changes
+
+
+### 3.0.0-beta4
+
+* Minor updates.
+
+
 ### 3.0.0-beta3
 
 * VFS-1860 explicit default space added

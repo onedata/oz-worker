@@ -15,13 +15,14 @@
 -behaviour(node_manager_plugin_behaviour).
 
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/elements/node_manager/node_manager.hrl").
 -include_lib("cluster_worker/include/elements/worker_host/worker_protocol.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 
 %% node_manager_plugin_behaviour callbacks
--export([on_init/1, on_terminate/2, on_code_change/3,
+-export([before_init/1, after_init/1, on_terminate/2, on_code_change/3,
     handle_call_extension/3, handle_cast_extension/2, handle_info_extension/2,
     modules_with_args/0, listeners/0, cm_nodes/0, db_nodes/0, check_node_ip_address/0, app_name/0]).
 
@@ -56,7 +57,6 @@ db_nodes() ->
     application:get_env(?APP_Name, db_nodes).
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% {@link node_manager_plugin_behaviour} callback listeners/0.
 %% @end
@@ -69,36 +69,67 @@ listeners() -> node_manager:cluster_worker_listeners() ++ [
 ].
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% {@link node_manager_plugin_behaviour} callback modules_with_args/0.
 %% @end
 %%--------------------------------------------------------------------
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() -> node_manager:cluster_worker_modules() ++ [
+    {groups_graph_caches_worker, []},
     {changes_worker, []},
     {ozpca_worker, []},
     {subscriptions_worker, []}
 ].
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
-%% {@link node_manager_plugin_behaviour}  callback on_init/0.
+%% {@link node_manager_plugin_behaviour} callback before_init/0.
 %% @end
 %%--------------------------------------------------------------------
--spec on_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
-on_init([]) ->
+-spec before_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
+before_init([]) ->
     try
         ok
     catch
         _:Error ->
-            ?error_stacktrace("Cannot start node_manager plugin: ~p", [Error]),
+            ?error_stacktrace("Error in node_manager_plugin:before_init: ~p",
+                [Error]),
             {error, cannot_start_node_manager_plugin}
     end.
 
 %%--------------------------------------------------------------------
-%% @private
+%% @doc
+%% {@link node_manager_plugin_behaviour} callback after_init/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
+after_init([]) ->
+    try
+        {ok, PredefinedGroups} =
+            application:get_env(?APP_Name, predefined_groups),
+        lists:foreach(
+            fun(Group) ->
+                Id = proplists:get_value(id, Group),
+                Name = proplists:get_value(name, Group),
+                % Privileges can be either a list of privileges or a module and
+                % function to call that will return such list.
+                Privs = case proplists:get_value(oz_api_privileges, Group) of
+                    List when is_list(List) ->
+                        List;
+                    {Module, Function} ->
+                        Module:Function()
+                end,
+                create_predefined_group(Id, Name, Privs)
+            end, PredefinedGroups),
+        ok
+    catch
+        _:Error ->
+            ?error_stacktrace("Error in node_manager_plugin:after_init: ~p",
+                [Error]),
+            {error, cannot_start_node_manager_plugin}
+    end.
+
+%%--------------------------------------------------------------------
 %% @doc
 %% Handling call messages
 %% @end
@@ -122,7 +153,6 @@ handle_call_extension(_Request, _From, State) ->
     {reply, wrong_request, State}.
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Handling cast messages
 %% @end
@@ -140,7 +170,6 @@ handle_cast_extension(_Request, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Handling all non call/cast messages
 %% @end
@@ -158,7 +187,6 @@ handle_info_extension(_Request, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% This function is called by a gen_server when it is about to
 %% terminate. It should be the opposite of Module:init/1 and do any
@@ -175,7 +203,6 @@ on_terminate(_Reason, _State) ->
     ok.
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Convert process state when code is changed
 %% @end
@@ -188,7 +215,6 @@ on_code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Get node IP. If there is no IP info in the env, then use 127.0.0.1.
 %% @end
@@ -204,4 +230,45 @@ check_node_ip_address() ->
             ?info("External IP: ~p", [Address]),
             Address
     end.
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Creates a predefined group in the system, if it does not exist.
+%% NOTE! This code will be run on every node_manager, so we need a
+%% transaction here that will prevent duplicates.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_predefined_group(Id :: binary(), Name :: binary(),
+    Privileges :: [oz_api_privileges:privilege()]) -> ok | error.
+create_predefined_group(Id, Name, Privileges) ->
+    datastore:run_synchronized(user_group, Id, fun() ->
+        case user_group:exists(Id) of
+            true ->
+                ?info("Predefined group '~s' already exists, "
+                "skipping.", [Name]);
+            false ->
+                NewGroup = #document{
+                    key = Id,
+                    value = #user_group{
+                        name = Name,
+                        type = role
+                    }},
+                case user_group:create(NewGroup) of
+                    {ok, Id} ->
+                        oz_api_privileges_logic:modify(
+                            Id, user_group, Privileges),
+                        ?info("Created predefined group '~s'", [Name]);
+                    Other ->
+                        ?error("Cannot create predefined group '~s' - ~p",
+                            [Id, Other])
+                end
+        end,
+        ok
+    end).
 

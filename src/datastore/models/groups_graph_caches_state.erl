@@ -1,14 +1,17 @@
 %%%-------------------------------------------------------------------
 %%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This document contains info needed to perform periodical
+%%% effective users and groups updates.
+%%% Should not be used directly (see group_graph module).
 %%% @end
 %%%-------------------------------------------------------------------
--module(space).
+-module(groups_graph_caches_state).
 -author("Michal Zmuda").
 -behaviour(model_behaviour).
 
@@ -17,7 +20,7 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
 %% model_behaviour callbacks
--export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
+-export([save/1, get/1, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
 
 %%%===================================================================
@@ -63,15 +66,6 @@ get(Key) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns list of all records.
-%% @end
-%%--------------------------------------------------------------------
--spec list() -> {ok, [datastore:document()]} | datastore:generic_error() | no_return().
-list() ->
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).
-
-%%--------------------------------------------------------------------
-%% @doc
 %% {@link model_behaviour} callback delete/1.
 %% @end
 %%--------------------------------------------------------------------
@@ -95,9 +89,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_Name, space_store_level, ?DISK_ONLY_LEVEL),
-    ?MODEL_CONFIG(space_bucket, [], StoreLevel).
+    ?MODEL_CONFIG(groups_graph_caches_state_bucket, [], ?GLOBAL_ONLY_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc
