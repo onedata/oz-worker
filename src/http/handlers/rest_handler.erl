@@ -499,7 +499,7 @@ parse_macaroons_from_headers(Req) ->
 -spec deserialize_macaroon(Data :: binary(), Req :: cowboy_req:req()) ->
     macaroon:macaroon() | no_return().
 deserialize_macaroon(Data, Req) ->
-    case macaroon:deserialize(Data) of
+    case token_utils:deserialize(Data) of
         {ok, M} -> M;
         {error, Reason} ->
             throw({invalid_token, atom_to_binary(Reason, latin1), Req})

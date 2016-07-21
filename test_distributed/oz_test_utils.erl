@@ -80,7 +80,7 @@ join_group(Config, UserId, GroupId) ->
         [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(#client{type = user, id = UserId}, group_invite_token, {group, GroupId}),
-            {ok, Macaroon} = macaroon:deserialize(Token),
+            {ok, Macaroon} = token_utils:deserialize(Token),
             {ok, GroupId} = group_logic:join(UserId, Macaroon)
         end, []]),
         ok
@@ -100,7 +100,7 @@ join_space(Config, {user, UserId}, SpaceId) ->
         [Node | _] = ?config(oz_worker_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_invite_user_token, {space, SpaceId}),
-            {ok, Macaroon} = macaroon:deserialize(Token),
+            {ok, Macaroon} = token_utils:deserialize(Token),
             space_logic:join({user, UserId}, Macaroon)
         end, []]),
         ok
@@ -114,7 +114,7 @@ join_space(Config, {group, GroupId}, SpaceId) ->
         [Node | _] = ?config(oz_worker_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(#client{type = provider}, space_invite_group_token, {space, SpaceId}),
-            {ok, Macaroon} = macaroon:deserialize(Token),
+            {ok, Macaroon} = token_utils:deserialize(Token),
             space_logic:join({group, GroupId}, Macaroon)
         end, []]),
         ok
@@ -158,7 +158,7 @@ support_space(Config, ProviderId, SpaceId, Size) ->
         [Node | _] = ?config(oz_worker_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             {ok, Token} = token_logic:create(#client{type = provider}, space_support_token, {space, SpaceId}),
-            {ok, Macaroon} = macaroon:deserialize(Token),
+            {ok, Macaroon} = token_utils:deserialize(Token),
             space_logic:support(ProviderId, Macaroon, Size)
         end, []]),
         ok

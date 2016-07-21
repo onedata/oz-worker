@@ -40,7 +40,7 @@ space_invite_user_token | space_invite_group_token | space_support_token.
 -spec validate(Token :: binary(), TokenType :: token_type()) ->
     {true, macaroon:macaroon()} | false.
 validate(Token, TokenType) ->
-    case macaroon:deserialize(Token) of
+    case token_utils:deserialize(Token) of
         {error, _} -> false;
         {ok, M} ->
             Id = macaroon:identifier(M),
@@ -80,7 +80,7 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     M2 = macaroon:add_first_party_caveat(M1,
         ["tokenType = ", atom_to_list(TokenType)]),
 
-    macaroon:serialize(M2).
+    token_utils:serialize62(M2).
 
 %%--------------------------------------------------------------------
 %% @doc Returns token issuer.
@@ -90,7 +90,7 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
 %%--------------------------------------------------------------------
 -spec get_issuer(Token :: binary()) -> {ok, [proplists:property()]}.
 get_issuer(Token) ->
-    {ok, Macaroon} = macaroon:deserialize(Token),
+    {ok, Macaroon} = token_utils:deserialize(Token),
     Identifier = macaroon:identifier(Macaroon),
     {ok, TokenDoc} = token:get(Identifier),
     #document{value = #token{

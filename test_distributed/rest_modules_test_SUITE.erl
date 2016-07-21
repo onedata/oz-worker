@@ -1381,17 +1381,17 @@ do_request(Endpoint, Headers, Method, Body, Options) ->
     http_client:request(Method, Endpoint, Headers, Body, [insecure | Options]).
 
 get_macaroon_id(Token) ->
-    {ok, Macaroon} = macaroon:deserialize(Token),
+    {ok, Macaroon} = token_utils:deserialize(Token),
     [{_, Identifier}] = macaroon:third_party_caveats(Macaroon),
     Identifier.
 
 prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
-    {ok, Macaroon} = macaroon:deserialize(SerializedMacaroon),
+    {ok, Macaroon} = token_utils:deserialize(SerializedMacaroon),
     BoundMacaroons = lists:map(
         fun(SrlzdDischMacaroon) ->
-            {ok, DM} = macaroon:deserialize(SrlzdDischMacaroon),
+            {ok, DM} = token_utils:deserialize(SrlzdDischMacaroon),
             BDM = macaroon:prepare_for_request(Macaroon, DM),
-            {ok, SBDM} = macaroon:serialize(BDM),
+            {ok, SBDM} = token_utils:serialize62(BDM),
             SBDM
         end, [str_utils:to_binary(SerializedDischarges)]),
     % Bound discharge macaroons are sent in one header,

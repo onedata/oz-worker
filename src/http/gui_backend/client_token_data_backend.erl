@@ -113,7 +113,7 @@ update_record(<<"clienttoken">>, _TokenId, _Data) ->
     ok | gui_error:error_result().
 delete_record(<<"clienttoken">>, Token) ->
     UserId = g_session:get_user_id(),
-    {ok, Macaroon} = macaroon:deserialize(Token),
+    {ok, Macaroon} = token_utils:deserialize(Token),
     Identifier = macaroon:identifier(Macaroon),
     onedata_auth:delete(Identifier),
     user_logic:delete_client_token(UserId, Token).
