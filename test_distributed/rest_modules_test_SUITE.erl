@@ -1221,7 +1221,7 @@ bad_request_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(ssl2),
+    application:start(etls),
     hackney:start(),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
     [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
@@ -1285,7 +1285,7 @@ end_per_testcase(_, Config) ->
 
 end_per_suite(Config) ->
     hackney:stop(),
-    application:stop(ssl2),
+    application:stop(etls),
     test_node_starter:clean_environment(Config).
 
 %%%===================================================================

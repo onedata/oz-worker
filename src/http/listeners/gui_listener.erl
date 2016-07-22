@@ -103,7 +103,7 @@ start() ->
         gui:init(),
         % Start the listener for web gui and nagios handler
         {ok, _} = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
-            ranch_ssl2, [
+            ranch_etls, [
                 {ip, {127, 0, 0, 1}},
                 {port, GuiPort},
                 {cacertfile, CaCertFile},
