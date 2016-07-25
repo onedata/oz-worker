@@ -68,6 +68,8 @@ start() ->
         {ok, CaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
         {ok, CertFile} = application:get_env(?APP_Name, gui_cert_file),
         {ok, KeyFile} = application:get_env(?APP_Name, gui_key_file),
+        % Get path to static docs files
+        {ok, DocsPath} = application:get_env(?APP_Name, gui_docs_static_root),
 
         GRHostname = dns_query_handler:get_canonical_hostname(),
 
@@ -92,6 +94,7 @@ start() ->
                     {file, <<"resources/gui_static/google_analytics/google97a2428c78c25c27.html">>}},
                 {"/nagios/[...]", nagios_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
+                {DocsPath ++ "/[...]", static_docs_handler, []},
                 {"/[...]", gui_static_handler, {dir, DocRoot}}
             ]}
         ],
