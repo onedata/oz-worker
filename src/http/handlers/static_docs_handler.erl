@@ -36,10 +36,10 @@ handle(Req, State) ->
         % Get path to static docs files
         {ok, DocsRootSt} = application:get_env(?APP_Name, gui_docs_static_root),
         DocsRoot = str_utils:to_binary(DocsRootSt),
-        % If the request URL is in form '/docs' rather than '/docs/', redirect
-        % the user so gitbook works correctly.
         L = byte_size(DocsRoot),
         NewReq = case cowboy_req:path(Req) of
+            % If the request URL is in form '/docs' rather than '/docs/',
+            % redirect the user so that gitbook works correctly.
             {DocsRoot, _} ->
                 {ok, Req2} = cowboy_req:reply(301, [
                     {<<"location">>, <<DocsRoot/binary, "/">>},
@@ -48,15 +48,17 @@ handle(Req, State) ->
                 Req2;
             % All paths start with that root path, strip it out
             {<<DocsRoot:L/binary, FilePath/binary>>, _} ->
-                ?dump(FilePath),
                 % Download the file from docs server and serve it to the client
+                % The request is followed as is (with all the headers) to the
+                % server and its unmodified answer is followed back.
                 {ok, DocsServerStr} =
                     application:get_env(?APP_Name, gui_docs_server),
                 DocsServer = str_utils:to_binary(DocsServerStr),
                 FileURL = <<DocsServer/binary, FilePath/binary>>,
-                {ok, Code, Headers, Result} =
-                    http_client:get(FileURL),
-                {ok, Req2} = cowboy_req:reply(Code, Headers, Result, Req),
+                {ReqHeaders, _} = cowboy_req:headers(Req),
+                {ok, Code, RespHeaders, Result} =
+                    http_client:get(FileURL, ReqHeaders),
+                {ok, Req2} = cowboy_req:reply(Code, RespHeaders, Result, Req),
                 Req2
         end,
         {ok, NewReq, State}
