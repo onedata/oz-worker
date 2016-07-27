@@ -5,8 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module handles requests with URL in form alias.gr.domain and
-%%% performs a HTTP redirect to proper provider.
+%%% @doc Cowboy handler that acts as a proxy for documentation static files -
+%%% all requests are followed to a third party documentation server and
+%%% responses are fed back to the client.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(static_docs_handler).
@@ -27,7 +28,9 @@ init(_Type, Req, _Args) ->
     {ok, Req, []}.
 
 %%--------------------------------------------------------------------
-%% @doc Handles a request returning a HTTP Redirect (307 - Moved temporarily).
+%% @doc Cowboy callback function.
+%% Handles a request - serves a file downloaded from docs server
+%% or returns a HTTP redirect.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle(term(), term()) -> {ok, term(), term()}.
