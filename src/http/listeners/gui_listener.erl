@@ -61,13 +61,28 @@ start() ->
 
         % Get gui config
         GuiPort = port(),
-        {ok, GuiNbAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),
+        {ok, GuiNbAcceptors} =
+            application:get_env(?APP_Name, gui_https_acceptors),
         {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
         {ok, MaxKeepAlive} = application:get_env(?APP_Name, gui_max_keepalive),
         % Get cert paths
         {ok, CaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
         {ok, CertFile} = application:get_env(?APP_Name, gui_cert_file),
         {ok, KeyFile} = application:get_env(?APP_Name, gui_key_file),
+
+        % Check if docs proxy is enabled
+        {ok, DocsProxyEnabled} =
+            application:get_env(?APP_Name, gui_docs_proxy_enabled),
+        DocsRoute = case DocsProxyEnabled of
+            false ->
+                % Don't add route for docs
+                [];
+            true ->
+                % Get path to static docs files
+                {ok, DocsPath} =
+                    application:get_env(?APP_Name, gui_docs_static_root),
+                {DocsPath ++ "/[...]", static_docs_handler, []}
+        end,
 
         GRHostname = dns_query_handler:get_canonical_hostname(),
 
@@ -87,13 +102,12 @@ start() ->
             {":alias." ++ GRHostname, [{'_', client_redirect_handler, [GuiPort]}]},
             % Proper requests are routed to handler modules
             % Proper requests are routed to handler modules
-            {'_', [
-                {<<"/google97a2428c78c25c27.html">>, cowboy_static,
-                    {file, <<"resources/gui_static/google_analytics/google97a2428c78c25c27.html">>}},
+            {'_', lists:flatten([
                 {"/nagios/[...]", nagios_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
+                DocsRoute,
                 {"/[...]", gui_static_handler, {dir, DocRoot}}
-            ]}
+            ])}
         ],
 
         % Initialize auth handler
@@ -115,8 +129,9 @@ start() ->
                 {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
                 {max_keepalive, MaxKeepAlive},
                 {timeout, Timeout},
-                % On every request, add headers that improve security to the response
-                {onrequest, fun gui_utils:onrequest_adjust_headers/1}
+                % On every request, add headers that improve
+                % security to the response
+                {onrequest, fun gui:response_headers/1}
             ]),
         ok
     catch

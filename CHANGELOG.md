@@ -4,6 +4,13 @@
 CHANGELOG
 ---------
 
+### 3.0.0-RC1
+
+* VFS-2316 Update etls.
+* VFS-2250 Use wrappers for macaroon serialization
+* VFS-2121 Tests refactoring
+
+
 ### 3.0.0-beta8
 
 * minor changes and improvements
