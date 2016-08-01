@@ -153,5 +153,7 @@ all_privileges() -> [
     set_privileges,
     list_spaces,
     list_providers,
-    list_providers_of_space
+    list_providers_of_space,
+    add_member_to_space,
+    remove_member_from_space
 ].
