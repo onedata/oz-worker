@@ -142,7 +142,7 @@ oz_api_privileges_test(Config) ->
         }
     })),
     % Now user 2 should be able to do some things (as he belongs to group2)
-    % 1) See privileges
+    % 1) See privileges [view_privileges]
     % Try 10 times, because user groups are resolved asynchronously and
     % it might not work momentarily.
     ?assertEqual(true, check_rest_call(#{
@@ -175,7 +175,7 @@ oz_api_privileges_test(Config) ->
             ]}
         }
     })),
-    % 2) List all the spaces in the system
+    % 2) List all the spaces in the system [list_spaces]
     User3 = create_user(),
     Space1 = create_space_for_user(User3),
     Space2 = create_space_for_user(User3),
@@ -195,7 +195,7 @@ oz_api_privileges_test(Config) ->
             ]}
         }
     })),
-    % 3) List all the providers in the system
+    % 3) List all the providers in the system [list_providers]
     Provider1 = create_provider(),
     Provider2 = create_provider(),
     Provider3 = create_provider(),
@@ -214,7 +214,7 @@ oz_api_privileges_test(Config) ->
             ]}
         }
     })),
-    % 4) List providers of a space
+    % 4) List providers of a space [list_providers_of_space]
     support_space(Space1, User3, Provider1),
     support_space(Space1, User3, Provider3),
     ?assert(check_rest_call(#{
@@ -231,7 +231,52 @@ oz_api_privileges_test(Config) ->
             ]}
         }
     })),
-
+    % 5) Add user to a space [add_member_to_space]
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/spaces/">>, Space1, <<"/users">>],
+            body => #{<<"userId">> => User1},
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    % 6) Add group to a space [add_member_to_space]
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/spaces/">>, Space1, <<"/groups">>],
+            body => #{<<"groupId">> => Group1},
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    % 7) Remove user from a space [remove_member_from_space]
+    ?assert(check_rest_call(#{
+        request => #{
+            method => delete,
+            path => [<<"/spaces/">>, Space1, <<"/users/">>, User1],
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    % 8) Remove group from a space [remove_member_from_space]
+    ?assert(check_rest_call(#{
+        request => #{
+            method => delete,
+            path => [<<"/spaces/">>, Space1, <<"/groups/">>, Group1],
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
 
     ok.
 
@@ -424,18 +469,18 @@ create_provider() ->
 support_space(SpaceId, UserId, ProviderId) ->
     [Node | _] = ?config(oz_worker_nodes, get_config()),
     Client = #client{type = user, id = UserId},
-    {ok, Macaroon} = rpc:call(
+    {ok, MacaroonBin} = rpc:call(
         Node, token_logic, create, [
             Client, space_support_token, {space, SpaceId}
         ]
+    ),
+    {ok, Macaroon} = rpc:call(
+        Node, token_utils, deserialize, [MacaroonBin]
     ),
     {ok, SpaceId} = rpc:call(
         Node, space_logic, support, [ProviderId, Macaroon, 10000000]
     ),
     SpaceId.
-
-
-
 
 
 set_privileges(EntityId, EntityType, Privs) ->

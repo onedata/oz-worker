@@ -86,7 +86,8 @@ is_authorized(users, put, _SpaceId, #client{type = user, id = UserId}) ->
 is_authorized(ginvite, get, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_invite_group);
 is_authorized(group, delete, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_group);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_group) orelse
+        oz_api_privileges_logic:has_effective_privilege(UserId, remove_member_from_space);
 is_authorized(groups, put, _SpaceId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, add_member_to_space);
 is_authorized(pinvite, get, SpaceId, #client{type = user, id = UserId}) ->
@@ -179,11 +180,11 @@ accept_resource(space, patch, SpaceId, Data, #client{type = provider}, Req) ->
 accept_resource(users, put, SpaceId, Data, _Client, Req) ->
     UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary, Req),
     {ok, SpaceId} = space_logic:add_user(SpaceId, UserId),
-    {{true, <<"/spaces/", SpaceId/binary>>}, Req};
+    {true, Req};
 accept_resource(groups, put, SpaceId, Data, _Client, Req) ->
     GroupId = rest_module_helper:assert_key(<<"groupId">>, Data, binary, Req),
     {ok, SpaceId} = space_logic:add_group(SpaceId, GroupId),
-    {{true, <<"/spaces/", SpaceId/binary>>}, Req};
+    {true, Req};
 accept_resource(upriv, put, SpaceId, Data, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {uid, UID} = lists:keyfind(uid, 1, Bindings),
