@@ -107,7 +107,6 @@ remove_space_test(Config) ->
 
 init_per_suite(Config) ->
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]),
-    timer:sleep(10000), % TODO add nagios to GR and delete sleep
     NewConfig.
 
 end_per_suite(Config) ->

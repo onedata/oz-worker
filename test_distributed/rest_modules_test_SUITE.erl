@@ -1252,7 +1252,7 @@ init_per_testcase(non_register, Config) ->
     [{cert_files, generate_cert_files()} | Config];
 init_per_testcase(register_only_provider, Config) ->
     %% this init function is for tests
-    %% than need registered provider
+    %% that need registered provider
     NewConfig = init_per_testcase(non_register, Config),
     RestAddress = ?config(restAddress, NewConfig),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
@@ -1371,7 +1371,7 @@ check_status(Response) ->
         _ -> {bad_response_code, Status}
     end.
 
-%% returns list of values from responsebody
+%% returns list of values from response body
 do_request(Endpoint, Headers, Method) ->
     do_request(Endpoint, Headers, Method, <<>>, []).
 do_request(Endpoint, Headers, Method, Body) ->
@@ -1443,7 +1443,7 @@ register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Confi
     file:write_file(CertFile, Cert),
     %% set request options for provider
     Options = [{ssl_options, [{keyfile, KeyFile}, {certfile, CertFile}]}],
-    %% set request parametres for provider
+    %% set request parameters for provider
     ProviderReqParams = update_req_params(ReqParams, Options, options),
     {ProviderId, ProviderReqParams}.
 
