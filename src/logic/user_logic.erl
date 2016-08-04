@@ -20,9 +20,9 @@
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
--export([create/1, get_user/1, get_user_doc/1, modify/2]).
--export([get_data/2, get_groups/1, get_effective_groups/1, get_providers/1]).
--export([get_spaces/1, get_effective_spaces/1, get_default_space/1, set_default_space/2]).
+-export([create/1, get_user/1, get_user_doc/1, modify/2, get_data/2]).
+-export([get_groups/1, get_effective_groups/1, get_providers/1]).
+-export([get_spaces/1, get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
@@ -256,18 +256,6 @@ get_spaces(UserId) ->
         {spaces, AllUserSpaces},
         {default, EffectiveDefaultSpace}
     ]}.
-
-%%--------------------------------------------------------------------
-%% @doc Returns a list of all spaces that a user belongs to, directly or through
-%% a group.
-%% Throws exception when call to the datastore fails, or user's groups don't
-%% exist.
-%% @end
-%%--------------------------------------------------------------------
--spec get_effective_spaces(UserId :: binary()) -> {ok, [binary()]}.
-get_effective_spaces(UserId) ->
-    {ok, Doc} = onedata_user:get(UserId),
-    {ok, get_all_spaces(Doc)}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns user's groups.

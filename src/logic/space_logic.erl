@@ -208,7 +208,7 @@ join({group, GroupId}, Macaroon) ->
 %% @doc Adds a new member to a Space.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(SpaceId :: binary, UserId :: binary()) ->
+-spec add_user(SpaceId :: binary(), UserId :: binary()) ->
     {ok, SpaceId :: binary()}.
 add_user(SpaceId, UserId) ->
     case has_user(SpaceId, UserId) of
@@ -232,7 +232,7 @@ add_user(SpaceId, UserId) ->
 %% @doc Adds a new group to a Space.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(SpaceId :: binary, GroupId :: binary()) ->
+-spec add_group(SpaceId :: binary(), GroupId :: binary()) ->
     {ok, SpaceId :: binary()}.
 add_group(SpaceId, GroupId) ->
     case has_group(SpaceId, GroupId) of

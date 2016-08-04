@@ -175,6 +175,7 @@ oz_api_privileges_test(Config) ->
             ]}
         }
     })),
+    % user 2 should be able to
     % 2) List all the spaces in the system [list_spaces]
     User3 = create_user(),
     Space1 = create_space_for_user(User3),
@@ -195,6 +196,7 @@ oz_api_privileges_test(Config) ->
             ]}
         }
     })),
+    % user 2 should be able to
     % 3) List all the providers in the system [list_providers]
     Provider1 = create_provider(),
     Provider2 = create_provider(),
@@ -214,6 +216,7 @@ oz_api_privileges_test(Config) ->
             ]}
         }
     })),
+    % user 2 should be able to
     % 4) List providers of a space [list_providers_of_space]
     support_space(Space1, User3, Provider1),
     support_space(Space1, User3, Provider3),
@@ -231,6 +234,7 @@ oz_api_privileges_test(Config) ->
             ]}
         }
     })),
+    % user 2 should be able to
     % 5) Add user to a space [add_member_to_space]
     ?assert(check_rest_call(#{
         request => #{
@@ -243,6 +247,7 @@ oz_api_privileges_test(Config) ->
             code => 204
         }
     })),
+    % user 2 should be able to
     % 6) Add group to a space [add_member_to_space]
     ?assert(check_rest_call(#{
         request => #{
@@ -255,6 +260,7 @@ oz_api_privileges_test(Config) ->
             code => 204
         }
     })),
+    % user 2 should be able to
     % 7) Remove user from a space [remove_member_from_space]
     ?assert(check_rest_call(#{
         request => #{
@@ -263,9 +269,10 @@ oz_api_privileges_test(Config) ->
             auth => {user, User2}
         },
         expect => #{
-            code => 204
+            code => 202
         }
     })),
+    % user 2 should be able to
     % 8) Remove group from a space [remove_member_from_space]
     ?assert(check_rest_call(#{
         request => #{
@@ -274,11 +281,286 @@ oz_api_privileges_test(Config) ->
             auth => {user, User2}
         },
         expect => #{
+            code => 202
+        }
+    })),
+    % Now lets remove privileges from group2 one by one and check if the user
+    % now longer has rights to do things.
+    % user 2 should NO LONGER be able to
+    % 1) Remove users or groups from spaces
+    % first, take the privileges from group2 to which user2 belongs
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/privileges/groups/">>, Group2],
+            body => #{<<"privileges">> => [
+                <<"view_privileges">>,
+                <<"set_privileges">>,
+                <<"list_spaces">>,
+                <<"list_providers">>,
+                <<"list_providers_of_space">>,
+                <<"add_member_to_space">>%,
+                %<<"remove_member_from_space">>
+            ]},
+            auth => {user, User1}
+        },
+        expect => #{
             code => 204
         }
     })),
-
-    ok.
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/spaces/">>, Space1, <<"/users">>],
+            body => #{<<"userId">> => User1},
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/spaces/">>, Space1, <<"/groups">>],
+            body => #{<<"groupId">> => Group1},
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => delete,
+            path => [<<"/spaces/">>, Space1, <<"/users/">>, User1],
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 403
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => delete,
+            path => [<<"/spaces/">>, Space1, <<"/groups/">>, Group1],
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 403
+        }
+    })),
+    % user 2 should NO LONGER be able to
+    % 2) Add users or groups to spaces
+    % first, take the privileges from group2 to which user2 belongs
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/privileges/groups/">>, Group2],
+            body => #{<<"privileges">> => [
+                <<"view_privileges">>,
+                <<"set_privileges">>,
+                <<"list_spaces">>,
+                <<"list_providers">>,
+                <<"list_providers_of_space">>%,
+                %<<"add_member_to_space">>%,
+                %<<"remove_member_from_space">>
+            ]},
+            auth => {user, User1}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/spaces/">>, Space1, <<"/users">>],
+            body => #{<<"userId">> => User1},
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 403
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/spaces/">>, Space1, <<"/groups">>],
+            body => #{<<"groupId">> => Group1},
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 403
+        }
+    })),
+    % user 2 should NO LONGER be able to
+    % 2) List providers of a space
+    % first, take the privileges from group2 to which user2 belongs
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/privileges/groups/">>, Group2],
+            body => #{<<"privileges">> => [
+                <<"view_privileges">>,
+                <<"set_privileges">>,
+                <<"list_spaces">>,
+                <<"list_providers">>%,
+                %<<"list_providers_of_space">>%,
+                %<<"add_member_to_space">>%,
+                %<<"remove_member_from_space">>
+            ]},
+            auth => {user, User1}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => get,
+            path => [<<"/spaces/">>, Space1, <<"/providers">>],
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 403
+        }
+    })),
+    % user 2 should NO LONGER be able to
+    % 3) List all the providers in the system [list_providers]
+    % first, take the privileges from group2 to which user2 belongs
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/privileges/groups/">>, Group2],
+            body => #{<<"privileges">> => [
+                <<"view_privileges">>,
+                <<"set_privileges">>,
+                <<"list_spaces">>%,
+                %<<"list_providers">>%,
+                %<<"list_providers_of_space">>%,
+                %<<"add_member_to_space">>%,
+                %<<"remove_member_from_space">>
+            ]},
+            auth => {user, User1}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => get,
+            path => <<"/providers">>,
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 403
+        }
+    })),
+    % user 2 should NO LONGER be able to
+    % 4) List all the spaces in the system [list_spaces]
+    % first, take the privileges from group2 to which user2 belongs
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/privileges/groups/">>, Group2],
+            body => #{<<"privileges">> => [
+                <<"view_privileges">>,
+                <<"set_privileges">>%,
+                %<<"list_spaces">>%,
+                %<<"list_providers">>%,
+                %<<"list_providers_of_space">>%,
+                %<<"add_member_to_space">>%,
+                %<<"remove_member_from_space">>
+            ]},
+            auth => {user, User1}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => get,
+            path => <<"/spaces">>,
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 403
+        }
+    })),
+    % user 2 should NO LONGER be able to
+    % 5) Set privileges [set_privileges]
+    % first, take the privileges from group2 to which user2 belongs
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/privileges/groups/">>, Group2],
+            body => #{<<"privileges">> => [
+                <<"view_privileges">>%,
+                %<<"set_privileges">>%,
+                %<<"list_spaces">>%,
+                %<<"list_providers">>%,
+                %<<"list_providers_of_space">>%,
+                %<<"add_member_to_space">>%,
+                %<<"remove_member_from_space">>
+            ]},
+            auth => {user, User1}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/privileges/groups/">>, Group2],
+            body => #{<<"privileges">> => [
+                <<"view_privileges">>,
+                <<"set_privileges">>,
+                <<"list_spaces">>,
+                <<"list_providers">>,
+                <<"list_providers_of_space">>
+            ]},
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 403
+        }
+    })),
+    % user 2 should NO LONGER be able to
+    % 6) View privileges [view_privileges]
+    % first, take the privileges from group2 to which user2 belongs
+    ?assert(check_rest_call(#{
+        request => #{
+            method => put,
+            path => [<<"/privileges/groups/">>, Group2],
+            body => #{<<"privileges">> => [
+                %<<"view_privileges">>%,
+                %<<"set_privileges">>%,
+                %<<"list_spaces">>%,
+                %<<"list_providers">>%,
+                %<<"list_providers_of_space">>%,
+                %<<"add_member_to_space">>%,
+                %<<"remove_member_from_space">>
+            ]},
+            auth => {user, User1}
+        },
+        expect => #{
+            code => 204
+        }
+    })),
+    ?assert(check_rest_call(#{
+        request => #{
+            method => get,
+            path => [<<"/privileges/groups/">>, Group2],
+            auth => {user, User2}
+        },
+        expect => #{
+            code => 403
+        }
+    })).
 
 
 %%%===================================================================
@@ -343,18 +625,10 @@ check_rest_call(ArgsMap) ->
             {user, UserId} ->
                 [{<<"macaroon">>, get_user_auth(UserId)} | ReqHeaders]
         end,
-        ct:print("ReqURL: ~s", [URL]),
-        ct:print("ReqHeaders: ~p", [HeadersPlusAuth]),
         % Add insecure option - we do not want the GR server cert to be checked.
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
             ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOpts]
         ),
-
-        ct:print("RespCode: ~B", [RespCode]),
-        ct:print("RespHeaders: ~p", [RespHeaders]),
-        ct:print("RespBody: ~s", [RespBody]),
-
-        ct:print("---------------------------------~n~n"),
 
         % Check response code if specified
         case ExpCode of

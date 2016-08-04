@@ -65,7 +65,8 @@ find(<<"space">>, SpaceId) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"space">>) ->
     UserId = g_session:get_user_id(),
-    {ok, SpaceIds} = user_logic:get_effective_spaces(UserId),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, UserSpaces),
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, #document{
         value = #onedata_user{
