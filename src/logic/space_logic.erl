@@ -205,7 +205,7 @@ join({group, GroupId}, Macaroon) ->
     add_group(SpaceId, GroupId).
 
 %%--------------------------------------------------------------------
-%% @doc Adds a new member to a Space.
+%% @doc Adds a new user to a Space.
 %% @end
 %%--------------------------------------------------------------------
 -spec add_user(SpaceId :: binary(), UserId :: binary()) ->

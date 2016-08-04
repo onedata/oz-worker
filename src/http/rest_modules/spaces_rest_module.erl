@@ -78,8 +78,8 @@ is_authorized(space, delete, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_remove);
 is_authorized(uinvite, get, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_invite_user);
-is_authorized(user, delete, SpId, #client{type = user, id = UserId}) ->
-    space_logic:has_effective_privilege(SpId, UserId, space_remove_user) orelse
+is_authorized(user, delete, SpaceId, #client{type = user, id = UserId}) ->
+    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_user) orelse
         oz_api_privileges_logic:has_effective_privilege(UserId, remove_member_from_space);
 is_authorized(users, put, _SpaceId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, add_member_to_space);

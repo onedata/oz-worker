@@ -161,11 +161,7 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
         name = DefaultName,
         providers_supports = ProvidersSupports
     }}} = space:get(SpaceId),
-    Name = try
-        maps:get(SpaceId, SpaceNamesMap)
-    catch _:_ ->
-        DefaultName
-    end,
+    Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),
     {Providers, _} = lists:unzip(ProvidersSupports),
     ProvidersToDisplay = lists:filter(
         fun(Provider) ->
