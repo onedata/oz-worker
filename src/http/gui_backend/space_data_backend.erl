@@ -65,10 +65,11 @@ find(<<"space">>, SpaceId) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"space">>) ->
     UserId = g_session:get_user_id(),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, UserSpaces),
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, #document{
         value = #onedata_user{
-            spaces = SpaceIds,
             space_names = SpaceNamesMap,
             default_space = DefaultSpaceId
         }}} = onedata_user:get(UserId),
@@ -154,9 +155,14 @@ delete_record(<<"space">>, _Id) ->
     DefaultSpaceId :: binary(), UserProviders :: [binary()]) ->
     proplists:proplist().
 space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
-    Name = maps:get(SpaceId, SpaceNamesMap),
-    {ok, [{providers, Providers}]} =
-        space_logic:get_providers(SpaceId, provider),
+    % Try to get space name from personal user's mapping, if not use its
+    % default name.
+    {ok, #document{value = #space{
+        name = DefaultName,
+        providers_supports = ProvidersSupports
+    }}} = space:get(SpaceId),
+    Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),
+    {Providers, _} = lists:unzip(ProvidersSupports),
     ProvidersToDisplay = lists:filter(
         fun(Provider) ->
             lists:member(Provider, UserProviders)

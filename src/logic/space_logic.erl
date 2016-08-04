@@ -22,6 +22,7 @@
 -export([get_data/2, get_users/1, get_effective_users/1, get_groups/1,
     get_providers/2, get_user/3, get_group/2, get_provider/3, get_privileges/2,
     get_effective_privileges/2]).
+-export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, remove_provider/2, cleanup/1]).
 -export([list/0]).
 
@@ -198,6 +199,18 @@ set_privileges(SpaceId, Member, Privileges) ->
     {ok, SpaceId :: binary()}.
 join({user, UserId}, Macaroon) ->
     {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
+    add_user(SpaceId, UserId);
+join({group, GroupId}, Macaroon) ->
+    {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
+    add_group(SpaceId, GroupId).
+
+%%--------------------------------------------------------------------
+%% @doc Adds a new user to a Space.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_user(SpaceId :: binary(), UserId :: binary()) ->
+    {ok, SpaceId :: binary()}.
+add_user(SpaceId, UserId) ->
     case has_user(SpaceId, UserId) of
         true -> ok;
         false ->
@@ -213,9 +226,15 @@ join({user, UserId}, Macaroon) ->
             {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
             user_logic:set_space_name_mapping(UserId, SpaceId, Name)
     end,
-    {ok, SpaceId};
-join({group, GroupId}, Macaroon) ->
-    {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
+    {ok, SpaceId}.
+
+%%--------------------------------------------------------------------
+%% @doc Adds a new group to a Space.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_group(SpaceId :: binary(), GroupId :: binary()) ->
+    {ok, SpaceId :: binary()}.
+add_group(SpaceId, GroupId) ->
     case has_group(SpaceId, GroupId) of
         true -> ok;
         false ->

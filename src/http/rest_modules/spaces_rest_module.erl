@@ -44,11 +44,11 @@ routes() ->
     [
         {<<"/spaces">>, M, S#rstate{resource = spaces, methods = [post, get]}},
         {<<"/spaces/:id">>, M, S#rstate{resource = space, methods = [get, patch, delete]}},
-        {<<"/spaces/:id/users">>, M, S#rstate{resource = users, methods = [get]}},
+        {<<"/spaces/:id/users">>, M, S#rstate{resource = users, methods = [get, put]}},
         {<<"/spaces/:id/users/token">>, M, S#rstate{resource = uinvite, methods = [get]}},
         {<<"/spaces/:id/users/:uid">>, M, S#rstate{resource = user, methods = [get, delete]}},
         {<<"/spaces/:id/users/:uid/privileges">>, M, S#rstate{resource = upriv, methods = [get, put]}},
-        {<<"/spaces/:id/groups">>, M, S#rstate{resource = groups, methods = [get]}},
+        {<<"/spaces/:id/groups">>, M, S#rstate{resource = groups, methods = [get, put]}},
         {<<"/spaces/:id/groups/token">>, M, S#rstate{resource = ginvite, methods = [get]}},
         {<<"/spaces/:id/groups/:gid">>, M, S#rstate{resource = group, methods = [get, delete]}},
         {<<"/spaces/:id/groups/:gid/privileges">>, M, S#rstate{resource = gpriv, methods = [get, put]}},
@@ -70,7 +70,7 @@ is_authorized(_, _, _, #client{type = undefined}) ->
     false;
 is_authorized(spaces, post, _SpaceId, _Client) ->
     true;
-is_authorized(spaces, get, _EntityId, #client{type = user, id = UserId}) ->
+is_authorized(spaces, get, _SpaceId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, list_spaces);
 is_authorized(space, patch, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_change_data);
@@ -79,11 +79,17 @@ is_authorized(space, delete, SpaceId, #client{type = user, id = UserId}) ->
 is_authorized(uinvite, get, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_invite_user);
 is_authorized(user, delete, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_user);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_user) orelse
+        oz_api_privileges_logic:has_effective_privilege(UserId, remove_member_from_space);
+is_authorized(users, put, _SpaceId, #client{type = user, id = UserId}) ->
+    oz_api_privileges_logic:has_effective_privilege(UserId, add_member_to_space);
 is_authorized(ginvite, get, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_invite_group);
 is_authorized(group, delete, SpaceId, #client{type = user, id = UserId}) ->
-    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_group);
+    space_logic:has_effective_privilege(SpaceId, UserId, space_remove_group) orelse
+        oz_api_privileges_logic:has_effective_privilege(UserId, remove_member_from_space);
+is_authorized(groups, put, _SpaceId, #client{type = user, id = UserId}) ->
+    oz_api_privileges_logic:has_effective_privilege(UserId, add_member_to_space);
 is_authorized(pinvite, get, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_add_provider);
 is_authorized(provider, delete, SpaceId, #client{type = user, id = UserId}) ->
@@ -170,6 +176,14 @@ accept_resource(space, patch, SpaceId, Data, #client{type = user, id = UserId}, 
 accept_resource(space, patch, SpaceId, Data, #client{type = provider}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ok = space_logic:modify(SpaceId, provider, Name),
+    {true, Req};
+accept_resource(users, put, SpaceId, Data, _Client, Req) ->
+    UserId = rest_module_helper:assert_key(<<"userId">>, Data, binary, Req),
+    {ok, SpaceId} = space_logic:add_user(SpaceId, UserId),
+    {true, Req};
+accept_resource(groups, put, SpaceId, Data, _Client, Req) ->
+    GroupId = rest_module_helper:assert_key(<<"groupId">>, Data, binary, Req),
+    {ok, SpaceId} = space_logic:add_group(SpaceId, GroupId),
     {true, Req};
 accept_resource(upriv, put, SpaceId, Data, _Client, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),

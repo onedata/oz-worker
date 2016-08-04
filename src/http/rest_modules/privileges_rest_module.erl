@@ -95,8 +95,8 @@ resource_exists(_, _, Req) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(Resource, put, EntityId, Data, _Client, Req) ->
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
-        [atom_to_binary(P, latin1) || P <- privileges:group_privileges()], Data,
-        list_of_bin, Req),
+        [atom_to_binary(P, latin1) || P <- oz_api_privileges:all_privileges()],
+        Data, list_of_bin, Req),
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
     % Resource is (onedata_user | user_group) so it can be used directly here.
     ok = oz_api_privileges_logic:modify(EntityId, Resource, Privileges),
