@@ -825,7 +825,6 @@ sort_map(OriginalMap) ->
         end, OriginalMap, maps:keys(OriginalMap)).
 
 
-
 put_config(Config) ->
     put(config, Config).
 
@@ -859,6 +858,5 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     hackney:stop(),
     application:stop(etls),
-    ok.
-%%    test_node_starter:clean_environment(Config).
+    test_node_starter:clean_environment(Config).
 

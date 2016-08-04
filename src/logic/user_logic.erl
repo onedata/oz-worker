@@ -262,8 +262,7 @@ get_spaces(UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_groups(UserId :: binary()) ->
-{ok, [proplists:property()]}.
+-spec get_effective_groups(UserId :: binary()) -> {ok, [proplists:property()]}.
 get_effective_groups(UserId) ->
     {ok, #document{value = #onedata_user{effective_groups = Groups}}} = onedata_user:get(UserId),
     {ok, [{effective_groups, Groups}]}.
