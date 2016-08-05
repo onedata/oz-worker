@@ -21,6 +21,7 @@
 -export([init/0]).
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
+-export([space_record/4]).
 
 
 %%%===================================================================

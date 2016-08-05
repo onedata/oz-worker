@@ -21,6 +21,7 @@
 -export([init/0]).
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
+-export([provider_record/3]).
 
 
 %%%===================================================================
@@ -46,12 +47,10 @@ init() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"provider">>, ProviderId) ->
     UserId = g_session:get_user_id(),
-    {ok, #document{
-        value = #onedata_user{
-            default_provider = DefaultProvider,
-            spaces = UserSpaces
-        }}} = user_logic:get_user_doc(UserId),
-    Res = provider_record(ProviderId, DefaultProvider, UserSpaces),
+    DefaultProvider = user_logic:get_default_provider(UserId),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, UserSpaces),
+    Res = provider_record(ProviderId, DefaultProvider, SpaceIds),
     {ok, Res}.
 
 
@@ -65,14 +64,12 @@ find(<<"provider">>, ProviderId) ->
 find_all(<<"provider">>) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
-    {ok, #document{
-        value = #onedata_user{
-            default_provider = DefaultProvider,
-            spaces = UserSpaces
-        }}} = user_logic:get_user_doc(UserId),
+    DefaultProvider = user_logic:get_default_provider(UserId),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, UserSpaces),
     Res = lists:map(
         fun(ProviderId) ->
-            provider_record(ProviderId, DefaultProvider, UserSpaces)
+            provider_record(ProviderId, DefaultProvider, SpaceIds)
         end, ProviderIds),
     {ok, Res}.
 

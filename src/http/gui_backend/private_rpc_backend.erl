@@ -111,4 +111,48 @@ handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     {ok, URL} = auth_logic:get_redirection_uri(UserId, ProviderId),
     {ok, [
         {<<"url">>, URL}
-    ]}.
+    ]};
+
+handle(<<"unsupportSpace">>, Props) ->
+    SpaceId = proplists:get_value(<<"spaceId">>, Props),
+    ProviderId = proplists:get_value(<<"providerId">>, Props),
+    UserId = g_session:get_user_id(),
+    Authorized = space_logic:has_effective_privilege(
+        SpaceId, UserId, space_remove_provider
+    ),
+    case Authorized of
+        true ->
+            true = space_logic:remove_provider(SpaceId, ProviderId),
+            {ok, [{providers, UserProviders}]} =
+                user_logic:get_providers(UserId),
+            {ok, #document{
+                value = #onedata_user{
+                    space_names = SpaceNamesMap,
+                    default_space = DefaultSpaceId,
+                    default_provider = DefaultProvider
+                }}} = onedata_user:get(UserId),
+            {ok, UserSpaces} = user_logic:get_spaces(UserId),
+            SpaceIds = proplists:get_value(spaces, UserSpaces),
+            SpaceRecord = space_data_backend:space_record(
+                SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders
+            ),
+            gui_async:push_updated(<<"space">>, SpaceRecord),
+            ProviderRecord = provider_data_backend:provider_record(
+                ProviderId, DefaultProvider, SpaceIds
+            ),
+            % If the provider no longer supports any of user's spaces, delete
+            % the record in ember cache.
+            case proplists:get_value(<<"spaces">>, ProviderRecord) of
+                [] ->
+                    gui_async:push_deleted(<<"provider">>, ProviderId);
+                _ ->
+                    gui_async:push_updated(<<"provider">>, ProviderRecord)
+            end,
+            ok;
+        false ->
+            gui_error:report_warning(
+                <<"You do not have permissions to unsupport this space. "
+                "Those persmissions can be modified in file browser, "
+                "'Spaces' tab.">>
+            )
+    end.
