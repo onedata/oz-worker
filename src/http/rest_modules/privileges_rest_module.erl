@@ -72,16 +72,19 @@ is_authorized(_, _, _, _) ->
 %% @see rest_module_behavior
 %% @end
 %%--------------------------------------------------------------------
--spec resource_exists(Resource :: resource(), ProviderId :: binary() | undefined,
+-spec resource_exists(Resource :: resource(), EntityId :: binary() | undefined,
     Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
-% Every entity has privileges to OZ API - however they can be empty.
-resource_exists(onedata_user, _, Req) ->
-    {true, Req};
-resource_exists(user_group, _, Req) ->
-    {true, Req};
+% Every existing entity has privileges to OZ API - however they can be an empty
+% list, which is usually the case.
+resource_exists(onedata_user, UserId, Req) ->
+    Result = user_logic:exists(UserId),
+    {Result, Req};
+resource_exists(user_group, GroupId, Req) ->
+    Result = group_logic:exists(GroupId),
+    {Result, Req};
 resource_exists(_, _, Req) ->
-    {true, Req}.
+    {false, Req}.
 
 %%--------------------------------------------------------------------
 %% @doc Processes data submitted by a client through POST, PATCH, PUT on a REST
@@ -92,15 +95,20 @@ resource_exists(_, _, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
     ProviderId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()} | halt, cowboy_req:req()} | no_return().
 accept_resource(Resource, put, EntityId, Data, _Client, Req) ->
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
         [atom_to_binary(P, latin1) || P <- oz_api_privileges:all_privileges()],
         Data, list_of_bin, Req),
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
     % Resource is (onedata_user | user_group) so it can be used directly here.
-    ok = oz_api_privileges_logic:modify(EntityId, Resource, Privileges),
-    {true, Req}.
+    case oz_api_privileges_logic:modify(EntityId, Resource, Privileges) of
+        ok ->
+            {true, Req};
+        _ ->
+            {ok, NewReq} = cowboy_req:reply(404, Req),
+            {halt, NewReq}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Returns data requested by a client through GET on a REST resource.
