@@ -190,8 +190,10 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
             {{false, <<"">>}, ReqX, State};
 
         {Error, Description1, ReqX} when is_atom(Error) ->
-            Body = json_utils:encode([{error, Error},
-                {error_description, str_utils:to_binary(Description1)}]),
+            Body = json_utils:encode([
+                {error, Error},
+                {error_description, str_utils:to_binary(Description1)}
+            ]),
 
             WWWAuthenticate =
                 <<"error=", (atom_to_binary(Error, latin1))/binary>>,
@@ -201,8 +203,8 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
 
         {Error, StatusCode, Description1, ReqX} when is_atom(Error) ->
             Body = json_utils:encode([
-                {<<"error">>, Error},
-                {<<"error_description">>, str_utils:to_binary(Description1)}
+                {error, Error},
+                {error_description, str_utils:to_binary(Description1)}
             ]),
 
             {ok, ReqY} = cowboy_req:reply(StatusCode, [], Body, ReqX),
@@ -257,10 +259,8 @@ authorize_by_macaroons(Req, BinMethod, Root) ->
                 {ok, UserId} ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};
-                {error, Reason1} ->
-                    ?info("Bad auth: ~p", [Reason1]),
-                    throw({invalid_token, <<"access denied">>,
-                        Req})
+                {error, Reason} ->
+                    rest_module_helper:report_token_validation_error(Reason, Req)
             end
     end.
 
