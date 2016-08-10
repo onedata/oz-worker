@@ -17,14 +17,16 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-%% API
+%% data_backend_behaviour callbacks
 -export([init/0]).
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
+%% API
+-export([space_record/4]).
 
 
 %%%===================================================================
-%%% API functions
+%%% data_backend_behaviour callbacks
 %%%===================================================================
 
 %%--------------------------------------------------------------------
@@ -142,11 +144,10 @@ delete_record(<<"space">>, _Id) ->
 
 
 %%%===================================================================
-%%% Internal functions
+%%% API functions
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Returns a client-compliant space record.
 %% @end
