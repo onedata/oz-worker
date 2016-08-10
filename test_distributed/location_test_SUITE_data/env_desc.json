@@ -44,7 +44,6 @@
                                 "node.oz2:7770",
                                 "node.oz3:7770"
                             ],
-                            "public_key_refresh_interval_seconds": 2,
                             "http_domain": {
                                 "string": "127.0.0.1"
                             }
@@ -87,7 +86,6 @@
                                 "node.oz1:7770",
                                 "node.oz3:7770"
                             ],
-                            "public_key_refresh_interval_seconds": 2,
                             "http_domain": {
                                 "string": "127.0.0.1"
                             }
@@ -130,7 +128,6 @@
                                 "node.oz1:7770",
                                 "node.oz2:7770"
                             ],
-                            "public_key_refresh_interval_seconds": 2,
                             "http_domain": {
                                 "string": "127.0.0.1"
                             }
