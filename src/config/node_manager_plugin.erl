@@ -78,6 +78,7 @@ modules_with_args() -> node_manager:cluster_worker_modules() ++ [
     {groups_graph_caches_worker, []},
     {changes_worker, []},
     {ozpca_worker, []},
+    {dht_worker, []},
     {subscriptions_worker, []}
 ].
 
