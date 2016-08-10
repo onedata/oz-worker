@@ -16,7 +16,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([report_error/2, report_error/3, report_invalid_value/3, report_missing_key/2]).
+-export([report_error/2, report_error/3, report_invalid_value/3, report_missing_key/2,
+    report_token_validation_error/2, report_token_expired/2]).
 -export([assert_type/4, assert_key/4, assert_key_value/5]).
 
 -type json_string() :: atom() | binary().
@@ -136,6 +137,46 @@ report_missing_key(Key, Req) ->
     Description = <<"missing required key: '",
         (str_utils:to_binary(Key))/binary, "'">>,
     report_error(invalid_request, Description, Req).
+
+%%--------------------------------------------------------------------
+%% @doc Throws an exception to report a token validation error.
+%%--------------------------------------------------------------------
+-spec report_token_validation_error(Reason :: term(), Req :: cowboy_req:req()) ->
+    no_return().
+report_token_validation_error({unverified_caveat, <<"time < ", Time/binary>>}, Req) ->
+    rest_module_helper:report_token_expired(binary_to_integer(Time), Req);
+report_token_validation_error({unverified_caveat, <<"method = ", Method/binary>>}, Req) ->
+    throw({invalid_method, <<"invalid method: '", Method/binary, "'">>, Req});
+report_token_validation_error({unverified_caveat, <<"rootResource in ", _/binary>>}, Req) ->
+    throw({root_resource_not_found, <<>>, Req});
+report_token_validation_error({unverified_caveat, <<"providerId = ", _/binary>>}, Req) ->
+    throw({invalid_provider, <<"invalid provider ID">>, Req});
+report_token_validation_error({bad_signature_for_macaroon, _}, Req) ->
+    throw({bad_signature_for_macaroon, <<>>, Req});
+report_token_validation_error({failed_to_decrypt_caveat, _}, Req) ->
+    throw({failed_to_decrypt_caveat, <<>>, Req});
+report_token_validation_error({no_discharge_macaroon_for_caveat, _}, Req) ->
+    throw({no_discharge_macaroon_for_caveat, <<>>, Req});
+report_token_validation_error(unknown_macaroon, Req) ->
+    throw({token_not_found, <<>>, Req});
+report_token_validation_error(Reason, Req) ->
+    ?info("Invalid token auth: ~p", [Reason]),
+    throw({invalid_token, <<"access denied">>, Req}).
+
+%%--------------------------------------------------------------------
+%% @doc Throws an exception to report an expired token.
+%%--------------------------------------------------------------------
+-spec report_token_expired(Time :: non_neg_integer(), Req :: cowboy_req:req()) ->
+    no_return().
+report_token_expired(Time, Req) ->
+    MegaSecs = Time div 1000000,
+    Secs = Time rem 1000000,
+    {{Year, Month, Day}, {Hour, Minute, Second}} =
+        calendar:now_to_datetime({MegaSecs, Secs, 0}),
+    Description = <<"expired ", (list_to_binary(lists:flatten(
+        io_lib:format("~4w-~2..0w-~2..0w ~2..0w:~2..0w:~2..0w UTC",
+            [Year, Month, Day, Hour, Minute, Second]))))/binary>>,
+    throw({token_expired, Description, Req}).
 
 %%--------------------------------------------------------------------
 %% @doc Throws an exception to report a generic REST error with a description.
