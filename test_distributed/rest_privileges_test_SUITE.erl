@@ -47,6 +47,66 @@ all() ->
         modify_space_members_test % add_member_to_space,remove_member_from_space
     ]).
 
+%%%===================================================================
+%%% Functions used to validate REST calls
+%%%===================================================================
+% Below functions are used in the tests for concise test code. They check if
+% given REST operation ended with expected results.
+
+% Tries to view privileges of SubjectType:SubjectId as Issuer
+% and asserts if returned code and privileges matches expected Code
+% and Privileges (use 'undefined' to skip privileges matching).
+check_view_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
+    ReqPath = case SubjectType of
+        onedata_user -> [<<"/privileges/users/">>, SubjectId];
+        user_group -> [<<"/privileges/groups/">>, SubjectId]
+    end,
+    ReqAuth = case Issuer of
+        undefined -> undefined;
+        _ -> {user, Issuer}
+
+    end,
+    RespBody = case Privileges of
+        undefined -> undefined;
+        _ -> #{<<"privileges">> => Privileges}
+    end,
+    check_rest_call(#{
+        request => #{
+            method => get,
+            path => ReqPath,
+            auth => ReqAuth
+        },
+        expect => #{
+            code => Code,
+            body => RespBody
+        }
+    }).
+
+
+% Tries to set Privileges of SubjectType:SubjectId as Issuer
+% and asserts if returned code matches expected Code.
+check_set_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
+    ReqPath = case SubjectType of
+        onedata_user -> [<<"/privileges/users/">>, SubjectId];
+        user_group -> [<<"/privileges/groups/">>, SubjectId]
+    end,
+    ReqAuth = case Issuer of
+        undefined -> undefined;
+        _ -> {user, Issuer}
+
+    end,
+    check_rest_call(#{
+        request => #{
+            method => put,
+            path => ReqPath,
+            body => #{<<"privileges">> => Privileges},
+            auth => ReqAuth
+        },
+        expect => #{
+            code => Code
+        }
+    }).
+
 
 %%%===================================================================
 %%% Test functions
@@ -56,87 +116,23 @@ view_privileges_test(Config) ->
     put_config(Config),
     User1 = create_user(),
     % Unauthenticated requests should be discarded (401)
-    ?assert(check_rest_call(#{
-        request => #{
-            method => get,
-            path => [<<"/privileges/users/">>, User1]
-        },
-        expect => #{
-            code => 401
-        }
-    })),
+    check_view_privileges(401, undefined, User1, onedata_user, undefined),
     % User without permissions cannot view the OZ API privileges (403)
-    ?assert(check_rest_call(#{
-        request => #{
-            method => get,
-            path => [<<"/privileges/users/">>, User1],
-            auth => {user, User1}
-        },
-        expect => #{
-            code => 403
-        }
-    })),
+    check_view_privileges(401, User1, User1, onedata_user, undefined),
     % Give the user view privileges and check again
     set_privileges(User1, onedata_user, [view_privileges]),
-    ?assert(check_rest_call(#{
-        request => #{
-            method => get,
-            path => [<<"/privileges/users/">>, User1],
-            auth => {user, User1}
-        },
-        expect => #{
-            code => 200,
-            body => #{<<"privileges">> => [
-                <<"view_privileges">>
-            ]}
-        }
-    })),
+    check_view_privileges(200, User1, User1, onedata_user,
+        [<<"view_privileges">>]),
     % New users and groups should have no permissions by default
     User2 = create_user(),
     Group2 = create_group_for_user(User2),
-    ?assert(check_rest_call(#{
-        request => #{
-            method => get,
-            path => [<<"/privileges/users/">>, User2],
-            auth => {user, User1}
-        },
-        expect => #{
-            code => 200,
-            body => #{<<"privileges">> => []}
-        }
-    })),
-    ?assert(check_rest_call(#{
-        request => #{
-            method => get,
-            path => [<<"/privileges/groups/">>, Group2],
-            auth => {user, User1}
-        },
-        expect => #{
-            code => 200,
-            body => #{<<"privileges">> => []}
-        }
-    })),
+    check_view_privileges(200, User1, User2, onedata_user, []),
+    check_view_privileges(200, User1, Group2, user_group, []),
     % Checking the privileges of nonexistent user or group should return 404
-    ?assert(check_rest_call(#{
-        request => #{
-            method => get,
-            path => [<<"/privileges/users/">>, <<"nonexistent_user">>],
-            auth => {user, User1}
-        },
-        expect => #{
-            code => 404
-        }
-    })),
-    ?assert(check_rest_call(#{
-        request => #{
-            method => get,
-            path => [<<"/privileges/groups/">>, <<"nonexistent_group">>],
-            auth => {user, User1}
-        },
-        expect => #{
-            code => 404
-        }
-    })).
+    check_view_privileges(404, User1, <<"nonexistent_user">>, onedata_user,
+        undefined),
+    check_view_privileges(404, User1, <<"nonexistent_group">>, user_group,
+        undefined).
 
 
 set_privileges_test(Config) ->
@@ -145,6 +141,9 @@ set_privileges_test(Config) ->
     % Give the user perms to view and set privileges
     set_privileges(User1, onedata_user, [view_privileges, set_privileges]),
     % First try some wrong perms
+    check_set_privileges(400, User1, User1, onedata_user,
+        [inexistent, permissions]),
+    % TODO STOND JEDZIEMY LOL
     ?assert(check_rest_call(#{
         request => #{
             method => put,
@@ -200,7 +199,7 @@ set_privileges_test(Config) ->
                     method => put,
                     path => [<<"/privileges/users/">>, User2],
                     body => #{<<"privileges">> => RandomPrivs},
-                    auth => {user, User1}
+                    auth => User1
                 },
                 expect => #{
                     code => 204
@@ -211,7 +210,7 @@ set_privileges_test(Config) ->
                 request => #{
                     method => get,
                     path => [<<"/privileges/users/">>, User2],
-                    auth => {user, User1}
+                    auth => User1
                 },
                 expect => #{
                     code => 200,
@@ -229,7 +228,7 @@ set_privileges_test(Config) ->
                     method => put,
                     path => [<<"/privileges/groups/">>, Group2],
                     body => #{<<"privileges">> => RandomPrivs},
-                    auth => {user, User1}
+                    auth => User1
                 },
                 expect => #{
                     code => 204
@@ -240,7 +239,7 @@ set_privileges_test(Config) ->
                 request => #{
                     method => get,
                     path => [<<"/privileges/groups/">>, Group2],
-                    auth => {user, User1}
+                    auth => User1
                 },
                 expect => #{
                     code => 200,
@@ -351,7 +350,7 @@ list_privilege_scenario(Config, PathToCheck, Privilege, BodyOnSuccess) ->
                 method => put,
                 path => Path,
                 body => #{<<"privileges">> => Privileges},
-                auth => {user, Admin}
+                auth => Admin
             },
             expect => #{
                 code => 204
@@ -364,7 +363,7 @@ list_privilege_scenario(Config, PathToCheck, Privilege, BodyOnSuccess) ->
             request => #{
                 method => get,
                 path => PathToCheck,
-                auth => {user, TestUser}
+                auth => TestUser
             },
             expect => #{
                 code => 403
@@ -377,7 +376,7 @@ list_privilege_scenario(Config, PathToCheck, Privilege, BodyOnSuccess) ->
             request => #{
                 method => get,
                 path => PathToCheck,
-                auth => {user, TestUser}
+                auth => TestUser
             },
             expect => #{
                 code => 200,
@@ -470,7 +469,7 @@ modify_space_members_test(Config) ->
                     method => put,
                     path => Path,
                     body => #{<<"privileges">> => Privileges},
-                    auth => {user, Admin}
+                    auth => Admin
                 },
                 expect => #{
                     code => 204
@@ -494,7 +493,7 @@ modify_space_members_test(Config) ->
                     method => put,
                     path => Path,
                     body => Body,
-                    auth => {user, TestUser}
+                    auth =>  TestUser
                 },
                 expect => #{
                     code => 403
@@ -518,7 +517,7 @@ modify_space_members_test(Config) ->
                     method => put,
                     path => Path,
                     body => Body,
-                    auth => {user, TestUser}
+                    auth => TestUser
                 },
                 expect => #{
                     code => 204
@@ -538,7 +537,7 @@ modify_space_members_test(Config) ->
                 request => #{
                     method => delete,
                     path => Path,
-                    auth => {user, TestUser}
+                    auth =>  TestUser
                 },
                 expect => #{
                     code => 403
@@ -558,7 +557,7 @@ modify_space_members_test(Config) ->
                 request => #{
                     method => delete,
                     path => Path,
-                    auth => {user, TestUser}
+                    auth =>  TestUser
                 },
                 expect => #{
                     code => 202
@@ -684,7 +683,7 @@ modify_space_members_test(Config) ->
 %%      path => [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>], % Mandatory
 %%      headers => [{<<"key">>, <<"value">>}], % Optional, default: ct=app/json
 %%      body => <<"body content">>, % Optional, default: <<"">>
-%%      auth => {user, <<"uid">>} orelse none, % Optional, default: none
+%%      auth => <<"uid">> orelse undefined, % Optional, default: undefined
 %%      opts => [http_client_option] % Optional, default: []
 %%    },
 %%    expect => #{
@@ -717,7 +716,7 @@ check_rest_call(ArgsMap) ->
             Map2 when is_map(Map2) ->
                 json_utils:encode_map(Map2)
         end,
-        ReqAuth = maps:get(auth, RequestMap, none),
+        ReqAuth = maps:get(auth, RequestMap, undefined),
         ReqOpts = maps:get(opts, RequestMap, []),
 
         ExpCode = maps:get(code, ExpectMap, undefined),
@@ -726,9 +725,9 @@ check_rest_call(ArgsMap) ->
 
         URL = str_utils:join_binary([get_oz_url() | ReqPath], <<"">>),
         HeadersPlusAuth = case ReqAuth of
-            none ->
+            undefined ->
                 ReqHeaders;
-            {user, UserId} ->
+            UserId ->
                 [{<<"macaroon">>, get_user_auth(UserId)} | ReqHeaders]
         end,
         % Add insecure option - we do not want the GR server cert to be checked.
