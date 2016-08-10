@@ -46,6 +46,12 @@ class OZWorkerConfigurator:
                 'string': "{0}://{1}:{2}".format(protocol, panel_hostname, port)
             }
 
+        ls_bootstrap_key = 'location_service_bootstrap_nodes'
+        if ls_bootstrap_key in sys_config:
+            split = [node.split(':') for node in sys_config[ls_bootstrap_key]]
+            sys_config[ls_bootstrap_key] = \
+                [worker.cluster_domain(id, uid) + ":" + port for id, port in split]
+
         return cfg
 
     # Called BEFORE the instance (cluster of workers) is started,
