@@ -39,6 +39,7 @@ init(_Args) ->
     {ok, Domain} = application:get_env(?APP_Name, http_domain),
     identity:ensure_identity_cert_created(KeyFile, CertFile, Domain),
 
+    refresh(),
     schedule_cert_refresh(),
     {ok, #{}}.
 
@@ -50,18 +51,10 @@ init(_Args) ->
 -spec handle(Request :: term()) -> ok | {error, Reason :: term()} | no_return().
 handle(healthcheck) ->
     ok;
-%%    DecodedCertificate = read_oz_cert(),
-%%    case identity:verify_with_dht(DecodedCertificate) of
-%%        ok -> ok;
-%%        {error, Reason} -> {error, {cert_not_published, Reason}}
-%%    end;
 
 handle(refresh_published_pubkey) ->
     try
-        ?debug("Refreshing published public key"),
-        {ok, CertFile} = application:get_env(?APP_Name, identity_cert_file),
-        DecodedCertificate = identity:read_cert(CertFile),
-        ok = identity:publish(DecodedCertificate)
+        ok = refresh()
     catch
         E:R ->
             %% exceptions are handled as we have to ensure refresh is scheduled
@@ -101,3 +94,10 @@ schedule_cert_refresh() ->
 refresh_interval() ->
     {ok, Interval} = application:get_env(?APP_Name, public_key_refresh_interval_seconds),
     timer:seconds(Interval).
+
+-spec refresh() -> ok | {error, Reason :: term()}.
+refresh() ->
+    ?debug("Refreshing published public key"),
+    {ok, CertFile} = application:get_env(?APP_Name, identity_cert_file),
+    DecodedCertificate = identity:read_cert(CertFile),
+    identity:publish(DecodedCertificate).
