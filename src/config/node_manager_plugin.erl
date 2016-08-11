@@ -247,7 +247,7 @@ check_node_ip_address() ->
 -spec create_predefined_group(Id :: binary(), Name :: binary(),
     Privileges :: [oz_api_privileges:privilege()]) -> ok | error.
 create_predefined_group(Id, Name, Privileges) ->
-    datastore:run_synchronized(user_group, Id, fun() ->
+    datastore:run_transaction(user_group, Id, fun() ->
         case user_group:exists(Id) of
             true ->
                 ?info("Predefined group '~s' already exists, "
