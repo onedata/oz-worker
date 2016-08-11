@@ -48,7 +48,7 @@ init() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"provider">>, ProviderId) ->
     UserId = g_session:get_user_id(),
-    DefaultProvider = user_logic:get_default_provider(UserId),
+    {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
     {ok, UserSpaces} = user_logic:get_spaces(UserId),
     SpaceIds = proplists:get_value(spaces, UserSpaces),
     Res = provider_record(ProviderId, DefaultProvider, SpaceIds),
@@ -65,7 +65,7 @@ find(<<"provider">>, ProviderId) ->
 find_all(<<"provider">>) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
-    DefaultProvider = user_logic:get_default_provider(UserId),
+    {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
     {ok, UserSpaces} = user_logic:get_spaces(UserId),
     SpaceIds = proplists:get_value(spaces, UserSpaces),
     Res = lists:map(
