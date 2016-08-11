@@ -30,6 +30,10 @@
 ]).
 
 
+% Convenience macro to retry 10 times before failing
+-define(assert_retry_10(_TestedCode), ?assertEqual(true, _TestedCode, 10)).
+
+
 %%%===================================================================
 %%% API functions
 %%%===================================================================
@@ -61,12 +65,7 @@ check_view_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
         onedata_user -> [<<"/privileges/users/">>, SubjectId];
         user_group -> [<<"/privileges/groups/">>, SubjectId]
     end,
-    ReqAuth = case Issuer of
-        undefined -> undefined;
-        _ -> {user, Issuer}
-
-    end,
-    RespBody = case Privileges of
+    ExpectedBody = case Privileges of
         undefined -> undefined;
         _ -> #{<<"privileges">> => Privileges}
     end,
@@ -74,11 +73,11 @@ check_view_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
         request => #{
             method => get,
             path => ReqPath,
-            auth => ReqAuth
+            auth => Issuer
         },
         expect => #{
             code => Code,
-            body => RespBody
+            body => ExpectedBody
         }
     }).
 
@@ -90,17 +89,120 @@ check_set_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
         onedata_user -> [<<"/privileges/users/">>, SubjectId];
         user_group -> [<<"/privileges/groups/">>, SubjectId]
     end,
-    ReqAuth = case Issuer of
-        undefined -> undefined;
-        _ -> {user, Issuer}
-
-    end,
     check_rest_call(#{
         request => #{
             method => put,
             path => ReqPath,
             body => #{<<"privileges">> => Privileges},
-            auth => ReqAuth
+            auth => Issuer
+        },
+        expect => #{
+            code => Code
+        }
+    }).
+
+
+% Tries to list all spaces in the system and asserts if returned code and body
+% match the expected.
+check_list_spaces(Code, Issuer, Spaces) ->
+    ExpectedBody = case Spaces of
+        undefined -> undefined;
+        _ -> #{<<"spaces">> => Spaces}
+    end,
+    check_rest_call(#{
+        request => #{
+            method => get,
+            path => [<<"/spaces">>],
+            auth => Issuer
+        },
+        expect => #{
+            code => Code,
+            body => ExpectedBody
+        }
+    }).
+
+
+% Tries to list all spaces in the system and asserts if returned code and body
+% match the expected.
+check_list_providers(Code, Issuer, Providers) ->
+    ExpectedBody = case Providers of
+        undefined -> undefined;
+        _ -> #{<<"providers">> => Providers}
+    end,
+    check_rest_call(#{
+        request => #{
+            method => get,
+            path => [<<"/providers">>],
+            auth => Issuer
+        },
+        expect => #{
+            code => Code,
+            body => ExpectedBody
+        }
+    }).
+
+
+% Tries to list all spaces in the system and asserts if returned code and body
+% match the expected.
+check_list_providers_of_space(Code, Issuer, SpaceId, Providers) ->
+    ExpectedBody = case Providers of
+        undefined -> undefined;
+        _ -> #{<<"providers">> => Providers}
+    end,
+    check_rest_call(#{
+        request => #{
+            method => get,
+            path => [<<"/spaces/">>, SpaceId, <<"/providers">>],
+            auth => Issuer
+        },
+        expect => #{
+            code => Code,
+            body => ExpectedBody
+        }
+    }).
+
+
+% Tries to add a user or group to a space and asserts if returned code
+% matches the expected.
+check_add_member_to_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
+    {ReqPath, ReqBody} = case SubjectType of
+        onedata_user -> {
+            [<<"/spaces/">>, SpaceId, <<"/users">>],
+            #{<<"userId">> => SubjectId}
+        };
+        user_group -> {
+            [<<"/spaces/">>, SpaceId, <<"/groups">>],
+            #{<<"groupId">> => SubjectId}
+        }
+    end,
+    check_rest_call(#{
+        request => #{
+            method => put,
+            path => ReqPath,
+            body => ReqBody,
+            auth => Issuer
+        },
+        expect => #{
+            code => Code
+        }
+    }).
+
+
+% Tries to remove a user or group from a space and asserts if returned code
+% matches the expected.
+check_remove_member_from_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
+    ReqPath = case SubjectType of
+        onedata_user ->
+            [<<"/spaces/">>, SpaceId, <<"/users/">>, SubjectId];
+        user_group ->
+            [<<"/spaces/">>, SpaceId, <<"/groups/">>, SubjectId]
+
+    end,
+    check_rest_call(#{
+        request => #{
+            method => delete,
+            path => ReqPath,
+            auth => Issuer
         },
         expect => #{
             code => Code
@@ -116,23 +218,24 @@ view_privileges_test(Config) ->
     put_config(Config),
     User1 = create_user(),
     % Unauthenticated requests should be discarded (401)
-    check_view_privileges(401, undefined, User1, onedata_user, undefined),
+    ?assert(check_view_privileges(401, undefined, User1, onedata_user,
+        undefined)),
     % User without permissions cannot view the OZ API privileges (403)
-    check_view_privileges(401, User1, User1, onedata_user, undefined),
+    ?assert(check_view_privileges(403, User1, User1, onedata_user, undefined)),
     % Give the user view privileges and check again
     set_privileges(User1, onedata_user, [view_privileges]),
-    check_view_privileges(200, User1, User1, onedata_user,
-        [<<"view_privileges">>]),
+    ?assert(check_view_privileges(200, User1, User1, onedata_user,
+        [<<"view_privileges">>])),
     % New users and groups should have no permissions by default
     User2 = create_user(),
     Group2 = create_group_for_user(User2),
-    check_view_privileges(200, User1, User2, onedata_user, []),
-    check_view_privileges(200, User1, Group2, user_group, []),
+    ?assert(check_view_privileges(200, User1, User2, onedata_user, [])),
+    ?assert(check_view_privileges(200, User1, Group2, user_group, [])),
     % Checking the privileges of nonexistent user or group should return 404
-    check_view_privileges(404, User1, <<"nonexistent_user">>, onedata_user,
-        undefined),
-    check_view_privileges(404, User1, <<"nonexistent_group">>, user_group,
-        undefined).
+    ?assert(check_view_privileges(404, User1, <<"bad_user">>, onedata_user,
+        undefined)),
+    ?assert(check_view_privileges(404, User1, <<"bad_group">>, user_group,
+        undefined)).
 
 
 set_privileges_test(Config) ->
@@ -141,39 +244,10 @@ set_privileges_test(Config) ->
     % Give the user perms to view and set privileges
     set_privileges(User1, onedata_user, [view_privileges, set_privileges]),
     % First try some wrong perms
-    check_set_privileges(400, User1, User1, onedata_user,
-        [inexistent, permissions]),
-    % TODO STOND JEDZIEMY LOL
-    ?assert(check_rest_call(#{
-        request => #{
-            method => put,
-            path => [<<"/privileges/users/">>, User1],
-            body => #{
-                <<"privileges">> => [
-                    inexistent,
-                    permissions
-                ]
-            },
-            auth => {user, User1}
-        },
-        expect => #{
-            code => 400
-        }
-    })),
+    ?assert(check_set_privileges(400, User1, User1, onedata_user,
+        [inexistent, permissions])),
     % And now a nonexistent user
-    ?assert(check_rest_call(#{
-        request => #{
-            method => put,
-            path => [<<"/privileges/users/">>, <<"nonexistent_user">>],
-            body => #{
-                <<"privileges">> => []
-            },
-            auth => {user, User1}
-        },
-        expect => #{
-            code => 404
-        }
-    })),
+    ?assert(check_set_privileges(404, User1, <<"bad_user">>, onedata_user, [])),
     % Create a user and a group for testing
     User2 = create_user(),
     Group2 = create_group_for_user(User2),
@@ -194,60 +268,24 @@ set_privileges_test(Config) ->
         fun(_) ->
             RandomPrivs = GenerateRandomPrivs(),
             % Set the privileges
-            ?assert(check_rest_call(#{
-                request => #{
-                    method => put,
-                    path => [<<"/privileges/users/">>, User2],
-                    body => #{<<"privileges">> => RandomPrivs},
-                    auth => User1
-                },
-                expect => #{
-                    code => 204
-                }
-            })),
+            ?assert(check_set_privileges(204, User1, User2, onedata_user,
+                RandomPrivs)),
             % View the privileges
-            ?assert(check_rest_call(#{
-                request => #{
-                    method => get,
-                    path => [<<"/privileges/users/">>, User2],
-                    auth => User1
-                },
-                expect => #{
-                    code => 200,
-                    body => #{<<"privileges">> => RandomPrivs}
-                }
-            }))
+            ?assert(check_view_privileges(200, User1, User2, onedata_user,
+                RandomPrivs))
         end, lists:seq(1, 30)), % 30 times
     % Now for Group2
     lists:foreach(
         fun(_) ->
             RandomPrivs = GenerateRandomPrivs(),
             % Set the privileges
-            ?assert(check_rest_call(#{
-                request => #{
-                    method => put,
-                    path => [<<"/privileges/groups/">>, Group2],
-                    body => #{<<"privileges">> => RandomPrivs},
-                    auth => User1
-                },
-                expect => #{
-                    code => 204
-                }
-            })),
+            ?assert(check_set_privileges(204, User1, Group2, user_group,
+                RandomPrivs)),
             % View the privileges
-            ?assert(check_rest_call(#{
-                request => #{
-                    method => get,
-                    path => [<<"/privileges/groups/">>, Group2],
-                    auth => User1
-                },
-                expect => #{
-                    code => 200,
-                    body => #{<<"privileges">> => RandomPrivs}
-                }
-            }))
-        end, lists:seq(1, 30)), % 30 times
-    ok.
+            ?assert(check_view_privileges(200, User1, Group2, user_group,
+                RandomPrivs))
+        end, lists:seq(1, 30)). % 30 times
+
 
 
 list_spaces_test(Config) ->
@@ -260,20 +298,72 @@ list_spaces_test(Config) ->
     Space2 = create_space_for_user(UserWithSpaces1),
     Space3 = create_space_for_user(UserWithSpaces2),
     Space4 = create_space_for_user(UserWithSpaces3),
-    ExpectedBody = #{
-        <<"spaces">> => [
-            Space1,
-            Space2,
-            Space3,
-            Space4
-        ]
-    },
-    list_privilege_scenario(
-        Config,
-        <<"/spaces">>,
-        <<"list_spaces">>,
-        ExpectedBody
-    ).
+    ExpectedSpaces = [
+        Space1,
+        Space2,
+        Space3,
+        Space4
+    ],
+    % Admin will be used to grant or revoke privileges
+    Admin = create_user(),
+    set_privileges(Admin, onedata_user, [set_privileges]),
+    % User will be used to test the functionality
+    TestUser = create_user(),
+
+    %% PRIVILEGES AS A USER
+
+    % TestUser should not be able to list spaces
+    % as he does not yet have privs
+    ?assert(check_list_spaces(403, TestUser, undefined)),
+    % Lets grant privileges to the user
+    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
+        [<<"list_spaces">>])),
+    % Now he should be able to list spaces
+    ?assert(check_list_spaces(200, TestUser, ExpectedSpaces)),
+    % Revoke the privileges again
+    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+    % He should no longer be able to list spaces
+    ?assert(check_list_spaces(403, TestUser, undefined)),
+
+    %% PRIVILEGES VIA GROUP
+
+    % Add the user to a group and give it privileges, see if the user can
+    % list spaces.
+    TestGroup = create_group_for_user(TestUser),
+    % The user should still not be able to list spaces as the group
+    % does not have privileges.
+    ?assert(check_list_spaces(403, TestUser, undefined)),
+    % But when we grant privileges to TestGroup, he should be able to
+    % list spaces
+    ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
+        [<<"list_spaces">>])),
+    % Try multiple times, because group graph takes a while to update
+    ?assertEqual(true, check_list_spaces(200, TestUser, ExpectedSpaces), 10),
+    % Revoke the privileges and check again
+    ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
+    % Try multiple times, because group graph takes a while to update
+    ?assertEqual(true, check_list_spaces(403, TestUser, undefined), 10),
+
+    %% PRIVILEGES VIA NESTED GROUPS
+
+    % Add him to a nested group, which belongs to a group, which belongs to a
+    % group that has the privileges and check if he can list spaces.
+    GrandChildGroup = create_group_for_user(TestUser),
+    ChildGroup = create_group_for_group(GrandChildGroup),
+    ParentGroup = create_group_for_group(ChildGroup),
+    % The user should still not be able to list spaces as the group
+    % does not have privileges.
+    ?assert(check_list_spaces(403, TestUser, undefined)),
+    % But when we grant privileges to ParentGroup, he should be able to
+    % list spaces
+    ?assert(check_set_privileges(204, Admin, ParentGroup, user_group,
+        [<<"list_spaces">>])),
+    % Try multiple times, because group graph takes a while to update
+    ?assertEqual(true, check_list_spaces(200, TestUser, ExpectedSpaces), 10),
+    % Revoke the privileges and check again
+    ?assert(check_set_privileges(204, Admin, ParentGroup, user_group, [])),
+    % Try multiple times, because group graph takes a while to update
+    ?assertEqual(true, check_list_spaces(403, TestUser, undefined), 10).
 
 
 list_providers_test(Config) ->
@@ -281,162 +371,153 @@ list_providers_test(Config) ->
     Provider1 = create_provider(),
     Provider2 = create_provider(),
     Provider3 = create_provider(),
-    ExpectedBody = #{
-        <<"providers">> => [
-            Provider1,
-            Provider2,
-            Provider3
-        ]
-    },
-    list_privilege_scenario(
-        Config,
-        <<"/providers">>,
-        <<"list_providers">>,
-        ExpectedBody
-    ).
-
-
-list_providers_of_space_test(Config) ->
-    put_config(Config),
-    TestUser = create_user(),
-    Provider1 = create_provider(),
-    Provider2 = create_provider(),
-    Space1 = create_space_for_user(TestUser),
-    support_space(Space1, TestUser, Provider1),
-    support_space(Space1, TestUser, Provider2),
-    ExpectedBody = #{
-        <<"providers">> => [
-            Provider1,
-            Provider2
-        ]
-    },
-    list_privilege_scenario(
-        Config,
-        [<<"/spaces/">>, Space1, <<"/providers">>],
-        <<"list_providers_of_space">>,
-        ExpectedBody
-    ).
-
-
-% Runs a fixed scenario against given privilege, checking if giving and revoking
-% privileges to user/group has effect on his rights to perform certain
-% operations. The operations concern viewing system entities.
-% The scenario is as follows:
-% 1) Make sure user cannot perform tested operation by default
-% 2) Give him the privilege and make sure that now he can
-% 3) Revoke the privilege and check if he cannot
-% 4) Give the privilege to a group user belongs to and check if he can
-% 5) Revoke the privilege from the group and check if he cannot
-% 6) Give the privilege to a parent of his group and check if he can
-% 7) Revoke the privilege from the group and check if he cannot
-list_privilege_scenario(Config, PathToCheck, Privilege, BodyOnSuccess) ->
-    put_config(Config),
+    ExpectedProviders = [
+        Provider1,
+        Provider2,
+        Provider3
+    ],
     % Admin will be used to grant or revoke privileges
     Admin = create_user(),
     set_privileges(Admin, onedata_user, [set_privileges]),
     % User will be used to test the functionality
     TestUser = create_user(),
-    % Define some functions that will be used repeatedly
-    % Set privileges for given entity as admin
-    SetPrivileges = fun(EntityId, EntityType, Privileges) ->
-        Path = case EntityType of
-            onedata_user ->
-                [<<"/privileges/users/">>, EntityId];
-            user_group ->
-                [<<"/privileges/groups/">>, EntityId]
-        end,
-        check_rest_call(#{
-            request => #{
-                method => put,
-                path => Path,
-                body => #{<<"privileges">> => Privileges},
-                auth => Admin
-            },
-            expect => #{
-                code => 204
-            }
-        })
-    end,
-    % Make sure user cannot get given resource
-    CannotGetResource = fun() ->
-        check_rest_call(#{
-            request => #{
-                method => get,
-                path => PathToCheck,
-                auth => TestUser
-            },
-            expect => #{
-                code => 403
-            }
-        })
-    end,
-    % Make sure user can get given resource
-    CanGetResource = fun() ->
-        check_rest_call(#{
-            request => #{
-                method => get,
-                path => PathToCheck,
-                auth => TestUser
-            },
-            expect => #{
-                code => 200,
-                body => BodyOnSuccess
-            }
-        })
-    end,
 
     %% PRIVILEGES AS A USER
 
-    % TestUser should not be able to perform the operation
+    % TestUser should not be able to list providers
     % as he does not yet have privs
-    ?assert(CannotGetResource()),
+    ?assert(check_list_providers(403, TestUser, undefined)),
     % Lets grant privileges to the user
-    ?assert(SetPrivileges(TestUser, onedata_user, [Privilege])),
-    % Now he should be able to perform the operation
-    ?assert(CanGetResource()),
+    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
+        [<<"list_providers">>])),
+    % Now he should be able to list providers
+    ?assert(check_list_providers(200, TestUser, ExpectedProviders)),
     % Revoke the privileges again
-    ?assert(SetPrivileges(TestUser, onedata_user, [])),
-    % He should no longer be able to perform the operation
-    ?assert(CannotGetResource()),
+    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+    % He should no longer be able to list providers
+    ?assert(check_list_providers(403, TestUser, undefined)),
 
     %% PRIVILEGES VIA GROUP
 
     % Add the user to a group and give it privileges, see if the user can
-    % perform the operation.
+    % list providers.
     TestGroup = create_group_for_user(TestUser),
-    % The user should still not be able to perform the operation as the group
+    % The user should still not be able to list providers as the group
     % does not have privileges.
-    ?assert(CannotGetResource()),
+    ?assert(check_list_providers(403, TestUser, undefined)),
     % But when we grant privileges to TestGroup, he should be able to
-    % perform the operation
-    ?assert(SetPrivileges(TestGroup, user_group, [Privilege])),
+    % list providers
+    ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
+        [<<"list_providers">>])),
     % Try multiple times, because group graph takes a while to update
-    ?assertEqual(true, CanGetResource(), 10), % Try 10 times
+    ?assertEqual(true,
+        check_list_providers(200, TestUser, ExpectedProviders), 10),
     % Revoke the privileges and check again
-    ?assert(SetPrivileges(TestGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
     % Try multiple times, because group graph takes a while to update
-    ?assertEqual(true, CannotGetResource(), 10), % Try 10 times
+    ?assertEqual(true, check_list_providers(403, TestUser, undefined), 10),
 
     %% PRIVILEGES VIA NESTED GROUPS
 
     % Add him to a nested group, which belongs to a group, which belongs to a
-    % group that has the privileges and check if he can perform the operation.
+    % group that has the privileges and check if he can list providers.
     GrandChildGroup = create_group_for_user(TestUser),
     ChildGroup = create_group_for_group(GrandChildGroup),
     ParentGroup = create_group_for_group(ChildGroup),
-    % The user should still not be able to perform the operation as the group
+    % The user should still not be able to list providers as the group
     % does not have privileges.
-    ?assert(CannotGetResource()),
+    ?assert(check_list_providers(403, TestUser, undefined)),
     % But when we grant privileges to ParentGroup, he should be able to
-    % perform the operation
-    ?assert(SetPrivileges(ParentGroup, user_group, [Privilege])),
+    % list providers
+    ?assert(check_set_privileges(204, Admin, ParentGroup, user_group,
+        [<<"list_providers">>])),
     % Try multiple times, because group graph takes a while to update
-    ?assertEqual(true, CanGetResource(), 10), % Try 10 times
+    ?assertEqual(true,
+        check_list_providers(200, TestUser, ExpectedProviders), 10),
     % Revoke the privileges and check again
-    ?assert(SetPrivileges(ParentGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, ParentGroup, user_group, [])),
     % Try multiple times, because group graph takes a while to update
-    ?assertEqual(true, CannotGetResource(), 10), % Try 10 times
-    ok.
+    ?assertEqual(true, check_list_providers(403, TestUser, undefined), 10).
+
+
+list_providers_of_space_test(Config) ->
+    put_config(Config),
+    UserWithSpaces = create_user(),
+    Provider1 = create_provider(),
+    Provider2 = create_provider(),
+    Space1 = create_space_for_user(UserWithSpaces),
+    support_space(Space1, UserWithSpaces, Provider1),
+    support_space(Space1, UserWithSpaces, Provider2),
+    ExpProviders = #{
+        <<"providers">> => [
+            Provider1,
+            Provider2
+        ]
+    },
+    % Admin will be used to grant or revoke privileges
+    Admin = create_user(),
+    set_privileges(Admin, onedata_user, [set_privileges]),
+    % User will be used to test the functionality
+    TestUser = create_user(),
+
+    %% PRIVILEGES AS A USER
+
+    % TestUser should not be able to list providers of space
+    % as he does not yet have privs
+    ?assert(check_list_providers_of_space(403, TestUser, Space1, undefined)),
+    % Lets grant privileges to the user
+    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
+        [<<"list_providers_of_space">>])),
+    % Now he should be able to list providers of space
+    ?assert(check_list_providers_of_space(200, TestUser, Space1, ExpProviders)),
+    % Revoke the privileges again
+    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+    % He should no longer be able to list providers of space
+    ?assert(check_list_providers_of_space(403, TestUser, Space1, undefined)),
+
+    %% PRIVILEGES VIA GROUP
+
+    % Add the user to a group and give it privileges, see if the user can
+    % list providers of space.
+    TestGroup = create_group_for_user(TestUser),
+    % The user should still not be able to list providers of space as the group
+    % does not have privileges.
+    ?assert(check_list_providers_of_space(403, TestUser, Space1, undefined)),
+    % But when we grant privileges to TestGroup, he should be able to
+    % list providers of space
+    ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
+        [<<"list_providers_of_space">>])),
+    % Try multiple times, because group graph takes a while to update
+    ?assertEqual(true,
+        check_list_providers_of_space(200, TestUser, Space1, ExpProviders), 10),
+    % Revoke the privileges and check again
+    ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
+    % Try multiple times, because group graph takes a while to update
+    ?assertEqual(true,
+        check_list_providers_of_space(403, TestUser, Space1, undefined), 10),
+
+    %% PRIVILEGES VIA NESTED GROUPS
+
+    % Add him to a nested group, which belongs to a group, which belongs to a
+    % group that has the privileges and check if he can list providers of space.
+    GrandChildGroup = create_group_for_user(TestUser),
+    ChildGroup = create_group_for_group(GrandChildGroup),
+    ParentGroup = create_group_for_group(ChildGroup),
+    % The user should still not be able to list providers of space as the group
+    % does not have privileges.
+    ?assert(check_list_providers_of_space(403, TestUser, Space1, undefined)),
+    % But when we grant privileges to ParentGroup, he should be able to
+    % list providers of space
+    ?assert(check_set_privileges(204, Admin, ParentGroup, user_group,
+        [<<"list_providers_of_space">>])),
+    % Try multiple times, because group graph takes a while to update
+    ?assertEqual(true,
+        check_list_providers_of_space(200, TestUser, Space1, ExpProviders), 10),
+    % Revoke the privileges and check again
+    ?assert(check_set_privileges(204, Admin, ParentGroup, user_group, [])),
+    % Try multiple times, because group graph takes a while to update
+    ?assertEqual(true,
+        check_list_providers_of_space(403, TestUser, Space1, undefined), 10).
 
 
 modify_space_members_test(Config) ->
@@ -455,213 +536,142 @@ modify_space_members_test(Config) ->
         SpaceOwner = create_user(),
         TestSpace = create_space_for_user(SpaceOwner),
 
-        % Define some functions that will be used repeatedly
-        % Set privileges for given entity as admin
-        SetPrivileges = fun(EntityId, EntityType, Privileges) ->
-            Path = case EntityType of
-                onedata_user ->
-                    [<<"/privileges/users/">>, EntityId];
-                user_group ->
-                    [<<"/privileges/groups/">>, EntityId]
-            end,
-            check_rest_call(#{
-                request => #{
-                    method => put,
-                    path => Path,
-                    body => #{<<"privileges">> => Privileges},
-                    auth => Admin
-                },
-                expect => #{
-                    code => 204
-                }
-            })
-        end,
-        % Make sure user CANNOT add users or groups to spaces
-        CannotAddEntity = fun(EntityId, EntityType) ->
-            {Path, Body} = case EntityType of
-                onedata_user -> {
-                    [<<"/spaces/">>, TestSpace, <<"/users">>],
-                    #{<<"userId">> => EntityId}
-                };
-                user_group -> {
-                    [<<"/spaces/">>, TestSpace, <<"/groups">>],
-                    #{<<"groupId">> => EntityId}
-                }
-            end,
-            check_rest_call(#{
-                request => #{
-                    method => put,
-                    path => Path,
-                    body => Body,
-                    auth =>  TestUser
-                },
-                expect => #{
-                    code => 403
-                }
-            })
-        end,
-        % Make sure user CAN add users or groups to spaces
-        CanAddEntity = fun(EntityId, EntityType) ->
-            {Path, Body} = case EntityType of
-                onedata_user -> {
-                    [<<"/spaces/">>, TestSpace, <<"/users">>],
-                    #{<<"userId">> => EntityId}
-                };
-                user_group -> {
-                    [<<"/spaces/">>, TestSpace, <<"/groups">>],
-                    #{<<"groupId">> => EntityId}
-                }
-            end,
-            check_rest_call(#{
-                request => #{
-                    method => put,
-                    path => Path,
-                    body => Body,
-                    auth => TestUser
-                },
-                expect => #{
-                    code => 204
-                }
-            })
-        end,
-        % Make sure user CANNOT delete users or groups to spaces
-        CannotDeleteEntity = fun(EntityId, EntityType) ->
-            Path = case EntityType of
-                onedata_user ->
-                    [<<"/spaces/">>, TestSpace, <<"/users/">>, EntityId];
-                user_group ->
-                    [<<"/spaces/">>, TestSpace, <<"/groups/">>, EntityId]
-
-            end,
-            check_rest_call(#{
-                request => #{
-                    method => delete,
-                    path => Path,
-                    auth =>  TestUser
-                },
-                expect => #{
-                    code => 403
-                }
-            })
-        end,
-        % Make sure user CAN delete users or groups to spaces
-        CanDeleteEntity = fun(EntityId, EntityType) ->
-            Path = case EntityType of
-                onedata_user ->
-                    [<<"/spaces/">>, TestSpace, <<"/users/">>, EntityId];
-                user_group ->
-                    [<<"/spaces/">>, TestSpace, <<"/groups/">>, EntityId]
-
-            end,
-            check_rest_call(#{
-                request => #{
-                    method => delete,
-                    path => Path,
-                    auth =>  TestUser
-                },
-                expect => #{
-                    code => 202
-                }
-            })
-        end,
-
         %% PRIVILEGES AS A USER
 
-        % TestUser should not be able to perform add operations
+        % TestUser should not be able to add or remove members from a space
         % as he does not yet have privs
-        ?assert(CannotAddEntity(AddedUser, onedata_user)),
-        ?assert(CannotAddEntity(AddedGroup, user_group)),
+        ?assert(check_add_member_to_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_add_member_to_space(403, TestUser, AddedGroup,
+            user_group, TestSpace)),
         % Give him the privileges and check again
-        ?assert(SetPrivileges(TestUser, onedata_user, [<<"add_member_to_space">>])),
-        ?assert(CanAddEntity(AddedUser, onedata_user)),
-        ?assert(CanAddEntity(AddedGroup, user_group)),
+        ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
+            [<<"add_member_to_space">>])),
+        ?assert(check_add_member_to_space(204, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_add_member_to_space(204, TestUser, AddedGroup,
+            user_group, TestSpace)),
         % Revoke the privileges and make sure he cannot
-        ?assert(SetPrivileges(TestUser, onedata_user, [])),
-        ?assert(CannotAddEntity(AddedUser, onedata_user)),
-        ?assert(CannotAddEntity(AddedGroup, user_group)),
+        ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+        ?assert(check_add_member_to_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_add_member_to_space(403, TestUser, AddedGroup,
+            user_group, TestSpace)),
         % The user should not be able to delete users/groups without privileges
-        ?assert(CannotDeleteEntity(AddedUser, onedata_user)),
-        ?assert(CannotDeleteEntity(AddedGroup, user_group)),
+        ?assert(check_remove_member_from_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_remove_member_from_space(403, TestUser, AddedGroup,
+            user_group, TestSpace)),
         % Give him the privileges and check again
-        ?assert(SetPrivileges(TestUser, onedata_user,
+        ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
             [<<"remove_member_from_space">>])),
-        ?assert(CanDeleteEntity(AddedUser, onedata_user)),
-        ?assert(CanDeleteEntity(AddedGroup, user_group)),
+        ?assert(check_remove_member_from_space(202, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_remove_member_from_space(202, TestUser, AddedGroup,
+            user_group, TestSpace)),
         % Revoke the privileges and make sure he cannot
-        ?assert(SetPrivileges(TestUser, onedata_user, [])),
-        ?assert(CannotDeleteEntity(AddedUser, onedata_user)),
-        ?assert(CannotDeleteEntity(AddedGroup, user_group)),
+        ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+        ?assert(check_remove_member_from_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_remove_member_from_space(403, TestUser, AddedGroup,
+            user_group, TestSpace)),
 
         %% PRIVILEGES VIA GROUP
 
         % Add the user to a group and give it privileges, see if the user can
-        % perform the operation.
+        % add or remove members from a space.
         TestGroup = create_group_for_user(TestUser),
         % TestUser should not be able to perform add operations
         % as he does not yet have privs
-        ?assert(CannotAddEntity(AddedUser, onedata_user)),
-        ?assert(CannotAddEntity(AddedGroup, user_group)),
+        ?assert(check_add_member_to_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_add_member_to_space(403, TestUser, AddedGroup,
+            user_group, TestSpace)),
         % Give the privileges to his group and check again
-        ?assert(SetPrivileges(TestGroup, user_group, [<<"add_member_to_space">>])),
+        ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
+            [<<"add_member_to_space">>])),
         % Try multiple times, because group graph takes a while to update
-        ?assertEqual(true, CanAddEntity(AddedUser, onedata_user), 10),% Try 10 times
-        ?assertEqual(true, CanAddEntity(AddedGroup, user_group), 10), % Try 10 times
+        ?assertEqual(true, check_add_member_to_space(204, TestUser, AddedUser,
+            onedata_user, TestSpace), 10),
+        ?assertEqual(true, check_add_member_to_space(204, TestUser, AddedGroup,
+            user_group, TestSpace), 10),
         % Revoke the privileges and make sure he cannot
-        ?assert(SetPrivileges(TestGroup, user_group, [])),
+        ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
         % Try multiple times, because group graph takes a while to update
-        ?assertEqual(true, CannotAddEntity(AddedUser, onedata_user), 10),% 10 times
-        ?assertEqual(true, CannotAddEntity(AddedGroup, user_group), 10), % 10 times
+        ?assertEqual(true, check_add_member_to_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace), 10),
+        ?assertEqual(true, check_add_member_to_space(403, TestUser, AddedGroup,
+            user_group, TestSpace), 10),
         % The user should not be able to delete users/groups without privileges
-        ?assert(CannotDeleteEntity(AddedUser, onedata_user)),
-        ?assert(CannotDeleteEntity(AddedGroup, user_group)),
+        ?assert(check_remove_member_from_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_remove_member_from_space(403, TestUser, AddedGroup,
+            user_group, TestSpace)),
         % Give him the privileges and check again
-        ?assert(SetPrivileges(TestGroup, user_group,
+        ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
             [<<"remove_member_from_space">>])),
         % Try multiple times, because group graph takes a while to update
-        ?assertEqual(true, CanDeleteEntity(AddedUser, onedata_user), 10),% 10 times
-        ?assertEqual(true, CanDeleteEntity(AddedGroup, user_group), 10), % 10 times
+        ?assertEqual(true, check_remove_member_from_space(202, TestUser,
+            AddedUser, onedata_user, TestSpace), 10),
+        ?assertEqual(true, check_remove_member_from_space(202, TestUser,
+            AddedGroup, user_group, TestSpace), 10),
         % Revoke the privileges and make sure he cannot
-        ?assert(SetPrivileges(TestGroup, user_group, [])),
+        ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
         % Try multiple times, because group graph takes a while to update
-        ?assertEqual(true, CannotDeleteEntity(AddedUser, onedata_user), 10),% 10 tms
-        ?assertEqual(true, CannotDeleteEntity(AddedGroup, user_group), 10), % 10 tms
+        ?assertEqual(true, check_remove_member_from_space(403, TestUser,
+            AddedUser, onedata_user, TestSpace), 10),
+        ?assertEqual(true, check_remove_member_from_space(403, TestUser,
+            AddedGroup, user_group, TestSpace), 10),
 
         %% PRIVILEGES VIA NESTED GROUPS
 
-        % Add him to a nested group, which belongs to a group, which belongs to a
-        % group that has the privileges and check if he can perform the operation.
+        % Add him to a nested group, which belongs to a group,
+        % which belongs to a group that has the privileges
+        % and check if he can perform the operation.
         GrandChildGroup = create_group_for_user(TestUser),
         ChildGroup = create_group_for_group(GrandChildGroup),
         ParentGroup = create_group_for_group(ChildGroup),
         % TestUser should not be able to perform add operations
         % as he does not yet have privs
-        ?assert(CannotAddEntity(AddedUser, onedata_user)),
-        ?assert(CannotAddEntity(AddedGroup, user_group)),
+        ?assert(check_add_member_to_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_add_member_to_space(403, TestUser, AddedGroup,
+            user_group, TestSpace)),
         % Give the privileges to his group and check again
-        ?assert(SetPrivileges(ParentGroup, user_group, [<<"add_member_to_space">>])),
+        ?assert(check_set_privileges(204, Admin, ParentGroup, user_group,
+            [<<"add_member_to_space">>])),
         % Try multiple times, because group graph takes a while to update
-        ?assertEqual(true, CanAddEntity(AddedUser, onedata_user), 10),% Try 10 times
-        ?assertEqual(true, CanAddEntity(AddedGroup, user_group), 10), % Try 10 times
+        ?assertEqual(true, check_add_member_to_space(204, TestUser, AddedUser,
+            onedata_user, TestSpace), 10),
+        ?assertEqual(true, check_add_member_to_space(204, TestUser, AddedGroup,
+            user_group, TestSpace), 10),
         % Revoke the privileges and make sure he cannot
-        ?assert(SetPrivileges(ParentGroup, user_group, [])),
+        ?assert(check_set_privileges(204, Admin, ParentGroup, user_group, [])),
         % Try multiple times, because group graph takes a while to update
-        ?assertEqual(true, CannotAddEntity(AddedUser, onedata_user), 10),% 10 times
-        ?assertEqual(true, CannotAddEntity(AddedGroup, user_group), 10), % 10 times
+        ?assertEqual(true, check_add_member_to_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace), 10),
+        ?assertEqual(true, check_add_member_to_space(403, TestUser, AddedGroup,
+            user_group, TestSpace), 10),
         % The user should not be able to delete users/groups without privileges
-        ?assert(CannotDeleteEntity(AddedUser, onedata_user)),
-        ?assert(CannotDeleteEntity(AddedGroup, user_group)),
+        ?assert(check_remove_member_from_space(403, TestUser, AddedUser,
+            onedata_user, TestSpace)),
+        ?assert(check_remove_member_from_space(403, TestUser, AddedGroup,
+            user_group, TestSpace)),
         % Give him the privileges and check again
-        ?assert(SetPrivileges(ParentGroup, user_group,
+        ?assert(check_set_privileges(204, Admin, ParentGroup, user_group,
             [<<"remove_member_from_space">>])),
         % Try multiple times, because group graph takes a while to update
-        ?assertEqual(true, CanDeleteEntity(AddedUser, onedata_user), 10),% 10 times
-        ?assertEqual(true, CanDeleteEntity(AddedGroup, user_group), 10), % 10 times
+        ?assertEqual(true, check_remove_member_from_space(202, TestUser,
+            AddedUser, onedata_user, TestSpace), 10),
+        ?assertEqual(true, check_remove_member_from_space(202, TestUser,
+            AddedGroup, user_group, TestSpace), 10),
         % Revoke the privileges and make sure he cannot
-        ?assert(SetPrivileges(ParentGroup, user_group, [])),
+        ?assert(check_set_privileges(204, Admin, ParentGroup, user_group, [])),
         % Try multiple times, because group graph takes a while to update
-        ?assertEqual(true, CannotDeleteEntity(AddedUser, onedata_user), 10),% 10 tms
-        ?assertEqual(true, CannotDeleteEntity(AddedGroup, user_group), 10), % 10 tms
-        ok
+        ?assertEqual(true, check_remove_member_from_space(403, TestUser,
+            AddedUser, onedata_user, TestSpace), 10),
+        ?assertEqual(true, check_remove_member_from_space(403, TestUser,
+            AddedGroup, user_group, TestSpace), 10)
     catch T:M ->
         ct:print("~p", [{T, M, erlang:get_stacktrace()}])
     end,
