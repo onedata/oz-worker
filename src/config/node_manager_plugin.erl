@@ -108,12 +108,12 @@ after_init([]) ->
         {ok, PredefinedGroups} =
             application:get_env(?APP_Name, predefined_groups),
         lists:foreach(
-            fun(Group) ->
-                Id = proplists:get_value(id, Group),
-                Name = proplists:get_value(name, Group),
+            fun(GroupMap) ->
+                Id = maps:get(id, GroupMap),
+                Name = maps:get(name, GroupMap),
                 % Privileges can be either a list of privileges or a module and
                 % function to call that will return such list.
-                Privs = case proplists:get_value(oz_api_privileges, Group) of
+                Privs = case maps:get(oz_api_privileges, GroupMap) of
                     List when is_list(List) ->
                         List;
                     {Module, Function} ->
