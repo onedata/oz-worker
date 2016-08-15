@@ -109,7 +109,8 @@ end_per_testcase(_, _Config) ->
     ok.
 
 end_per_suite(Config) ->
-    test_node_starter:clean_environment(Config).
+    ok.
+%%    test_node_starter:clean_environment(Config).
 
 
 %%%===================================================================

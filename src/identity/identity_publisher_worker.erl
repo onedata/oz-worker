@@ -100,4 +100,16 @@ refresh() ->
     ?debug("Refreshing published public key"),
     {ok, CertFile} = application:get_env(?APP_Name, identity_cert_file),
     DecodedCertificate = identity:read_cert(CertFile),
-    identity:publish(DecodedCertificate).
+    identity:publish(DecodedCertificate),
+
+    {ok, Docs} = owned_identity:list(),
+    utils:pforeach(fun(#document{value = #owned_identity{id = ID, public_key = Key}}) ->
+        case plugins:apply(identity_repository, publish, [ID, identity:decode(Key)]) of
+            {error, Reason} ->
+                ?warning("Unable to publish owned ID (~p) due to ~p", [ID, Reason]);
+            ok ->
+                ?debug("Published owned ID (~p) due to ~p", [ID])
+        end
+    end, Docs),
+
+    ok.
