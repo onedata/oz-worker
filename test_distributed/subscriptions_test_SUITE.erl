@@ -639,14 +639,16 @@ fetches_changes_older_than_in_cache(Config) ->
     subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>}),
     subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
     subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated3">>}),
+
+    Context = subscriptions_test_utils:init_messages(Node, PID, [(?ID(u1))]),
     subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated4">>}),
 
     % when
-    Context = subscriptions_test_utils:init_messages(Node, PID, [(?ID(u1))]),
     _ForgottenContext = subscriptions_test_utils:flush_messages(Context,
         subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>})),
 
     subscriptions_test_utils:empty_cache(Node),
+    subscriptions_test_utils:save(Node, ?ID(u2), #onedata_user{name = <<"u2">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
