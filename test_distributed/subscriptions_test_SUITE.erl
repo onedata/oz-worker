@@ -47,7 +47,8 @@
     all_data_in_group_update_test/1,
     all_data_in_provider_update_test/1,
     updates_for_with_providers_test/1,
-    child_group_update_through_users_test/1]).
+    child_group_update_through_users_test/1,
+    fetches_changes_older_than_in_cache_without_save/1]).
 
 
 %%%===================================================================
@@ -74,6 +75,7 @@ all() -> ?ALL([
     updates_have_revisions_test,
     updates_for_added_user_have_revisions_test,
     fetches_changes_older_than_in_cache,
+%%    fetches_changes_older_than_in_cache_without_save,
     fetches_changes_from_both_cache_and_db,
     fetches_changes_when_cache_has_gaps,
     no_space_update_test,
@@ -656,6 +658,32 @@ fetches_changes_older_than_in_cache(Config) ->
     ]),
     ok.
 
+fetches_changes_older_than_in_cache_without_save(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
+    timer:sleep(timer:seconds(5)), % sleep to save provider at disk
+
+    U1 = #onedata_user{name = <<"u1">>},
+    subscriptions_test_utils:save(Node, ?ID(u1), U1),
+    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>}),
+    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
+    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated3">>}),
+
+    Context = subscriptions_test_utils:init_messages(Node, PID, [(?ID(u1))]),
+    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated4">>}),
+
+    % when
+    _ForgottenContext = subscriptions_test_utils:flush_messages(Context,
+        subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>})),
+
+    subscriptions_test_utils:empty_cache(Node),
+
+    % then
+    subscriptions_test_utils:verify_messages_present(Context, [
+        subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>})
+    ]),
+    ok.
 
 fetches_changes_from_both_cache_and_db(Config) ->
     % given
