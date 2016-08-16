@@ -18,7 +18,7 @@
 % Info about identities, which are owned by this OZ
 -record(owned_identity, {
     id :: identity:id(),
-    public_key :: identity:encoded_public_key()
+    encoded_public_key :: identity:encoded_public_key()
 }).
 
 % Describes state of batch.

@@ -87,32 +87,22 @@ resource_exists(publickey, ID, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(provider, _, ID, Data, _Client, Req) ->
-    PublicKey = rest_module_helper:assert_key(<<"publicKey">>, Data, binary, Req),
+    EncodedPublicKey = rest_module_helper:assert_key(<<"publicKey">>, Data, binary, Req),
     URLs = rest_module_helper:assert_key(<<"urls">>, Data, list_of_bin, Req),
     RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary, Req),
 
-    Decoded = binary_to_term(base64:decode(PublicKey)),
-    case plugins:apply(identity_repository, publish, [ID, Decoded]) of
+    case plugins:apply(identity_repository, publish, [ID, EncodedPublicKey]) of
         ok ->
             Provider = #provider{client_name = ID, urls = URLs, redirection_point = RedirectionPoint},
             {ok, _} = provider:save(#document{key = ID, value = Provider}),
-%%            {ok, OzDomain} = application:get_env(?APP_Name, http_domain),
-%%            {ok, OzPublicKey} = plugins:apply(identity_repository, get, [OzDomain]),
-%%            Encoded = base64:encode(term_to_binary(OzPublicKey)),
-%%            Body = json_utils:encode([
-%%                {<<"providerID">>, ID},
-%%                {<<"ozID">>, OzDomain},
-%%                {<<"ozPublicKey">>, Encoded}
-%%            ]),
             {true, Req};
         {error, _Reason} ->
             ?warning("Unsucessful to create provider ~p", [ID]),
             {false, Req}
     end;
 accept_resource(publickey, _, ID, Data, _Client, Req) ->
-    PublicKey = rest_module_helper:assert_key(<<"publicKey">>, Data, binary, Req),
-    Decoded = binary_to_term(base64:decode(PublicKey)),
-    case plugins:apply(identity_repository, publish, [ID, Decoded]) of
+    EncodedPublicKey = rest_module_helper:assert_key(<<"publicKey">>, Data, binary, Req),
+    case plugins:apply(identity_repository, publish, [ID, EncodedPublicKey]) of
         ok -> {true, Req};
         {error, _Reason} ->
             ?warning("Client ~p unsucessfuly tried to override key of ~p", [_Client, ID]),
@@ -129,9 +119,8 @@ accept_resource(publickey, _, ID, Data, _Client, Req) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(publickey, ID, _, Req) ->
     %% resource_exists verified, that resource is obtainable
-    {ok, PublicKey} = plugins:apply(identity_repository, get, [ID]),
-    Encoded = base64:encode(term_to_binary(PublicKey)),
-    {[{<<"publicKey">>, Encoded}], Req}.
+    {ok, EncodedPublicKey} = plugins:apply(identity_repository, get, [ID]),
+    {[{<<"publicKey">>, EncodedPublicKey}], Req}.
 
 %%--------------------------------------------------------------------
 %% @doc Deletes the resource identified by the SpaceId parameter.

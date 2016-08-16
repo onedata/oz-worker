@@ -60,9 +60,9 @@ oz_certs_published_after_refresh(Config) ->
 oz_certs_obtainable_via_rest(Config) ->
     %% given
     [OZ1, OZ2, OZ3] = ?config(oz_worker_nodes, Config),
-    Key1 = identity:get_public_key(get_cert(OZ1)),
-    Key2 = identity:get_public_key(get_cert(OZ2)),
-    Key3 = identity:get_public_key(get_cert(OZ3)),
+    Key1 = get_public_key(OZ1),
+    Key2 = get_public_key(OZ2),
+    Key3 = get_public_key(OZ3),
 
     %% when
     Result1 = get_public_key_rest(OZ1, get_id(OZ1)),
@@ -74,6 +74,7 @@ oz_certs_obtainable_via_rest(Config) ->
     ?assertMatch(Key2, Result2),
     ?assertMatch(Key3, Result3).
 
+
 certs_are_publishable_via_rest(Config) ->
     %% given
     [OZ1, OZ2, OZ3] = ?config(oz_worker_nodes, Config),
@@ -81,8 +82,8 @@ certs_are_publishable_via_rest(Config) ->
     Cert2 = new_self_signed_cert(<<"c2">>),
 
     %% when
-    publish_public_key_rest(OZ1, identity:get_id(Cert1), identity:get_public_key(Cert1)),
-    publish_public_key_rest(OZ1, identity:get_id(Cert2), identity:get_public_key(Cert2)),
+    publish_public_key_rest(OZ1, identity_utils:get_id(Cert1), identity_utils:get_public_key(Cert1)),
+    publish_public_key_rest(OZ1, identity_utils:get_id(Cert2), identity_utils:get_public_key(Cert2)),
 
     %% then
     ?assertMatch(ok, verify(OZ1, Cert1)),
@@ -109,8 +110,7 @@ end_per_testcase(_, _Config) ->
     ok.
 
 end_per_suite(Config) ->
-    ok.
-%%    test_node_starter:clean_environment(Config).
+    test_node_starter:clean_environment(Config).
 
 
 %%%===================================================================
@@ -125,10 +125,13 @@ verify(Node, Cert) ->
 
 get_cert(Node) ->
     {ok, IdentityCertFile} = rpc:call(Node, application, get_env, [?APP_Name, identity_cert_file]),
-    rpc:call(Node, identity, read_cert, [IdentityCertFile]).
+    rpc:call(Node, identity_utils, read_cert, [IdentityCertFile]).
 
 get_id(Node) ->
-    identity:get_id(get_cert(Node)).
+    identity_utils:get_id(get_cert(Node)).
+
+get_public_key(Node) ->
+    identity_utils:get_public_key(get_cert(Node)).
 
 new_self_signed_cert(ID) ->
     TmpDir = utils:mkdtemp(),
@@ -143,7 +146,7 @@ new_self_signed_cert(ID) ->
     os:cmd(["openssl req", " -new ", " -key ", KeyFile, " -out ", CSRFile, " -subj ", "\"/CN=" ++ DomainForCN ++ "\""]),
     os:cmd(["openssl x509", " -req ", " -days ", " 365 ", " -in ", CSRFile, " -signkey ", KeyFile, " -out ", CertFile]),
 
-    Cert = identity:read_cert(CertFile),
+    Cert = identity_utils:read_cert(CertFile),
     utils:rmtempdir(TmpDir),
     Cert.
 
@@ -157,13 +160,13 @@ get_public_key_rest(OzNode, ID) ->
     {_, _, _, ResponseBody} = Response,
     Data = json_utils:decode(ResponseBody),
     EncodedPublicKey = proplists:get_value(<<"publicKey">>, Data),
-    binary_to_term(base64:decode(EncodedPublicKey)).
+    identity_utils:decode(EncodedPublicKey).
 
 publish_public_key_rest(OzNode, ID, PublicKey) ->
     RestAddress = get_rest_address(OzNode),
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Endpoint = RestAddress ++ "/publickey/" ++ EncodedID,
-    Encoded = base64:encode(term_to_binary(PublicKey)),
+    Encoded = identity_utils:encode(PublicKey),
     Body = json_utils:encode([{<<"publicKey">>, Encoded}]),
     Headers = [{<<"content-type">>, <<"application/json">>}],
     Response = http_client:request(put, Endpoint, Headers, Body, [insecure]),

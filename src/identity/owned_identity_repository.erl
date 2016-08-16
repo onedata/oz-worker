@@ -28,11 +28,11 @@
 %%--------------------------------------------------------------------
 -spec publish(identity:id(), identity:public_key()) ->
     ok | {error, Reason :: term()}.
-publish(ID, PublicKey) ->
-    case ?ACTUAL_REPOSITORY:publish(ID, PublicKey) of
+publish(ID, EncodedPublicKey) ->
+    case ?ACTUAL_REPOSITORY:publish(ID, EncodedPublicKey) of
         ok ->
             DbResult = owned_identity:save(#document{key = ID, value =
-            #owned_identity{id = ID, public_key = identity:encode(PublicKey)}}),
+            #owned_identity{id = ID, encoded_public_key = EncodedPublicKey}}),
             case DbResult of
                 {ok, _} -> ok;
                 {error, Reason} -> {error, {db_failed, Reason}}
@@ -46,11 +46,11 @@ publish(ID, PublicKey) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get(identity:id()) ->
-    {ok, identity:public_key()} | {error, Reason :: term()}.
+    {ok, identity:encoded_public_key()} | {error, Reason :: term()}.
 get(ID) ->
     case owned_identity:get(ID) of
-        {ok, #document{value = #owned_identity{public_key = Key}}} ->
-            {ok, identity:decode(Key)};
+        {ok, #document{value = #owned_identity{encoded_public_key = Encoded}}} ->
+            {ok, Encoded};
         {error, {not_found, _}} ->
             ?ACTUAL_REPOSITORY:get(ID);
         {error, Reason} ->
