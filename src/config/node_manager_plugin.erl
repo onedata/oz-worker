@@ -262,7 +262,7 @@ create_predefined_groups() ->
 -spec create_predefined_group(Id :: binary(), Name :: binary(),
     Privileges :: [oz_api_privileges:privilege()]) -> ok | error.
 create_predefined_group(Id, Name, Privileges) ->
-    datastore:run_synchronized(user_group, Id, fun() ->
+    critical_section:run([user_group, Id], fun() ->
         case user_group:exists(Id) of
             true ->
                 ?info("Predefined group '~s' already exists, "
