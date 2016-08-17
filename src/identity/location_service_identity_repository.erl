@@ -9,15 +9,17 @@
 %%% This module manages identity data in DHT.
 %%% @end
 %%%-------------------------------------------------------------------
--module(owned_identity_repository).
+-module(location_service_identity_repository).
 -author("Michal Zmuda").
 
 -behaviour(identity_repository_behaviour).
 
 -include_lib("ctool/include/logging.hrl").
--include_lib("datastore/oz_datastore_models_def.hrl").
+-include_lib("public_key/include/public_key.hrl").
 
--define(ACTUAL_REPOSITORY, dht_identity_repository).
+-define(DHT_DATA_KEY, <<"public_key">>).
+-define(TYPE, identity).
+
 
 -export([publish/2, get/1]).
 
@@ -26,18 +28,12 @@
 %% Publishes public key under given ID.
 %% @end
 %%--------------------------------------------------------------------
--spec publish(identity:id(), identity:public_key()) ->
+-spec publish(identity:id(), identity:encoded_public_key()) ->
     ok | {error, Reason :: term()}.
 publish(ID, EncodedPublicKey) ->
-    case ?ACTUAL_REPOSITORY:publish(ID, EncodedPublicKey) of
-        ok ->
-            DbResult = owned_identity:save(#document{key = ID, value =
-            #owned_identity{id = ID, encoded_public_key = EncodedPublicKey}}),
-            case DbResult of
-                {ok, _} -> ok;
-                {error, Reason} -> {error, {db_failed, Reason}}
-            end;
-        {error, Reason} -> {error, {repo_failed, Reason}}
+    case locations:claim_model(?TYPE, ID, [{?DHT_DATA_KEY, EncodedPublicKey}]) of
+        {ok, _} -> ok;
+        {error, Reason} -> {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
@@ -48,11 +44,11 @@ publish(ID, EncodedPublicKey) ->
 -spec get(identity:id()) ->
     {ok, identity:encoded_public_key()} | {error, Reason :: term()}.
 get(ID) ->
-    case owned_identity:get(ID) of
-        {ok, #document{value = #owned_identity{encoded_public_key = Encoded}}} ->
-            {ok, Encoded};
-        {error, {not_found, _}} ->
-            ?ACTUAL_REPOSITORY:get(ID);
+    case locations:resolve_model(?TYPE, ID) of
         {error, Reason} ->
-            {error, {db_failed, Reason}}
+            ?error("DHT query failed due to: ~p", [Reason]),
+            {error, {dht_query_failed, Reason}};
+        {ok, Props} ->
+            EncodedPublicKey = proplists:get_value(?DHT_DATA_KEY, Props),
+            {ok, EncodedPublicKey}
     end.
