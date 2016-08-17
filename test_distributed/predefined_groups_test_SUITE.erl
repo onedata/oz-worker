@@ -52,7 +52,7 @@ predefined_groups_test(Config) ->
             oz_api_privileges => [view_privileges, set_privileges]
         },
         #{
-            id => <<"group33">>,
+            id => <<"group3">>,
             name => <<"Group 3">>,
             oz_api_privileges => []
         }
@@ -60,7 +60,9 @@ predefined_groups_test(Config) ->
     % Set the corresponding env variable on every node
     lists:foreach(
         fun(N) ->
-            ok = test_utils:set_env(N, oz_worker, predefined_groups, PredefinedGroups)
+            ok = test_utils:set_env(
+                N, oz_worker, predefined_groups, PredefinedGroups
+            )
         end, Nodes),
     % Call the group creation procedure on every node in parallel,
     % it best depicts how it is done normally - the after_init callback is
