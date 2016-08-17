@@ -1227,8 +1227,8 @@ init_per_suite(Config) ->
     [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
     ok = rpc:call(Node1, application, set_env, [?APP_Name, group_graph_refresh_interval, -1]),
     ok = rpc:call(Node2, application, set_env, [?APP_Name, group_graph_refresh_interval, -1]),
-    OZ_IP_1 = get_node_ip(Node1),
-    OZ_IP_2 = get_node_ip(Node2),
+    OZ_IP_1 = test_utils:get_docker_ip((Node1),
+    OZ_IP_2 = test_utils:get_docker_ip((Node2),
     RestPort = get_rest_port(Node1),
     RestAPIPrefix = get_rest_api_prefix(Node1),
     RestAddress = str_utils:format("https://~s:~B~s", [OZ_IP_1, RestPort, RestAPIPrefix]),
@@ -1312,11 +1312,6 @@ get_rest_port(Node) ->
 get_rest_api_prefix(Node) ->
     {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_Name, rest_api_prefix]),
     RestAPIPrefix.
-
-%% returns ip (as a string) of given node
-get_node_ip(Node) ->
-    CMD = "docker inspect --format '{{ .NetworkSettings.IPAddress }}'" ++ " " ++ utils:get_host(Node),
-    re:replace(os:cmd(CMD), "\\s+", "", [global, {return, list}]).
 
 generate_cert_files() ->
     Prefix = "provider" ++ integer_to_list(erlang:system_time(micro_seconds)),

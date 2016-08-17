@@ -25,6 +25,8 @@
 -export([before_init/1, after_init/1, on_terminate/2, on_code_change/3,
     handle_call_extension/3, handle_cast_extension/2, handle_info_extension/2,
     modules_with_args/0, listeners/0, cm_nodes/0, db_nodes/0, check_node_ip_address/0, app_name/0]).
+%% Additional, OZ specific API
+-export([create_predefined_groups/0]).
 
 %%%===================================================================
 %%% node_manager_plugin_behaviour callbacks
@@ -105,23 +107,7 @@ before_init([]) ->
 -spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 after_init([]) ->
     try
-        {ok, PredefinedGroups} =
-            application:get_env(?APP_Name, predefined_groups),
-        lists:foreach(
-            fun(GroupMap) ->
-                Id = maps:get(id, GroupMap),
-                Name = maps:get(name, GroupMap),
-                % Privileges can be either a list of privileges or a module and
-                % function to call that will return such list.
-                Privs = case maps:get(oz_api_privileges, GroupMap) of
-                    List when is_list(List) ->
-                        List;
-                    {Module, Function} ->
-                        Module:Function()
-                end,
-                create_predefined_group(Id, Name, Privs)
-            end, PredefinedGroups),
-        ok
+        create_predefined_groups()
     catch
         _:Error ->
             ?error_stacktrace("Error in node_manager_plugin:after_init: ~p",
@@ -233,6 +219,35 @@ check_node_ip_address() ->
 
 
 %%%===================================================================
+%%% OZ specific API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates predefined groups in the system based on settings in app.config.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_predefined_groups() -> ok.
+create_predefined_groups() ->
+    {ok, PredefinedGroups} =
+        application:get_env(?APP_Name, predefined_groups),
+    lists:foreach(
+        fun(GroupMap) ->
+            Id = maps:get(id, GroupMap),
+            Name = maps:get(name, GroupMap),
+            % Privileges can be either a list of privileges or a module and
+            % function to call that will return such list.
+            Privs = case maps:get(oz_api_privileges, GroupMap) of
+                List when is_list(List) ->
+                    List;
+                {Module, Function} ->
+                    Module:Function()
+            end,
+            create_predefined_group(Id, Name, Privs)
+        end, PredefinedGroups).
+
+
+%%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
@@ -271,4 +286,3 @@ create_predefined_group(Id, Name, Privileges) ->
         end,
         ok
     end).
-

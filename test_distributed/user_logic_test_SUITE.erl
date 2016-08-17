@@ -5,7 +5,10 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This file contains tests for user logic module.
+%%% @doc This file contains tests for user logic module concerning:
+%%%   - personal space name mapping for users
+%%%   - logging in via basic auth by interacting with onepanel
+%%%   - automatic adding of users to predefined groups based on onepanel role
 %%% @end
 %%%-------------------------------------------------------------------
 -module(user_logic_test_SUITE).
@@ -21,13 +24,15 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
 -export([set_space_name_mapping_test/1, clean_space_name_mapping_test/1,
-    remove_space_test/1]).
+    remove_space_test/1, basic_auth_login_test/1]).
 
 all() ->
     ?ALL([
         set_space_name_mapping_test,
         clean_space_name_mapping_test,
-        remove_space_test
+        remove_space_test,
+%%        basic_auth_authorization_test
+        basic_auth_login_test
     ]).
 
 %%%===================================================================
@@ -100,6 +105,17 @@ remove_space_test(Config) ->
     ?assertMatch({ok, #document{value = #onedata_user{
         spaces = [], space_names = #{}
     }}}, rpc:call(Node, onedata_user, get, [UserId])).
+
+% Check if basic auth login endpoint works.
+basic_auth_login_test(Config) ->
+    % To resolve user details, OZ asks onepanel via a REST endpoint. In this
+    % test, onepanel is mocked using appmock.
+    % Set the env variable in OZ that points to onepanel URL.
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    [Appmock | _] = ?config(appmock_nodes, Config),
+    
+    ok.
+
 
 %%%===================================================================
 %%% Setup/teardown functions

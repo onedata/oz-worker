@@ -63,16 +63,23 @@
                             }
                         }
                     }
-                }
-            }
-        }
-    },
-    "appmock_domains": {
-        "onepanel": {
-            "appmock": {
-                "node1": {
+                },
+                "node3": {
+                    "vm.args": {
+                        "setcookie": "test_cookie"
+                    },
                     "sys.config": {
-                        "app_description_file": "./onepanel_mock_description.erl.cfg"
+                        "oz_worker": {
+                            "cm_nodes": [
+                                "cm"
+                            ],
+                            "db_nodes": [
+                                "127.0.0.1:49161"
+                            ],
+                            "http_domain": {
+                                "string": "127.0.0.1"
+                            }
+                        }
                     }
                 }
             }

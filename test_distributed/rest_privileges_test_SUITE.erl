@@ -828,15 +828,6 @@ get_random_oz_url() ->
     lists:nth(random:uniform(length(RestURLs)), RestURLs).
 
 
-get_node_ip(Node) ->
-    CMD = string:join([
-        "docker inspect",
-        "--format '{{ .NetworkSettings.IPAddress }}'",
-        utils:get_host(Node)
-    ], " "),
-    re:replace(os:cmd(CMD), "\\s+", "", [global, {return, binary}]).
-
-
 % Create a group for user which belongs to a group,
 % which belongs to another group. The structure looks as follows:
 % User -> G1 -> G2 -> G3
@@ -907,7 +898,7 @@ init_per_suite(Config) ->
     ),
     Nodes = ?config(oz_worker_nodes, NewConfig),
     RestURLs = lists:map(fun(Node) ->
-        NodeIP = get_node_ip(Node),
+        NodeIP = test_utils:get_docker_ip(Node),
         {ok, RestPort} = rpc:call(
             Node, application, get_env, [?APP_Name, rest_port]
         ),
