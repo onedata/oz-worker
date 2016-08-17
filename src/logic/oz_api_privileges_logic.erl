@@ -45,7 +45,7 @@ get(EntityId, EntityType) ->
 %% Modifies privileges of given entity (user/group).
 %% If such record does not exist, it is created.
 %% If provided privileges are empty, the record (if exists) is deleted.
-%% If user/group with given ID does not exists, an error is returned.
+%% If user/group with given ID does not exist, an error is returned.
 %% @end
 %%--------------------------------------------------------------------
 -spec modify(EntityId :: binary(), EntityType,
