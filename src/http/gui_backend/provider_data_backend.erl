@@ -17,14 +17,16 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-%% API
+%% data_backend_behaviour callbacks
 -export([init/0]).
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
+%% API
+-export([provider_record/3]).
 
 
 %%%===================================================================
-%%% API functions
+%%% data_backend_behaviour callbacks
 %%%===================================================================
 
 %%--------------------------------------------------------------------
@@ -46,12 +48,10 @@ init() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"provider">>, ProviderId) ->
     UserId = g_session:get_user_id(),
-    {ok, #document{
-        value = #onedata_user{
-            default_provider = DefaultProvider,
-            spaces = UserSpaces
-        }}} = user_logic:get_user_doc(UserId),
-    Res = provider_record(ProviderId, DefaultProvider, UserSpaces),
+    {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, UserSpaces),
+    Res = provider_record(ProviderId, DefaultProvider, SpaceIds),
     {ok, Res}.
 
 
@@ -65,14 +65,12 @@ find(<<"provider">>, ProviderId) ->
 find_all(<<"provider">>) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
-    {ok, #document{
-        value = #onedata_user{
-            default_provider = DefaultProvider,
-            spaces = UserSpaces
-        }}} = user_logic:get_user_doc(UserId),
+    {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, UserSpaces),
     Res = lists:map(
         fun(ProviderId) ->
-            provider_record(ProviderId, DefaultProvider, UserSpaces)
+            provider_record(ProviderId, DefaultProvider, SpaceIds)
         end, ProviderIds),
     {ok, Res}.
 
@@ -126,11 +124,10 @@ delete_record(<<"provider">>, _Id) ->
 
 
 %%%===================================================================
-%%% Internal functions
+%%% API functions
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Returns a client-compliant space record.
 %% @end

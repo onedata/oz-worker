@@ -4,6 +4,17 @@
 CHANGELOG
 ---------
 
+### 3.0.0-RC2
+
+* VFS-2357 Add checks if taking away privileges works in OZ API REST
+* VFS-2269 Enable Symmetric Multiprocessing
+* VFS-2357 Add integration tests for OZ API REST functionalities
+* VFS-2357 Add admin endpoints to add/remove users and groups from spaces, fix a couple of bugs
+* VFS-2351 onedata_auth is persistent
+* VFS-2359 Turn off HSTS by default, allow configuration via app.config, improve docs integration
+* VFS-2359 Add handler for serving static docs files located on another server
+
+
 ### 3.0.0-RC1
 
 * VFS-2316 Update etls.

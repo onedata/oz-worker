@@ -72,7 +72,7 @@ refresh_effective_caches() ->
     Now = erlang:system_time(),
     {ok, Interval} = application:get_env(?APP_Name, group_graph_refresh_interval),
 
-    datastore:run_transaction(groups_graph_caches_state, ?LOCK_ID, fun() ->
+    critical_section:run([groups_graph_caches_state, ?LOCK_ID], fun() ->
         {ok, #document{value = #groups_graph_caches_state{
             last_rebuild = Timestamp,
             changed_groups = GroupsWithDuplicates,
