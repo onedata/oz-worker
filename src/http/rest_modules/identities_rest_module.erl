@@ -45,7 +45,7 @@ routes() ->
     M = rest_handler,
     [
         {<<"/publickey/:id">>, M, S#rstate{resource = publickey, methods = [get, put, post], noauth = [get, put, post]}},
-        {<<"/provider_data/:id">>, M, S#rstate{resource = provider, methods = [put], noauth = [put]}}
+        {<<"/provider_data/:id">>, M, S#rstate{resource = provider, methods = [post], noauth = [post]}}
     ].
 
 %%--------------------------------------------------------------------
@@ -57,9 +57,16 @@ routes() ->
 -spec is_authorized(Resource :: resource(), Method :: method(),
     ID :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
-is_authorized(Resource, Method, ID, Client) ->
-    ?emergency("~p", [{Resource, Method, ID, Client}]),
-%%    false. todo
+is_authorized(provider, _, _, _) ->
+    true;
+is_authorized(publickey, put, MatchingID, #client{type = provider, id = MatchingID}) ->
+    true;
+is_authorized(publickey, post, MatchingID, #client{type = provider, id = MatchingID}) ->
+    true;
+is_authorized(publickey, _,_, _) ->
+    %% todo: remove this case once this endpoint is protected by identity verification
+    %% todo: and #client is filled appropriately
+    %% todo: also remove this put/post from noauth methods
     true.
 
 %%--------------------------------------------------------------------
