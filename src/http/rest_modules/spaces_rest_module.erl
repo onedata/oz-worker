@@ -153,7 +153,7 @@ resource_exists(_, SpaceId, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
     SpaceId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, URL :: binary()} | halt, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, SpaceId} = space_logic:create({user, UserId}, Name),

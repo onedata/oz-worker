@@ -58,22 +58,10 @@ predefined_groups_test(Config) ->
         }
     ],
     % Set the corresponding env variable on every node
-    lists:foreach(
-        fun(N) ->
-            ok = test_utils:set_env(
-                N, oz_worker, predefined_groups, PredefinedGroups
-            )
-        end, Nodes),
-    % Call the group creation procedure on every node in parallel,
-    % it best depicts how it is done normally - the after_init callback is
-    % called on every node. The procedure should cope with that i.e. not create
-    % duplicates or crash if a group exists.
-    utils:pmap(
-        fun(N) ->
-            ?assertEqual(ok,
-                % The function reads from env and creates the predefined groups
-                rpc:call(N, node_manager_plugin, create_predefined_groups, []))
-        end, Nodes),
+    test_utils:set_env(Node, oz_worker, predefined_groups, PredefinedGroups),
+    % Call the group creation procedure. The function reads from env and
+    % creates the predefined groups
+    ?assertEqual(ok, rpc:call(Node, group_logic, create_predefined_groups, [])),
     % Now, lets check if the groups are present in the system and have desired
     % privileges.
     CheckGroup = fun(ExpId, ExpName, ExpPrivileges) ->

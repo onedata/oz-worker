@@ -102,7 +102,7 @@ resource_exists(_, _, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
     UserId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, URL :: binary()} | halt, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(user, patch, UserId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ok = user_logic:modify(UserId, [{name, Name}]),

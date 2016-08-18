@@ -172,7 +172,7 @@ automatic_group_membership_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     OneZoneIP = test_utils:get_docker_ip(Node),
     % First make sure that groups for tests exist in the system. We can use
-    % the predefined groups system here.
+    % the predefined groups mechanism here.
     PredefinedGroups = [
         #{
             id => <<"group1">>,

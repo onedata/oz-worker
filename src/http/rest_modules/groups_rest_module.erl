@@ -143,7 +143,7 @@ resource_exists(_, GroupId, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
     GroupId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, URL :: binary()} | halt, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     Type = rest_module_helper:assert_key(<<"type">>, Data, binary, Req),

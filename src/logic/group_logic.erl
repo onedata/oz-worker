@@ -12,7 +12,9 @@
 -module(group_logic).
 -author("Konrad Zemek").
 
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
@@ -23,6 +25,7 @@
     get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
     get_parent_groups/1, get_parent_group/2, get_effective_user/2]).
 -export([remove/1, remove_user/2, cleanup/1, remove_nested_group/2]).
+-export([create_predefined_groups/0]).
 
 %%%===================================================================
 %%% API
@@ -505,4 +508,68 @@ cleanup(GroupId) ->
     case Group of
         #user_group{users = []} -> remove(GroupId);
         _ -> false
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates predefined groups in the system based on settings in app.config.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_predefined_groups() -> ok.
+create_predefined_groups() ->
+    {ok, PredefinedGroups} =
+        application:get_env(?APP_Name, predefined_groups),
+    lists:foreach(
+        fun(GroupMap) ->
+            Id = maps:get(id, GroupMap),
+            Name = maps:get(name, GroupMap),
+            % Privileges can be either a list of privileges or a module and
+            % function to call that will return such list.
+            Privs = case maps:get(oz_api_privileges, GroupMap) of
+                List when is_list(List) ->
+                    List;
+                {Module, Function} ->
+                    Module:Function()
+            end,
+            create_predefined_group(Id, Name, Privs)
+        end, PredefinedGroups).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Creates a predefined group in the system, if it does not exist, and grants
+%% given privileges to it.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_predefined_group(Id :: binary(), Name :: binary(),
+    Privileges :: [oz_api_privileges:privilege()]) -> ok | error.
+create_predefined_group(Id, Name, Privileges) ->
+    case user_group:exists(Id) of
+        true ->
+            ?info("Predefined group '~s' already exists, "
+            "skipping.", [Name]),
+            ok;
+        false ->
+            NewGroup = #document{
+                key = Id,
+                value = #user_group{
+                    name = Name,
+                    type = role
+                }},
+            case user_group:create(NewGroup) of
+                {ok, Id} ->
+                    ok = oz_api_privileges_logic:modify(
+                        Id, user_group, Privileges),
+                    ?info("Created predefined group '~s'", [Name]),
+                    ok;
+                Other ->
+                    ?error("Cannot create predefined group '~s' - ~p",
+                        [Id, Other]),
+                    error
+            end
     end.

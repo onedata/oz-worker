@@ -56,7 +56,7 @@
 -callback accept_resource(Resource :: atom(), Method :: accept_method(),
     ResId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, URL :: binary()} | halt, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 
 %%--------------------------------------------------------------------
 %% @doc Returns data requested by a client through GET request on a REST

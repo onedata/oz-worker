@@ -43,8 +43,8 @@ routes() ->
     S = #rstate{module = ?MODULE, root = oz_api_privileges},
     M = rest_handler,
     [
-        {<<"/privileges/users/:id/">>, M, S#rstate{resource = onedata_user, methods = [get, put, delete]}},
-        {<<"/privileges/groups/:id/">>, M, S#rstate{resource = user_group, methods = [get, put, delete]}}
+        {<<"/privileges/users/:id/">>, M, S#rstate{resource = onedata_user, methods = [get, patch, delete]}},
+        {<<"/privileges/groups/:id/">>, M, S#rstate{resource = user_group, methods = [get, patch, delete]}}
     ].
 
 %%--------------------------------------------------------------------
@@ -95,7 +95,7 @@ resource_exists(_, _, Req) ->
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
     ProviderId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
-    {boolean() | {true, URL :: binary()} | halt, cowboy_req:req()} | no_return().
+    {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(Resource, put, EntityId, Data, _Client, Req) ->
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
         [atom_to_binary(P, latin1) || P <- oz_api_privileges:all_privileges()],
@@ -106,8 +106,7 @@ accept_resource(Resource, put, EntityId, Data, _Client, Req) ->
         ok ->
             {true, Req};
         _ ->
-            {ok, NewReq} = cowboy_req:reply(404, Req),
-            {halt, NewReq}
+            {false, Req}
     end.
 
 %%--------------------------------------------------------------------

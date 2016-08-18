@@ -41,14 +41,15 @@
 all() ->
     % Below tests check all OZ API privileges
     ?ALL([
-        % test case               % tested_privileges
+        % test case                   % tested_privileges
         % ---------------------------------------------------
-        view_privileges_test,     % view_privileges
-        set_privileges_test,      % set_privileges
-        list_spaces_test,         % list_spaces
-        list_providers_test,      % list_providers
+        view_privileges_test,         % view_privileges
+        set_privileges_test,          % set_privileges
+        list_spaces_test,             % list_spaces
+        list_providers_test,          % list_providers
         list_providers_of_space_test, % list_providers_of_space
-        modify_space_members_test % add_member_to_space,remove_member_from_space
+        modify_space_members_test     % add_member_to_space,
+                                      % remove_member_from_space
     ]).
 
 %%%===================================================================
@@ -91,7 +92,7 @@ check_set_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
     end,
     check_rest_call(#{
         request => #{
-            method => put,
+            method => patch,
             path => ReqPath,
             body => #{<<"privileges">> => Privileges},
             auth => Issuer
