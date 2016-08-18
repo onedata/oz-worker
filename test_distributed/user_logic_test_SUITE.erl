@@ -219,7 +219,7 @@ automatic_group_membership_test(Config) ->
         BasicAuthEndpoint, BasicAuthHeaders, [], [insecure]
     )),
     % now for the groups check
-    {ok, [{groups, GroupIds}]} =
+    {ok, [{groups, GroupIds}]} = ?assertMatch({ok, [{groups, _}]}) =
         rpc:call(Node, user_logic, get_groups, [<<"user2Id">>]),
     ?assertEqual([<<"group1">>, <<"group2">>], lists:sort(GroupIds)),
     ok.
