@@ -66,7 +66,7 @@ get(ID) ->
 %%%===================================================================
 
 -spec get_public_key_by_location(ID :: identity:id()) ->
-    identity:encoded_public_key().
+    {ok, identity:encoded_public_key()} | {error, Reason :: term()}.
 get_public_key_by_location(ID) ->
     case locations:resolve_model(?TYPE, ID) of
         {error, Reason} ->
