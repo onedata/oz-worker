@@ -190,7 +190,7 @@ automatic_group_membership_test(Config) ->
         Node, oz_worker, predefined_groups, PredefinedGroups
     ),
     % Call the group creation procedure
-    rpc:call(Node, node_manager_plugin, create_predefined_groups, []),
+    ok = rpc:call(Node, group_logic, create_predefined_groups, []),
     % Now, prepare config entry for onepanel role to groups mapping. We want
     % everyone with role "user2Role" to belong to both groups 1 and 2.
     RoleToGroupMapping = #{
