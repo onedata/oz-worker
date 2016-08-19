@@ -254,7 +254,8 @@ set_privileges_test(Config) ->
     {ok, Group2} = oz_test_utils:create_group(Config, User2, <<"gr">>),
     % Get all possible privileges
     [Node | _] = ?config(oz_worker_nodes, Config),
-    AllPrivileges = rpc:call(Node, oz_api_privileges, all_privileges, []),
+    AllPrivilegesAtoms = rpc:call(Node, oz_api_privileges, all_privileges, []),
+    AllPrivileges = [atom_to_binary(P, utf8) || P <- AllPrivilegesAtoms],
     % Try to set all combinations of privileges, both for User2 and Group2.
     Combinations = all_combinations(AllPrivileges),
     lists:foreach(
