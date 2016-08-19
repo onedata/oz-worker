@@ -255,39 +255,27 @@ set_privileges_test(Config) ->
     % Get all possible privileges
     [Node | _] = ?config(oz_worker_nodes, Config),
     AllPrivileges = rpc:call(Node, oz_api_privileges, all_privileges, []),
-    % Fun that chooses a random subset of privileges from all possible
-    GenerateRandomPrivs = fun() ->
-        random:seed(erlang:timestamp()),
-        Shuffled = [X || {_, X} <-
-            lists:sort([{random:uniform(), N} || N <- AllPrivileges])],
-        Len = random:uniform(length(AllPrivileges)),
-        RandomizedAtoms = lists:sublist(Shuffled, Len),
-        % Return a list of binaries
-        [atom_to_binary(Atom, utf8) || Atom <- RandomizedAtoms]
-    end,
-    % Generate 30 test cases by trying to set a random subset of privileges and
-    % check if it was set correctly, both for User2 and Group2.
+    % Try to set all combinations of privileges, both for User2 and Group2.
+    Combinations = all_combinations(AllPrivileges),
     lists:foreach(
-        fun(_) ->
-            RandomPrivs = GenerateRandomPrivs(),
+        fun(Privileges) ->
             % Set the privileges
             ?assert(check_set_privileges(204, User1, User2, onedata_user,
-                RandomPrivs)),
+                Privileges)),
             % View the privileges
             ?assert(check_view_privileges(200, User1, User2, onedata_user,
-                RandomPrivs))
-        end, lists:seq(1, 30)), % 30 times
+                Privileges))
+        end, Combinations),
     % Now for Group2
     lists:foreach(
-        fun(_) ->
-            RandomPrivs = GenerateRandomPrivs(),
+        fun(Privileges) ->
             % Set the privileges
             ?assert(check_set_privileges(204, User1, Group2, user_group,
-                RandomPrivs)),
+                Privileges)),
             % View the privileges
             ?assert(check_view_privileges(200, User1, Group2, user_group,
-                RandomPrivs))
-        end, lists:seq(1, 30)). % 30 times
+                Privileges))
+        end, Combinations).
 
 
 
@@ -880,6 +868,48 @@ sort_map(OriginalMap) ->
         end, OriginalMap, maps:keys(OriginalMap)).
 
 
+% Generates all possible combinations of given set (set = list),
+% starting from length 0 and finishing with length of the set.
+% Sequence of items does not matter. For example
+% all_combinations([1,2,3) = [
+%     [1,2,3],
+%     [2,3],
+%     [1,2],
+%     [1,3],
+%     [1],
+%     [2],
+%     [3]
+% ]
+all_combinations(Set) ->
+    % Accumulate combinations of every possible length
+    lists:foldl(
+        fun(Len, Acc) ->
+            combinations(Len, Set) ++ Acc
+        end, [], lists:seq(0, length(Set))).
+
+% Generates all possible combinations of given length of given set (set = list).
+% Sequence of items does not matter.
+combinations(0, _) ->
+    [];
+
+combinations(1, Set) ->
+    [[Elem] || Elem <- Set];
+
+combinations(Len, OriginalSet) ->
+    {Res, _} = lists:foldl(
+        fun(Elem, {Acc, Set}) ->
+            case length(Set) > 0 of
+                true ->
+                    SetsWithoutElem = combinations(Len - 1, Set -- [Elem]),
+                    NewSubsets = [[Elem | Subset] || Subset <- SetsWithoutElem],
+                    {NewSubsets ++ Acc, Set -- [Elem]};
+                false ->
+                    {Acc, Set}
+            end
+        end, {[], OriginalSet}, OriginalSet),
+    Res.
+
+
 put_config(Config) ->
     put(config, Config).
 
@@ -920,3 +950,4 @@ end_per_suite(Config) ->
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
     oz_test_utils:remove_all_entities(Config).
+
