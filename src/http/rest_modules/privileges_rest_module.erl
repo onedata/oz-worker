@@ -96,7 +96,7 @@ resource_exists(_, _, Req) ->
     ProviderId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
-accept_resource(Resource, put, EntityId, Data, _Client, Req) ->
+accept_resource(Resource, patch, EntityId, Data, _Client, Req) ->
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
         [atom_to_binary(P, latin1) || P <- oz_api_privileges:all_privileges()],
         Data, list_of_bin, Req),
