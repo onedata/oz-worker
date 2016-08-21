@@ -41,8 +41,7 @@
                                 "127.0.0.1:49161"
                             ],
                             "location_service_bootstrap_nodes": [
-                                "node.oz2:7770",
-                                "node.oz3:7770"
+                                "testmaster"
                             ],
                             "http_domain": {
                                 "string": "127.0.0.1"
@@ -83,8 +82,7 @@
                                 "127.0.0.1:49161"
                             ],
                             "location_service_bootstrap_nodes": [
-                                "node.oz1:7770",
-                                "node.oz3:7770"
+                                "testmaster"
                             ],
                             "http_domain": {
                                 "string": "127.0.0.1"
@@ -125,8 +123,7 @@
                                 "127.0.0.1:49161"
                             ],
                             "location_service_bootstrap_nodes": [
-                                "node.oz1:7770",
-                                "node.oz2:7770"
+                                "testmaster"
                             ],
                             "http_domain": {
                                 "string": "127.0.0.1"

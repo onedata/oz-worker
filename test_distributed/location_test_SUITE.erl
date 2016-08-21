@@ -150,7 +150,14 @@ claim_any_id_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
+    EnvDescFile = ?TEST_FILE(Config, "env_desc.json"),
+    Temp = utils:mkdtemp(),
+    Adjusted = location_service_test_utils:adjust_env_desc(Temp, EnvDescFile),
+    location_service_test_utils:start(),
+
+    RunningConfig = ?TEST_INIT(Config, Adjusted),
+    utils:rmtempdir(Temp),
+    RunningConfig.
 
 init_per_testcase(_, _Config) ->
     _Config.
@@ -159,6 +166,7 @@ end_per_testcase(_, _Config) ->
     ok.
 
 end_per_suite(Config) ->
+    location_service_test_utils:stop(),
     test_node_starter:clean_environment(Config).
 
 
