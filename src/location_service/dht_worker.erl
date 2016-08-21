@@ -106,7 +106,7 @@ init(_Args) ->
                 ++ " -p " ++ integer_to_list(ServicePort)
                 ++ " -r " ++ integer_to_list(RestPort)
                 ++ " -c " ++ hd(string:tokens(atom_to_list(DBNode), ":"))
-                ++ " -vvvv"
+                ++ " -vv"
                 ++ BootstrapArgs,
 
             ?info("Running DHT port by command ~p", [Command]),
@@ -176,19 +176,7 @@ handle_port(Port) ->
 %%--------------------------------------------------------------------
 -spec process_log(string()) -> ok.
 process_log(Msg) ->
-    case string:str(Msg, ": {") of
-        0 -> ?warning("Unlabbeled log: " ++ Msg);
-        N -> do_log(string:substr(Msg, N + 3))
-    end.
-
-do_log([$d, $e, $b, $u, $g, $} | Message]) ->
-    ?debug(Message);
-do_log([$i, $n, $f, $o, $} | Message]) ->
-    ?debug(Message); % this is intended
-do_log([$w, $a, $r, $n, $} | Message]) ->
-    ?warning(Message);
-do_log([$e, $r, $r, $o, $r, $} | Message]) ->
-    ?error(Message).
+    ?info(Msg).
 
 %%--------------------------------------------------------------------
 %% @doc @private
