@@ -170,7 +170,6 @@ modify(UserId, Proplist) ->
                     spaces = proplists:get_value(spaces, Proplist, Spaces),
                     groups = proplists:get_value(groups, Proplist, Groups),
                     default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
-                    % TODO mock
                     first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST),
                     default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider),
                     chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider),
