@@ -3,6 +3,7 @@
 var bodyParser = require("body-parser");
 var express = require('express');
 var async = require('async');
+var dns = require('dns');
 
 var kad = require('kad');
 var constants = require('kad/lib/constants');
@@ -79,15 +80,28 @@ function Server(options) {
  * @param exitCallback  - called when client lost connectivity to other peers
  */
 Server.prototype.startDHT = function (callback, exitCallback) {
+  var node = this.node;
   this._enableExitOnNotConnected(exitCallback);
   async.each(this.options.bootstrapNodes, function (nodeString, done) {
     var tokens = nodeString.split(":");
-    var contact = Contact({
-      address: tokens[0],
-      port: parseInt(tokens[1], 10)
-    });
-    this.node.connect(contact, done)
-  }.bind(this), callback);
+    var host = tokens[0];
+    var port = parseInt(tokens[1], 10);
+
+    dns.resolve(host, 'A', function (err, addresses) {
+      if (err) node._log.warn(host + " unresolvable via DNS");
+
+      addresses = addresses || [];
+      addresses.push(host);
+      addresses = Array.from(new Set(addresses));
+
+      node._log.info(host + " resolved to " + addresses);
+      async.each(addresses, function (ip, done) {
+        var contact = Contact({address: host, port: port});
+        node.connect(contact, done)
+      });
+      done()
+    })
+  }, callback);
 };
 
 /**
