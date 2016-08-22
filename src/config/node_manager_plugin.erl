@@ -24,7 +24,8 @@
 %% node_manager_plugin_behaviour callbacks
 -export([before_init/1, after_init/1, on_terminate/2, on_code_change/3,
     handle_call_extension/3, handle_cast_extension/2, handle_info_extension/2,
-    modules_with_args/0, listeners/0, cm_nodes/0, db_nodes/0, check_node_ip_address/0, app_name/0, clear_memory/1]).
+    modules_with_args/0, listeners/0, cm_nodes/0, db_nodes/0,
+    check_node_ip_address/0, app_name/0, clear_memory/1]).
 
 %%%===================================================================
 %%% node_manager_plugin_behaviour callbacks
@@ -105,23 +106,11 @@ before_init([]) ->
 -spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 after_init([]) ->
     try
-        {ok, PredefinedGroups} =
-            application:get_env(?APP_Name, predefined_groups),
-        lists:foreach(
-            fun(Group) ->
-                Id = proplists:get_value(id, Group),
-                Name = proplists:get_value(name, Group),
-                % Privileges can be either a list of privileges or a module and
-                % function to call that will return such list.
-                Privs = case proplists:get_value(oz_api_privileges, Group) of
-                    List when is_list(List) ->
-                        List;
-                    {Module, Function} ->
-                        Module:Function()
-                end,
-                create_predefined_group(Id, Name, Privs)
-            end, PredefinedGroups),
-        ok
+        %% This code will be run on every node_manager, so we need a
+        %% transaction here that will prevent duplicates.
+        critical_section:run(create_predefined_groups, fun() ->
+            group_logic:create_predefined_groups()
+        end)
     catch
         _:Error ->
             ?error_stacktrace("Error in node_manager_plugin:after_init: ~p",
@@ -239,44 +228,3 @@ check_node_ip_address() ->
 -spec clear_memory(HighMemUse :: boolean()) -> ok.
 clear_memory(_) ->
     ok.
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Creates a predefined group in the system, if it does not exist.
-%% NOTE! This code will be run on every node_manager, so we need a
-%% transaction here that will prevent duplicates.
-%% @end
-%%--------------------------------------------------------------------
--spec create_predefined_group(Id :: binary(), Name :: binary(),
-    Privileges :: [oz_api_privileges:privilege()]) -> ok | error.
-create_predefined_group(Id, Name, Privileges) ->
-    critical_section:run([user_group, Id], fun() ->
-        case user_group:exists(Id) of
-            true ->
-                ?info("Predefined group '~s' already exists, "
-                "skipping.", [Name]);
-            false ->
-                NewGroup = #document{
-                    key = Id,
-                    value = #user_group{
-                        name = Name,
-                        type = role
-                    }},
-                case user_group:create(NewGroup) of
-                    {ok, Id} ->
-                        oz_api_privileges_logic:modify(
-                            Id, user_group, Privileges),
-                        ?info("Created predefined group '~s'", [Name]);
-                    Other ->
-                        ?error("Cannot create predefined group '~s' - ~p",
-                            [Id, Other])
-                end
-        end,
-        ok
-    end).
-

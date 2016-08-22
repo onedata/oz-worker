@@ -49,7 +49,7 @@
 %% @doc Processes data submitted by a client through POST, PUT, PATCH on a REST
 %% resource. The callback shall return {true, URL} with an URL pointing to the
 %% newly created resource if it was created. Otherwise, it shall return whether
-%% the operation was performed successfuly. ResId shall be set to the value of
+%% the operation was performed successfully. ResId shall be set to the value of
 %% :id binding or client's Id if there's no binding defined.
 %% @end
 %%--------------------------------------------------------------------
