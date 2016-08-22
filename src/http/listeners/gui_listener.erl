@@ -44,11 +44,6 @@ port() ->
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
     try
-        %% TODO for development
-        %% This is needed for the redirection to provider to work, as
-        %% we don't use legit server certificates on providers.
-        application:set_env(ctool, verify_server_cert, false),
-
         % Resolve static files root. First, check if there is a non-empty dir
         % located in gui_custom_static_root. If not, use default.
         {ok, CstmRoot} = application:get_env(?APP_Name, gui_custom_static_root),

@@ -82,14 +82,19 @@ distclean: clean
 
 rel: generate
 
-test_rel: generate_dev cm_rel
+test_rel: generate_dev cm_rel appmock_rel
 
 cm_rel:
 	ln -sf deps/cluster_worker/cluster_manager/
 	make -C cluster_manager/ rel
 
+appmock_rel:
+	make -C appmock/ rel
+
 relclean:
+	rm -rf rel/test_cluster
 	rm -rf rel/oz_worker
+	rm -rf appmock/rel/appmock
 	rm -rf cluster_manager/rel/cluster_manager
 
 ##

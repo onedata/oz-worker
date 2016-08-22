@@ -595,7 +595,7 @@ authenticate_by_basic_credentials(Login, Password) ->
             % Check if user's role entitles him to belong to any groups
             {ok, GroupMapping} = application:get_env(
                 ?APP_Name, onepanel_role_to_group_mapping),
-            Groups = proplists:get_value(UserRole, GroupMapping, []),
+            Groups = maps:get(UserRole, GroupMapping, []),
             lists:foreach(
                 fun(GroupId) ->
                     case group_logic:has_user(GroupId, UserId) of

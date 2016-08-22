@@ -45,28 +45,38 @@ get(EntityId, EntityType) ->
 %% Modifies privileges of given entity (user/group).
 %% If such record does not exist, it is created.
 %% If provided privileges are empty, the record (if exists) is deleted.
+%% If user/group with given ID does not exist, an error is returned.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(EntityId :: binary(),
-    EntityType :: oz_api_privileges:entity_type(),
-    NewPrivileges :: [oz_api_privileges:privilege()]) -> ok.
+-spec modify(EntityId :: binary(), EntityType,
+    NewPrivileges :: [oz_api_privileges:privilege()]) ->
+    ok | {error, {not_found, EntityType}}
+    when EntityType :: oz_api_privileges:entity_type().
 modify(EntityId, EntityType, NewPrivileges) ->
-    case NewPrivileges of
-        [] ->
-            % Empty privileges, delete the record (if present)
-            true = remove(EntityId, EntityType);
-        _ ->
-            Key = resolve_id(EntityId, EntityType),
-            Doc = #document{
-                key = Key, value = #oz_api_privileges{
-                    privileges = NewPrivileges
-                }},
-            UpdateFun = fun(OZPrivileges = #oz_api_privileges{}) ->
-                {ok, OZPrivileges#oz_api_privileges{privileges = NewPrivileges}}
+    case entity_exists(EntityId, EntityType) of
+        false ->
+            {error, {not_found, EntityType}};
+        true ->
+            case NewPrivileges of
+                [] ->
+                    % Empty privileges, delete the record (if present)
+                    true = remove(EntityId, EntityType);
+                _ ->
+                    Key = resolve_id(EntityId, EntityType),
+                    Doc = #document{
+                        key = Key, value = #oz_api_privileges{
+                            privileges = NewPrivileges
+                        }},
+                    UpdateFun = fun(OZPrivileges = #oz_api_privileges{}) ->
+                        {ok, OZPrivileges#oz_api_privileges{
+                            privileges = NewPrivileges
+                        }}
+                    end,
+                    {ok, Key} =
+                        oz_api_privileges:create_or_update(Doc, UpdateFun)
             end,
-            {ok, Key} = oz_api_privileges:create_or_update(Doc, UpdateFun)
-    end,
-    ok.
+            ok
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -131,3 +141,22 @@ resolve_id(EntityId, EntityType) ->
         user_group ->
             <<"group:", EntityId/binary>>
     end.
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Checks if entity of given ID and type exists in the system.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_exists(EntityId :: binary(),
+    EntityType :: onedata_user | user_group) -> boolean().
+entity_exists(EntityId, onedata_user) ->
+    user_logic:exists(EntityId);
+entity_exists(EntityId, user_group) ->
+    group_logic:exists(EntityId).
+
