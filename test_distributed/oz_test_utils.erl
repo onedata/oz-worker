@@ -15,29 +15,16 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 
 %% API
--export([create_space/3, create_user/2, create_group/3]).
--export([join_group/3, join_space/3, leave_space/3, support_space/4]).
--export([modify_space/4]).
--export([remove_space/2]).
+-export([create_user/2, get_client_token/2, remove_user/2]).
+-export([create_group/3, join_group/3, remove_group/2]).
+-export([create_space/3, join_space/3, leave_space/3, remove_space/2]).
+-export([modify_space/4, support_space/4]).
+-export([create_provider/2, remove_provider/2]).
+-export([remove_all_entities/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc Creates space in onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec create_space(Config :: term(), Member :: {user | group, Id :: binary()}, Name :: binary()) ->
-    {ok, Id :: binary()} | {error, Reason :: term()}.
-create_space(Config, Member, Name) ->
-    try
-        [Node | _] = ?config(oz_worker_nodes, Config),
-        rpc:call(Node, space_logic, create, [Member, Name])
-    catch
-        _:Reason ->
-            {error, Reason}
-    end.
 
 %%--------------------------------------------------------------------
 %% @doc Creates user in onezone.
@@ -49,6 +36,36 @@ create_user(Config, User) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, user_logic, create, [User])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Creates a client token for given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_client_token(Config :: term(), UserId :: binary()) ->
+    {ok, Id :: binary()} | {error, Reason :: term()}.
+get_client_token(Config, UserId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, auth_logic, gen_token, [UserId])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Removes user from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_user(Config :: term(), UserId :: binary()) ->
+    boolean() | {error, Reason :: term()}.
+remove_user(Config, UserId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, user_logic, remove, [UserId])
     catch
         _:Reason ->
             {error, Reason}
@@ -70,20 +87,72 @@ create_group(Config, UserId, Name) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Adds user to group in onezone.
+%% @doc Adds a user or group to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec join_group(Config :: term(), UserId :: binary(), GroupId :: binary()) ->
+-spec join_group(Config :: term(), Member :: {user | group, Id :: binary()}, GroupId :: binary()) ->
     ok | {error, Reason :: term()}.
-join_group(Config, UserId, GroupId) ->
+join_group(Config, {user, MemberId}, GroupId) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, erlang, apply, [fun() ->
-            {ok, Token} = token_logic:create(#client{type = user, id = UserId}, group_invite_token, {group, GroupId}),
+            {ok, Token} = token_logic:create(
+                #client{type = user, id = MemberId},
+                group_invite_token,
+                {group, GroupId}
+            ),
             {ok, Macaroon} = token_utils:deserialize(Token),
-            {ok, GroupId} = group_logic:join(UserId, Macaroon)
+            {ok, GroupId} = group_logic:join(MemberId, Macaroon)
         end, []]),
         ok
+    catch
+        _:Reason ->
+            {error, Reason}
+    end;
+
+join_group(Config, {group, MemberId}, GroupId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, erlang, apply, [fun() ->
+            {ok, Token} = token_logic:create(
+                #client{type = user, id = MemberId},
+                group_invite_group_token,
+                {group, GroupId}
+            ),
+            {ok, Macaroon} = token_utils:deserialize(Token),
+            {ok, GroupId} = group_logic:join_group(MemberId, Macaroon)
+        end, []]),
+        ok
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Removes group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_group(Config :: term(), UserId :: binary()) ->
+    boolean() | {error, Reason :: term()}.
+remove_group(Config, GroupId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, group_logic, remove, [GroupId])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Creates space in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_space(Config :: term(), Member :: {user | group, Id :: binary()}, Name :: binary()) ->
+    {ok, Id :: binary()} | {error, Reason :: term()}.
+create_space(Config, Member, Name) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, space_logic, create, [Member, Name])
     catch
         _:Reason ->
             {error, Reason}
@@ -188,11 +257,79 @@ modify_space(Config, SpaceId, Member, Name) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_space(Config :: term(), SpaceId :: binary()) ->
-    ok | {error, Reason :: term()}.
+    boolean() | {error, Reason :: term()}.
 remove_space(Config, SpaceId) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, space_logic, remove, [SpaceId])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Creates a provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider(Config :: term(), Name :: binary()) ->
+    {ok, ProviderId :: binary(), ProviderCertPem :: binary()} |
+    {error, Reason :: term()}.
+create_provider(Config, Name) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        Prefix = "provider" ++ integer_to_list(random:uniform(123345123)),
+        KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
+        CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
+        os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
+        os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
+        {ok, CSR} = file:read_file(CSRFile),
+        rpc:call(Node, provider_logic, create, [
+            Name,
+            [<<"127.0.0.1">>],
+            <<"127.0.0.1">>,
+            CSR
+        ])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Removes a provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_provider(Config :: term(), ProviderId :: binary()) ->
+    boolean() | {error, Reason :: term()}.
+remove_provider(Config, ProviderId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, provider_logic, remove, [ProviderId])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Removes all entities from onezone (users, groups, spaces, providers).
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_all_entities(Config :: term()) -> ok | {error, Reason :: term()}.
+remove_all_entities(Config) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        % Delete all providers
+        {ok, PrDocs} = rpc:call(Node, provider, list, []),
+        [true = remove_provider(Config, PId) || #document{key = PId} <- PrDocs],
+        % Delete all spaces
+        {ok, SpaceDocs} = rpc:call(Node, space, list, []),
+        [true = remove_space(Config, SId) || #document{key = SId} <- SpaceDocs],
+        % Delete all groups
+        {ok, GroupDocs} = rpc:call(Node, user_group, list, []),
+        [true = remove_group(Config, GId) || #document{key = GId} <- GroupDocs],
+        % Delete all users
+        {ok, UserDocs} = rpc:call(Node, onedata_user, list, []),
+        [true = remove_user(Config, UId) || #document{key = UId} <- UserDocs],
+        ok
     catch
         _:Reason ->
             {error, Reason}

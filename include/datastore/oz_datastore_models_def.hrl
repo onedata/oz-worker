@@ -156,7 +156,6 @@
 %% This record contains a list of privileges possessed by certain entity
 %% (user / group) to use onezone API.
 -record(oz_api_privileges, {
-    type = user :: user | group,
     privileges = [] :: [oz_api_privileges:privilege()]
 }).
 
