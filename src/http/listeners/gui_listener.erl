@@ -11,7 +11,6 @@
 -module(gui_listener).
 -author("Michal Zmuda").
 
--include("gui_config.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("gui/include/gui.hrl").
@@ -20,6 +19,8 @@
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, healthcheck/0]).
+
+-define(gui_https_listener, https).
 
 %%%===================================================================
 %%% listener_behaviour callbacks

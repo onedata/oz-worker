@@ -295,4 +295,4 @@ clean_space_name_mapping(Node, UserId, SpaceId) ->
 appmock_mocked_endpoint(Config) ->
     [AppmockNode] = ?config(appmock_nodes, Config),
     AppmockIP = test_utils:get_docker_ip(AppmockNode),
-    str_utils:format("https://~s:9443", [AppmockIP]).
+    erlang:list_to_binary(str_utils:format("https://~s:9443", [AppmockIP])).

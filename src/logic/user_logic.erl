@@ -539,9 +539,9 @@ authenticate_by_basic_credentials(Login, Password) ->
     Headers = [basic_auth_header(Login, Password)],
     {ok, OnepanelRESTURL} =
         application:get_env(?APP_Name, onepanel_rest_url),
-    {ok, OnepanelGetUserEndpoint} =
-        application:get_env(?APP_Name, onepanel_user_endpoint),
-    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    {ok, OnepanelGetUsersEndpoint} =
+        application:get_env(?APP_Name, onepanel_users_endpoint),
+    URL = <<OnepanelRESTURL/binary, OnepanelGetUsersEndpoint/binary, Login/binary>>,
     RestCallResult = case http_client:get(URL, Headers, <<"">>, [insecure]) of
         {ok, 200, _, JSON} ->
             json_utils:decode(JSON);
@@ -630,9 +630,9 @@ change_user_password(Login, OldPassword, NewPassword) ->
     ],
     {ok, OnepanelRESTURL} =
         application:get_env(?APP_Name, onepanel_rest_url),
-    {ok, OnepanelGetUserEndpoint} =
-        application:get_env(?APP_Name, onepanel_user_endpoint),
-    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    {ok, OnepanelGetUsersEndpoint} =
+        application:get_env(?APP_Name, onepanel_users_endpoint),
+    URL = <<OnepanelRESTURL/binary, OnepanelGetUsersEndpoint/binary, Login/binary>>,
     Body = json_utils:encode([{<<"password">>, NewPassword}]),
     case http_client:put(URL, Headers, Body, [insecure]) of
         {ok, 204, _, _} ->
