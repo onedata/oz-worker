@@ -101,7 +101,7 @@ init(_Args) ->
         fun() ->
             process_flag(trap_exit, true),
 
-            Command = "nodejs/location-service/start.js"
+            Command = "node nodejs/location-service/start.js"
                 ++ " -h " ++ Host
                 ++ " -p " ++ integer_to_list(ServicePort)
                 ++ " -r " ++ integer_to_list(RestPort)
