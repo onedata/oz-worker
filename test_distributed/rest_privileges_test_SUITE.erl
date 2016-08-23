@@ -178,7 +178,7 @@ check_add_member_to_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
     end,
     check_rest_call(#{
         request => #{
-            method => put,
+            method => post,
             path => ReqPath,
             body => ReqBody,
             auth => Issuer
@@ -546,6 +546,11 @@ modify_space_members_test(Config) ->
     ?assert(check_add_member_to_space(204, TestUser, AddedUser,
         onedata_user, TestSpace)),
     ?assert(check_add_member_to_space(204, TestUser, AddedGroup,
+        user_group, TestSpace)),
+    % Make sure inexistent users and groups cannot be added
+    ?assert(check_add_member_to_space(400, TestUser, <<"wrong_user_id">>,
+        onedata_user, TestSpace)),
+    ?assert(check_add_member_to_space(400, TestUser, <<"wrong_group_id">>,
         user_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
     ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
