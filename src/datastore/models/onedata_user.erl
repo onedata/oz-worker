@@ -105,7 +105,8 @@ exists(Key) ->
 model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
     StoreLevel = application:get_env(?APP_Name, user_store_level, ?DISK_ONLY_LEVEL),
-    ?MODEL_CONFIG(onedata_user_bucket, [], StoreLevel).
+    Hooks = record_location_hooks:get_hooks(),
+    ?MODEL_CONFIG(onedata_user_bucket, Hooks, StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -115,8 +116,8 @@ model_init() ->
 -spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term(),
     ReturnValue :: term()) -> ok.
-'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
-    ok.
+'after'(ModelName, Method, _Level, Context, ReturnValue) ->
+    record_location_hooks:handle_after(ModelName, Method, Context, ReturnValue).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -125,8 +126,8 @@ model_init() ->
 %%--------------------------------------------------------------------
 -spec before(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
-before(_ModelName, _Method, _Level, _Context) ->
-    ok.
+before(ModelName, Method, _Level, Context) ->
+    record_location_hooks:handle_before(ModelName, Method, Context).
 
 %%%===================================================================
 %%% API callbacks

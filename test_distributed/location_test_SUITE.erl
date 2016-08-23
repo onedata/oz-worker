@@ -23,6 +23,7 @@
 -export([init_per_testcase/2, end_per_testcase/2]).
 -export([
     restarts_port_after_failure/1,
+    location_of_records_are_set_upon_creation/1,
     resolve_is_consistent_with_claim/1
 ]).
 
@@ -38,6 +39,7 @@
 
 all() -> ?ALL([
     resolve_is_consistent_with_claim,
+    location_of_records_are_set_upon_creation,
     restarts_port_after_failure
 ]).
 
@@ -100,6 +102,35 @@ resolve_is_consistent_with_claim(Config) ->
     ?assertMatch({ok, Host3}, resolve(Node3, ID3)),
     ok.
 
+location_of_records_are_set_upon_creation(Config) ->
+    %% given
+    [Node1, Node2, Node3 | _] = ?config(oz_worker_nodes, Config),
+    Host1 = get_hostname(Node1),
+    Host2 = get_hostname(Node2),
+    Host3 = get_hostname(Node3),
+
+    %% when
+    ID1 = create(Node1, #onedata_user{}),
+    ID2 = create(Node2, #user_group{}),
+    ID3 = create(Node3, #provider{}),
+    ID4 = create(Node1, #space{}),
+
+    %% then
+    ?assertMatch({ok, Host1}, resolve(Node1, onedata_user, ID1)),
+    ?assertMatch({ok, Host1}, resolve(Node2, onedata_user, ID1)),
+    ?assertMatch({ok, Host1}, resolve(Node3, onedata_user, ID1)),
+    ?assertMatch({ok, Host2}, resolve(Node1, user_group, ID2)),
+    ?assertMatch({ok, Host2}, resolve(Node2, user_group, ID2)),
+    ?assertMatch({ok, Host2}, resolve(Node3, user_group, ID2)),
+    ?assertMatch({ok, Host3}, resolve(Node1, provider, ID3)),
+    ?assertMatch({ok, Host3}, resolve(Node2, provider, ID3)),
+    ?assertMatch({ok, Host3}, resolve(Node3, provider, ID3)),
+    ?assertMatch({ok, Host1}, resolve(Node1, space, ID4)),
+    ?assertMatch({ok, Host1}, resolve(Node2, space, ID4)),
+    ?assertMatch({ok, Host1}, resolve(Node3, space, ID4)),
+    ok.
+
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -121,11 +152,19 @@ end_per_suite(Config) ->
 %%% Internal functions
 %%%===================================================================
 
+create(Node, Record) ->
+    Result = rpc:call(Node, element(1, Record), create, [#document{value = Record}]),
+    ?assertMatch({ok, _}, Result),
+    {ok, ID1} = Result,
+    ID1.
+
 claim(Node, ID) ->
     rpc:call(Node, locations, claim, [test, ID]).
 
 resolve(Node, ID) ->
-    rpc:call(Node, locations, resolve, [test, ID]).
+    resolve(Node, test, ID).
+resolve(Node, Namespace, ID) ->
+    rpc:call(Node, locations, resolve, [Namespace, ID]).
 
 get_hostname(Node) ->
     {ok, Host} = rpc:call(Node, application, get_env, [oz_worker, http_domain]),
