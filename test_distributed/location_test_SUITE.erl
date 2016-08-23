@@ -23,8 +23,7 @@
 -export([init_per_testcase/2, end_per_testcase/2]).
 -export([
     restarts_port_after_failure/1,
-    claim_given_id_test/1,
-    claim_any_id_test/1
+    resolve_is_consistent_with_claim/1
 ]).
 
 %% appends function name to id (atom) and yields binary
@@ -38,8 +37,7 @@
 %%%===================================================================
 
 all() -> ?ALL([
-    claim_given_id_test,
-    claim_any_id_test,
+    resolve_is_consistent_with_claim,
     restarts_port_after_failure
 ]).
 
@@ -51,18 +49,18 @@ restarts_port_after_failure(Config) ->
     ID1 = ?ID('id1'),
     ID2 = ?ID('id2'),
 
-    ?assertMatch({ok, ID1}, claim_id(Node1, ID1)),
-    [?assertMatch({ok, Host1}, resolve_id(Node, ID1)) || Node <- Nodes],
-    [?assertMatch({error, _}, resolve_id(Node, ID2)) || Node <- Nodes],
+    ?assertMatch(ok, claim(Node1, ID1)),
+    [?assertMatch({ok, Host1}, resolve(Node, ID1)) || Node <- Nodes],
+    [?assertMatch({error, _}, resolve(Node, ID2)) || Node <- Nodes],
 
     [rpc:call(Node, os, cmd, "pkill node") || Node <- Nodes],
 
-    ?assertMatch({ok, ID2}, claim_id(Node2, ID2)),
-    [?assertMatch({ok, Host1}, resolve_id(Node, ID1)) || Node <- Nodes],
-    [?assertMatch({ok, Host2}, resolve_id(Node, ID2)) || Node <- Nodes],
+    ?assertMatch(ok, claim(Node2, ID2)),
+    [?assertMatch({ok, Host1}, resolve(Node, ID1)) || Node <- Nodes],
+    [?assertMatch({ok, Host2}, resolve(Node, ID2)) || Node <- Nodes],
     ok.
 
-claim_given_id_test(Config) ->
+resolve_is_consistent_with_claim(Config) ->
     %% given
     [Node1, Node2, Node3 | _] = ?config(oz_worker_nodes, Config),
     Host1 = get_hostname(Node1),
@@ -73,76 +71,33 @@ claim_given_id_test(Config) ->
     ID3 = ?ID('id3'),
 
     %% when
-    ?assertMatch({ok, ID1}, claim_id(Node1, ID1)),
-    ?assertMatch({ok, ID2}, claim_id(Node2, ID2)),
-    ?assertMatch({ok, ID3}, claim_id(Node3, ID3)),
+    ?assertMatch(ok, claim(Node1, ID1)),
+    ?assertMatch(ok, claim(Node2, ID2)),
+    ?assertMatch(ok, claim(Node3, ID3)),
 
     %% then - subsequent claim succeeds
-    ?assertMatch({ok, ID1}, claim_id(Node1, ID1)),
-    ?assertMatch({ok, ID2}, claim_id(Node2, ID2)),
-    ?assertMatch({ok, ID3}, claim_id(Node3, ID3)),
+    ?assertMatch(ok, claim(Node1, ID1)),
+    ?assertMatch(ok, claim(Node2, ID2)),
+    ?assertMatch(ok, claim(Node3, ID3)),
 
     %% then - claim conflict detected
-    ?assertMatch({error, _}, claim_id(Node2, ID1)),
-    ?assertMatch({error, _}, claim_id(Node3, ID1)),
-    ?assertMatch({error, _}, claim_id(Node1, ID2)),
-    ?assertMatch({error, _}, claim_id(Node3, ID2)),
-    ?assertMatch({error, _}, claim_id(Node1, ID3)),
-    ?assertMatch({error, _}, claim_id(Node2, ID3)),
+    ?assertMatch({error, {'CONFLICT', _}}, claim(Node2, ID1)),
+    ?assertMatch({error, {'CONFLICT', _}}, claim(Node2, ID1)),
+    ?assertMatch({error, {'CONFLICT', _}}, claim(Node1, ID2)),
+    ?assertMatch({error, {'CONFLICT', _}}, claim(Node3, ID2)),
+    ?assertMatch({error, {'CONFLICT', _}}, claim(Node1, ID3)),
+    ?assertMatch({error, {'CONFLICT', _}}, claim(Node2, ID3)),
 
     %% then - coherent state
-    ?assertMatch({ok, Host1}, resolve_id(Node1, ID1)),
-    ?assertMatch({ok, Host1}, resolve_id(Node2, ID1)),
-    ?assertMatch({ok, Host1}, resolve_id(Node3, ID1)),
-    ?assertMatch({ok, Host2}, resolve_id(Node1, ID2)),
-    ?assertMatch({ok, Host2}, resolve_id(Node2, ID2)),
-    ?assertMatch({ok, Host2}, resolve_id(Node3, ID2)),
-    ?assertMatch({ok, Host3}, resolve_id(Node1, ID3)),
-    ?assertMatch({ok, Host3}, resolve_id(Node2, ID3)),
-    ?assertMatch({ok, Host3}, resolve_id(Node3, ID3)),
-    ok.
-
-claim_any_id_test(Config) ->
-    %% given
-    [Node1, Node2, Node3 | _] = ?config(oz_worker_nodes, Config),
-    Host1 = get_hostname(Node1),
-    Host2 = get_hostname(Node2),
-    Host3 = get_hostname(Node3),
-
-    %% when
-    Claim1 = claim_id(Node1),
-    Claim2 = claim_id(Node2),
-    Claim3 = claim_id(Node3),
-    ?assertMatch({ok, _}, Claim1),
-    ?assertMatch({ok, _}, Claim2),
-    ?assertMatch({ok, _}, Claim3),
-    {ok, ID1} = Claim1,
-    {ok, ID2} = Claim2,
-    {ok, ID3} = Claim3,
-
-    %% then - subsequent claim succeeds
-    ?assertMatch({ok, ID1}, claim_id(Node1, ID1)),
-    ?assertMatch({ok, ID2}, claim_id(Node2, ID2)),
-    ?assertMatch({ok, ID3}, claim_id(Node3, ID3)),
-
-    %% then - claim conflict detected
-    ?assertMatch({error, _}, claim_id(Node2, ID1)),
-    ?assertMatch({error, _}, claim_id(Node3, ID1)),
-    ?assertMatch({error, _}, claim_id(Node1, ID2)),
-    ?assertMatch({error, _}, claim_id(Node3, ID2)),
-    ?assertMatch({error, _}, claim_id(Node1, ID3)),
-    ?assertMatch({error, _}, claim_id(Node2, ID3)),
-
-    %% then - coherent state
-    ?assertMatch({ok, Host1}, resolve_id(Node1, ID1)),
-    ?assertMatch({ok, Host1}, resolve_id(Node2, ID1)),
-    ?assertMatch({ok, Host1}, resolve_id(Node3, ID1)),
-    ?assertMatch({ok, Host2}, resolve_id(Node1, ID2)),
-    ?assertMatch({ok, Host2}, resolve_id(Node2, ID2)),
-    ?assertMatch({ok, Host2}, resolve_id(Node3, ID2)),
-    ?assertMatch({ok, Host3}, resolve_id(Node1, ID3)),
-    ?assertMatch({ok, Host3}, resolve_id(Node2, ID3)),
-    ?assertMatch({ok, Host3}, resolve_id(Node3, ID3)),
+    ?assertMatch({ok, Host1}, resolve(Node1, ID1)),
+    ?assertMatch({ok, Host1}, resolve(Node2, ID1)),
+    ?assertMatch({ok, Host1}, resolve(Node3, ID1)),
+    ?assertMatch({ok, Host2}, resolve(Node1, ID2)),
+    ?assertMatch({ok, Host2}, resolve(Node2, ID2)),
+    ?assertMatch({ok, Host2}, resolve(Node3, ID2)),
+    ?assertMatch({ok, Host3}, resolve(Node1, ID3)),
+    ?assertMatch({ok, Host3}, resolve(Node2, ID3)),
+    ?assertMatch({ok, Host3}, resolve(Node3, ID3)),
     ok.
 
 %%%===================================================================
@@ -166,14 +121,11 @@ end_per_suite(Config) ->
 %%% Internal functions
 %%%===================================================================
 
-claim_id(Node) ->
-    rpc:call(Node, locations, claim_id, []).
+claim(Node, ID) ->
+    rpc:call(Node, locations, claim, [test, ID]).
 
-claim_id(Node, ID) ->
-    rpc:call(Node, locations, claim_id, [ID]).
-
-resolve_id(Node, ID) ->
-    rpc:call(Node, locations, resolve_id, [ID]).
+resolve(Node, ID) ->
+    rpc:call(Node, locations, resolve, [test, ID]).
 
 get_hostname(Node) ->
     {ok, Host} = rpc:call(Node, application, get_env, [oz_worker, http_domain]),

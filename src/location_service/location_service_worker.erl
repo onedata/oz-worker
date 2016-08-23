@@ -10,7 +10,7 @@
 %%% basic API for Location Service.
 %%% @end
 %%%-------------------------------------------------------------------
--module(dht_worker).
+-module(location_service_worker).
 -author("Michal Zmuda").
 
 -behaviour(worker_plugin_behaviour).
@@ -24,8 +24,12 @@
 -export([init/1, handle/1, cleanup/0]).
 
 %% API
--export([get_value/1, set_value/2]).
+-export([get/1, set/2]).
 
+-type(dht_data() :: [{binary(), term()}]).
+-type(error_code() :: 'CONFLICT' | 'TIMEOUT' | 'NOT_FOUND' | 'UNKNOWN_ERROR' | atom()).
+
+-define(DATA_KEY, <<"value">>).
 
 %%%===================================================================
 %%% API
@@ -38,18 +42,22 @@
 %% the operation itself.
 %% @end
 %%--------------------------------------------------------------------
--spec get_value(ID :: binary()) -> {error, term()} | {ok, Status, Value, Message} when
-    Status :: ErrorStatus :: atom() | 'OK',
-    Value :: [{binary(), term()}],
-    Message :: binary().
-get_value(ID) ->
+-spec get(locations:id()) -> {error, Reason} | {ok, dht_data()} when
+    Reason :: request_failed | {error_code(), Message :: binary()}.
+get(ID) ->
     case http_client:request(get, get_dht_endpoint(ID)) of
         {ok, 200, _, ResponseBody} ->
             Response = json_utils:decode(ResponseBody),
-            Value = proplists:get_value(<<"value">>, Response, undefined),
-            Message = proplists:get_value(<<"message">>, Response, undefined),
             StatusBin = proplists:get_value(<<"status">>, Response, <<"empty_response">>),
-            {ok, binary_to_atom(StatusBin, latin1), Value, Message};
+            Status = binary_to_atom(StatusBin, latin1),
+            case Status of
+                'OK' ->
+                    Data = proplists:get_value(?DATA_KEY, Response, undefined),
+                    {ok, Data};
+                _ ->
+                    Message = proplists:get_value(<<"message">>, Response, undefined),
+                    {error, {Status, Message}}
+            end;
         {error, _Term} ->
             ?warning("Get request (for ~p) failed due to ~p", [ID, _Term]),
             {error, request_failed}
@@ -61,20 +69,24 @@ get_value(ID) ->
 %% the operation itself.
 %% @end
 %%--------------------------------------------------------------------
--spec set_value(ID :: binary(), Value :: term()) -> {error, term()} | {ok, Status, Message} when
-    Status :: ErrorStatus :: atom() | 'OK',
-    Message :: binary().
-set_value(ID, Value) ->
-    Body = json_utils:encode({struct, [{value, Value}]}),
+-spec set(locations:id(), dht_data()) -> ok | {error, Reason} when
+    Reason :: request_failed | {error_code(), Message :: binary()}.
+set(ID, Data) ->
+    Body = json_utils:encode({struct, [{?DATA_KEY, Data}]}),
     Headers = [{<<"content-type">>, <<"application/json">>}],
     case http_client:request(post, get_dht_endpoint(ID), Headers, Body) of
         {ok, 200, _, ResponseBody} ->
             Response = json_utils:decode(ResponseBody),
-            Message = proplists:get_value(<<"message">>, Response, undefined),
             StatusBin = proplists:get_value(<<"status">>, Response, <<"empty_response">>),
-            {ok, binary_to_atom(StatusBin, latin1), Message};
+            Status = binary_to_atom(StatusBin, latin1),
+            case Status of
+                'OK' -> ok;
+                _ ->
+                    Message = proplists:get_value(<<"message">>, Response, undefined),
+                    {error, {Status, Message}}
+            end;
         {error, _Term} ->
-            ?warning("Post request (id: ~p, value ~p) failed due to ~p", [ID, Value, _Term]),
+            ?warning("Post request (id: ~p, value ~p) failed due to ~p", [ID, Data, _Term]),
             {error, request_failed}
     end.
 
@@ -123,7 +135,11 @@ init(_Args) ->
 %%--------------------------------------------------------------------
 -spec handle(Request :: term()) -> ok | {error, Reason :: term()} | no_return().
 handle(healthcheck) ->
-    ok;
+    locations:claim(node(), <<"helthcheck_record">>),
+    case locations:resolve(node(), <<"helthcheck_record">>) of
+        {error, _Reason} -> {error, {not_allowed_result, _Reason}};
+        {ok, _} -> ok
+    end;
 
 handle({'EXIT', Source, Reason}) ->
     Handler = worker_host:state_get(?MODULE, handler),

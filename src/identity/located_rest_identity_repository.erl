@@ -19,8 +19,7 @@
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("datastore/oz_datastore_models_def.hrl").
 
--define(TYPE, identity_location).
-
+-define(LS_NAMESPACE, identity_location).
 
 -export([publish/2, get/1]).
 
@@ -32,8 +31,8 @@
 -spec publish(identity:id(), identity:encoded_public_key()) ->
     ok | {error, Reason :: term()}.
 publish(ID, EncodedPublicKey) ->
-    case locations:claim_model(?TYPE, ID) of
-        {ok, _} ->
+    case locations:claim(?LS_NAMESPACE, ID) of
+        ok ->
             DbResult = owned_identity:save(#document{key = ID, value =
             #owned_identity{id = ID, encoded_public_key = EncodedPublicKey}}),
             case DbResult of
@@ -68,11 +67,10 @@ get(ID) ->
 -spec get_public_key_by_location(ID :: identity:id()) ->
     {ok, identity:encoded_public_key()} | {error, Reason :: term()}.
 get_public_key_by_location(ID) ->
-    case locations:resolve_model(?TYPE, ID) of
+    case locations:resolve(?LS_NAMESPACE, ID) of
         {error, Reason} ->
             {error, {location_service_failed, Reason}};
-        {ok, Props} ->
-            Location = proplists:get_value(<<"location">>, Props),
+        {ok, Location} ->
             EncodedPublicKey = get_public_key_via_rest(Location, ID),
             {ok, EncodedPublicKey}
     end.
