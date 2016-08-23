@@ -75,14 +75,20 @@ listeners() -> node_manager:cluster_worker_listeners() ++ [
 %% @end
 %%--------------------------------------------------------------------
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
-modules_with_args() -> node_manager:cluster_worker_modules() ++ [
-    {groups_graph_caches_worker, []},
-    {changes_worker, []},
-    {ozpca_worker, []},
-    {location_service_worker, []},
-    {identity_publisher_worker, []},
-    {subscriptions_worker, []}
-].
+modules_with_args() ->
+    Base = node_manager:cluster_worker_modules() ++ [
+        {groups_graph_caches_worker, []},
+        {changes_worker, []},
+        {ozpca_worker, []},
+        {subscriptions_worker, []}
+    ],
+    case application:get_env(?APP_Name, location_service_enabled) of
+        {ok, false} -> Base;
+        {ok, true} -> Base ++ [
+            {location_service_worker, []},
+            {identity_publisher_worker, []}
+        ]
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
