@@ -41,7 +41,7 @@
                                 "127.0.0.1:49161"
                             ],
                             "location_service_bootstrap_nodes": [
-                                "testmaster"
+                                "test-bootstrap-node"
                             ],
                             "http_domain": {
                                 "string": "127.0.0.1"
@@ -82,7 +82,7 @@
                                 "127.0.0.1:49161"
                             ],
                             "location_service_bootstrap_nodes": [
-                                "testmaster"
+                                "test-bootstrap-node"
                             ],
                             "http_domain": {
                                 "string": "127.0.0.1"
@@ -123,7 +123,7 @@
                                 "127.0.0.1:49161"
                             ],
                             "location_service_bootstrap_nodes": [
-                                "testmaster"
+                                "test-bootstrap-node"
                             ],
                             "http_domain": {
                                 "string": "127.0.0.1"
