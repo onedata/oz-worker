@@ -6,7 +6,7 @@ Brings up a set of cluster-worker nodes. They can create separate clusters.
 """
 
 import os
-from . import docker, common, worker, gui, panel
+from . import docker, common, worker, gui, panel, location_service_bootstrap
 
 DOCKER_BINDIR_PATH = '/root/build'
 
@@ -31,6 +31,12 @@ class OZWorkerConfigurator:
     def tweak_config(self, cfg, uid, instance):
         sys_config = cfg['nodes']['node']['sys.config'][self.app_name()]
         sys_config['external_ip'] = {'string': 'IP_PLACEHOLDER'}
+
+        bootstrap_key = 'location_service_bootstrap_nodes'
+        if bootstrap_key in sys_config:
+            sys_config[bootstrap_key] = map(lambda name:
+                location_service_bootstrap.format_if_test_node(name, uid),
+                sys_config[bootstrap_key])
 
         if 'http_domain' in sys_config:
             domain = worker.cluster_domain(instance, uid)
