@@ -81,7 +81,7 @@ handle_after(_Model, _Method, _Context, _ReturnValue) ->
 -spec claim_model(#document{}) -> ok | {error, term()}.
 claim_model(#document{key = ID, value = Value}) ->
     case locations:claim(element(1, Value), ID) of
-        {ok, _} -> ok;
+        ok -> ok;
         Error ->
             ?error("Unable to claim ~p ~p due to ~p", [element(1, Value), ID, Error]),
             %% todo: {error, location_service_refused_id}
