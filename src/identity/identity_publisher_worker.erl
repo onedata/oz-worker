@@ -20,11 +20,25 @@
 -include_lib("public_key/include/public_key.hrl").
 
 %% worker_plugin_behaviour callbacks
--export([init/1, handle/1, cleanup/0]).
+-export([init/1, handle/1, cleanup/0, start_refreshing/0]).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts scheduled refreshing of owned public keys.
+%% @end
+%%--------------------------------------------------------------------
+-spec start_refreshing() -> ok.
+start_refreshing() ->
+    {ok, KeyFile} = application:get_env(?APP_Name, identity_key_file),
+    {ok, CertFile} = application:get_env(?APP_Name, identity_cert_file),
+    {ok, Domain} = application:get_env(?APP_Name, http_domain),
+    ok = identity_utils:ensure_synced_cert_present(KeyFile, CertFile, Domain),
+    refresh(),
+    schedule_cert_refresh().
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -34,13 +48,6 @@
 -spec init(Args :: term()) ->
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
 init(_Args) ->
-    {ok, KeyFile} = application:get_env(?APP_Name, identity_key_file),
-    {ok, CertFile} = application:get_env(?APP_Name, identity_cert_file),
-    {ok, Domain} = application:get_env(?APP_Name, http_domain),
-    identity_utils:ensure_synced_cert_present(KeyFile, CertFile, Domain),
-
-    refresh(),
-    schedule_cert_refresh(),
     {ok, #{}}.
 
 %%--------------------------------------------------------------------
@@ -103,13 +110,18 @@ refresh() ->
     identity:publish(DecodedCertificate),
 
     {ok, Docs} = owned_identity:list(),
-    utils:pforeach(fun(#document{value = #owned_identity{id = ID, encoded_public_key = Encoded}}) ->
+    Results = utils:pmap(fun(#document{value = #owned_identity{id = ID, encoded_public_key = Encoded}}) ->
         case plugins:apply(identity_repository, publish, [ID, Encoded]) of
-            {error, Reason} ->
-                ?warning("Unable to publish owned ID (~p) due to ~p", [ID, Reason]);
-            ok ->
-                ?debug("Published owned ID (~p) due to ~p", [ID])
+            {error, Reason} -> #{id => ID, encoded => Encoded, error => Reason};
+            ok -> ok
         end
     end, Docs),
 
-    ok.
+    case lists:usort(Results) of
+        [] -> ?warning("No certs to publish from this OZ");
+        [ok] -> ok;
+        UniqueResults ->
+            Errors = UniqueResults -- [ok],
+            ?warning("Errors on publishing owned certs ~p", [Errors]),
+            {error, {at_least_one_publish_failed, Errors}}
+    end.
