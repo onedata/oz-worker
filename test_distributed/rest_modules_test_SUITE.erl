@@ -32,6 +32,10 @@
 -define(USER_NAME1, <<"user1">>).
 -define(USER_NAME2, <<"user2">>).
 -define(USER_NAME3, <<"user3">>).
+% Default alias (= no alias set) is an empty string
+-define(DEFAULT_USER_ALIAS, <<"">>).
+-define(USER_ALIAS1, <<"alias1">>).
+-define(USER_ALIAS2, <<"alias2">>).
 -define(SPACE_NAME1, <<"space1">>).
 -define(SPACE_NAME2, <<"space2">>).
 -define(GROUP_NAME1, <<"group1">>).
@@ -372,8 +376,8 @@ user_authorize_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     ParamsWithOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    ?assertMatch([UserId, ?USER_NAME1], get_user_info(UserReqParams)),
-    ?assertMatch([UserId, ?USER_NAME1], get_user_info(ParamsWithOtherAddress)).
+    ?assertMatch([UserId, ?USER_NAME1, ?DEFAULT_USER_ALIAS], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME1, ?DEFAULT_USER_ALIAS], get_user_info(ParamsWithOtherAddress)).
 
 update_user_test(Config) ->
     UserId = ?config(userId, Config),
@@ -381,9 +385,15 @@ update_user_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     ParamsWithOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    ?assertMatch(ok, check_status(update_user(?USER_NAME2, UserReqParams))),
-    ?assertMatch([UserId, ?USER_NAME2], get_user_info(UserReqParams)),
-    ?assertMatch([UserId, ?USER_NAME2], get_user_info(ParamsWithOtherAddress)).
+    ?assertMatch(ok, check_status(update_user([{<<"name">>, ?USER_NAME2}], UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2, ?DEFAULT_USER_ALIAS], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME2, ?DEFAULT_USER_ALIAS], get_user_info(ParamsWithOtherAddress)),
+    ?assertMatch(ok, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(ParamsWithOtherAddress)),
+    ?assertMatch(ok, check_status(update_user([{<<"name">>, ?USER_NAME2}, {<<"alias">>, ?USER_ALIAS2}], UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS2], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS2], get_user_info(ParamsWithOtherAddress)).
 
 delete_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1543,13 +1553,11 @@ register_user(UserName, ProviderId, Config, ProviderReqParams) ->
 get_user_info(ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
     Response = do_request(RestAddress ++ "/user", Headers, get, [], Options),
-    get_body_val([userId, name], Response).
+    get_body_val([userId, name, alias], Response).
 
-update_user(NewUserName, ReqParams) ->
+update_user(Attributes, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
-    Body = json_utils:encode([
-        {<<"name">>, NewUserName}
-    ]),
+    Body = json_utils:encode(Attributes),
     do_request(RestAddress ++ "/user", Headers, patch, Body, Options).
 
 delete_user(ReqParams) ->

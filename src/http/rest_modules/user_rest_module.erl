@@ -104,8 +104,11 @@ resource_exists(_, _, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(user, patch, UserId, Data, _Client, Req) ->
-    Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    ok = user_logic:modify(UserId, [{name, Name}]),
+    rest_module_helper:assert_type(<<"name">>, Data, binary, Req),
+    rest_module_helper:assert_type(<<"alias">>, Data, binary, Req),
+    % Convert proplist keys to atoms as user_logic expects them as atoms.
+    DataAtoms = [{binary_to_existing_atom(K, utf8), V} || {K, V} <- Data],
+    ok = user_logic:modify(UserId, DataAtoms),
     {true, Req};
 accept_resource(auth, post, _User, Data, _Client, Req) ->
     Identifier = rest_module_helper:assert_key(<<"identifier">>, Data, binary, Req),
