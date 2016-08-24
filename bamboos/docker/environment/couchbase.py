@@ -66,7 +66,7 @@ def _cluster_nodes(containers, cluster_name, master_hostname, uid):
                  stdout=sys.stderr)
 
 
-def up(image, dns, uid, cluster_name, nodes, location_service=False):
+def up(image, dns, uid, cluster_name, nodes, buckets={'default':512}, cluster_ramsize=1024):
 
     dns_servers, dns_output = dns_mod.maybe_start(dns, uid)
     couchbase_output = {}
@@ -89,24 +89,16 @@ bash'''
     assert 0 == docker.exec_(containers[0],
                  command=["/opt/couchbase/bin/couchbase-cli", "cluster-init", "-c", "{0}:8091".format(master_hostname),
                           "--cluster-init-username=admin", "--cluster-init-password=password",
-                          "--cluster-init-ramsize=512", "--services=data,index,query"],
+                          "--cluster-init-ramsize=" + str(cluster_ramsize), "--services=data,index,query"],
                  stdout=sys.stderr)
 
-    # Create default bucket
-    default_bucket_size = "412" if location_service else "512"
-    assert 0 == docker.exec_(containers[0],
-                 command=["/opt/couchbase/bin/couchbase-cli", "bucket-create", "-c", "{0}:8091".format(master_hostname),
-                          "-u", "admin", "-p", "password", "--bucket=default",
-                          "--bucket-ramsize=" + default_bucket_size, "--wait"],
-                 stdout=sys.stderr)
-
-    if location_service:
-        # Create Location Service bucket
+    # Create buckets
+    for bucket_name, bucket_size in buckets.items():
         assert 0 == docker.exec_(containers[0],
-                     command=["/opt/couchbase/bin/couchbase-cli", "bucket-create", "-c", "{0}:8091".format(master_hostname),
-                              "-u", "admin", "-p", "password", "--bucket=location_service",
-                              "--bucket-ramsize=100", "--wait"],
-                     stdout=sys.stderr)
+                 command=["/opt/couchbase/bin/couchbase-cli", "bucket-create", "-c", "{0}:8091".format(master_hostname),
+                          "-u", "admin", "-p", "password", "--bucket=" + bucket_name,
+                          "--bucket-ramsize=" + str(bucket_size), "--wait"],
+                 stdout=sys.stderr)
 
     # Create database cluster nodes
     if len(containers) > 1:
