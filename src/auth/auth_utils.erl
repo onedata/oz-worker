@@ -39,7 +39,7 @@ local_auth_endpoint() ->
 
 %%--------------------------------------------------------------------
 %% @doc Function used to validate login by processing a redirect that came from
-%% an OAuth provider. Must be called from n2o context to work. Returns one of the following:
+%% an OAuth provider. Must be called from gui context to work. Returns one of the following:
 %% 1. atom 'new_user' if the login has been verified and a new user has been created
 %% 2. {redirect, URL} if the account already exists, to state where the user should be redirected now
 %% 3. {error, Desription} if the validation failed or any other error occurred.
