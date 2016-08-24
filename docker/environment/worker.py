@@ -164,10 +164,10 @@ def _couchbase_up(cluster_name, db_nodes, dns_servers, uid, configurator):
         return db_node_mappings, {}
 
     [dns] = dns_servers
-    use_location_service = configurator.app_name() == "oz_worker"
     couchbase_output = couchbase.up('couchbase/server:community-4.1.0', dns,
                                     uid, cluster_name, len(db_node_mappings),
-                                    use_location_service)
+                                    configurator.couchbase_buckets(),
+                                    configurator.couchbase_ramsize())
 
     return db_node_mappings, couchbase_output
 
