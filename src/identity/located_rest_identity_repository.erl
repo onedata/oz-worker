@@ -64,6 +64,13 @@ get(ID) ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Determines public key for given ID -  first it uses location service
+%% to locate the owner of given ID (OZ, who published this key) and then
+%% it uses rest API of OZ to obtain actual public key assigned to given ID.
+%% @end
+%%--------------------------------------------------------------------
 -spec get_public_key_by_location(ID :: identity:id()) ->
     {ok, identity:encoded_public_key()} | {error, Reason :: term()}.
 get_public_key_by_location(ID) ->
@@ -75,6 +82,11 @@ get_public_key_by_location(ID) ->
             {ok, EncodedPublicKey}
     end.
 
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Uses rest API of OZ to obtain actual public key assigned to given ID.
+%% @end
+%%--------------------------------------------------------------------
 -spec get_public_key_via_rest(OzDomain :: binary(), ID :: identity:id()) ->
     identity:encoded_public_key().
 get_public_key_via_rest(OzDomain, ID) ->

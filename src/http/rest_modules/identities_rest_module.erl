@@ -103,8 +103,8 @@ accept_resource(provider, _, ID, Data, _Client, Req) ->
             Provider = #provider{client_name = ID, urls = URLs, redirection_point = RedirectionPoint},
             {ok, _} = provider:save(#document{key = ID, value = Provider}),
             {true, Req};
-        {error, _Reason} ->
-            ?warning("Unsucessful to create provider ~p", [ID]),
+        {error, Reason} ->
+            ?warning("Unable to create new provider with ID ~p due to ~p", [ID, Reason]),
             {false, Req}
     end;
 accept_resource(publickey, _, ID, Data, _Client, Req) ->
