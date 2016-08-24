@@ -44,7 +44,7 @@ routes() ->
     S = #rstate{module = ?MODULE, root = publickey},
     M = rest_handler,
     [
-        {<<"/publickey/:id">>, M, S#rstate{resource = publickey, methods = [get, put, post], noauth = [get, put, post]}},
+        {<<"/publickey/:id">>, M, S#rstate{resource = publickey, methods = [get, patch], noauth = [get]}},
         {<<"/provider_data/:id">>, M, S#rstate{resource = provider, methods = [post], noauth = [post]}}
     ].
 
@@ -64,10 +64,7 @@ is_authorized(publickey, put, MatchingID, #client{type = provider, id = Matching
 is_authorized(publickey, post, MatchingID, #client{type = provider, id = MatchingID}) ->
     true;
 is_authorized(publickey, _,_, _) ->
-    %% todo: remove this case once this endpoint is protected by identity verification
-    %% todo: and #client is filled appropriately
-    %% todo: also remove this put/post from noauth methods
-    true.
+    false.
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether a resource exists.
