@@ -22,7 +22,7 @@ CouchbaseStore.prototype.put = function (key, value, callback) {
 
 CouchbaseStore.prototype.get = function (key, callback) {
   this.bucket.get(key, function (err, res) {
-    if (res && res.value && res.value) {
+    if (res && res.value) {
       callback(err, JSON.stringify(res.value))
     } else {
       callback(new Error('Not found in Couchbase'))

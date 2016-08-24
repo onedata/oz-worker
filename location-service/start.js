@@ -22,8 +22,8 @@ function increaseVerbosity(v, total) {
 program
   .version('0.0.1', '-V, --version')
   .usage('[options]')
-  .option('-p, --port <n>', 'Service port', port, 30000)
-  .option('-r, --rest-port <n>', 'Rest interface port', port, 3000)
+  .option('-p, --port <n>', 'Service port', port, 7770)
+  .option('-r, --rest-port <n>', 'Rest interface port', port, 7771)
   .option('-h, --host <n>', 'Hostname (both for rest $ service)', noop, '0.0.0.0')
   .option('-c, --couchbase-address <n>', 'Hostname of Couchbase', noop, null)
   .option('-b, --bootstrap-node [value]', 'Node to connect to', collect, [])

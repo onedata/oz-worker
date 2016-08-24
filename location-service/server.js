@@ -23,7 +23,7 @@ var Contact = kad.contacts.AddressPortContact;
  * and is connected to the kad network.
  *
  * @param options
- * @param options.bootstrapNodes - list of kad bootstrap nodes
+ * @param options.bootstrapNodes - list of kad bootstrap nodes (if omitted node won't fail when not connected)
  * @param options.verbosity      - verbosity level [0-4]
  * @param options.port           - port for kad service
  * @param options.restPort       - port for REST API
