@@ -16,7 +16,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(METHODS, [create, create_or_update, save, update]).
+-define(METHODS, [create, create_or_update, save]).
 -define(MODELS, [space, user_group, onedata_user, provider]).
 
 -export([get_hooks/0, handle_before/3, handle_after/4]).
@@ -52,8 +52,6 @@ handle_before(_Model, save, [Doc]) ->
     claim_model(Doc);
 handle_before(_Model, create_or_update, [Doc, _Diff]) ->
     claim_model(Doc);
-handle_before(Model, update, [Key, _Diff]) ->
-    claim_model(#document{key = Key, value = {Model}});
 handle_before(_Model, _Method, _Context) ->
     ok.
 
