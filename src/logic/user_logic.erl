@@ -536,11 +536,7 @@ clean_space_name_mapping(UserId, SpaceId) ->
     Password :: binary()) -> {ok, UserDoc :: #document{}} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
     Headers = [basic_auth_header(Login, Password)],
-    {ok, OnepanelRESTURL} =
-        application:get_env(?APP_Name, onepanel_rest_url),
-    {ok, OnepanelGetUserEndpoint} =
-        application:get_env(?APP_Name, onepanel_user_endpoint),
-    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    URL = get_onepanel_rest_user_url(Login),
     RestCallResult = case http_client:get(URL, Headers, <<"">>, [insecure]) of
         {ok, 200, _, JSON} ->
             json_utils:decode(JSON);
@@ -627,11 +623,7 @@ change_user_password(Login, OldPassword, NewPassword) ->
         {<<"content-type">>, <<"application/json">>},
         basic_auth_header(Login, OldPassword)
     ],
-    {ok, OnepanelRESTURL} =
-        application:get_env(?APP_Name, onepanel_rest_url),
-    {ok, OnepanelGetUserEndpoint} =
-        application:get_env(?APP_Name, onepanel_user_endpoint),
-    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    URL = get_onepanel_rest_user_url(Login),
     Body = json_utils:encode([{<<"password">>, NewPassword}]),
     case http_client:put(URL, Headers, Body, [insecure]) of
         {ok, 204, _, _} ->
@@ -669,6 +661,20 @@ basic_auth_header(Login, Password) ->
     UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
     {<<"Authorization">>, <<"Basic ", UserAndPassword/binary>>}.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns onepanel REST endpoint for user management.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_onepanel_rest_user_url(Login :: binary()) -> URL :: binary().
+get_onepanel_rest_user_url(Login) ->
+    {ok, OnepanelRESTURL} =
+        application:get_env(?APP_Name, onepanel_rest_url),
+    {ok, OnepanelGetUsersEndpoint} =
+        application:get_env(?APP_Name, onepanel_users_endpoint),
+    <<(str_utils:to_binary(OnepanelRESTURL))/binary,
+        (str_utils:to_binary(OnepanelGetUsersEndpoint))/binary, Login/binary>>.
 
 %%--------------------------------------------------------------------
 %% @private
