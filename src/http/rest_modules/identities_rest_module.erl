@@ -59,11 +59,11 @@ routes() ->
     boolean().
 is_authorized(provider, _, _, _) ->
     true;
-is_authorized(publickey, put, MatchingID, #client{type = provider, id = MatchingID}) ->
+is_authorized(publickey, get, _, _) ->
     true;
-is_authorized(publickey, post, MatchingID, #client{type = provider, id = MatchingID}) ->
+is_authorized(publickey, patch, MatchingID, #client{type = provider, id = MatchingID}) ->
     true;
-is_authorized(publickey, _,_, _) ->
+is_authorized(publickey, _X, _Y, _Z) ->
     false.
 
 %%--------------------------------------------------------------------

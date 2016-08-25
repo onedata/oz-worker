@@ -24,8 +24,8 @@
 -export([
     oz_certs_published_after_refresh/1,
     oz_certs_obtainable_via_rest/1,
-    certs_are_publishable_via_rest/1
-]).
+    certs_are_published_on_provider_registration_via_rest/1,
+    provider_certs_are_updated_via_rest/1]).
 
 %% appends function name to id (atom) and yields binary
 -define(ID(Id), list_to_binary(
@@ -40,7 +40,8 @@
 all() -> ?ALL([
     oz_certs_published_after_refresh,
     oz_certs_obtainable_via_rest,
-    certs_are_publishable_via_rest
+    certs_are_published_on_provider_registration_via_rest,
+    provider_certs_are_updated_via_rest
 ]).
 
 oz_certs_published_after_refresh(Config) ->
@@ -75,21 +76,43 @@ oz_certs_obtainable_via_rest(Config) ->
     ?assertMatch(Key3, Result3).
 
 
-certs_are_publishable_via_rest(Config) ->
+certs_are_published_on_provider_registration_via_rest(Config) ->
     %% given
-    [OZ1, OZ2, OZ3] = ?config(oz_worker_nodes, Config),
-    Cert1 = new_self_signed_cert(<<"c1">>),
-    Cert2 = new_self_signed_cert(<<"c2">>),
+    [OZ1, OZ2, _] = ?config(oz_worker_nodes, Config),
+    Cert1 = new_self_signed_cert(<<"certs_are_published_on_provider_registration_via_rest 1">>),
+    Cert2 = new_self_signed_cert(<<"certs_are_published_on_provider_registration_via_rest 2">>),
 
     %% when
-    publish_public_key_rest(OZ1, identity_utils:get_id(Cert1), identity_utils:get_public_key(Cert1)),
-    publish_public_key_rest(OZ1, identity_utils:get_id(Cert2), identity_utils:get_public_key(Cert2)),
+    register_provider_rest(OZ1, identity_utils:get_id(Cert1), identity_utils:get_public_key(Cert1)),
+    register_provider_rest(OZ1, identity_utils:get_id(Cert2), identity_utils:get_public_key(Cert2)),
 
     %% then
     ?assertMatch(ok, verify(OZ1, Cert1)),
     ?assertMatch(ok, verify(OZ2, Cert1)),
     ?assertMatch(ok, verify(OZ1, Cert2)),
     ?assertMatch(ok, verify(OZ2, Cert2)).
+
+%% todo: this is a-happy-path only as auth in rest_handler is mocked anyway
+%% todo: remove rest_handler mock and test auth thoroughly
+provider_certs_are_updated_via_rest(Config) ->
+    %% given
+    [OZ1, OZ2, _] = ?config(oz_worker_nodes, Config),
+    Cert1 = new_self_signed_cert(<<"provider_certs_are_updateable_via_rest 1">>),
+    Cert2 = new_self_signed_cert(<<"provider_certs_are_updateable_via_rest 2">>),
+    Cert1bis = new_self_signed_cert(<<"provider_certs_are_updateable_via_rest 1">>),
+    Cert2bis = new_self_signed_cert(<<"provider_certs_are_updateable_via_rest 2">>),
+    register_provider_rest(OZ1, identity_utils:get_id(Cert1), identity_utils:get_public_key(Cert1)),
+    register_provider_rest(OZ1, identity_utils:get_id(Cert2), identity_utils:get_public_key(Cert2)),
+
+    %% when
+    update_public_key_rest(OZ1, identity_utils:get_id(Cert1bis), identity_utils:get_public_key(Cert1bis)),
+    update_public_key_rest(OZ1, identity_utils:get_id(Cert2bis), identity_utils:get_public_key(Cert2bis)),
+
+    %% then
+    ?assertMatch(ok, verify(OZ1, Cert1bis)),
+    ?assertMatch(ok, verify(OZ2, Cert1bis)),
+    ?assertMatch(ok, verify(OZ1, Cert2bis)),
+    ?assertMatch(ok, verify(OZ2, Cert2bis)).
 
 
 %%%===================================================================
@@ -99,12 +122,25 @@ certs_are_publishable_via_rest(Config) ->
 init_per_suite(Config) ->
     ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
 
-init_per_testcase(_, _Config) ->
+init_per_testcase(_, Config) ->
     application:start(etls),
     hackney:start(),
-    _Config.
 
-end_per_testcase(_, _Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_new(Nodes, rest_handler),
+    test_utils:mock_expect(Nodes, rest_handler, is_authorized,
+        fun(Req, State) ->
+            {Bindings, _} = cowboy_req:bindings(Req),
+            ResId = proplists:get_value(id, Bindings),
+            {true, Req, State#rstate{client = #client{type = provider, id = ResId}}}
+        end),
+
+    Config.
+
+end_per_testcase(_, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, [rest_handler]),
+
     hackney:stop(),
     application:stop(etls),
     ok.
@@ -116,9 +152,6 @@ end_per_suite(Config) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-publish(Node, Cert) ->
-    rpc:call(Node, identity, publish, [Cert]).
 
 verify(Node, Cert) ->
     rpc:call(Node, identity, verify, [Cert]).
@@ -162,15 +195,29 @@ get_public_key_rest(OzNode, ID) ->
     EncodedPublicKey = proplists:get_value(<<"publicKey">>, Data),
     identity_utils:decode(EncodedPublicKey).
 
-publish_public_key_rest(OzNode, ID, PublicKey) ->
+update_public_key_rest(OzNode, ID, PublicKey) ->
     RestAddress = get_rest_address(OzNode),
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Endpoint = RestAddress ++ "/publickey/" ++ EncodedID,
     Encoded = identity_utils:encode(PublicKey),
     Body = json_utils:encode([{<<"publicKey">>, Encoded}]),
     Headers = [{<<"content-type">>, <<"application/json">>}],
-    Response = http_client:request(put, Endpoint, Headers, Body, [insecure]),
-    ?assertMatch({ok, 201, _, _}, Response).
+    Response = http_client:request(patch, Endpoint, Headers, Body, [insecure]),
+    ?assertMatch({ok, 204, _, _}, Response).
+
+register_provider_rest(OzNode, ID, PublicKey) ->
+    RestAddress = get_rest_address(OzNode),
+    EncodedID = binary_to_list(http_utils:url_encode(ID)),
+    Endpoint = RestAddress ++ "/provider_data/" ++ EncodedID,
+    Encoded = identity_utils:encode(PublicKey),
+    Body = json_utils:encode([
+        {<<"publicKey">>, Encoded},
+        {<<"urls">>, [<<"127.0.0.1">>]},
+        {<<"redirectionPoint">>, <<"127.0.0.1">>}
+    ]),
+    Headers = [{<<"content-type">>, <<"application/json">>}],
+    Response = http_client:request(post, Endpoint, Headers, Body, [insecure]),
+    ?assertMatch({ok, 204, _, _}, Response).
 
 get_rest_address(OzNode) ->
     OZ_IP = get_node_ip(OzNode),
