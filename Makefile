@@ -75,6 +75,7 @@ clean:
 	./rebar clean
 
 distclean: clean
+	rm -rf location-service/node_modules
 	./rebar delete-deps
 
 ##
