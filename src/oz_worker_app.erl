@@ -15,7 +15,6 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("rest_config.hrl").
--include("gui_config.hrl").
 -include("registered_names.hrl").
 -include("messages_white_list.hrl").
 
@@ -41,7 +40,7 @@
     {ok, pid(), State :: term()} |
     {error, Reason :: term()}).
 start(_StartType, _StartArgs) ->
-    % DNS config needs to be loaded here as n2o listener needs to access it.
+    % DNS config needs to be loaded here as gui listener needs to access it.
     dns_query_handler:load_config(),
     test_node_starter:maybe_start_cover(),
     activate_white_lists(),
