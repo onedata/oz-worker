@@ -67,7 +67,7 @@ allowed_methods(Req, #rstate{methods = Methods} = State) ->
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
-%% Return whether POST is allowed when the resource doesn't exist.
+%% Return the list of content-types the resource accepts.
 %% @end
 %%--------------------------------------------------------------------
 -spec content_types_accepted(Req :: cowboy_req:req(), State :: rstate()) ->
