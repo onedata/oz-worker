@@ -4,6 +4,12 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc4
+
+* VFS-2156 Change onepanel config env variables types
+* Disable openid providers in auth.config by default, leaving basicAuth only
+
+
 ### 3.0.0-RC3
 
 * VFS-2156 Remove GUI files
