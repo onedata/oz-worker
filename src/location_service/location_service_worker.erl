@@ -112,8 +112,9 @@ init(_Args) ->
     Pid = spawn_link(
         fun() ->
             process_flag(trap_exit, true),
+            {ok, LibPath} = application:get_env(?APP_Name, location_service_lib_path),
 
-            Command = "node nodejs/location-service/start.js"
+            Command = "node " ++ filename:join(LibPath, "start.js")
                 ++ " -h " ++ Host
                 ++ " -p " ++ integer_to_list(ServicePort)
                 ++ " -r " ++ integer_to_list(RestPort)
