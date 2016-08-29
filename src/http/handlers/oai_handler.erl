@@ -122,6 +122,7 @@ resource_exists(Req, State) ->
 %%--------------------------------------------------------------------
 -spec terminate(term(), term(), term()) -> ok.
 terminate(_Reason, _Req, _State) ->
+%%    TODO needed ?
     ok.
 
 
@@ -138,9 +139,12 @@ provide_resource(Req, State) ->
 %%    io:format("QS: ~p~n", [cowboy_req:qs_val(<<"verb">>, Req)]),
 %%    io:format("QS: ~p~n", [cowboy_req:qs_vals(Req)]),
 %%    {<<"">>, Req1, State},
-    {Data, Req1} = cowboy_req:qs_vals(Req),
-    handle_request(Data, Req1),
-    {<<"">>, Req1, State}.
+    {QS, Req1} = cowboy_req:qs_vals(Req),
+    Req2 = handle_request(QS, Req1),
+    {<<"dupa">>, Req2, State}. % should return response_body
+
+%%    Req2 = cowboy_req:set_resp_body(<<"dupa2">>, Req1),
+%%    Req3 = cowboy_req:reply(200, Req2),
 
 
 
@@ -153,9 +157,9 @@ provide_resource(Req, State) ->
 -spec accept_resource(Req :: cowboy_req:req(), State :: any()) ->
     boolean() | {{true, URL :: binary()} | boolean(), cowboy_req:req(), any()}.
 accept_resource(Req, State) ->
-    {ok, Data, Req1} = cowboy_req:body_qs(Req),
-    handle_request(Data, Req1),
-    true.
+    {ok, QS, Req1} = cowboy_req:body_qs(Req),
+    Req2 = handle_request(QS, Req1),
+    {true, Req2, State}.
 
 %%    {FullHostname, _} = cowboy_req:header(<<"host">>, Req),
 %%    {QS, _} = cowboy_req:qs(Req),
@@ -195,14 +199,20 @@ binary_to_verb(<<"ListSets">>) -> listSets.
 
 
 
-handle_request(Data, Req) ->
-    case proplists:get_value(<<"verb">>, Data) of
+handle_request(Args, Req) ->
+    case proplists:get_value(<<"verb">>, Args) of
         undefined -> error; % todo handle bad verb error;
-        Verb -> io:format("handle_request: ~nVerb=~p~nData=~p~n", [Verb, Data]),
-                ?MODULE:binary_to_verb(Verb)(Data)
-    end,
-    erlang:error(not_implemented).
+        Verb -> io:format("handle_request: ~nVerb=~p~nData=~p~n", [Verb, Args]),
+            Module = binary_to_verb(Verb),
+            Module:process_request(Args, Req),
+            Req1 = cowboy_req:set_resp_body(<<"dupa2">>, Req),
+            {ok, Req2} = cowboy_req:reply(200, Req1),
+            Req2
+%%            ,
+%%                ?MODULE:binary_to_verb(Verb)(Data)
+    end.
+%%    erlang:error(not_implemented).
 
-identify(Data) ->
+%%identify(Data) ->
 
 
