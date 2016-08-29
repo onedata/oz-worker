@@ -75,12 +75,20 @@ listeners() -> node_manager:cluster_worker_listeners() ++ [
 %% @end
 %%--------------------------------------------------------------------
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
-modules_with_args() -> node_manager:cluster_worker_modules() ++ [
-    {groups_graph_caches_worker, []},
-    {changes_worker, []},
-    {ozpca_worker, []},
-    {subscriptions_worker, []}
-].
+modules_with_args() ->
+    Base = node_manager:cluster_worker_modules() ++ [
+        {groups_graph_caches_worker, []},
+        {changes_worker, []},
+        {ozpca_worker, []},
+        {subscriptions_worker, []}
+    ],
+    case application:get_env(?APP_Name, location_service_enabled) of
+        {ok, false} -> Base;
+        {ok, true} -> Base ++ [
+            {location_service_worker, []},
+            {identity_publisher_worker, []}
+        ]
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -106,6 +114,11 @@ before_init([]) ->
 -spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 after_init([]) ->
     try
+        %% This cannot be started before all workers are up
+        %% and critical section is running
+        %% todo: once critical section works in worker init, move it there
+        identity_publisher_worker:start_refreshing(),
+
         %% This code will be run on every node_manager, so we need a
         %% transaction here that will prevent duplicates.
         critical_section:run(create_predefined_groups, fun() ->

@@ -33,6 +33,7 @@ all: test_rel
 ##
 
 deps:
+	cd location-service &&  npm install
 	./rebar get-deps
 	deps/gui/pull-gui.sh gui-config.sh
 
@@ -74,6 +75,7 @@ clean:
 	./rebar clean
 
 distclean: clean
+	rm -rf location-service/node_modules
 	./rebar delete-deps
 
 ##
