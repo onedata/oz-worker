@@ -1600,6 +1600,14 @@ get_body_val(KeyList, Response) ->
             [proplists:get_value(atom_to_binary(Key, latin1), JSONOutput) || Key <- KeyList]
     end.
 
+%% returns map of values from Response's body,
+get_body_map(Response) ->
+    case check_status(Response) of
+        {bad_response_code, Code} -> {request_error, Code};
+        _ ->
+            json_utils:decode_map(get_response_body(Response))
+    end.
+
 get_header_val(Parameter, Response) ->
     case check_status(Response) of
         {bad_response_code, Code} -> {request_error, Code};
@@ -2395,6 +2403,169 @@ space_privilege_check(space_remove, Users, _GID, SID) ->
 clean_space_privileges(SID, UserId, ReqParams) ->
     set_space_privileges(users, SID, UserId, [space_view_data], ReqParams).
 
+%% Handle services functions =========================================================
+
+add_handle_service(Service, {RestAddress, Headers, Options}) ->
+    ServiceJson = json_utils:encode_map(Service),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/">>,
+    Response = do_request(Address, Headers, post, ServiceJson, Options),
+    get_body_map(Response).
+
+list_handle_service({RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+get_handle_service(HSID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary>>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+modify_handle_service(Modifications, HSID, {RestAddress, Headers, Options}) ->
+    ModificationsJson = json_utils:encode_map(Modifications),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary>>,
+    Response = do_request(Address, Headers, patch, ModificationsJson, Options),
+    get_body_map(Response).
+
+delete_handle_service(HSID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_body_map(Response).
+
+add_user_to_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary>>,
+    Response = do_request(Address, Headers, put, <<>>, Options),
+    get_body_map(Response).
+
+list_users_of_handle_service(HSID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+delete_user_from_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_body_map(Response).
+
+add_group_to_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary>>,
+    Response = do_request(Address, Headers, put, <<>>, Options),
+    get_body_map(Response).
+
+list_groups_of_handle_service(HSID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+delete_group_from_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_body_map(Response).
+
+get_user_privileges_for_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+set_user_privileges_for_handle_service(HSID, UID, Privileges, {RestAddress, Headers, Options}) ->
+    PrivilegesJson = json_utils:encode_map(Privileges),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, put, PrivilegesJson, Options),
+    get_body_map(Response).
+
+get_group_privileges_for_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+set_group_privileges_for_handle_service(HSID, UID, Privileges, {RestAddress, Headers, Options}) ->
+    PrivilegesJson = json_utils:encode_map(Privileges),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, put, PrivilegesJson, Options),
+    get_body_map(Response).
+
+%% Handles functions =======================================================
+
+add_handle(Service, {RestAddress, Headers, Options}) ->
+    ServiceJson = json_utils:encode_map(Service),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/">>,
+    Response = do_request(Address, Headers, post, ServiceJson, Options),
+    get_body_map(Response).
+
+list_handle({RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+get_handle(HID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary>>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+modify_handle(Modifications, HID, {RestAddress, Headers, Options}) ->
+    ModificationsJson = json_utils:encode_map(Modifications),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary>>,
+    Response = do_request(Address, Headers, patch, ModificationsJson, Options),
+    get_body_map(Response).
+
+delete_handle(HID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_body_map(Response).
+
+add_user_to_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/", UID/binary>>,
+    Response = do_request(Address, Headers, put, <<>>, Options),
+    get_body_map(Response).
+
+list_users_of_handle(HID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+delete_user_from_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/", UID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_body_map(Response).
+
+add_group_to_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/", UID/binary>>,
+    Response = do_request(Address, Headers, put, <<>>, Options),
+    get_body_map(Response).
+
+list_groups_of_handle(HID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+delete_group_from_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/", UID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_body_map(Response).
+
+get_user_privileges_for_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+set_user_privileges_for_handle(HID, UID, Privileges, {RestAddress, Headers, Options}) ->
+    PrivilegesJson = json_utils:encode_map(Privileges),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, put, PrivilegesJson, Options),
+    get_body_map(Response).
+
+get_group_privileges_for_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+set_group_privileges_for_handle(HID, UID, Privileges, {RestAddress, Headers, Options}) ->
+    PrivilegesJson = json_utils:encode_map(Privileges),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, put, PrivilegesJson, Options),
+    get_body_map(Response).
+
+%% Other functions =========================================================
 
 check_bad_requests([Endpoint], Method, Body, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
