@@ -48,10 +48,9 @@ process_request(Args, Req) ->
 
     XML = ?ROOT_ELEMENT#xmlElement{content=get_attributes(Args)} ,%#xmlElement,
 
-    io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
+%%    io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
     io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
-
-    ok.
+    xmerl:export_simple([XML], xmerl_xml).
 
 get_attributes(Args) ->
 
