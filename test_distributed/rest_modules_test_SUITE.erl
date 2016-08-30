@@ -73,29 +73,130 @@
 
 %% API
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
--export([create_provider_test/1, update_provider_test/1, get_provider_info_test/1,
-    delete_provider_test/1, create_and_support_space_by_provider/1, get_supported_space_info_test/1,
-    unsupport_space_test/1, provider_check_port_test/1, provider_check_ip_test/1,
-    support_space_test/1, user_authorize_test/1, update_user_test/1, delete_user_test/1,
-    create_space_for_user_test/1, set_user_default_space_test/1,
-    last_user_leaves_space_test/1, user_gets_space_info_test/1, invite_user_to_space_test/1,
-    get_group_info_by_user_test/1, get_ancestor_group_info_by_user_test/1, last_user_leaves_group_test/1,
-    non_last_user_leaves_group_test/1, group_invitation_test/1, create_group_test/1, update_group_test/1,
-    delete_group_test/1, create_group_for_user_test/1, effective_group_for_user_test/1, invite_user_to_group_test/1,
-    get_user_info_by_group_test/1, delete_user_from_group_test/1, get_group_privileges_test/1,
-    set_group_privileges_test/1, group_creates_space_test/1, get_space_info_by_group_test/1,
-    last_group_leaves_space_test/1, create_space_by_user_test/1,
-    create_and_support_space_test/1, update_space_test/1, delete_space_test/1,
-    get_users_from_space_test/1, get_user_info_from_space_test/1,
-    delete_user_from_space_test/1, get_groups_from_space_test/1, get_group_info_from_space_test/1,
-    delete_group_from_space_test/1, get_providers_supporting_space_test/1,
-    get_info_of_provider_supporting_space_test/1, delete_provider_supporting_space_test/1,
-    get_space_privileges_test/1, invite_group_to_space_test/1, not_last_group_leaves_space_test/1,
-    not_last_user_leaves_space_test/1, bad_request_test/1, get_unsupported_space_info_test/1,
-    set_space_privileges_test/1, set_non_existing_space_as_user_default_space_test/1,
-    set_user_default_space_without_permission_test/1, create_provider_with_location_test/1,
-    add_group_to_group_test/1, get_group_info_by_group_relation_test/1, delete_group_from_group_test/1,
-    get_nested_group_privileges_test/1, set_nested_group_privileges_test/1, group_cycle_prevented_test/1]).
+
+% provider_rest_module_test_group
+-export([
+    create_provider_test/1,
+    create_provider_with_location_test/1,
+    update_provider_test/1,
+    get_provider_info_test/1,
+    delete_provider_test/1,
+    create_and_support_space_by_provider_test/1,
+    get_supported_space_info_test/1,
+    unsupport_space_test/1,
+    provider_check_ip_test/1,
+    provider_check_port_test/1,
+    support_space_test/1,
+    get_unsupported_space_info_test/1
+]).
+
+% user_rest_module_test_group
+-export([
+    user_authorize_test/1,
+    update_user_test/1,
+    delete_user_test/1,
+    create_space_for_user_test/1,
+    set_user_default_space_test/1,
+    set_user_default_space_without_permission_test/1,
+    set_non_existing_space_as_user_default_space_test/1,
+    last_user_leaves_space_test/1,
+    not_last_user_leaves_space_test/1,
+    user_gets_space_info_test/1,
+    invite_user_to_space_test/1,
+    get_group_info_by_user_test/1,
+    get_ancestor_group_info_by_user_test/1,
+    last_user_leaves_group_test/1,
+    non_last_user_leaves_group_test/1
+]).
+
+% group_rest_module_test_group
+-export([
+    create_group_test/1,
+    update_group_test/1,
+    delete_group_test/1,
+    create_group_for_user_test/1,
+    effective_group_for_user_test/1,
+    invite_user_to_group_test/1,
+    get_user_info_by_group_test/1,
+    delete_user_from_group_test/1,
+    get_group_privileges_test/1,
+    set_group_privileges_test/1,
+    group_creates_space_test/1,
+    get_space_info_by_group_test/1,
+    last_group_leaves_space_test/1,
+    not_last_group_leaves_space_test/1,
+    invite_group_to_space_test/1,
+    add_group_to_group_test/1,
+    get_group_info_by_group_relation_test/1,
+    delete_group_from_group_test/1,
+    get_nested_group_privileges_test/1,
+    set_nested_group_privileges_test/1,
+    group_cycle_prevented_test/1,
+    group_invitation_test/1
+]).
+
+% spaces_rest_module_test_group
+-export([
+    create_space_by_user_test/1,
+    create_and_support_space_test/1,
+    update_space_test/1,
+    delete_space_test/1,
+    get_users_from_space_test/1,
+    get_user_info_from_space_test/1,
+    delete_user_from_space_test/1,
+    get_groups_from_space_test/1,
+    get_group_info_from_space_test/1,
+    delete_group_from_space_test/1,
+    get_providers_supporting_space_test/1,
+    get_info_of_provider_supporting_space_test/1,
+    delete_provider_supporting_space_test/1,
+    get_space_privileges_test/1,
+    set_space_privileges_test/1
+]).
+
+% handle_services_rest_module_test_group
+-export([
+    create_doi_service_test/1,
+    create_pid_service_test/1,
+    list_services_test/1,
+    get_service_test/1,
+    modify_service_test/1,
+    delete_service_test/1,
+    add_user_to_service_test/1,
+    list_service_users_test/1,
+    delete_user_from_service_test/1,
+    add_group_to_service_test/1,
+    list_service_groups_test/1,
+    delete_group_from_service_test/1,
+    get_user_privileges_for_service_test/1,
+    set_user_privileges_for_service_test/1,
+    get_group_privileges_for_service_test/1,
+    set_group_privileges_for_service_test/1
+]).
+
+% handles_rest_module_test_group
+-export([
+    create_handle_test/1,
+    list_handles_test/1,
+    get_handle_test/1,
+    modify_handle_test/1,
+    delete_handle_test/1,
+    add_user_to_handle_test/1,
+    list_handle_users_test/1,
+    delete_user_from_handle_test/1,
+    add_group_to_handle_test/1,
+    list_handle_groups_test/1,
+    delete_group_from_handle_test/1,
+    get_user_privileges_for_handle_test/1,
+    set_user_privileges_for_handle_test/1,
+    get_group_privileges_for_handle_test/1,
+    set_group_privileges_for_handle_test/1
+]).
+
+% other tests
+-export([
+    bad_request_test/1
+]).
 
 %%%===================================================================
 %%% API functions
@@ -107,6 +208,8 @@ all() ->
         {group, user_rest_module_test_group},
         {group, group_rest_module_test_group},
         {group, spaces_rest_module_test_group},
+        {group, handle_services_rest_module_test_group},
+        {group, handles_rest_module_test_group},
         bad_request_test
     ]).
 
@@ -121,13 +224,14 @@ groups() ->
                 update_provider_test,
                 get_provider_info_test,
                 delete_provider_test,
-                create_and_support_space_by_provider,
+                create_and_support_space_by_provider_test,
                 get_supported_space_info_test,
                 unsupport_space_test,
                 provider_check_ip_test,
                 provider_check_port_test,
                 support_space_test,
                 get_unsupported_space_info_test
+%%                group_invitation_test todo fix
             ]
         },
         {
@@ -148,8 +252,7 @@ groups() ->
                 get_group_info_by_user_test,
                 get_ancestor_group_info_by_user_test,
                 last_user_leaves_group_test,
-                non_last_user_leaves_group_test,
-                invite_user_to_group_test
+                non_last_user_leaves_group_test
             ]
         },
         {
@@ -196,8 +299,51 @@ groups() ->
                 get_providers_supporting_space_test,
                 get_info_of_provider_supporting_space_test,
                 delete_provider_supporting_space_test,
-                get_group_privileges_test,
-                set_group_privileges_test
+                set_space_privileges_test
+            ]
+        },
+        {
+            handle_services_rest_module_test_group,
+            [],
+            [
+                create_doi_service_test,
+                create_pid_service_test,
+                list_services_test,
+                get_service_test,
+                modify_service_test,
+                delete_service_test,
+                add_user_to_service_test,
+                list_service_users_test,
+                delete_user_from_service_test,
+                add_group_to_service_test,
+                list_service_groups_test,
+                delete_group_from_service_test,
+                get_user_privileges_for_service_test,
+                set_user_privileges_for_service_test,
+                get_group_privileges_for_service_test,
+                set_group_privileges_for_service_test
+            ]
+        },
+        {
+            handles_rest_module_test_group,
+            [],
+            [
+                create_handle_test,
+                list_handles_test,
+                get_handle_test,
+                modify_handle_test,
+                delete_handle_test,
+                delete_handle_test,
+                add_user_to_handle_test,
+                list_handle_users_test,
+                delete_user_from_handle_test,
+                add_group_to_handle_test,
+                list_handle_groups_test,
+                delete_group_from_handle_test,
+                get_user_privileges_for_handle_test,
+                set_user_privileges_for_handle_test,
+                get_group_privileges_for_handle_test,
+                set_group_privileges_for_handle_test
             ]
         }
     ].
@@ -284,7 +430,7 @@ delete_provider_test(Config) ->
     ?assertMatch({request_error, ?UNAUTHORIZED}, get_provider_info(ParamsWithOtherAddress)),
     ?assertMatch({request_error, ?UNAUTHORIZED}, get_provider_info(ProviderReqParams)).
 
-create_and_support_space_by_provider(Config) ->
+create_and_support_space_by_provider_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
@@ -1171,6 +1317,106 @@ set_space_privileges_test(Config) ->
     % space entirely (and other tests need the space to exist)
     PrvlgsToCheck = ?SPACE_PRIVILEGES -- [space_remove] ++ [space_remove],
     space_privileges_check(PrvlgsToCheck, Users, GID, SID).
+
+
+%% handle_services_rest_module_test_group ============================
+
+create_doi_service_test(_Config) ->
+    ok. %todo write me!
+
+create_pid_service_test(_Config) ->
+    ok. %todo write me!
+
+list_services_test(_Config) ->
+    ok. %todo write me!
+
+get_service_test(_Config) ->
+    ok. %todo write me!
+
+modify_service_test(_Config) ->
+    ok. %todo write me!
+
+delete_service_test(_Config) ->
+    ok. %todo write me!
+
+add_user_to_service_test(_Config) ->
+    ok. %todo write me!
+
+list_service_users_test(_Config) ->
+    ok. %todo write me!
+
+delete_user_from_service_test(_Config) ->
+    ok. %todo write me!
+
+add_group_to_service_test(_Config) ->
+    ok. %todo write me!
+
+list_service_groups_test(_Config) ->
+    ok. %todo write me!
+
+delete_group_from_service_test(_Config) ->
+    ok. %todo write me!
+
+get_user_privileges_for_service_test(_Config) ->
+    ok. %todo write me!
+
+set_user_privileges_for_service_test(_Config) ->
+    ok. %todo write me!
+
+get_group_privileges_for_service_test(_Config) ->
+    ok. %todo write me!
+
+set_group_privileges_for_service_test(_Config) ->
+    ok. %todo write me!
+
+%% handles_rest_module_test_group ====================================
+
+create_handle_test(_Config) ->
+    ok. %todo write me!
+
+list_handles_test(_Config) ->
+    ok. %todo write me!
+
+get_handle_test(_Config) ->
+    ok. %todo write me!
+
+modify_handle_test(_Config) ->
+    ok. %todo write me!
+
+delete_handle_test(_Config) ->
+    ok. %todo write me!
+
+add_user_to_handle_test(_Config) ->
+    ok. %todo write me!
+
+list_handle_users_test(_Config) ->
+    ok. %todo write me!
+
+delete_user_from_handle_test(_Config) ->
+    ok. %todo write me!
+
+add_group_to_handle_test(_Config) ->
+    ok. %todo write me!
+
+list_handle_groups_test(_Config) ->
+    ok. %todo write me!
+
+delete_group_from_handle_test(_Config) ->
+    ok. %todo write me!
+
+get_user_privileges_for_handle_test(_Config) ->
+    ok. %todo write me!
+
+set_user_privileges_for_handle_test(_Config) ->
+    ok. %todo write me!
+
+get_group_privileges_for_handle_test(_Config) ->
+    ok. %todo write me!
+
+set_group_privileges_for_handle_test(_Config) ->
+    ok. %todo write me!
+
+%% other tests =======================================================
 
 bad_request_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
