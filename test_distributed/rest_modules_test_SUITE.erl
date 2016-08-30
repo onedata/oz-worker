@@ -1653,14 +1653,11 @@ prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
         {<<"discharge-macaroons">>, BoundMacaroonsValue}
     ].
 
-update_req_params(ReqParams, NewParam, headers) ->
-    {RestAddress, Headers, Options} = ReqParams,
+update_req_params({RestAddress, Headers, Options}, NewParam, headers) ->
     {RestAddress, Headers ++ NewParam, Options};
-update_req_params(ReqParams, NewParam, options) ->
-    {RestAddress, Headers, Options} = ReqParams,
+update_req_params({RestAddress, Headers, Options}, NewParam, options) ->
     {RestAddress, Headers, Options ++ NewParam};
-update_req_params(ReqParams, NewParam, address) ->
-    {_, Headers, Options} = ReqParams,
+update_req_params({_, Headers, Options}, NewParam, address) ->
     {NewParam, Headers, Options}.
 
 %% Provider functions =====================================================
@@ -1668,8 +1665,7 @@ update_req_params(ReqParams, NewParam, address) ->
 register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
     register_provider(undefined, undefined, URLS, RedirectionPoint, ClientName, Config, ReqParams).
 
-register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
-    {RestAddress, Headers, _Options} = ReqParams,
+register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Config, {RestAddress, Headers, _Options}) ->
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     {ok, CSR} = file:read_file(CSRFile),
     Params = [
@@ -1698,37 +1694,31 @@ register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Confi
     ProviderReqParams = update_req_params(ReqParams, Options, options),
     {ProviderId, ProviderReqParams}.
 
-get_provider_info(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_provider_info({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/provider", Headers, get, [], Options),
     get_body_val([clientName, urls, redirectionPoint, providerId], Response).
 
-get_provider_info_with_location(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_provider_info_with_location({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/provider", Headers, get, [], Options),
     get_body_val([latitude, longitude, clientName, urls, redirectionPoint, providerId], Response).
 
-get_provider_info(ProviderId, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_provider_info(ProviderId, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(ProviderId)),
     Response = do_request(RestAddress ++ "/provider/" ++ EncodedPID, Headers, get, [], Options),
     get_body_val([clientName, urls, redirectionPoint, providerId], Response).
 
-update_provider(URLS, RedirectionPoint, ClientName, ReqParams) ->
+update_provider(URLS, RedirectionPoint, ClientName, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"urls">>, URLS},
         {<<"redirectionPoint">>, RedirectionPoint},
         {<<"clientName">>, ClientName}
     ]),
-    {RestAddress, Headers, Options} = ReqParams,
     do_request(RestAddress ++ "/provider", Headers, patch, Body, Options).
 
-delete_provider(ReqParams) ->
-    {RestAddress, _Headers, Options} = ReqParams,
+delete_provider({RestAddress, _Headers, Options}) ->
     do_request(RestAddress ++ "/provider", [], delete, [], Options).
 
-create_and_support_space(Token, SpaceName, Size, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_and_support_space(Token, SpaceName, Size, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, SpaceName},
         {<<"token">>, Token},
@@ -1737,32 +1727,26 @@ create_and_support_space(Token, SpaceName, Size, ReqParams) ->
     Response = do_request(RestAddress ++ "/provider/spaces", Headers, post, Body, Options),
     get_header_val(<<"spaces">>, Response).
 
-get_supported_spaces(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_supported_spaces({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/provider/spaces", Headers, get, [], Options),
     Val = get_body_val([spaces], Response),
     fetch_value_from_list(Val).
 
-get_space_info_by_provider(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_info_by_provider(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/provider/spaces/" ++ EncodedSID, Headers, get, [], Options),
     get_body_val([spaceId, name, providersSupports], Response).
 
-unsupport_space(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+unsupport_space(SID, {RestAddress, Headers, Options}) ->
     do_request(RestAddress ++ "/provider/spaces/" ++ binary_to_list(http_utils:url_encode(SID)), Headers, delete, [], Options).
 
-check_provider_ip(ReqParams) ->
-    {RestAddress, _, _} = ReqParams,
+check_provider_ip({RestAddress, _, _}) ->
     do_request(RestAddress ++ "/provider/test/check_my_ip", [], get).
 
-check_provider_ports(ReqParams) ->
-    {RestAddress, _, _} = ReqParams,
+check_provider_ports({RestAddress, _, _}) ->
     do_request(RestAddress ++ "/provider/test/check_my_ports", [], post).
 
-support_space(Token, Size, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+support_space(Token, Size, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token},
         {<<"size">>, Size}
@@ -1780,9 +1764,8 @@ create_user(UserName, Node) ->
 %% then it parses macaroons from response
 %% and returns headers updated with these macaroons
 %% headers are needed to confirm that user is authorized
-authorize_user(UserId, ProviderId, ReqParams, Node) ->
+authorize_user(UserId, ProviderId, {RestAddress, Headers, _Options}, Node) ->
     SerializedMacaroon = rpc:call(Node, auth_logic, gen_token, [UserId, ProviderId]),
-    {RestAddress, Headers, _Options} = ReqParams,
     Identifier = get_macaroon_id(SerializedMacaroon),
     Body = json_utils:encode([{<<"identifier">>, Identifier}]),
     Resp = do_request(RestAddress ++ "/user/authorize", Headers, post, Body),
@@ -1796,67 +1779,56 @@ register_user(UserName, ProviderId, Config, ProviderReqParams) ->
     UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
     {UserId, UserReqParams}.
 
-get_user_info(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_info({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user", Headers, get, [], Options),
     get_body_val([userId, name, alias], Response).
 
-update_user(Attributes, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+update_user(Attributes, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode(Attributes),
     do_request(RestAddress ++ "/user", Headers, patch, Body, Options).
 
-delete_user(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_user({RestAddress, Headers, Options}) ->
     do_request(RestAddress ++ "/user", Headers, delete, [], Options).
 
-get_user_spaces(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_spaces({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/spaces", Headers, get, [], Options),
     get_body_val([spaces, default], Response).
 
-get_space_info_by_user(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_info_by_user(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/user/spaces/" ++ EncodedSID, Headers, get, [], Options),
     get_body_val([spaceId, name], Response).
 
-get_user_default_space(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_default_space({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/spaces/default", Headers, get, [], Options),
     Val = get_body_val([spaceId], Response),
     fetch_value_from_list(Val).
 
-create_space_for_user(SpaceName, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_space_for_user(SpaceName, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, SpaceName}
     ]),
     Response = do_request(RestAddress ++ "/user/spaces", Headers, post, Body, Options),
     get_header_val(<<"spaces">>, Response).
 
-set_default_space_for_user(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+set_default_space_for_user(SID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"spaceId">>, SID}
     ]),
     do_request(RestAddress ++ "/user/spaces/default", Headers, put, Body, Options).
 
-user_leaves_space(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+user_leaves_space(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     do_request(RestAddress ++ "/user/spaces/" ++ EncodedSID, Headers, delete, [], Options).
 
-join_user_to_space(Token, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+join_user_to_space(Token, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token}
     ]),
     Response = do_request(RestAddress ++ "/user/spaces/join", Headers, post, Body, Options),
     get_header_val(<<"user/spaces">>, Response).
 
-create_group_for_user(GroupName, GroupType, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_group_for_user(GroupName, GroupType, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, GroupName},
         {<<"type">>, GroupType}
@@ -1864,31 +1836,26 @@ create_group_for_user(GroupName, GroupType, ReqParams) ->
     Response = do_request(RestAddress ++ "/user/groups", Headers, post, Body, Options),
     get_header_val(<<"groups">>, Response).
 
-get_user_groups(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_groups({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/groups", Headers, get, [], Options),
     Val = get_body_val([groups], Response),
     fetch_value_from_list(Val).
 
-get_user_effective_groups(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_effective_groups({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/effective_groups", Headers, get, [], Options),
     Val = get_body_val([effective_groups], Response),
     fetch_value_from_list(Val).
 
-get_group_info_by_user(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_info_by_user(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/user/groups/" ++ Encoded, Headers, get, [], Options),
     get_body_val([groupId, name, type], Response).
 
-user_leaves_group(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+user_leaves_group(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     do_request(RestAddress ++ "/user/groups/" ++ Encoded, Headers, delete, [], Options).
 
-join_user_to_group(Token, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+join_user_to_group(Token, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token}
     ]),
@@ -1897,8 +1864,7 @@ join_user_to_group(Token, ReqParams) ->
 
 %% Group functions ==============================================================
 
-create_group(GroupName, GroupType, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_group(GroupName, GroupType, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, GroupName},
         {<<"type">>, GroupType}
@@ -1906,14 +1872,12 @@ create_group(GroupName, GroupType, ReqParams) ->
     Response = do_request(RestAddress ++ "/groups", Headers, post, Body, Options),
     get_header_val(<<"groups">>, Response).
 
-get_group_info(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_info(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded, Headers, get, [], Options),
     get_body_val([groupId, name, type], Response).
 
-update_group(GID, NewGroupName, NewGroupType, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+update_group(GID, NewGroupName, NewGroupType, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, NewGroupName},
         {<<"type">>, NewGroupType}
@@ -1921,86 +1885,74 @@ update_group(GID, NewGroupName, NewGroupType, ReqParams) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     do_request(RestAddress ++ "/groups/" ++ Encoded, Headers, patch, Body, Options).
 
-delete_group(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_group(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     do_request(RestAddress ++ "/groups/" ++ Encoded, Headers, delete, [], Options).
 
-get_group_invitation_token(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_invitation_token(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/users/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_group_invitation_group_token(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_invitation_group_token(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/nested/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_group_users(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_users(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/users", Headers, get, [], Options),
     Val = get_body_val([users], Response),
     fetch_value_from_list(Val).
 
-get_group_nested_groups(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_nested_groups(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/nested", Headers, get, [], Options),
     Val = get_body_val([nested_groups], Response),
     fetch_value_from_list(Val).
 
-get_group_parent_groups(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_parent_groups(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/parent", Headers, get, [], Options),
     Val = get_body_val([parent_groups], Response),
     fetch_value_from_list(Val).
 
-get_user_info_by_group(GID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_info_by_group(GID, UID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/users/" ++ EncodedUID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([userId, name], Response).
 
-get_group_info_by_parent_group(ParentGID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_info_by_parent_group(ParentGID, GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([groupId, name, type], Response).
 
-get_group_info_by_nested_group(GID, ParentGID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_info_by_nested_group(GID, ParentGID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/parent/" ++ EncodedPGID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([groupId, name, type], Response).
 
-delete_user_from_group(GID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_user_from_group(GID, UID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/users/" ++ EncodedUID,
     do_request(Address, Headers, delete, [], Options).
 
-delete_group_from_group(ParentGID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_group_from_group(ParentGID, GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID,
     do_request(Address, Headers, delete, [], Options).
 
-get_group_privileges_of_user(GID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_privileges_of_user(GID, UID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/users/" ++ EncodedUID ++ "/privileges",
@@ -2008,8 +1960,7 @@ get_group_privileges_of_user(GID, UID, ReqParams) ->
     Val = get_body_val([privileges], Response),
     fetch_value_from_list(Val).
 
-get_group_privileges_of_group(ParentGID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_privileges_of_group(ParentGID, GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID ++ "/privileges",
@@ -2017,8 +1968,7 @@ get_group_privileges_of_group(ParentGID, GID, ReqParams) ->
     Val = get_body_val([privileges], Response),
     fetch_value_from_list(Val).
 
-set_group_privileges_of_user(GID, UID, Privileges, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+set_group_privileges_of_user(GID, UID, Privileges, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"privileges">>, Privileges}
     ]),
@@ -2027,8 +1977,7 @@ set_group_privileges_of_user(GID, UID, Privileges, ReqParams) ->
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/users/" ++ EncodedUID ++ "/privileges",
     do_request(Address, Headers, put, Body, Options).
 
-set_group_privileges_of_group(ParentGID, GID, Privileges, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+set_group_privileges_of_group(ParentGID, GID, Privileges, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"privileges">>, Privileges}
     ]),
@@ -2037,23 +1986,20 @@ set_group_privileges_of_group(ParentGID, GID, Privileges, ReqParams) ->
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID ++ "/privileges",
     do_request(Address, Headers, put, Body, Options).
 
-get_group_spaces(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_spaces(GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces", Headers, get, [], Options),
     Val = get_body_val([spaces], Response),
     fetch_value_from_list(Val).
 
-get_space_info_by_group(GID, SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_info_by_group(GID, SID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces/" ++ EncodedSID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([spaceId, name], Response).
 
-create_space_for_group(Name, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_space_for_group(Name, GID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name}
     ]),
@@ -2061,14 +2007,12 @@ create_space_for_group(Name, GID, ReqParams) ->
     Response = do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces", Headers, post, Body, Options),
     get_header_val(<<"spaces">>, Response).
 
-group_leaves_space(GID, SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+group_leaves_space(GID, SID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces/" ++ EncodedSID, Headers, delete, [], Options).
 
-join_group_to_space(Token, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+join_group_to_space(Token, GID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token}
     ]),
@@ -2076,8 +2020,7 @@ join_group_to_space(Token, GID, ReqParams) ->
     Response = do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces/join", Headers, post, Body, Options),
     get_header_val(<<"groups/", GID/binary, "/spaces">>, Response).
 
-join_group_to_group(Token, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+join_group_to_group(Token, GID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token}
     ]),
@@ -2222,8 +2165,7 @@ clean_group_privileges(GID, UserId, ReqParams) ->
 %% Spaces functions ===========================================================
 
 %% create space for user
-create_space(Name, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_space(Name, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name}
     ]),
@@ -2231,8 +2173,7 @@ create_space(Name, ReqParams) ->
     get_header_val(<<"spaces">>, Response).
 
 %% create space for user/group who delivers token
-create_space(Token, Name, Size, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_space(Token, Name, Size, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name},
         {<<"token">>, Token},
@@ -2241,49 +2182,42 @@ create_space(Token, Name, Size, ReqParams) ->
     Response = do_request(RestAddress ++ "/spaces", Headers, post, Body, Options),
     get_header_val(<<"spaces">>, Response).
 
-get_space_info(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_info(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/spaces/" ++ EncodedSID, Headers, get, [], Options),
     get_body_val([spaceId, name], Response).
 
-update_space(Name, SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+update_space(Name, SID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name}
     ]),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     do_request(RestAddress ++ "/spaces/" ++ EncodedSID, Headers, patch, Body, Options).
 
-delete_space(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_space(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     do_request(RestAddress ++ "/spaces/" ++ EncodedSID, Headers, delete, [], Options).
 
-get_space_users(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_users(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users", Headers, get, [], Options),
     Val = get_body_val([users], Response),
     fetch_value_from_list(Val).
 
-get_user_info_from_space(SID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_info_from_space(SID, UID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users/" ++ EncodedUID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([userId, name], Response).
 
-delete_user_from_space(SID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_user_from_space(SID, UID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users/" ++ EncodedUID,
     do_request(Address, Headers, delete, [], Options).
 
-get_space_privileges(UserType, SID, ID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_privileges(UserType, SID, ID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/" ++ atom_to_list(UserType) ++ "/" ++ EncodedID ++ "/privileges",
@@ -2291,8 +2225,7 @@ get_space_privileges(UserType, SID, ID, ReqParams) ->
     Val = get_body_val([privileges], Response),
     fetch_value_from_list(Val).
 
-set_space_privileges(UserType, SID, ID, Privileges, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+set_space_privileges(UserType, SID, ID, Privileges, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"privileges">>, Privileges}
     ]),
@@ -2301,15 +2234,13 @@ set_space_privileges(UserType, SID, ID, Privileges, ReqParams) ->
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/" ++ atom_to_list(UserType) ++ "/" ++ EncodedID ++ "/privileges",
     do_request(Address, Headers, put, Body, Options).
 
-get_space_groups(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_groups(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/spaces/" ++ EncodedSID ++ "/groups", Headers, get, [], Options),
     Val = get_body_val([groups], Response),
     fetch_value_from_list(Val).
 
-get_group_from_space(SID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_from_space(SID, GID, {RestAddress, Headers, Options}) ->
     Response =
         do_request(
             RestAddress ++ "/spaces/" ++ binary_to_list(http_utils:url_encode(SID)) ++ "/groups/" ++ binary_to_list(http_utils:url_encode(GID)),
@@ -2317,15 +2248,13 @@ get_group_from_space(SID, GID, ReqParams) ->
         ),
     get_body_val([groupId, name, type], Response).
 
-delete_group_from_space(SID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_group_from_space(SID, GID, {RestAddress, Headers, Options}) ->
     do_request(
         RestAddress ++ "/spaces/" ++ binary_to_list(http_utils:url_encode(SID)) ++ "/groups/" ++ binary_to_list(http_utils:url_encode(GID)),
         Headers, delete, [], Options
     ).
 
-get_supporting_providers(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_supporting_providers(SID, {RestAddress, Headers, Options}) ->
     Response =
         do_request(
             RestAddress ++ "/spaces/" ++ binary_to_list(http_utils:url_encode(SID)) ++ "/providers",
@@ -2334,44 +2263,38 @@ get_supporting_providers(SID, ReqParams) ->
     [Providers] = get_body_val([providers], Response),
     Providers.
 
-get_supporting_provider_info(SID, PID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_supporting_provider_info(SID, PID, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(PID)),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/providers/" ++ EncodedPID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([clientName, providerId, urls, redirectionPoint], Response).
 
-delete_supporting_provider(SID, PID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_supporting_provider(SID, PID, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(PID)),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/providers/" ++ EncodedPID,
     do_request(Address, Headers, delete, [], Options).
 
-get_space_creation_token_for_user(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_creation_token_for_user({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/spaces/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_space_creation_token_for_group(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_creation_token_for_group(GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_space_invitation_token(UserType, ID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_invitation_token(UserType, ID, {RestAddress, Headers, Options}) ->
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedID ++ "/" ++ atom_to_list(UserType) ++ "/token",
     Response = do_request(Address, Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_space_support_token(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_support_token(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/spaces/" ++ EncodedSID ++ "/providers/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
