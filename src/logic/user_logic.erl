@@ -22,7 +22,7 @@
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, get_data/2]).
 -export([get_groups/1, get_effective_groups/1, get_providers/1]).
--export([get_spaces/1, get_default_space/1, set_default_space/2]).
+-export([get_spaces/1, get_shares/1, get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
@@ -255,6 +255,32 @@ get_spaces(UserId) ->
         {spaces, AllUserSpaces},
         {default, EffectiveDefaultSpace}
     ]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns user's shares, i.e. all shares of all spaces in which user has
+%% the privilege to manage shares.
+%% Throws exception when call to the datastore fails, or user doesn't exist,
+%% or his groups don't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_shares(UserId :: binary()) -> {ok, [proplists:property()]}.
+get_shares(UserId) ->
+    {ok, Doc} = onedata_user:get(UserId),
+    AllUserSpaces = get_all_spaces(Doc),
+    % Resolve user shares - he can only view the shares in spaces where
+    % he has proper privileges.
+    UserShares = lists:foldl(
+        fun(SpaceId, Acc) ->
+            case space_logic:has_effective_privilege(
+                SpaceId, UserId, space_manage_shares) of
+                true ->
+                    {ok, SharesInSpace} = space_logic:get_shares(SpaceId),
+                    SharesInSpace ++ Acc;
+                false ->
+                    Acc
+            end
+        end, [], AllUserSpaces),
+    {ok, UserShares}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns user's groups.

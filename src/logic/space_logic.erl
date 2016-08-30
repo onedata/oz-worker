@@ -17,13 +17,16 @@
 
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
-    has_effective_privilege/3]).
--export([create/2, create/4, modify/3, set_privileges/3, join/2, support/3]).
--export([get_data/2, get_users/1, get_effective_users/1, get_groups/1,
-    get_providers/2, get_user/3, get_group/2, get_provider/3, get_privileges/2,
-    get_effective_privileges/2]).
--export([add_user/2, add_group/2]).
--export([remove/1, remove_user/2, remove_group/2, remove_provider/2, cleanup/1]).
+    has_effective_privilege/3, has_share/2]).
+-export([create/2, create/4, get_data/2, modify/3]).
+-export([join/2, add_user/2, get_user/3, get_users/1, get_effective_users/1,
+    remove_user/2]).
+-export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
+-export([support/3, get_providers/2, get_provider/3, remove_provider/2]).
+-export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
+-export([create_share/4, get_shares/1, remove_share/1]).
+-export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
+-export([remove/1, cleanup/1]).
 -export([list/0]).
 
 %%%===================================================================
@@ -137,6 +140,25 @@ has_effective_privilege(SpaceId, UserId, Privilege) ->
     end.
 
 %%--------------------------------------------------------------------
+%% @doc Returns whether the share identified by ShareId belongs to the Space.
+%% Shall return false in any other case (Space doesn't exist, etc).
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_user(SpaceId :: binary(), ShareId :: binary()) ->
+    boolean().
+has_share(SpaceId, ShareId) ->
+    case exists(SpaceId) of
+        false -> false;
+        true ->
+            {ok, #document{
+                value = #space{
+                    shares = Shares
+                }}} = space:get(SpaceId),
+            lists:member(ShareId, Shares)
+    end.
+
+%%--------------------------------------------------------------------
 %% @doc Creates a Space for a user.
 %% Throws exception when call to the datastore fails, or given member doesn't exist.
 %% @end
@@ -144,7 +166,8 @@ has_effective_privilege(SpaceId, UserId, Privilege) ->
 -spec create({user | group, Id :: binary()}, Name :: binary()) ->
     {ok, SpaceId :: binary()} | no_return().
 create(Member, Name) ->
-    create_with_provider(Member, Name, []).
+    {ok, ShareDoc} = create_with_provider(Member, Name, []),
+    {ok, ShareDoc#document.key}.
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user, by a provider that will support it.
@@ -156,7 +179,8 @@ create(Member, Name) ->
     {ok, SpaceId :: binary()}.
 create({provider, ProviderId}, Name, Macaroon, Size) ->
     {ok, Member} = token_logic:consume(Macaroon),
-    create_with_provider(Member, Name, [{ProviderId, Size}]).
+    {ok, ShareDoc} = create_with_provider(Member, Name, [{ProviderId, Size}]),
+    {ok, ShareDoc#document.key}.
 
 %%--------------------------------------------------------------------
 %% @doc Modifies Space's data.
@@ -524,13 +548,14 @@ remove_provider(SpaceId, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec create_with_provider({user | group, Id :: binary()}, Name :: binary(),
     Size :: [{Provider :: binary(), ProvidedSize :: pos_integer()}]) ->
-    {ok, SpaceId :: binary()}.
+    {ok, SpaceDoc :: datastore:document()}.
 create_with_provider({user, UserId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, providers_supports = Supports, users = [{UserId, Privileges}]},
     {Providers, _} = lists:unzip(Supports),
 
     {ok, SpaceId} = space:save(#document{value = Space}),
+    {ok, SpaceDoc} = space:get(SpaceDoc),
     {ok, _} = onedata_user:update(UserId, fun(User) ->
         #onedata_user{spaces = USpaces} = User,
         {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
@@ -538,12 +563,13 @@ create_with_provider({user, UserId}, Name, Supports) ->
 
     add_space_to_providers(SpaceId, Providers),
     user_logic:set_space_name_mapping(UserId, SpaceId, Name),
-    {ok, SpaceId};
+    {ok, SpaceDoc};
 
 create_with_provider({group, GroupId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, providers_supports = Supports, groups = [{GroupId, Privileges}]},
     {ok, SpaceId} = space:save(#document{value = Space}),
+    {ok, SpaceDoc} = space:get(SpaceDoc),
     {Providers, _} = lists:unzip(Supports),
 
     {ok, _} = user_group:update(GroupId, fun(Group) ->
@@ -557,7 +583,7 @@ create_with_provider({group, GroupId}, Name, Supports) ->
         user_logic:set_space_name_mapping(UserId, SpaceId, Name)
     end, Users),
 
-    {ok, SpaceId}.
+    {ok, SpaceDoc}.
 
 
 %%--------------------------------------------------------------------
@@ -617,6 +643,68 @@ get_effective_privileges(SpaceId, UserId) ->
 
     {ok, ordsets:union([UserPrivileges | PrivilegesSets])}.
 
+
+%%--------------------------------------------------------------------
+%% @doc Creates a share for a user.
+%% Throws exception when call to the datastore fails,
+%% or given member doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_share({user, UserId :: binary()}, Name :: binary(),
+    RootFileId :: binary(), ParentSpaceId :: binary()) ->
+    {ok, SpaceId :: binary()} | no_return().
+create_share({user, UserId}, Name, RootFileId, ParentSpaceId) ->
+    {ok, ShareDoc} = create_with_provider({user, UserId}, Name, []),
+    ShareId = ShareDoc#document.key,
+    {ok, _} = space:update(ShareId, fun(DocToUpdate) ->
+        {ok, DocToUpdate#space{
+            type = share,
+            public_url = asas,
+            parent_space = ParentSpaceId,
+            root_file_id = RootFileId
+        }}
+    end),
+    {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
+        Shares = SpaceDoc#space.shares,
+        {ok, SpaceDoc#space{shares = [ShareId | Shares]}}
+    end),
+    {ok, ShareDoc#document.key}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns the list of all shares created in given space.
+%% Throws exception when call to the datastore fails,
+%% or given space doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_shares(SpaceId :: binary()) -> {ok, [binary()]} | no_return().
+get_shares(SpaceId) ->
+    {ok, #document{
+        value = #space{
+            shares = Shares
+        }}} = space:get(SpaceId),
+    {ok, Shares}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Removes a share.
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_share(ShareId :: binary()) -> true.
+remove_share(ShareId) ->
+    {ok, #document{
+        value = #space{
+            parent_space = ParentSpaceId
+        }}} = space:get(ShareId),
+    ok = space:delete(ShareId),
+    {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
+        Shares = SpaceDoc#space.shares,
+        {ok, SpaceDoc#space{shares = Shares -- [ShareId]}}
+    end),
+    true.
+
+
 %%--------------------------------------------------------------------
 %% @doc Transforms a space to include new privileges.
 %%--------------------------------------------------------------------
@@ -640,3 +728,41 @@ list() ->
         SpaceId
     end, SpaceDocs),
     {ok, SpaceIds}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns public access URL for given share that points to onezone.
+%% OneZone will then redirect such clients to one of providers that support the
+%% parent space of the share.
+%%--------------------------------------------------------------------
+-spec share_id_to_public_url(ShareId :: binary()) -> binary().
+share_id_to_public_url(ShareId) ->
+    OZHostname = dns_query_handler:get_canonical_hostname(),
+    str_utils:format_bin("https://~s/share/~s", [OZHostname, ShareId]).
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns public access URL for given share that points to one of
+%% providers that support the parent space of the share.
+%%--------------------------------------------------------------------
+-spec share_id_to_redirect_url(ShareId :: binary()) -> binary().
+share_id_to_redirect_url(ShareId) ->
+    {ok, #document{
+        value = #space{
+            parent_space = ParentSpaceId
+        }}} = space:get(ShareId),
+    {ok, Providers} = get_providers(ParentSpaceId, provider),
+    % Prefer online providers
+    {Online, Offline} = lists:partition(
+        fun(ProviderId) ->
+            subscriptions:any_connection_active(ProviderId)
+        end, Providers),
+    % But if there are none, choose one of inactive
+    Choice = case length(Online) of
+        0 -> Offline;
+        _ -> Online
+    end,
+    random:seed(erlang:timestamp()),
+    ChosenProvider = lists:nth(random:uniform(length(Choice)), Choice),
+    {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
+    str_utils:format_bin("~s/share/~s", [ProviderURL, ShareId]).

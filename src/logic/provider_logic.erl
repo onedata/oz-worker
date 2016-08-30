@@ -22,7 +22,7 @@
 
 %% API
 -export([create/4, create/5, modify/2, exists/1]).
--export([get_data/1, get_spaces/1]).
+-export([get_data/1, get_spaces/1, get_url/1]).
 -export([remove/1]).
 -export([test_connection/1, check_provider_connectivity/1]).
 -export([choose_provider_for_user/1]).
@@ -140,6 +140,22 @@ get_data(ProviderId) ->
 get_spaces(ProviderId) ->
     {ok, #document{value = #provider{spaces = Spaces}}} = provider:get(ProviderId),
     {ok, [{spaces, Spaces}]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns full provider URL.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_url(ProviderId :: binary()) ->
+    {ok, ProviderURL :: binary()}.
+get_url(ProviderId) ->
+    {ok, PData} = provider_logic:get_data(ProviderId),
+    RedirectionPoint = proplists:get_value(redirectionPoint, PData),
+    #hackney_url{host = Host, port = Port} =
+        hackney_url:parse_url(RedirectionPoint),
+    URL = str_utils:format_bin("https://~s:~B", [Host, Port]),
+    {ok, URL}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Remove provider's account.
