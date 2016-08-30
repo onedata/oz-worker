@@ -143,9 +143,49 @@ handle_request(Args, Req) ->
         undefined -> error; % todo handle bad verb error;
         Verb -> io:format("handle_request: ~nVerb=~p~nData=~p~n", [Verb, Args]),
             Module = binary_to_verb(Verb),
-            XML = Module:process_request(Args, Req),
+            ParsedArgs = Module:parse_arguments(Args),
+            XML = ?ROOT_ELEMENT#xmlElement{content=get_attributes(Module, Args)}, %TODO add request and date
+
+            %%    io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
+            io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
+            ResponseBody = xmerl:export_simple([XML], xmerl_xml),
+
+%%            XML = Module:process_request(Args, Req)
+            %% ,
             io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
             Req2 = cowboy_req:set_resp_header(<<"content-type">>, ?RESPONSE_CONTENT_TYPE, Req),
-            {XML, Req2}
+            {ResponseBody, Req2}
     end.
 
+get_attributes(Module, Args) ->
+
+    RequiredAttributes = lists:flatmap(fun(A) ->
+        generate_xml(A, Module:get_attribute(A))
+    end, Module:required_response_attributes()),
+
+    OptionalAttributes = lists:flatmap(fun(A) ->
+        try generate_xml(A, Module:get_attribute(A)) of
+            XML -> XML
+        catch _:_ -> []
+        end
+    end, Module:optional_response_attributes()),
+    RequiredAttributes ++ OptionalAttributes.
+
+generate_xml(Name, Value) ->
+    generate_xml([], Name, Value).
+
+generate_xml(XML, _Name, []) -> lists:reverse(XML);
+generate_xml(XML, Name, [#xmlElement{} = Value | Values]) ->
+    generate_xml([#xmlElement{name=Name, content=[Value]} | XML], Name, Values);
+generate_xml(XML, Name, [Value | Values]) ->
+    generate_xml([#xmlElement{name=Name, content=[binary_to_list(Value)]} | XML], Name, Values);
+generate_xml(XML, Name, Value = #xmlElement{}) ->
+    generate_xml([#xmlElement{name=Name, content=[Value]} | XML], Name, []);
+generate_xml(XML, Name, Value) ->
+    generate_xml([#xmlElement{name=Name, content=[binary_to_list(Value)]} | XML], Name, []).
+
+
+
+%% TODO
+%% TODO * response should contain: response data, request container
+%% TODO
