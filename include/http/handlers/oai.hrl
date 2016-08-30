@@ -49,15 +49,15 @@
 
 -define(XMLNS, #xmlAttribute{
         name=xmlns,
-        value= <<"http://www.openarchives.org/OAI/2.0/">>}).
+        value= "http://www.openarchives.org/OAI/2.0/"}).
 
 -define(XMLNS_XSI, #xmlAttribute{
     name='xml:xsi',
-    value= <<"http://www.w3.org/2001/XMLSchema-instance">>}).
+    value= "http://www.w3.org/2001/XMLSchema-instance"}).
 
 -define(XSI_SCHEMA_LOCATION, #xmlAttribute{
     name='xsi:schemaLocation',
-    value = <<"http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd">>}).
+    value = "http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"}).
 
 
 -define(ROOT_ELEMENT, #xmlElement{
@@ -72,4 +72,5 @@
 
 -define(RESPONSE_CONTENT_TYPE, <<"text/xml">>).
 
--define(SUPPORTED_VERSION, <<"2.0">>).
+-define(PROTOCOL_VERSION, <<"2.0">>).
+
