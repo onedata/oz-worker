@@ -28,11 +28,9 @@ optional_arguments() -> [].
 parse_arguments(Args) ->
     maps:merge(parse_required_arguments(Args), parse_optional_arguments(Args)).
 
-parse_required_arguments(Args) ->
-    #{}.
+parse_required_arguments(Args) -> #{}.
 
-parse_optional_arguments(Args) ->
-    #{}.
+parse_optional_arguments(Args) -> #{}.
 
 required_response_attributes() -> [
     repositoryName, baseURL, protocolVersion,

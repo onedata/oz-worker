@@ -17,7 +17,8 @@
 
 %% API
 -export([init/3, terminate/3, rest_init/2, allowed_methods/2,
-    content_types_accepted/2, content_types_provided/2, resource_exists/2, accept_resource/2, provide_resource/2]).
+    content_types_accepted/2, content_types_provided/2, resource_exists/2,
+    accept_resource/2, provide_resource/2]).
 
 %%%===================================================================
 %%% API
@@ -101,7 +102,7 @@ terminate(_Reason, _Req, _State) ->
 provide_resource(Req, State) ->
     {QS, Req1} = cowboy_req:qs_vals(Req),
     {ResponseBody, Req2} = handle_request(QS, Req1),
-    {ResponseBody, Req2, State}. % should return response_body
+    {ResponseBody, Req2, State}.
 
 
     %%--------------------------------------------------------------------
@@ -115,7 +116,7 @@ accept_resource(Req, State) ->
     {ok, QS, Req1} = cowboy_req:body_qs(Req),
     {ResponseBody, Req2} = handle_request(QS, Req1),
     Req3 = cowboy_req:set_resp_body(ResponseBody, Req2),
-    {true, Req3, State}.
+    {true, Req3, State}. % TODO delete content-type x-www-form .. from request
 
 
 %%%===================================================================
@@ -144,10 +145,14 @@ handle_request(Args, Req) ->
         Verb -> io:format("handle_request: ~nVerb=~p~nData=~p~n", [Verb, Args]),
             Module = binary_to_verb(Verb),
             ParsedArgs = Module:parse_arguments(Args),
-            XML = ?ROOT_ELEMENT#xmlElement{content=get_attributes(Module, Args)}, %TODO add request and date
+            XML = ?ROOT_ELEMENT#xmlElement{content= get_attribute_values(Module, Args)},
 
             %%    io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
             io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
+
+            ResponseDate = generate_response_date(),
+
+            %TODO add request and date here
             ResponseBody = xmerl:export_simple([XML], xmerl_xml),
 
 %%            XML = Module:process_request(Args, Req)
@@ -157,7 +162,7 @@ handle_request(Args, Req) ->
             {ResponseBody, Req2}
     end.
 
-get_attributes(Module, Args) ->
+get_attribute_values(Module, Args) ->
 
     RequiredAttributes = lists:flatmap(fun(A) ->
         generate_xml(A, Module:get_attribute(A))
@@ -186,6 +191,21 @@ generate_xml(XML, Name, Value) ->
 
 
 
+generate_response_date() ->
+    {{Y, M, D}, {H, M, S}} = calendar:universal_time(),
+    #xmlElement{
+        name=responseDate,
+        content=str_utils:format("~4..0B-2..0-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ", [Y, M, D, H, M, S])}. % TODO padding with 0
+
+
+
 %% TODO
 %% TODO * response should contain: response data, request container
-%% TODO
+%% TODO * docs
+%% TODO * specs
+%% TODO * error handling
+%% TODO * generating xml in proper format DC, ...
+%% TODO     * it should be a separate module
+%% TODO * add encoding to head of xml
+%% TODO * handle datestamps
+%% TODO * handle all verbs
