@@ -127,19 +127,16 @@ is_authorized(_, _, _, _) ->
 resource_exists(spaces, _SpaceId, Req) ->
     {true, Req};
 resource_exists(UserBound, SpaceId, Req) when UserBound =:= user; UserBound =:= upriv ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     case rest_handler:requests_effective_state(Req) of
         false -> {space_logic:has_user(SpaceId, UID), Req2};
         true -> {space_logic:has_effective_user(SpaceId, UID), Req2}
     end;
 resource_exists(GroupBound, SpaceId, Req) when GroupBound =:= group; GroupBound =:= gpriv ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {gid, GID} = lists:keyfind(gid, 1, Bindings),
+    {GID, Req2} = cowboy_req:binding(gid, Req),
     {space_logic:has_group(SpaceId, GID), Req2};
 resource_exists(provider, SpaceId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {pid, PID} = lists:keyfind(pid, 1, Bindings),
+    {PID, Req2} = cowboy_req:binding(pid, Req),
     {space_logic:has_provider(SpaceId, PID), Req2};
 resource_exists(_, SpaceId, Req) ->
     {space_logic:exists(SpaceId), Req}.
@@ -198,8 +195,7 @@ accept_resource(groups, post, SpaceId, Data, _Client, Req) ->
             {true, Req}
     end;
 accept_resource(upriv, put, SpaceId, Data, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
 
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
         [atom_to_binary(P, latin1) || P <- privileges:space_privileges()], Data,
@@ -209,8 +205,7 @@ accept_resource(upriv, put, SpaceId, Data, _Client, Req) ->
     ok = space_logic:set_privileges(SpaceId, {user, UID}, Privileges),
     {true, Req2};
 accept_resource(gpriv, put, SpaceId, Data, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {gid, GID} = lists:keyfind(gid, 1, Bindings),
+    {GID, Req2} = cowboy_req:binding(gid, Req),
 
     BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
         [atom_to_binary(P, latin1) || P <- privileges:space_privileges()], Data,
@@ -261,13 +256,11 @@ provide_resource(uinvite, SpaceId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, space_invite_user_token, {space, SpaceId}),
     {[{token, Token}], Req};
 provide_resource(user, SpaceId, #client{type = ClientType}, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     {ok, User} = space_logic:get_user(SpaceId, ClientType, UID),
     {User, Req2};
 provide_resource(upriv, SpaceId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     {ok, Privileges} =
         case rest_handler:requests_effective_state(Req) of
             false -> space_logic:get_privileges(SpaceId, {user, UID});
@@ -281,13 +274,11 @@ provide_resource(ginvite, SpaceId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, space_invite_group_token, {space, SpaceId}),
     {[{token, Token}], Req};
 provide_resource(group, SpaceId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {gid, GID} = lists:keyfind(gid, 1, Bindings),
+    {GID, Req2} = cowboy_req:binding(gid, Req),
     {ok, Group} = space_logic:get_group(SpaceId, GID),
     {Group, Req2};
 provide_resource(gpriv, SpaceId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {gid, GID} = lists:keyfind(gid, 1, Bindings),
+    {GID, Req2} = cowboy_req:binding(gid, Req),
     {ok, Privileges} = space_logic:get_privileges(SpaceId, {group, GID}),
     {[{privileges, Privileges}], Req2};
 provide_resource(providers, SpaceId, #client{type = ClientType}, Req) ->
@@ -297,8 +288,7 @@ provide_resource(pinvite, SpaceId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, space_support_token, {space, SpaceId}),
     {[{token, Token}], Req};
 provide_resource(provider, SpaceId, #client{type = ClientType}, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {pid, PID} = lists:keyfind(pid, 1, Bindings),
+    {PID, Req2} = cowboy_req:binding(pid, Req),
     {ok, Provider} = space_logic:get_provider(SpaceId, ClientType, PID),
     {Provider, Req2}.
 
@@ -313,14 +303,11 @@ provide_resource(provider, SpaceId, #client{type = ClientType}, Req) ->
 delete_resource(space, SpaceId, Req) ->
     {space_logic:remove(SpaceId), Req};
 delete_resource(user, SpaceId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     {space_logic:remove_user(SpaceId, UID), Req2};
 delete_resource(group, SpaceId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {gid, GID} = lists:keyfind(gid, 1, Bindings),
+    {GID, Req2} = cowboy_req:binding(gid, Req),
     {space_logic:remove_group(SpaceId, GID), Req2};
 delete_resource(provider, SpaceId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {pid, PID} = lists:keyfind(pid, 1, Bindings),
+    {PID, Req2} = cowboy_req:binding(pid, Req),
     {space_logic:remove_provider(SpaceId, PID), Req2}.

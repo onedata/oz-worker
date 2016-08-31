@@ -90,12 +90,10 @@ is_authorized(_, _, _, _) ->
     Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 resource_exists(space, ProviderId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
+    {SID, Req2} = cowboy_req:binding(sid, Req),
     {space_logic:has_provider(SID, ProviderId), Req2};
 resource_exists(nprovider, _, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {pid, PID} = lists:keyfind(pid, 1, Bindings),
+    {PID, Req2} = cowboy_req:binding(pid, Req),
     {provider_logic:exists(PID), Req2};
 resource_exists(_, _, Req) ->
     {true, Req}.
@@ -189,16 +187,14 @@ provide_resource(provider, ProviderId, _Client, Req) ->
     {ok, Provider} = provider_logic:get_data(ProviderId),
     {Provider, Req};
 provide_resource(nprovider, _ProviderId, _Client, Req) ->
-    {Bindings, _Req2} = cowboy_req:bindings(Req),
-    {pid, PID} = lists:keyfind(pid, 1, Bindings),
+    {PID, Req2} = cowboy_req:binding(pid, Req),
     {ok, Provider} = provider_logic:get_data(PID),
-    {Provider, Req};
+    {Provider, Req2};
 provide_resource(spaces, ProviderId, _Client, Req) ->
     {ok, Spaces} = provider_logic:get_spaces(ProviderId),
     {Spaces, Req};
 provide_resource(space, _ProviderId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
+    {SID, Req2} = cowboy_req:binding(sid, Req),
     {ok, Space} = space_logic:get_data(SID, provider),
     {Space, Req2};
 provide_resource(ip, _ProviderId, _Client, Req) ->
@@ -216,6 +212,5 @@ provide_resource(ip, _ProviderId, _Client, Req) ->
 delete_resource(provider, ProviderId, Req) ->
     {provider_logic:remove(ProviderId), Req};
 delete_resource(space, ProviderId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
+    {SID, Req2} = cowboy_req:binding(sid, Req),
     {space_logic:remove_provider(SID, ProviderId), Req2}.

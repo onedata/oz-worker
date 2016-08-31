@@ -120,16 +120,13 @@ is_authorized(_, _, _, _) ->
 resource_exists(groups, _GroupId, Req) ->
     {true, Req};
 resource_exists(UserBound, GroupId, Req) when UserBound =:= user; UserBound =:= upriv ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     {group_logic:has_user(GroupId, UID), Req2};
 resource_exists(Bound, GroupId, Req) when Bound =:= nested_group; Bound =:= npriv ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    {NID, Req2} = cowboy_req:binding(nid, Req),
     {group_logic:has_nested_group(GroupId, NID), Req2};
 resource_exists(space, GroupId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
+    {SID, Req2} = cowboy_req:binding(sid, Req),
     {space_logic:has_group(SID, GroupId), Req2};
 resource_exists(_, GroupId, Req) ->
     {group_logic:exists(GroupId), Req}.
@@ -155,14 +152,12 @@ accept_resource(group, patch, GroupId, Data, _Client, Req) ->
     ok = group_logic:modify(GroupId, #{name => Name, type => binary_to_atom(Type, latin1)}),
     {true, Req};
 accept_resource(upriv, put, GroupId, Data, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     Privileges = extract_member_privileges(Data, Req2),
     ok = group_logic:set_privileges(GroupId, UID, Privileges),
     {true, Req2};
 accept_resource(npriv, put, GroupId, Data, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    {NID, Req2} = cowboy_req:binding(nid, Req),
     Privileges = extract_member_privileges(Data, Req2),
     ok = group_logic:set_nested_group_privileges(GroupId, NID, Privileges),
     {true, Req2};
@@ -221,41 +216,34 @@ provide_resource(ninvite, GroupId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, group_invite_group_token, {group, GroupId}),
     {[{token, Token}], Req};
 provide_resource(nested_group, GroupId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    {NID, Req2} = cowboy_req:binding(nid, Req),
     {ok, Group} = group_logic:get_nested_group(GroupId, NID),
     {Group, Req2};
 provide_resource(parent_group, GroupId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {pid, PID} = lists:keyfind(pid, 1, Bindings),
+    {PID, Req2} = cowboy_req:binding(pid, Req),
     {ok, Group} = group_logic:get_parent_group(GroupId, PID),
     {Group, Req2};
 provide_resource(uinvite, GroupId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, group_invite_token, {group, GroupId}),
     {[{token, Token}], Req};
 provide_resource(user, GroupId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     {ok, User} = group_logic:get_user(GroupId, UID),
     {User, Req2};
 provide_resource(effective_user, GroupId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     {ok, User} = group_logic:get_effective_user(GroupId, UID),
     {User, Req2};
 provide_resource(npriv, GroupId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    {NID, Req2} = cowboy_req:binding(nid, Req),
     {ok, Privileges} = group_logic:get_nested_group_privileges(GroupId, NID),
     {[{privileges, Privileges}], Req2};
 provide_resource(upriv, GroupId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     {ok, Privileges} = group_logic:get_privileges(GroupId, UID),
     {[{privileges, Privileges}], Req2};
 provide_resource(eupriv, GroupId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     {ok, Privileges} = group_logic:get_effective_privileges(GroupId, UID),
     {[{privileges, Privileges}], Req2};
 provide_resource(spaces, GroupId, _Client, Req) ->
@@ -265,8 +253,7 @@ provide_resource(screate, GroupId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, space_create_token, {group, GroupId}),
     {[{token, Token}], Req};
 provide_resource(space, _GroupId, #client{id = UserId}, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
+    {SID, Req2} = cowboy_req:binding(sid, Req),
     {ok, Space} = space_logic:get_data(SID, {user, UserId}),
     {Space, Req2}.
 
@@ -281,16 +268,13 @@ provide_resource(space, _GroupId, #client{id = UserId}, Req) ->
 delete_resource(group, GroupId, Req) ->
     {group_logic:remove(GroupId), Req};
 delete_resource(user, GroupId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {uid, UID} = lists:keyfind(uid, 1, Bindings),
+    {UID, Req2} = cowboy_req:binding(uid, Req),
     {group_logic:remove_user(GroupId, UID), Req2};
 delete_resource(nested_group, GroupId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {nid, NID} = lists:keyfind(nid, 1, Bindings),
+    {NID, Req2} = cowboy_req:binding(nid, Req),
     {group_logic:remove_nested_group(GroupId, NID), Req2};
 delete_resource(space, GroupId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
+    {SID, Req2} = cowboy_req:binding(sid, Req),
     {space_logic:remove_group(SID, GroupId), Req2}.
 
 %%%===================================================================
