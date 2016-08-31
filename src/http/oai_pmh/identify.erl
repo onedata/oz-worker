@@ -14,8 +14,8 @@
 
 
 %% API
--export([required_arguments/0, optional_arguments/0, required_response_attributes/0,
-    optional_response_attributes/0, get_attribute/1, parse_arguments/1,
+-export([required_arguments/0, optional_arguments/0, required_response_elements/0,
+    optional_response_elements/0, get_element/1, parse_arguments/1,
     parse_required_arguments/1, parse_optional_arguments/1]).
 
 -include("http/handlers/oai.hrl").
@@ -26,38 +26,38 @@ required_arguments() ->[].
 optional_arguments() -> [].
 
 parse_arguments(Args) ->
-    maps:merge(parse_required_arguments(Args), parse_optional_arguments(Args)).
+    parse_required_arguments(Args) ++ parse_optional_arguments(Args).
 
-parse_required_arguments(Args) -> #{}.
+parse_required_arguments(Args) -> [].
 
-parse_optional_arguments(Args) -> #{}.
+parse_optional_arguments(Args) -> [].
 
-required_response_attributes() -> [
+required_response_elements() -> [
     repositoryName, baseURL, protocolVersion,
     earliestDatestamp, granularity, adminEmail].
 
-optional_response_attributes() ->
+optional_response_elements() ->
     [compression, description].
 
-get_attribute(repositoryName) ->
+get_element(repositoryName) ->
     <<"REPOSITORY NAME">>; % TODO what should be the repository name
-get_attribute(baseURL) ->
+get_element(baseURL) ->
     {ok, Domain} = application:get_env(?APP_Name, http_domain),
     {ok, OAI_PREFIX} = application:get_env(?APP_Name, oai_pmh_prefix ),
     list_to_binary(Domain ++ OAI_PREFIX);
-get_attribute(protocolVersion) ->
+get_element(protocolVersion) ->
     ?PROTOCOL_VERSION;
-get_attribute(earliestDatestamp) ->
+get_element(earliestDatestamp) ->
     <<"1970-01-01T00:00:00Z">>; % TODO how to get it
-get_attribute(deletedRecord) ->
+get_element(deletedRecord) ->
     <<"no">> ; % TODO can be no, transient, persistent
-get_attribute(granularity) ->
+get_element(granularity) ->
     <<"YYYY-MM-DDThh:mm:ss:Z">> ;% TODO can be <<"YYYY-MM-DD">>
-get_attribute(adminEmail) ->
+get_element(adminEmail) ->
     [<<"a@mail.com">>, <<"b@mail.com">>];
-get_attribute(compression) ->
+get_element(compression) ->
     <<"compression">>;
-get_attribute(description) -> [
+get_element(description) -> [
     #xmlElement{name=description1, attributes = [#xmlAttribute{name=xml_schema}]}, %TODO it's example
     #xmlElement{name=description2, attributes = [#xmlAttribute{name=xml_schema}]}].  %TODO it's example
 

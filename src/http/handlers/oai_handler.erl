@@ -18,7 +18,7 @@
 %% API
 -export([init/3, terminate/3, rest_init/2, allowed_methods/2,
     content_types_accepted/2, content_types_provided/2, resource_exists/2,
-    accept_resource/2, provide_resource/2]).
+    accept_resource/2, provide_resource/2, generate_response/2]).
 
 %%%===================================================================
 %%% API
@@ -78,7 +78,7 @@ content_types_accepted(Req, State) ->
 %% @end
 %%--------------------------------------------------------------------
 resource_exists(Req, State) ->
-%%    TODO
+    %%    TODO
     {true, Req, State}.
 
 
@@ -88,7 +88,7 @@ resource_exists(Req, State) ->
 %%--------------------------------------------------------------------
 -spec terminate(term(), term(), term()) -> ok.
 terminate(_Reason, _Req, _State) ->
-%%    TODO needed ?
+    %%    TODO needed ?
     ok.
 
 
@@ -105,7 +105,7 @@ provide_resource(Req, State) ->
     {ResponseBody, Req2, State}.
 
 
-    %%--------------------------------------------------------------------
+%%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
 %% Process the request body of application/x-www-form-urlencoded content type.
 %% @end
@@ -129,77 +129,132 @@ accept_resource(Req, State) ->
 %% WRITEME
 %% @end
 %%--------------------------------------------------------------------
--spec binary_to_verb(binary()) -> oai_verb().
-binary_to_verb(<<"Identify">>) -> identify;
-binary_to_verb(<<"GetRecord">>) -> getRecord;
-binary_to_verb(<<"ListIdentifiers">>) -> listIdentifiers;
-binary_to_verb(<<"ListMedatadaFormats">>) -> listMedatadaFormats;
-binary_to_verb(<<"ListRecords">>) -> listRecords;
-binary_to_verb(<<"ListSets">>) -> listSets.
+-spec verb_to_module(binary()) -> oai_verb().
+verb_to_module(<<"Identify">>) -> identify;
+verb_to_module(<<"GetRecord">>) -> get_record;
+verb_to_module(<<"ListIdentifiers">>) -> list_identifiers;
+verb_to_module(<<"ListMedatadaFormats">>) -> list_medatada_formats;
+verb_to_module(<<"ListRecords">>) -> list_records;
+verb_to_module(<<"ListSets">>) -> list_sets.
 
-
-
-handle_request(Args, Req) ->
-    case proplists:get_value(<<"verb">>, Args) of
+handle_request(QueryString, Req) ->
+    case proplists:get_value(<<"verb">>, QueryString) of
         undefined -> error; % todo handle bad verb error;
-        Verb -> io:format("handle_request: ~nVerb=~p~nData=~p~n", [Verb, Args]),
-            Module = binary_to_verb(Verb),
-            ParsedArgs = Module:parse_arguments(Args),
-            XML = ?ROOT_ELEMENT#xmlElement{content= get_attribute_values(Module, Args)},
-
-            %%    io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
-            io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
-
-            ResponseDate = generate_response_date(),
-
-            %TODO add request and date here
+        Verb ->
+            Module = verb_to_module(Verb),
+            %%            ParsedArgs = Module:parse_arguments(Args),
+            ParsedArgs = parse_args(Module, QueryString),
+            Response = generate_response(Verb, ParsedArgs),
+            ResponseDate = generate_response_date_element(), %todo handle errors
+            RequestElement = generate_request_element(ParsedArgs, Req),
+            XML = ?ROOT_ELEMENT#xmlElement{
+                content = [ResponseDate, RequestElement, Response]},
+            %%            io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
             ResponseBody = xmerl:export_simple([XML], xmerl_xml),
-
-%%            XML = Module:process_request(Args, Req)
-            %% ,
-            io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
-            Req2 = cowboy_req:set_resp_header(<<"content-type">>, ?RESPONSE_CONTENT_TYPE, Req),
+            %%            io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
+            Req2 = cowboy_req:set_resp_header(<<"content-type">>,
+                ?RESPONSE_CONTENT_TYPE, Req),
             {ResponseBody, Req2}
     end.
 
-get_attribute_values(Module, Args) ->
 
-    RequiredAttributes = lists:flatmap(fun(A) ->
-        generate_xml(A, Module:get_attribute(A))
-    end, Module:required_response_attributes()),
+generate_response(Verb, Args) ->
 
-    OptionalAttributes = lists:flatmap(fun(A) ->
-        try generate_xml(A, Module:get_attribute(A)) of
+    Module = verb_to_module(Verb),
+    RequiredElements = lists:flatmap(fun(ElementName) ->
+        XML =  to_xml(ElementName,
+            Module:get_element(ElementName)), % TODO handle error in get_element
+        io:format("~nNAME: ~p~n~p~n", [ElementName, XML]), XML
+    end, Module:required_response_elements()),
+
+    OptionalElements = lists:flatmap(fun(ElementName) ->
+        try to_xml(ElementName, Module:get_element(
+            ElementName)) of % TODO handle error in get_element
             XML -> XML
         catch _:_ -> []
         end
-    end, Module:optional_response_attributes()),
-    RequiredAttributes ++ OptionalAttributes.
-
-generate_xml(Name, Value) ->
-    generate_xml([], Name, Value).
-
-generate_xml(XML, _Name, []) -> lists:reverse(XML);
-generate_xml(XML, Name, [#xmlElement{} = Value | Values]) ->
-    generate_xml([#xmlElement{name=Name, content=[Value]} | XML], Name, Values);
-generate_xml(XML, Name, [Value | Values]) ->
-    generate_xml([#xmlElement{name=Name, content=[binary_to_list(Value)]} | XML], Name, Values);
-generate_xml(XML, Name, Value = #xmlElement{}) ->
-    generate_xml([#xmlElement{name=Name, content=[Value]} | XML], Name, []);
-generate_xml(XML, Name, Value) ->
-    generate_xml([#xmlElement{name=Name, content=[binary_to_list(Value)]} | XML], Name, []).
-
-
-
-generate_response_date() ->
-    {{Y, M, D}, {H, M, S}} = calendar:universal_time(),
+    end, Module:optional_response_elements()),
     #xmlElement{
-        name=responseDate,
-        content=str_utils:format("~4..0B-2..0-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ", [Y, M, D, H, M, S])}. % TODO padding with 0
+        name = binary_to_atom(Verb, latin1),
+        content = RequiredElements ++ OptionalElements
+    }.
+
+
+to_xml(Name, [#xmlElement{} = Value]) ->
+    [#xmlElement{name = Name, content = [Value]}];
+to_xml(Name, [#oai_record{header = Header, metadata = Metadata, about = About}]) ->
+    [#xmlElement{name = Name,
+        content = [
+            to_xml(header, Header),
+            to_xml(metadata, Metadata),
+            to_xml(about, About)]}];
+to_xml(Name, [#oai_header{identifier = Identifier, datestamp = Datestamp, setSpec = SetSpec}]) ->
+    [#xmlElement{name = Name,
+        content = [
+            to_xml(identifier, Identifier),
+            to_xml(datestamp, Datestamp),
+            to_xml(setSpec, SetSpec)]}];
+to_xml(Name, [Value, Values]) ->
+    to_xml(Name, Value) ++  to_xml(Name, Values);
+to_xml(Name, Value) when is_binary(Value) ->
+    [#xmlElement{name = Name, content = [binary_to_list(Value)]}];
+to_xml(Name, Value) when is_number(Value) ->
+    [#xmlElement{name = Name, content = [str_utils:format("~B~", [Value])]}];
+to_xml(Name, Value) ->
+    [#xmlElement{name = Name, content = [Value]}].
+
+generate_response_date_element() ->
+    {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:universal_time(),
+    #xmlElement{name = responseDate,
+        content = [str_utils:format(
+            "~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ",
+            [Year, Month, Day, Hour, Minute, Second])]}. % TODO padding with 0
+
+
+generate_request_element(ParsedArgs, Req) ->
+    {Path, Req2} = cowboy_req:path(Req),
+    {URL, _Req3} = cowboy_req:host_url(Req2),
+    BaseURL = string:concat(binary_to_list(URL), binary_to_list(Path)),
+
+    #xmlElement{
+        name = request,
+        attributes = generate_attributes(ParsedArgs),
+        content = [BaseURL]
+    }.
+
+generate_attributes(ParsedArgs) ->
+
+    lists:map(fun({Name, Value}) ->
+        #xmlAttribute{
+            name = binary_to_atom(Name, latin1),
+            value = binary_to_list(Value)}
+    end, ParsedArgs).
+
+parse_args(Module, QueryString) ->
+    %% TODO handle badargs, args repetition, illegal args etc.
+    QueryString.
+%%    RequiredArguments = lists:flatmap(fun(A) ->
+%%        case proplists:get_value(QueryString, A) of
+%%            undefined -> error;
+%%            Value -> Value
+%%        end
+%%    end, Module:required_arguments()),
+%%
+%%    OptionalAttributes = lists:flatmap(fun(A) ->
+%%    try generate_xml(A, Module:get_attribute(A)) of
+%%        XML -> XML
+%%        catch _:_ -> []
+%%    end
+%%    end, Module:optional_response_attributes()),
+%%    RequiredArguments ++ OptionalAttributes.
+
+
 
 
 
 %% TODO
+
+%% TODO * OAI-identifier
 %% TODO * response should contain: response data, request container
 %% TODO * docs
 %% TODO * specs
@@ -209,3 +264,7 @@ generate_response_date() ->
 %% TODO * add encoding to head of xml
 %% TODO * handle datestamps
 %% TODO * handle all verbs
+%% TODO * compression
+%% TODO * identity encoding
+%% TODO * maybe parsing arguments should be implemented in each module to return proper error
+% TODO handle error in get_element

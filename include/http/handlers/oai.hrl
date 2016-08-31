@@ -16,7 +16,7 @@
 
 
 -record(oai_header, {
-    id :: oai_id(),
+    identifier :: oai_id(),
     datestamp,
     setSpec :: list(),
     status :: undefined | deleted
@@ -33,7 +33,8 @@
 -record(oai_record, {
     header :: oai_header(),
     metadata :: oai_metadata(),
-    about :: oai_about()
+    about :: oai_about(),
+    metadata_format :: atom()
 }).
 
 
@@ -44,7 +45,6 @@
 -type oai_metadata() :: #oai_metadata{}.
 -type oai_about() :: #oai_about{}.
 -type oai_record() :: #oai_record{}.
--type oai_granularity() :: 'YYYY-MM-DD' | 'YYYY-MM-DDThh:mm:ssZ' .
 
 
 -define(XMLNS, #xmlAttribute{
