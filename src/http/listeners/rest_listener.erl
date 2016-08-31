@@ -76,7 +76,9 @@ start() ->
             provider_rest_module:routes(),
             spaces_rest_module:routes(),
             groups_rest_module:routes(),
-            privileges_rest_module:routes()
+            privileges_rest_module:routes(),
+            handle_services_rest_module:routes(),
+            handles_rest_module:routes()
         ]),
         RESTRoutesWithPrefix = lists:map(
             fun({Path, Module, InitialState}) ->

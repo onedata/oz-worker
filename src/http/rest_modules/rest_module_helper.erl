@@ -45,31 +45,31 @@ unauthorized_client | unsupported_grant_type | invalid_scope | would_introduce_c
     float() | undefined | no_return();
     (Key :: json_string(), List :: [{json_string(), term()}],
         Type :: pos_integer, Req :: cowboy_req:req()) ->
+    pos_integer() | undefined | no_return();
+    (Key :: json_string(), List :: [{json_string(), term()}],
+        Type :: any, Req :: cowboy_req:req()) ->
     pos_integer() | undefined | no_return().
 assert_type(Key, List, Type, Req) ->
     case lists:keyfind(Key, 1, List) of
         {Key, Value} when Type =:= binary andalso is_binary(Value) ->
             Value;
-
         {Key, Value} when Type =:= list_of_bin andalso is_list(Value) ->
             case lists:all(fun is_binary/1, Value) of
                 true -> Value;
                 false -> report_invalid_value(Key, Value, Req)
             end;
-
         {Key, Value} when Type =:= pos_integer andalso is_binary(Value) ->
             Regex = <<"[1-9][0-9]*">>,
             case re:run(Value, Regex, [{capture, first, binary}]) of
                 {match, [Value]} -> binary_to_integer(Value);
                 _ -> report_invalid_value(Key, Value, Req)
             end;
-
         {Key, Value} when Type =:= float andalso is_float(Value) ->
             Value;
-
+        {Key, Value} when Type =:= any ->
+            Value;
         {Key, Value} ->
             report_invalid_value(Key, Value, Req);
-
         false ->
             undefined
     end.
