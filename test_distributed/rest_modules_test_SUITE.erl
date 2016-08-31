@@ -71,6 +71,38 @@
     ]
 ).
 
+-define(DOI_SERVICE,
+    #{
+        <<"type">> => <<"DOI">>,
+        <<"name">> => <<"LifeWatch DataCite">>,
+        <<"host">> => <<"https://mds.test.datacite.org">>,
+        <<"doiEndpoint">> => <<"/doi">>,
+        <<"metadataEndpoint">> => <<"/metadata">>,
+        <<"mediaEndpoint">> => <<"/media">>,
+        <<"prefix">> => <<"10.572">>,
+        <<"username">> => <<"alice">>,
+        <<"password">> => <<"*******">>,
+        <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
+        <<"allowTemplateOverride">> => false
+    }
+).
+
+-define(PID_SERVICE,
+    #{
+        <<"type">> => <<"PID">>,
+        <<"name">> => <<"iMarine EPIC">>,
+        <<"endpoint">> => <<"https://epic.grnet.gr/api/v2/handles">>,
+        <<"prefix">> => <<"11789">>,
+        <<"suffixGeneration">> => <<"auto">>,
+        <<"suffixPrefix">> => <<"{{space.name}}">>,
+        <<"suffixSuffix">> => <<"{{user.name}}">>,
+        <<"username">> => <<"alice">>,
+        <<"password">> => <<"*******">>,
+        <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
+        <<"allowTemplateOverride">> => false
+    }
+).
+
 %% API
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
 
@@ -230,8 +262,8 @@ groups() ->
                 provider_check_ip_test,
                 provider_check_port_test,
                 support_space_test,
-                get_unsupported_space_info_test
-%%                group_invitation_test todo fix
+                get_unsupported_space_info_test,
+                group_invitation_test
             ]
         },
         {
@@ -792,6 +824,7 @@ group_invitation_test(Config) ->
 
     %% check if GID returned for user2 is the same as GID1
     ?assertMatch(GID1, join_user_to_group(InvitationToken, User2ParamsOtherAddress)),
+    ensure_effective_users_and_groups_updated(Config),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ReqParams)),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ParamsOtherAddress)),
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID1, User1ReqParams))),
@@ -1321,100 +1354,254 @@ set_space_privileges_test(Config) ->
 
 %% handle_services_rest_module_test_group ============================
 
-create_doi_service_test(_Config) ->
-    ok. %todo write me!
+create_doi_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
 
-create_pid_service_test(_Config) ->
-    ok. %todo write me!
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
 
-list_services_test(_Config) ->
-    ok. %todo write me!
+    ?assertMatch(<<_/binary>>, Id).
 
-get_service_test(_Config) ->
-    ok. %todo write me!
+create_pid_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
 
-modify_service_test(_Config) ->
-    ok. %todo write me!
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
 
-delete_service_test(_Config) ->
-    ok. %todo write me!
+    ?assertMatch(<<_/binary>>, Id).
 
-add_user_to_service_test(_Config) ->
-    ok. %todo write me!
+list_services_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    DoiId = add_handle_service(?DOI_SERVICE, UserReqParams),
+    PidId = add_handle_service(?PID_SERVICE, UserReqParams),
 
-list_service_users_test(_Config) ->
-    ok. %todo write me!
+    Services = list_handle_service(UserReqParams), %todo should we list owned services or services that are accessible.
 
-delete_user_from_service_test(_Config) ->
-    ok. %todo write me!
+    ?assert(is_list(Services)),
+    ?assertEqual(lists:sort([DoiId, PidId]), lists:sort(Services)).
 
-add_group_to_service_test(_Config) ->
-    ok. %todo write me!
+get_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
 
-list_service_groups_test(_Config) ->
-    ok. %todo write me!
+    Result = get_handle_service(Id, UserReqParams),
 
-delete_group_from_service_test(_Config) ->
-    ok. %todo write me!
+    ?assertEqual(?DOI_SERVICE, Result).
 
-get_user_privileges_for_service_test(_Config) ->
-    ok. %todo write me!
+modify_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    Modifications = #{
+        <<"name">> => <<"New name">>,
+        <<"allowTemplateOverride">> => true
+    },
 
-set_user_privileges_for_service_test(_Config) ->
-    ok. %todo write me!
+    Result = modify_handle_service(Modifications, Id, UserReqParams),
 
-get_group_privileges_for_service_test(_Config) ->
-    ok. %todo write me!
+    ?assertEqual(204, Result),
+    ?assertMatch(#{<<"name">> := <<"New name">>, <<"allowTemplateOverride">> := true},
+        get_handle_service(Id, UserReqParams)).
 
-set_group_privileges_for_service_test(_Config) ->
-    ok. %todo write me!
+delete_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+
+    Result = delete_handle_service(Id, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual({request_error, 404}, get_handle_service(Id, UserReqParams)).
+
+add_user_to_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+
+    Result = add_user_to_handle_service(Id, UserId, UserReqParams),
+
+    ?assertEqual(204, Result).
+
+list_service_users_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
+    {UserId2, _} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId2, UserReqParams),
+
+    Users = list_users_of_handle_service(Id, UserReqParams),
+
+    ?assert(is_list(Users)),
+    ?assertEqual(lists:sort(UserId, UserId2), lists:sort(Users)).
+
+delete_user_from_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId, UserReqParams),
+
+    Result = delete_user_from_handle_service(Id, UserId, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual([], list_users_of_handle_service(Id, UserReqParams)).
+
+add_group_to_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+
+    Result = add_group_to_handle_service(Id, GroupId, UserReqParams),
+
+    ?assertEqual(204, Result).
+
+list_service_groups_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    GroupId1 = create_group(<<"test_group1">>, <<"organization">>, UserReqParams),
+    GroupId2 = create_group(<<"test_group2">>, <<"organization">>, UserReqParams),
+
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId1, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId2, UserReqParams),
+
+    Groups = list_groups_of_handle_service(Id, UserReqParams),
+
+    ?assert(is_list(Groups)),
+    ?assertEqual(lists:sort(GroupId1, GroupId2), lists:sort(Groups)).
+
+delete_group_from_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+
+    Result = delete_group_from_handle_service(Id, GroupId, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual([], list_groups_of_handle_service(Id, UserReqParams)).
+
+get_user_privileges_for_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId, UserReqParams),
+
+    Privileges = get_user_privileges_for_handle_service(Id, UserId, UserReqParams),
+
+    ?assertEqual(lists:sort([<<"list_handle_services">>, <<"delete_handle_service">>,
+        <<"modify_handle_service">>, <<"view_handle_service">>]),
+        lists:sort(Privileges)
+    ).
+
+set_user_privileges_for_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    UserId = ?config(userId, Config),
+    Privileges = [<<"view_handle_service">>],
+
+    Result = set_user_privileges_for_handle_service(Id, UserId, Privileges, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual(Privileges, get_user_privileges_for_handle_service(Id, UserId, UserReqParams)).
+
+get_group_privileges_for_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+
+    Privileges = get_group_privileges_for_handle_service(Id, GroupId, UserReqParams),
+
+    ?assertEqual(lists:sort([<<"list_handle_services">>, <<"view_handle_service">>]),
+        lists:sort(Privileges)
+    ).
+
+set_group_privileges_for_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+    Privileges = [<<"view_handle_service">>],
+
+    Result = set_group_privileges_for_handle_service(Id, GroupId, Privileges, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual(Privileges, get_group_privileges_for_handle_service(Id, GroupId, UserReqParams)).
 
 %% handles_rest_module_test_group ====================================
 
-create_handle_test(_Config) ->
-    ok. %todo write me!
+create_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-list_handles_test(_Config) ->
-    ok. %todo write me!
+list_handles_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-get_handle_test(_Config) ->
-    ok. %todo write me!
+get_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-modify_handle_test(_Config) ->
-    ok. %todo write me!
+modify_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-delete_handle_test(_Config) ->
-    ok. %todo write me!
+delete_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-add_user_to_handle_test(_Config) ->
-    ok. %todo write me!
+add_user_to_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-list_handle_users_test(_Config) ->
-    ok. %todo write me!
+list_handle_users_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-delete_user_from_handle_test(_Config) ->
-    ok. %todo write me!
+delete_user_from_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-add_group_to_handle_test(_Config) ->
-    ok. %todo write me!
+add_group_to_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-list_handle_groups_test(_Config) ->
-    ok. %todo write me!
+list_handle_groups_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-delete_group_from_handle_test(_Config) ->
-    ok. %todo write me!
+delete_group_from_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-get_user_privileges_for_handle_test(_Config) ->
-    ok. %todo write me!
+get_user_privileges_for_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-set_user_privileges_for_handle_test(_Config) ->
-    ok. %todo write me!
+set_user_privileges_for_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-get_group_privileges_for_handle_test(_Config) ->
-    ok. %todo write me!
+get_group_privileges_for_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
-set_group_privileges_for_handle_test(_Config) ->
-    ok. %todo write me!
+set_group_privileges_for_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address). %todo write me!
 
 %% other tests =======================================================
 
@@ -1503,6 +1690,8 @@ init_per_testcase(provider_check_ip_test, Config) ->
     init_per_testcase(register_only_provider, Config);
 init_per_testcase(provider_check_port_test, Config) ->
     init_per_testcase(register_only_provider, Config);
+init_per_testcase(list_service_users_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
 init_per_testcase(non_register, Config) ->
     RestAddress = RestAddress = ?config(restAddress, Config),
     [{cert_files, generate_cert_files()} | Config];
@@ -1518,6 +1707,17 @@ init_per_testcase(register_only_provider, Config) ->
         {providerId, ProviderId},
         {providerReqParams, ProviderReqParams}
         | NewConfig
+    ];
+init_per_testcase(register_provider_and_two_users, Config) ->
+    DefaultConfig = init_per_testcase(default, Config),
+    ProviderId = ?config(providerId, DefaultConfig),
+    ProviderReqParams = ?config(providerReqParams, DefaultConfig),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME1, ProviderId, DefaultConfig, ProviderReqParams),
+    [
+        {userId2, UserId2},
+        {userReqParams2, UserReqParams2}
+        | DefaultConfig
     ];
 init_per_testcase(_Default, Config) ->
     %% this default init function is for tests
@@ -1673,7 +1873,7 @@ update_req_params({_, Headers, Options}, NewParam, address) ->
 register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
     register_provider(undefined, undefined, URLS, RedirectionPoint, ClientName, Config, ReqParams).
 
-register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Config, {RestAddress, Headers, _Options}) ->
+register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Config, ReqParams = {RestAddress, Headers, _Options}) ->
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     {ok, CSR} = file:read_file(CSRFile),
     Params = [
@@ -2409,7 +2609,7 @@ add_handle_service(Service, {RestAddress, Headers, Options}) ->
     ServiceJson = json_utils:encode_map(Service),
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/">>,
     Response = do_request(Address, Headers, post, ServiceJson, Options),
-    get_body_map(Response).
+    get_header_val(<<"handle_services">>, Response).
 
 list_handle_service({RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/">>,
@@ -2425,17 +2625,17 @@ modify_handle_service(Modifications, HSID, {RestAddress, Headers, Options}) ->
     ModificationsJson = json_utils:encode_map(Modifications),
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary>>,
     Response = do_request(Address, Headers, patch, ModificationsJson, Options),
-    get_body_map(Response).
+    get_response_status(Response).
 
 delete_handle_service(HSID, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary>>,
     Response = do_request(Address, Headers, delete, <<>>, Options),
-    get_body_map(Response).
+    get_response_status(Response).
 
 add_user_to_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary>>,
     Response = do_request(Address, Headers, put, <<>>, Options),
-    get_body_map(Response).
+    get_response_status(Response).
 
 list_users_of_handle_service(HSID, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/">>,
@@ -2445,12 +2645,12 @@ list_users_of_handle_service(HSID, {RestAddress, Headers, Options}) ->
 delete_user_from_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary>>,
     Response = do_request(Address, Headers, delete, <<>>, Options),
-    get_body_map(Response).
+    get_response_status(Response).
 
 add_group_to_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary>>,
     Response = do_request(Address, Headers, put, <<>>, Options),
-    get_body_map(Response).
+    get_response_status(Response).
 
 list_groups_of_handle_service(HSID, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/">>,
@@ -2460,7 +2660,7 @@ list_groups_of_handle_service(HSID, {RestAddress, Headers, Options}) ->
 delete_group_from_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary>>,
     Response = do_request(Address, Headers, delete, <<>>, Options),
-    get_body_map(Response).
+    get_response_status(Response).
 
 get_user_privileges_for_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary, "/privileges">>,
@@ -2471,7 +2671,7 @@ set_user_privileges_for_handle_service(HSID, UID, Privileges, {RestAddress, Head
     PrivilegesJson = json_utils:encode_map(Privileges),
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary, "/privileges">>,
     Response = do_request(Address, Headers, put, PrivilegesJson, Options),
-    get_body_map(Response).
+    get_response_status(Response).
 
 get_group_privileges_for_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary, "/privileges">>,
@@ -2482,7 +2682,7 @@ set_group_privileges_for_handle_service(HSID, UID, Privileges, {RestAddress, Hea
     PrivilegesJson = json_utils:encode_map(Privileges),
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary, "/privileges">>,
     Response = do_request(Address, Headers, put, PrivilegesJson, Options),
-    get_body_map(Response).
+    get_response_status(Response).
 
 %% Handles functions =======================================================
 
