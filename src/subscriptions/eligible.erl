@@ -25,19 +25,9 @@
 %%--------------------------------------------------------------------
 -spec providers(Doc :: datastore:document(), Model :: subscriptions:model())
         -> [ProviderID :: binary()].
-providers(SpaceDoc, space) ->
-    % Resolve doc to check - if this is a regular space, just check the doc,
-    % if this is a share, check the parent space doc.
-    #document{value = #space{type = Type, parent_space = ParentId}} = SpaceDoc,
-    DocToCheck = case Type of
-        regular ->
-            SpaceDoc;
-        share ->
-            {ok, Doc} = space:get(ParentId),
-            Doc
-    end,
+providers(Doc, space) ->
     #document{value = #space{users = SpaceUserTuples, groups = GroupTuples,
-        providers_supports = ProvidersSupports}} = DocToCheck,
+        providers_supports = ProvidersSupports}} = Doc,
     {SpaceProviders, _} = lists:unzip(ProvidersSupports),
 
     GroupUsersSets = lists:flatmap(fun({GroupId, _}) ->
@@ -51,6 +41,12 @@ providers(SpaceDoc, space) ->
     SpaceUsersSet = ordsets:from_list(SpaceUsers),
 
     SpaceProviders ++ through_users(SpaceUsersSet ++ GroupUsersSets);
+
+% For share, the eligible providers are the as for its parent space.
+providers(Doc, share) ->
+    #document{value = #share{parent_space = ParentId}} = Doc,
+    {ok, ParentDoc} = space:get(ParentId),
+    providers(ParentDoc, space);
 
 providers(Doc, user_group) ->
     #document{

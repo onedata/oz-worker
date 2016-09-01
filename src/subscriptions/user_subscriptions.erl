@@ -147,10 +147,10 @@ get_shares(ProviderID, SpaceChanges) ->
     lists:flatmap(fun({_, SpaceDoc, _}) ->
         #document{value = #space{shares = Shares}} = SpaceDoc,
         lists:filtermap(fun(ShareId) ->
-            case get_with_revs(space, ShareId) of
-                {ok, Doc} -> {true, {-1, Doc, space}};
+            case get_with_revs(share, ShareId) of
+                {ok, Doc} -> {true, {-1, Doc, share}};
                 {error, _} ->
-                    ?warning("Missing space ~p; provider ~p", [ShareId, ProviderID]),
+                    ?warning("Missing share ~p; provider ~p", [ShareId, ProviderID]),
                     false
             end
         end, Shares)

@@ -25,7 +25,8 @@
 -export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
 -export([support/3, get_providers/2, get_provider/3, remove_provider/2]).
 -export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
--export([create_share/4, get_shares/1, remove_share/1, get_parent_space/1]).
+-export([create_share/4, get_shares/1, get_share_data/2, get_share_parent/1,
+    remove_share/1]).
 -export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
 -export([remove/1, cleanup/1]).
 -export([list/0]).
@@ -167,8 +168,7 @@ has_share(SpaceId, ShareId) ->
 -spec create({user | group, Id :: binary()}, Name :: binary()) ->
     {ok, SpaceId :: binary()} | no_return().
 create(Member, Name) ->
-    {ok, ShareDoc} = create_with_provider(Member, Name, []),
-    {ok, ShareDoc#document.key}.
+    create_with_provider(Member, Name, []).
 
 %%--------------------------------------------------------------------
 %% @doc Creates a Space for a user, by a provider that will support it.
@@ -180,8 +180,7 @@ create(Member, Name) ->
     {ok, SpaceId :: binary()}.
 create({provider, ProviderId}, Name, Macaroon, Size) ->
     {ok, Member} = token_logic:consume(Macaroon),
-    {ok, ShareDoc} = create_with_provider(Member, Name, [{ProviderId, Size}]),
-    {ok, ShareDoc#document.key}.
+    create_with_provider(Member, Name, [{ProviderId, Size}]).
 
 %%--------------------------------------------------------------------
 %% @doc Modifies Space's data.
@@ -315,30 +314,16 @@ get_data(SpaceId, {user, UserId}) ->
     {ok, #document{
         value = #space{
             name = CanonicalName,
-            type = Type,
             providers_supports = Supports,
-            public_url = PublicURL,
-            root_file_id = RootFileId,
-            parent_space = ParentSpace,
             shares = Shares
         }}} = space:get(SpaceId),
-    Name = case Type of
-        regular ->
-            {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
-            {ok, Alias} = maps:find(SpaceId, SpaceNames),
-            Alias;
-        share ->
-            CanonicalName
-    end,
+    {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
+    {ok, Name} = maps:find(SpaceId, SpaceNames),
     {ok, [
         {spaceId, SpaceId},
         {name, Name},
-        {type, Type},
         {canonicalName, CanonicalName},
         {providersSupports, Supports},
-        {public_url, PublicURL},
-        {root_file_id, RootFileId},
-        {parent_space, ParentSpace},
         {shares, Shares}
     ]};
 get_data(SpaceId, provider) ->
@@ -576,7 +561,6 @@ create_with_provider({user, UserId}, Name, Supports) ->
     {Providers, _} = lists:unzip(Supports),
 
     {ok, SpaceId} = space:save(#document{value = Space}),
-    {ok, SpaceDoc} = space:get(SpaceId),
     {ok, _} = onedata_user:update(UserId, fun(User) ->
         #onedata_user{spaces = USpaces} = User,
         {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
@@ -584,13 +568,12 @@ create_with_provider({user, UserId}, Name, Supports) ->
 
     add_space_to_providers(SpaceId, Providers),
     user_logic:set_space_name_mapping(UserId, SpaceId, Name),
-    {ok, SpaceDoc};
+    {ok, SpaceId};
 
 create_with_provider({group, GroupId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, providers_supports = Supports, groups = [{GroupId, Privileges}]},
     {ok, SpaceId} = space:save(#document{value = Space}),
-    {ok, SpaceDoc} = space:get(SpaceId),
     {Providers, _} = lists:unzip(Supports),
 
     {ok, _} = user_group:update(GroupId, fun(Group) ->
@@ -604,7 +587,7 @@ create_with_provider({group, GroupId}, Name, Supports) ->
         user_logic:set_space_name_mapping(UserId, SpaceId, Name)
     end, Users),
 
-    {ok, SpaceDoc}.
+    {ok, SpaceId}.
 
 
 %%--------------------------------------------------------------------
@@ -677,17 +660,16 @@ get_effective_privileges(SpaceId, UserId) ->
 create_share({user, _UserId}, Name, RootFileId, ParentSpaceId) ->
     true = exists(ParentSpaceId),
 
-    Space = #space{
+    Share = #share{
         name = Name,
-        type = share,
         parent_space = ParentSpaceId,
         root_file_id = RootFileId
     },
-    {ok, ShareId} = space:save(#document{value = Space}),
+    {ok, ShareId} = share:save(#document{value = Share}),
 
     % Update public URL
-    {ok, _} = space:update(ShareId, fun(SpaceDoc) ->
-        {ok, SpaceDoc#space{public_url = share_id_to_public_url(ShareId)}}
+    {ok, _} = share:update(ShareId, fun(ShareDoc) ->
+        {ok, ShareDoc#share{public_url = share_id_to_public_url(ShareId)}}
     end),
 
     {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
@@ -714,6 +696,31 @@ get_shares(SpaceId) ->
 
 
 %%--------------------------------------------------------------------
+%% @doc Returns details about the Space.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_share_data(SpaceId :: binary(),
+    Client :: {user, UserId :: binary()} | provider) ->
+    {ok, [proplists:property()]}.
+get_share_data(SpaceId, _Client) ->
+    {ok, #document{
+        value = #share{
+            name = Name,
+            public_url = PublicURL,
+            root_file_id = RootFileId,
+            parent_space = ParentSpace
+        }}} = share:get(SpaceId),
+    {ok, [
+        {spaceId, SpaceId},
+        {name, Name},
+        {public_url, PublicURL},
+        {root_file_id, RootFileId},
+        {parent_space, ParentSpace}
+    ]}.
+
+
+%%--------------------------------------------------------------------
 %% @doc Removes a share.
 %% Throws exception when call to the datastore fails.
 %% @end
@@ -721,10 +728,10 @@ get_shares(SpaceId) ->
 -spec remove_share(ShareId :: binary()) -> true.
 remove_share(ShareId) ->
     {ok, #document{
-        value = #space{
+        value = #share{
             parent_space = ParentSpaceId
-        }}} = space:get(ShareId),
-    ok = space:delete(ShareId),
+        }}} = share:get(ShareId),
+    ok = share:delete(ShareId),
     {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
         Shares = SpaceDoc#space.shares,
         {ok, SpaceDoc#space{shares = Shares -- [ShareId]}}
@@ -737,12 +744,12 @@ remove_share(ShareId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec get_parent_space(SpaceId :: binary()) -> {ok, undefined | binary()}.
-get_parent_space(SpaceId) ->
+-spec get_share_parent(SpaceId :: binary()) -> {ok, undefined | binary()}.
+get_share_parent(SpaceId) ->
     {ok, #document{
-        value = #space{
+        value = #share{
             parent_space = ParentSpaceId
-        }}} = space:get(SpaceId),
+        }}} = share:get(SpaceId),
     {ok, ParentSpaceId}.
 
 
@@ -789,9 +796,9 @@ share_id_to_public_url(ShareId) ->
 -spec share_id_to_redirect_url(ShareId :: binary()) -> binary().
 share_id_to_redirect_url(ShareId) ->
     {ok, #document{
-        value = #space{
+        value = #share{
             parent_space = ParentSpaceId
-        }}} = space:get(ShareId),
+        }}} = share:get(ShareId),
     {ok, [{providers, Providers}]} = get_providers(ParentSpaceId, provider),
     % Prefer online providers
     {Online, Offline} = lists:partition(

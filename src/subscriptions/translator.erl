@@ -67,26 +67,33 @@ get_msg(Seq, Doc, space = Model) ->
     #document{value = Value, key = ID} = Doc,
     #space{
         name = Name,
-        type = Type,
         users = Users,
         groups = Groups,
         providers_supports = Supports,
-        public_url = PublicURL,
-        root_file_id = RootFileId,
-        parent_space = ParentSpace,
         shares = Shares
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {id, ID},
         {name, Name},
-        {type, Type},
         {providers_supports, Supports},
         {users, Users},
         {groups, Groups},
+        {shares, Shares}
+    ]}];
+get_msg(Seq, Doc, share = Model) ->
+    #document{value = Value, key = ID} = Doc,
+    #share{
+        name = Name,
+        public_url = PublicURL,
+        root_file_id = RootFileId,
+        parent_space = ParentSpace
+    } = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {id, ID},
+        {name, Name},
         {public_url, PublicURL},
         {root_file_id, RootFileId},
-        {parent_space, ParentSpace},
-        {shares, Shares}
+        {parent_space, ParentSpace}
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
