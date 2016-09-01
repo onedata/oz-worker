@@ -257,8 +257,17 @@ provide_resource(space, SpaceId, #client{type = user, id = UserId}, Req) ->
     % Check if the user has view permissions to given space. If yes, return the
     % space data as he sees it. If not, it means that he used his OZ API
     % privileges to access it (use 'provider' client for public space data).
-    Client = case space_logic:has_effective_privilege(
-        SpaceId, UserId, space_view_data) of
+    AuthorizedAsUser = case space_logic:get_parent_space(SpaceId) of
+        {ok, undefined} ->
+            % Regular space, check view data perm
+            space_logic:has_effective_privilege(
+                SpaceId, UserId, space_view_data);
+        {ok, ParentSpace} ->
+            % Share - to view shares, it's enough to belong to parent space
+            space_logic:has_effective_user(ParentSpace, UserId)
+    end,
+
+    Client = case AuthorizedAsUser of
         true ->
             {user, UserId};
         false ->

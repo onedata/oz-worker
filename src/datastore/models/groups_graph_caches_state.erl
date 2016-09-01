@@ -89,7 +89,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(groups_graph_caches_state_bucket, [], ?DISK_ONLY_LEVEL).
+    ?MODEL_CONFIG(groups_graph_caches_state_bucket, [], ?GLOBAL_ONLY_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc
