@@ -190,7 +190,7 @@ accept_resource(shares, post, ParentSpace, Data, #client{type = user, id = UserI
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     RootFileId = rest_module_helper:assert_key(<<"root_file_id">>, Data, binary, Req),
     {ok, ShareId} = space_logic:create_share({user, UserId}, Name, RootFileId, ParentSpace),
-    {{true, <<"/spaces/", ParentSpace/binary, "/shares/", ShareId/binary>>}, Req};
+    {{true, <<"/shares/", ShareId/binary>>}, Req};
 accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
