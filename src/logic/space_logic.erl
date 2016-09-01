@@ -554,7 +554,7 @@ remove_provider(SpaceId, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec create_with_provider({user | group, Id :: binary()}, Name :: binary(),
     Size :: [{Provider :: binary(), ProvidedSize :: pos_integer()}]) ->
-    {ok, SpaceDoc :: datastore:document()}.
+    {ok, SpaceId :: binary()}.
 create_with_provider({user, UserId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, providers_supports = Supports, users = [{UserId, Privileges}]},
