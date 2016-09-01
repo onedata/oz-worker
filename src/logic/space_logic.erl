@@ -49,11 +49,10 @@ exists(SpaceId) ->
 -spec has_provider(SpaceId :: binary(), ProviderId :: binary()) ->
     boolean().
 has_provider(SpaceId, ProviderId) ->
-    case exists(SpaceId) of
-        false -> false;
-        true ->
-            {ok, #document{value = #space{
-                providers_supports = ProvidersSupports}}} = space:get(SpaceId),
+    case space:get(SpaceId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #space{providers_supports = ProvidersSupports}}} ->
             {Providers, _} = lists:unzip(ProvidersSupports),
             lists:member(ProviderId, Providers)
     end.
@@ -67,10 +66,10 @@ has_provider(SpaceId, ProviderId) ->
 -spec has_user(SpaceId :: binary(), UserId :: binary()) ->
     boolean().
 has_user(SpaceId, UserId) ->
-    case exists(SpaceId) of
-        false -> false;
-        true ->
-            {ok, #document{value = #space{users = Users}}} = space:get(SpaceId),
+    case space:get(SpaceId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #space{users = Users}}} ->
             lists:keymember(UserId, 1, Users)
     end.
 
@@ -84,17 +83,18 @@ has_user(SpaceId, UserId) ->
 -spec has_effective_user(SpaceId :: binary(), UserId :: binary()) ->
     boolean().
 has_effective_user(SpaceId, UserId) ->
-    case exists(SpaceId) of
-        false -> false;
-        true ->
-            {ok, #document{value = #space{users = Users, groups = SpaceGroups}}} = space:get(SpaceId),
+    case space:get(SpaceId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #space{users = Users, groups = SpaceGroups}}} ->
             case lists:keymember(UserId, 1, Users) of
-                true -> true;
+                true ->
+                    true;
                 false ->
-                    case user_logic:exists(UserId) of
-                        false -> false;
-                        true ->
-                            {ok, #document{value = #onedata_user{groups = UserGroups}}} = onedata_user:get(UserId),
+                    case onedata_user:get(UserId) of
+                        {error, {not_found, _}} ->
+                            false;
+                        {ok, #document{value = #onedata_user{groups = UserGroups}}} ->
                             SpaceGroupsSet = ordsets:from_list([GroupId || {GroupId, _} <- SpaceGroups]),
                             UserGroupsSet = ordsets:from_list(UserGroups),
                             not ordsets:is_disjoint(SpaceGroupsSet, UserGroupsSet)
@@ -111,10 +111,10 @@ has_effective_user(SpaceId, UserId) ->
 -spec has_group(SpaceId :: binary(), GroupId :: binary()) ->
     boolean().
 has_group(SpaceId, GroupId) ->
-    case exists(SpaceId) of
-        false -> false;
-        true ->
-            {ok, #document{value = #space{groups = Groups}}} = space:get(SpaceId),
+    case space:get(SpaceId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #space{groups = Groups}}} ->
             lists:keymember(GroupId, 1, Groups)
     end.
 
