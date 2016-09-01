@@ -262,7 +262,7 @@ validate_arguments(Module, ArgsList) ->
     not illegal_arguments_exist(Module, ArgsList) and
     ( not exclusive_argument_exist(Module, ArgsList) and
         all_required_arguments_are_present(Module, ArgsList) )
-    or (exclusive_argument_exist(Module, ArgsList) and length(ArgsList) == 1).
+    or (exclusive_argument_exist(Module, ArgsList) and (length(ArgsList) == 1)).
 
 
 error_to_xml(#oai_error{code=Code, description=Description}) ->
