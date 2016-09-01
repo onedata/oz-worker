@@ -181,6 +181,7 @@ revs_prop(#document{rev = Rev}) ->
 
 -spec message_model(subscriptions:model()) -> atom().
 message_model(space) -> space;
+message_model(share) -> share;
 message_model(provider) -> provider;
 message_model(onedata_user) -> user;
 message_model(user_group) -> group.

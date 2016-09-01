@@ -26,7 +26,7 @@
 -export([support/3, get_providers/2, get_provider/3, remove_provider/2]).
 -export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
 -export([create_share/4, get_shares/1, get_share_data/2, get_share_parent/1,
-    remove_share/1]).
+    share_exists/1, remove_share/1]).
 -export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
 -export([remove/1, cleanup/1]).
 -export([list/0]).
@@ -751,6 +751,16 @@ get_share_parent(SpaceId) ->
             parent_space = ParentSpaceId
         }}} = share:get(SpaceId),
     {ok, ParentSpaceId}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether a Share exists.
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec share_exists(ShareId :: binary()) ->
+    boolean().
+share_exists(ShareId) ->
+    share:exists(ShareId).
 
 
 %%--------------------------------------------------------------------
