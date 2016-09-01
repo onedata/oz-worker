@@ -9,11 +9,13 @@
 %%%-------------------------------------------------------------------
 -author("Jakub Kudzia").
 
+
+-ifndef(OAI_HRL).
+-define(OAI_HRL, 1).
 -include_lib("xmerl/include/xmerl.hrl").
 
 %%TODO write docs
 %%TODO ??? macro names with/without"OAI" prefix
-
 
 -record(oai_header, {
     identifier :: oai_id(),
@@ -37,6 +39,11 @@
     about :: oai_about()
 }).
 
+-record(oai_error, {
+    code :: badArgument | badResumptionToken | badVerb | cannotDisseminateFormat |
+            idDoesNotExist | noRecordsMatch | noMetadataFormats | noSetHierarchy,
+    description :: list()
+}).
 
 -type oai_verb() :: identify | getRecord | listIdentifiers |
                     listMedatadaFormats | listRecords | listSets.
@@ -45,6 +52,7 @@
 -type oai_metadata() :: #oai_metadata{}.
 -type oai_about() :: #oai_about{}.
 -type oai_record() :: #oai_record{}.
+-type oai_error() :: #oai_error{}.
 
 
 -define(OAI_XML_NAMESPACE, #xmlAttribute{
@@ -77,3 +85,4 @@
 
 -define(PROTOCOL_VERSION, <<"2.0">>).
 
+-endif.

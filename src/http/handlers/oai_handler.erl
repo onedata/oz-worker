@@ -12,13 +12,14 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("http/handlers/oai.hrl").
+-include("http/handlers/oai_errors.hrl").
 -include("http/handlers/rest_handler.hrl").
 
 
 %% API
 -export([init/3, terminate/3, rest_init/2, allowed_methods/2,
     content_types_accepted/2, content_types_provided/2, resource_exists/2,
-    accept_resource/2, provide_resource/2, generate_response/2]).
+    accept_resource/2, provide_resource/2, generate_response/2, count_key_occurrences/2]).
 
 %%%===================================================================
 %%% API
@@ -135,27 +136,39 @@ verb_to_module(<<"GetRecord">>) -> get_record;
 verb_to_module(<<"ListIdentifiers">>) -> list_identifiers;
 verb_to_module(<<"ListMedatadaFormats">>) -> list_medatada_formats;
 verb_to_module(<<"ListRecords">>) -> list_records;
-verb_to_module(<<"ListSets">>) -> list_sets.
+verb_to_module(<<"ListSets">>) -> list_sets;
+verb_to_module(_) -> badVerb.
+
+
 
 handle_request(QueryString, Req) ->
-    case proplists:get_value(<<"verb">>, QueryString) of
-        undefined -> error; % todo handle bad verb error;
-        Verb ->
-            Module = verb_to_module(Verb),
-            %%            ParsedArgs = Module:parse_arguments(Args),
-            ParsedArgs = parse_args(Module, QueryString),
-            Response = generate_response(Verb, ParsedArgs),
-            ResponseDate = generate_response_date_element(), %todo handle errors
-            RequestElement = generate_request_element(ParsedArgs, Req),
-            XML = ?ROOT_ELEMENT#xmlElement{
-                content = [ResponseDate, RequestElement, Response]},
-            %%            io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
-            ResponseBody = xmerl:export_simple([XML], xmerl_xml),
-            %%            io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
-            Req2 = cowboy_req:set_resp_header(<<"content-type">>,
-                ?RESPONSE_CONTENT_TYPE, Req),
-            {ResponseBody, Req2}
-    end.
+    io:format("QS: ~n~p~n", [QueryString]),
+    ResponseDate = generate_response_date_element(),
+    {Response, RequestElement} =
+        case key_occurs_exactly_once(<<"verb">>, QueryString) of
+        false -> {error_to_xml(?BAD_VERB), generate_request_element(Req)};
+        true ->
+            Verb = proplists:get_value(<<"verb">>, QueryString),
+            case verb_to_module(Verb) of
+                badVerb -> {error_to_xml(?BAD_VERB), generate_request_element(Req)};
+                Module ->
+                    ArgsList = proplists:delete(<<"verb">>, QueryString),
+                    case validate_arguments(Module, ArgsList) of
+                        true -> {generate_response(Verb, ArgsList),
+                            generate_request_element(ArgsList, Req)}; %todo handle errors
+                        false -> {error_to_xml(?BAD_ARGUMENT), generate_request_element(Req)}
+                    end
+
+            end
+    end,
+    XML = ?ROOT_ELEMENT#xmlElement{
+            content = [ResponseDate, RequestElement, Response]},
+    %% io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
+    ResponseBody = xmerl:export_simple([XML], xmerl_xml),
+    %% io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
+    Req2 = cowboy_req:set_resp_header(<<"content-type">>,
+    ?RESPONSE_CONTENT_TYPE, Req),
+    {ResponseBody, Req2}.
 
 
 generate_response(Verb, Args) ->
@@ -211,6 +224,9 @@ generate_response_date_element() ->
             [Year, Month, Day, Hour, Minute, Second])]}. % TODO padding with 0
 
 
+generate_request_element(Req) ->
+    generate_request_element([], Req).
+
 generate_request_element(ParsedArgs, Req) ->
     {Path, Req2} = cowboy_req:path(Req),
     {URL, _Req3} = cowboy_req:host_url(Req2),
@@ -230,41 +246,72 @@ generate_attributes(ParsedArgs) ->
             value = binary_to_list(Value)}
     end, ParsedArgs).
 
-parse_args(Module, QueryString) ->
-    %% TODO handle badargs, args repetition, illegal args etc.
-    QueryString.
-%%    RequiredArguments = lists:flatmap(fun(A) ->
-%%        case proplists:get_value(QueryString, A) of
-%%            undefined -> error;
-%%            Value -> Value
-%%        end
-%%    end, Module:required_arguments()),
-%%
-%%    OptionalAttributes = lists:flatmap(fun(A) ->
-%%    try generate_xml(A, Module:get_attribute(A)) of
-%%        XML -> XML
-%%        catch _:_ -> []
-%%    end
-%%    end, Module:optional_response_attributes()),
-%%    RequiredArguments ++ OptionalAttributes.
+validate_arguments(Module, ArgsList) ->
+    all_keys_occurs_exactly_once(ArgsList)`` and
+    not illegal_arguments_exist(Module, ArgsList) and
+    all_required_arguments_are_present(Module, ArgsList).
 
+
+error_to_xml(#oai_error{code=Code, description=Description}) ->
+    #xmlElement{
+        name=error,
+        attributes = [#xmlAttribute{name=code, value=Code}],
+        content = [Description]
+    }.
 
 metadata_prefix_to_metadata_format(oai_dc) -> dublin_core.
 
 
+all_required_arguments_are_present(Module, ArgsList) ->
+
+    RequiredArguments = Module:required_arguments(),
+    ExistingArguments = proplists:get_keys(ArgsList),
+
+    case RequiredArguments -- ExistingArguments of
+        [] -> true;
+        _ -> false
+    end.
+
+illegal_arguments_exist(Module, ArgsList) ->
+    ExistingKeys = proplists:get_keys(ArgsList),
+    KnownKeys = Module:required_arguments() ++ Module:optional_arguments(),
+    case  ExistingKeys -- KnownKeys of
+        [] -> false;
+        _ -> true
+    end.
+
+all_keys_occurs_exactly_once(Proplist) ->
+    lists:foldl(fun({K, _V}, Acc) ->
+        key_occurs_exactly_once(K, Proplist) and Acc
+    end, true, Proplist).
+
+
+%%key exists and is not duplicated
+key_occurs_exactly_once(Key, Proplist) ->
+    case count_key_occurrences(Key, Proplist) of
+        1 -> true;
+        _ -> false
+    end.
+
+count_key_occurrences(Key, Proplist) ->
+    lists:foldl(fun({K, _V}, Sum) ->
+        case K of
+            Key -> 1 + Sum;
+            _ -> Sum
+        end
+    end, 0, Proplist).
+
 
 %% TODO
-
 %% TODO * OAI-identifier
 %% TODO * docs
 %% TODO * specs
 %% TODO * error handling
-%% TODO * generating xml in proper format DC, ... <- done ??
-%% TODO     * it should be a separate module
 %% TODO * add encoding to head of xml
 %% TODO * handle datestamps
 %% TODO * handle all verbs
 %% TODO * compression
 %% TODO * identity encoding
 %% TODO * maybe parsing arguments should be implemented in each module to return proper error
-% TODO handle error in get_element
+%% TODO * handle error in get_element
+%% TODO * allowed charset

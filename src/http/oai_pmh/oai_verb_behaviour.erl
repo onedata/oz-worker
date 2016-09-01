@@ -16,12 +16,6 @@
 
 -callback optional_arguments() -> [binary()].
 
--callback parse_arguments() -> list().
-
--callback parse_required_arguments() -> list().
-
--callback parse_optional_arguments() -> list().
-
 -callback required_response_elements() -> [atom()].
 
 -callback optional_response_elements() -> [atom()].

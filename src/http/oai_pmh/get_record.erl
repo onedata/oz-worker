@@ -14,21 +14,17 @@
 
 
 %% API
--export([required_arguments/0, optional_arguments/0, required_response_elements/0, optional_response_elements/0, parse_arguments/1, get_element/1, parse_required_arguments/1, parse_optional_arguments/1]).
+-export([required_arguments/0, optional_arguments/0,
+    required_response_elements/0, optional_response_elements/0
+    , get_element/1
+]).
 
 
 -include("http/handlers/oai.hrl").
 
-required_arguments() ->[<<"identifier">>, <<"metedataPrefix">>].
+required_arguments() ->[<<"identifier">>, <<"metadataPrefix">>].
 
 optional_arguments() -> [].
-
-parse_arguments(Args) ->
-    parse_required_arguments(Args) ++ parse_optional_arguments(Args).
-
-parse_required_arguments(Args) -> [].
-
-parse_optional_arguments(Args) -> [].
 
 required_response_elements() -> [record].
 
