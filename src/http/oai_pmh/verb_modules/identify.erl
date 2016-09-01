@@ -14,9 +14,8 @@
 
 
 %% API
--export([required_arguments/0, optional_arguments/0, required_response_elements/0,
-    optional_response_elements/0, get_element/1
-]).
+-export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
+    required_response_elements/0, optional_response_elements/0, get_element/1]).
 
 -include("http/handlers/oai.hrl").
 -include("registered_names.hrl").
@@ -24,6 +23,8 @@
 required_arguments() ->[].
 
 optional_arguments() -> [].
+
+exclusive_arguments() -> [].
 
 required_response_elements() -> [
     repositoryName, baseURL, protocolVersion,

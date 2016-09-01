@@ -140,9 +140,7 @@ verb_to_module(<<"ListSets">>) -> list_sets;
 verb_to_module(_) -> badVerb.
 
 
-
 handle_request(QueryString, Req) ->
-    io:format("QS: ~n~p~n", [QueryString]),
     ResponseDate = generate_response_date_element(),
     {Response, RequestElement} =
         case key_occurs_exactly_once(<<"verb">>, QueryString) of
@@ -154,15 +152,13 @@ handle_request(QueryString, Req) ->
                 Module ->
                     ArgsList = proplists:delete(<<"verb">>, QueryString),
                     case validate_arguments(Module, ArgsList) of
-                        true -> {generate_response(Verb, ArgsList),
-                            generate_request_element(ArgsList, Req)}; %todo handle errors
+                        true -> handle_request_with_validated_args(Verb, ArgsList, Req);
                         false -> {error_to_xml(?BAD_ARGUMENT), generate_request_element(Req)}
                     end
 
             end
     end,
-    XML = ?ROOT_ELEMENT#xmlElement{
-            content = [ResponseDate, RequestElement, Response]},
+    XML = insert_to_root_xml_element([ResponseDate, RequestElement, Response]),
     %% io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
     ResponseBody = xmerl:export_simple([XML], xmerl_xml),
     %% io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
@@ -170,6 +166,15 @@ handle_request(QueryString, Req) ->
     ?RESPONSE_CONTENT_TYPE, Req),
     {ResponseBody, Req2}.
 
+
+handle_request_with_validated_args(Verb, ArgsList, Req) ->
+    %todo handle errors
+    Response = case generate_response(Verb, ArgsList) of
+        {error, Reason} -> error_to_xml(Reason);
+        PositiveResponse -> PositiveResponse
+    end,
+
+    {Response, generate_request_element(ArgsList, Req)}.
 
 generate_response(Verb, Args) ->
 
@@ -191,6 +196,11 @@ generate_response(Verb, Args) ->
         content = RequiredElements ++ OptionalElements
     }.
 
+insert_to_root_xml_element(Content) when is_list(Content) ->
+    ?ROOT_ELEMENT#xmlElement{content = Content};
+insert_to_root_xml_element(Content) ->
+    ?ROOT_ELEMENT#xmlElement{content = [Content]}.
+
 
 to_xml(Name, #xmlElement{} = Value) ->
     [#xmlElement{name = Name, content = [Value]}];
@@ -205,7 +215,8 @@ to_xml(Name, #oai_header{identifier = Identifier, datestamp = Datestamp, setSpec
                   to_xml(datestamp, Datestamp) ++
                   to_xml(setSpec, SetSpec)}];
 to_xml(Name, #oai_metadata{metadata_format=Format, value=Value}) ->
-    Mod = metadata_prefix_to_metadata_format(Format),
+    MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
+    Mod = metadata_prefix_to_metadata_format(MetadataPrefix),
     [#xmlElement{name=Name, content=Mod:encode(Value)}];
 to_xml(Name, [Value, Values]) ->
     to_xml(Name, Value) ++  to_xml(Name, Values);
@@ -247,9 +258,11 @@ generate_attributes(ParsedArgs) ->
     end, ParsedArgs).
 
 validate_arguments(Module, ArgsList) ->
-    all_keys_occurs_exactly_once(ArgsList)`` and
+    all_keys_occurs_exactly_once(ArgsList) and
     not illegal_arguments_exist(Module, ArgsList) and
-    all_required_arguments_are_present(Module, ArgsList).
+    ( not exclusive_argument_exist(Module, ArgsList) and
+        all_required_arguments_are_present(Module, ArgsList) )
+    or (exclusive_argument_exist(Module, ArgsList) and length(ArgsList) == 1).
 
 
 error_to_xml(#oai_error{code=Code, description=Description}) ->
@@ -261,24 +274,21 @@ error_to_xml(#oai_error{code=Code, description=Description}) ->
 
 metadata_prefix_to_metadata_format(oai_dc) -> dublin_core.
 
+exclusive_argument_exist(Module, ArgsList) ->
+    ExclusiveArgumentsSet = sets:from_list(Module:exclusive_arguments()),
+    ExistingArgumentsSet = sets:from_list(proplists:get_keys(ArgsList)),
+    not sets:is_disjoint(ExclusiveArgumentsSet, ExistingArgumentsSet).
 
 all_required_arguments_are_present(Module, ArgsList) ->
 
-    RequiredArguments = Module:required_arguments(),
-    ExistingArguments = proplists:get_keys(ArgsList),
-
-    case RequiredArguments -- ExistingArguments of
-        [] -> true;
-        _ -> false
-    end.
+    RequiredArgumentsSet = sets:from_list(Module:required_arguments()),
+    ExistingArgumentsSet = sets:from_list(proplists:get_keys(ArgsList)),
+    sets:is_subset(RequiredArgumentsSet, ExistingArgumentsSet).
 
 illegal_arguments_exist(Module, ArgsList) ->
-    ExistingKeys = proplists:get_keys(ArgsList),
-    KnownKeys = Module:required_arguments() ++ Module:optional_arguments(),
-    case  ExistingKeys -- KnownKeys of
-        [] -> false;
-        _ -> true
-    end.
+    KnownArgumentsSet = sets:from_list(Module:required_arguments() ++ Module:optional_arguments()),
+    ExistingArgumentsSet = sets:from_list(proplists:get_keys(ArgsList)),
+    not sets:is_subset(ExistingArgumentsSet, KnownArgumentsSet).
 
 all_keys_occurs_exactly_once(Proplist) ->
     lists:foldl(fun({K, _V}, Acc) ->

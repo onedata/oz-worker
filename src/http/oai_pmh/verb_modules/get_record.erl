@@ -14,10 +14,8 @@
 
 
 %% API
--export([required_arguments/0, optional_arguments/0,
-    required_response_elements/0, optional_response_elements/0
-    , get_element/1
-]).
+-export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
+    required_response_elements/0, optional_response_elements/0, get_element/1]).
 
 
 -include("http/handlers/oai.hrl").
@@ -25,6 +23,8 @@
 required_arguments() ->[<<"identifier">>, <<"metadataPrefix">>].
 
 optional_arguments() -> [].
+
+exclusive_arguments() -> [].
 
 required_response_elements() -> [record].
 
@@ -37,9 +37,7 @@ get_element(record) ->
             datestamp = <<"date">>,
             setSpec = ["set1", "set2"]},
         metadata = #oai_metadata{
-            metadata_format = oai_dc,
+            metadata_format = #oai_metadata_format{metadataPrefix = oai_dc},
             value = #{}
         }
     }.
-
-

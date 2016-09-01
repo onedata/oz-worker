@@ -24,10 +24,17 @@
     status :: undefined | deleted
 }).
 
+-record(oai_metadata_format, {
+    metadataPrefix :: atom(),
+    schema,
+    metadataNamespace
+}).
+
 -record(oai_metadata, {
-    metadata_format :: atom(),
+    metadata_format :: oai_metadata_format(),
     value :: #{}
 }).
+
 
 -record(oai_about, {
 
@@ -49,6 +56,7 @@
                     listMedatadaFormats | listRecords | listSets.
 -type oai_id() :: binary(). % todo maybe it should be record
 -type oai_header() :: #oai_header{}.
+-type oai_metadata_format() :: #oai_metadata_format{}.
 -type oai_metadata() :: #oai_metadata{}.
 -type oai_about() :: #oai_about{}.
 -type oai_record() :: #oai_record{}.

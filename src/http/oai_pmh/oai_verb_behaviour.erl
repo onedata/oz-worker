@@ -16,11 +16,10 @@
 
 -callback optional_arguments() -> [binary()].
 
+-callback exclusive_arguments() -> [binary()].
+
 -callback required_response_elements() -> [atom()].
 
 -callback optional_response_elements() -> [atom()].
 
 -callback get_element() -> binary() | [binary()] | #xmlElement{} | [#xmlElement{}].
-
-%%-callback write(Data) -> iodata().
-%%-callback TODO maybe optional anbd required response attributes
