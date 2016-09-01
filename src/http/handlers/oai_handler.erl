@@ -162,9 +162,8 @@ generate_response(Verb, Args) ->
 
     Module = verb_to_module(Verb),
     RequiredElements = lists:flatmap(fun(ElementName) ->
-        XML =  to_xml(ElementName,
-            Module:get_element(ElementName)), % TODO handle error in get_element
-        io:format("~nNAME: ~p~n~p~n", [ElementName, XML]), XML
+        to_xml(ElementName, Module:get_element(ElementName)) % TODO handle error in get_element
+%%        io:format("~nNAME: ~p~n~p~n", [ElementName, XML]), XML
     end, Module:required_response_elements()),
 
     OptionalElements = lists:flatmap(fun(ElementName) ->
@@ -180,26 +179,27 @@ generate_response(Verb, Args) ->
     }.
 
 
-to_xml(Name, [#xmlElement{} = Value]) ->
+to_xml(Name, #xmlElement{} = Value) ->
     [#xmlElement{name = Name, content = [Value]}];
-to_xml(Name, [#oai_record{header = Header, metadata = Metadata, about = About}]) ->
-    [#xmlElement{name = Name,
-        content = [
-            to_xml(header, Header),
-            to_xml(metadata, Metadata),
-            to_xml(about, About)]}];
-to_xml(Name, [#oai_header{identifier = Identifier, datestamp = Datestamp, setSpec = SetSpec}]) ->
-    [#xmlElement{name = Name,
-        content = [
-            to_xml(identifier, Identifier),
-            to_xml(datestamp, Datestamp),
-            to_xml(setSpec, SetSpec)]}];
+to_xml(Name, #oai_record{header = Header, metadata = Metadata}) ->
+    [#xmlElement{
+        name = Name,
+        content = to_xml(header, Header) ++ to_xml(metadata, Metadata)}]; % todo about is optional
+to_xml(Name, #oai_header{identifier = Identifier, datestamp = Datestamp, setSpec = SetSpec}) ->
+    [#xmlElement{
+        name = Name,
+        content = to_xml(identifier, Identifier) ++
+                  to_xml(datestamp, Datestamp) ++
+                  to_xml(setSpec, SetSpec)}];
+to_xml(Name, #oai_metadata{metadata_format=Format, value=Value}) ->
+    Mod = metadata_prefix_to_metadata_format(Format),
+    [#xmlElement{name=Name, content=Mod:encode(Value)}];
 to_xml(Name, [Value, Values]) ->
     to_xml(Name, Value) ++  to_xml(Name, Values);
 to_xml(Name, Value) when is_binary(Value) ->
     [#xmlElement{name = Name, content = [binary_to_list(Value)]}];
 to_xml(Name, Value) when is_number(Value) ->
-    [#xmlElement{name = Name, content = [str_utils:format("~B~", [Value])]}];
+    [#xmlElement{name = Name, content = [str_utils:format("~B", [Value])]}];
 to_xml(Name, Value) ->
     [#xmlElement{name = Name, content = [Value]}].
 
@@ -249,17 +249,17 @@ parse_args(Module, QueryString) ->
 %%    RequiredArguments ++ OptionalAttributes.
 
 
+metadata_prefix_to_metadata_format(oai_dc) -> dublin_core.
 
 
 
 %% TODO
 
 %% TODO * OAI-identifier
-%% TODO * response should contain: response data, request container
 %% TODO * docs
 %% TODO * specs
 %% TODO * error handling
-%% TODO * generating xml in proper format DC, ...
+%% TODO * generating xml in proper format DC, ... <- done ??
 %% TODO     * it should be a separate module
 %% TODO * add encoding to head of xml
 %% TODO * handle datestamps

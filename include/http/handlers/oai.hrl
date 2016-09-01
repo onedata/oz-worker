@@ -23,7 +23,8 @@
 }).
 
 -record(oai_metadata, {
-
+    metadata_format :: atom(),
+    value :: #{}
 }).
 
 -record(oai_about, {
@@ -33,8 +34,7 @@
 -record(oai_record, {
     header :: oai_header(),
     metadata :: oai_metadata(),
-    about :: oai_about(),
-    metadata_format :: atom()
+    about :: oai_about()
 }).
 
 
@@ -47,22 +47,25 @@
 -type oai_record() :: #oai_record{}.
 
 
--define(XMLNS, #xmlAttribute{
+-define(OAI_XML_NAMESPACE, #xmlAttribute{
         name=xmlns,
         value= "http://www.openarchives.org/OAI/2.0/"}).
 
--define(XMLNS_XSI, #xmlAttribute{
+-define(OAI_XML_SCHEMA_NAMESPACE, #xmlAttribute{
     name='xml:xsi',
     value= "http://www.w3.org/2001/XMLSchema-instance"}).
 
--define(XSI_SCHEMA_LOCATION, #xmlAttribute{
+-define(OAI_XSI_SCHEMA_LOCATION, #xmlAttribute{
     name='xsi:schemaLocation',
     value = "http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"}).
 
 
 -define(ROOT_ELEMENT, #xmlElement{
     name = 'OAI-PMH',
-    attributes = [?XMLNS, ?XMLNS_XSI, ?XSI_SCHEMA_LOCATION]
+    attributes = [
+        ?OAI_XML_NAMESPACE,
+        ?OAI_XML_SCHEMA_NAMESPACE,
+        ?OAI_XSI_SCHEMA_LOCATION]
 }).
 
 

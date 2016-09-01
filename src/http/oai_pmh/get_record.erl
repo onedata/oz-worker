@@ -14,7 +14,7 @@
 
 
 %% API
--export([required_arguments/0, optional_arguments/0]).
+-export([required_arguments/0, optional_arguments/0, required_response_elements/0, optional_response_elements/0, parse_arguments/1, get_element/1, parse_required_arguments/1, parse_optional_arguments/1]).
 
 
 -include("http/handlers/oai.hrl").
@@ -34,5 +34,16 @@ required_response_elements() -> [record].
 
 optional_response_elements() -> [].
 
-get_element(record) -> ok
-    .
+get_element(record) ->
+    #oai_record{
+        header = #oai_header{
+            identifier = <<"id">>,
+            datestamp = <<"date">>,
+            setSpec = ["set1", "set2"]},
+        metadata = #oai_metadata{
+            metadata_format = oai_dc,
+            value = #{}
+        }
+    }.
+
+
