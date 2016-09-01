@@ -14,6 +14,7 @@
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
@@ -24,7 +25,7 @@
 -export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
 -export([support/3, get_providers/2, get_provider/3, remove_provider/2]).
 -export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
--export([create_share/4, get_shares/1, remove_share/1]).
+-export([create_share/4, get_shares/1, remove_share/1, get_parent_space/1]).
 -export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
 -export([remove/1, cleanup/1]).
 -export([list/0]).
@@ -145,7 +146,7 @@ has_effective_privilege(SpaceId, UserId, Privilege) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_user(SpaceId :: binary(), ShareId :: binary()) ->
+-spec has_share(SpaceId :: binary(), ShareId :: binary()) ->
     boolean().
 has_share(SpaceId, ShareId) ->
     case exists(SpaceId) of
@@ -311,14 +312,34 @@ support(ProviderId, Macaroon, SupportedSize) ->
 -spec get_data(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider) ->
     {ok, [proplists:property()]}.
 get_data(SpaceId, {user, UserId}) ->
-    {ok, #document{value = #space{name = CanonicalName, providers_supports = Supports}}} = space:get(SpaceId),
-    {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
-    {ok, Name} = maps:find(SpaceId, SpaceNames),
+    {ok, #document{
+        value = #space{
+            name = CanonicalName,
+            type = Type,
+            providers_supports = Supports,
+            public_url = PublicURL,
+            root_file_id = RootFileId,
+            parent_space = ParentSpace,
+            shares = Shares
+        }}} = space:get(SpaceId),
+    Name = case Type of
+        regular ->
+            {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
+            {ok, Alias} = maps:find(SpaceId, SpaceNames),
+            Alias;
+        share ->
+            CanonicalName
+    end,
     {ok, [
         {spaceId, SpaceId},
         {name, Name},
+        {type, Type},
         {canonicalName, CanonicalName},
-        {providersSupports, Supports}
+        {providersSupports, Supports},
+        {public_url, PublicURL},
+        {root_file_id, RootFileId},
+        {parent_space, ParentSpace},
+        {shares, Shares}
     ]};
 get_data(SpaceId, provider) ->
     {ok, #document{value = #space{name = CanonicalName, providers_supports = Supports}}} = space:get(SpaceId),
@@ -555,7 +576,7 @@ create_with_provider({user, UserId}, Name, Supports) ->
     {Providers, _} = lists:unzip(Supports),
 
     {ok, SpaceId} = space:save(#document{value = Space}),
-    {ok, SpaceDoc} = space:get(SpaceDoc),
+    {ok, SpaceDoc} = space:get(SpaceId),
     {ok, _} = onedata_user:update(UserId, fun(User) ->
         #onedata_user{spaces = USpaces} = User,
         {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
@@ -569,7 +590,7 @@ create_with_provider({group, GroupId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
     Space = #space{name = Name, providers_supports = Supports, groups = [{GroupId, Privileges}]},
     {ok, SpaceId} = space:save(#document{value = Space}),
-    {ok, SpaceDoc} = space:get(SpaceDoc),
+    {ok, SpaceDoc} = space:get(SpaceId),
     {Providers, _} = lists:unzip(Supports),
 
     {ok, _} = user_group:update(GroupId, fun(Group) ->
@@ -653,22 +674,28 @@ get_effective_privileges(SpaceId, UserId) ->
 -spec create_share({user, UserId :: binary()}, Name :: binary(),
     RootFileId :: binary(), ParentSpaceId :: binary()) ->
     {ok, SpaceId :: binary()} | no_return().
-create_share({user, UserId}, Name, RootFileId, ParentSpaceId) ->
-    {ok, ShareDoc} = create_with_provider({user, UserId}, Name, []),
-    ShareId = ShareDoc#document.key,
-    {ok, _} = space:update(ShareId, fun(DocToUpdate) ->
-        {ok, DocToUpdate#space{
-            type = share,
-            public_url = asas,
-            parent_space = ParentSpaceId,
-            root_file_id = RootFileId
-        }}
+create_share({user, _UserId}, Name, RootFileId, ParentSpaceId) ->
+    true = exists(ParentSpaceId),
+
+    Space = #space{
+        name = Name,
+        type = share,
+        parent_space = ParentSpaceId,
+        root_file_id = RootFileId
+    },
+    {ok, ShareId} = space:save(#document{value = Space}),
+
+    % Update public URL
+    {ok, _} = space:update(ShareId, fun(SpaceDoc) ->
+        {ok, SpaceDoc#space{public_url = share_id_to_public_url(ShareId)}}
     end),
+
     {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
         Shares = SpaceDoc#space.shares,
         {ok, SpaceDoc#space{shares = [ShareId | Shares]}}
     end),
-    {ok, ShareDoc#document.key}.
+
+    {ok, ShareId}.
 
 
 %%--------------------------------------------------------------------
@@ -683,7 +710,7 @@ get_shares(SpaceId) ->
         value = #space{
             shares = Shares
         }}} = space:get(SpaceId),
-    {ok, Shares}.
+    {ok, [{shares, Shares}]}.
 
 
 %%--------------------------------------------------------------------
@@ -703,6 +730,20 @@ remove_share(ShareId) ->
         {ok, SpaceDoc#space{shares = Shares -- [ShareId]}}
     end),
     true.
+
+
+%%--------------------------------------------------------------------
+%% @doc Check if given space is a share.
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_parent_space(SpaceId :: binary()) -> {ok, undefined | binary()}.
+get_parent_space(SpaceId) ->
+    {ok, #document{
+        value = #space{
+            parent_space = ParentSpaceId
+        }}} = space:get(SpaceId),
+    {ok, ParentSpaceId}.
 
 
 %%--------------------------------------------------------------------
@@ -751,7 +792,7 @@ share_id_to_redirect_url(ShareId) ->
         value = #space{
             parent_space = ParentSpaceId
         }}} = space:get(ShareId),
-    {ok, Providers} = get_providers(ParentSpaceId, provider),
+    {ok, [{providers, Providers}]} = get_providers(ParentSpaceId, provider),
     % Prefer online providers
     {Online, Offline} = lists:partition(
         fun(ProviderId) ->

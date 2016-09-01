@@ -65,14 +65,28 @@ get_msg(Seq, Doc = #document{deleted = true, key = ID}, Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), delete}];
 get_msg(Seq, Doc, space = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #space{name = Name, users = Users, groups = Groups,
-        providers_supports = Supports} = Value,
+    #space{
+        name = Name,
+        type = Type,
+        users = Users,
+        groups = Groups,
+        providers_supports = Supports,
+        public_url = PublicURL,
+        root_file_id = RootFileId,
+        parent_space = ParentSpace,
+        shares = Shares
+    } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {id, ID},
         {name, Name},
+        {type, Type},
         {providers_supports, Supports},
         {users, Users},
-        {groups, Groups}
+        {groups, Groups},
+        {public_url, PublicURL},
+        {root_file_id, RootFileId},
+        {parent_space, ParentSpace},
+        {shares, Shares}
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
