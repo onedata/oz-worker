@@ -6,6 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% %%% Database model representing state of subscriptions
 %%% @end
 %%%-------------------------------------------------------------------
 -module(subscriptions_state).

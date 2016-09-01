@@ -6,6 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% Database model representing oneprovider subsciptions for metadata changes.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(provider_subscription).
