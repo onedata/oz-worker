@@ -38,5 +38,7 @@ models() -> [
   session,
   space,
   token,
-  user_group
+  user_group,
+  handle_service,
+  handle
 ].

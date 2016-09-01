@@ -14,6 +14,11 @@
 
 -behavior(rest_module_behavior).
 
+-type provided_resource() :: handle_services | handle_service | users | upriv | groups | gpriv .
+-type accepted_resource() :: handle_services | handle_service | user | upriv | group | gpriv.
+-type removable_resource() :: handle_service | user | group.
+-type resource() :: provided_resource() | accepted_resource() | removable_resource().
+
 %% API
 -export([routes/0, is_authorized/4, accept_resource/6, provide_resource/4,
     delete_resource/3, resource_exists/3]).
@@ -59,33 +64,33 @@ is_authorized(_, _, _, #client{type = undefined}) ->
 is_authorized(handle_services, post, _HandleServiceId, _Client) -> % todo what privilege should be checked here?
     true;
 is_authorized(handle_services, get, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
 is_authorized(handle_service, get, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
 is_authorized(handle_service, patch, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
 is_authorized(handle_service, delete, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, delete_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, delete_handle_service);
 is_authorized(users, get, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
 is_authorized(user, put, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
 is_authorized(user, delete, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
 is_authorized(groups, get, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
 is_authorized(group, put, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
 is_authorized(group, delete, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
 is_authorized(upriv, get, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
 is_authorized(upriv, put, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
 is_authorized(gpriv, get, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
 is_authorized(gpriv, put, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_services_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
+    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, modify_handle_service);
 is_authorized(_, _, _, _) ->
     false.
 
@@ -100,23 +105,23 @@ is_authorized(_, _, _, _) ->
 resource_exists(handle_services, _HandleServiceId, Req) ->
     {true, Req};
 resource_exists(handle_service, HandleServiceId, Req) ->
-    {handle_services_logic:exists(HandleServiceId), Req};
+    {handle_service_logic:exists(HandleServiceId), Req};
 resource_exists(users, HandleServiceId, Req) ->
-    {handle_services_logic:exists(HandleServiceId), Req};
+    {handle_service_logic:exists(HandleServiceId), Req};
 resource_exists(groups, HandleServiceId, Req) ->
-    {handle_services_logic:exists(HandleServiceId), Req};
+    {handle_service_logic:exists(HandleServiceId), Req};
 resource_exists(user, HandleServiceId, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),
-    {handle_services_logic:has_user(HandleServiceId, UID), Req2};
+    {handle_service_logic:has_user(HandleServiceId, UID), Req2};
 resource_exists(upriv, HandleServiceId, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),
-    {handle_services_logic:has_user(HandleServiceId, UID), Req2};
+    {handle_service_logic:has_user(HandleServiceId, UID), Req2};
 resource_exists(group, HandleServiceId, Req) ->
     {GID, Req2} = cowboy_req:binding(gid, Req),
-    {handle_services_logic:has_group(HandleServiceId, GID), Req2};
+    {handle_service_logic:has_group(HandleServiceId, GID), Req2};
 resource_exists(gpriv, HandleServiceId, Req) ->
     {GID, Req2} = cowboy_req:binding(gid, Req),
-    {handle_services_logic:has_group(HandleServiceId, GID), Req2}.
+    {handle_service_logic:has_group(HandleServiceId, GID), Req2}.
 
 %%--------------------------------------------------------------------
 %% @doc Processes data submitted by a client through POST, PATCH, PUT on a REST
@@ -132,11 +137,11 @@ accept_resource(handle_services, post, _HandleServiceId, Data, #client{type = us
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ProxyEndpoint = rest_module_helper:assert_key(<<"proxyEndpoint">>, Data, binary, Req),
     ServiceDescription = rest_module_helper:assert_key(<<"serviceDescription">>, Data, any, Req),
-    {ok, HandleServiceId} = handle_services_logic:create(UserId, Name, ProxyEndpoint, ServiceDescription),
+    {ok, HandleServiceId} = handle_service_logic:create(UserId, Name, ProxyEndpoint, ServiceDescription),
     {{true, <<"/handle_services/", HandleServiceId/binary>>}, Req};
 
-accept_resource(handle_service, patch, HandleServiceId, Data, #client{type = user, id = UserId}, Req) ->
-    ok = handle_services_logic:modify(HandleServiceId, UserId, Data),
+accept_resource(handle_service, patch, HandleServiceId, Data, #client{type = user, id = _UserId}, Req) ->
+    ok = handle_service_logic:modify(HandleServiceId, Data),
     {true, Req};
 
 accept_resource(user, put, HandleServiceId, _Data, _Client, Req) ->
@@ -146,7 +151,7 @@ accept_resource(user, put, HandleServiceId, _Data, _Client, Req) ->
             Description = <<"User with given ID does not exist">>,
             rest_module_helper:report_error(invalid_request, Description, Req2);
         true ->
-            {ok, HandleServiceId} = handle_services_logic:add_user(HandleServiceId, UID),
+            {ok, HandleServiceId} = handle_service_logic:add_user(HandleServiceId, UID),
             {true, Req2}
     end;
 accept_resource(group, put, HandleServiceId, _Data, _Client, Req) ->
@@ -156,7 +161,7 @@ accept_resource(group, put, HandleServiceId, _Data, _Client, Req) ->
             Description = <<"Group with given ID does not exist">>,
             rest_module_helper:report_error(invalid_request, Description, Req2);
         true ->
-            {ok, HandleServiceId} = handle_services_logic:add_group(HandleServiceId, GID),
+            {ok, HandleServiceId} = handle_service_logic:add_group(HandleServiceId, GID),
             {true, Req2}
     end;
 accept_resource(upriv, put, HandleServiceId, Data, _Client, Req) ->
@@ -167,7 +172,7 @@ accept_resource(upriv, put, HandleServiceId, Data, _Client, Req) ->
         list_of_bin, Req2),
 
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
-    ok = handle_services_logic:set_user_privileges(HandleServiceId, UID, Privileges),
+    ok = handle_service_logic:set_user_privileges(HandleServiceId, UID, Privileges),
     {true, Req2};
 accept_resource(gpriv, put, HandleServiceId, Data, _Client, Req) ->
     {GID, Req2} = cowboy_req:binding(gid, Req),
@@ -177,7 +182,7 @@ accept_resource(gpriv, put, HandleServiceId, Data, _Client, Req) ->
         list_of_bin, Req2),
 
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
-    ok = handle_services_logic:set_group_privileges(HandleServiceId, GID, Privileges),
+    ok = handle_service_logic:set_group_privileges(HandleServiceId, GID, Privileges),
     {true, Req2}.
 
 %%--------------------------------------------------------------------
@@ -189,33 +194,25 @@ accept_resource(gpriv, put, HandleServiceId, Data, _Client, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(handle_services, _EntityId, #client{type = user, id = UserId}, Req) ->
-    {ok, HandleServiceIds} = handle_services_logic:list(UserId),
+    {ok, HandleServiceIds} = handle_service_logic:list(UserId),
     {[{handle_services, HandleServiceIds}], Req};
-provide_resource(handle_service, HandleServiceId, #client{type = user, id = UserId}, Req) ->
-    {ok, Data} = handle_services_logic:get_data(HandleServiceId, UserId),
+provide_resource(handle_service, HandleServiceId, #client{type = user, id = _UserId}, Req) ->
+    {ok, Data} = handle_service_logic:get_data(HandleServiceId),
     {Data, Req};
 provide_resource(users, HandleServiceId, _Client, Req) ->
-    {ok, Users} = handle_services_logic:get_effective_users(HandleServiceId),
+    {ok, Users} = handle_service_logic:get_users(HandleServiceId),
     {Users, Req};
-provide_resource(user, HandleServiceId, _Client, Req) ->
-    {UID, Req2} = cowboy_req:binding(uid, Req),
-    {ok, User} = handle_services_logic:get_user(HandleServiceId, UID),
-    {User, Req2};
 provide_resource(upriv, HandleServiceId, _Client, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),
-    {ok, Privileges} = handle_services_logic:get_user_privileges(HandleServiceId, UID),
-    {[{privileges, Privileges}], Req2};
+    {ok, Privileges} = handle_service_logic:get_user_privileges(HandleServiceId, UID),
+    {Privileges, Req2};
 provide_resource(groups, HandleServiceId, _Client, Req) ->
-    {ok, Groups} = handle_services_logic:get_groups(HandleServiceId),
+    {ok, Groups} = handle_service_logic:get_groups(HandleServiceId),
     {Groups, Req};
-provide_resource(group, HandleServiceId, _Client, Req) ->
-    {GID, Req2} = cowboy_req:binding(gid, Req),
-    {ok, Group} = handle_services_logic:get_group(HandleServiceId, GID),
-    {Group, Req2};
 provide_resource(gpriv, HandleServiceId, _Client, Req) ->
     {GID, Req2} = cowboy_req:binding(gid, Req),
-    {ok, Privileges} = handle_services_logic:get_group_privileges(HandleServiceId, GID),
-    {[{privileges, Privileges}], Req2}.
+    {ok, Privileges} = handle_service_logic:get_group_privileges(HandleServiceId, GID),
+    {Privileges, Req2}.
 
 %%--------------------------------------------------------------------
 %% @doc Deletes the resource.
@@ -226,10 +223,10 @@ provide_resource(gpriv, HandleServiceId, _Client, Req) ->
     HandleServiceId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 delete_resource(handle_service, HandleServiceId, Req) ->
-    {handle_services_logic:remove(HandleServiceId), Req};
+    {handle_service_logic:remove(HandleServiceId), Req};
 delete_resource(user, HandleServiceId, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),
-    {handle_services_logic:remove_user(HandleServiceId, UID), Req2};
+    {handle_service_logic:remove_user(HandleServiceId, UID), Req2};
 delete_resource(group, HandleServiceId, Req) ->
     {GID, Req2} = cowboy_req:binding(gid, Req),
-    {handle_services_logic:remove_group(HandleServiceId, GID), Req2}.
+    {handle_service_logic:remove_group(HandleServiceId, GID), Req2}.
