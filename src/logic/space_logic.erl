@@ -712,7 +712,7 @@ get_share_data(SpaceId, _Client) ->
             parent_space = ParentSpace
         }}} = share:get(SpaceId),
     {ok, [
-        {spaceId, SpaceId},
+        {shareId, SpaceId},
         {name, Name},
         {public_url, PublicURL},
         {root_file_id, RootFileId},
