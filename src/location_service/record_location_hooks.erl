@@ -33,7 +33,7 @@ get_hooks() ->
         {ok, true} ->
             [{X, Y} || X <- ?MODELS, Y <- ?METHODS];
         {ok, false} ->
-            ?warning("location service hooks disabled"),
+            ?debug("location service hooks disabled"),
             []
     end.
 
