@@ -7,7 +7,7 @@
 %%%-------------------------------------------------------------------
 %%% @doc The module handling logic behind /spaces REST resources.
 %%%-------------------------------------------------------------------
--module(spaces_rest_module).
+-module(shares_rest_module).
 -author("Konrad Zemek").
 
 -include("http/handlers/rest_handler.hrl").
