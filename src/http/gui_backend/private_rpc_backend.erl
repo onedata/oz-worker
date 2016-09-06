@@ -166,6 +166,7 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
         {true, Macaroon} ->
             case space_logic:join({user, UserId}, Macaroon) of
                 {ok, SpaceId} ->
+                    % Push the newly joined space to the client's model
                     {ok, #document{
                         value = #onedata_user{
                             space_names = SpaceNamesMap
@@ -176,7 +177,7 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
                         % no providers
                         SpaceId, SpaceNamesMap, undefined, []
                     ),
-                    gui_async:push_updated(<<"space">>, SpaceRecord),
+                    gui_async:push_created(<<"space">>, SpaceRecord),
                     {ok, [{<<"spaceId">>, SpaceId}]};
                 {error, invalid_token_value} ->
                     gui_error:report_warning(<<"Invalid token value.">>)
