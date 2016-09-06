@@ -160,19 +160,25 @@ handle(<<"unsupportSpace">>, Props) ->
 
 handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
     UserId = g_session:get_user_id(),
-    case space_logic:join({user, UserId}, Token) of
-        {ok, SpaceId} ->
-            {ok, #document{
-                value = #onedata_user{
-                    space_names = SpaceNamesMap
-                }}} = onedata_user:get(UserId),
-            SpaceRecord = space_data_backend:space_record(
-                % DefaultSpaceId and UserProviders do not matter because this is
-                % a new space - it's not default and has no providers
-                SpaceId, SpaceNamesMap, undefined, []
-            ),
-            gui_async:push_updated(<<"space">>, SpaceRecord),
-            {ok, [{<<"spaceId">>, SpaceId}]};
-        {error, invalid_token_value} ->
-            gui_error:report_warning(<<"Invalid token value.">>)
+    case token_logic:validate(Token, space_invite_user_token) of
+        false ->
+            gui_error:report_warning(<<"Invalid token value.">>);
+        {true, Macaroon} ->
+            case space_logic:join({user, UserId}, Macaroon) of
+                {ok, SpaceId} ->
+                    {ok, #document{
+                        value = #onedata_user{
+                            space_names = SpaceNamesMap
+                        }}} = onedata_user:get(UserId),
+                    SpaceRecord = space_data_backend:space_record(
+                        % DefaultSpaceId and UserProviders do not matter because
+                        % this is a new space - it's not default and has
+                        % no providers
+                        SpaceId, SpaceNamesMap, undefined, []
+                    ),
+                    gui_async:push_updated(<<"space">>, SpaceRecord),
+                    {ok, [{<<"spaceId">>, SpaceId}]};
+                {error, invalid_token_value} ->
+                    gui_error:report_warning(<<"Invalid token value.">>)
+            end
     end.
