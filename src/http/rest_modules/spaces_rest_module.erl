@@ -16,11 +16,11 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: spaces | space | shares | share | users |
+-type provided_resource() :: spaces | space | shares | users |
 uinvite | user | upriv | groups | ginvite | group | gpriv | providers |
 pinvite | provider.
--type accepted_resource() :: spaces | space | shares | upriv | gpriv.
--type removable_resource() :: space | share | user | group | provider.
+-type accepted_resource() :: spaces | space | share | upriv | gpriv.
+-type removable_resource() :: space | user | group | provider.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
 %% API
@@ -46,8 +46,8 @@ routes() ->
     [
         {<<"/spaces">>, M, S#rstate{resource = spaces, methods = [post, get]}},
         {<<"/spaces/:id">>, M, S#rstate{resource = space, methods = [get, patch, delete]}},
-        {<<"/shares/:id">>, M, S#rstate{resource = share, methods = [put, get, patch, delete]}},
         {<<"/spaces/:id/shares">>, M, S#rstate{resource = shares, methods = [get]}},
+        {<<"/spaces/:id/shares/:sid">>, M, S#rstate{resource = share, methods = [put]}},
         {<<"/spaces/:id/users">>, M, S#rstate{resource = users, methods = [get, post]}},
         {<<"/spaces/:id/users/token">>, M, S#rstate{resource = uinvite, methods = [get]}},
         {<<"/spaces/:id/users/:uid">>, M, S#rstate{resource = user, methods = [get, delete]}},
@@ -82,12 +82,12 @@ is_authorized(space, delete, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_remove);
 is_authorized(share, put, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_manage_shares);
-is_authorized(share, patch, ShareId, #client{type = user, id = UserId}) ->
-    {ok, ParentSpace} = space_logic:get_share_parent(ShareId),
-    space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
-is_authorized(share, delete, ShareId, #client{type = user, id = UserId}) ->
-    {ok, ParentSpace} = space_logic:get_share_parent(ShareId),
-    space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
+is_authorized(shares, get, SpaceId, #client{type = user, id = UserId}) ->
+    % Share - to view shares, it's enough to belong to parent space
+    space_logic:has_effective_user(SpaceId, UserId);
+is_authorized(shares, get, SpaceId, #client{type = provider, id = ProviderId}) ->
+    % Share - to view shares as provider, it's enough to support parent space
+    space_logic:has_provider(SpaceId, ProviderId);
 is_authorized(uinvite, get, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_invite_user);
 is_authorized(user, delete, SpaceId, #client{type = user, id = UserId}) ->
@@ -109,16 +109,6 @@ is_authorized(provider, delete, SpaceId, #client{type = user, id = UserId}) ->
 is_authorized(R, put, SpaceId, #client{type = user, id = UserId})
     when R =:= upriv; R =:= gpriv ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_set_privileges);
-is_authorized(ShareBound, get, ShareId, #client{type = user, id = UserId})
-    when ShareBound =:= share orelse ShareBound =:= shares ->
-    {ok, ParentSpace} = space_logic:get_share_parent(ShareId),
-    % Share - to view shares, it's enough to belong to parent space
-    space_logic:has_effective_user(ParentSpace, UserId);
-is_authorized(ShareBound, get, ShareId, #client{type = provider, id = ProviderId})
-    when ShareBound =:= share orelse ShareBound =:= shares ->
-    {ok, ParentSpace} = space_logic:get_share_parent(ShareId),
-    % Share - to view shares as provider, it's enough to support parent space
-    space_logic:has_provider(ParentSpace, ProviderId);
 is_authorized(R, get, SpaceId, #client{type = user, id = UserId}) ->
     Result = space_logic:has_effective_privilege(
         SpaceId, UserId, space_view_data),
@@ -167,8 +157,6 @@ resource_exists(provider, SpaceId, Req) ->
     {Bindings, Req2} = cowboy_req:bindings(Req),
     {pid, PID} = lists:keyfind(pid, 1, Bindings),
     {space_logic:has_provider(SpaceId, PID), Req2};
-resource_exists(share, ShareId, Req) ->
-    {space_logic:share_exists(ShareId), Req};
 resource_exists(_, SpaceId, Req) ->
     {space_logic:exists(SpaceId), Req}.
 
@@ -186,11 +174,12 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId},
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, SpaceId} = space_logic:create({user, UserId}, Name),
     {{true, <<"/spaces/", SpaceId/binary>>}, Req};
-accept_resource(shares, post, ParentSpace, Data, #client{type = user, id = UserId}, Req) ->
+accept_resource(share, put, SpaceId, Data, _Client, Req) ->
+    {ShareId, _} = cowboy_req:binding(sid, Req),
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     RootFileId = rest_module_helper:assert_key(<<"root_file_id">>, Data, binary, Req),
-    {ok, ShareId} = space_logic:create_share({user, UserId}, Name, RootFileId, ParentSpace),
-    {{true, <<"/shares/", ShareId/binary>>}, Req};
+    {ok, ShareId} = share_logic:create(ShareId, Name, RootFileId, SpaceId),
+    {true, Req};
 accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
@@ -280,9 +269,6 @@ provide_resource(space, SpaceId, #client{type = user, id = UserId}, Req) ->
     {Data, Req};
 provide_resource(space, SpaceId, #client{type = provider}, Req) ->
     {ok, Data} = space_logic:get_data(SpaceId, provider),
-    {Data, Req};
-provide_resource(share, ShareId, #client{type = ClientType}, Req) ->
-    {ok, Data} = space_logic:get_share_data(ShareId, ClientType),
     {Data, Req};
 provide_resource(shares, SpaceId, _Client, Req) ->
     {ok, Shares} = space_logic:get_shares(SpaceId),

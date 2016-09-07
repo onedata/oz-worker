@@ -5,10 +5,10 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc Integration tests of privileges REST module in onezone.
+%%% @doc Integration tests of shares REST module in onezone.
 %%% @end
 %%%-------------------------------------------------------------------
--module(rest_privileges_test_SUITE).
+-module(rest_shares_test_SUITE).
 -author("Lukasz Opiola").
 
 -include("registered_names.hrl").
@@ -21,8 +21,8 @@
 
 -export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
 -export([
-    view_privileges_test/1,
-    set_privileges_test/1,
+    view_share_test/1,
+    view_shares_of_space_test/1,
     list_spaces_test/1,
     list_providers_test/1,
     list_providers_of_space_test/1,
@@ -49,7 +49,7 @@ all() ->
         list_providers_test,          % list_providers
         list_providers_of_space_test, % list_providers_of_space
         modify_space_members_test     % add_member_to_space,
-                                      % remove_member_from_space
+        % remove_member_from_space
     ]).
 
 %%%===================================================================

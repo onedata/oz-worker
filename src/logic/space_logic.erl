@@ -18,16 +18,14 @@
 
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
-    has_effective_privilege/3, has_share/2]).
+    has_effective_privilege/3]).
+-export([get_shares/1, has_share/2]).
 -export([create/2, create/4, get_data/2, modify/3]).
 -export([join/2, add_user/2, get_user/3, get_users/1, get_effective_users/1,
-    remove_user/2]).
+remove_user/2]).
 -export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
 -export([support/3, get_providers/2, get_provider/3, remove_provider/2]).
 -export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
--export([create_share/4, get_shares/1, get_share_data/2, get_share_parent/1,
-    share_exists/1, remove_share/1]).
--export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
 -export([remove/1, cleanup/1]).
 -export([list/0]).
 
@@ -649,38 +647,6 @@ get_effective_privileges(SpaceId, UserId) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Creates a share for a user.
-%% Throws exception when call to the datastore fails,
-%% or given member doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec create_share({user, UserId :: binary()}, Name :: binary(),
-    RootFileId :: binary(), ParentSpaceId :: binary()) ->
-    {ok, SpaceId :: binary()} | no_return().
-create_share({user, _UserId}, Name, RootFileId, ParentSpaceId) ->
-    true = exists(ParentSpaceId),
-
-    Share = #share{
-        name = Name,
-        parent_space = ParentSpaceId,
-        root_file_id = RootFileId
-    },
-    {ok, ShareId} = share:save(#document{value = Share}),
-
-    % Update public URL
-    {ok, _} = share:update(ShareId, fun(ShareDoc) ->
-        {ok, ShareDoc#share{public_url = share_id_to_public_url(ShareId)}}
-    end),
-
-    {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
-        Shares = SpaceDoc#space.shares,
-        {ok, SpaceDoc#space{shares = [ShareId | Shares]}}
-    end),
-
-    {ok, ShareId}.
-
-
-%%--------------------------------------------------------------------
 %% @doc Returns the list of all shares created in given space.
 %% Throws exception when call to the datastore fails,
 %% or given space doesn't exist.
@@ -693,74 +659,6 @@ get_shares(SpaceId) ->
             shares = Shares
         }}} = space:get(SpaceId),
     {ok, [{shares, Shares}]}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns details about the Space.
-%% Throws exception when call to the datastore fails, or space doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec get_share_data(SpaceId :: binary(),
-    Client :: {user, UserId :: binary()} | provider) ->
-    {ok, [proplists:property()]}.
-get_share_data(SpaceId, _Client) ->
-    {ok, #document{
-        value = #share{
-            name = Name,
-            public_url = PublicURL,
-            root_file_id = RootFileId,
-            parent_space = ParentSpace
-        }}} = share:get(SpaceId),
-    {ok, [
-        {shareId, SpaceId},
-        {name, Name},
-        {public_url, PublicURL},
-        {root_file_id, RootFileId},
-        {parent_space, ParentSpace}
-    ]}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Removes a share.
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec remove_share(ShareId :: binary()) -> true.
-remove_share(ShareId) ->
-    {ok, #document{
-        value = #share{
-            parent_space = ParentSpaceId
-        }}} = share:get(ShareId),
-    ok = share:delete(ShareId),
-    {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
-        Shares = SpaceDoc#space.shares,
-        {ok, SpaceDoc#space{shares = Shares -- [ShareId]}}
-    end),
-    true.
-
-
-%%--------------------------------------------------------------------
-%% @doc Check if given space is a share.
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec get_share_parent(SpaceId :: binary()) -> {ok, undefined | binary()}.
-get_share_parent(SpaceId) ->
-    {ok, #document{
-        value = #share{
-            parent_space = ParentSpaceId
-        }}} = share:get(SpaceId),
-    {ok, ParentSpaceId}.
-
-%%--------------------------------------------------------------------
-%% @doc Returns whether a Share exists.
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec share_exists(ShareId :: binary()) ->
-    boolean().
-share_exists(ShareId) ->
-    share:exists(ShareId).
 
 
 %%--------------------------------------------------------------------
@@ -786,41 +684,3 @@ list() ->
         SpaceId
     end, SpaceDocs),
     {ok, SpaceIds}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns public access URL for given share that points to onezone.
-%% OneZone will then redirect such clients to one of providers that support the
-%% parent space of the share.
-%%--------------------------------------------------------------------
--spec share_id_to_public_url(ShareId :: binary()) -> binary().
-share_id_to_public_url(ShareId) ->
-    OZHostname = dns_query_handler:get_canonical_hostname(),
-    str_utils:format_bin("https://~s/share/~s", [OZHostname, ShareId]).
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns public access URL for given share that points to one of
-%% providers that support the parent space of the share.
-%%--------------------------------------------------------------------
--spec share_id_to_redirect_url(ShareId :: binary()) -> binary().
-share_id_to_redirect_url(ShareId) ->
-    {ok, #document{
-        value = #share{
-            parent_space = ParentSpaceId
-        }}} = share:get(ShareId),
-    {ok, [{providers, Providers}]} = get_providers(ParentSpaceId, provider),
-    % Prefer online providers
-    {Online, Offline} = lists:partition(
-        fun(ProviderId) ->
-            subscriptions:any_connection_active(ProviderId)
-        end, Providers),
-    % But if there are none, choose one of inactive
-    Choice = case length(Online) of
-        0 -> Offline;
-        _ -> Online
-    end,
-    random:seed(erlang:timestamp()),
-    ChosenProvider = lists:nth(random:uniform(length(Choice)), Choice),
-    {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
-    str_utils:format_bin("~s/#/public/shares/~s", [ProviderURL, ShareId]).
