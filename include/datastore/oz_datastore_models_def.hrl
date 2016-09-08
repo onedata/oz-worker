@@ -15,6 +15,12 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
 -include("http/handlers/rest_handler.hrl").
 
+% Info about identities, which are owned by this OZ
+-record(owned_identity, {
+    id :: identity:id(),
+    encoded_public_key :: identity:encoded_public_key()
+}).
+
 % Describes state of batch.
 -record(outbox, {
     timer_expires :: pos_integer(),

@@ -33,6 +33,7 @@ all: test_rel
 ##
 
 deps:
+	cd location-service && npm install
 	./rebar get-deps
 	deps/gui/pull-gui.sh gui-config.sh
 
@@ -74,6 +75,7 @@ clean:
 	./rebar clean
 
 distclean: clean
+	rm -rf location-service/node_modules
 	./rebar delete-deps
 
 ##
@@ -144,7 +146,7 @@ else
 	@echo "Building package for distribution $(DISTRIBUTION)"
 endif
 
-package/$(PKG_ID).tar.gz: deps
+package/$(PKG_ID).tar.gz:
 	mkdir -p package
 	rm -rf package/$(PKG_ID)
 	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION) | (cd package && tar -xf -)
@@ -156,14 +158,14 @@ package/$(PKG_ID).tar.gz: deps
 	     echo "$${vsn}" > $${dep}/priv/vsn.git; \
 	     sed -i'' "s/{vsn,\\s*git}/{vsn, \"$${vsn}\"}/" $${dep}/src/*.app.src 2>/dev/null || true; \
 	done
-	find package/$(PKG_ID) -name ".git" -type d -exec rm -rf {} +
+	find package/$(PKG_ID) -depth -name ".git" -exec rm -rf {} \;
 	tar -C package -czf package/$(PKG_ID).tar.gz $(PKG_ID)
 
 dist: package/$(PKG_ID).tar.gz
 	cp package/$(PKG_ID).tar.gz .
 
 package: check_distribution package/$(PKG_ID).tar.gz
-	${MAKE} -C package -f $(PWD)/deps/node_package/Makefile
+	${MAKE} -C package -f $(PKG_ID)/deps/node_package/Makefile
 
 pkgclean:
 	rm -rf package

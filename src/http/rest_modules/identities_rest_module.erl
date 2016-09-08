@@ -1,24 +1,26 @@
 %%%-------------------------------------------------------------------
-%%% @author Lukasz Opiola
+%%% @author Michal Zmuda
 %%% @copyright (C): 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc The module handling logic behind /shares REST resources.
+%%% @doc The module handling logic behind /provider REST resource.
 %%%-------------------------------------------------------------------
--module(shares_rest_module).
--author("Lukasz Opiola").
+-module(identities_rest_module).
+-author("Michal Zmuda").
 
 -include("http/handlers/rest_handler.hrl").
+-include("registered_names.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: share.
--type accepted_resource() :: share.
--type removable_resource() :: share.
+-type provided_resource() :: publickey.
+-type accepted_resource() :: publickey.
+-type removable_resource() :: publickey.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
 %% API
@@ -39,10 +41,11 @@
 -spec routes() ->
     [{PathMatch :: binary(), rest_handler, State :: rstate()}].
 routes() ->
-    S = #rstate{module = ?MODULE, root = share},
+    S = #rstate{module = ?MODULE, root = publickey},
     M = rest_handler,
     [
-        {<<"/shares/:id">>, M, S#rstate{resource = share, methods = [get, patch, delete]}}
+        {<<"/publickey/:id">>, M, S#rstate{resource = publickey, methods = [get, patch], noauth = [get]}},
+        {<<"/provider_data/:id">>, M, S#rstate{resource = provider, methods = [post], noauth = [post]}}
     ].
 
 %%--------------------------------------------------------------------
@@ -52,25 +55,15 @@ routes() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(Resource :: resource(), Method :: method(),
-    ShareId :: binary() | undefined, Client :: rest_handler:client()) ->
+    ID :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
-is_authorized(_, _, _, #client{type = undefined}) ->
-    false;
-is_authorized(share, get, ShareId, #client{type = user, id = UserId}) ->
-    {ok, ParentSpace} = share_logic:get_parent(ShareId),
-    % Share - to view shares, it's enough to belong to parent space
-    space_logic:has_effective_user(ParentSpace, UserId);
-is_authorized(share, get, ShareId, #client{type = provider, id = ProviderId}) ->
-    {ok, ParentSpace} = share_logic:get_parent(ShareId),
-    % Share - to view shares as provider, it's enough to support parent space
-    space_logic:has_provider(ParentSpace, ProviderId);
-is_authorized(share, patch, ShareId, #client{type = user, id = UserId}) ->
-    {ok, ParentSpace} = share_logic:get_parent(ShareId),
-    space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
-is_authorized(share, delete, ShareId, #client{type = user, id = UserId}) ->
-    {ok, ParentSpace} = share_logic:get_parent(ShareId),
-    space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
-is_authorized(_, _, _, _) ->
+is_authorized(provider, _, _, _) ->
+    true;
+is_authorized(publickey, get, _, _) ->
+    true;
+is_authorized(publickey, patch, MatchingID, #client{type = provider, id = MatchingID}) ->
+    true;
+is_authorized(publickey, _X, _Y, _Z) ->
     false.
 
 %%--------------------------------------------------------------------
@@ -78,11 +71,14 @@ is_authorized(_, _, _, _) ->
 %% @see rest_module_behavior
 %% @end
 %%--------------------------------------------------------------------
--spec resource_exists(Resource :: resource(), ShareId :: binary() | undefined,
+-spec resource_exists(Resource :: resource(), ID :: binary() | undefined,
     Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
-resource_exists(share, ShareId, Req) ->
-    {share_logic:exists(ShareId), Req}.
+resource_exists(publickey, ID, Req) ->
+    case plugins:apply(identity_repository, get, [ID]) of
+        {error, _} -> {false, Req};
+        {ok, _} -> {true, Req}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Processes data submitted by a client through POST, PATCH, PUT on a REST
@@ -91,33 +87,52 @@ resource_exists(share, ShareId, Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
-    ShareId :: binary() | undefined, Data :: data(),
+    ID :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
-accept_resource(share, patch, ShareId, Data, _Client, Req) ->
-    NewName = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    {ok, ShareId} = share_logic:modify(ShareId, NewName),
-    {true, Req}.
+accept_resource(provider, _, ID, Data, _Client, Req) ->
+    EncodedPublicKey = rest_module_helper:assert_key(<<"publicKey">>, Data, binary, Req),
+    URLs = rest_module_helper:assert_key(<<"urls">>, Data, list_of_bin, Req),
+    RedirectionPoint = rest_module_helper:assert_key(<<"redirectionPoint">>, Data, binary, Req),
+
+    case plugins:apply(identity_repository, publish, [ID, EncodedPublicKey]) of
+        ok ->
+            Provider = #provider{client_name = ID, urls = URLs, redirection_point = RedirectionPoint},
+            {ok, _} = provider:save(#document{key = ID, value = Provider}),
+            {true, Req};
+        {error, Reason} ->
+            ?warning("Unable to create new provider with ID ~p due to ~p", [ID, Reason]),
+            {false, Req}
+    end;
+accept_resource(publickey, _, ID, Data, _Client, Req) ->
+    EncodedPublicKey = rest_module_helper:assert_key(<<"publicKey">>, Data, binary, Req),
+    case plugins:apply(identity_repository, publish, [ID, EncodedPublicKey]) of
+        ok -> {true, Req};
+        {error, _Reason} ->
+            ?warning("Client ~p unsucessfuly tried to override key of ~p", [_Client, ID]),
+            {false, Req}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Returns data requested by a client through GET on a REST resource.
 %% @see rest_module_behavior
 %% @end
 %%--------------------------------------------------------------------
--spec provide_resource(Resource :: provided_resource(), ShareId :: binary() | undefined,
+-spec provide_resource(Resource :: provided_resource(), ID :: binary() | undefined,
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
-provide_resource(share, ShareId, #client{type = ClientType}, Req) ->
-    {ok, Data} = share_logic:get_data(ShareId, ClientType),
-    {Data, Req}.
+provide_resource(publickey, ID, _, Req) ->
+    %% resource_exists verified, that resource is obtainable
+    {ok, EncodedPublicKey} = plugins:apply(identity_repository, get, [ID]),
+    {[{<<"publicKey">>, EncodedPublicKey}], Req}.
 
 %%--------------------------------------------------------------------
-%% @doc Deletes the resource.
+%% @doc Deletes the resource identified by the SpaceId parameter.
 %% @see rest_module_behavior
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_resource(Resource :: removable_resource(),
-    ShareId :: binary() | undefined, Req :: cowboy_req:req()) ->
+    ID :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
-delete_resource(share, ShareId, Req) ->
-    {share_logic:remove(ShareId), Req}.
+delete_resource(_, _, Req) ->
+    {false, Req}.

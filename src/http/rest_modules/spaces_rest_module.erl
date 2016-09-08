@@ -175,6 +175,7 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId},
     {ok, SpaceId} = space_logic:create({user, UserId}, Name),
     {{true, <<"/spaces/", SpaceId/binary>>}, Req};
 accept_resource(share, put, SpaceId, Data, _Client, Req) ->
+    % TODO DO NOT ALLOW PUT WHEN RESOURCE EXISTS
     {ShareId, _} = cowboy_req:binding(sid, Req),
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     RootFileId = rest_module_helper:assert_key(<<"root_file_id">>, Data, binary, Req),

@@ -25,6 +25,7 @@
 %%--------------------------------------------------------------------
 -spec models() -> Models :: [model_behaviour:model_type()].
 models() -> [
+  owned_identity,
   groups_graph_caches_state,
   outbox,
   provider_subscription,
