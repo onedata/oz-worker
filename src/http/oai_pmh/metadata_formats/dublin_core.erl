@@ -57,7 +57,7 @@ encode(Metadata) ->
             undefined -> [];
             Value -> [#xmlElement{
                 name=binary_to_atom(<<"dc:", Key/binary>>, latin1),
-                content=[Value]}]
+                content=[ensure_string(Value)]}]
         end
     end, elements()),
 
@@ -71,3 +71,14 @@ encode(Metadata) ->
         content = XMLElements}].
 
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+
+ensure_string(Value) when is_binary(Value) ->
+    binary_to_list(Value);
+ensure_string(Value) when is_atom(Value) ->
+    atom_to_list(Value);
+ensure_string(Value) when is_list(Value) ->
+    Value.

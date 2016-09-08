@@ -150,9 +150,9 @@ handle_request(QueryString, Req) ->
             case verb_to_module(Verb) of
                 badVerb -> {error_to_xml(?BAD_VERB), generate_request_element(Req)};
                 Module ->
-                    ArgsList = proplists:delete(<<"verb">>, QueryString),
-                    case validate_arguments(Module, ArgsList) of
-                        true -> handle_request_with_validated_args(Verb, ArgsList, Req);
+%%                    ArgsList = proplists:delete(<<"verb">>, QueryString),
+                    case validate_arguments(Module, QueryString) of
+                        true -> handle_request_with_validated_args(Verb, QueryString, Req);
                         false -> {error_to_xml(?BAD_ARGUMENT), generate_request_element(Req)}
                     end
 
@@ -160,7 +160,8 @@ handle_request(QueryString, Req) ->
     end,
     XML = insert_to_root_xml_element([ResponseDate, RequestElement, Response]),
     %% io:format("DEBUG::~n~p~nDEBUG~n", [XML]),
-    ResponseBody = xmerl:export_simple([XML], xmerl_xml),
+    Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
+    ResponseBody = xmerl:export_simple([XML], xmerl_xml, [{prolog, Prolog}]),
     %% io:format(lists:flatten(xmerl:export_simple([XML], xmerl_xml))),
     Req2 = cowboy_req:set_resp_header(<<"content-type">>,
     ?RESPONSE_CONTENT_TYPE, Req),
@@ -168,7 +169,7 @@ handle_request(QueryString, Req) ->
 
 
 handle_request_with_validated_args(Verb, ArgsList, Req) ->
-    %todo handle errors
+    %todo handle request specific errors
     Response = case generate_response(Verb, ArgsList) of
         {error, Reason} -> error_to_xml(Reason);
         PositiveResponse -> PositiveResponse
@@ -218,7 +219,7 @@ to_xml(Name, #oai_metadata{metadata_format=Format, value=Value}) ->
     MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
     Mod = metadata_prefix_to_metadata_format(MetadataPrefix),
     [#xmlElement{name=Name, content=Mod:encode(Value)}];
-to_xml(Name, [Value, Values]) ->
+to_xml(Name, [Value | Values]) ->
     to_xml(Name, Value) ++  to_xml(Name, Values);
 to_xml(Name, Value) when is_binary(Value) ->
     [#xmlElement{name = Name, content = [binary_to_list(Value)]}];
@@ -232,7 +233,7 @@ generate_response_date_element() ->
     #xmlElement{name = responseDate,
         content = [str_utils:format(
             "~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ",
-            [Year, Month, Day, Hour, Minute, Second])]}. % TODO padding with 0
+            [Year, Month, Day, Hour, Minute, Second])]}.
 
 
 generate_request_element(Req) ->
@@ -257,7 +258,8 @@ generate_attributes(ParsedArgs) ->
             value = binary_to_list(Value)}
     end, ParsedArgs).
 
-validate_arguments(Module, ArgsList) ->
+validate_arguments(Module, QueryString) ->
+    ArgsList = proplists:delete(<<"verb">>, QueryString),
     all_keys_occurs_exactly_once(ArgsList) and
     not illegal_arguments_exist(Module, ArgsList) and
     ( not exclusive_argument_exist(Module, ArgsList) and
@@ -317,7 +319,6 @@ count_key_occurrences(Key, Proplist) ->
 %% TODO * docs
 %% TODO * specs
 %% TODO * error handling
-%% TODO * add encoding to head of xml
 %% TODO * handle datestamps
 %% TODO * handle all verbs
 %% TODO * compression
@@ -325,3 +326,4 @@ count_key_occurrences(Key, Proplist) ->
 %% TODO * maybe parsing arguments should be implemented in each module to return proper error
 %% TODO * handle error in get_element
 %% TODO * allowed charset
+%% TODO * error message should include info what exactly failed

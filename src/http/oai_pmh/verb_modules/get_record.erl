@@ -38,6 +38,10 @@ get_element(record) ->
             setSpec = ["set1", "set2"]},
         metadata = #oai_metadata{
             metadata_format = #oai_metadata_format{metadataPrefix = oai_dc},
-            value = #{}
+            value = #{
+                <<"title">> => <<"Potop">>,
+                <<"creator">> => <<"Henryk Sienkiewicz">>,
+                <<"description">> => <<"novel">>
+            }
         }
     }.
