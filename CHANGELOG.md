@@ -4,6 +4,37 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc4
+
+* VFS-2156 Change onepanel config env variables types
+* Disable openid providers in auth.config by default, leaving basicAuth only
+
+
+### 3.0.0-RC3
+
+* VFS-2156 Remove GUI files
+* VFS-2436 Allow modifying user alias via REST
+* VFS-2436 Disallow adding inexistent users or groups to spaces via REST admin endpoint
+* VFS-2154 Fix a mixup between privileges expressed in atoms and binaries in rest privileges tests
+* VFS-2154 Update privileges rest handler to accept patch rather than put
+* VFS-2154 Use all possible combinations of privs rather than random subset
+* VFS-2154 Major refactor of rest privileges test suite and some improvements to the tested code
+* VFS-2154 Further refinement of OZ API privileges tests, update oz-gui-default reference
+* VFS-2358 HOTFIX: Fix a badmatch in provider data backend
+* VFS-2358 Update comments concerning module APIs in space and provider data backends
+* Releasing new version 3.0.0-RC2
+* VFS-2154 Rework tests for OZ API, fix some bugs that were revealed by tests
+* VFS-2273 Handle macaroon verification errors
+* VFS-2358 Implement unsupport space functionality in GUI
+* VFS-2357 Add checks if taking away privileges works in OZ API REST
+* VFS-2269 Enable Symmetric Multiprocessing
+* VFS-2357 Add admin endpoints to add/remove users and groups from spaces, fix a couple of bugs
+* VFS-2359 Turn off HSTS by default, allow configuration via app.config, improve docs integration
+* VFS-2359 Add handler for serving static docs files located on another server
+* Releasing new version 3.0.0-RC1
+* VFS-2250 Use wrappers for macaroon serialization
+
+
 ### 3.0.0-RC2
 
 * VFS-2357 Add checks if taking away privileges works in OZ API REST

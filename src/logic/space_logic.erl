@@ -14,16 +14,19 @@
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
     has_effective_privilege/3]).
--export([create/2, create/4, modify/3, set_privileges/3, join/2, support/3]).
--export([get_data/2, get_users/1, get_effective_users/1, get_groups/1,
-    get_providers/2, get_user/3, get_group/2, get_provider/3, get_privileges/2,
-    get_effective_privileges/2]).
--export([add_user/2, add_group/2]).
--export([remove/1, remove_user/2, remove_group/2, remove_provider/2, cleanup/1]).
+-export([get_shares/1, has_share/2]).
+-export([create/2, create/4, get_data/2, modify/3]).
+-export([join/2, add_user/2, get_user/3, get_users/1, get_effective_users/1,
+remove_user/2]).
+-export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
+-export([support/3, get_providers/2, get_provider/3, remove_provider/2]).
+-export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
+-export([remove/1, cleanup/1]).
 -export([list/0]).
 
 %%%===================================================================
@@ -134,6 +137,25 @@ has_effective_privilege(SpaceId, UserId, Privilege) ->
         true ->
             {ok, UserPrivileges} = get_effective_privileges(SpaceId, UserId),
             ordsets:is_element(Privilege, UserPrivileges)
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the share identified by ShareId belongs to the Space.
+%% Shall return false in any other case (Space doesn't exist, etc).
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_share(SpaceId :: binary(), ShareId :: binary()) ->
+    boolean().
+has_share(SpaceId, ShareId) ->
+    case exists(SpaceId) of
+        false -> false;
+        true ->
+            {ok, #document{
+                value = #space{
+                    shares = Shares
+                }}} = space:get(SpaceId),
+            lists:member(ShareId, Shares)
     end.
 
 %%--------------------------------------------------------------------
@@ -287,14 +309,20 @@ support(ProviderId, Macaroon, SupportedSize) ->
 -spec get_data(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider) ->
     {ok, [proplists:property()]}.
 get_data(SpaceId, {user, UserId}) ->
-    {ok, #document{value = #space{name = CanonicalName, providers_supports = Supports}}} = space:get(SpaceId),
+    {ok, #document{
+        value = #space{
+            name = CanonicalName,
+            providers_supports = Supports,
+            shares = Shares
+        }}} = space:get(SpaceId),
     {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
     {ok, Name} = maps:find(SpaceId, SpaceNames),
     {ok, [
         {spaceId, SpaceId},
         {name, Name},
         {canonicalName, CanonicalName},
-        {providersSupports, Supports}
+        {providersSupports, Supports},
+        {shares, Shares}
     ]};
 get_data(SpaceId, provider) ->
     {ok, #document{value = #space{name = CanonicalName, providers_supports = Supports}}} = space:get(SpaceId),
@@ -616,6 +644,22 @@ get_effective_privileges(SpaceId, UserId) ->
         end,
 
     {ok, ordsets:union([UserPrivileges | PrivilegesSets])}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns the list of all shares created in given space.
+%% Throws exception when call to the datastore fails,
+%% or given space doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_shares(SpaceId :: binary()) -> {ok, [binary()]} | no_return().
+get_shares(SpaceId) ->
+    {ok, #document{
+        value = #space{
+            shares = Shares
+        }}} = space:get(SpaceId),
+    {ok, [{shares, Shares}]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Transforms a space to include new privileges.

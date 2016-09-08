@@ -22,7 +22,7 @@
 %% API
 -export([create/1, get_user/1, get_user_doc/1, modify/2, get_data/2]).
 -export([get_groups/1, get_effective_groups/1, get_providers/1]).
--export([get_spaces/1, get_default_space/1, set_default_space/2]).
+-export([get_spaces/1, get_shares/1, get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
@@ -170,7 +170,6 @@ modify(UserId, Proplist) ->
                     spaces = proplists:get_value(spaces, Proplist, Spaces),
                     groups = proplists:get_value(groups, Proplist, Groups),
                     default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
-                    % TODO mock
                     first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST),
                     default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider),
                     chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider),
@@ -256,6 +255,32 @@ get_spaces(UserId) ->
         {spaces, AllUserSpaces},
         {default, EffectiveDefaultSpace}
     ]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns user's shares, i.e. all shares of all spaces in which user has
+%% the privilege to manage shares.
+%% Throws exception when call to the datastore fails, or user doesn't exist,
+%% or his groups don't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_shares(UserId :: binary()) -> {ok, [proplists:property()]}.
+get_shares(UserId) ->
+    {ok, Doc} = onedata_user:get(UserId),
+    AllUserSpaces = get_all_spaces(Doc),
+    % Resolve user shares - he can only view the shares in spaces where
+    % he has proper privileges.
+    UserShares = lists:foldl(
+        fun(SpaceId, Acc) ->
+            case space_logic:has_effective_privilege(
+                SpaceId, UserId, space_manage_shares) of
+                true ->
+                    {ok, SharesInSpace} = space_logic:get_shares(SpaceId),
+                    SharesInSpace ++ Acc;
+                false ->
+                    Acc
+            end
+        end, [], AllUserSpaces),
+    {ok, UserShares}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns user's groups.
@@ -537,11 +562,7 @@ clean_space_name_mapping(UserId, SpaceId) ->
     Password :: binary()) -> {ok, UserDoc :: #document{}} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
     Headers = [basic_auth_header(Login, Password)],
-    {ok, OnepanelRESTURL} =
-        application:get_env(?APP_Name, onepanel_rest_url),
-    {ok, OnepanelGetUserEndpoint} =
-        application:get_env(?APP_Name, onepanel_user_endpoint),
-    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    URL = get_onepanel_rest_user_url(Login),
     RestCallResult = case http_client:get(URL, Headers, <<"">>, [insecure]) of
         {ok, 200, _, JSON} ->
             json_utils:decode(JSON);
@@ -628,11 +649,7 @@ change_user_password(Login, OldPassword, NewPassword) ->
         {<<"content-type">>, <<"application/json">>},
         basic_auth_header(Login, OldPassword)
     ],
-    {ok, OnepanelRESTURL} =
-        application:get_env(?APP_Name, onepanel_rest_url),
-    {ok, OnepanelGetUserEndpoint} =
-        application:get_env(?APP_Name, onepanel_user_endpoint),
-    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    URL = get_onepanel_rest_user_url(Login),
     Body = json_utils:encode([{<<"password">>, NewPassword}]),
     case http_client:put(URL, Headers, Body, [insecure]) of
         {ok, 204, _, _} ->
@@ -670,6 +687,20 @@ basic_auth_header(Login, Password) ->
     UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
     {<<"Authorization">>, <<"Basic ", UserAndPassword/binary>>}.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns onepanel REST endpoint for user management.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_onepanel_rest_user_url(Login :: binary()) -> URL :: binary().
+get_onepanel_rest_user_url(Login) ->
+    {ok, OnepanelRESTURL} =
+        application:get_env(?APP_Name, onepanel_rest_url),
+    {ok, OnepanelGetUsersEndpoint} =
+        application:get_env(?APP_Name, onepanel_users_endpoint),
+    <<(str_utils:to_binary(OnepanelRESTURL))/binary,
+        (str_utils:to_binary(OnepanelGetUsersEndpoint))/binary, Login/binary>>.
 
 %%--------------------------------------------------------------------
 %% @private

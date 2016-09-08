@@ -33,7 +33,8 @@ updates(ProviderID, NewUserIDs) ->
     GroupChanges = get_groups(ProviderID, UserChanges),
     SpaceChanges = get_spaces(ProviderID, UserChanges)
         ++ get_group_spaces(ProviderID, GroupChanges),
-    UserChanges ++ SpaceChanges ++ GroupChanges.
+    ShareChanges = get_shares(ProviderID, SpaceChanges),
+    UserChanges ++ SpaceChanges ++ GroupChanges ++ ShareChanges.
 
 
 %%%===================================================================
@@ -133,6 +134,27 @@ get_group_spaces(ProviderID, GroupChanges) ->
             end
         end, Spaces)
     end, GroupChanges).
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches all shares in given list of spaces.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_shares(ProviderID :: binary(),
+    SpaceChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+get_shares(ProviderID, SpaceChanges) ->
+    lists:flatmap(fun({_, SpaceDoc, _}) ->
+        #document{value = #space{shares = Shares}} = SpaceDoc,
+        lists:filtermap(fun(ShareId) ->
+            case get_with_revs(share, ShareId) of
+                {ok, Doc} -> {true, {-1, Doc, share}};
+                {error, _} ->
+                    ?warning("Missing share ~p; provider ~p", [ShareId, ProviderID]),
+                    false
+            end
+        end, Shares)
+    end, SpaceChanges).
 
 %%--------------------------------------------------------------------
 %% @doc @private

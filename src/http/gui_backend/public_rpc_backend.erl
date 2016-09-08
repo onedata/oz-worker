@@ -39,12 +39,23 @@ handle(<<"getZoneName">>, _) ->
     ]};
 
 handle(<<"getSupportedAuthorizers">>, _) ->
-    % get_auth_providers() returns list of atoms
-    ProvidersAtoms = auth_config:get_auth_providers(),
-    Providers = [str_utils:to_binary(Provider) || Provider <- ProvidersAtoms],
-    {ok, [
-        {<<"authorizers">>, Providers}
-    ]};
+    case application:get_env(?APP_Name, dev_mode) of
+        {ok, true} ->
+            % If dev mode is enabled, always return basic auth and just one
+            % dummy provider which will redirect to /dev_login page.
+            {ok, [
+                {<<"authorizers">>, [<<"basicAuth">>, <<"plgrid">>]}
+            ]};
+        _ ->
+            % Production mode, return providers from config
+            % get_auth_providers() returns list of atoms
+            ProvidersAtoms = auth_config:get_auth_providers(),
+            Providers =
+                [str_utils:to_binary(Provider) || Provider <- ProvidersAtoms],
+            {ok, [
+                {<<"authorizers">>, Providers}
+            ]}
+    end;
 
 handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     case application:get_env(?APP_Name, dev_mode) of

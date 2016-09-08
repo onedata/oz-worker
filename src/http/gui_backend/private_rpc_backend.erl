@@ -155,4 +155,26 @@ handle(<<"unsupportSpace">>, Props) ->
                 "Those persmissions can be modified in file browser, "
                 "'Spaces' tab.">>
             )
+    end;
+
+
+handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
+    UserId = g_session:get_user_id(),
+    case token_logic:validate(Token, space_invite_user_token) of
+        false ->
+            gui_error:report_warning(<<"Invalid token value.">>);
+        {true, Macaroon} ->
+            {ok, SpaceId} = space_logic:join({user, UserId}, Macaroon),
+            % Push the newly joined space to the client's model
+            {ok, #document{
+                value = #onedata_user{
+                    space_names = SpaceNamesMap
+                }}} = onedata_user:get(UserId),
+            SpaceRecord = space_data_backend:space_record(
+                % DefaultSpaceId and UserProviders do not matter because this is
+                % a new space - it's not default and has no providers
+                SpaceId, SpaceNamesMap, <<"">>, []
+            ),
+            gui_async:push_created(<<"space">>, SpaceRecord),
+            {ok, [{<<"spaceId">>, SpaceId}]}
     end.

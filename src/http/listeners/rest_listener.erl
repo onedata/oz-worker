@@ -71,9 +71,11 @@ start() ->
         GRHostname = dns_query_handler:get_canonical_hostname(),
 
         RESTRoutes = lists:append([
+            identities_rest_module:routes(),
             user_rest_module:routes(),
             provider_rest_module:routes(),
             spaces_rest_module:routes(),
+            shares_rest_module:routes(),
             groups_rest_module:routes(),
             privileges_rest_module:routes()
         ]),
@@ -117,7 +119,6 @@ start() ->
             {error, Error}
     end.
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link listener_behaviour} callback stop/0.
@@ -156,7 +157,7 @@ healthcheck() ->
 %% @doc
 %% Returns list of weak ciphers.
 %% @end
--spec weak_ciphers() -> list().
 %%--------------------------------------------------------------------
+-spec weak_ciphers() -> list().
 weak_ciphers() ->
     [{dhe_rsa, des_cbc, sha}, {rsa, des_cbc, sha}].

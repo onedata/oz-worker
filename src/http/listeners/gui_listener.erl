@@ -11,7 +11,6 @@
 -module(gui_listener).
 -author("Michal Zmuda").
 
--include("gui_config.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("gui/include/gui.hrl").
@@ -20,6 +19,8 @@
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, healthcheck/0]).
+
+-define(gui_https_listener, https).
 
 %%%===================================================================
 %%% listener_behaviour callbacks
@@ -79,7 +80,7 @@ start() ->
                 {DocsPath ++ "/[...]", static_docs_handler, []}
         end,
 
-        GRHostname = dns_query_handler:get_canonical_hostname(),
+        OZHostname = dns_query_handler:get_canonical_hostname(),
 
         % Setup GUI dispatch opts for cowboy
         GUIDispatch = [
@@ -94,11 +95,12 @@ start() ->
                 {'_', redirector_handler, []}
             ]},
             % Redirect requests in form: alias.onedata.org
-            {":alias." ++ GRHostname, [{'_', client_redirect_handler, [GuiPort]}]},
+            {":alias." ++ OZHostname, [{'_', client_redirect_handler, [GuiPort]}]},
             % Proper requests are routed to handler modules
             % Proper requests are routed to handler modules
             {'_', lists:flatten([
                 {"/nagios/[...]", nagios_handler, []},
+                {"/share/:share_id", public_share_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
                 DocsRoute,
                 {"/[...]", gui_static_handler, {dir, DocRoot}}

@@ -65,14 +65,35 @@ get_msg(Seq, Doc = #document{deleted = true, key = ID}, Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), delete}];
 get_msg(Seq, Doc, space = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #space{name = Name, users = Users, groups = Groups,
-        providers_supports = Supports} = Value,
+    #space{
+        name = Name,
+        users = Users,
+        groups = Groups,
+        providers_supports = Supports,
+        shares = Shares
+    } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {id, ID},
         {name, Name},
         {providers_supports, Supports},
         {users, Users},
-        {groups, Groups}
+        {groups, Groups},
+        {shares, Shares}
+    ]}];
+get_msg(Seq, Doc, share = Model) ->
+    #document{value = Value, key = ID} = Doc,
+    #share{
+        name = Name,
+        public_url = PublicURL,
+        root_file_id = RootFileId,
+        parent_space = ParentSpace
+    } = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {id, ID},
+        {name, Name},
+        {public_url, PublicURL},
+        {root_file_id, RootFileId},
+        {parent_space, ParentSpace}
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
@@ -160,6 +181,7 @@ revs_prop(#document{rev = Rev}) ->
 
 -spec message_model(subscriptions:model()) -> atom().
 message_model(space) -> space;
+message_model(share) -> share;
 message_model(provider) -> provider;
 message_model(onedata_user) -> user;
 message_model(user_group) -> group.
