@@ -61,14 +61,14 @@ encode(Metadata) ->
         end
     end, elements()),
 
-    [#xmlElement{
+    #xmlElement{
         name='oai_dc:dc',
         attributes = [
             ?OAI_DC_XML_NAMESPACE,
             ?DC_XML_NAMESPACE,
             ?DC_XML_SCHEMA_NAMESPACE,
             ?DC_XSI_SCHEMA_LOCATION],
-        content = XMLElements}].
+        content = XMLElements}.
 
 
 %%%===================================================================

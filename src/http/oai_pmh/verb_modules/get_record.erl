@@ -35,7 +35,7 @@ get_element(record) ->
         header = #oai_header{
             identifier = <<"id">>,
             datestamp = <<"date">>,
-            setSpec = ["set1", "set2"]},
+            setSpec = [<<"set1">>, <<"set2">>]},
         metadata = #oai_metadata{
             metadata_format = #oai_metadata_format{metadataPrefix = oai_dc},
             value = #{

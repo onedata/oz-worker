@@ -15,6 +15,7 @@
     required_response_elements/0, optional_response_elements/0, get_element/1]).
 
 -include("registered_names.hrl").
+-include("http/handlers/oai_errors.hrl").
 
 
 required_arguments() -> [].
@@ -28,4 +29,4 @@ required_response_elements() -> [set].
 optional_response_elements() -> [].
 
 get_element(set) ->
-    erlang:error(not_implemented).
+    {error, ?NO_SET_HIERARCHY}.

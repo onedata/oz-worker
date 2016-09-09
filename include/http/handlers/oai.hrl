@@ -68,7 +68,7 @@
         value= "http://www.openarchives.org/OAI/2.0/"}).
 
 -define(OAI_XML_SCHEMA_NAMESPACE, #xmlAttribute{
-    name='xml:xsi',
+    name='xmlns:xsi',
     value= "http://www.w3.org/2001/XMLSchema-instance"}).
 
 -define(OAI_XSI_SCHEMA_LOCATION, #xmlAttribute{

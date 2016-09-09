@@ -28,7 +28,7 @@ exclusive_arguments() -> [].
 
 required_response_elements() -> [
     repositoryName, baseURL, protocolVersion,
-    earliestDatestamp, granularity, adminEmail].
+    earliestDatestamp, deletedRecord, granularity, adminEmail].
 
 optional_response_elements() ->
     [compression, description].
@@ -44,7 +44,7 @@ get_element(protocolVersion) ->
 get_element(earliestDatestamp) ->
     <<"1970-01-01T00:00:00Z">>; % TODO how to get it
 get_element(deletedRecord) ->
-    <<"no">> ; % TODO can be no, transient, persistent
+    <<"no">> ;
 get_element(granularity) ->
     <<"YYYY-MM-DDThh:mm:ss:Z">> ;% TODO can be <<"YYYY-MM-DD">>
 get_element(adminEmail) ->

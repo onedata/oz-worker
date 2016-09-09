@@ -144,16 +144,16 @@ handle_request(QueryString, Req) ->
     ResponseDate = generate_response_date_element(),
     {Response, RequestElement} =
         case key_occurs_exactly_once(<<"verb">>, QueryString) of
-        false -> {error_to_xml(?BAD_VERB), generate_request_element(Req)};
+        false -> {to_xml(?BAD_VERB), generate_request_element(Req)};
         true ->
             Verb = proplists:get_value(<<"verb">>, QueryString),
             case verb_to_module(Verb) of
-                badVerb -> {error_to_xml(?BAD_VERB), generate_request_element(Req)};
+                badVerb -> {to_xml(?BAD_VERB), generate_request_element(Req)};
                 Module ->
 %%                    ArgsList = proplists:delete(<<"verb">>, QueryString),
                     case validate_arguments(Module, QueryString) of
                         true -> handle_request_with_validated_args(Verb, QueryString, Req);
-                        false -> {error_to_xml(?BAD_ARGUMENT), generate_request_element(Req)}
+                        false -> {to_xml(?BAD_ARGUMENT), generate_request_element(Req)}
                     end
 
             end
@@ -171,7 +171,7 @@ handle_request(QueryString, Req) ->
 handle_request_with_validated_args(Verb, ArgsList, Req) ->
     %todo handle request specific errors
     Response = case generate_response(Verb, ArgsList) of
-        {error, Reason} -> error_to_xml(Reason);
+        {error, Reason} -> to_xml(Reason);
         PositiveResponse -> PositiveResponse
     end,
 
@@ -180,22 +180,37 @@ handle_request_with_validated_args(Verb, ArgsList, Req) ->
 generate_response(Verb, Args) ->
 
     Module = verb_to_module(Verb),
-    RequiredElements = lists:flatmap(fun(ElementName) ->
-        to_xml(ElementName, Module:get_element(ElementName)) % TODO handle error in get_element
-%%        io:format("~nNAME: ~p~n~p~n", [ElementName, XML]), XML
-    end, Module:required_response_elements()),
+    try
+        RequiredElements = lists:flatmap(fun(ElementName) ->
+            case Module:get_element(ElementName) of
+                {error, Reason} ->
+                    io:format("DEBUG: ~p~n", [Reason]),
+                    throw(Reason);
+                Element ->
+                    io:format("DEBUG2: ~p~n", [Element]),
+                    ensure_list(to_xml(ElementName, Element))
+            end
+            % TODO handle error in get_element
+        end, Module:required_response_elements()),
 
-    OptionalElements = lists:flatmap(fun(ElementName) ->
-        try to_xml(ElementName, Module:get_element(
-            ElementName)) of % TODO handle error in get_element
-            XML -> XML
-        catch _:_ -> []
-        end
-    end, Module:optional_response_elements()),
-    #xmlElement{
-        name = binary_to_atom(Verb, latin1),
-        content = RequiredElements ++ OptionalElements
-    }.
+        io:format("DEBUG3: ~p~n", [RequiredElements]),
+
+
+        OptionalElements = lists:flatmap(fun(ElementName) ->
+            try to_xml(ElementName, Module:get_element(ElementName)) of % TODO handle error in get_element
+                XML -> ensure_list(XML)
+            catch _:_ -> [] %todo handle if it fails with undefined or other error
+            end
+        end, Module:optional_response_elements()),
+
+        #xmlElement{
+            name = binary_to_atom(Verb, latin1),
+            content = RequiredElements ++ OptionalElements
+        }
+    catch
+%%        _:function_clause -> handle errors
+        _:Error -> to_xml(Error)
+    end.
 
 insert_to_root_xml_element(Content) when is_list(Content) ->
     ?ROOT_ELEMENT#xmlElement{content = Content};
@@ -203,30 +218,44 @@ insert_to_root_xml_element(Content) ->
     ?ROOT_ELEMENT#xmlElement{content = [Content]}.
 
 
+
+to_xml(#oai_error{}=Value) ->
+    to_xml([], Value).
+
+
 to_xml(Name, #xmlElement{} = Value) ->
-    [#xmlElement{name = Name, content = [Value]}];
+    #xmlElement{name = Name, content = [Value]};
 to_xml(Name, #oai_record{header = Header, metadata = Metadata}) ->
-    [#xmlElement{
+    #xmlElement{
         name = Name,
-        content = to_xml(header, Header) ++ to_xml(metadata, Metadata)}]; % todo about is optional
+        content = ensure_list(to_xml(header, Header)) ++
+                  ensure_list(to_xml(metadata, Metadata))}; % todo about is optional
 to_xml(Name, #oai_header{identifier = Identifier, datestamp = Datestamp, setSpec = SetSpec}) ->
-    [#xmlElement{
+    #xmlElement{
         name = Name,
-        content = to_xml(identifier, Identifier) ++
-                  to_xml(datestamp, Datestamp) ++
-                  to_xml(setSpec, SetSpec)}];
+        content = ensure_list(to_xml(identifier, Identifier)) ++
+                  ensure_list(to_xml(datestamp, Datestamp)) ++
+                  ensure_list(to_xml(setSpec, SetSpec))};
 to_xml(Name, #oai_metadata{metadata_format=Format, value=Value}) ->
     MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
     Mod = metadata_prefix_to_metadata_format(MetadataPrefix),
-    [#xmlElement{name=Name, content=Mod:encode(Value)}];
+    #xmlElement{name=Name, content=[Mod:encode(Value)]};
+to_xml(_Name, #oai_error{code=Code, description=Description}) ->
+    #xmlElement{
+        name=error,
+        attributes = [#xmlAttribute{name=code, value=Code}],
+        content = [Description]
+    };
+to_xml(Name, [Value]) ->
+    [to_xml(Name, Value)];
 to_xml(Name, [Value | Values]) ->
-    to_xml(Name, Value) ++  to_xml(Name, Values);
+    [to_xml(Name, Value) | to_xml(Name, Values)];
 to_xml(Name, Value) when is_binary(Value) ->
-    [#xmlElement{name = Name, content = [binary_to_list(Value)]}];
+    #xmlElement{name = Name, content = [binary_to_list(Value)]};
 to_xml(Name, Value) when is_number(Value) ->
-    [#xmlElement{name = Name, content = [str_utils:format("~B", [Value])]}];
+    #xmlElement{name = Name, content = [str_utils:format("~B", [Value])]};
 to_xml(Name, Value) ->
-    [#xmlElement{name = Name, content = [Value]}].
+    #xmlElement{name = Name, content = [Value]}.
 
 generate_response_date_element() ->
     {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:universal_time(),
@@ -314,6 +343,9 @@ count_key_occurrences(Key, Proplist) ->
     end, 0, Proplist).
 
 
+ensure_list(Arg) when is_list(Arg) -> Arg;
+ensure_list(Arg) -> [Arg].
+
 %% TODO
 %% TODO * OAI-identifier
 %% TODO * docs
@@ -327,3 +359,8 @@ count_key_occurrences(Key, Proplist) ->
 %% TODO * handle error in get_element
 %% TODO * allowed charset
 %% TODO * error message should include info what exactly failed
+%% TODO * what if processing optional argument fails, should i send xml error or not include
+%% TODO   argument in response
+
+
+
