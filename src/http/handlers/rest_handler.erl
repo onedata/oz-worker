@@ -80,7 +80,8 @@ allowed_methods(Req, #rstate{methods = Methods} = State) ->
 content_types_accepted(Req, #rstate{} = State) ->
     {[
         {<<"application/json">>, accept_resource_json},
-        {<<"application/x-www-form-urlencoded">>, accept_resource_form}
+        {<<"application/x-www-form-urlencoded">>, accept_resource_form},
+        {<<"text/xml">>, accept_resource_xml}
     ], Req, State}.
 
 %%--------------------------------------------------------------------
@@ -345,6 +346,34 @@ accept_resource_json(Req, #rstate{} = State) ->
 accept_resource_form(Req, #rstate{} = State) ->
     {ok, Data, Req2} = cowboy_req:body_qs(Req),
     accept_resource(Data, Req2, State).
+
+%%--------------------------------------------------------------------
+%% @doc Cowboy callback function.
+%% Process the request body of text/xml content type.
+%% @end
+%%--------------------------------------------------------------------
+-spec accept_resource_form(Req :: cowboy_req:req(), State :: rstate()) ->
+    {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
+accept_resource_xml(Req, #rstate{} = State) ->
+    {ok, Body, Req2} = cowboy_req:body(Req),
+    Data = try
+        xmerl_scan:(Body) % TODO implement parsing xml from body and later saving it in datastore
+    catch
+        _:_ -> malformed
+    end,
+
+    case Data =:= malformed of
+        true ->
+            Body = json_utils:encode([
+                {<<"error">>, <<"invalid_request">>},
+                {<<"error_description">>, <<"malformed JSON data">>}]),
+            Req3 = cowboy_req:set_resp_body(Body, Req2),
+            {false, Req3, State};
+
+        false ->
+            accept_resource(Data, Req2, State)
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.

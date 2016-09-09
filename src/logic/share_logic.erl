@@ -20,7 +20,7 @@
 -export([create/4, exists/1, modify/2, remove/1]).
 -export([get_data/2, get_parent/1]).
 -export([list/0]).
--export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
+-export([share_id_to_public_url/1, share_id_to_redirect_url/1, add_metadata/2]).
 
 %%%===================================================================
 %%% API
@@ -188,3 +188,15 @@ share_id_to_redirect_url(ShareId) ->
     ChosenProvider = lists:nth(random:uniform(length(Choice)), Choice),
     {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
     str_utils:format_bin("~s/#/public/shares/~s", [ProviderURL, ShareId]).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Saves given share metadata
+%% @end
+%%--------------------------------------------------------------------
+
+add_metadata(ShareId, Metadata) ->
+    {ok, _} = share:update(ShareId, fun(ShareDoc) ->
+        {ok, ShareDoc#share{metadata = Metadata}}
+    end),
+    ok.

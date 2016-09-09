@@ -17,7 +17,7 @@
 
 
 -type provided_resource() :: share.
--type accepted_resource() :: share.
+-type accepted_resource() :: share | share_metadata.
 -type removable_resource() :: share.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
@@ -42,7 +42,9 @@ routes() ->
     S = #rstate{module = ?MODULE, root = share},
     M = rest_handler,
     [
-        {<<"/shares/:id">>, M, S#rstate{resource = share, methods = [get, patch, delete]}}
+        {<<"/shares/:id">>, M, S#rstate{resource = share, methods = [get, patch, delete]}},
+        {<<"/shares/:id/opendata">>, M, S#rstate{resource = share_metadata, methods = [post]}}
+
     ].
 
 %%--------------------------------------------------------------------
@@ -68,6 +70,9 @@ is_authorized(share, patch, ShareId, #client{type = user, id = UserId}) ->
     {ok, ParentSpace} = share_logic:get_parent(ShareId),
     space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
 is_authorized(share, delete, ShareId, #client{type = user, id = UserId}) ->
+    {ok, ParentSpace} = share_logic:get_parent(ShareId),
+    space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
+is_authorized(share_metadata, post, ShareId, #client{type = user, id = UserId}) ->
     {ok, ParentSpace} = share_logic:get_parent(ShareId),
     space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
 is_authorized(_, _, _, _) ->
@@ -97,6 +102,13 @@ resource_exists(share, ShareId, Req) ->
 accept_resource(share, patch, ShareId, Data, _Client, Req) ->
     NewName = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, ShareId} = share_logic:modify(ShareId, NewName),
+    {true, Req};
+accept_resource(share_metadata, post, ShareId, Data, _Client, Req) ->
+    io:format("ShareId: ~p~n"
+              "Data: ~p~n"
+              "Client: ~p~n"
+              "Req: ~p~n", [ShareId, Data, _Client, Req]),
+    xmerl
     {true, Req}.
 
 %%--------------------------------------------------------------------

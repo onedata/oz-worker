@@ -208,7 +208,7 @@ generate_response(Verb, Args) ->
             content = RequiredElements ++ OptionalElements
         }
     catch
-%%        _:function_clause -> handle errors
+%%        _:function_clause -> TODO handle errors
         _:Error -> to_xml(Error)
     end.
 
