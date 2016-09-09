@@ -175,8 +175,14 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId},
     {ok, SpaceId} = space_logic:create({user, UserId}, Name),
     {{true, <<"/spaces/", SpaceId/binary>>}, Req};
 accept_resource(share, put, SpaceId, Data, _Client, Req) ->
-    % TODO DO NOT ALLOW PUT WHEN RESOURCE EXISTS
     {ShareId, _} = cowboy_req:binding(sid, Req),
+    case share_logic:exists(ShareId) of
+        true ->
+            Description = <<"Share with given ID exists. Modify with PATCH.">>,
+            rest_module_helper:report_error(invalid_request, Description, Req);
+        false ->
+            ok
+    end,
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     RootFileId = rest_module_helper:assert_key(<<"root_file_id">>, Data, binary, Req),
     {ok, ShareId} = share_logic:create(ShareId, Name, RootFileId, SpaceId),
