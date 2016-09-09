@@ -1,3 +1,5 @@
+.EXPORT_ALL_VARIABLES:
+
 REPO	        ?= oz_worker
 
 # distro for package building (oneof: wily, fedora-23-x86_64)
@@ -10,9 +12,11 @@ PKG_ID           = oz_worker-$(PKG_VERSION)
 PKG_BUILD        = 1
 BASE_DIR         = $(shell pwd)
 ERLANG_BIN       = $(shell dirname $(shell which erl))
-REBAR           ?= $(BASE_DIR)/rebar
+REBAR           ?= $(BASE_DIR)/rebar3
+LIB_DIR          = _build/default/lib
+REL_DIRS         = _build/default/rel
 PKG_VARS_CONFIG  = pkg.vars.config
-OVERLAY_VARS    ?=
+OVERLAY_VARS    ?= --overlay_vars=rel/vars.config
 
 DOCKER_REG_USER        ?= ""
 DOCKER_REG_PASSWORD    ?= ""
@@ -24,7 +28,7 @@ GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgr
 ONEDATA_GIT_URL := $(shell if [ "${ONEDATA_GIT_URL}" = "" ]; then echo ${GIT_URL}; else echo ${ONEDATA_GIT_URL}; fi)
 export ONEDATA_GIT_URL
 
-.PHONY: test deps generate package
+.PHONY: test deps upgrade generate package
 
 all: test_rel
 
@@ -32,51 +36,35 @@ all: test_rel
 ## Rebar targets
 ##
 
+upgrade:
+	$(REBAR) upgrade
+
 deps:
-	cd location-service &&  npm install
-	./rebar get-deps
-	deps/gui/pull-gui.sh gui-config.sh
+	cd location-service && npm install
+	$(LIB_DIR)/gui/pull-gui.sh gui-config.sh
 
-recompile:
-	./rebar compile skip_deps=true
-
-##
-## If performance is compiled in cluster_worker then annotations do not work.
-## Make sure they are not included in cluster_worker build.
-## todo: find better solution
-##
 compile:
-	sed -i "s/ \"deps\/ctool\/annotations\/performance\.erl\"/%%\"deps\/ctool\/annotations\/performance\.erl\"/" deps/cluster_worker/rebar.config
-	rm deps/cluster_worker/ebin/performance.beam || true
-	./rebar compile
-	sed -i "s/%%\"deps\/ctool\/annotations\/performance\.erl\"/ \"deps\/ctool\/annotations\/performance\.erl\"/" deps/cluster_worker/rebar.config
-
-##
-## Reltool configs introduce dependency on deps directories (which do not exist)
-## Also a release is not necessary for us.
-## We prevent reltool from creating a release.
-## todo: find better solution
+	$(REBAR) compile
+	make -C $(LIB_DIR)/cluster_worker/ priv/sync_gateway
 
 ## Generates a production release
-generate: deps compile
-	sed -i "s/{sub_dirs, \[\"rel\"\]}\./{sub_dirs, \[\]}\./" deps/cluster_worker/rebar.config
-	./rebar generate $(OVERLAY_VARS)
-	sed -i "s/{sub_dirs, \[\]}\./{sub_dirs, \[\"rel\"\]}\./" deps/cluster_worker/rebar.config
+generate: compile deps
+	$(REBAR) release $(OVERLAY_VARS)
 	# Copy GUI static files into release
-	@mkdir -p rel/oz_worker/data/gui_static
-	cp -R deps/gui_static/* rel/oz_worker/data/gui_static/
+	@mkdir -p $(REL_DIRS)/oz_worker/data/gui_static/
+	cp -R $(LIB_DIR)/gui_static/* $(REL_DIRS)/oz_worker/data/gui_static/
 
 ## Generates a dev release
-generate_dev: deps compile generate
+generate_dev: generate
 	# Try to get developer auth.config
 	./get_dev_auth_config.sh
 
 clean:
-	./rebar clean
+	$(REBAR) clean
 
 distclean: clean
 	rm -rf location-service/node_modules
-	./rebar delete-deps
+	$(REBAR) clean --all
 
 ##
 ## Release targets
@@ -87,8 +75,11 @@ rel: generate
 test_rel: generate_dev cm_rel appmock_rel
 
 cm_rel:
-	ln -sf deps/cluster_worker/cluster_manager/
-	make -C cluster_manager/ rel
+	mkdir -p cluster_manager/bamboos/gen_dev
+	cp -rf $(LIB_DIR)/cluster_manager/bamboos/gen_dev cluster_manager/bamboos
+	printf "\n{base_dir, \"$(BASE_DIR)/cluster_manager/_build\"}." >> $(LIB_DIR)/cluster_manager/rebar.config
+	make -C $(LIB_DIR)/cluster_manager/ rel
+	sed -i "s@{base_dir, \"$(PWD)/cluster_manager/_build\"}\.@@" $(LIB_DIR)/cluster_manager/rebar.config
 
 appmock_rel:
 	make -C appmock/ rel
@@ -104,7 +95,7 @@ relclean:
 ##
 
 eunit:
-	./rebar eunit skip_deps=true suites=${SUITES}
+	$(REBAR) do eunit skip_deps=true suites=${SUITES}, cover
 ## Rename all tests in order to remove duplicated names (add _(++i) suffix to each test)
 	@for tout in `find test -name "TEST-*.xml"`; do awk '/testcase/{gsub("_[0-9]+\"", "_" ++i "\"")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
 
@@ -115,28 +106,13 @@ coverage:
 ## Dialyzer targets local
 ##
 
-PLT ?= .dialyzer.plt
-
-# Builds dialyzer's Persistent Lookup Table file.
-.PHONY: plt
-plt:
-	dialyzer --check_plt --plt ${PLT}; \
-	if [ $$? != 0 ]; then \
-	    dialyzer --build_plt --output_plt ${PLT} --apps kernel stdlib sasl erts \
-		ssl tools runtime_tools crypto inets xmerl snmp public_key eunit \
-		mnesia edoc common_test syntax_tools compiler ./deps/*/ebin; \
-	fi; exit 0
-
-
 # Dialyzes the project.
-dialyzer: plt
-	dialyzer ./ebin --plt ${PLT} -Werror_handling -Wrace_conditions --fullpath
+dialyzer:
+	$(REBAR) dialyzer
 
 ##
 ## Packaging targets
 ##
-
-export PKG_VERSION PKG_ID PKG_BUILD BASE_DIR ERLANG_BIN REBAR OVERLAY_VARS RELEASE PKG_VARS_CONFIG
 
 check_distribution:
 ifeq ($(DISTRIBUTION), none)
@@ -146,26 +122,25 @@ else
 	@echo "Building package for distribution $(DISTRIBUTION)"
 endif
 
-package/$(PKG_ID).tar.gz: deps
+package/$(PKG_ID).tar.gz:
 	mkdir -p package
 	rm -rf package/$(PKG_ID)
 	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION) | (cd package && tar -xf -)
-	${MAKE} -C package/$(PKG_ID) deps
-	for dep in package/$(PKG_ID) package/$(PKG_ID)/deps/*; do \
+	${MAKE} -C package/$(PKG_ID) upgrade deps
+	for dep in package/$(PKG_ID) package/$(PKG_ID)/$(LIB_DIR)/*; do \
 	     echo "Processing dependency: `basename $${dep}`"; \
 	     vsn=`git --git-dir=$${dep}/.git describe --tags 2>/dev/null`; \
 	     mkdir -p $${dep}/priv; \
 	     echo "$${vsn}" > $${dep}/priv/vsn.git; \
 	     sed -i'' "s/{vsn,\\s*git}/{vsn, \"$${vsn}\"}/" $${dep}/src/*.app.src 2>/dev/null || true; \
 	done
-	find package/$(PKG_ID) -name ".git" -type d -exec rm -rf {} +
 	tar -C package -czf package/$(PKG_ID).tar.gz $(PKG_ID)
 
 dist: package/$(PKG_ID).tar.gz
 	cp package/$(PKG_ID).tar.gz .
 
 package: check_distribution package/$(PKG_ID).tar.gz
-	${MAKE} -C package -f $(PWD)/deps/node_package/Makefile
+	${MAKE} -C package -f $(PKG_ID)/node_package/Makefile
 
 pkgclean:
 	rm -rf package

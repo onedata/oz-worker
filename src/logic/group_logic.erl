@@ -155,7 +155,7 @@ create(UserId, Name, Type) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(GroupId :: binary(), Data :: #{}) ->
+-spec modify(GroupId :: binary(), Data :: maps:map()) ->
     ok.
 modify(GroupId, Data) ->
     {ok, _} = user_group:update(GroupId, Data),

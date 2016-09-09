@@ -112,13 +112,14 @@ init(_Args) ->
     Pid = spawn_link(
         fun() ->
             process_flag(trap_exit, true),
+            {ok, LibPath} = application:get_env(?APP_Name, location_service_lib_path),
 
-            Command = "node nodejs/location-service/start.js"
+            Command = "node " ++ filename:join(LibPath, "start.js")
                 ++ " -h " ++ Host
                 ++ " -p " ++ integer_to_list(ServicePort)
                 ++ " -r " ++ integer_to_list(RestPort)
                 ++ " -c " ++ hd(string:tokens(atom_to_list(DBNode), ":"))
-                ++ " -vv"
+                ++ " " ++ get_log_level_opt()
                 ++ BootstrapArgs,
 
             ?info("Running DHT port by command ~p", [Command]),
@@ -204,3 +205,18 @@ get_dht_endpoint(ID) ->
     {ok, RestPort} = application:get_env(?APP_Name, location_service_rest_port),
     Address = "localhost:" ++ integer_to_list(RestPort) ++ "/" ++ binary_to_list(ID),
     list_to_binary(Address).
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Returns log level option for location service script.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_log_level_opt() -> string().
+get_log_level_opt() ->
+    case application:get_env(?APP_Name, location_service_log_level) of
+        {ok, 1} -> "-v";
+        {ok, 2} -> "-vv";
+        {ok, 3} -> "-vvv";
+        {ok, 4} -> "-vvvv";
+        _ -> ""
+    end.
