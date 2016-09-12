@@ -60,10 +60,10 @@ is_authorized(share, get, ShareId, #client{type = user, id = UserId}) ->
     {ok, ParentSpace} = share_logic:get_parent(ShareId),
     % Share - to view shares, it's enough to belong to parent space
     space_logic:has_effective_user(ParentSpace, UserId);
-is_authorized(share, get, ShareId, #client{type = provider, id = ProviderId}) ->
-    {ok, ParentSpace} = share_logic:get_parent(ShareId),
-    % Share - to view shares as provider, it's enough to support parent space
-    space_logic:has_provider(ParentSpace, ProviderId);
+is_authorized(share, get, _ShareId, #client{type = provider}) ->
+    % All providers are allowed to get information about a share - it is public
+    % and all of them should be able to display the shared data.
+    true;
 is_authorized(share, patch, ShareId, #client{type = user, id = UserId}) ->
     {ok, ParentSpace} = share_logic:get_parent(ShareId),
     space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
