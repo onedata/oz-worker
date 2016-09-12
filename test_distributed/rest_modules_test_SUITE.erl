@@ -73,33 +73,39 @@
 
 -define(DOI_SERVICE,
     #{
-        <<"type">> => <<"DOI">>,
         <<"name">> => <<"LifeWatch DataCite">>,
-        <<"host">> => <<"https://mds.test.datacite.org">>,
-        <<"doiEndpoint">> => <<"/doi">>,
-        <<"metadataEndpoint">> => <<"/metadata">>,
-        <<"mediaEndpoint">> => <<"/media">>,
-        <<"prefix">> => <<"10.572">>,
-        <<"username">> => <<"alice">>,
-        <<"password">> => <<"*******">>,
-        <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
-        <<"allowTemplateOverride">> => false
+        <<"proxyEndpoint">> => <<"some_endpoint">>,
+        <<"serviceDescription">> => #{
+            <<"type">> => <<"DOI">>,
+            <<"host">> => <<"https://mds.test.datacite.org">>,
+            <<"doiEndpoint">> => <<"/doi">>,
+            <<"metadataEndpoint">> => <<"/metadata">>,
+            <<"mediaEndpoint">> => <<"/media">>,
+            <<"prefix">> => <<"10.572">>,
+            <<"username">> => <<"alice">>,
+            <<"password">> => <<"*******">>,
+            <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
+            <<"allowTemplateOverride">> => false
+        }
     }
 ).
 
 -define(PID_SERVICE,
     #{
-        <<"type">> => <<"PID">>,
         <<"name">> => <<"iMarine EPIC">>,
-        <<"endpoint">> => <<"https://epic.grnet.gr/api/v2/handles">>,
-        <<"prefix">> => <<"11789">>,
-        <<"suffixGeneration">> => <<"auto">>,
-        <<"suffixPrefix">> => <<"{{space.name}}">>,
-        <<"suffixSuffix">> => <<"{{user.name}}">>,
-        <<"username">> => <<"alice">>,
-        <<"password">> => <<"*******">>,
-        <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
-        <<"allowTemplateOverride">> => false
+        <<"proxyEndpoint">> => <<"some_endpoint2">>,
+        <<"serviceDescription">> => #{
+            <<"type">> => <<"PID">>,
+            <<"endpoint">> => <<"https://epic.grnet.gr/api/v2/handles">>,
+            <<"prefix">> => <<"11789">>,
+            <<"suffixGeneration">> => <<"auto">>,
+            <<"suffixPrefix">> => <<"{{space.name}}">>,
+            <<"suffixSuffix">> => <<"{{user.name}}">>,
+            <<"username">> => <<"alice">>,
+            <<"password">> => <<"*******">>,
+            <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
+            <<"allowTemplateOverride">> => false
+        }
     }
 ).
 
@@ -1366,6 +1372,11 @@ set_space_privileges_test(Config) ->
 
 create_doi_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
+
+    [Worker | _] = ?config(oz_worker_nodes, Config),
+    tracer:start(Worker),
+    tracer:trace_calls(rest_handler),
+    tracer:trace_calls(handle_services_rest_module),
 
     Id = add_handle_service(?DOI_SERVICE, UserReqParams),
 
