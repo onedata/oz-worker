@@ -4,6 +4,23 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc5
+
+* VFS-2491 Add RPC call to join a space
+* VFS-2468 Add log level opt to location service script
+* VFS-2468 Add nodejs to packages requirements
+* VFS-2500 described location service config options
+* VFS-2309 no more bootstrap on testmaster
+* VFS-2309 adjusted location service to use node 4
+* VFS-2176 all 'A' DNS entries used as bootstrap nodes
+* VFS-2309 boostrap location service client on testmaster
+* VFS-2309 rest auth skeleton
+* VFS-2309 public keys retrieved from directly publishers
+* VFS-2309 refactoring: encoded key pased & utitlities separated
+* VFS-2309 identity verification in oz
+* VFS-2309 location service added
+
+
 ### 3.0.0-rc4
 
 * VFS-2156 Change onepanel config env variables types

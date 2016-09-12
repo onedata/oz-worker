@@ -17,26 +17,26 @@
 
 % Info about identities, which are owned by this OZ
 -record(owned_identity, {
-    id :: identity:id(),
-    encoded_public_key :: identity:encoded_public_key()
+    id :: undefined | identity:id(),
+    encoded_public_key :: undefined | identity:encoded_public_key()
 }).
 
 % Describes state of batch.
 -record(outbox, {
-    timer_expires :: pos_integer(),
-    timer :: timer:tref(),
-    buffer :: [term()]
+    timer_expires :: undefined | pos_integer(),
+    timer :: undefined | timer:tref(),
+    buffer :: undefined | [term()]
 }).
 
 % Stores data used to provide subscription updates
 -record(subscriptions_state, {
-    cache :: gb_trees:tree()
+    cache :: undefined | gb_trees:tree()
 }).
 
 % Stores state of provider subscription
 -record(provider_subscription, {
     connections = [] :: [pid()],
-    provider :: binary(),
+    provider :: undefined | binary(),
     resume_at = 1 :: subscriptions:seq(),
     missing = [] :: [subscriptions:seq()],
     users = [] :: [binary()]
@@ -45,19 +45,19 @@
 %% Stores CA dedicated node
 %% todo: implement distributed CA properly (connected with VFS-1499)
 -record(ozpca_state, {
-    dedicated_node :: {ok, node()} | {error, Reason :: term()}
+    dedicated_node :: undefined | {ok, node()} | {error, Reason :: term()}
 }).
 
 %% Records of this type store a macaroons secret
 -record(onedata_auth, {
-    secret :: binary(),
-    user_id :: binary()
+    secret :: undefined | binary(),
+    user_id :: undefined | binary()
 }).
 
 %% This record defines a group of users, it has: name, list of users that belongs to it, list of spaces that are used by this group
 -record(user_group, {
-    name :: binary(),
-    type :: user_group:type(),
+    name :: undefined | binary(),
+    type :: undefined | user_group:type(),
     users = [] :: [{UserID :: binary(), [privileges:group_privilege()]}],
     effective_users = [] :: group_graph:effective_users(),
     effective_groups = [] :: group_graph:effective_groups(),
@@ -74,18 +74,18 @@
 
 %% This record defines a provider who support spaces and can be reached via url
 -record(provider, {
-    client_name :: binary(),
-    redirection_point :: binary(),
-    urls :: [binary()],
+    client_name :: undefined | binary(),
+    redirection_point :: undefined | binary(),
+    urls :: undefined | [binary()],
     spaces = [] :: [SpaceId :: binary()],
-    serial :: binary(),
-    latitude :: float(),
-    longitude :: float()
+    serial :: undefined | binary(),
+    latitude :: undefined | float(),
+    longitude :: undefined | float()
 }).
 
 %% This record defines a space that can be used by users to store their files
 -record(space, {
-    name :: binary(),
+    name :: undefined | binary(),
     providers_supports = [] :: [{ProviderId :: binary(), Size :: pos_integer()}],
     users = [] :: [{UserId :: binary(), [privileges:space_privilege()]}],
     groups = [] :: [{GroupId :: binary(), [privileges:space_privilege()]}],
@@ -104,10 +104,10 @@
 
 %% This record defines a token that can be used by user to do something
 -record(token, {
-    secret :: binary(),
-    resource :: atom(),
-    resource_id :: binary(),
-    issuer :: rest_handler:client()
+    secret :: undefined | binary(),
+    resource :: undefined | atom(),
+    resource_id :: undefined | binary(),
+    issuer :: undefined | rest_handler:client()
 }).
 
 %% This record defines a GUI session

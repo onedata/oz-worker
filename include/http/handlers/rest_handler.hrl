@@ -27,17 +27,17 @@
 
 %% A description of REST request's client.
 -record(client, {
-    type :: user | provider, %% client's type
+    type :: user | provider | undefined, %% client's type
     id = <<"">> :: binary()  %% client's ID in the database
 }).
 
 %% A record describing the state of REST request.
 -record(rstate, {
-    module :: module(),              %% identifier of the REST module handling request's details
-    root :: atom(),                  %% name of the root resource
-    resource :: atom(),              %% name of the requested resource
-    methods :: [method()],           %% an array of REST methods the resource accepts
-    client :: rest_handler:client(), %% the authenticated client's data
+    module :: undefined | module(),              %% identifier of the REST module handling request's details
+    root :: undefined | atom(),                  %% name of the root resource
+    resource :: undefined | atom(),              %% name of the requested resource
+    methods :: undefined | [method()],           %% an array of REST methods the resource accepts
+    client :: undefined | rest_handler:client(), %% the authenticated client's data
     noauth = [] :: [atom()]          %% list of methods not requiring a proper TLS authentication
 }).
 

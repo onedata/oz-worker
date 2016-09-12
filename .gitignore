@@ -6,10 +6,7 @@ src/gui/gui_static/flatui
 src/gui/gui_static/fonts
 src/gui/gui_static/n2o
 
-deps
-ebin
 cluster_manager
-rel/oz_worker
 rel/*.rpm
 package
 package.tar.gz
@@ -26,3 +23,5 @@ location-service/node_modules/
 test/eunit_results
 test_distributed/logs
 test_distributed/cover_tmp.spec
+_build
+compile_commands.json
