@@ -352,12 +352,16 @@ accept_resource_form(Req, #rstate{} = State) ->
 %% Process the request body of text/xml content type.
 %% @end
 %%--------------------------------------------------------------------
--spec accept_resource_form(Req :: cowboy_req:req(), State :: rstate()) ->
+-spec accept_resource_xml(Req :: cowboy_req:req(), State :: rstate()) ->
     {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
 accept_resource_xml(Req, #rstate{} = State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
+    io:format(
+    "Body: ~p~n"
+    "Req: ~p~n"
+    "is list: ~p~n", [Body, Req2, is_list(Body)]),
     Data = try
-        xmerl_scan:(Body) % TODO implement parsing xml from body and later saving it in datastore
+        xmerl_scan:string(Body) % TODO implement parsing xml from body and later saving it in datastore
     catch
         _:_ -> malformed
     end,

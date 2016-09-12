@@ -37,7 +37,7 @@ get_element(repositoryName) ->
     <<"REPOSITORY NAME">>; % TODO what should be the repository name
 get_element(baseURL) ->
     {ok, Domain} = application:get_env(?APP_Name, http_domain),
-    {ok, OAI_PREFIX} = application:get_env(?APP_Name, oai_pmh_prefix ),
+    {ok, OAI_PREFIX} = application:get_env(?APP_Name, oai_pmh_api_prefix ),
     list_to_binary(Domain ++ OAI_PREFIX);
 get_element(protocolVersion) ->
     ?PROTOCOL_VERSION;
