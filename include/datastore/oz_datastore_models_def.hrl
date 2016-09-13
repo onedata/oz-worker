@@ -99,7 +99,8 @@
     public_url = undefined :: undefined | binary(),
     root_file_id = undefined :: undefined | binary(),
     parent_space = undefined :: undefined | binary(),
-    metadata = undefined :: undefined | binary() | iodata()
+    metadata = undefined :: undefined | binary() | iodata(),
+    metadata_timestamp = {{0, 0, 0}, {0, 0, 0}}  :: erlang:datetime()
 }).
 
 %% This record defines a token that can be used by user to do something

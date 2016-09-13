@@ -15,7 +15,7 @@
 
 %% API
 -export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
-    required_response_elements/0, optional_response_elements/0, get_element/1]).
+    required_response_elements/0, optional_response_elements/0, get_element/2]).
 
 -include("registered_names.hrl").
 -include("http/handlers/oai.hrl").
@@ -31,7 +31,7 @@ required_response_elements() -> [header].
 
 optional_response_elements() -> [].
 
-get_element(header) -> [
+get_element(header, Args) -> [
         #oai_header{
             identifier = <<"id">>,
             datestamp = <<"date">>,

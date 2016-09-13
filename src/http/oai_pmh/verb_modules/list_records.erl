@@ -12,7 +12,7 @@
 
 %% API
 -export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
-    required_response_elements/0, optional_response_elements/0, get_element/1]).
+    required_response_elements/0, optional_response_elements/0, get_element/2]).
 
 -include("registered_names.hrl").
 
@@ -27,5 +27,5 @@ required_response_elements() -> [record].
 
 optional_response_elements() -> [].
 
-get_element(record) ->
+get_element(record, Args) ->
     erlang:error(not_implemented).

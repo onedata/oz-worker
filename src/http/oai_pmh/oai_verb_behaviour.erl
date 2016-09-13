@@ -22,4 +22,5 @@
 
 -callback optional_response_elements() -> [atom()].
 
--callback get_element() -> binary() | [binary()] | #xmlElement{} | [#xmlElement{}].
+-callback get_element(Element :: atom(), Args :: [{Key :: binary(), Value :: binary()}])
+        -> binary() | [binary()] | #xmlElement{} | [#xmlElement{}].

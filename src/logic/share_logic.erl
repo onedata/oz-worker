@@ -13,14 +13,13 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models_def.hrl").
--include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([create/4, exists/1, modify/2, remove/1]).
--export([get_data/2, get_parent/1]).
+-export([get_data/2, get_parent/1, get_metadata/1]).
 -export([list/0]).
--export([share_id_to_public_url/1, share_id_to_redirect_url/1, add_metadata/2]).
+-export([share_id_to_public_url/1, share_id_to_redirect_url/1, modify_metadata/2]).
 
 %%%===================================================================
 %%% API
@@ -195,8 +194,28 @@ share_id_to_redirect_url(ShareId) ->
 %% @end
 %%--------------------------------------------------------------------
 
-add_metadata(ShareId, Metadata) ->
+modify_metadata(ShareId, Metadata) ->
     {ok, _} = share:update(ShareId, fun(ShareDoc) ->
-        {ok, ShareDoc#share{metadata = Metadata}}
+        {ok, ShareDoc#share{
+            metadata = Metadata,
+            metadata_timestamp = erlang:universaltime()
+        }}
     end),
     ok.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Saves given share metadata
+%% @end
+%%--------------------------------------------------------------------
+
+get_metadata(ShareId) ->
+    {ok, #document{
+        value = #share{
+            metadata = Metadata,
+            metadata_timestamp = Timestamp
+        }}} = share:get(ShareId),
+    {ok, [
+        {<<"metadata">>, Metadata},
+        {<<"metadata_timestamp">>, Timestamp}
+]}.

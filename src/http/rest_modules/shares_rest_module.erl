@@ -108,6 +108,7 @@ accept_resource(share_metadata, post, ShareId, Data, _Client, Req) ->
               "Data: ~p~n"
               "Client: ~p~n"
               "Req: ~p~n", [ShareId, Data, _Client, Req]),
+    ok = share_logic:modify_metadata(ShareId, Data),
     {true, Req}.
 
 %%--------------------------------------------------------------------

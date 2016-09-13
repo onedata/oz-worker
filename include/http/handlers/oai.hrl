@@ -32,7 +32,7 @@
 
 -record(oai_metadata, {
     metadata_format :: oai_metadata_format(),
-    value :: #{}
+    value :: #{} | #xmlElement{}
 }).
 
 

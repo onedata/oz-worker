@@ -12,7 +12,7 @@
 
 %% API
 -export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
-    required_response_elements/0, optional_response_elements/0, get_element/1]).
+    required_response_elements/0, optional_response_elements/0, get_element/2]).
 
 -include("registered_names.hrl").
 -include("http/handlers/oai_errors.hrl").
@@ -28,5 +28,5 @@ required_response_elements() -> [set].
 
 optional_response_elements() -> [].
 
-get_element(set) ->
+get_element(set, _Args) ->
     {error, ?NO_SET_HIERARCHY}.
