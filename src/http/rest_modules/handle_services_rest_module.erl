@@ -63,8 +63,8 @@ is_authorized(_, _, _, #client{type = undefined}) ->
     false;
 is_authorized(handle_services, post, _HandleServiceId, _Client) -> % todo what privilege should be checked here?
     true;
-is_authorized(handle_services, get, HandleServiceId, #client{type = user, id = UserId}) ->
-    handle_service_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
+is_authorized(handle_services, get, _HandleServiceId, #client{type = user}) ->
+    true;
 is_authorized(handle_service, get, HandleServiceId, #client{type = user, id = UserId}) ->
     handle_service_logic:has_effective_privilege(HandleServiceId, UserId, view_handle_service);
 is_authorized(handle_service, patch, HandleServiceId, #client{type = user, id = UserId}) ->
@@ -136,13 +136,17 @@ resource_exists(gpriv, HandleServiceId, Req) ->
 accept_resource(handle_services, post, _HandleServiceId, Data, #client{type = user, id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ProxyEndpoint = rest_module_helper:assert_key(<<"proxyEndpoint">>, Data, binary, Req),
-    ServiceDescription = rest_module_helper:assert_key(<<"serviceDescription">>, Data, any, Req),
-    {ok, HandleServiceId} = handle_service_logic:create(UserId, Name, ProxyEndpoint, ServiceDescription),
+    ServiceProperties = rest_module_helper:assert_key(<<"serviceProperties">>, Data, any, Req),
+    {ok, HandleServiceId} = handle_service_logic:create(UserId, Name, ProxyEndpoint, ServiceProperties),
     {{true, <<"/handle_services/", HandleServiceId/binary>>}, Req};
 
 accept_resource(handle_service, patch, HandleServiceId, Data, #client{type = user, id = _UserId}, Req) ->
-    ok = handle_service_logic:modify(HandleServiceId, Data),
-    {true, Req};
+    Name = rest_module_helper:assert_type(<<"name">>, Data, binary, Req),
+    ProxyEndpoint = rest_module_helper:assert_type(<<"proxyEndpoint">>, Data, binary, Req),
+    ServiceProperties = rest_module_helper:assert_type(<<"serviceProperties">>, Data, any, Req),
+    ok = handle_service_logic:modify(HandleServiceId, Name, ProxyEndpoint, ServiceProperties),
+    {ok, Req2} = cowboy_req:reply(204, Req),
+    {true, Req2};
 
 accept_resource(user, put, HandleServiceId, _Data, _Client, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),
@@ -152,7 +156,8 @@ accept_resource(user, put, HandleServiceId, _Data, _Client, Req) ->
             rest_module_helper:report_error(invalid_request, Description, Req2);
         true ->
             {ok, HandleServiceId} = handle_service_logic:add_user(HandleServiceId, UID),
-            {true, Req2}
+            {ok, Req3} = cowboy_req:reply(204, Req2),
+            {true, Req3}
     end;
 accept_resource(group, put, HandleServiceId, _Data, _Client, Req) ->
     {GID, Req2} = cowboy_req:binding(gid, Req),
@@ -162,7 +167,8 @@ accept_resource(group, put, HandleServiceId, _Data, _Client, Req) ->
             rest_module_helper:report_error(invalid_request, Description, Req2);
         true ->
             {ok, HandleServiceId} = handle_service_logic:add_group(HandleServiceId, GID),
-            {true, Req2}
+            {ok, Req3} = cowboy_req:reply(204, Req2),
+            {true, Req3}
     end;
 accept_resource(upriv, put, HandleServiceId, Data, _Client, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),
@@ -173,7 +179,8 @@ accept_resource(upriv, put, HandleServiceId, Data, _Client, Req) ->
 
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
     ok = handle_service_logic:set_user_privileges(HandleServiceId, UID, Privileges),
-    {true, Req2};
+    {ok, Req3} = cowboy_req:reply(204, Req2),
+    {true, Req3};
 accept_resource(gpriv, put, HandleServiceId, Data, _Client, Req) ->
     {GID, Req2} = cowboy_req:binding(gid, Req),
 
@@ -183,7 +190,8 @@ accept_resource(gpriv, put, HandleServiceId, Data, _Client, Req) ->
 
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
     ok = handle_service_logic:set_group_privileges(HandleServiceId, GID, Privileges),
-    {true, Req2}.
+    {ok, Req3} = cowboy_req:reply(204, Req2),
+    {true, Req3}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns data requested by a client through GET on a REST resource.
@@ -195,7 +203,7 @@ accept_resource(gpriv, put, HandleServiceId, Data, _Client, Req) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(handle_services, _EntityId, #client{type = user, id = UserId}, Req) ->
     {ok, HandleServiceIds} = handle_service_logic:list(UserId),
-    {[{handle_services, HandleServiceIds}], Req};
+    {HandleServiceIds, Req};
 provide_resource(handle_service, HandleServiceId, #client{type = user, id = _UserId}, Req) ->
     {ok, Data} = handle_service_logic:get_data(HandleServiceId),
     {Data, Req};

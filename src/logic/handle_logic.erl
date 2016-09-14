@@ -17,7 +17,7 @@
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
--export([create/4, modify/2, set_user_privileges/3, set_group_privileges/3]).
+-export([create/4, modify/4, set_user_privileges/3, set_group_privileges/3]).
 -export([get_data/1, get_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
@@ -130,8 +130,7 @@ create(UserId, HandleServiceId, ResourceType, ResourceId) ->
         resource_id = ResourceId, users = [{UserId, Privileges}]},
 
     {ok, HandleId} = handle:save(#document{value = Handle}),
-    {ok, _} = onedata_user:update(UserId, fun(User) ->
-        #onedata_user{handles = UHandles} = User,
+    {ok, _} = onedata_user:update(UserId, fun(User = #onedata_user{handles = UHandles}) ->
         {ok, User#onedata_user{handles = [HandleId | UHandles]}}
     end),
 
@@ -142,15 +141,18 @@ create(UserId, HandleServiceId, ResourceType, ResourceId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(HandleId :: binary(), Data :: binary()) -> ok.
-modify(HandleId, Data) ->
+-spec modify(HandleId :: binary(), HandleServiceId :: binary(),
+    ResourceType :: binary(), ResourceId :: binary()) -> ok.
+modify(_HandleId, undefined, undefined, undefined) ->
+    ok;
+modify(HandleId, NewHandleServiceId, NewResourceType, NewResourceId) ->
     {ok, _} = handle:update(HandleId,
-        fun(#handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
+        fun(Handle = #handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
             resource_id = ResourceId}) ->
-            NewHandleServiceId = maps:get(<<"handleServiceId">>, Data, HandleServiceId),
-            NewResourceType = maps:get(<<"resourceType">>, Data, ResourceType),
-            NewResourceId = maps:get(<<"resourceId">>, Data, ResourceId),
-            {ok, #handle{handle_service_id = NewHandleServiceId, resource_type = NewResourceType, resource_id = NewResourceId}}
+            FinalHandleServiceId = utils:ensure_defined(NewHandleServiceId, undefined, HandleServiceId),
+            FinalResourceType = utils:ensure_defined(NewResourceType, undefined, ResourceType),
+            FinalResourceId = utils:ensure_defined(NewResourceId, undefined, ResourceId),
+            {ok, Handle#handle{handle_service_id = FinalHandleServiceId, resource_type = FinalResourceType, resource_id = FinalResourceId}}
         end),
     ok.
 
@@ -422,7 +424,7 @@ get_effective_user_privileges(HandleId, UserId) ->
 list(UserId) ->
     {ok, Doc} = onedata_user:get(UserId),
     AllUserHandles = get_all_handles(Doc),
-    {ok, AllUserHandles}.
+    {ok, [{handles, AllUserHandles}]}.
 
 %%%===================================================================
 %%% Internal functions

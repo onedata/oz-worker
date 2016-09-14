@@ -17,7 +17,7 @@
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
--export([create/4, modify/2, set_user_privileges/3, set_group_privileges/3]).
+-export([create/4, modify/4, set_user_privileges/3, set_group_privileges/3]).
 -export([get_data/1, get_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
@@ -122,11 +122,11 @@ has_effective_privilege(HandleServiceId, UserId, Privilege) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(UserId :: binary(), Name :: binary(),
-    ProxyEndpoint :: binary(), ServiceDescription :: term()) ->
+    ProxyEndpoint :: binary(), ServiceProperties :: term()) ->
     {ok, HandleServiceId :: binary()}.
-create(UserId, Name, ProxyEndpoint, ServiceDescription) ->
+create(UserId, Name, ProxyEndpoint, ServiceProperties) ->
     Privileges = privileges:handle_service_admin(),
-    HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_description = ServiceDescription,  users = [{UserId, Privileges}]},
+    HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_description = ServiceProperties,  users = [{UserId, Privileges}]},
 
     {ok, HandleServiceId} = handle_service:save(#document{value = HandleService}),
     {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -141,14 +141,15 @@ create(UserId, Name, ProxyEndpoint, ServiceDescription) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(HandleServiceId :: binary(), Data :: binary()) -> ok.
-modify(HandleServiceId, Data) ->
+-spec modify(HandleServiceId :: binary(), Name :: binary(),
+    ProxyEndpoint :: binary(), ServiceProperties :: term()) -> ok.
+modify(HandleServiceId, NewName, NewProxyEndpoint, NewServiceProperties) ->
     {ok, _} = handle_service:update(HandleServiceId,
-        fun(#handle_service{name = Name, proxy_endpoint = Proxy, service_description = Desc}) ->
-            NewName = maps:get(<<"name">>, Data, Name),
-            NewProxy = maps:get(<<"proxyEndpoint">>, Data, Proxy),
-            NewDesc = maps:get(<<"serviceDescription">>, Data, Desc),
-            {ok, #handle_service{name = NewName, proxy_endpoint = NewProxy, service_description = NewDesc}}
+        fun(HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_description = ServiceProperties}) ->
+            FinalName = utils:ensure_defined(NewName, undefined, Name),
+            FinalProxyEndpoint = utils:ensure_defined(NewProxyEndpoint, undefined, ProxyEndpoint),
+            FinalServiceProperties = utils:ensure_defined(NewServiceProperties, undefined, ServiceProperties),
+            {ok, HandleService#handle_service{name = FinalName, proxy_endpoint = FinalProxyEndpoint, service_description = FinalServiceProperties}}
         end),
     ok.
 
@@ -244,7 +245,7 @@ get_data(HandleServiceId) ->
         {handleServiceId, HandleServiceId},
         {name, Name},
         {proxyEndpoint, Proxy},
-        {serviceDescription, Desc}
+        {serviceProperties, Desc}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -418,7 +419,7 @@ get_effective_user_privileges(HandleServiceId, UserId) ->
 list(UserId) ->
     {ok, Doc} = onedata_user:get(UserId),
     AllUserHandleServices = get_all_handle_services(Doc),
-    {ok, AllUserHandleServices}.
+    {ok, [{handle_services, AllUserHandleServices}]}.
 
 %%%===================================================================
 %%% Internal functions

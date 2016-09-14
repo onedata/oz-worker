@@ -75,7 +75,7 @@
     #{
         <<"name">> => <<"LifeWatch DataCite">>,
         <<"proxyEndpoint">> => <<"some_endpoint">>,
-        <<"serviceDescription">> => #{
+        <<"serviceProperties">> => #{
             <<"type">> => <<"DOI">>,
             <<"host">> => <<"https://mds.test.datacite.org">>,
             <<"doiEndpoint">> => <<"/doi">>,
@@ -94,7 +94,7 @@
     #{
         <<"name">> => <<"iMarine EPIC">>,
         <<"proxyEndpoint">> => <<"some_endpoint2">>,
-        <<"serviceDescription">> => #{
+        <<"serviceProperties">> => #{
             <<"type">> => <<"PID">>,
             <<"endpoint">> => <<"https://epic.grnet.gr/api/v2/handles">>,
             <<"prefix">> => <<"11789">>,
@@ -1373,11 +1373,6 @@ set_space_privileges_test(Config) ->
 create_doi_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
 
-    [Worker | _] = ?config(oz_worker_nodes, Config),
-    tracer:start(Worker),
-    tracer:trace_calls(rest_handler),
-    tracer:trace_calls(handle_services_rest_module),
-
     Id = add_handle_service(?DOI_SERVICE, UserReqParams),
 
     ?assertMatch(<<_/binary>>, Id).
@@ -1396,8 +1391,9 @@ list_services_test(Config) ->
 
     Services = list_handle_service(UserReqParams), %todo should we list owned services or services that are accessible.
 
-    ?assert(is_list(Services)),
-    ?assertEqual(lists:sort([DoiId, PidId]), lists:sort(Services)).
+    #{<<"handle_services">> := ServiceList} =
+        ?assertMatch(#{<<"handle_services">> := [_ | _]}, Services),
+    ?assertEqual(lists:sort([DoiId, PidId]), lists:sort(ServiceList)).
 
 get_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1405,20 +1401,22 @@ get_service_test(Config) ->
 
     Result = get_handle_service(Id, UserReqParams),
 
-    ?assertEqual(?DOI_SERVICE, Result).
+    ?assertEqual(?DOI_SERVICE#{<<"handleServiceId">> => Id}, Result).
 
 modify_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    NewName = <<"New name">>,
+    NewDescription = #{<<"list">> => [null, <<"a">>, 2], <<"object">> => #{<<"a">> => <<"b">>}},
     Modifications = #{
-        <<"name">> => <<"New name">>,
-        <<"allowTemplateOverride">> => true
+        <<"name">> => NewName,
+        <<"serviceProperties">> => NewDescription
     },
 
     Result = modify_handle_service(Modifications, Id, UserReqParams),
 
     ?assertEqual(204, Result),
-    ?assertMatch(#{<<"name">> := <<"New name">>, <<"allowTemplateOverride">> := true},
+    ?assertMatch(#{<<"name">> := NewName, <<"serviceProperties">> := NewDescription},
         get_handle_service(Id, UserReqParams)).
 
 delete_service_test(Config) ->
@@ -1427,43 +1425,49 @@ delete_service_test(Config) ->
 
     Result = delete_handle_service(Id, UserReqParams),
 
-    ?assertEqual(204, Result),
-    ?assertEqual({request_error, 404}, get_handle_service(Id, UserReqParams)).
+    ?assertEqual(202, Result),
+    ?assertEqual({request_error, 403}, get_handle_service(Id, UserReqParams)). %todo change to 404
 
 add_user_to_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
+    UserId2 = ?config(userId2, Config),
     Id = add_handle_service(?PID_SERVICE, UserReqParams),
 
     Result = add_user_to_handle_service(Id, UserId, UserReqParams),
+    Result2 = add_user_to_handle_service(Id, UserId2, UserReqParams),
 
-    ?assertEqual(204, Result).
+    ?assertEqual(204, Result),
+    ?assertEqual(204, Result2).
 
 list_service_users_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-    {UserId2, _} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    UserId2 = ?config(userId2, Config),
     Id = add_handle_service(?PID_SERVICE, UserReqParams),
     204 = add_user_to_handle_service(Id, UserId, UserReqParams),
     204 = add_user_to_handle_service(Id, UserId2, UserReqParams),
 
     Users = list_users_of_handle_service(Id, UserReqParams),
 
-    ?assert(is_list(Users)),
-    ?assertEqual(lists:sort([UserId, UserId2]), lists:sort(Users)).
+    #{<<"users">> := UserList} =
+        ?assertMatch(#{<<"users">> := [_ | _]}, Users),
+    ?assertEqual(lists:sort([UserId, UserId2]), lists:sort(UserList)).
 
 delete_user_from_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
+    UserReqParams2 = ?config(userReqParams2, Config),
     UserId = ?config(userId, Config),
+    UserId2 = ?config(userId2, Config),
     Id = add_handle_service(?PID_SERVICE, UserReqParams),
     204 = add_user_to_handle_service(Id, UserId, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId2, UserReqParams),
 
     Result = delete_user_from_handle_service(Id, UserId, UserReqParams),
 
-    ?assertEqual(204, Result),
-    ?assertEqual([], list_users_of_handle_service(Id, UserReqParams)).
+    ?assertEqual(202, Result),
+    ?assertEqual({request_error, 403}, list_users_of_handle_service(Id, UserReqParams)),
+    ?assertEqual(#{<<"users">> => [UserId2]}, list_users_of_handle_service(Id, UserReqParams2)).
 
 add_group_to_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1484,8 +1488,9 @@ list_service_groups_test(Config) ->
 
     Groups = list_groups_of_handle_service(Id, UserReqParams),
 
-    ?assert(is_list(Groups)),
-    ?assertEqual(lists:sort(GroupId1, GroupId2), lists:sort(Groups)).
+    #{<<"groups">> := GroupList} =
+        ?assertMatch(#{<<"groups">> := [_ | _]}, Groups),
+    ?assertEqual(lists:sort([GroupId1, GroupId2]), lists:sort(GroupList)).
 
 delete_group_from_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1495,8 +1500,8 @@ delete_group_from_service_test(Config) ->
 
     Result = delete_group_from_handle_service(Id, GroupId, UserReqParams),
 
-    ?assertEqual(204, Result),
-    ?assertEqual([], list_groups_of_handle_service(Id, UserReqParams)).
+    ?assertEqual(202, Result),
+    ?assertEqual(#{<<"groups">> => []}, list_groups_of_handle_service(Id, UserReqParams)).
 
 get_user_privileges_for_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1506,18 +1511,25 @@ get_user_privileges_for_service_test(Config) ->
 
     Privileges = get_user_privileges_for_handle_service(Id, UserId, UserReqParams),
 
+    #{<<"privileges">> := PrivilegeList} =
+        ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
     ?assertEqual(lists:sort([<<"register_handle_service">>, <<"list_handle_services">>, <<"delete_handle_service">>,
         <<"modify_handle_service">>, <<"view_handle_service">>]),
-        lists:sort(Privileges)
+        lists:sort(PrivilegeList)
     ).
 
 set_user_privileges_for_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     Id = add_handle_service(?PID_SERVICE, UserReqParams),
     UserId = ?config(userId, Config),
-    Privileges = [<<"view_handle_service">>],
+    Privileges = #{<<"privileges">> => [<<"view_handle_service">>]},
 
+    [Worker | _] = ?config(oz_worker_nodes, Config),
+    tracer:start(Worker),
+    tracer:trace_calls(handle_services_rest_module),
+    tracer:trace_calls(handle_service_logic),
     Result = set_user_privileges_for_handle_service(Id, UserId, Privileges, UserReqParams),
+    tracer:stop(),
 
     ?assertEqual(204, Result),
     ?assertEqual(Privileges, get_user_privileges_for_handle_service(Id, UserId, UserReqParams)).
@@ -1530,8 +1542,10 @@ get_group_privileges_for_service_test(Config) ->
 
     Privileges = get_group_privileges_for_handle_service(Id, GroupId, UserReqParams),
 
-    ?assertEqual(lists:sort([<<"list_handle_services">>, <<"view_handle_service">>]),
-        lists:sort(Privileges)
+    #{<<"privileges">> := PrivilegeList} =
+        ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
+    ?assertEqual(lists:sort([<<"view_handle_service">>]),
+        lists:sort(PrivilegeList)
     ).
 
 set_group_privileges_for_service_test(Config) ->
@@ -1539,7 +1553,7 @@ set_group_privileges_for_service_test(Config) ->
     Id = add_handle_service(?PID_SERVICE, UserReqParams),
     GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
     204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
-    Privileges = [<<"view_handle_service">>],
+    Privileges = #{<<"privileges">> => [<<"delete_handle_service">>, <<"view_handle_service">>]},
 
     Result = set_group_privileges_for_handle_service(Id, GroupId, Privileges, UserReqParams),
 
@@ -1573,8 +1587,9 @@ list_handles_test(Config) ->
 
     Handles = list_handle(UserReqParams), %todo should we list owned services or services that are accessible.
 
-    ?assert(is_list(Handles)),
-    ?assertEqual(lists:sort([Id1, Id2]), lists:sort(Handles)).
+    #{<<"handles">> := HandlesList} =
+        ?assertMatch(#{<<"handles">> := [_ | _]}, Handles),
+    ?assertEqual(lists:sort([Id1, Id2]), lists:sort(HandlesList)).
 
 get_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1604,7 +1619,8 @@ modify_handle_test(Config) ->
     Result = modify_handle(Modifications, HId, UserReqParams),
 
     ?assertEqual(204, Result),
-    ?assertEqual(?HANDLE(Id, Guid2), get_handle(HId, UserReqParams)).
+    ?assertEqual(?HANDLE(Id, Guid2)#{<<"handle">> => <<"undefined">>, <<"handleId">> => HId},
+        get_handle(HId, UserReqParams)).
 
 delete_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1614,8 +1630,8 @@ delete_handle_test(Config) ->
 
     Result = delete_handle(HId, UserReqParams),
 
-    ?assertEqual(204, Result),
-    ?assertEqual({request_error, 404}, get_handle(HId, UserReqParams)).
+    ?assertEqual(202, Result),
+    ?assertEqual({request_error, 403}, get_handle(HId, UserReqParams)). %todo change to 404
 
 add_user_to_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1631,9 +1647,7 @@ add_user_to_handle_test(Config) ->
 list_handle_users_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
-    ProviderId = ?config(providerId, Config),
-    ProviderReqParams = ?config(providerReqParams, Config),
-    {UserId2, _} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    UserId2 = ?config(userId2, Config),
     Id = add_handle_service(?PID_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
@@ -1643,21 +1657,26 @@ list_handle_users_test(Config) ->
 
     Users = list_users_of_handle(HId, UserReqParams),
 
-    ?assert(is_list(Users)),
-    ?assertEqual(lists:sort([UserId, UserId2]), lists:sort(Users)).
+    #{<<"users">> := UsersList} =
+        ?assertMatch(#{<<"users">> := [_ | _]}, Users),
+    ?assertEqual(lists:sort([UserId, UserId2]), lists:sort(UsersList)).
 
 delete_user_from_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
+    UserReqParams2 = ?config(userReqParams2, Config),
     UserId = ?config(userId, Config),
+    UserId2 = ?config(userId2, Config),
     Id = add_handle_service(?PID_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
-    204 = add_user_to_handle(Id, UserId, UserReqParams),
+    204 = add_user_to_handle(HId, UserId, UserReqParams),
+    204 = add_user_to_handle(HId, UserId2, UserReqParams),
 
     Result = delete_user_from_handle(HId, UserId, UserReqParams),
 
-    ?assertEqual(204, Result),
-    ?assertEqual([], list_users_of_handle(Id, UserReqParams)).
+    ?assertEqual(202, Result),
+    ?assertEqual({request_error, 403}, list_users_of_handle(HId, UserReqParams)),
+    ?assertEqual(#{<<"users">> => [UserId2]}, list_users_of_handle(HId, UserReqParams2)).
 
 add_group_to_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1682,8 +1701,9 @@ list_handle_groups_test(Config) ->
 
     Groups = list_groups_of_handle(HId, UserReqParams),
 
-    ?assert(is_list(Groups)),
-    ?assertEqual(lists:sort(GroupId1, GroupId2), lists:sort(Groups)).
+    #{<<"groups">> := GroupsList} =
+        ?assertMatch(#{<<"groups">> := [_ | _]}, Groups),
+    ?assertEqual(lists:sort([GroupId1, GroupId2]), lists:sort(GroupsList)).
 
 delete_group_from_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1695,8 +1715,8 @@ delete_group_from_handle_test(Config) ->
 
     Result = delete_group_from_handle(HId, GroupId, UserReqParams),
 
-    ?assertEqual(204, Result),
-    ?assertEqual([], list_groups_of_handle(HId, UserReqParams)).
+    ?assertEqual(202, Result),
+    ?assertEqual(#{<<"groups">> => []}, list_groups_of_handle(HId, UserReqParams)).
 
 get_user_privileges_for_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1708,9 +1728,11 @@ get_user_privileges_for_handle_test(Config) ->
 
     Privileges = get_user_privileges_for_handle(HId, UserId, UserReqParams),
 
+    #{<<"privileges">> := PrivilegeList} =
+        ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
     ?assertEqual(lists:sort([<<"register_handle">>, <<"list_handles">>, <<"delete_handle">>,
         <<"modify_handle">>, <<"view_handle">>]),
-        lists:sort(Privileges)
+        lists:sort(PrivilegeList)
     ).
 
 set_user_privileges_for_handle_test(Config) ->
@@ -1719,7 +1741,7 @@ set_user_privileges_for_handle_test(Config) ->
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     UserId = ?config(userId, Config),
-    Privileges = [<<"view_handle">>],
+    Privileges = #{<<"privileges">> => [<<"view_handle">>]},
 
     Result = set_user_privileges_for_handle(HId, UserId, Privileges, UserReqParams),
 
@@ -1736,8 +1758,10 @@ get_group_privileges_for_handle_test(Config) ->
 
     Privileges = get_group_privileges_for_handle(HId, GroupId, UserReqParams),
 
-    ?assertEqual(lists:sort([<<"list_handle">>, <<"view_handle">>]),
-        lists:sort(Privileges)
+    #{<<"privileges">> := PrivilegeList} =
+        ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
+    ?assertEqual(lists:sort([<<"view_handle">>]),
+        lists:sort(PrivilegeList)
     ).
 
 set_group_privileges_for_handle_test(Config) ->
@@ -1747,7 +1771,7 @@ set_group_privileges_for_handle_test(Config) ->
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
     204 = add_group_to_handle(HId, GroupId, UserReqParams),
-    Privileges = [<<"view_handle">>],
+    Privileges = #{<<"privileges">> => [<<"view_handle">>]},
 
     Result = set_group_privileges_for_handle(HId, GroupId, Privileges, UserReqParams),
 
@@ -1841,7 +1865,15 @@ init_per_testcase(provider_check_ip_test, Config) ->
     init_per_testcase(register_only_provider, Config);
 init_per_testcase(provider_check_port_test, Config) ->
     init_per_testcase(register_only_provider, Config);
+init_per_testcase(add_user_to_service_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
 init_per_testcase(list_service_users_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
+init_per_testcase(delete_user_from_service_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
+init_per_testcase(list_handle_users_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
+init_per_testcase(delete_user_from_handle_test, Config) ->
     init_per_testcase(register_provider_and_two_users, Config);
 init_per_testcase(non_register, Config) ->
     RestAddress = RestAddress = ?config(restAddress, Config),
