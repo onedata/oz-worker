@@ -19,7 +19,8 @@
 %% API
 -export([init/3, terminate/3, rest_init/2, allowed_methods/2,
     content_types_accepted/2, content_types_provided/2, resource_exists/2,
-    accept_resource/2, provide_resource/2, generate_response/2, count_key_occurrences/2, to_xml/2]).
+    accept_resource/2, provide_resource/2, generate_response/2,
+    count_key_occurrences/2, to_xml/2]).
 
 %%%===================================================================
 %%% API
@@ -163,8 +164,7 @@ handle_request(QueryString, Req) ->
     Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
     ResponseBody = xmerl:export_simple([XML], xmerl_xml, [{prolog, Prolog}]),
     io:format("RESPONSE: ~p~n", [lists:flatten(xmerl:export_simple([XML], xmerl_xml))]),
-    Req2 = cowboy_req:set_resp_header(<<"content-type">>,
-    ?RESPONSE_CONTENT_TYPE, Req),
+    Req2 = cowboy_req:set_resp_header(<<"content-type">>, ?RESPONSE_CONTENT_TYPE, Req),
     {ResponseBody, Req2}.
 
 
@@ -222,11 +222,9 @@ to_xml(#oai_error{}=Value) ->
 
 
 to_xml(Name, #xmlElement{} = Value) ->
-    io:format("DUPA XML ELEMENT~n"),
     #xmlElement{name = Name, content = [Value]};
 to_xml(Name, #oai_record{header = Header, metadata = Metadata}) ->
 
-    io:format("METADATA: ~p~n", [Metadata]),
     #xmlElement{
         name = Name,
         content = ensure_list(to_xml(header, Header)) ++ %[str_utils:to_list(Metadata)]};
@@ -238,10 +236,10 @@ to_xml(Name, #oai_header{identifier = Identifier, datestamp = Datestamp, setSpec
                   ensure_list(to_xml(datestamp, str_utils:to_binary(Datestamp))) ++
                   ensure_list(to_xml(setSpec, str_utils:to_binary(SetSpec)))};
 to_xml(Name, #oai_metadata{metadata_format=Format, value=Value}) ->
-%%    MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
-%%    Mod = metadata_prefix_to_metadata_format(MetadataPrefix),
-%%    #xmlElement{name=Name, content=[Mod:encode(Value)]};
-    #xmlElement{name=Name, content=[Value]};%todo Metadata is currnetly bare xml
+    MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
+    Mod = metadata_prefix_to_metadata_format(MetadataPrefix),
+    #xmlElement{name=Name, content=[Mod:encode(Value)]};
+%%    #xmlElement{name=Name, content=[Value]};%todo Metadata is currnetly bare xml
 to_xml(_Name, #oai_error{code=Code, description=Description}) ->
     #xmlElement{
         name=error,
@@ -295,15 +293,7 @@ validate_arguments(Module, QueryString) ->
         all_required_arguments_are_present(Module, ArgsList) )
     or (exclusive_argument_exist(Module, ArgsList) and (length(ArgsList) == 1)).
 
-
-error_to_xml(#oai_error{code=Code, description=Description}) ->
-    #xmlElement{
-        name=error,
-        attributes = [#xmlAttribute{name=code, value=Code}],
-        content = [Description]
-    }.
-
-metadata_prefix_to_metadata_format(oai_dc) -> dublin_core.
+metadata_prefix_to_metadata_format(<<"oai_dc">>) -> dublin_core.
 
 exclusive_argument_exist(Module, ArgsList) ->
     ExclusiveArgumentsSet = sets:from_list(Module:exclusive_arguments()),

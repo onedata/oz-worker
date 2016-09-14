@@ -11,42 +11,59 @@
 
 -include("oai.hrl").
 
--define(BAD_ARGUMENT, #oai_error{
-    code=badArgument,
-    description = "The request includes illegal arguments, is missing required arguments, includes a repeated argument, or values for arguments have an illegal syntax."
+-define(OAI_ERROR(Code, Description), #oai_error{
+    code=Code,
+    description=str_utils:to_list(Description)
 }).
 
--define(BAD_RESUMPTION_TOKEN, #oai_error{
-    code=badResumptionToken,
-    description = "The value of the resumptionToken argument is invalid or expired."
-}).
+-define(BAD_ARGUMENT, ?BAD_ARGUMENT(
+    "The request includes illegal arguments, "
+    "is missing required arguments, includes "
+    "a repeated argument, or values for "
+    "arguments have an illegal syntax.")).
+-define(BAD_ARGUMENT(Description),
+    ?OAI_ERROR(badArgument, Description)).
 
--define(BAD_VERB, #oai_error{
-    code=badVerb,
-    description = "Value of the verb argument is not a legal OAI-PMH verb, the verb argument is missing, or the verb argument is repeated."
-}).
+-define(BAD_RESUMPTION_TOKEN, ?BAD_RESUMPTION_TOKEN(
+    "The value of the resumptionToken argument is invalid or expired.")).
+-define(BAD_RESUMPTION_TOKEN(Description),
+    ?OAI_ERROR(badResumptionToken, Description)).
 
--define(CANNOT_DISSEMINATE_FORMAT, #oai_error{
-    code=cannotDisseminateFormat,
-    description = "The metadata format identified by the value given for the metadataPrefix argument is not supported by the item or by the repository."
-}).
+-define(BAD_VERB, ?BAD_VERB(
+    "Value of the verb argument is not a legal "
+    "OAI-PMH verb, the verb argument is missing, "
+    "or the verb argument is repeated.")).
+-define(BAD_VERB(Description),
+    ?OAI_ERROR(badVerb, Description)).
 
--define(ID_DOES_NOT_EXIST, #oai_error{
-    code=idDoesNotExist,
-    description = "The value of the identifier argument is unknown or illegal in this repository."
-}).
+-define(CANNOT_DISSEMINATE_FORMAT, ?CANNOT_DISSEMINATE_FORMAT(
+    "The metadata format identified by the value "
+    "given for the metadataPrefix argument is not "
+    "supported by the item or by the repository.")).
 
--define(NO_RECORDS_MATCH, #oai_error{
-    code=noRecordsMatch,
-    description = "The combination of the values of the from, until, set and metadataPrefix arguments results in an empty list."
-}).
+-define(CANNOT_DISSEMINATE_FORMAT(Description),
+    ?OAI_ERROR(cannotDisseminateFormat, Description)).
 
--define(NO_METADATA_FORMATS, #oai_error{
-    code=noMetadataFormats,
-    description = "There are no metadata formats available for the specified item."
-}).
+-define(ID_DOES_NOT_EXIST, ?ID_DOES_NOT_EXIST(
+    "The value of the identifier argument is unknown "
+    "or illegal in this repository.")).
 
--define(NO_SET_HIERARCHY, #oai_error{
-    code=noSetHierarchy,
-    description = "The repository does not support sets."
-}).
+-define(ID_DOES_NOT_EXIST(Description),
+    ?OAI_ERROR(idDoesNotExist, Description)).
+
+-define(NO_RECORDS_MATCH, ?NO_RECORDS_MATCH(
+    "The combination of the values of the from, "
+    "until, set and metadataPrefix arguments results "
+    "in an empty list.")).
+-define(NO_RECORDS_MATCH(Description),
+    ?OAI_ERROR(noRecordsMatch, Description)).
+
+-define(NO_METADATA_FORMATS, ?OAI_ERROR(
+    "There are no metadata formats available for the specified item.")).
+-define(NO_METADATA_FORMATS(Description),
+    ?NO_METADATA_FORMATS(noMetadataFormats, Description)).
+
+-define(NO_SET_HIERARCHY, ?NO_SET_HIERARCHY(
+    "The repository does not support sets.")).
+-define(NO_SET_HIERARCHY(Description),
+    ?OAI_ERROR(noSetHierarchy, Description)).

@@ -11,7 +11,7 @@
 -author("Jakub Kudzia").
 
 %% API
--export([datetime_to_oai_datestamp/1]).
+-export([datetime_to_oai_datestamp/1, strip_error/1]).
 
 
 datetime_to_oai_datestamp(DateTime) ->
@@ -19,3 +19,7 @@ datetime_to_oai_datestamp(DateTime) ->
     str_utils:format(
         "~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ",
         [Year, Month, Day, Hour, Minute, Second]).
+
+strip_error({error, Reason}) -> strip_error(Reason);
+strip_error({badmatch, Reason}) -> strip_error(Reason);
+strip_error(Reason) -> Reason.

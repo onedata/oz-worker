@@ -52,33 +52,27 @@ elements() -> [
 
 -spec encode(#{}) -> #xmlElement{}.
 encode(Metadata) ->
-    XMLElements = lists:flatmap(fun(Key) ->
-        case maps:get(Key, Metadata, undefined) of
-            undefined -> [];
-            Value -> [#xmlElement{
-                name=binary_to_atom(<<"dc:", Key/binary>>, latin1),
-                content=[ensure_string(Value)]}]
-        end
-    end, elements()),
-
-    #xmlElement{
-        name='oai_dc:dc',
-        attributes = [
-            ?OAI_DC_XML_NAMESPACE,
-            ?DC_XML_NAMESPACE,
-            ?DC_XML_SCHEMA_NAMESPACE,
-            ?DC_XSI_SCHEMA_LOCATION],
-        content = XMLElements}.
+    {MetadataXML, _} = xmerl_scan:string(binary_to_list(Metadata)),
+    MetadataXML. %todo currently bare xml is saved
+%%    XMLElements = lists:flatmap(fun(Key) ->
+%%        case maps:get(Key, Metadata, undefined) of
+%%            undefined -> [];
+%%            Value -> [#xmlElement{
+%%                name=binary_to_atom(<<"dc:", Key/binary>>, latin1),
+%%                content=[str_utils:to_list(Value)]}]
+%%        end
+%%    end, elements()),
+%%
+%%    #xmlElement{
+%%        name='oai_dc:dc',
+%%        attributes = [
+%%            ?OAI_DC_XML_NAMESPACE,
+%%            ?DC_XML_NAMESPACE,
+%%            ?DC_XML_SCHEMA_NAMESPACE,
+%%            ?DC_XSI_SCHEMA_LOCATION],
+%%        content = XMLElements}.
 
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-
-ensure_string(Value) when is_binary(Value) ->
-    binary_to_list(Value);
-ensure_string(Value) when is_atom(Value) ->
-    atom_to_list(Value);
-ensure_string(Value) when is_list(Value) ->
-    Value.

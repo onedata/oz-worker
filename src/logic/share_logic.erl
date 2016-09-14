@@ -19,7 +19,7 @@
 -export([create/4, exists/1, modify/2, remove/1]).
 -export([get_data/2, get_parent/1, get_metadata/1]).
 -export([list/0]).
--export([share_id_to_public_url/1, share_id_to_redirect_url/1, modify_metadata/2]).
+-export([share_id_to_public_url/1, share_id_to_redirect_url/1, modify_metadata/3]).
 
 %%%===================================================================
 %%% API
@@ -194,10 +194,12 @@ share_id_to_redirect_url(ShareId) ->
 %% @end
 %%--------------------------------------------------------------------
 
-modify_metadata(ShareId, Metadata) ->
+modify_metadata(ShareId, Metadata, MetadataFormat) ->
     {ok, _} = share:update(ShareId, fun(ShareDoc) ->
+        MetadataFormats = ShareDoc#share.metadata_formats,
         {ok, ShareDoc#share{
             metadata = Metadata,
+            metadata_formats = [MetadataFormat | MetadataFormats],
             metadata_timestamp = erlang:universaltime()
         }}
     end),
@@ -205,7 +207,8 @@ modify_metadata(ShareId, Metadata) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Saves given share metadata
+%% Saves given share metadata.
+%% Throws exception when call to the datastore fails, or share doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 
@@ -213,9 +216,11 @@ get_metadata(ShareId) ->
     {ok, #document{
         value = #share{
             metadata = Metadata,
+            metadata_formats = MetadataFormats,
             metadata_timestamp = Timestamp
         }}} = share:get(ShareId),
     {ok, [
         {<<"metadata">>, Metadata},
+        {<<"metadata_formats">>, MetadataFormats},
         {<<"metadata_timestamp">>, Timestamp}
 ]}.

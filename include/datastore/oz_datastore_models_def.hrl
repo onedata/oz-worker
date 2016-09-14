@@ -100,6 +100,7 @@
     root_file_id = undefined :: undefined | binary(),
     parent_space = undefined :: undefined | binary(),
     metadata = undefined :: undefined | binary() | iodata(),
+    metadata_formats = [] :: [binary()],
     metadata_timestamp = {{0, 0, 0}, {0, 0, 0}}  :: erlang:datetime()
 }).
 
