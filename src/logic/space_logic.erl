@@ -22,7 +22,7 @@
 -export([get_shares/1, has_share/2]).
 -export([create/2, create/4, get_data/2, modify/3]).
 -export([join/2, add_user/2, get_user/3, get_users/1, get_effective_users/1,
-remove_user/2]).
+    remove_user/2]).
 -export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
 -export([support/3, get_providers/2, get_provider/3, remove_provider/2]).
 -export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
@@ -450,8 +450,13 @@ get_privileges(SpaceId, {group, GroupId}) ->
 -spec remove(SpaceId :: binary()) ->
     true.
 remove(SpaceId) ->
-    {ok, #document{value = Space}} = space:get(SpaceId),
-    #space{users = Users, groups = Groups, providers_supports = Supports} = Space,
+    {ok, #document{
+        value = #space{
+            users = Users,
+            groups = Groups,
+            providers_supports = Supports,
+            shares = Shares
+        }}} = space:get(SpaceId),
 
     lists:foreach(fun({UserId, _}) ->
         {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -477,6 +482,10 @@ remove(SpaceId) ->
         end)
     end, Supports),
 
+    lists:foreach(fun(ShareId) ->
+        ok = share:delete(ShareId)
+    end, Shares),
+
     case space:delete(SpaceId) of
         ok -> true;
         _ -> false
@@ -499,7 +508,9 @@ remove_user(SpaceId, UserId) ->
         {ok, Space#space{users = lists:keydelete(UserId, 1, Users)}}
     end),
     user_logic:clean_space_name_mapping(UserId, SpaceId),
-    cleanup(SpaceId),
+    % Currently, spaces with no users and groups are not deleted so it is
+    % possible to restore the files after accidentally leaving a space.
+    % cleanup(SpaceId),
     true.
 
 %%--------------------------------------------------------------------
@@ -522,7 +533,9 @@ remove_group(SpaceId, GroupId) ->
     lists:foreach(fun({UserId, _}) ->
         user_logic:clean_space_name_mapping(UserId, SpaceId)
     end, Users),
-    cleanup(SpaceId),
+    % Currently, spaces with no users and groups are not deleted so it is
+    % possible to restore the files after accidentally leaving a space.
+    % cleanup(SpaceId),
     true.
 
 %%--------------------------------------------------------------------

@@ -188,8 +188,7 @@ check_rest_call(ArgsMap) ->
 
 get_random_oz_url() ->
     RestURLs = get_config(rest_urls),
-    random:seed(erlang:timestamp()),
-    lists:nth(random:uniform(length(RestURLs)), RestURLs).
+    lists:nth(rand:uniform(length(RestURLs)), RestURLs).
 
 
 % Convert all header keys to lowercase so comparing is easier

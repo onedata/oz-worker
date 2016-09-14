@@ -108,7 +108,7 @@ check_rename_share(Code, Issuer, ShareId, Params) ->
     ReqPath = [<<"/shares/">>, ShareId],
     rest_test_utils:check_rest_call(#{
         request => #{
-            method => get,
+            method => patch,
             path => ReqPath,
             auth => Issuer,
             body => Params
@@ -241,7 +241,7 @@ view_shares_test(Config) ->
     ])),
     % Remove the user from Space, he should no longer be able to view the shares
     % of the space nor each of the shares.
-    ok = oz_test_utils:leave_space(Config, {user, User}, Space),
+    true = oz_test_utils:leave_space(Config, {user, User}, Space),
     ?assert(check_get_share(403, User, Share1Id, undefined)),
     ?assert(check_get_share(403, User, Share2Id, undefined)),
     ?assert(check_get_share(403, User, Share3Id, undefined)),
@@ -291,7 +291,7 @@ modify_share_test(Config) ->
     )),
     % Now correct ones
     ?assert(check_rename_share(
-        200, User, ShareId, #{<<"name">> => NewName}
+        204, User, ShareId, #{<<"name">> => NewName}
     )),
     % Retrieve share data and check if the name was changed
     ?assert(check_get_share(
@@ -315,7 +315,7 @@ modify_share_test(Config) ->
     ),
     % Now the user should be able to rename the share
     ?assert(check_rename_share(
-        200, User, ShareId, #{<<"name">> => EvenMoreNewName}
+        204, User, ShareId, #{<<"name">> => EvenMoreNewName}
     )),
     % Check if the data was updated
     ?assert(check_get_share(
@@ -345,8 +345,9 @@ remove_share_test(Config) ->
     })),
     % Try to remove a share
     ?assert(check_remove_share(202, User, Share1Id)),
-    % Make sure the share 1 not longer exists
-    ?assert(check_get_share(404, User, Share1Id, undefined)),
+    % Make sure the share 1 not longer exists (403 because the user is not
+    % authorized to ask about non-existent share)
+    ?assert(check_get_share(403, User, Share1Id, undefined)),
     ?assert(check_get_shares_of_space(200, User, Space, [Share2Id])),
     % Take the space_manage_shares privilege from user and makes sure he no
     % longer can remove shares.
@@ -397,5 +398,5 @@ end_per_suite(Config) ->
 
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
-    oz_test_utils:remove_all_entities(Config).
+    ok = oz_test_utils:remove_all_entities(Config).
 

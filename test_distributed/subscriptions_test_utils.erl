@@ -83,41 +83,41 @@ generate_ids(Prefix, Number) ->
 create_spaces(SIDs, UIDs, GIDs, Node) ->
     Groups = [{GID, []} || GID <- GIDs],
     Users =  [{UID, []} || UID <- UIDs],
-    lists:map(fun({SID, N}) -> {
+    lists:map(fun({SID, N}) ->
         Space = #space{
             name = list_to_binary("s" ++ integer_to_list(N) ++ integer_to_list(erlang:system_time(micro_seconds))),
             groups = Groups,
             users = Users
-        }},
+        },
         subscriptions_test_utils:save(Node, SID, Space),
         {SID, Space}
     end, lists:zip(SIDs, lists:seq(1, length(SIDs)))).
 
 create_users(UIDs, GIDs, Node) ->
-    lists:map(fun({UID, N}) ->{
+    lists:map(fun({UID, N}) ->
         User = #onedata_user{
             name=list_to_binary("u" ++ integer_to_list(N)),
             groups = GIDs
-        }},
+        },
         subscriptions_test_utils:save(Node, UID, User),
         {UID, User}
     end, lists:zip(UIDs, lists:seq(1, length(UIDs)))).
 
 create_groups(GIDs, UIDs, SIDs, Node) ->
     Users = [{UID, []} || UID <- UIDs],
-    lists:map(fun({GID, N}) ->{
+    lists:map(fun({GID, N}) ->
         Group = #user_group{
             name = list_to_binary("g" ++ integer_to_list(N)),
             users = Users,
             spaces = SIDs
-        }},
+        },
         subscriptions_test_utils:save(Node, GID, Group),
         {GID, Group}
 end, lists:zip(GIDs, lists:seq(1, length(GIDs)))).
 
 
 generate_cert_files() ->
-    {MegaSec, Sec, MiliSec} = erlang:now(),
+    {MegaSec, Sec, MiliSec} = erlang:timestamp(),
     Prefix = lists:foldl(fun(Int, Acc) ->
         Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
     KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
