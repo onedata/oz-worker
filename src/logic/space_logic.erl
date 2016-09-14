@@ -652,7 +652,7 @@ get_effective_privileges(SpaceId, UserId) ->
 %% or given space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_shares(SpaceId :: binary()) -> {ok, [binary()]} | no_return().
+-spec get_shares(SpaceId :: binary()) -> {ok, [{shares, [binary()]}]} | no_return().
 get_shares(SpaceId) ->
     {ok, #document{
         value = #space{

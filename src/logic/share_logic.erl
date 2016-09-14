@@ -184,7 +184,6 @@ share_id_to_redirect_url(ShareId) ->
         0 -> Offline;
         _ -> Online
     end,
-    random:seed(erlang:timestamp()),
-    ChosenProvider = lists:nth(random:uniform(length(Choice)), Choice),
+    ChosenProvider = lists:nth(rand:uniform(length(Choice)), Choice),
     {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
     str_utils:format_bin("~s/#/public/shares/~s", [ProviderURL, ShareId]).

@@ -22,7 +22,9 @@
 -export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
 -export([
     create_share_test/1,
-    view_shares_test/1
+    view_shares_test/1,
+    modify_share_test/1,
+    remove_share_test/1
 ]).
 
 
@@ -37,7 +39,9 @@
 all() ->
     ?ALL([
         create_share_test,
-        view_shares_test
+        view_shares_test,
+        modify_share_test,
+        remove_share_test
     ]).
 
 %%%===================================================================
@@ -62,7 +66,7 @@ check_create_share(Code, Issuer, SpaceId, ShareId, Parameters) ->
         }
     }).
 
-% Tries to retrieve share share data for a user and asserts if returned code and
+% Tries to retrieve share data for a user and asserts if returned code and
 % body matches the expected.
 check_get_share(Code, Issuer, ShareId, ExpectedBody) ->
     ReqPath = [<<"/shares/">>, ShareId],
@@ -78,10 +82,14 @@ check_get_share(Code, Issuer, ShareId, ExpectedBody) ->
         }
     }).
 
-% Tries to retrieve share share data for a user and asserts if returned code and
+% Tries to retrieve share data for a user and asserts if returned code and
 % body matches the expected.
 check_get_shares_of_space(Code, Issuer, SpaceId, ExpectedShareList) ->
     ReqPath = [<<"/spaces/">>, SpaceId, <<"/shares/">>],
+    ExpectedBody = case ExpectedShareList of
+        undefined -> undefined;
+        _ -> #{<<"shares">> => ExpectedShareList}
+    end,
     rest_test_utils:check_rest_call(#{
         request => #{
             method => get,
@@ -90,7 +98,38 @@ check_get_shares_of_space(Code, Issuer, SpaceId, ExpectedShareList) ->
         },
         expect => #{
             code => Code,
-            body => #{<<"shares">> => ExpectedShareList}
+            body => ExpectedBody
+        }
+    }).
+
+% Tries to update share data for a user by renaming the share and asserts if
+% returned code and body matches the expected.
+check_rename_share(Code, Issuer, ShareId, Params) ->
+    ReqPath = [<<"/shares/">>, ShareId],
+    rest_test_utils:check_rest_call(#{
+        request => #{
+            method => get,
+            path => ReqPath,
+            auth => Issuer,
+            body => Params
+        },
+        expect => #{
+            code => Code
+        }
+    }).
+
+% Tries to remove a share for a user and asserts if
+% returned code and body matches the expected.
+check_remove_share(Code, Issuer, ShareId) ->
+    ReqPath = [<<"/shares/">>, ShareId],
+    rest_test_utils:check_rest_call(#{
+        request => #{
+            method => delete,
+            path => ReqPath,
+            auth => Issuer
+        },
+        expect => #{
+            code => Code
         }
     }).
 
@@ -139,6 +178,7 @@ create_share_test(Config) ->
     })),
     ok.
 
+
 view_shares_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
@@ -153,7 +193,7 @@ view_shares_test(Config) ->
         <<"root_file_id">> => Share1File
     })),
     % Retrieve it and validate the obtained data
-    ?assert(check_get_share(200, User, Share1Id, #{
+    Share1ExpectedData = #{
         <<"shareId">> => Share1Id,
         <<"name">> => Share1Name,
         <<"parent_space">> => Space,
@@ -161,7 +201,8 @@ view_shares_test(Config) ->
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
         <<"public_url">> => get_public_share_url(Config, Share1Id)
-    })),
+    },
+    ?assert(check_get_share(200, User, Share1Id, Share1ExpectedData)),
     % Create some other shares
     {Share2Id, Share2Name, Share2File} = {<<"s2id">>, <<"s2nm">>, <<"s2rf">>},
     {Share3Id, Share3Name, Share3File} = {<<"s3id">>, <<"s3nm">>, <<"s3rf">>},
@@ -174,7 +215,7 @@ view_shares_test(Config) ->
         <<"root_file_id">> => Share3File
     })),
     % Retrieve them and validate the obtained data
-    ?assert(check_get_share(200, User, Share2Id, #{
+    Share2ExpectedData = #{
         <<"shareId">> => Share2Id,
         <<"name">> => Share2Name,
         <<"parent_space">> => Space,
@@ -182,8 +223,9 @@ view_shares_test(Config) ->
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
         <<"public_url">> => get_public_share_url(Config, Share2Id)
-    })),
-    ?assert(check_get_share(200, User, Share3Id, #{
+    },
+    ?assert(check_get_share(200, User, Share2Id, Share2ExpectedData)),
+    Share3ExpectedData = #{
         <<"shareId">> => Share3Id,
         <<"name">> => Share3Name,
         <<"parent_space">> => Space,
@@ -191,13 +233,139 @@ view_shares_test(Config) ->
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
         <<"public_url">> => get_public_share_url(Config, Share3Id)
-    })),
+    },
+    ?assert(check_get_share(200, User, Share3Id, Share3ExpectedData)),
     % Retrieve all shares of Space and check if they all all there
     ?assert(check_get_shares_of_space(200, User, Space, [
         Share1Id, Share2Id, Share3Id
     ])),
     % Remove the user from Space, he should no longer be able to view the shares
     % of the space nor each of the shares.
+    ok = oz_test_utils:leave_space(Config, {user, User}, Space),
+    ?assert(check_get_share(403, User, Share1Id, undefined)),
+    ?assert(check_get_share(403, User, Share2Id, undefined)),
+    ?assert(check_get_share(403, User, Share3Id, undefined)),
+    ?assert(check_get_shares_of_space(403, User, Space, undefined)),
+    % However, when we add him to a group and the group to the Space, it should
+    % be possible again.
+    {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
+    ok = oz_test_utils:join_space(Config, {group, Group}, Space),
+    ?assert(check_get_share(200, User, Share1Id, Share1ExpectedData)),
+    ?assert(check_get_share(200, User, Share2Id, Share2ExpectedData)),
+    ?assert(check_get_share(200, User, Share3Id, Share3ExpectedData)),
+    ?assert(check_get_shares_of_space(200, User, Space, [
+        Share1Id, Share2Id, Share3Id
+    ])),
+    ok.
+
+
+modify_share_test(Config) ->
+    rest_test_utils:set_config(Config),
+    % Create a user and a space
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Space} = oz_test_utils:create_space(
+        Config, {user, User}, <<"sp">>
+    ),
+    % Create a share
+    {ShareId, ShareName, ShareFile} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
+    ?assert(check_create_share(204, User, Space, ShareId, #{
+        <<"name">> => ShareName,
+        <<"root_file_id">> => ShareFile
+    })),
+    % Make sure share data is correct
+    ShareExpectedData = #{
+        <<"shareId">> => ShareId,
+        <<"name">> => ShareName,
+        <<"parent_space">> => Space,
+        <<"root_file_id">> => ShareFile,
+        % Public share URL is computed by OZ, so it is not provided in create,
+        % but should be included in GET response
+        <<"public_url">> => get_public_share_url(Config, ShareId)
+    },
+    ?assert(check_get_share(200, User, ShareId, ShareExpectedData)),
+    % Try to modify share data (currently only rename is supported)
+    NewName = <<"new name">>,
+    % First, try wrong parameters
+    ?assert(check_rename_share(
+        400, User, ShareId, #{<<"wrong">> => <<"params">>}
+    )),
+    % Now correct ones
+    ?assert(check_rename_share(
+        200, User, ShareId, #{<<"name">> => NewName}
+    )),
+    % Retrieve share data and check if the name was changed
+    ?assert(check_get_share(
+        200, User, ShareId, ShareExpectedData#{<<"name">> => NewName}
+    )),
+    % Take the space_manage_shares privilege from user and makes sure he no
+    % longer can modify shares.
+    ok = oz_test_utils:set_space_privileges(
+        Config, {user, User}, Space, [space_view_data]
+    ),
+    EvenMoreNewName = <<"newest new name">>,
+    ?assert(check_rename_share(
+        403, User, ShareId, #{<<"name">> => EvenMoreNewName}
+    )),
+    % User should be able to rename shares again if we add him to a group that
+    % has space_manages_shares privilege and belongs to the space.
+    {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
+    ok = oz_test_utils:join_space(Config, {group, Group}, Space),
+    ok = oz_test_utils:set_space_privileges(
+        Config, {group, Group}, Space, [space_manage_shares]
+    ),
+    % Now the user should be able to rename the share
+    ?assert(check_rename_share(
+        200, User, ShareId, #{<<"name">> => EvenMoreNewName}
+    )),
+    % Check if the data was updated
+    ?assert(check_get_share(
+        200, User, ShareId, ShareExpectedData#{<<"name">> => EvenMoreNewName}
+    )),
+    ok.
+
+
+remove_share_test(Config) ->
+    rest_test_utils:set_config(Config),
+    rest_test_utils:set_config(Config),
+    % Create a user and a space
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Space} = oz_test_utils:create_space(
+        Config, {user, User}, <<"sp">>
+    ),
+    % Create two shares
+    {Share1Id, Share1Name, Share1File} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
+    {Share2Id, Share2Name, Share2File} = {<<"s2id">>, <<"s2nm">>, <<"s2rf">>},
+    ?assert(check_create_share(204, User, Space, Share1Id, #{
+        <<"name">> => Share1Name,
+        <<"root_file_id">> => Share1File
+    })),
+    ?assert(check_create_share(204, User, Space, Share2Id, #{
+        <<"name">> => Share2Name,
+        <<"root_file_id">> => Share2File
+    })),
+    % Try to remove a share
+    ?assert(check_remove_share(202, User, Share1Id)),
+    % Make sure the share 1 not longer exists
+    ?assert(check_get_share(404, User, Share1Id, undefined)),
+    ?assert(check_get_shares_of_space(200, User, Space, [Share2Id])),
+    % Take the space_manage_shares privilege from user and makes sure he no
+    % longer can remove shares.
+    ok = oz_test_utils:set_space_privileges(
+        Config, {user, User}, Space, [space_view_data]
+    ),
+    ?assert(check_remove_share(403, User, Share2Id)),
+    % User should be able to remove shares again if we add him to a group that
+    % has space_manages_shares privilege and belongs to the space.
+    {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
+    ok = oz_test_utils:join_space(Config, {group, Group}, Space),
+    ok = oz_test_utils:set_space_privileges(
+        Config, {group, Group}, Space, [space_manage_shares]
+    ),
+    % Now the user should be able to remove the share
+    ?assert(check_remove_share(202, User, Share2Id)),
+    % Make sure the share 2 not longer exists
+    ?assert(check_get_share(404, User, Share2Id, undefined)),
+    ?assert(check_get_shares_of_space(200, User, Space, [])),
     ok.
 
 
