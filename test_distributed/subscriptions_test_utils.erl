@@ -140,8 +140,11 @@ get_last_sequence_number(Node) ->
 %%%===================================================================
 
 expectation(ID, #space{name = Name, providers_supports = Supports,
-    groups = Groups, users = Users}) ->
-    space_expectation(ID, Name, Users, Groups, Supports);
+    groups = Groups, users = Users, shares = Shares}) ->
+    space_expectation(ID, Name, Users, Groups, Supports, Shares);
+expectation(ID, #share{name = Name, parent_space = ParentSpace,
+    root_file_id = RootFileId, public_url = PublicUrl}) ->
+    share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl);
 expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
     default_space = DefaultSpace, effective_groups = EGroups}) ->
     user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups, case DefaultSpace of
@@ -160,13 +163,23 @@ expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) -
         {<<"public_only">>, false}
     ]}].
 
-space_expectation(ID, Name, Users, Groups, Supports) ->
+space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
     [{<<"id">>, ID}, {<<"space">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
         {<<"providers_supports">>, Supports},
         {<<"users">>, privileges_as_binaries(Users)},
-        {<<"groups">>, privileges_as_binaries(Groups)}
+        {<<"groups">>, privileges_as_binaries(Groups)},
+        {<<"shares">>, Shares}
+    ]}].
+
+share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl) ->
+    [{<<"id">>, ID}, {<<"share">>, [
+        {<<"id">>, ID},
+        {<<"name">>, Name},
+        {<<"parent_space">>, ParentSpace},
+        {<<"root_file_id">>, RootFileId},
+        {<<"public_url">>, PublicUrl}
     ]}].
 
 user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace) ->

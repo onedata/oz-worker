@@ -226,8 +226,8 @@ no_share_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    Sp1 = #space{name = <<"whatever">>, providers_supports = []},
-    Sh1 = #share{name = <<"initial">>, parent_space = Sp1},
+    Sp1 = #space{name = <<"whatever">>, providers_supports = [], shares = [?ID(sh1)]},
+    Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
     subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
     subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
 
@@ -247,8 +247,8 @@ share_update_through_support_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(sp1)]),
-    Sp1 = #space{name = <<"whatever">>, providers_supports = [{PID, 0}]},
-    Sh1 = #share{name = <<"initial">>, parent_space = Sp1},
+    Sp1 = #space{name = <<"whatever">>, providers_supports = [{PID, 0}], shares = [?ID(sh1)]},
+    Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
     subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
     subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
 

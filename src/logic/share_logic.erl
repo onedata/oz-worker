@@ -41,14 +41,10 @@ create(ShareId, Name, RootFileId, ParentSpaceId) ->
     Share = #share{
         name = Name,
         parent_space = ParentSpaceId,
-        root_file_id = RootFileId
+        root_file_id = RootFileId,
+        public_url = share_id_to_public_url(ShareId)
     },
     {ok, ShareId} = share:save(#document{key = ShareId, value = Share}),
-
-    % Update public URL
-    {ok, _} = share:update(ShareId, fun(ShareDoc) ->
-        {ok, ShareDoc#share{public_url = share_id_to_public_url(ShareId)}}
-    end),
 
     {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
         Shares = SpaceDoc#space.shares,
