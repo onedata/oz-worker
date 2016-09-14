@@ -127,7 +127,7 @@ get_data(ShareId, _Client) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_parent(ShareId :: binary()) ->
-    {ok, undefined | binary()} | {error, term()}.
+    {ok, undefined | binary()} | datastore:get_error().
 get_parent(ShareId) ->
     case share:get(ShareId) of
         {ok, #document{value = #share{parent_space = ParentSpaceId}}} ->
