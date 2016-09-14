@@ -130,13 +130,15 @@ get_data(ShareId, _Client) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec get_parent(ShareId :: binary()) -> {ok, undefined | binary()}.
+-spec get_parent(ShareId :: binary()) ->
+    {ok, undefined | binary()} | {error, term()}.
 get_parent(ShareId) ->
-    {ok, #document{
-        value = #share{
-            parent_space = ParentSpaceId
-        }}} = share:get(ShareId),
-    {ok, ParentSpaceId}.
+    case share:get(ShareId) of
+        {ok, #document{value = #share{parent_space = ParentSpaceId}}} ->
+            {ok, ParentSpaceId};
+        Error ->
+            Error
+    end.
 
 
 %%--------------------------------------------------------------------

@@ -365,7 +365,7 @@ remove_share_test(Config) ->
     % Now the user should be able to remove the share
     ?assert(check_remove_share(202, User, Share2Id)),
     % Make sure the share 2 not longer exists
-    ?assert(check_get_share(404, User, Share2Id, undefined)),
+    ?assert(check_get_share(403, User, Share2Id, undefined)),
     ?assert(check_get_shares_of_space(200, User, Space, [])),
     ok.
 
