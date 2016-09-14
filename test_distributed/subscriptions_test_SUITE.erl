@@ -237,8 +237,8 @@ no_share_update_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_absent(Context, [
-        subscriptions_test_utils:expectation(?ID(sh1), Sp1#space{name = <<"initial">>}),
-        subscriptions_test_utils:expectation(?ID(sh1), Sp1#space{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"initial">>}),
+        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
     ]),
     ok.
 
