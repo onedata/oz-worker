@@ -18,7 +18,7 @@
 -export([create_user/2, get_client_token/2, remove_user/2]).
 -export([create_group/3, join_group/3, remove_group/2]).
 -export([create_space/3, join_space/3, leave_space/3, remove_space/2]).
--export([modify_space/4, support_space/4]).
+-export([modify_space/4, support_space/4, set_space_privileges/4]).
 -export([create_provider/2, remove_provider/2]).
 -export([remove_all_entities/1]).
 
@@ -231,6 +231,22 @@ support_space(Config, ProviderId, SpaceId, Size) ->
             space_logic:support(ProviderId, Macaroon, Size)
         end, []]),
         ok
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc Sets privileges in a space for a user or group.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_space_privileges(Config :: term(), Member :: {user, Id :: binary()},
+    SpaceId :: binary(), Privileges :: [privileges:space_privilege()]) ->
+    ok | {error, Reason :: term()}.
+set_space_privileges(Config, Member, SpaceId, Privileges) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, space_logic, set_privileges, [SpaceId, Member, Privileges])
     catch
         _:Reason ->
             {error, Reason}
