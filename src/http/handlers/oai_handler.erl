@@ -135,7 +135,7 @@ accept_resource(Req, State) ->
 verb_to_module(<<"Identify">>) -> identify;
 verb_to_module(<<"GetRecord">>) -> get_record;
 verb_to_module(<<"ListIdentifiers">>) -> list_identifiers;
-verb_to_module(<<"ListMedatadaFormats">>) -> list_medatada_formats;
+verb_to_module(<<"ListMetadataFormats">>) -> list_metadata_formats;
 verb_to_module(<<"ListRecords">>) -> list_records;
 verb_to_module(<<"ListSets">>) -> list_sets;
 verb_to_module(_) -> badVerb.
@@ -237,7 +237,7 @@ to_xml(Name, #oai_header{identifier = Identifier, datestamp = Datestamp, setSpec
                   ensure_list(to_xml(setSpec, str_utils:to_binary(SetSpec)))};
 to_xml(Name, #oai_metadata{metadata_format=Format, value=Value}) ->
     MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
-    Mod = metadata_prefix_to_metadata_format(MetadataPrefix),
+    Mod = metadata_formats:module(MetadataPrefix),
     #xmlElement{name=Name, content=[Mod:encode(Value)]};
 %%    #xmlElement{name=Name, content=[Value]};%todo Metadata is currnetly bare xml
 to_xml(_Name, #oai_error{code=Code, description=Description}) ->
@@ -245,6 +245,14 @@ to_xml(_Name, #oai_error{code=Code, description=Description}) ->
         name=error,
         attributes = [#xmlAttribute{name=code, value=Code}],
         content = [Description]
+    };
+to_xml(Name, #oai_metadata_format{metadataPrefix = MetadataPrefix, schema=Schema,
+    metadataNamespace = Namespace }) ->
+    #xmlElement{
+        name=Name,
+        content = ensure_list(to_xml(metadatPrefix, MetadataPrefix)) ++
+                  ensure_list(to_xml(schema, Schema)) ++
+                  ensure_list(to_xml(metadataNamespace, Namespace))
     };
 to_xml(Name, [Value]) ->
     [to_xml(Name, Value)];

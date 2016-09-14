@@ -61,7 +61,7 @@
 -define(NO_METADATA_FORMATS, ?OAI_ERROR(
     "There are no metadata formats available for the specified item.")).
 -define(NO_METADATA_FORMATS(Description),
-    ?NO_METADATA_FORMATS(noMetadataFormats, Description)).
+    ?OAI_ERROR(noMetadataFormats, Description)).
 
 -define(NO_SET_HIERARCHY, ?NO_SET_HIERARCHY(
     "The repository does not support sets.")).

@@ -12,6 +12,16 @@
 
 -include_lib("xmerl/include/xmerl.hrl").
 
--callback encode(Metadata :: #{}) -> #xmlElement{}.
+-callback metadata_prefix() -> binary().
+
+-callback schema_URL() -> binary().
+
+-callback main_namespace() -> {atom(), binary()}.
+
+-callback extra_namespaces() -> [{atom(), binary()}].
+
+-callback schema_location() -> binary().
 
 -callback elements() -> [binary()].
+
+-callback encode(Metadata :: #{}) -> #xmlElement{}.

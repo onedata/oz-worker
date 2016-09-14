@@ -26,8 +26,8 @@
 
 -record(oai_metadata_format, {
     metadataPrefix :: binary(),
-    schema,
-    metadataNamespace
+    schema ::binary(),
+    metadataNamespace ::binary()
 }).
 
 -record(oai_metadata, {

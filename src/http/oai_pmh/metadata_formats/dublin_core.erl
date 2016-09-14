@@ -12,10 +12,10 @@
 
 -behaviour(metadata_format_behaviour).
 
--include_lib("xmerl/include/xmerl.hrl").
+-include("http/handlers/oai.hrl").
 
 %% API
--export([elements/0, encode/1]).
+-export([elements/0, encode/1, metadata_prefix/0, schema_URL/0, extra_namespaces/0, schema_location/0, main_namespace/0]).
 
 -define(OAI_DC_XML_NAMESPACE, #xmlAttribute{
     name='xmlns:oai_dc',
@@ -23,13 +23,26 @@
 -define(DC_XML_NAMESPACE, #xmlAttribute{
     name='xmlns:dc',
     value="http://purl.org/dc/elements/1.1/"}).
--define(DC_XML_SCHEMA_NAMESPACE, #xmlAttribute{
-    name='xml:xsi',
-    value="http://www.w3.org/2001/XMLSchema-instance"}).
 
 -define(DC_XSI_SCHEMA_LOCATION, #xmlAttribute{
     name='xsi:schemaLocation',
     value = "http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd"}).
+
+metadata_prefix() -> <<"oai_dc">>.
+
+schema_URL() -> <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>.
+
+main_namespace() ->
+    {'xmlns:oai_dc', <<"http://www.openarchives.org/OAI/2.0/oai_dc/">>}.
+
+extra_namespaces() -> [
+    {'xmlns:dc', "http://purl.org/dc/elements/1.1/"}
+].
+
+schema_location() ->
+    {_, MainNamespace} = main_namespace(),
+    str_utils:format_bin("~s ~s", [MainNamespace, schema_URL()]).
+
 
 elements() -> [
     <<"title">>,
@@ -50,7 +63,10 @@ elements() -> [
 ].
 
 
--spec encode(#{}) -> #xmlElement{}.
+format_info() -> ok.
+
+
+
 encode(Metadata) ->
     {MetadataXML, _} = xmerl_scan:string(binary_to_list(Metadata)),
     MetadataXML. %todo currently bare xml is saved
@@ -68,7 +84,7 @@ encode(Metadata) ->
 %%        attributes = [
 %%            ?OAI_DC_XML_NAMESPACE,
 %%            ?DC_XML_NAMESPACE,
-%%            ?DC_XML_SCHEMA_NAMESPACE,
+%%            ?OAI_XML_SCHEMA_NAMESPACE,
 %%            ?DC_XSI_SCHEMA_LOCATION],
 %%        content = XMLElements}.
 
