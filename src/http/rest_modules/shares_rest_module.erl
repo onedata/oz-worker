@@ -96,7 +96,7 @@ resource_exists(share, ShareId, Req) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(share, patch, ShareId, Data, _Client, Req) ->
     NewName = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    {ok, ShareId} = share_logic:modify(ShareId, NewName),
+    ok = share_logic:modify(ShareId, NewName),
     {true, Req}.
 
 %%--------------------------------------------------------------------
