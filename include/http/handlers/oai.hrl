@@ -15,7 +15,6 @@
 -include_lib("xmerl/include/xmerl.hrl").
 
 %%TODO write docs
-%%TODO ??? macro names with/without"OAI" prefix
 
 -record(oai_header, {
     identifier :: oai_id(),
@@ -35,9 +34,8 @@
     value :: #{} | #xmlElement{}
 }).
 
-
 -record(oai_about, {
-
+    %% TODO
 }).
 
 -record(oai_record, {

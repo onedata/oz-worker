@@ -58,7 +58,7 @@ get_element(record, Args) ->
                     [MetadataPrefix]))}
         end
     catch
-        E1:E2 -> io:format("ERROR: ~p~p", [E1, E2]),
+        _:_ ->
             {error, ?ID_DOES_NOT_EXIST(str_utils:format(
                     "The value of the identifier argument \"~s\" "
                     "is unknown in this repository.", [Id]))}

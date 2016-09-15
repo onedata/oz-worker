@@ -78,7 +78,6 @@ allowed_methods(Req, #rstate{methods = Methods} = State) ->
     Params :: '*' | [{binary(), binary()}],
     AcceptResource :: atom().
 content_types_accepted(Req, #rstate{} = State) ->
-    io:format("STATE: ~p~n", [State]),
     {[
         {<<"application/json">>, accept_resource_json},
         {<<"application/x-www-form-urlencoded">>, accept_resource_form},
@@ -357,12 +356,9 @@ accept_resource_form(Req, #rstate{} = State) ->
     {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
 accept_resource_xml(Req, #rstate{} = State) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
-%%    io:format(
-%%    "Body: ~p~n"
-%%    "Req: ~p~n"
-%%    "is list: ~p~n", [Body, Req2, is_list(Body)]),
-    Data = try % Data = {XML, _}
-        xmerl_scan:string(binary_to_list(Body)) % TODO implement parsing xml from body and later saving it in datastore
+    Data = try
+        xmerl_scan:string(binary_to_list(Body))
+        % TODO implement parsing xml from body and later saving it in datastore
     catch
         _:_ -> malformed
     end,
@@ -376,8 +372,8 @@ accept_resource_xml(Req, #rstate{} = State) ->
             {false, Req3, State};
 
         false ->
-            accept_resource(Body, Req2, State) % TODO change Body to Data when we won't save whole xml
-%%            accept_resource(list_to_binary(xmerl:export_simple([Data], xmerl_xml)), Req2, State) % TODO change Body to Data when we won't save whole xml
+            accept_resource(Body, Req2, State) % TODO change Body to Data when we won't save bare xml
+%%            accept_resource(list_to_binary(xmerl:export_simple([Data], xmerl_xml)), Req2, State)
     end.
 
 

@@ -69,8 +69,10 @@ process_and_validate_args(Args) ->
 
 process_and_validate_verb_specific_arguments(Module, Args) ->
     all_keys_occur_exactly_once(Args),
-    parse_exclusive_arguments(Module, Args),
-    parse_required_arguments(Module, Args),
+    case parse_exclusive_arguments(Module, Args) of
+        false -> parse_required_arguments(Module, Args);
+        _ -> ok
+    end,
     illegal_arguments_do_not_exist(Module, Args),
     args_values_are_well_defined(Args).
 
@@ -88,10 +90,10 @@ parse_exclusive_arguments(Module, ArgsList) ->
     ExclusiveArgumentsSet = sets:from_list(Module:exclusive_arguments()),
     ExistingArgumentsSet = sets:from_list(proplists:get_keys(ArgsList)),
     case sets:is_disjoint(ExclusiveArgumentsSet, ExistingArgumentsSet) of
-        true -> ok;
+        true -> false;
         false ->
             case ExclusiveArgumentsSet == ExistingArgumentsSet of
-                true -> ok;
+                true -> true;
                 false -> throw(exclusive_argument)
             end
     end.

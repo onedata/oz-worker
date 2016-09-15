@@ -104,10 +104,6 @@ accept_resource(share, patch, ShareId, Data, _Client, Req) ->
     {ok, ShareId} = share_logic:modify(ShareId, NewName),
     {true, Req};
 accept_resource(share_metadata, post, ShareId, Data, _Client, Req) ->
-    io:format("ShareId: ~p~n"
-              "Data: ~p~n"
-              "Client: ~p~n"
-              "Req: ~p~n", [ShareId, Data, _Client, Req]),
     % todo currentyl only dc is supported
     % todo how should we determine what format of metadata is passed
     ok = share_logic:modify_metadata(ShareId, Data, <<"oai_dc">>),

@@ -46,14 +46,12 @@ get_element(earliestDatestamp, _Args) ->
 get_element(deletedRecord, _Args) ->
     <<"no">> ;
 get_element(granularity, _Args) ->
-    <<"YYYY-MM-DDThh:mm:ss:Z">> ;% TODO can be <<"YYYY-MM-DD">>
+    <<"YYYY-MM-DDThh:mm:ss:Z">>;
 get_element(adminEmail, _Args) ->
-    [<<"a@mail.com">>, <<"b@mail.com">>];
+    [<<"a@mail.com">>, <<"b@mail.com">>]; % TODO how to get them
 get_element(compression, _Args) ->
-    <<"">>;
+    <<"">>; %TODO
 get_element(description, _Args) -> [].
-%%    #xmlElement{name=description1, attributes = [#xmlAttribute{name=xml_schema}]}, %TODO it's example
-%%    #xmlElement{name=description2, attributes = [#xmlAttribute{name=xml_schema}]}].  %TODO it's example
-
+    %% TODO do we need description ???
 
 
