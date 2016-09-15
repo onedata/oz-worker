@@ -244,24 +244,29 @@ no_share_update_test(Config) ->
 
 % Checks if update is pushed to providers that support changed space
 share_update_through_support_test(Config) ->
-    % given
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(sp1)]),
-    Sp1 = #space{name = <<"whatever">>, providers_supports = [{PID, 0}], shares = [?ID(sh1)]},
-    Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
-    subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
-    subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
+    try
+        % given
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(sp1)]),
+        Sp1 = #space{name = <<"whatever">>, providers_supports = [{PID, 0}], shares = [?ID(sh1)]},
+        Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
+        subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
+        subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
 
-    % when
-    Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
-    Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(sh1), Sh1)),
-    subscriptions_test_utils:update_document(Node, share, ?ID(sh1), #{name => <<"updated">>}),
+        % when
+        Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
+        Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(sh1), Sh1)),
+        subscriptions_test_utils:update_document(Node, share, ?ID(sh1), #{name => <<"updated">>}),
 
-    % then
-    subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
-    ]),
-    ok.
+        % then
+        subscriptions_test_utils:verify_messages_present(Context, [
+            subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
+        ]),
+        ok
+    catch
+        T:M ->
+            ct:print("~p", [{T, M, erlang:get_stacktrace()}])
+    end.
 
 all_data_in_space_update_test(Config) ->
     % given
@@ -353,7 +358,7 @@ all_data_in_provider_update_test(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), Spaces, Urls),
 
     % when
-    Context =subscriptions_test_utils:init_messages(Node, PID, []),
+    Context = subscriptions_test_utils:init_messages(Node, PID, []),
     subscriptions_test_utils:update_document(Node, provider, PID, #{client_name => Name}),
 
     % then
@@ -370,7 +375,7 @@ updates_for_with_providers_test(Config) ->
 
 
     % when
-    Context =subscriptions_test_utils:init_messages(Node, PID, []),
+    Context = subscriptions_test_utils:init_messages(Node, PID, []),
     subscriptions_test_utils:save(Node, ?ID(p2), P2),
     subscriptions_test_utils:save(Node, ?ID(p3), P3),
 
@@ -813,7 +818,8 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_new(Nodes, group_graph),
-    test_utils:mock_expect(Nodes, group_graph, refresh_effective_caches, fun() -> ok end),
+    test_utils:mock_expect(Nodes, group_graph, refresh_effective_caches, fun() ->
+        ok end),
     Config.
 
 end_per_testcase(_, Config) ->

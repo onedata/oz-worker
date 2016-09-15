@@ -503,12 +503,15 @@ remove_nested_group(ParentGroupId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec cleanup(GroupId :: binary()) -> boolean().
-cleanup(GroupId) ->
-    {ok, #document{value = Group}} = user_group:get(GroupId),
-    case Group of
-        #user_group{users = []} -> remove(GroupId);
-        _ -> false
-    end.
+cleanup(_GroupId) ->
+    false.
+%% Currently, groups with no users and groups are not deleted so it is
+%% possible to restore membership after accidentally leaving a group.
+%%    {ok, #document{value = Group}} = user_group:get(GroupId),
+%%    case Group of
+%%        #user_group{users = [], nested_groups = []} -> remove(GroupId);
+%%        _ -> false
+%%    end.
 
 %%--------------------------------------------------------------------
 %% @doc

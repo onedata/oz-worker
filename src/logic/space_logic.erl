@@ -508,9 +508,7 @@ remove_user(SpaceId, UserId) ->
         {ok, Space#space{users = lists:keydelete(UserId, 1, Users)}}
     end),
     user_logic:clean_space_name_mapping(UserId, SpaceId),
-    % Currently, spaces with no users and groups are not deleted so it is
-    % possible to restore the files after accidentally leaving a space.
-    % cleanup(SpaceId),
+    cleanup(SpaceId),
     true.
 
 %%--------------------------------------------------------------------
@@ -533,9 +531,7 @@ remove_group(SpaceId, GroupId) ->
     lists:foreach(fun({UserId, _}) ->
         user_logic:clean_space_name_mapping(UserId, SpaceId)
     end, Users),
-    % Currently, spaces with no users and groups are not deleted so it is
-    % possible to restore the files after accidentally leaving a space.
-    % cleanup(SpaceId),
+    cleanup(SpaceId),
     true.
 
 %%--------------------------------------------------------------------
@@ -622,12 +618,15 @@ add_space_to_providers(SpaceId, [ProviderId | RestProviders]) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec cleanup(SpaceId :: binary()) -> boolean() | no_return().
-cleanup(SpaceId) ->
-    {ok, #document{value = #space{groups = Groups, users = Users}}} = space:get(SpaceId),
-    case {Groups, Users} of
-        {[], []} -> remove(SpaceId);
-        _ -> false
-    end.
+cleanup(_SpaceId) ->
+    false.
+%% Currently, spaces with no users and groups are not deleted so it is
+%% possible to restore the files after accidentally leaving a space.
+%%    {ok, #document{value = #space{groups = Groups, users = Users}}} = space:get(SpaceId),
+%%    case {Groups, Users} of
+%%        {[], []} -> remove(SpaceId);
+%%        _ -> false
+%%    end.
 
 %%--------------------------------------------------------------------
 %% @doc Retrieves effective user privileges taking into account any groups
