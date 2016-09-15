@@ -138,7 +138,7 @@ get_parent(ShareId) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns a list of all shaces (their ids).
+%% @doc Returns a list of all shares (their ids).
 %%--------------------------------------------------------------------
 -spec list() -> {ok, [binary()]}.
 list() ->
