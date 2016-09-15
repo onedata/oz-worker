@@ -18,7 +18,6 @@
     required_response_elements/0, optional_response_elements/0, get_element/2]).
 
 
-
 -include("http/handlers/oai.hrl").
 -include("http/handlers/oai_errors.hrl").
 

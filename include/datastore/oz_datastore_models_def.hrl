@@ -101,7 +101,7 @@
     parent_space = undefined :: undefined | binary(),
     metadata = undefined :: undefined | binary() | iodata(),
     metadata_formats = [] :: [binary()],
-    metadata_timestamp = {{0, 0, 0}, {0, 0, 0}}  :: erlang:datetime()
+    metadata_timestamp = undefined :: undefined | erlang:datetime()
 }).
 
 %% This record defines a token that can be used by user to do something

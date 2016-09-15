@@ -34,6 +34,13 @@ process_and_validate_args(Args) ->
             str_utils:format("The verb argument ~s is not a legal OAI-PMH verb.",[BadVerb])});
         throw:{repeated_key, Key}  -> throw({badArgument,
             str_utils:format("The request includes repeated argument ~s.",[Key])});
+        throw:{value_not_defined, Key}  -> throw({badArgument,
+            str_utils:format("The request argument ~s has empty value.",[Key])});
+        throw:{cannotDisseminateFormat, MetadataPrefix}  -> throw({cannotDisseminateFormat,
+            str_utils:format(
+                "The metadata format identified by the value ~s"
+                "given for the metadataPrefix argument is not "
+                "supported by this repository.",[MetadataPrefix])});
         throw:{missing_key, Keys}  ->
             KeysStr = [str_utils:to_list(K) || K <- Keys],
             throw({badArgument,
@@ -49,7 +56,7 @@ process_and_validate_args(Args) ->
             str_utils:format("Datestamps from=~s and until=~s "
                              "have different granularity.", [From, Until])});
         throw:{invalid_date_format, Date} -> throw({badArgument,
-            str_utils:format("Datestamp ~s has invalid formay.", [Date])});
+            str_utils:format("Datestamp ~s has invalid format.", [Date])});
         throw:{wrong_datestamps_relation, From, Until} ->throw({badArgument,
             str_utils:format("Datestamp from=~s is greater than until=~s: ", [From, Until])})
     end
@@ -64,7 +71,8 @@ process_and_validate_verb_specific_arguments(Module, Args) ->
     all_keys_occur_exactly_once(Args),
     parse_exclusive_arguments(Module, Args),
     parse_required_arguments(Module, Args),
-    illegal_arguments_do_not_exist(Module, Args).
+    illegal_arguments_do_not_exist(Module, Args),
+    args_values_are_well_defined(Args).
 
 parse_required_arguments(Module, ArgsList) ->
     RequiredArgumentsSet = sets:from_list(Module:required_arguments()),
@@ -91,9 +99,17 @@ parse_exclusive_arguments(Module, ArgsList) ->
 parse_harvesting_arguments(ArgsList) ->
     case proplists:get_value(<<"set">>, ArgsList) of
         undefined ->
+            parse_harvesting_metadata_prefix(ArgsList),
             parse_harvesting_datestamps(ArgsList);
         _ ->
             throw(noSetHierarchy)
+    end.
+
+parse_harvesting_metadata_prefix(ArgsList) ->
+    MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, ArgsList),
+    case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
+        false -> throw({cannotDisseminateFormat, MetadataPrefix});
+        _ -> ok
     end.
 
 parse_harvesting_datestamps(ArgsList) ->
@@ -107,7 +123,7 @@ parse_harvesting_datestamps(ArgsList) ->
                 false ->
                     throw({granularity_mismatch, From, Until});
                 true ->
-                    case oai_utils:is_earlier_or_equal(From, Until) of
+                    case oai_utils:is_earlier_or_equal(Date1, Date2) of
                         true -> ok;
                         false -> throw({wrong_datestamps_relation, From, Until})
                     end
@@ -121,8 +137,23 @@ validate_datestamp_format(undefined) -> undefined;
 validate_datestamp_format(Date) ->
     case oai_utils:oai_datestamp_to_datetime(Date) of
         {error, invalid_date_format} ->throw({invalid_date_format, Date});
-        ParsedDate -> ParsedDate %todo check if this works , finish harvesting verbs
+        ConvertedDate ->
+            case is_valid_datestamp(ConvertedDate) of
+                true -> ConvertedDate;
+                false -> throw({invalid_date_format, Date})
+            end
     end.
+
+is_valid_datestamp(Date = {_Y, _M, _D}) -> calendar:valid_date(Date);
+is_valid_datestamp({Date = {_, _, _}, Time = {_H, _Min, _S}}) ->
+    is_valid_datestamp(Date) and is_valid_time(Time);
+is_valid_datestamp(_) ->
+    throw(invalid_date_format).
+
+is_valid_time({H, M, S}) ->
+    (0 =< H) and (H < 24) and
+    (0 =< M) and (M < 60) and
+    (0 =< S) and (S < 60) .
 
 illegal_arguments_do_not_exist(Module, ArgsList) ->
     KnownArgumentsSet = sets:from_list(Module:required_arguments() ++
@@ -140,6 +171,15 @@ all_keys_occur_exactly_once(Proplist) ->
     lists:foldl(fun(K, Acc) ->
         key_occurs_exactly_once(K, Proplist) and Acc
     end, true, proplists:get_keys(Proplist)).
+
+args_values_are_well_defined(Args) ->
+    lists:foreach(fun({K, V}) ->
+        case V of
+            true -> throw({value_not_defined, K});
+            _ -> ok
+        end
+    end, Args).
+
 
 %%key exists and is not duplicated
 key_occurs_exactly_once(Key, Proplist) ->

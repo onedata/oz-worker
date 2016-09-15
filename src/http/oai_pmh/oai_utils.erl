@@ -16,10 +16,10 @@
 %% API
 -export([datetime_to_oai_datestamp/1, strip_error/1, oai_datestamp_to_datetime/1,
     is_harvesting/1, verb_to_module/1, granularity_days_to_seconds/1,
-    is_earlier_or_equal/2, dates_have_the_same_granularity/2, to_xml/1,  ensure_list/1]).
+    is_earlier_or_equal/2, dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/2, harvest/4, harvest/3]).
 
 -define(DATESTAMP_REGEX,
-  "(\\d{4}?)-(\\d{2})-(\\d{2})(?:T(\\d{2}):(\\d{2}):(\\d{2})Z)?").
+    "(\\d{4})-(\\d{2})-(\\d{2})(?:$|(?:T(\\d{2}):(\\d{2}):(\\d{2})Z){1})").
 
 
 datetime_to_oai_datestamp(DateTime) ->
@@ -28,6 +28,7 @@ datetime_to_oai_datestamp(DateTime) ->
         "~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ",
         [Year, Month, Day, Hour, Minute, Second]).
 
+oai_datestamp_to_datetime(undefined) -> undefined;
 oai_datestamp_to_datetime(Datestamp) ->
     {ok, Regex} = re:compile(?DATESTAMP_REGEX),
     case re:run(Datestamp, Regex, [{capture, all_but_first, list}]) of
@@ -51,6 +52,40 @@ is_harvesting(<<"ListRecords">>) -> true;
 is_harvesting(<<"ListSets">>) -> true;
 is_harvesting(_) -> false.
 
+harvest(Identifier, MetadataPrefix) ->
+    harvest(Identifier, MetadataPrefix, undefined, undefined).
+
+harvest(MetadataPrefix, From, Until) ->
+    harvest(all, MetadataPrefix, From, Until).
+
+harvest(Identifier, MetadataPrefix, FromDatestamp, UntilDatestamp) ->
+    From = oai_datestamp_to_datetime(FromDatestamp),
+    Until = oai_datestamp_to_datetime(UntilDatestamp),
+    ShareIds = case Identifier of
+        all ->
+            {ok, Ids} = share_logic:list(),
+            Ids;
+        Id -> [Id]
+    end,
+    lists:filter(fun(ShareId) ->
+        {ok, MetadataInfo} = share_logic:get_metadata(ShareId),
+        try proplists:get_value(<<"metadata">>, MetadataInfo) of
+            undefined -> false;
+            _ ->
+                Datestamp = proplists:get_value(<<"metadata_timestamp">>, MetadataInfo),
+                MetadataFormats = proplists:get_value(<<"metadata_formats">>, MetadataInfo),
+                is_earlier_or_equal(From, Datestamp) and
+                is_earlier_or_equal(Datestamp, Until) and
+                is_requested_format_available(MetadataPrefix, MetadataFormats)
+        catch
+            _:_ -> false
+        end
+    end, ShareIds).
+
+is_requested_format_available(MetadataPrefix, SupportedMetadataFormats) ->
+    lists:member(MetadataPrefix, SupportedMetadataFormats).
+
+
 %%get_record(Identifier, MetadataPrefix) ->
 %%    get_record(Identifier, MetadataPrefix, undefined, undefined).
 %%
@@ -59,41 +94,48 @@ is_harvesting(_) -> false.
 %%        {undefined ->
 %%    end
 
-granularity_days_to_seconds({Y, M, D}) -> {{Y, M, D}, {0, 0, 0}};
-granularity_days_to_seconds({{Y, M, D}, {H, Min,S}}) -> {{Y, M, D}, {H, Min,S}}.
 
+granularity_days_to_seconds(undefined) -> undefined;
+granularity_days_to_seconds({floor, {Y, M, D}}) -> {{Y, M, D}, {0, 0, 0}};
+granularity_days_to_seconds({ceiling, {Y, M, D}}) -> {{Y, M, D}, {23, 59, 59}};
+granularity_days_to_seconds({floor, {{Y, M, D}, {H, Min,S}}}) -> {{Y, M, D}, {H, Min,S}};
+granularity_days_to_seconds({ceiling, {{Y, M, D}, {H, Min,S}}}) -> {{Y, M, D}, {H, Min,S}}.
 
-is_earlier_or_equal(Date1, Date2) ->
-    is_earlier(Date1, Date2) or is_equal(Date1, Date2).
+%%
+%%is_earlier_or_equal(Date1, Date2) ->
+%%    is_earlier(Date1, Date2) or is_equal(Date1, Date2).
 
-is_later_or_equal(Date1, Date2) ->
-    is_later(Date1, Date2) or is_equal(Date1, Date2).
+%%is_later_or_equal(Date1, Date2) ->
+%%    is_later(Date1, Date2) or is_equal(Date1, Date2).
 
 %%    D1 = granularity_days_to_seconds(Date1),
 %%    D2 = granularity_days_to_seconds(Date2),
 %%    calendar:datetime_to_gregorian_seconds(D1) =<
 %%        calendar:datetime_to_gregorian_seconds(D2).
 
-is_earlier(undefined, _Date) -> true;
-is_earlier(_Date, undefined) -> true;
-is_earlier(Date1, Date2) ->
-    D1 = granularity_days_to_seconds(Date1),
-    D2 = granularity_days_to_seconds(Date2),
-    calendar:datetime_to_gregorian_seconds(D1) <
+is_earlier_or_equal(undefined, _Date) -> true;
+is_earlier_or_equal(_Date, undefined) -> true;
+is_earlier_or_equal(Date1, Date2) ->
+    D1 = granularity_days_to_seconds({floor, Date1}),
+    D2 = granularity_days_to_seconds({ceiling, Date2}),
+    calendar:datetime_to_gregorian_seconds(D1) =<
         calendar:datetime_to_gregorian_seconds(D2).
 
-is_equal(Date1, Date2) ->
-    D1 = granularity_days_to_seconds(Date1),
-    D2 = granularity_days_to_seconds(Date2),
-    calendar:datetime_to_gregorian_seconds(D1) == calendar:datetime_to_gregorian_seconds(D2).
+%%is_equal(undefined, undefined) -> true;
+%%is_equal(undefined, _Date) -> false;
+%%is_equal(_Date, undefined) -> false;
+%%is_equal(Date1, Date2) ->
+%%    D1 = granularity_days_to_seconds({floor, Date1}),
+%%    D2 = granularity_days_to_seconds({floor, Date2}),
+%%    calendar:datetime_to_gregorian_seconds(D1) == calendar:datetime_to_gregorian_seconds(D2).
 
-is_later(undefined, _Date) -> true;
-is_later(_Date, undefined) -> true;
-is_later(Date1, Date2) ->
-    D1 = granularity_days_to_seconds(Date1),
-    D2 = granularity_days_to_seconds(Date2),
-    calendar:datetime_to_gregorian_seconds(D1) >
-        calendar:datetime_to_gregorian_seconds(D2).
+%%is_later(undefined, _Date) -> true;
+%%is_later(_Date, undefined) -> true;
+%%is_later(Date1, Date2) ->
+%%    D1 = granularity_days_to_seconds(Date1),
+%%    D2 = granularity_days_to_seconds(Date2),
+%%    calendar:datetime_to_gregorian_seconds(D1) >
+%%        calendar:datetime_to_gregorian_seconds(D2).
 
 
 
@@ -230,6 +272,7 @@ to_xml(Content) -> str_utils:to_list(Content).
 
 
 
+
 ensure_list(undefined) -> [];
 ensure_list(Arg) when is_list(Arg) -> Arg;
 ensure_list(Arg) -> [Arg].
@@ -237,6 +280,7 @@ ensure_list(Arg) -> [Arg].
 ensure_atom(Arg) when is_atom(Arg) -> Arg;
 ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
 ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
+
 
 %%%===================================================================
 %%% Internal functions

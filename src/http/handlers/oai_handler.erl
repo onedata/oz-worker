@@ -140,7 +140,8 @@ handle_request(QueryString, Req) ->
     catch
         throw:{badVerb, Description} -> ?BAD_VERB(Description);
         throw:{badArgument, Description} -> ?BAD_ARGUMENT(Description);
-        throw:noSetHierarchy -> ?NO_SET_HIERARCHY
+        throw:noSetHierarchy -> ?NO_SET_HIERARCHY;
+        throw:{cannotDisseminateFormat, Description} -> ?CANNOT_DISSEMINATE_FORMAT(Description)
     end,
 
     RequestElement = case Response of
