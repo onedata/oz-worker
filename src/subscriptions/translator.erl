@@ -91,9 +91,9 @@ get_msg(Seq, Doc, share = Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {id, ID},
         {name, Name},
-        {public_url, PublicURL},
+        {parent_space, ParentSpace},
         {root_file_id, RootFileId},
-        {parent_space, ParentSpace}
+        {public_url, PublicURL}
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,

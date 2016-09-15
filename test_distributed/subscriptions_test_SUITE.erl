@@ -160,6 +160,7 @@ space_update_through_support_test(Config) ->
 
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
+    ct:print("Context1: ~p", [Context1]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(s1), S1)),
     subscriptions_test_utils:update_document(Node, space, ?ID(s1), #{name => <<"updated">>}),
 
@@ -255,6 +256,7 @@ share_update_through_support_test(Config) ->
 
         % when
         Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
+        ct:print("Context1: ~p", [Context1]),
         Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(sh1), Sh1)),
         subscriptions_test_utils:update_document(Node, share, ?ID(sh1), #{name => <<"updated">>}),
 
