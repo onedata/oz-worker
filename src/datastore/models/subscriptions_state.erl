@@ -6,6 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% API for subscriptions_state record - used to store the state for
+%%% subscriptions mechanism.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(subscriptions_state).

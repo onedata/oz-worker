@@ -6,6 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% API for outbox record - used to enclose updates sent by
+%%% subscriptions mechanism.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(outbox).
