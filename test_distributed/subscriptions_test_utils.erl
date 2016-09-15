@@ -144,7 +144,15 @@ expectation(ID, #space{name = Name, providers_supports = Supports,
     space_expectation(ID, Name, Users, Groups, Supports, Shares);
 expectation(ID, #share{name = Name, parent_space = ParentSpace,
     root_file_id = RootFileId, public_url = PublicUrl}) ->
-    share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl);
+    RootFileIdBin = case RootFileId of
+        undefined -> <<"undefined">>;
+        RFIBin when is_binary(RFIBin) -> RFIBin
+    end,
+    PublicUrlBin = case PublicUrl of
+        undefined -> <<"undefined">>;
+        PUBin when is_binary(PUBin) -> PUBin
+    end,
+    share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin);
 expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
     default_space = DefaultSpace, effective_groups = EGroups}) ->
     user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups, case DefaultSpace of
@@ -283,7 +291,7 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
 
-    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
+    % ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),

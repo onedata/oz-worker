@@ -160,7 +160,6 @@ space_update_through_support_test(Config) ->
 
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
-    ct:print("Context1: ~p", [Context1]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(s1), S1)),
     subscriptions_test_utils:update_document(Node, space, ?ID(s1), #{name => <<"updated">>}),
 
@@ -245,30 +244,24 @@ no_share_update_test(Config) ->
 
 % Checks if update is pushed to providers that support changed space
 share_update_through_support_test(Config) ->
-    try
-        % given
-        [Node | _] = ?config(oz_worker_nodes, Config),
-        PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(sp1)]),
-        Sp1 = #space{name = <<"whatever">>, providers_supports = [{PID, 0}], shares = [?ID(sh1)]},
-        Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
-        subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
-        subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(sp1)]),
+    Sp1 = #space{name = <<"whatever">>, providers_supports = [{PID, 0}], shares = [?ID(sh1)]},
+    Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
+    subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
+    subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
 
-        % when
-        Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
-        ct:print("Context1: ~p", [Context1]),
-        Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(sh1), Sh1)),
-        subscriptions_test_utils:update_document(Node, share, ?ID(sh1), #{name => <<"updated">>}),
+    % when
+    Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
+    Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(sh1), Sh1)),
+    subscriptions_test_utils:update_document(Node, share, ?ID(sh1), #{name => <<"updated">>}),
 
-        % then
-        subscriptions_test_utils:verify_messages_present(Context, [
-            subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
-        ]),
-        ok
-    catch
-        T:M ->
-            ct:print("~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    % then
+    subscriptions_test_utils:verify_messages_present(Context, [
+        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
+    ]),
+    ok.
 
 all_data_in_space_update_test(Config) ->
     % given
