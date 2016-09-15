@@ -6,6 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% API for onedata_user record - representing a user in the system.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(onedata_user).

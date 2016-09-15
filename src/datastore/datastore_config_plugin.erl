@@ -37,6 +37,7 @@ models() -> [
   provider,
   session,
   space,
+  share,
   token,
   user_group
 ].

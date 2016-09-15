@@ -75,6 +75,7 @@ start() ->
             user_rest_module:routes(),
             provider_rest_module:routes(),
             spaces_rest_module:routes(),
+            shares_rest_module:routes(),
             groups_rest_module:routes(),
             privileges_rest_module:routes()
         ]),

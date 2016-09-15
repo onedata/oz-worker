@@ -18,8 +18,9 @@
 -export([create_user/2, get_client_token/2, remove_user/2]).
 -export([create_group/3, join_group/3, remove_group/2]).
 -export([create_space/3, join_space/3, leave_space/3, remove_space/2]).
--export([modify_space/4, support_space/4]).
+-export([modify_space/4, support_space/4, set_space_privileges/4]).
 -export([create_provider/2, remove_provider/2]).
+-export([remove_share/2]).
 -export([remove_all_entities/1]).
 
 %%%===================================================================
@@ -168,9 +169,7 @@ join_space(Config, {user, UserId}, SpaceId) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
-            {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_invite_user_token, {space, SpaceId}),
-            {ok, Macaroon} = token_utils:deserialize(Token),
-            space_logic:join({user, UserId}, Macaroon)
+            space_logic:add_user(SpaceId, UserId)
         end, []]),
         ok
     catch
@@ -181,10 +180,9 @@ join_space(Config, {user, UserId}, SpaceId) ->
 join_space(Config, {group, GroupId}, SpaceId) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
+
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
-            {ok, Token} = token_logic:create(#client{type = provider}, space_invite_group_token, {space, SpaceId}),
-            {ok, Macaroon} = token_utils:deserialize(Token),
-            space_logic:join({group, GroupId}, Macaroon)
+            space_logic:add_group(SpaceId, GroupId)
         end, []]),
         ok
     catch
@@ -197,7 +195,7 @@ join_space(Config, {group, GroupId}, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec leave_space(Config :: term(), {user | group, Id :: binary()}, SpaceId :: binary()) ->
-    ok | {error, Reason :: term()}.
+    boolean() | {error, Reason :: term()}.
 leave_space(Config, {user, UserId}, SpaceId) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
@@ -237,6 +235,22 @@ support_space(Config, ProviderId, SpaceId, Size) ->
     end.
 
 %%--------------------------------------------------------------------
+%% @doc Sets privileges in a space for a user or group.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_space_privileges(Config :: term(), Member :: {user, Id :: binary()},
+    SpaceId :: binary(), Privileges :: [privileges:space_privilege()]) ->
+    ok | {error, Reason :: term()}.
+set_space_privileges(Config, Member, SpaceId, Privileges) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, space_logic, set_privileges, [SpaceId, Member, Privileges])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
 %% @doc Modifies space name.
 %% @end
 %%--------------------------------------------------------------------
@@ -268,6 +282,21 @@ remove_space(Config, SpaceId) ->
     end.
 
 %%--------------------------------------------------------------------
+%% @doc Removes share.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_share(Config :: term(), ShareId :: binary()) ->
+    boolean() | {error, Reason :: term()}.
+remove_share(Config, ShareId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, share_logic, remove, [ShareId])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
 %% @doc Creates a provider.
 %% @end
 %%--------------------------------------------------------------------
@@ -277,7 +306,7 @@ remove_space(Config, SpaceId) ->
 create_provider(Config, Name) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
-        Prefix = "provider" ++ integer_to_list(random:uniform(123345123)),
+        Prefix = "provider" ++ integer_to_list(rand:uniform(123345123)),
         KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
         CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
         os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
@@ -310,7 +339,8 @@ remove_provider(Config, ProviderId) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Removes all entities from onezone (users, groups, spaces, providers).
+%% @doc Removes all entities from onezone
+%% (users, groups, spaces, shares, providers).
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_all_entities(Config :: term()) -> ok | {error, Reason :: term()}.
@@ -320,6 +350,9 @@ remove_all_entities(Config) ->
         % Delete all providers
         {ok, PrDocs} = rpc:call(Node, provider, list, []),
         [true = remove_provider(Config, PId) || #document{key = PId} <- PrDocs],
+        % Delete all shares
+        {ok, ShareDocs} = rpc:call(Node, share, list, []),
+        [true = remove_share(Config, SId) || #document{key = SId} <- ShareDocs],
         % Delete all spaces
         {ok, SpaceDocs} = rpc:call(Node, space, list, []),
         [true = remove_space(Config, SId) || #document{key = SId} <- SpaceDocs],

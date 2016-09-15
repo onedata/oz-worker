@@ -11,13 +11,15 @@
 -author("Konrad Zemek").
 
 -include("http/handlers/rest_handler.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: spaces | space | users | uinvite | user | upriv |
-groups | ginvite | group | gpriv | providers | pinvite | provider.
--type accepted_resource() :: spaces | space | upriv | gpriv.
+-type provided_resource() :: spaces | space | shares | users |
+uinvite | user | upriv | groups | ginvite | group | gpriv | providers |
+pinvite | provider.
+-type accepted_resource() :: spaces | space | share | upriv | gpriv.
 -type removable_resource() :: space | user | group | provider.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
@@ -44,6 +46,8 @@ routes() ->
     [
         {<<"/spaces">>, M, S#rstate{resource = spaces, methods = [post, get]}},
         {<<"/spaces/:id">>, M, S#rstate{resource = space, methods = [get, patch, delete]}},
+        {<<"/spaces/:id/shares">>, M, S#rstate{resource = shares, methods = [get]}},
+        {<<"/spaces/:id/shares/:sid">>, M, S#rstate{resource = share, methods = [put]}},
         {<<"/spaces/:id/users">>, M, S#rstate{resource = users, methods = [get, post]}},
         {<<"/spaces/:id/users/token">>, M, S#rstate{resource = uinvite, methods = [get]}},
         {<<"/spaces/:id/users/:uid">>, M, S#rstate{resource = user, methods = [get, delete]}},
@@ -76,6 +80,14 @@ is_authorized(space, patch, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_change_data);
 is_authorized(space, delete, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_remove);
+is_authorized(share, put, SpaceId, #client{type = user, id = UserId}) ->
+    space_logic:has_effective_privilege(SpaceId, UserId, space_manage_shares);
+is_authorized(shares, get, SpaceId, #client{type = user, id = UserId}) ->
+    % Share - to view shares, it's enough to belong to parent space
+    space_logic:has_effective_user(SpaceId, UserId);
+is_authorized(shares, get, SpaceId, #client{type = provider, id = ProviderId}) ->
+    % Share - to view shares as provider, it's enough to support parent space
+    space_logic:has_provider(SpaceId, ProviderId);
 is_authorized(uinvite, get, SpaceId, #client{type = user, id = UserId}) ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_invite_user);
 is_authorized(user, delete, SpaceId, #client{type = user, id = UserId}) ->
@@ -97,16 +109,20 @@ is_authorized(provider, delete, SpaceId, #client{type = user, id = UserId}) ->
 is_authorized(R, put, SpaceId, #client{type = user, id = UserId})
     when R =:= upriv; R =:= gpriv ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_set_privileges);
-is_authorized(Resource, get, SpaceId, #client{type = user, id = UserId}) ->
-    Result = space_logic:has_effective_privilege(SpaceId, UserId, space_view_data),
-    case {Resource, Result} of
+is_authorized(R, get, SpaceId, #client{type = user, id = UserId}) ->
+    Result = space_logic:has_effective_privilege(
+        SpaceId, UserId, space_view_data),
+    case {R, Result} of
         {space, false} ->
-            % If the user is not authorized by perms in space to view it,
-            % check if he has oz_api_privileges to list spaces...
-            oz_api_privileges_logic:has_effective_privilege(UserId, list_spaces);
+            % If the user is not authorized by perms in space to view spaces,
+            % check if he has oz_api_privileges to list spaces
+            oz_api_privileges_logic:has_effective_privilege(
+                UserId, list_spaces);
         {providers, false} ->
-            % ... or to list providers of space.
-            oz_api_privileges_logic:has_effective_privilege(UserId, list_providers_of_space);
+            % If the user is not authorized by perms in space to view providers,
+            % check if he has oz_api_privileges to list providers
+            oz_api_privileges_logic:has_effective_privilege(
+                UserId, list_providers_of_space);
         _ ->
             Result
     end;
@@ -158,6 +174,19 @@ accept_resource(spaces, post, _SpaceId, Data, #client{type = user, id = UserId},
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     {ok, SpaceId} = space_logic:create({user, UserId}, Name),
     {{true, <<"/spaces/", SpaceId/binary>>}, Req};
+accept_resource(share, put, SpaceId, Data, _Client, Req) ->
+    {ShareId, _} = cowboy_req:binding(sid, Req),
+    case share_logic:exists(ShareId) of
+        true ->
+            Description = <<"Share with given ID exists. Modify with PATCH.">>,
+            rest_module_helper:report_error(invalid_request, Description, Req);
+        false ->
+            ok
+    end,
+    Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
+    RootFileId = rest_module_helper:assert_key(<<"root_file_id">>, Data, binary, Req),
+    {ok, ShareId} = share_logic:create(ShareId, Name, RootFileId, SpaceId),
+    {true, Req};
 accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
@@ -235,8 +264,9 @@ provide_resource(space, SpaceId, #client{type = user, id = UserId}, Req) ->
     % Check if the user has view permissions to given space. If yes, return the
     % space data as he sees it. If not, it means that he used his OZ API
     % privileges to access it (use 'provider' client for public space data).
-    Client = case space_logic:has_effective_privilege(
-        SpaceId, UserId, space_view_data) of
+    CanViewSpace = space_logic:has_effective_privilege(
+        SpaceId, UserId, space_view_data),
+    Client = case CanViewSpace of
         true ->
             {user, UserId};
         false ->
@@ -247,6 +277,9 @@ provide_resource(space, SpaceId, #client{type = user, id = UserId}, Req) ->
 provide_resource(space, SpaceId, #client{type = provider}, Req) ->
     {ok, Data} = space_logic:get_data(SpaceId, provider),
     {Data, Req};
+provide_resource(shares, SpaceId, _Client, Req) ->
+    {ok, Shares} = space_logic:get_shares(SpaceId),
+    {Shares, Req};
 provide_resource(users, SpaceId, #client{type = user}, Req) ->
     {ok, Users} =
         case rest_handler:requests_effective_state(Req) of

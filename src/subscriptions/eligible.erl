@@ -42,6 +42,12 @@ providers(Doc, space) ->
 
     SpaceProviders ++ through_users(SpaceUsersSet ++ GroupUsersSets);
 
+% For share, the eligible providers are the as for its parent space.
+providers(Doc, share) ->
+    #document{value = #share{parent_space = ParentId}} = Doc,
+    {ok, ParentDoc} = space:get(ParentId),
+    providers(ParentDoc, space);
+
 providers(Doc, user_group) ->
     #document{
         value = #user_group{
