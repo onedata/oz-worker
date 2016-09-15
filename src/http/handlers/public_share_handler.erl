@@ -1,15 +1,16 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2014 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license 
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module handles requests with URL in form alias.gr.domain and
-%%% performs a HTTP redirect to proper provider.
+%%% @doc This module handles requests for public shares and redirects a user
+%%% to a random provider that supports the parent space of the share.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(public_share_handler).
+-author("Lukasz Opiola").
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").

@@ -62,7 +62,6 @@ is_authorized(share, get, ShareId, #client{type = user, id = UserId}) ->
             false;
         {ok, ParentSpace} ->
             % Share - to view shares, it's enough to belong to parent space
-            share_logic:get_parent(ShareId),
             space_logic:has_effective_user(ParentSpace, UserId)
     end;
 is_authorized(share, get, _ShareId, #client{type = provider}) ->
