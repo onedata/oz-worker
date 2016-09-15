@@ -53,8 +53,23 @@
 -define(NOT_FOUND, 404).
 
 
--define(GROUP_PRIVILEGES, privileges:group_admin()).
--define(SPACE_PRIVILEGES, privileges:space_admin()).
+-define(GROUP_PRIVILEGES,
+    [
+        group_view_data, group_change_data, group_invite_user,
+        group_remove_user, group_join_space, group_create_space,
+        group_set_privileges, group_remove, group_leave_space,
+        group_create_space_token, group_join_group,
+        group_invite_group, group_remove_group
+    ]
+).
+-define(SPACE_PRIVILEGES,
+    [
+        space_view_data, space_change_data, space_invite_user,
+        space_remove_user, space_invite_group, space_remove_group,
+        space_set_privileges, space_remove, space_add_provider,
+        space_remove_provider
+    ]
+).
 
 %% API
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
