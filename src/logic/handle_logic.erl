@@ -16,7 +16,7 @@
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
--export([create/5, modify/4, set_user_privileges/3, set_group_privileges/3]).
+-export([create/5, modify/3, set_user_privileges/3, set_group_privileges/3]).
 -export([get_data/1, get_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
@@ -140,18 +140,15 @@ create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(HandleId :: binary(), HandleServiceId :: binary(),
-    ResourceType :: binary(), ResourceId :: binary()) -> ok.
-modify(_HandleId, undefined, undefined, undefined) ->
+-spec modify(handle:id(), handle:resource_type(), handle:resource_id()) -> ok.
+modify(_HandleId, undefined, undefined) ->
     ok;
-modify(HandleId, NewHandleServiceId, NewResourceType, NewResourceId) ->
+modify(HandleId, NewResourceType, NewResourceId) ->
     {ok, _} = handle:update(HandleId,
-        fun(Handle = #handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
-            resource_id = ResourceId}) ->
-            FinalHandleServiceId = utils:ensure_defined(NewHandleServiceId, undefined, HandleServiceId),
+        fun(Handle = #handle{resource_type = ResourceType, resource_id = ResourceId}) ->
             FinalResourceType = utils:ensure_defined(NewResourceType, undefined, ResourceType),
             FinalResourceId = utils:ensure_defined(NewResourceId, undefined, ResourceId),
-            {ok, Handle#handle{handle_service_id = FinalHandleServiceId, resource_type = FinalResourceType, resource_id = FinalResourceId}}
+            {ok, Handle#handle{resource_type = FinalResourceType, resource_id = FinalResourceId}}
         end),
     ok.
 

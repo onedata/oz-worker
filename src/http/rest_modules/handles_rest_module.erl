@@ -145,9 +145,9 @@ accept_resource(handle, patch, HandleId, Data, #client{type = user, id = _UserId
     HandleServiceId = rest_module_helper:assert_type(<<"handleServiceId">>, Data, binary, Req),
     ResourceType = rest_module_helper:assert_type(<<"resourceType">>, Data, binary, Req),
     ResourceId = rest_module_helper:assert_type(<<"resourceId">>, Data, binary, Req),
+    ok = handle_proxy:modify_handle(HandleId, ResourceType, ResourceId),
     ok = handle_logic:modify(HandleId, HandleServiceId, ResourceType, ResourceId),
-    {ok, Req2} = cowboy_req:reply(204, Req),
-    {true, Req2};
+    {true, Req};
 
 accept_resource(user, put, HandleId, _Data, _Client, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),
