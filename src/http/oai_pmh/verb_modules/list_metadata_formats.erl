@@ -39,14 +39,14 @@ get_element(metadataFormat, Args) ->
             try
                 {ok, MetadataInfo} =  share_logic:get_metadata(Id),
                 case proplists:get_value(<<"metadata_formats">>, MetadataInfo) of
-                    [] -> throw(no_metadata_formats);
+                    [] -> throw(noMetadataFromats);
                     SupportedMetadataPrefixes ->
                         lists:map(fun(MetadataPrefix) ->
                             get_metadata_format_info(MetadataPrefix)
                         end, SupportedMetadataPrefixes)
                 end
             catch
-                throw:no_metadata_formats ->
+                throw:noMetadataFromats ->
                     {error, ?NO_METADATA_FORMATS(str_utils:format(
                         "There are no metadata formats available for item ~s", [Id]))};
                 _:_ ->
@@ -70,5 +70,5 @@ get_metadata_format_info(MetadataPrefix) ->
             metadataNamespace=Namespace
         }
     catch
-        _:_ -> throw(no_metadata_formats)
+        _:_ -> throw(noMetadataFromats)
     end.

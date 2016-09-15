@@ -28,4 +28,8 @@ required_response_elements() -> [record].
 optional_response_elements() -> [].
 
 get_element(record, Args) ->
-    erlang:error(not_implemented).
+    error(not_implemented).
+%%    MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
+%%    share_logic:list
+
+%%.

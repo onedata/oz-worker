@@ -50,10 +50,10 @@ get_element(granularity, _Args) ->
 get_element(adminEmail, _Args) ->
     [<<"a@mail.com">>, <<"b@mail.com">>];
 get_element(compression, _Args) ->
-    <<"compression">>;
-get_element(description, _Args) -> [
-    #xmlElement{name=description1, attributes = [#xmlAttribute{name=xml_schema}]}, %TODO it's example
-    #xmlElement{name=description2, attributes = [#xmlAttribute{name=xml_schema}]}].  %TODO it's example
+    <<"">>;
+get_element(description, _Args) -> [].
+%%    #xmlElement{name=description1, attributes = [#xmlAttribute{name=xml_schema}]}, %TODO it's example
+%%    #xmlElement{name=description2, attributes = [#xmlAttribute{name=xml_schema}]}].  %TODO it's example
 
 
 
