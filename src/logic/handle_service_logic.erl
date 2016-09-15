@@ -13,7 +13,6 @@
 -author("Tomasz Lichon").
 
 -include("datastore/oz_datastore_models_def.hrl").
--include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).

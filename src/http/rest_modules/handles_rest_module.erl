@@ -137,7 +137,8 @@ accept_resource(handles, post, _HandleId, Data, #client{type = user, id = UserId
     HandleServiceId = rest_module_helper:assert_key(<<"handleServiceId">>, Data, binary, Req),
     ResourceType = rest_module_helper:assert_key(<<"resourceType">>, Data, binary, Req),
     ResourceId = rest_module_helper:assert_key(<<"resourceId">>, Data, binary, Req),
-    {ok, HandleId} = handle_logic:create(UserId, HandleServiceId, ResourceType, ResourceId),
+    {ok, HandleLocation} = handle_proxy:register_handle(HandleServiceId, ResourceType, ResourceId),
+    {ok, HandleId} = handle_logic:create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation),
     {{true, <<"/handles/", HandleId/binary>>}, Req};
 
 accept_resource(handle, patch, HandleId, Data, #client{type = user, id = _UserId}, Req) ->
@@ -231,6 +232,7 @@ provide_resource(gpriv, HandleId, _Client, Req) ->
     HandleId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 delete_resource(handle, HandleId, Req) ->
+    ok = handle_proxy:unregister_handle(HandleId),
     {handle_logic:remove(HandleId), Req};
 delete_resource(user, HandleId, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),

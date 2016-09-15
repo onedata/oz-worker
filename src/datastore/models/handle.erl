@@ -17,6 +17,13 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
+-type id() :: binary().
+-type resource_type() :: binary().
+-type resource_id() :: binary().
+-type public_handle() :: binary().
+
+-export_type([id/0, resource_type/0, resource_id/0, public_handle/0]).
+
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).

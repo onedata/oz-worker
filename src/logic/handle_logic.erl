@@ -13,11 +13,10 @@
 -author("Tomasz Lichon").
 
 -include("datastore/oz_datastore_models_def.hrl").
--include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
--export([create/4, modify/4, set_user_privileges/3, set_group_privileges/3]).
+-export([create/5, modify/4, set_user_privileges/3, set_group_privileges/3]).
 -export([get_data/1, get_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
@@ -122,12 +121,12 @@ has_effective_privilege(HandleId, UserId, Privilege) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(UserId :: binary(), HandleServiceId :: binary(),
-    ResourceType :: binary(), ResourceId :: binary()) ->
+    ResourceType :: binary(), ResourceId :: binary(), HandleLocation :: binary()) ->
     {ok, HandleId :: binary()}.
-create(UserId, HandleServiceId, ResourceType, ResourceId) ->
+create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation) ->
     Privileges = privileges:handle_admin(),
     Handle = #handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
-        resource_id = ResourceId, users = [{UserId, Privileges}]},
+        resource_id = ResourceId, handle = HandleLocation, users = [{UserId, Privileges}]},
 
     {ok, HandleId} = handle:save(#document{value = Handle}),
     {ok, _} = onedata_user:update(UserId, fun(User = #onedata_user{handles = UHandles}) ->
