@@ -83,41 +83,41 @@ generate_ids(Prefix, Number) ->
 create_spaces(SIDs, UIDs, GIDs, Node) ->
     Groups = [{GID, []} || GID <- GIDs],
     Users =  [{UID, []} || UID <- UIDs],
-    lists:map(fun({SID, N}) -> {
+    lists:map(fun({SID, N}) ->
         Space = #space{
             name = list_to_binary("s" ++ integer_to_list(N) ++ integer_to_list(erlang:system_time(micro_seconds))),
             groups = Groups,
             users = Users
-        }},
+        },
         subscriptions_test_utils:save(Node, SID, Space),
         {SID, Space}
     end, lists:zip(SIDs, lists:seq(1, length(SIDs)))).
 
 create_users(UIDs, GIDs, Node) ->
-    lists:map(fun({UID, N}) ->{
+    lists:map(fun({UID, N}) ->
         User = #onedata_user{
             name=list_to_binary("u" ++ integer_to_list(N)),
             groups = GIDs
-        }},
+        },
         subscriptions_test_utils:save(Node, UID, User),
         {UID, User}
     end, lists:zip(UIDs, lists:seq(1, length(UIDs)))).
 
 create_groups(GIDs, UIDs, SIDs, Node) ->
     Users = [{UID, []} || UID <- UIDs],
-    lists:map(fun({GID, N}) ->{
+    lists:map(fun({GID, N}) ->
         Group = #user_group{
             name = list_to_binary("g" ++ integer_to_list(N)),
             users = Users,
             spaces = SIDs
-        }},
+        },
         subscriptions_test_utils:save(Node, GID, Group),
         {GID, Group}
 end, lists:zip(GIDs, lists:seq(1, length(GIDs)))).
 
 
 generate_cert_files() ->
-    {MegaSec, Sec, MiliSec} = erlang:now(),
+    {MegaSec, Sec, MiliSec} = erlang:timestamp(),
     Prefix = lists:foldl(fun(Int, Acc) ->
         Acc ++ integer_to_list(Int) end, "provider", [MegaSec, Sec, MiliSec]),
     KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
@@ -140,8 +140,19 @@ get_last_sequence_number(Node) ->
 %%%===================================================================
 
 expectation(ID, #space{name = Name, providers_supports = Supports,
-    groups = Groups, users = Users}) ->
-    space_expectation(ID, Name, Users, Groups, Supports);
+    groups = Groups, users = Users, shares = Shares}) ->
+    space_expectation(ID, Name, Users, Groups, Supports, Shares);
+expectation(ID, #share{name = Name, parent_space = ParentSpace,
+    root_file_id = RootFileId, public_url = PublicUrl}) ->
+    RootFileIdBin = case RootFileId of
+        undefined -> <<"undefined">>;
+        RFIBin when is_binary(RFIBin) -> RFIBin
+    end,
+    PublicUrlBin = case PublicUrl of
+        undefined -> <<"undefined">>;
+        PUBin when is_binary(PUBin) -> PUBin
+    end,
+    share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin);
 expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
     default_space = DefaultSpace, effective_groups = EGroups}) ->
     user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups, case DefaultSpace of
@@ -160,13 +171,23 @@ expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) -
         {<<"public_only">>, false}
     ]}].
 
-space_expectation(ID, Name, Users, Groups, Supports) ->
+space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
     [{<<"id">>, ID}, {<<"space">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
         {<<"providers_supports">>, Supports},
         {<<"users">>, privileges_as_binaries(Users)},
-        {<<"groups">>, privileges_as_binaries(Groups)}
+        {<<"groups">>, privileges_as_binaries(Groups)},
+        {<<"shares">>, Shares}
+    ]}].
+
+share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl) ->
+    [{<<"id">>, ID}, {<<"share">>, [
+        {<<"id">>, ID},
+        {<<"name">>, Name},
+        {<<"parent_space">>, ParentSpace},
+        {<<"root_file_id">>, RootFileId},
+        {<<"public_url">>, PublicUrl}
     ]}].
 
 user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace) ->
@@ -270,7 +291,7 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
 
-%%    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
+    % ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),

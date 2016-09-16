@@ -22,7 +22,7 @@
 -export([get_shares/1, has_share/2]).
 -export([create/2, create/4, get_data/2, modify/3]).
 -export([join/2, add_user/2, get_user/3, get_users/1, get_effective_users/1,
-remove_user/2]).
+    remove_user/2]).
 -export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
 -export([support/3, get_providers/2, get_provider/3, remove_provider/2]).
 -export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
@@ -450,8 +450,13 @@ get_privileges(SpaceId, {group, GroupId}) ->
 -spec remove(SpaceId :: binary()) ->
     true.
 remove(SpaceId) ->
-    {ok, #document{value = Space}} = space:get(SpaceId),
-    #space{users = Users, groups = Groups, providers_supports = Supports} = Space,
+    {ok, #document{
+        value = #space{
+            users = Users,
+            groups = Groups,
+            providers_supports = Supports,
+            shares = Shares
+        }}} = space:get(SpaceId),
 
     lists:foreach(fun({UserId, _}) ->
         {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -476,6 +481,10 @@ remove(SpaceId) ->
             {ok, Provider#provider{spaces = lists:delete(SpaceId, PSpaces)}}
         end)
     end, Supports),
+
+    lists:foreach(fun(ShareId) ->
+        ok = share:delete(ShareId)
+    end, Shares),
 
     case space:delete(SpaceId) of
         ok -> true;
@@ -609,12 +618,15 @@ add_space_to_providers(SpaceId, [ProviderId | RestProviders]) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec cleanup(SpaceId :: binary()) -> boolean() | no_return().
-cleanup(SpaceId) ->
-    {ok, #document{value = #space{groups = Groups, users = Users}}} = space:get(SpaceId),
-    case {Groups, Users} of
-        {[], []} -> remove(SpaceId);
-        _ -> false
-    end.
+cleanup(_SpaceId) ->
+    false.
+%% Currently, spaces with no users and groups are not deleted so it is
+%% possible to restore the files after accidentally leaving a space.
+%%    {ok, #document{value = #space{groups = Groups, users = Users}}} = space:get(SpaceId),
+%%    case {Groups, Users} of
+%%        {[], []} -> remove(SpaceId);
+%%        _ -> false
+%%    end.
 
 %%--------------------------------------------------------------------
 %% @doc Retrieves effective user privileges taking into account any groups
@@ -652,7 +664,7 @@ get_effective_privileges(SpaceId, UserId) ->
 %% or given space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_shares(SpaceId :: binary()) -> {ok, [binary()]} | no_return().
+-spec get_shares(SpaceId :: binary()) -> {ok, [{shares, [binary()]}]} | no_return().
 get_shares(SpaceId) ->
     {ok, #document{
         value = #space{

@@ -59,19 +59,33 @@ routes() ->
 is_authorized(_, _, _, #client{type = undefined}) ->
     false;
 is_authorized(share, get, ShareId, #client{type = user, id = UserId}) ->
-    {ok, ParentSpace} = share_logic:get_parent(ShareId),
-    % Share - to view shares, it's enough to belong to parent space
-    space_logic:has_effective_user(ParentSpace, UserId);
+    case share_logic:get_parent(ShareId) of
+        {error, {not_found, share}} ->
+            false;
+        {ok, ParentSpace} ->
+            % Share - to view shares, it's enough to belong to parent space
+            space_logic:has_effective_user(ParentSpace, UserId)
+    end;
 is_authorized(share, get, _ShareId, #client{type = provider}) ->
     % All providers are allowed to get information about a share - it is public
     % and all of them should be able to display the shared data.
     true;
 is_authorized(share, patch, ShareId, #client{type = user, id = UserId}) ->
-    {ok, ParentSpace} = share_logic:get_parent(ShareId),
-    space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
+    case share_logic:get_parent(ShareId) of
+        {error, {not_found, share}} ->
+            false;
+        {ok, ParentSpace} ->
+            space_logic:has_effective_privilege(
+                ParentSpace, UserId, space_manage_shares)
+    end;
 is_authorized(share, delete, ShareId, #client{type = user, id = UserId}) ->
-    {ok, ParentSpace} = share_logic:get_parent(ShareId),
-    space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
+    case share_logic:get_parent(ShareId) of
+        {error, {not_found, share}} ->
+            false;
+        {ok, ParentSpace} ->
+            space_logic:has_effective_privilege(
+                ParentSpace, UserId, space_manage_shares)
+    end;
 is_authorized(share_metadata, post, ShareId, #client{type = user, id = UserId}) ->
     {ok, ParentSpace} = share_logic:get_parent(ShareId),
     space_logic:has_effective_privilege(ParentSpace, UserId, space_manage_shares);
@@ -101,7 +115,7 @@ resource_exists(share, ShareId, Req) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(share, patch, ShareId, Data, _Client, Req) ->
     NewName = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    {ok, ShareId} = share_logic:modify(ShareId, NewName),
+    ok = share_logic:modify(ShareId, NewName),
     {true, Req};
 accept_resource(share_metadata, post, ShareId, Data, _Client, Req) ->
     % todo currentyl only dc is supported

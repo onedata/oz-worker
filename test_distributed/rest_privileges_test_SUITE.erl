@@ -49,7 +49,7 @@ all() ->
         list_providers_test,          % list_providers
         list_providers_of_space_test, % list_providers_of_space
         modify_space_members_test     % add_member_to_space,
-                                      % remove_member_from_space
+        % remove_member_from_space
     ]).
 
 %%%===================================================================
@@ -762,5 +762,5 @@ end_per_suite(Config) ->
 
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
-    oz_test_utils:remove_all_entities(Config).
+    ok = oz_test_utils:remove_all_entities(Config).
 

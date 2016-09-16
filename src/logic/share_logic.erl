@@ -40,14 +40,10 @@ create(ShareId, Name, RootFileId, ParentSpaceId) ->
     Share = #share{
         name = Name,
         parent_space = ParentSpaceId,
-        root_file_id = RootFileId
+        root_file_id = RootFileId,
+        public_url = share_id_to_public_url(ShareId)
     },
     {ok, ShareId} = share:save(#document{key = ShareId, value = Share}),
-
-    % Update public URL
-    {ok, _} = share:update(ShareId, fun(ShareDoc) ->
-        {ok, ShareDoc#share{public_url = share_id_to_public_url(ShareId)}}
-    end),
 
     {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
         Shares = SpaceDoc#space.shares,
@@ -129,17 +125,19 @@ get_data(ShareId, _Client) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec get_parent(ShareId :: binary()) -> {ok, undefined | binary()}.
+-spec get_parent(ShareId :: binary()) ->
+    {ok, undefined | binary()} | datastore:get_error().
 get_parent(ShareId) ->
-    {ok, #document{
-        value = #share{
-            parent_space = ParentSpaceId
-        }}} = share:get(ShareId),
-    {ok, ParentSpaceId}.
+    case share:get(ShareId) of
+        {ok, #document{value = #share{parent_space = ParentSpaceId}}} ->
+            {ok, ParentSpaceId};
+        Error ->
+            Error
+    end.
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns a list of all shaces (their ids).
+%% @doc Returns a list of all shares (their ids).
 %%--------------------------------------------------------------------
 -spec list() -> {ok, [binary()]}.
 list() ->
@@ -183,8 +181,7 @@ share_id_to_redirect_url(ShareId) ->
         0 -> Offline;
         _ -> Online
     end,
-    random:seed(erlang:timestamp()),
-    ChosenProvider = lists:nth(random:uniform(length(Choice)), Choice),
+    ChosenProvider = lists:nth(rand:uniform(length(Choice)), Choice),
     {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
     str_utils:format_bin("~s/#/public/shares/~s", [ProviderURL, ShareId]).
 

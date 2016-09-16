@@ -3,9 +3,10 @@
 %%% @copyright (C) 2015 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
-%%c% @end
+%%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% API for user_group record - representing a group in the system.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(user_group).
