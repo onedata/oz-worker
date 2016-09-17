@@ -56,10 +56,10 @@ create(UserInfo, ProposedUserId) ->
     {ok, UserId} = onedata_user:save(
         #document{key = ProposedUserId, value = UserInfo}
     ),
-    % Check if global groups are enabled, if so add the new user to the group.
+    % Check if global groups are enabled, if so add the new user to the groups.
     case application:get_env(?APP_Name, enable_global_groups) of
         {ok, true} ->
-            GlobalGroups = application:get_env(?APP_Name, global_groups),
+            {ok, GlobalGroups} = application:get_env(?APP_Name, global_groups),
             lists:foreach(
                 fun({GroupId, Privileges}) ->
                     group_logic:add_user(GroupId, UserId),
