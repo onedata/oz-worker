@@ -197,7 +197,7 @@ add_user(GroupId, UserId) ->
                     {ok, #document{
                         value = #space{
                             name = Name
-                        }}} = space:get(GroupId),
+                        }}} = space:get(SpaceId),
                     user_logic:set_space_name_mapping(
                         UserId, SpaceId, Name, false
                     )
