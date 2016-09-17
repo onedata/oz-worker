@@ -27,7 +27,7 @@ all() ->
     ?ALL([
         predefined_groups_test,
         global_groups_test,
-        automatic_space_membership_via_global_grup_test
+        automatic_space_membership_via_global_group_test
     ]).
 
 %%%===================================================================

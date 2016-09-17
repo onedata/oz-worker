@@ -49,10 +49,13 @@ create(UserInfo) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create(UserInfo :: #onedata_user{}, UserId :: onedata_user:id()) ->
+-spec create(UserInfo :: #onedata_user{},
+    ProposedUserId :: onedata_user:id() | undefined) ->
     {ok, UserId :: onedata_user:id()}.
-create(UserInfo, UserId) ->
-    {ok, UserId} = onedata_user:save(#document{key = UserId, value = UserInfo}),
+create(UserInfo, ProposedUserId) ->
+    {ok, UserId} = onedata_user:save(
+        #document{key = ProposedUserId, value = UserInfo}
+    ),
     % Check if global groups are enabled, if so add the new user to the group.
     case application:get_env(?APP_Name, enable_global_groups) of
         {ok, true} ->
