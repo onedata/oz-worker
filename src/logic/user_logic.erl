@@ -20,7 +20,7 @@
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
--export([create/1, get_user/1, get_user_doc/1, modify/2, get_data/2]).
+-export([create/1, create/2, get_user/1, get_user_doc/1, modify/2, get_data/2]).
 -export([get_groups/1, get_effective_groups/1, get_providers/1]).
 -export([get_spaces/1, get_shares/1, get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
@@ -38,10 +38,35 @@
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create(User :: #onedata_user{}) ->
-    {ok, UserId :: binary()}.
-create(User) ->
-    onedata_user:save(#document{value = User}).
+-spec create(UserInfo :: #onedata_user{}) ->
+    {ok, UserId :: onedata_user:id()}.
+create(UserInfo) ->
+    create(UserInfo, undefined).
+
+
+%%--------------------------------------------------------------------
+%% @doc Creates a user account with given Id.
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(UserInfo :: #onedata_user{}, UserId :: onedata_user:id()) ->
+    {ok, UserId :: onedata_user:id()}.
+create(UserInfo, UserId) ->
+    {ok, UserId} = onedata_user:save(#document{key = UserId, value = UserInfo}),
+    % Check if global groups are enabled, if so add the new user to the group.
+    case application:get_env(?APP_Name, enable_global_groups) of
+        {ok, true} ->
+            GlobalGroups = application:get_env(?APP_Name, global_groups),
+            lists:foreach(
+                fun({GroupId, Privileges}) ->
+                    group_logic:add_user(GroupId, UserId),
+                    group_logic:set_privileges(GroupId, UserId, Privileges)
+                end, GlobalGroups);
+        _ ->
+            ok
+    end,
+    {ok, UserId}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Retrieves user from the database.

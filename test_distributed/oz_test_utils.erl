@@ -15,8 +15,8 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 
 %% API
--export([create_user/2, get_client_token/2, remove_user/2]).
--export([create_group/3, join_group/3, remove_group/2]).
+-export([create_user/2, get_user/2, get_client_token/2, remove_user/2]).
+-export([create_group/3, get_group/2, join_group/3, remove_group/2]).
 -export([create_space/3, join_space/3, leave_space/3, remove_space/2]).
 -export([modify_space/4, support_space/4, set_space_privileges/4]).
 -export([create_provider/2, remove_provider/2]).
@@ -41,6 +41,23 @@ create_user(Config, User) ->
         _:Reason ->
             {error, Reason}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Retrieves user data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user(Config :: term(), UserId :: binary()) ->
+    {ok, #document{}} | {error, Reason :: term()}.
+get_user(Config, UserId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, onedata_user, get, [UserId])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Creates a client token for given user.
@@ -86,6 +103,23 @@ create_group(Config, UserId, Name) ->
         _:Reason ->
             {error, Reason}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Retrieves user data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group(Config :: term(), GroupId :: binary()) ->
+    {ok, #document{}} | {error, Reason :: term()}.
+get_group(Config, GroupId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, user_group, get, [GroupId])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Adds a user or group to group in onezone.

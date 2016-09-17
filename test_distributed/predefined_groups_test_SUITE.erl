@@ -20,11 +20,12 @@
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
--export([predefined_groups_test/1]).
+-export([predefined_groups_test/1, global_groups_test/1]).
 
 all() ->
     ?ALL([
-        predefined_groups_test
+        predefined_groups_test,
+        global_groups_test
     ]).
 
 %%%===================================================================
@@ -37,7 +38,7 @@ all() ->
 % this test starts. This means that to test it we need to call the procedure
 % once again after the environment has started.
 predefined_groups_test(Config) ->
-    [Node | _] = Nodes = ?config(oz_worker_nodes, Config),
+    [Node | _] = ?config(oz_worker_nodes, Config),
     % Prepare config entry that will define what groups should be created, each
     % with different OZ API privileges.
     PredefinedGroups = [
@@ -77,7 +78,7 @@ predefined_groups_test(Config) ->
         ]),
         % Check if privileges were found by group ID
         ?assertMatch({ok, _}, PrivsResult),
-        % Check if the privileges is correct
+        % Check if the privileges are correct
         {ok, ActualPrivileges} = PrivsResult,
         ?assertEqual(ExpPrivileges, ActualPrivileges)
     end,
@@ -85,6 +86,73 @@ predefined_groups_test(Config) ->
     CheckGroup(<<"group1">>, <<"Group 1">>, AllPrivs),
     CheckGroup(<<"group2">>, <<"Group 2">>, [view_privileges, set_privileges]),
     CheckGroup(<<"group3">>, <<"Group 3">>, []),
+    ok.
+
+% This test checks if global groups mechanism works as expected. If enabled, it
+% should automatically add every new user to given groups on creation, and
+% properly set his privileges according to config.
+global_groups_test(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    % Set the predefined groups env
+    PredefinedGroups = [
+        #{
+            id => <<"admins_group">>,
+            name => <<"Admins group">>,
+            oz_api_privileges => {oz_api_privileges, all_privileges}
+        },
+        #{
+            id => <<"all_users_group">>,
+            name => <<"All users">>,
+            oz_api_privileges => []
+        },
+        #{
+            id => <<"access_to_public_data">>,
+            name => <<"Access to public data">>,
+            oz_api_privileges => []
+        }
+    ],
+    test_utils:set_env(Node, oz_worker, predefined_groups, PredefinedGroups),
+    % Make sure predefined groups are created
+    ?assertEqual(ok, rpc:call(Node, group_logic, create_predefined_groups, [])),
+    % Enable global groups
+    test_utils:set_env(Node, oz_worker, enable_global_groups, true),
+    % Set automatic global groups
+    GlobalGroups = [
+        {<<"all_users_group">>, [group_view_data]},
+        {<<"access_to_public_data">>, []}
+    ],
+    test_utils:set_env(Node, oz_worker, global_groups, GlobalGroups),
+    % Now, creating a new user should cause him to automatically belong to
+    % global groups with specified privileges.
+    {ok, UserId} = oz_test_utils:create_user(
+        Config, #onedata_user{name = "User with automatic groups"}
+    ),
+    {ok, #document{value = #onedata_user{
+        groups = UserGroups
+    }}} = oz_test_utils:get_user(Config, UserId),
+    ExpectedGroups = [<<"all_users_group">>, <<"access_to_public_data">>],
+    % Check if user belongs to correct groups
+    ?assertEqual(lists:usort(UserGroups), lists:usort(ExpectedGroups)),
+    % Check if privileges are set correctly
+    {ok, #document{value = #user_group{
+        users = AllUsersGroupPrivs
+    }}} = oz_test_utils:get_group(Config, <<"all_users_group">>),
+    ?assertEqual(
+        proplists:get_value(UserId, AllUsersGroupPrivs), [group_view_data]),
+    {ok, #document{value = #user_group{
+        users = PublicAccessGroupPrivs
+    }}} = oz_test_utils:get_group(Config, <<"access_to_public_data">>),
+    ?assertEqual(
+        proplists:get_value(UserId, PublicAccessGroupPrivs), []),
+    % Make sure that disabling global groups has desired effects
+    test_utils:set_env(Node, oz_worker, enable_global_groups, false),
+    {ok, UserNoGroupsId} = oz_test_utils:create_user(
+        Config, #onedata_user{name = "User with NO automatic groups"}
+    ),
+    {ok, #document{value = #onedata_user{
+        groups = ShouldBeEmptyList
+    }}} = oz_test_utils:get_user(Config, UserNoGroupsId),
+    ?assertEqual(ShouldBeEmptyList, []),
     ok.
 
 %%%===================================================================
