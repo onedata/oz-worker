@@ -26,7 +26,7 @@
 -export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
--export([set_space_name_mapping/3, clean_space_name_mapping/2]).
+-export([set_space_name_mapping/4, clean_space_name_mapping/2]).
 -export([authenticate_by_basic_credentials/2, change_user_password/3]).
 
 %%%===================================================================
@@ -512,41 +512,59 @@ set_provider_as_default(UserId, ProviderId, Flag) ->
 %% is a member of another space with provided name, a '#' character and prefix
 %% of space ID it prepended to the name, so that the new name is unique and the
 %% prefix of a space ID satisfies minimal length.
+%% The Overwrite argument decides if SpaceName should overwrite the existing
+%% name mapping for given SpaceId, if such exists. If there is no mapping, it is
+%% added no matter the Overwrite arg.
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec set_space_name_mapping(UserId :: binary(), SpaceId :: binary(),
-    SpaceName :: binary()) -> ok.
-set_space_name_mapping(UserId, SpaceId, SpaceName) ->
+    SpaceName :: binary(), Overwrite :: boolean()) -> ok.
+set_space_name_mapping(UserId, SpaceId, SpaceName, Overwrite) ->
     SpaceNameLen = size(SpaceName),
     UniqueSpaceName = <<SpaceName/binary, "#", SpaceId/binary>>,
 
     {ok, _} = onedata_user:update(UserId, fun(User) ->
         #onedata_user{space_names = SpaceNames} = User,
-
-        {ShortestUniquePrefLen, FilteredSpaces} = maps:fold(fun
-            (Id, _, {UniquePrefLen, SpacesAcc}) when Id == SpaceId ->
-                {UniquePrefLen, SpacesAcc};
-            (Id, Name, {UniquePrefLen, SpacesAcc}) ->
-                PrefLen = binary:longest_common_prefix([UniqueSpaceName, Name]),
-                {max(PrefLen + 1, UniquePrefLen), maps:put(Id, Name, SpacesAcc)}
-        end, {SpaceNameLen, #{}}, SpaceNames),
-
-        ValidUniquePrefLen = case ShortestUniquePrefLen > SpaceNameLen of
+        case (not Overwrite) andalso maps:is_key(SpaceId, SpaceNames) of
             true ->
-                min(max(ShortestUniquePrefLen,
-                    SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
-                    size(UniqueSpaceName));
-            false ->
-                ShortestUniquePrefLen
-        end,
+                % If the map already contains the key and Overwrite is false,
+                % nothing needs to be done.
+                {ok, User};
+            _ ->
+                % Else, we have to update or add the name mapping and check for
+                % duplicated names.
+                {ShortestUniquePfxLen, FilteredSpaces} = maps:fold(fun
+                    (Id, _, {UniquePrefLen, SpacesAcc}) when Id == SpaceId ->
+                        {UniquePrefLen, SpacesAcc};
+                    (Id, Name, {UniquePrefLen, SpacesAcc}) ->
+                        PrefLen = binary:longest_common_prefix(
+                            [UniqueSpaceName, Name]),
+                        {
+                            max(PrefLen + 1, UniquePrefLen),
+                            maps:put(Id, Name, SpacesAcc)
+                        }
+                end, {SpaceNameLen, #{}}, SpaceNames),
 
-        ShortestUniqueSpaceName = <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
-        NewUser = User#onedata_user{
-            space_names = maps:put(SpaceId, ShortestUniqueSpaceName, FilteredSpaces)
-        },
+                ValidUniquePrefLen = case ShortestUniquePfxLen > SpaceNameLen of
+                    true ->
+                        min(max(ShortestUniquePfxLen,
+                            SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
+                            size(UniqueSpaceName));
+                    false ->
+                        ShortestUniquePfxLen
+                end,
 
-        {ok, NewUser}
+                ShortestUniqueSpaceName =
+                    <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
+                NewMapping = maps:put(
+                    SpaceId, ShortestUniqueSpaceName, FilteredSpaces),
+                NewUser = User#onedata_user{
+                    space_names = NewMapping
+                },
+
+                {ok, NewUser}
+        end
     end),
     ok.
 

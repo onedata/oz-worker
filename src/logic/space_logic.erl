@@ -188,7 +188,7 @@ create({provider, ProviderId}, Name, Macaroon, Size) ->
 -spec modify(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider,
     Name :: binary()) -> ok.
 modify(SpaceId, {user, UserId}, Name) ->
-    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     ok;
 modify(SpaceId, provider, Name) ->
     {ok, _} = space:update(SpaceId, fun(Space) ->
@@ -246,7 +246,7 @@ add_user(SpaceId, UserId) ->
                 {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
             end),
             {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
-            user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+            user_logic:set_space_name_mapping(UserId, SpaceId, Name, false)
     end,
     {ok, SpaceId}.
 
@@ -272,7 +272,7 @@ add_group(SpaceId, GroupId) ->
             {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
             {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
             lists:foreach(fun({UserId, _}) ->
-                user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+                user_logic:set_space_name_mapping(UserId, SpaceId, Name, false)
             end, Users)
     end,
     {ok, SpaceId}.
@@ -574,7 +574,7 @@ create_with_provider({user, UserId}, Name, Supports) ->
     end),
 
     add_space_to_providers(SpaceId, Providers),
-    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     {ok, SpaceId};
 
 create_with_provider({group, GroupId}, Name, Supports) ->
@@ -591,7 +591,7 @@ create_with_provider({group, GroupId}, Name, Supports) ->
     add_space_to_providers(SpaceId, Providers),
     {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
     lists:foreach(fun({UserId, _}) ->
-        user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+        user_logic:set_space_name_mapping(UserId, SpaceId, Name, true)
     end, Users),
 
     {ok, SpaceId}.
