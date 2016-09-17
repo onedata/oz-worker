@@ -226,6 +226,7 @@ create_space(Config, Member, Name) ->
 add_member_to_space(Config, {user, UserId}, SpaceId) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
+
         {ok, SpaceId} = rpc:call(Node, erlang, apply, [fun() ->
             space_logic:add_user(SpaceId, UserId)
         end, []]),
