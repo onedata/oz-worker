@@ -203,7 +203,9 @@ automatic_space_membership_via_global_group_test(Config) ->
     % To effectively belong to the space, user needs to have a space name
     % mapping and be resolvable as effective member.
     ?assert(maps:is_key(OpenSpaceId, SpaceNames)),
-    ?assert(oz_test_utils:has_effective_user(Config, OpenSpaceId, UserId)),
+    ?assert(oz_test_utils:space_has_effective_user(
+        Config, OpenSpaceId, UserId
+    )),
     % Make sure that disabling global groups has desired effects
     test_utils:set_env(Node, oz_worker, enable_global_groups, false),
     {ok, UserIdWithoutAccess} = oz_test_utils:create_user(
@@ -211,12 +213,23 @@ automatic_space_membership_via_global_group_test(Config) ->
     ),
     {ok, #document{value = #onedata_user{
         space_names = ShouldNotContainTheOpenSpace
-    }}} = oz_test_utils:get_user(Config, UserId),
+    }}} = oz_test_utils:get_user(Config, UserIdWithoutAccess),
     ?assert(not maps:is_key(OpenSpaceId, ShouldNotContainTheOpenSpace)),
-    ?assert(not oz_test_utils:has_effective_user(
+    ?assert(not oz_test_utils:space_has_effective_user(
         Config, OpenSpaceId, UserIdWithoutAccess
     )),
-
+    % Make sure that removing the first user from global group will cause him
+    % to lose access to OpenSpace.
+    true = oz_test_utils:group_remove_user(
+        Config, <<"all_users_group">>, UserId
+    ),
+    {ok, #document{value = #onedata_user{
+        space_names = ShouldNoLongerContainTheOpenSpace
+    }}} = oz_test_utils:get_user(Config, UserId),
+    ?assert(not maps:is_key(OpenSpaceId, ShouldNoLongerContainTheOpenSpace)),
+    ?assert(not oz_test_utils:space_has_effective_user(
+        Config, OpenSpaceId, UserId
+    )),
     ok.
 
 %%%===================================================================

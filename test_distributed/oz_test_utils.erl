@@ -16,12 +16,18 @@
 
 %% API
 -export([create_user/2, get_user/2, get_client_token/2, remove_user/2]).
--export([create_group/3, get_group/2, join_group/3, remove_group/2]).
+
+-export([create_group/3, get_group/2, remove_group/2]).
+-export([join_group/3, group_remove_user/3]).
+
 -export([create_space/3, add_member_to_space/3, leave_space/3, remove_space/2]).
 -export([modify_space/4, support_space/4, set_space_privileges/4]).
--export([has_effective_user/3]).
+-export([space_has_effective_user/3]).
+
 -export([create_provider/2, remove_provider/2]).
+
 -export([remove_share/2]).
+
 -export([remove_all_entities/1]).
 
 %%%===================================================================
@@ -164,6 +170,23 @@ join_group(Config, {group, MemberId}, GroupId) ->
             {error, Reason}
     end.
 
+
+%%--------------------------------------------------------------------
+%% @doc Removes user from a group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_remove_user(Config :: term(), GroupId :: binary(),
+    UserId :: binary()) -> true | {error, Reason :: term()}.
+group_remove_user(Config, GroupId, UserId) ->
+    try
+        [Node | _] = ?config(oz_worker_nodes, Config),
+        rpc:call(Node, group_logic, remove_user, [GroupId, UserId])
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+
 %%--------------------------------------------------------------------
 %% @doc Removes group from onezone.
 %% @end
@@ -183,8 +206,8 @@ remove_group(Config, GroupId) ->
 %% @doc Creates space in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_space(Config :: term(), Member :: {user | group, Id :: binary()}, Name :: binary()) ->
-    {ok, Id :: binary()} | {error, Reason :: term()}.
+-spec create_space(Config :: term(), Member :: {user | group, Id :: binary()},
+    Name :: binary()) -> {ok, Id :: binary()} | {error, Reason :: term()}.
 create_space(Config, Member, Name) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
@@ -198,8 +221,8 @@ create_space(Config, Member, Name) ->
 %% @doc Joins space as a user or a group.
 %% @end
 %%--------------------------------------------------------------------
--spec add_member_to_space(Config :: term(), {user | group, Id :: binary()}, SpaceId :: binary()) ->
-    ok | {error, Reason :: term()}.
+-spec add_member_to_space(Config :: term(), {user | group, Id :: binary()},
+    SpaceId :: binary()) -> ok | {error, Reason :: term()}.
 add_member_to_space(Config, {user, UserId}, SpaceId) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
@@ -290,9 +313,9 @@ set_space_privileges(Config, Member, SpaceId, Privileges) ->
 %% @doc Checks if given space has given effective user.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_user(Config :: term(), SpaceId :: binary(),
+-spec space_has_effective_user(Config :: term(), SpaceId :: binary(),
     UserId :: binary()) -> boolean() | {error, Reason :: term()}.
-has_effective_user(Config, SpaceId, UserId) ->
+space_has_effective_user(Config, SpaceId, UserId) ->
     try
         [Node | _] = ?config(oz_worker_nodes, Config),
         rpc:call(Node, space_logic, has_effective_user, [SpaceId, UserId])
