@@ -186,6 +186,22 @@ add_user(GroupId, UserId) ->
                 #onedata_user{groups = Groups} = User,
                 {ok, User#onedata_user{groups = [GroupId | Groups]}}
             end),
+            % Update user's space name mapping for every space that
+            % the group belongs to
+            {ok, #document{
+                value = #user_group{
+                    spaces = Spaces
+                }}} = user_group:get(GroupId),
+            lists:foreach(
+                fun(SpaceId) ->
+                    {ok, #document{
+                        value = #space{
+                            name = Name
+                        }}} = space:get(GroupId),
+                    user_logic:set_space_name_mapping(
+                        UserId, SpaceId, Name, false
+                    )
+                end, Spaces),
             ok
     end.
 
@@ -476,6 +492,15 @@ remove_user(GroupId, UserId) ->
         {ok, User#onedata_user{groups = lists:delete(GroupId, Groups)}}
     end),
     cleanup(GroupId),
+    % Clean user's space name mapping for every space that the group belongs to
+    {ok, #document{
+        value = #user_group{
+            spaces = Spaces
+        }}} = user_group:get(GroupId),
+    lists:foreach(
+        fun(SpaceId) ->
+            user_logic:clean_space_name_mapping(UserId, SpaceId)
+        end, Spaces),
     true.
 
 %%--------------------------------------------------------------------
