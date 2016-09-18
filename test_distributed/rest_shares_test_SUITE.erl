@@ -140,7 +140,7 @@ check_remove_share(Code, Issuer, ShareId) ->
 create_share_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_rpc:call(Config, user_logic, create, [#onedata_user{}]),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -182,7 +182,7 @@ create_share_test(Config) ->
 view_shares_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_rpc:call(Config, user_logic, create, [#onedata_user{}]),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -262,7 +262,7 @@ view_shares_test(Config) ->
 modify_share_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_rpc:call(Config, user_logic, create, [#onedata_user{}]),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -328,7 +328,7 @@ remove_share_test(Config) ->
     rest_test_utils:set_config(Config),
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_rpc:call(Config, user_logic, create, [#onedata_user{}]),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -387,7 +387,7 @@ init_per_suite(Config) ->
     application:start(etls),
     hackney:start(),
     NewConfig = ?TEST_INIT(
-        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
+        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils, oz_rpc]
     ),
     NewConfig.
 

@@ -417,6 +417,7 @@ remove_provider(Config, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc Removes all entities from onezone
 %% (users, groups, spaces, shares, providers).
+%% NOTE: Does not remove predefined groups!
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_all_entities(Config :: term()) -> ok | {error, Reason :: term()}.
@@ -432,8 +433,17 @@ remove_all_entities(Config) ->
         % Delete all spaces
         {ok, SpaceDocs} = rpc:call(Node, space, list, []),
         [true = remove_space(Config, SId) || #document{key = SId} <- SpaceDocs],
-        % Delete all groups
-        {ok, GroupDocs} = rpc:call(Node, user_group, list, []),
+        % Delete all groups, excluding predefined groups
+        {ok, GroupDocsAll} = rpc:call(Node, user_group, list, []),
+        % Filter out predefined groups
+        {ok, PredefinedGroupsMapping} = test_utils:get_env(
+            Node, oz_worker, predefined_groups
+        ),
+        PredefinedGroups = [Id || #{id := Id} <- PredefinedGroupsMapping],
+        GroupDocs = lists:filter(
+            fun(#document{key = GroupId}) ->
+                not lists:member(GroupId, PredefinedGroups)
+            end, GroupDocsAll),
         [true = remove_group(Config, GId) || #document{key = GId} <- GroupDocs],
         % Delete all users
         {ok, UserDocs} = rpc:call(Node, onedata_user, list, []),
