@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing user session.
+%%% API for session record - used to store session details.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(session).

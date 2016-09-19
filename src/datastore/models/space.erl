@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing space.
+%%% API for space record - representing a space in the system.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(space).

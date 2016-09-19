@@ -6,7 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% %%% Database model representing state of subscriptions
+%%% API for subscriptions_state record - used to store the state for
+%%% subscriptions mechanism.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(subscriptions_state).

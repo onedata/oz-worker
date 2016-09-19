@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing oneprovider.
+%%% API for provider record - representing a provider in the system.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(provider).

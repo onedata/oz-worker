@@ -292,13 +292,17 @@ groups() ->
                 set_user_default_space_test,
                 set_user_default_space_without_permission_test,
                 set_non_existing_space_as_user_default_space_test,
-                last_user_leaves_space_test,
+                % This test is disabled as currently we do not
+                % remove a space when last member leaves.
+                % last_user_leaves_space_test,
                 not_last_user_leaves_space_test,
                 user_gets_space_info_test,
                 invite_user_to_space_test,
                 get_group_info_by_user_test,
                 get_ancestor_group_info_by_user_test,
-                last_user_leaves_group_test,
+                % This test is disabled as currently we do not
+                % remove a group when last member leaves.
+                % last_user_leaves_group_test,
                 non_last_user_leaves_group_test
             ]
         },
@@ -668,6 +672,7 @@ user_gets_space_info_test(Config) ->
     ?assertMatch([SID, ?SPACE_NAME1], get_space_info_by_user(SID, UserReqParams)),
     ?assertMatch([SID, ?SPACE_NAME1], get_space_info_by_user(SID, ParamsWithOtherAddress)).
 
+% This test is disabled as currently we do not remove a space when last member leaves.
 last_user_leaves_space_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
     UserReqParams = ?config(userReqParams, Config),
@@ -788,6 +793,7 @@ get_ancestor_group_info_by_user_test(Config) ->
     ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_user(GID2, User1ReqParams)),
     ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_user(GID2, User1ParamsOtherAddress)).
 
+% This test is disabled as currently we do not remove a group when last member leaves.
 last_user_leaves_group_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),

@@ -49,7 +49,7 @@ all() ->
         list_providers_test,          % list_providers
         list_providers_of_space_test, % list_providers_of_space
         modify_space_members_test     % add_member_to_space,
-                                      % remove_member_from_space
+        % remove_member_from_space
     ]).
 
 %%%===================================================================
@@ -70,7 +70,7 @@ check_view_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
         undefined -> undefined;
         _ -> #{<<"privileges">> => Privileges}
     end,
-    check_rest_call(#{
+    rest_test_utils:check_rest_call(#{
         request => #{
             method => get,
             path => ReqPath,
@@ -90,7 +90,7 @@ check_set_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
         onedata_user -> [<<"/privileges/users/">>, SubjectId];
         user_group -> [<<"/privileges/groups/">>, SubjectId]
     end,
-    check_rest_call(#{
+    rest_test_utils:check_rest_call(#{
         request => #{
             method => patch,
             path => ReqPath,
@@ -110,7 +110,7 @@ check_list_spaces(Code, Issuer, Spaces) ->
         undefined -> undefined;
         _ -> #{<<"spaces">> => Spaces}
     end,
-    check_rest_call(#{
+    rest_test_utils:check_rest_call(#{
         request => #{
             method => get,
             path => [<<"/spaces">>],
@@ -130,7 +130,7 @@ check_list_providers(Code, Issuer, Providers) ->
         undefined -> undefined;
         _ -> #{<<"providers">> => Providers}
     end,
-    check_rest_call(#{
+    rest_test_utils:check_rest_call(#{
         request => #{
             method => get,
             path => [<<"/providers">>],
@@ -150,7 +150,7 @@ check_list_providers_of_space(Code, Issuer, SpaceId, Providers) ->
         undefined -> undefined;
         _ -> #{<<"providers">> => Providers}
     end,
-    check_rest_call(#{
+    rest_test_utils:check_rest_call(#{
         request => #{
             method => get,
             path => [<<"/spaces/">>, SpaceId, <<"/providers">>],
@@ -176,7 +176,7 @@ check_add_member_to_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
             #{<<"groupId">> => SubjectId}
         }
     end,
-    check_rest_call(#{
+    rest_test_utils:check_rest_call(#{
         request => #{
             method => post,
             path => ReqPath,
@@ -199,7 +199,7 @@ check_remove_member_from_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
             [<<"/spaces/">>, SpaceId, <<"/groups/">>, SubjectId]
 
     end,
-    check_rest_call(#{
+    rest_test_utils:check_rest_call(#{
         request => #{
             method => delete,
             path => ReqPath,
@@ -216,7 +216,7 @@ check_remove_member_from_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
 %%%===================================================================
 
 view_privileges_test(Config) ->
-    put_config(Config),
+    rest_test_utils:set_config(Config),
     {ok, User1} = oz_test_utils:create_user(Config, #onedata_user{}),
     % Unauthenticated requests should be discarded (401)
     ?assert(check_view_privileges(401, undefined, User1, onedata_user,
@@ -224,7 +224,7 @@ view_privileges_test(Config) ->
     % User without permissions cannot view the OZ API privileges (403)
     ?assert(check_view_privileges(403, User1, User1, onedata_user, undefined)),
     % Give the user view privileges and check again
-    set_privileges(User1, onedata_user, [view_privileges]),
+    set_privileges(Config, User1, onedata_user, [view_privileges]),
     ?assert(check_view_privileges(200, User1, User1, onedata_user,
         [<<"view_privileges">>])),
     % New users and groups should have no permissions by default
@@ -240,10 +240,12 @@ view_privileges_test(Config) ->
 
 
 set_privileges_test(Config) ->
-    put_config(Config),
+    rest_test_utils:set_config(Config),
     {ok, User1} = oz_test_utils:create_user(Config, #onedata_user{}),
     % Give the user perms to view and set privileges
-    set_privileges(User1, onedata_user, [view_privileges, set_privileges]),
+    set_privileges(
+        Config, User1, onedata_user, [view_privileges, set_privileges]
+    ),
     % First try some wrong perms
     ?assert(check_set_privileges(400, User1, User1, onedata_user,
         [inexistent, permissions])),
@@ -281,7 +283,7 @@ set_privileges_test(Config) ->
 
 
 list_spaces_test(Config) ->
-    put_config(Config),
+    rest_test_utils:set_config(Config),
     % Create some spaces belonging to some users
     {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, UserWithSpaces2} = oz_test_utils:create_user(Config, #onedata_user{}),
@@ -306,7 +308,7 @@ list_spaces_test(Config) ->
     ],
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
-    set_privileges(Admin, onedata_user, [set_privileges]),
+    set_privileges(Config, Admin, onedata_user, [set_privileges]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
 
@@ -365,7 +367,7 @@ list_spaces_test(Config) ->
 
 
 list_providers_test(Config) ->
-    put_config(Config),
+    rest_test_utils:set_config(Config),
     {ok, Provider1, _} = oz_test_utils:create_provider(Config, <<"pr">>),
     {ok, Provider2, _} = oz_test_utils:create_provider(Config, <<"pr">>),
     {ok, Provider3, _} = oz_test_utils:create_provider(Config, <<"pr">>),
@@ -376,7 +378,7 @@ list_providers_test(Config) ->
     ],
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
-    set_privileges(Admin, onedata_user, [set_privileges]),
+    set_privileges(Config, Admin, onedata_user, [set_privileges]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
 
@@ -435,7 +437,7 @@ list_providers_test(Config) ->
 
 
 list_providers_of_space_test(Config) ->
-    put_config(Config),
+    rest_test_utils:set_config(Config),
     {ok, UserWithSpaces} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, Provider1, _} = oz_test_utils:create_provider(Config, <<"pr">>),
     {ok, Provider2, _} = oz_test_utils:create_provider(Config, <<"pr">>),
@@ -450,7 +452,7 @@ list_providers_of_space_test(Config) ->
     ],
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
-    set_privileges(Admin, onedata_user, [set_privileges]),
+    set_privileges(Config, Admin, onedata_user, [set_privileges]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
 
@@ -513,10 +515,10 @@ list_providers_of_space_test(Config) ->
 
 
 modify_space_members_test(Config) ->
-    put_config(Config),
+    rest_test_utils:set_config(Config),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
-    set_privileges(Admin, onedata_user, [set_privileges]),
+    set_privileges(Config, Admin, onedata_user, [set_privileges]),
     % TestUser will be used to test the privileges
     {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
     % AddedUser will be added to spaces and removed by TestUser
@@ -679,150 +681,6 @@ modify_space_members_test(Config) ->
 %%% Helper functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% Performs a REST call and check the output if it matches the expected.
-%% Returns true when id does and mismatch details when it does not, so
-%% it is strongly recommended to wrap the call to this function in an assertion.
-%% Args map looks like following:
-%% #{
-%%    request => #{
-%%      method => get, % Optional, default: get
-%%      path => [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>], % Mandatory
-%%      headers => [{<<"key">>, <<"value">>}], % Optional, default: ct=app/json
-%%      body => <<"body content">>, % Optional, default: <<"">>
-%%      auth => <<"uid">> orelse undefined, % Optional, default: undefined
-%%      opts => [http_client_option] % Optional, default: []
-%%    },
-%%    expect => #{
-%%      code => 200, % Optional, by default not validated
-%%      headers => [{<<"key">>, <<"value">>}], % Optional, by def. not validated
-%%      body => <<"binary">> orelse #{} % Optional, by default not validated
-%%      % Specifying a map here will cause validation of JSON content-wise
-%%      % (if the JSON object specified by map is equal to the one in reply)
-%%    }
-%% }
-%%--------------------------------------------------------------------
-check_rest_call(ArgsMap) ->
-    try
-        RequestMap = maps:get(request, ArgsMap),
-        ExpectMap = maps:get(expect, ArgsMap),
-
-        ReqMethod = maps:get(method, RequestMap, get),
-        ReqPath = case maps:get(path, RequestMap) of
-            Bin when is_binary(Bin) ->
-                [Bin];
-            List ->
-                List
-        end,
-        ReqHeaders = maps:get(headers, RequestMap, [
-            {<<"content-type">>, <<"application/json">>}
-        ]),
-        ReqBody = case maps:get(body, RequestMap, <<"">>) of
-            Bin2 when is_binary(Bin2) ->
-                Bin2;
-            Map2 when is_map(Map2) ->
-                json_utils:encode_map(Map2)
-        end,
-        ReqAuth = maps:get(auth, RequestMap, undefined),
-        ReqOpts = maps:get(opts, RequestMap, []),
-
-        ExpCode = maps:get(code, ExpectMap, undefined),
-        ExpHeaders = maps:get(headers, ExpectMap, undefined),
-        ExpBody = maps:get(body, ExpectMap, undefined),
-
-        URL = str_utils:join_binary([get_random_oz_url() | ReqPath], <<"">>),
-        HeadersPlusAuth = case ReqAuth of
-            undefined ->
-                ReqHeaders;
-            UserId ->
-                % Cache user auth tokens, if none in cache create a new one.
-                Macaroon = case get({macaroon, UserId}) of
-                    undefined ->
-                        Mac = oz_test_utils:get_client_token(
-                            get_config(), UserId
-                        ),
-                        put({macaroon, UserId}, Mac),
-                        Mac;
-                    Mac ->
-                        Mac
-                end,
-                [{<<"macaroon">>, Macaroon} | ReqHeaders]
-        end,
-        % Add insecure option - we do not want the GR server cert to be checked.
-        {ok, RespCode, RespHeaders, RespBody} = http_client:request(
-            ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOpts]
-        ),
-
-        % Check response code if specified
-        case ExpCode of
-            undefined ->
-                ok;
-            _ ->
-                case RespCode of
-                    ExpCode ->
-                        ok;
-                    _ ->
-                        throw({code, RespCode, ExpCode})
-                end
-        end,
-
-        % Check response headers if specified
-        case ExpHeaders of
-            undefined ->
-                ok;
-            _ ->
-                NormExpHeaders = normalize_headers(ExpHeaders),
-                NormRespHeaders = normalize_headers(RespHeaders),
-                case NormRespHeaders of
-                    NormExpHeaders ->
-                        ok;
-                    _ ->
-                        throw({headers, NormRespHeaders, NormExpHeaders})
-                end
-        end,
-
-        % Check response body if specified
-        case ExpBody of
-            undefined ->
-                ok;
-            Bin3 when is_binary(Bin3) ->
-                case RespBody of
-                    ExpBody ->
-                        ok;
-                    _ ->
-                        throw({body, RespBody, ExpBody})
-                end;
-            Map3 when is_map(Map3) ->
-                RespBodyMap = json_utils:decode_map(RespBody),
-                case compare_maps(RespBodyMap, ExpBody) of
-                    true ->
-                        ok;
-                    false ->
-                        throw({body, RespBodyMap, ExpBody})
-                end
-        end,
-
-        % Everything OK, return true
-        true
-    catch
-        % Something wrong, return details. If assert is used, the test will fail
-        % and properly display the point of failure.
-        {Type, Actual, Expected} ->
-            {
-                Type,
-                {got, Actual},
-                {expected, Expected}
-            }
-    end.
-
-
-get_random_oz_url() ->
-    Config = get_config(),
-    RestURLs = ?config(restURLs, Config),
-    random:seed(erlang:timestamp()),
-    lists:nth(random:uniform(length(RestURLs)), RestURLs).
-
-
 % Create a group for user which belongs to a group,
 % which belongs to another group. The structure looks as follows:
 % User -> G1 -> G2 -> G3
@@ -837,41 +695,11 @@ create_3_nested_groups(Config, TestUser) ->
     TopGroup.
 
 
-set_privileges(EntityId, EntityType, Privs) ->
-    [Node | _] = ?config(oz_worker_nodes, get_config()),
+set_privileges(Config, EntityId, EntityType, Privs) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
     rpc:call(
         Node, oz_api_privileges_logic, modify, [EntityId, EntityType, Privs]
     ).
-
-
-% Convert all header keys to lowercase so comparing is easier
-normalize_headers(Headers) ->
-    lists:sort(
-        lists:map(fun({Key, Value}) ->
-            KeyLower = list_to_binary(string:to_lower(binary_to_list(Key))),
-            {KeyLower, Value}
-        end, Headers)
-    ).
-
-
-% Returns true if two maps have the same contents
-compare_maps(Map1, Map2) ->
-    sort_map(Map1) =:= sort_map(Map2).
-
-
-% Sorts all nested lists in a map and returns the result map
-sort_map(OriginalMap) ->
-    lists:foldl(
-        fun(Key, MapAcc) ->
-            case maps:get(Key, MapAcc) of
-                List when is_list(List) ->
-                    maps:put(Key, lists:sort(List), MapAcc);
-                Map when is_map(Map) ->
-                    maps:put(Key, sort_map(Map), MapAcc);
-                _ ->
-                    MapAcc
-            end
-        end, OriginalMap, maps:keys(OriginalMap)).
 
 
 % Generates all possible combinations of given set (set = list),
@@ -915,14 +743,6 @@ combinations(Len, OriginalSet) ->
         end, {[], OriginalSet}, OriginalSet),
     Res.
 
-
-put_config(Config) ->
-    put(config, Config).
-
-
-get_config() ->
-    get(config).
-
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -933,20 +753,7 @@ init_per_suite(Config) ->
     NewConfig = ?TEST_INIT(
         Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
     ),
-    Nodes = ?config(oz_worker_nodes, NewConfig),
-    RestURLs = lists:map(fun(Node) ->
-        NodeIP = test_utils:get_docker_ip(Node),
-        {ok, RestPort} = rpc:call(
-            Node, application, get_env, [?APP_Name, rest_port]
-        ),
-        {ok, RestAPIPrefix} = rpc:call(
-            Node, application, get_env, [?APP_Name, rest_api_prefix]
-        ),
-        str_utils:format_bin(
-            "https://~s:~B~s", [NodeIP, RestPort, RestAPIPrefix]
-        )
-    end, Nodes),
-    [{restURLs, RestURLs} | NewConfig].
+    NewConfig.
 
 end_per_suite(Config) ->
     hackney:stop(),
@@ -955,5 +762,5 @@ end_per_suite(Config) ->
 
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
-    oz_test_utils:remove_all_entities(Config).
+    ok = oz_test_utils:remove_all_entities(Config).
 

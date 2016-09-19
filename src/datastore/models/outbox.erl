@@ -6,7 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing outbox.
+%%% API for outbox record - used to enclose updates sent by
+%%% subscriptions mechanism.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(outbox).

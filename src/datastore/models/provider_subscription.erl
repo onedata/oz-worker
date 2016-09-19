@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing oneprovider subsciptions for metadata changes.
+%%% API for provider_subscription record - used to store subscription details.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(provider_subscription).

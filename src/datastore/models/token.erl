@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing macaroon token.
+%%% API for space record - used to store token data.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(token).

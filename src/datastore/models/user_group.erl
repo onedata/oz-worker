@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing group of users.
+%%% API for user_group record - representing a group in the system.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(user_group).

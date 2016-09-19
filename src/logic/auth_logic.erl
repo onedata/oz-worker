@@ -26,8 +26,9 @@
 -define(MACAROONS_LOCATION, <<"onezone">>).
 
 %% API
--export([start/0, stop/0, get_redirection_uri/2, gen_token/1, gen_token/2,
-    validate_token/5, authenticate_user/1, invalidate_token/1]).
+-export([start/0, stop/0, get_redirection_uri/2,
+    gen_token/1, gen_token/2, validate_token/5, invalidate_token/1,
+    authenticate_user/1]).
 
 %% Handling state tokens
 -export([generate_state_token/2, lookup_state_token/1,
@@ -110,12 +111,9 @@ get_redirection_uri(UserId, ProviderId) ->
     % (so their web browsers can connect).
     % To do this, we need a recursive DNS server in docker environment,
     % whose address must be fed to system's resolv.conf.
-    {ok, PData} = provider_logic:get_data(ProviderId),
-    RedirectionPoint = proplists:get_value(redirectionPoint, PData),
-    #hackney_url{host = Host, port = Port} =
-        hackney_url:parse_url(RedirectionPoint),
-    URL = str_utils:format_bin("https://~s:~B~s?code=~s", [
-        Host, Port, ?provider_auth_endpoint, Token
+    {ok, ProviderURL} = provider_logic:get_url(ProviderId),
+    URL = str_utils:format_bin("~s~s?code=~s", [
+        ProviderURL, ?provider_auth_endpoint, Token
     ]),
     {ok, URL}.
 

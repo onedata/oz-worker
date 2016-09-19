@@ -28,6 +28,8 @@
     space_update_through_users_test/1,
     space_update_through_groups_test/1,
     no_space_update_test/1,
+    share_update_through_support_test/1,
+    no_share_update_test/1,
     user_update_test/1,
     only_public_user_update_test/1,
     group_update_through_users_test/1,
@@ -54,13 +56,16 @@
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-%%TODO move init_messages befor save
+%% TODO move init_messages before save
 all() -> ?ALL([
     provider_connection_checks_test,
     multiple_updates_test,
     space_update_through_support_test,
     space_update_through_users_test,
     space_update_through_groups_test,
+    no_space_update_test,
+    share_update_through_support_test,
+    no_share_update_test,
     all_data_in_space_update_test,
     all_data_in_user_update_test,
     all_data_in_group_update_test,
@@ -78,7 +83,6 @@ all() -> ?ALL([
 %%    fetches_changes_older_than_in_cache_without_save,
     fetches_changes_from_both_cache_and_db,
     fetches_changes_when_cache_has_gaps,
-    no_space_update_test,
     only_public_user_update_test,
     no_group_update_test
 ]).
@@ -217,6 +221,48 @@ space_update_through_groups_test(Config) ->
     ]),
     ok.
 
+% Checks if share update won't appear if provider does not support its space
+no_share_update_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
+    Sp1 = #space{name = <<"whatever">>, providers_supports = [], shares = [?ID(sh1)]},
+    Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
+    subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
+    subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
+
+    % when
+    Context = subscriptions_test_utils:init_messages(Node, PID, []),
+    subscriptions_test_utils:update_document(Node, share, ?ID(sh1), #{name => <<"updated">>}),
+
+    % then
+    subscriptions_test_utils:verify_messages_absent(Context, [
+        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"initial">>}),
+        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
+    ]),
+    ok.
+
+% Checks if update is pushed to providers that support changed space
+share_update_through_support_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(sp1)]),
+    Sp1 = #space{name = <<"whatever">>, providers_supports = [{PID, 0}], shares = [?ID(sh1)]},
+    Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
+    subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
+    subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
+
+    % when
+    Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
+    Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(sh1), Sh1)),
+    subscriptions_test_utils:update_document(Node, share, ?ID(sh1), #{name => <<"updated">>}),
+
+    % then
+    subscriptions_test_utils:verify_messages_present(Context, [
+        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
+    ]),
+    ok.
+
 all_data_in_space_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
@@ -307,7 +353,7 @@ all_data_in_provider_update_test(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), Spaces, Urls),
 
     % when
-    Context =subscriptions_test_utils:init_messages(Node, PID, []),
+    Context = subscriptions_test_utils:init_messages(Node, PID, []),
     subscriptions_test_utils:update_document(Node, provider, PID, #{client_name => Name}),
 
     % then
@@ -324,7 +370,7 @@ updates_for_with_providers_test(Config) ->
 
 
     % when
-    Context =subscriptions_test_utils:init_messages(Node, PID, []),
+    Context = subscriptions_test_utils:init_messages(Node, PID, []),
     subscriptions_test_utils:save(Node, ?ID(p2), P2),
     subscriptions_test_utils:save(Node, ?ID(p3), P3),
 
@@ -767,7 +813,8 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_new(Nodes, group_graph),
-    test_utils:mock_expect(Nodes, group_graph, refresh_effective_caches, fun() -> ok end),
+    test_utils:mock_expect(Nodes, group_graph, refresh_effective_caches, fun() ->
+        ok end),
     Config.
 
 end_per_testcase(_, Config) ->

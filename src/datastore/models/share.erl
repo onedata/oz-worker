@@ -1,27 +1,25 @@
 %%%-------------------------------------------------------------------
-%%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @author Lukasz Opiola
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for onedata_auth record - used to store macaroon's secrets.
+%%% API for share record - representing a file share in the system.
 %%% @end
 %%%-------------------------------------------------------------------
--module(onedata_auth).
--author("Michal Zmuda").
+-module(share).
+-author("Lukasz Opiola").
 -behaviour(model_behaviour).
 
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
 %% model_behaviour callbacks
--export([save/1, get/1, exists/1, delete/1, update/2, create/1,
+-export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
-
-%% API
--export([get_auth_by_user_id/1]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -66,6 +64,15 @@ get(Key) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns list of all records.
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [datastore:document()]} | datastore:generic_error() | no_return().
+list() ->
+    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).
+
+%%--------------------------------------------------------------------
+%% @doc
 %% {@link model_behaviour} callback delete/1.
 %% @end
 %%--------------------------------------------------------------------
@@ -89,7 +96,9 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(onedata_auth_bucket, [], ?GLOBALLY_CACHED_LEVEL).
+    % TODO migrate to GLOBALLY_CACHED_LEVEL
+    StoreLevel = application:get_env(?APP_Name, share_store_level, ?DISK_ONLY_LEVEL),
+    ?MODEL_CONFIG(share_bucket, [], StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -111,25 +120,3 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
-
-
-%%%===================================================================
-%%% API callbacks
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc Gets auth from DB for a given user id.
-%% todo: change implementation to something fast (connected with VFS-1498)
-%% @end
-%%--------------------------------------------------------------------
--spec get_auth_by_user_id(UserId :: binary()) -> {ok, [#document{}]}.
-get_auth_by_user_id(UserId) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #onedata_auth{user_id = UID}} = Doc, Acc) ->
-            {next, case UID of UserId -> [Doc | Acc]; _ -> Acc end};
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).

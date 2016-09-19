@@ -90,7 +90,17 @@
     name :: undefined | binary(),
     providers_supports = [] :: [{ProviderId :: binary(), Size :: pos_integer()}],
     users = [] :: [{UserId :: binary(), [privileges:space_privilege()]}],
-    groups = [] :: [{GroupId :: binary(), [privileges:space_privilege()]}]
+    groups = [] :: [{GroupId :: binary(), [privileges:space_privilege()]}],
+    % All shares that belong to this space.
+    shares = [] :: [ShareId :: binary()]
+}).
+
+%% This record defines a file/directory public share
+-record(share, {
+    name = undefined :: undefined | binary(),
+    public_url = undefined :: undefined | binary(),
+    root_file_id = undefined :: undefined | binary(),
+    parent_space = undefined :: undefined | binary()
 }).
 
 %% This record defines a token that can be used by user to do something

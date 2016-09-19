@@ -80,7 +80,7 @@ start() ->
                 {DocsPath ++ "/[...]", static_docs_handler, []}
         end,
 
-        GRHostname = dns_query_handler:get_canonical_hostname(),
+        OZHostname = dns_query_handler:get_canonical_hostname(),
 
         % Setup GUI dispatch opts for cowboy
         GUIDispatch = [
@@ -95,11 +95,12 @@ start() ->
                 {'_', redirector_handler, []}
             ]},
             % Redirect requests in form: alias.onedata.org
-            {":alias." ++ GRHostname, [{'_', client_redirect_handler, [GuiPort]}]},
+            {":alias." ++ OZHostname, [{'_', client_redirect_handler, [GuiPort]}]},
             % Proper requests are routed to handler modules
             % Proper requests are routed to handler modules
             {'_', lists:flatten([
                 {"/nagios/[...]", nagios_handler, []},
+                {"/share/:share_id", public_share_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
                 DocsRoute,
                 {"/[...]", gui_static_handler, {dir, DocRoot}}
