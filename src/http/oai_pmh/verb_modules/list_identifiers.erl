@@ -4,46 +4,82 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% WRITEME
+%%% Module responsible for handling "ListIdentifiers" OAI-PMH request.
+%%% http://www.openarchives.org/OAI/2.0/openarchivesprotocol.htm#ListIdentifiers
 %%% @end
 %%%-------------------------------------------------------------------
 -module(list_identifiers).
 -author("Jakub Kudzia").
 
+-include("registered_names.hrl").
+-include("http/handlers/oai.hrl").
+
 -behaviour(oai_verb_behaviour).
 
 %% API
 -export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
-    required_response_elements/0, optional_response_elements/0, get_element/2]).
-
--include("registered_names.hrl").
--include("http/handlers/oai.hrl").
--include("http/handlers/oai_errors.hrl").
+    required_response_elements/0, optional_response_elements/0, get_response/2]).
 
 
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback required_arguments/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec required_arguments() -> [binary()].
 required_arguments() -> [<<"metadataPrefix">>].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback optional_arguments/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec optional_arguments() -> [binary()].
 optional_arguments() -> [<<"from">>, <<"until">>, <<"set">>].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback exclusive_arguments/0
+%%% @end
+%%%--------------------------------------------------------------------
+-spec exclusive_arguments() -> [binary()].
 exclusive_arguments() -> [<<"resumptionToken">>].
 
-required_response_elements() -> [header].
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback required_response_elements/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec required_response_elements() -> [binary()].
+required_response_elements() -> [<<"header">>].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback optional_response_elements/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec optional_response_elements() -> [binary()].
 optional_response_elements() -> [].
 
-get_element(header, Args) ->
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback get_response/2
+%%% @end
+%%%-------------------------------------------------------------------
+-spec get_response(binary(), proplist()) -> oai_response().
+get_response(<<"header">>, Args) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     From = proplists:get_value(<<"from">>, Args),
     Until = proplists:get_value(<<"until">>, Args),
-    HarvestedRecordIds = oai_utils:harvest(MetadataPrefix, From, Until),
-    HarvestedRecords = lists:map(fun(Id) ->
-        {ok, [{_, _}, {_, _}, {<<"metadata_timestamp">>, Timestamp}]} = share_logic:get_metadata(Id),
+    HarvestingFun = fun(Id, Metadata) ->
+        Timestamp = proplists:get_value(<<"metadata_timestamp">>, Metadata),
         #oai_header{
             identifier = Id,
             datestamp = oai_utils:datetime_to_oai_datestamp(Timestamp)
         }
-    end, HarvestedRecordIds),
-    case HarvestedRecords of
-        [] -> {error, ?NO_RECORDS_MATCH};
-        _ -> HarvestedRecords
-    end .
+    end,
+    oai_utils:harvest(MetadataPrefix, From, Until, HarvestingFun).

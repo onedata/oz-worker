@@ -4,41 +4,78 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% WRITEME
+%%% Module responsible for handling "ListRecords" OAI-PMH request.
+%%% http://www.openarchives.org/OAI/2.0/openarchivesprotocol.htm#ListRecords
 %%% @end
 %%%-------------------------------------------------------------------
 -module(list_records).
 -author("Jakub Kudzia").
 
-%% API
--export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
-    required_response_elements/0, optional_response_elements/0, get_element/2]).
-
 -include("http/handlers/oai.hrl").
--include("http/handlers/oai_errors.hrl").
 -include("registered_names.hrl").
 
+%% API
+-export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
+    required_response_elements/0, optional_response_elements/0, get_response/2]).
 
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback required_arguments/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec required_arguments() -> [binary()].
 required_arguments() -> [<<"metadataPrefix">>].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback optional_arguments/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec optional_arguments() -> [binary()].
 optional_arguments() -> [<<"from">>, <<"until">>, <<"set">>].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback exclusive_arguments/0
+%%% @end
+%%%--------------------------------------------------------------------
+-spec exclusive_arguments() -> [binary()].
 exclusive_arguments() -> [<<"resumptionToken">>].
 
-required_response_elements() -> [record].
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback required_response_elements/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec required_response_elements() -> [binary()].
+required_response_elements() -> [<<"record">>].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback optional_response_elements/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec optional_response_elements() -> [binary()].
 optional_response_elements() -> [].
 
-get_element(record, Args) ->
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback get_response/2
+%%% @end
+%%%-------------------------------------------------------------------
+-spec get_response(binary(), proplist()) -> oai_response().
+get_response(<<"record">>, Args) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     From = proplists:get_value(<<"from">>, Args),
     Until = proplists:get_value(<<"until">>, Args),
-    HarvestedRecordIds = oai_utils:harvest(MetadataPrefix, From, Until),
-    HarvestedRecords = lists:map(fun(Id) ->
-        {ok, [
-            {<<"metadata">>, Metadata},
-            {_, _},
-            {<<"metadata_timestamp">>, Timestamp}]} = share_logic:get_metadata(Id),
+    HarvestingFun = fun(Id, Metadata) ->
+        Timestamp = proplists:get_value(<<"metadata_timestamp">>, Metadata),
+        MetadataValue = proplists:get_value(<<"metadata">>, Metadata),
         #oai_record{
             header = #oai_header{
                 identifier = Id,
@@ -46,11 +83,8 @@ get_element(record, Args) ->
             },
             metadata = #oai_metadata{
                 metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
-                value = Metadata % todo currently metadata is bare xml
+                value = MetadataValue
             }
         }
-    end, HarvestedRecordIds),
-    case HarvestedRecords of
-        [] -> {error, ?NO_RECORDS_MATCH};
-        _ -> HarvestedRecords
-    end .
+    end,
+    oai_utils:harvest(MetadataPrefix, From, Until, HarvestingFun).
