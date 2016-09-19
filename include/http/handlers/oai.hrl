@@ -60,6 +60,7 @@
 -type oai_record() :: #oai_record{}.
 -type oai_error() :: #oai_error{}.
 
+-type proplist() :: [{Key :: binary(), Value :: binary()}].
 
 -define(OAI_XML_NAMESPACE, #xmlAttribute{
         name=xmlns,

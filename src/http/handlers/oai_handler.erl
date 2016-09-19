@@ -128,10 +128,18 @@ handle_request(QueryString, Req) ->
         {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryString),
         generate_response(Verb, ParsedArgs)
     catch
-        throw:{badVerb, Description} -> ?BAD_VERB(Description);
-        throw:{badArgument, Description} -> ?BAD_ARGUMENT(Description);
-        throw:noSetHierarchy -> ?NO_SET_HIERARCHY;
-        throw:{cannotDisseminateFormat, Description} -> ?CANNOT_DISSEMINATE_FORMAT(Description)
+        throw:Error ->
+            oai_errors:handle(Error)
+        % TODO handle unknown errors
+%%        throw:{badVerb, Description} -> ?BAD_VERB(Description);
+%%        throw:badVerb -> ?BAD_VERB;
+%%        throw:{badArgument, Description} -> ?BAD_ARGUMENT(Description);
+%%        throw:badArgument ->;
+%%        throw:noSetHierarchy -> ?NO_SET_HIERARCHY;
+%%        throw:{cannotDisseminateFormat, Description} -> ?CANNOT_DISSEMINATE_FORMAT(Description);
+%%        throw:{noRecordsMatch, Description} -> ?NO_RECORDS_MATCH(Description);
+%%        throw:{noMetadataFromats, Description} -> ?NO_METADATA_FORMATS(Description);
+%%        throw:{idDoesNotExist, Description} -> ?ID_DOES_NOT_EXIST(Description)
     end,
 
     RequestElement = case Response of
@@ -178,18 +186,18 @@ generate_response(Verb, Args) ->
 
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
-        case Module:get_element(ElementName, Args) of
-            {error, OAIError} ->
-                throw(OAIError);
+        case Module:get_response(ElementName, Args) of
+%%            #oai_error{} = OAIError ->
+%%                throw(OAIError);
             Elements when is_list(Elements)->
                 [ {ElementName, Element} || Element <- Elements ];
             Element -> oai_utils:ensure_list({ElementName, Element})
-        end
+        end %todo catch errors
     end, Module:required_response_elements()).
 
 generate_optional_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
-        try Module:get_element(ElementName, Args) of
+        try Module:get_response(ElementName, Args) of
             <<"">> -> [];
             [] -> [];
             Elements when is_list(Elements)->
@@ -206,9 +214,6 @@ insert_to_root_xml_element(Content) ->
 
 generate_response_date_element() ->
     {responseDate, oai_utils:datetime_to_oai_datestamp(erlang:universaltime())}.
-%%    #xmlElement{name = responseDate,
-%%        content = []
-%%    }.
 
 generate_request_element(Req) ->
     generate_request_element([], Req).
@@ -230,6 +235,7 @@ generate_request_element(ParsedArgs, Req) ->
 %% TODO * identity encoding
 %% TODO * allowed charset
 %% TODO * define granularity as date type
+%% TODO * share should have opendata attribute
 
 
 
