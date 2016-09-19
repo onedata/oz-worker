@@ -4,29 +4,69 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% WRITEME
+%%% Module responsible for handling "ListSets" OAI-PMH request.
+%%% NOTE: This request is currently not supported
+%%% http://www.openarchives.org/OAI/2.0/openarchivesprotocol.htm#ListSets
 %%% @end
 %%%-------------------------------------------------------------------
 -module(list_sets).
 -author("Jakub Kudzia").
 
-%% API
--export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
-    required_response_elements/0, optional_response_elements/0, get_element/2]).
-
 -include("registered_names.hrl").
 -include("http/handlers/oai_errors.hrl").
 
+-behaviour(oai_verb_behaviour).
 
+%% API
+-export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
+    required_response_elements/0, optional_response_elements/0, get_response/2]).
+
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback required_arguments/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec required_arguments() -> [binary()].
 required_arguments() -> [].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback optional_arguments/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec optional_arguments() -> [binary()].
 optional_arguments() -> [].
 
-exclusive_arguments() -> [<<"resumptionToken">>].
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback exclusive_arguments/0
+%%% @end
+%%%--------------------------------------------------------------------
+-spec exclusive_arguments() -> [binary()].
+exclusive_arguments() -> [].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback required_response_elements/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec required_response_elements() -> [binary()].
 required_response_elements() -> [set].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback optional_response_elements/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec optional_response_elements() -> [binary()].
 optional_response_elements() -> [].
 
-get_element(set, _Args) ->
-    {error, ?NO_SET_HIERARCHY}.
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link oai_verb_behaviour} callback get_response/2
+%%% @end
+%%%-------------------------------------------------------------------
+-spec get_response(binary(), proplist()) -> oai_response().
+get_response(set, _Args) ->
+    throw(noSetHierarchy).

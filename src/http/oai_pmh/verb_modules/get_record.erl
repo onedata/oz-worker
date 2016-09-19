@@ -5,6 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @doc
 %%% This module is responsible for handling OAI-PMH "GetRecord" request.
+%%% http://www.openarchives.org/OAI/2.0/openarchivesprotocol.htm#GetRecord
 %%% @end
 %%%-------------------------------------------------------------------
 -module(get_record).

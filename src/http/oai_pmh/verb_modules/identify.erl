@@ -4,7 +4,8 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% WRITEME
+%%% Module responsible for handling "Identify" OAI-PMH request.
+%%% http://www.openarchives.org/OAI/2.0/openarchivesprotocol.htm#Identify
 %%% @end
 %%%-------------------------------------------------------------------
 -module(identify).
