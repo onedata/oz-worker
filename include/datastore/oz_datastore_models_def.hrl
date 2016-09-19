@@ -174,20 +174,20 @@
 }).
 
 -record(handle_service, {
-    name :: binary(),
-    proxy_endpoint :: binary(),
-    service_description :: term(),
-    users = [] :: [{UserId :: binary(), [privileges:space_privilege()]}],
-    groups = [] :: [{GroupId :: binary(), [privileges:space_privilege()]}]
+    name :: handle_service:name() | undefined,
+    proxy_endpoint :: handle_service:proxy_endpoint() | undefined,
+    service_properties :: handle_service:service_properties() | undefined,
+    users = [] :: [{UserId :: binary(), [privileges:handle_service_privilege()]}],
+    groups = [] :: [{GroupId :: binary(), [privileges:handle_service_privilege()]}]
 }).
 
 -record(handle, {
-    handle_service_id :: binary(),
-    handle :: binary(),
-    resource_type :: binary(),
-    resource_id :: binary(),
-    users = [] :: [{UserId :: binary(), [privileges:space_privilege()]}],
-    groups = [] :: [{GroupId :: binary(), [privileges:space_privilege()]}]
+    handle_service_id :: handle_service:id() | undefined,
+    handle :: handle:public_handle() | undefined,
+    resource_type :: handle:resource_type() | undefined,
+    resource_id :: handle:resource_id() | undefined,
+    users = [] :: [{UserId :: binary(), [privileges:handle_privilege()]}],
+    groups = [] :: [{GroupId :: binary(), [privileges:handle_privilege()]}]
 }).
 
 -type user_info() :: #onedata_user{}.

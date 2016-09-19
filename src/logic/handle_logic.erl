@@ -31,7 +31,7 @@
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(HandleId :: binary()) ->
+-spec exists(HandleId :: handle:id()) ->
     boolean().
 exists(HandleId) ->
     handle:exists(HandleId).
@@ -42,7 +42,7 @@ exists(HandleId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_user(HandleId :: binary(), UserId :: binary()) ->
+-spec has_user(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
     boolean().
 has_user(HandleId, UserId) ->
     case handle:get(HandleId) of
@@ -59,7 +59,7 @@ has_user(HandleId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_user(HandleId :: binary(), UserId :: binary()) ->
+-spec has_effective_user(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
     boolean().
 has_effective_user(HandleId, UserId) ->
     case handle:get(HandleId) of
@@ -87,7 +87,7 @@ has_effective_user(HandleId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_group(HandleId :: binary(), GroupId :: binary()) ->
+-spec has_group(HandleId :: handle:id(), GroupId :: user_group:id()) ->
     boolean().
 has_group(HandleId, GroupId) ->
     case handle:get(HandleId) of
@@ -104,7 +104,7 @@ has_group(HandleId, GroupId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_privilege(HandleId :: binary(), UserId :: binary(),
+-spec has_effective_privilege(HandleId :: handle:id(), UserId :: onedata_user:id(),
     Privilege :: privileges:handle_privilege()) ->
     boolean().
 has_effective_privilege(HandleId, UserId, Privilege) ->
@@ -120,9 +120,9 @@ has_effective_privilege(HandleId, UserId, Privilege) ->
 %% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create(UserId :: binary(), HandleServiceId :: binary(),
+-spec create(UserId :: onedata_user:id(), HandleServiceId :: binary(),
     ResourceType :: binary(), ResourceId :: binary(), HandleLocation :: binary()) ->
-    {ok, HandleId :: binary()}.
+    {ok, HandleId :: handle:id()}.
 create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation) ->
     Privileges = privileges:handle_admin(),
     Handle = #handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
@@ -157,7 +157,7 @@ modify(HandleId, NewResourceType, NewResourceId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_user_privileges(HandleId :: binary(), UserId :: binary(),
+-spec set_user_privileges(HandleId :: handle:id(), UserId :: onedata_user:id(),
     Privileges :: [privileges:handle_privilege()]) ->
     ok.
 set_user_privileges(HandleId, UserId, Privileges) ->
@@ -174,7 +174,7 @@ set_user_privileges(HandleId, UserId, Privileges) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_group_privileges(HandleId :: binary(), GroupId :: binary(),
+-spec set_group_privileges(HandleId :: handle:id(), GroupId :: user_group:id(),
     Privileges :: [privileges:handle_privilege()]) ->
     ok.
 set_group_privileges(HandleId, GroupId, Privileges) ->
@@ -190,8 +190,8 @@ set_group_privileges(HandleId, GroupId, Privileges) ->
 %% @doc Adds a new user to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(HandleId :: binary(), UserId :: binary()) ->
-    {ok, HandleId :: binary()}.
+-spec add_user(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
+    {ok, HandleId :: handle:id()}.
 add_user(HandleId, UserId) ->
     case has_user(HandleId, UserId) of
         true -> ok;
@@ -212,8 +212,8 @@ add_user(HandleId, UserId) ->
 %% @doc Adds a new group to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(HandleId :: binary(), GroupId :: binary()) ->
-    {ok, HandleId :: binary()}.
+-spec add_group(HandleId :: handle:id(), GroupId :: user_group:id()) ->
+    {ok, HandleId :: handle:id()}.
 add_group(HandleId, GroupId) ->
     case has_group(HandleId, GroupId) of
         true -> ok;
@@ -236,7 +236,7 @@ add_group(HandleId, GroupId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(HandleId :: binary()) -> {ok, [proplists:property()]}.
+-spec get_data(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
 get_data(HandleId) ->
     {ok, #document{value = #handle{handle_service_id = HandleServiceId, handle = Handle,
         resource_type = ResourceType, resource_id = ResourceId}}} =
@@ -254,7 +254,7 @@ get_data(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(HandleId :: binary()) ->
+-spec get_users(HandleId :: handle:id()) ->
     {ok, [proplists:property()]}.
 get_users(HandleId) ->
     {ok, #document{value = #handle{users = Users}}} = handle:get(HandleId),
@@ -266,7 +266,7 @@ get_users(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(HandleId :: binary()) ->
+-spec get_groups(HandleId :: handle:id()) ->
     {ok, [proplists:property()]}.
 get_groups(HandleId) ->
     {ok, #document{value = #handle{groups = GroupTuples}}} = handle:get(HandleId),
@@ -278,8 +278,8 @@ get_groups(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_privileges(HandleId :: binary(), UserId :: binary()) ->
-    {ok, [privileges:handle_privilege()]}.
+-spec get_user_privileges(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
+    {ok, [{privileges, [privileges:handle_privilege()]}]}.
 get_user_privileges(HandleId, UserId) ->
     {ok, #document{value = #handle{users = Users}}} = handle:get(HandleId),
     {_, Privileges} = lists:keyfind(UserId, 1, Users),
@@ -290,8 +290,8 @@ get_user_privileges(HandleId, UserId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_privileges(HandleId :: binary(), GroupId :: binary()) ->
-    {ok, [privileges:handle_privilege()]}.
+-spec get_group_privileges(HandleId :: handle:id(), GroupId :: user_group:id()) ->
+    {ok, [{privileges, [privileges:handle_privilege()]}]}.
 get_group_privileges(HandleId, GroupId) ->
     {ok, #document{value = #handle{groups = Groups}}} = handle:get(HandleId),
     {_, Privileges} = lists:keyfind(GroupId, 1, Groups),
@@ -302,7 +302,7 @@ get_group_privileges(HandleId, GroupId) ->
 %% Throws exception when call to the datastore fails, or handle is already removed.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(HandleId :: binary()) -> true.
+-spec remove(HandleId :: handle:id()) -> boolean().
 remove(HandleId) ->
     {ok, #document{value = Handle}} = handle:get(HandleId),
     #handle{users = Users, groups = Groups} = Handle,
@@ -333,7 +333,7 @@ remove(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(HandleId :: binary(), UserId :: binary()) ->
+-spec remove_user(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
     true.
 remove_user(HandleId, UserId) ->
     {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -352,7 +352,7 @@ remove_user(HandleId, UserId) ->
 %% Throws exception when call to the datastore fails, or handle/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(HandleId :: binary(), GroupId :: binary()) ->
+-spec remove_group(HandleId :: handle:id(), GroupId :: user_group:id()) ->
     true.
 remove_group(HandleId, GroupId) ->
     {ok, _} = user_group:update(GroupId, fun(Group) ->
@@ -372,7 +372,7 @@ remove_group(HandleId, GroupId) ->
 %% Throws exception when call to the datastore fails, or handle is already removed.
 %% @end
 %%--------------------------------------------------------------------
--spec cleanup(HandleId :: binary()) -> boolean() | no_return().
+-spec cleanup(HandleId :: handle:id()) -> boolean() | no_return().
 cleanup(HandleId) ->
     {ok, #document{value = #handle{groups = Groups, users = Users}}} = handle:get(HandleId),
     case {Groups, Users} of
@@ -386,7 +386,7 @@ cleanup(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_user_privileges(HandleId :: binary(), UserId :: binary()) ->
+-spec get_effective_user_privileges(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
     {ok, ordsets:ordset(privileges:handle_privilege())}.
 get_effective_user_privileges(HandleId, UserId) ->
     {ok, #document{value = #onedata_user{groups = UGroups}}} = onedata_user:get(UserId),
@@ -415,7 +415,7 @@ get_effective_user_privileges(HandleId, UserId) ->
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec list(UserId :: binary()) ->
+-spec list(UserId :: onedata_user:id()) ->
     {ok, [proplists:property()]}.
 list(UserId) ->
     {ok, Doc} = onedata_user:get(UserId),
@@ -434,8 +434,8 @@ list(UserId) ->
 %% exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_all_handles(Doc :: datastore:document()) ->
-    ordsets:ordset(HandleId :: binary()).
+-spec get_all_handles(Doc :: onedata_user:doc()) ->
+    ordsets:ordset(HandleId :: handle:id()).
 get_all_handles(#document{value = #onedata_user{
     handles = UserHandles, groups = Groups}}) ->
 

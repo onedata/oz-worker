@@ -84,7 +84,9 @@ assert_type(Key, List, Type, Req) ->
     (Key :: json_string(), List :: [{json_string(), term()}],
         Type :: binary, Req :: cowboy_req:req()) -> binary() | no_return();
     (Key :: json_string(), List :: [{json_string(), term()}],
-        Type :: pos_integer, Req :: cowboy_req:req()) -> pos_integer() | no_return().
+        Type :: pos_integer, Req :: cowboy_req:req()) -> pos_integer() | no_return();
+    (Key :: json_string(), List :: [{json_string(), term()}],
+        Type :: any, Req :: cowboy_req:req()) -> term() | no_return().
 assert_key(Key, List, Type, Req) ->
     case assert_type(Key, List, Type, Req) of
         undefined -> report_missing_key(Key, Req);

@@ -26,7 +26,8 @@
 
 
 -type id() :: binary().
--export_type([id/0]).
+-type doc() :: datastore:document().
+-export_type([id/0, doc/0]).
 
 %%%===================================================================
 %%% model_behaviour callbacks

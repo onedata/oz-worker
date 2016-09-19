@@ -142,11 +142,10 @@ accept_resource(handles, post, _HandleId, Data, #client{type = user, id = UserId
     {{true, <<"/handles/", HandleId/binary>>}, Req};
 
 accept_resource(handle, patch, HandleId, Data, #client{type = user, id = _UserId}, Req) ->
-    HandleServiceId = rest_module_helper:assert_type(<<"handleServiceId">>, Data, binary, Req),
     ResourceType = rest_module_helper:assert_type(<<"resourceType">>, Data, binary, Req),
     ResourceId = rest_module_helper:assert_type(<<"resourceId">>, Data, binary, Req),
     ok = handle_proxy:modify_handle(HandleId, ResourceType, ResourceId),
-    ok = handle_logic:modify(HandleId, HandleServiceId, ResourceType, ResourceId),
+    ok = handle_logic:modify(HandleId, ResourceType, ResourceId),
     {true, Req};
 
 accept_resource(user, put, HandleId, _Data, _Client, Req) ->

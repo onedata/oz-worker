@@ -18,8 +18,11 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
 -type id() :: binary().
+-type name() :: binary().
+-type proxy_endpoint() :: binary().
+-type service_properties() :: json_term().
 
--export_type([id/0]).
+-export_type([id/0, name/0, proxy_endpoint/0, service_properties/0]).
 
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,

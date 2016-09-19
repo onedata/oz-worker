@@ -34,7 +34,7 @@
 register_handle(HandleServiceId, ResourceType, ResourceId) ->
     {ok, #document{value = #handle_service{
         proxy_endpoint = ProxyEndpoint,
-        service_description = ServiceProperties}}
+        service_properties = ServiceProperties}}
     } = handle_service:get(HandleServiceId),
     Url = get_redirect_url(ResourceType, ResourceId),
     Metadata = get_metadata(),
@@ -68,7 +68,7 @@ unregister_handle(HandleId)  ->
         handle:get(HandleId),
     {ok, #document{value = #handle_service{
         proxy_endpoint = ProxyEndpoint,
-        service_description = ServiceProperties}}
+        service_properties = ServiceProperties}}
     } = handle_service:get(HandleServiceId),
 %%    Body = [
 %%        {<<"serviceProperties">>, ServiceProperties}
@@ -91,16 +91,16 @@ unregister_handle(HandleId)  ->
 %% @end
 %%--------------------------------------------------------------------
 -spec modify_handle(handle:id(), handle:resource_type(), handle:resource_id()) ->
-    {ok, handle:public_handle()}.
+    ok.
 modify_handle(_HandleId, undefined, undefined)  ->
-    {ok, undefined};
+    ok;
 modify_handle(HandleId, NewResourceType, NewResourceId)  ->
     {ok, #document{value = #handle{handle_service_id = HandleServiceId,
         resource_type = ResourceType, resource_id = ResourceId, handle = PublicHandle}}} =
         handle:get(HandleId),
     {ok, #document{value = #handle_service{
         proxy_endpoint = ProxyEndpoint,
-        service_description = ServiceProperties}}
+        service_properties = ServiceProperties}}
     } = handle_service:get(HandleServiceId),
     case (NewResourceType =:= undefined orelse NewResourceType =:= ResourceType)
         andalso (NewResourceId =:= undefined orelse NewResourceId =:= ResourceId)

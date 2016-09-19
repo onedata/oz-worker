@@ -31,7 +31,7 @@
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(HandleServiceId :: binary()) ->
+-spec exists(HandleServiceId :: handle_service:id()) ->
     boolean().
 exists(HandleServiceId) ->
     handle_service:exists(HandleServiceId).
@@ -42,7 +42,7 @@ exists(HandleServiceId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_user(HandleServiceId :: binary(), UserId :: binary()) ->
+-spec has_user(HandleServiceId :: handle_service:id(), UserId :: onedata_user:id()) ->
     boolean().
 has_user(HandleServiceId, UserId) ->
     case handle_service:get(HandleServiceId) of
@@ -59,7 +59,7 @@ has_user(HandleServiceId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_user(HandleServiceId :: binary(), UserId :: binary()) ->
+-spec has_effective_user(HandleServiceId :: handle_service:id(), UserId :: onedata_user:id()) ->
     boolean().
 has_effective_user(HandleServiceId, UserId) ->
     case handle_service:get(HandleServiceId) of
@@ -87,7 +87,7 @@ has_effective_user(HandleServiceId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_group(HandleServiceId :: binary(), GroupId :: binary()) ->
+-spec has_group(HandleServiceId :: handle_service:id(), GroupId :: user_group:id()) ->
     boolean().
 has_group(HandleServiceId, GroupId) ->
     case handle_service:get(HandleServiceId) of
@@ -104,7 +104,7 @@ has_group(HandleServiceId, GroupId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_privilege(HandleServiceId :: binary(), UserId :: binary(),
+-spec has_effective_privilege(HandleServiceId :: handle_service:id(), UserId :: onedata_user:id(),
     Privilege :: privileges:handle_service_privilege()) ->
     boolean().
 has_effective_privilege(HandleServiceId, UserId, Privilege) ->
@@ -120,12 +120,13 @@ has_effective_privilege(HandleServiceId, UserId, Privilege) ->
 %% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create(UserId :: binary(), Name :: binary(),
-    ProxyEndpoint :: binary(), ServiceProperties :: term()) ->
-    {ok, HandleServiceId :: binary()}.
+-spec create(UserId :: onedata_user:id(), Name :: handle_service:name(),
+    ProxyEndpoint :: handle_service:proxy_endpoint(),
+    ServiceProperties :: handle_service:service_properties()) ->
+    {ok, HandleServiceId :: handle_service:id()}.
 create(UserId, Name, ProxyEndpoint, ServiceProperties) ->
     Privileges = privileges:handle_service_admin(),
-    HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_description = ServiceProperties,  users = [{UserId, Privileges}]},
+    HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_properties = ServiceProperties,  users = [{UserId, Privileges}]},
 
     {ok, HandleServiceId} = handle_service:save(#document{value = HandleService}),
     {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -140,15 +141,16 @@ create(UserId, Name, ProxyEndpoint, ServiceProperties) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(HandleServiceId :: binary(), Name :: binary(),
-    ProxyEndpoint :: binary(), ServiceProperties :: term()) -> ok.
+-spec modify(HandleServiceId :: handle_service:id(), Name :: handle_service:name(),
+    ProxyEndpoint :: handle_service:proxy_endpoint(),
+    ServiceProperties :: handle_service:service_properties()) -> ok.
 modify(HandleServiceId, NewName, NewProxyEndpoint, NewServiceProperties) ->
     {ok, _} = handle_service:update(HandleServiceId,
-        fun(HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_description = ServiceProperties}) ->
+        fun(HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_properties = ServiceProperties}) ->
             FinalName = utils:ensure_defined(NewName, undefined, Name),
             FinalProxyEndpoint = utils:ensure_defined(NewProxyEndpoint, undefined, ProxyEndpoint),
             FinalServiceProperties = utils:ensure_defined(NewServiceProperties, undefined, ServiceProperties),
-            {ok, HandleService#handle_service{name = FinalName, proxy_endpoint = FinalProxyEndpoint, service_description = FinalServiceProperties}}
+            {ok, HandleService#handle_service{name = FinalName, proxy_endpoint = FinalProxyEndpoint, service_properties = FinalServiceProperties}}
         end),
     ok.
 
@@ -157,7 +159,7 @@ modify(HandleServiceId, NewName, NewProxyEndpoint, NewServiceProperties) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_user_privileges(HandleServiceId :: binary(), UserId :: binary(),
+-spec set_user_privileges(HandleServiceId :: handle_service:id(), UserId :: onedata_user:id(),
     Privileges :: [privileges:handle_service_privilege()]) ->
     ok.
 set_user_privileges(HandleServiceId, UserId, Privileges) ->
@@ -174,7 +176,7 @@ set_user_privileges(HandleServiceId, UserId, Privileges) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_group_privileges(HandleServiceId :: binary(), GroupId :: binary(),
+-spec set_group_privileges(HandleServiceId :: handle_service:id(), GroupId :: user_group:id(),
     Privileges :: [privileges:handle_service_privilege()]) ->
     ok.
 set_group_privileges(HandleServiceId, GroupId, Privileges) ->
@@ -190,8 +192,8 @@ set_group_privileges(HandleServiceId, GroupId, Privileges) ->
 %% @doc Adds a new user to a handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(HandleServiceId :: binary(), UserId :: binary()) ->
-    {ok, HandleServiceId :: binary()}.
+-spec add_user(HandleServiceId :: handle_service:id(), UserId :: onedata_user:id()) ->
+    {ok, HandleServiceId :: handle_service:id()}.
 add_user(HandleServiceId, UserId) ->
     case has_user(HandleServiceId, UserId) of
         true -> ok;
@@ -212,8 +214,8 @@ add_user(HandleServiceId, UserId) ->
 %% @doc Adds a new group to a handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(HandleServiceId :: binary(), GroupId :: binary()) ->
-    {ok, HandleServiceId :: binary()}.
+-spec add_group(HandleServiceId :: handle_service:id(), GroupId :: user_group:id()) ->
+    {ok, HandleServiceId :: handle_service:id()}.
 add_group(HandleServiceId, GroupId) ->
     case has_group(HandleServiceId, GroupId) of
         true -> ok;
@@ -236,9 +238,9 @@ add_group(HandleServiceId, GroupId) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(HandleServiceId :: binary()) -> {ok, [proplists:property()]}.
+-spec get_data(HandleServiceId :: handle_service:id()) -> {ok, [proplists:property()]}.
 get_data(HandleServiceId) ->
-    {ok, #document{value = #handle_service{name = Name, proxy_endpoint = Proxy, service_description = Desc}}} =
+    {ok, #document{value = #handle_service{name = Name, proxy_endpoint = Proxy, service_properties = Desc}}} =
         handle_service:get(HandleServiceId),
     {ok, [
         {handleServiceId, HandleServiceId},
@@ -252,7 +254,7 @@ get_data(HandleServiceId) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(HandleServiceId :: binary()) ->
+-spec get_users(HandleServiceId :: handle_service:id()) ->
     {ok, [proplists:property()]}.
 get_users(HandleServiceId) ->
     {ok, #document{value = #handle_service{users = Users}}} = handle_service:get(HandleServiceId),
@@ -264,7 +266,7 @@ get_users(HandleServiceId) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(HandleServiceId :: binary()) ->
+-spec get_groups(HandleServiceId :: handle_service:id()) ->
     {ok, [proplists:property()]}.
 get_groups(HandleServiceId) ->
     {ok, #document{value = #handle_service{groups = GroupTuples}}} = handle_service:get(HandleServiceId),
@@ -276,8 +278,8 @@ get_groups(HandleServiceId) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_privileges(HandleServiceId :: binary(), UserId :: binary()) ->
-    {ok, [privileges:handle_service_privilege()]}.
+-spec get_user_privileges(HandleServiceId :: handle_service:id(), UserId :: onedata_user:id()) ->
+    {ok, [{privileges, [privileges:handle_privilege()]}]}.
 get_user_privileges(HandleServiceId, UserId) ->
     {ok, #document{value = #handle_service{users = Users}}} = handle_service:get(HandleServiceId),
     {_, Privileges} = lists:keyfind(UserId, 1, Users),
@@ -288,8 +290,8 @@ get_user_privileges(HandleServiceId, UserId) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_privileges(HandleServiceId :: binary(), GroupId :: binary()) ->
-    {ok, [privileges:handle_service_privilege()]}.
+-spec get_group_privileges(HandleServiceId :: handle_service:id(), GroupId :: user_group:id()) ->
+    {ok, [{privileges, [privileges:handle_privilege()]}]}.
 get_group_privileges(HandleServiceId, GroupId) ->
     {ok, #document{value = #handle_service{groups = Groups}}} = handle_service:get(HandleServiceId),
     {_, Privileges} = lists:keyfind(GroupId, 1, Groups),
@@ -300,7 +302,7 @@ get_group_privileges(HandleServiceId, GroupId) ->
 %% Throws exception when call to the datastore fails, or handle_service is already removed.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(HandleServiceId :: binary()) -> true.
+-spec remove(HandleServiceId :: handle_service:id()) -> boolean().
 remove(HandleServiceId) ->
     {ok, #document{value = HandleService}} = handle_service:get(HandleServiceId),
     #handle_service{users = Users, groups = Groups} = HandleService,
@@ -331,7 +333,7 @@ remove(HandleServiceId) ->
 %% Throws exception when call to the datastore fails, or handle_service/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(HandleServiceId :: binary(), UserId :: binary()) ->
+-spec remove_user(HandleServiceId :: handle_service:id(), UserId :: onedata_user:id()) ->
     true.
 remove_user(HandleServiceId, UserId) ->
     {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -350,7 +352,7 @@ remove_user(HandleServiceId, UserId) ->
 %% Throws exception when call to the datastore fails, or handle_service/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(HandleServiceId :: binary(), GroupId :: binary()) ->
+-spec remove_group(HandleServiceId :: handle_service:id(), GroupId :: user_group:id()) ->
     true.
 remove_group(HandleServiceId, GroupId) ->
     {ok, _} = user_group:update(GroupId, fun(Group) ->
@@ -370,7 +372,7 @@ remove_group(HandleServiceId, GroupId) ->
 %% Throws exception when call to the datastore fails, or handle_service is already removed.
 %% @end
 %%--------------------------------------------------------------------
--spec cleanup(HandleServiceId :: binary()) -> boolean() | no_return().
+-spec cleanup(HandleServiceId :: handle_service:id()) -> boolean() | no_return().
 cleanup(HandleServiceId) ->
     {ok, #document{value = #handle_service{groups = Groups, users = Users}}} = handle_service:get(HandleServiceId),
     case {Groups, Users} of
@@ -384,7 +386,7 @@ cleanup(HandleServiceId) ->
 %% Throws exception when call to the datastore fails, or handle_service/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_user_privileges(HandleServiceId :: binary(), UserId :: binary()) ->
+-spec get_effective_user_privileges(HandleServiceId :: handle_service:id(), UserId :: onedata_user:id()) ->
     {ok, ordsets:ordset(privileges:handle_service_privilege())}.
 get_effective_user_privileges(HandleServiceId, UserId) ->
     {ok, #document{value = #onedata_user{groups = UGroups}}} = onedata_user:get(UserId),
@@ -413,8 +415,7 @@ get_effective_user_privileges(HandleServiceId, UserId) ->
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec list(UserId :: binary()) ->
-    {ok, [proplists:property()]}.
+-spec list(UserId :: onedata_user:id()) -> {ok, [proplists:property()]}.
 list(UserId) ->
     {ok, Doc} = onedata_user:get(UserId),
     AllUserHandleServices = get_all_handle_services(Doc),
@@ -433,7 +434,7 @@ list(UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_all_handle_services(Doc :: datastore:document()) ->
-    ordsets:ordset(HandleServiceId :: binary()).
+    ordsets:ordset(HandleServiceId :: handle_service:id()).
 get_all_handle_services(#document{value = #onedata_user{
     handle_services = UserHandleServices, groups = Groups}}) ->
 
