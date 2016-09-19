@@ -39,9 +39,28 @@ page_init() ->
             cowboy_req:header(<<"authorization">>, Req),
         [User, Passwd] = binary:split(base64:decode(UserAndPassword), <<":">>),
         case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-            {ok, #document{key = UserId}} ->
+            {ok, UserDoc} ->
+                #document{
+                    key = UserId,
+                    value = #onedata_user{
+                        default_provider = DefaultProvider
+                    }} = UserDoc,
                 g_session:log_in(UserId),
-                {reply, 200};
+                % If user has a default provider, redirect him straight there
+                URL = case DefaultProvider of
+                    undefined ->
+                        <<?page_after_login>>;
+                    ProviderId ->
+                        ?debug("Automatically redirecting user `~s` "
+                        "to default provider `~s`", [UserId, ProviderId]),
+                        {ok, ProviderURL} = auth_logic:get_redirection_uri(
+                            UserId, ProviderId
+                        ),
+                        ProviderURL
+                end,
+                JSONHeader = [{<<"content-type">>, <<"application/json">>}],
+                Body = json_utils:encode_map(#{<<"url">> => URL}),
+                {reply, 200, JSONHeader, Body};
             {error, Binary} when is_binary(Binary) ->
                 {reply, 401, [], Binary};
             _ ->

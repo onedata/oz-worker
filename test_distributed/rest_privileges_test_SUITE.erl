@@ -444,8 +444,8 @@ list_providers_of_space_test(Config) ->
     {ok, Space1} = oz_test_utils:create_space(
         Config, {user, UserWithSpaces}, <<"sp">>
     ),
-    ok = oz_test_utils:support_space(Config, Provider1, Space1, 100),
-    ok = oz_test_utils:support_space(Config, Provider2, Space1, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider1, Space1, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider2, Space1, 100),
     ExpProviders = [
         Provider1,
         Provider2
