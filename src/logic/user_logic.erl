@@ -671,7 +671,7 @@ authenticate_by_basic_credentials(Login, Password) ->
                         false ->
                             {ok, GroupData} = group_logic:get_data(GroupId),
                             GroupName = proplists:get_value(name, GroupData),
-                            ok = group_logic:add_user(GroupId, UserId),
+                            {ok, _} = group_logic:add_user(GroupId, UserId),
                             ?info("Added user '~s' to group '~s' based on "
                             "role '~s'", [Login, GroupName, UserRole])
                     end
