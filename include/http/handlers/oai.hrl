@@ -49,6 +49,10 @@
     description :: list()
 }).
 
+-type oai_verb_module() :: identify | get_record | list_identifiers |
+                           list_medatada_formats | list_records | list_sets.
+
+
 -type oai_verb() :: identify | getRecord | listIdentifiers |
                     listMedatadaFormats | listRecords | listSets.
 
@@ -66,6 +70,8 @@
 -type oai_response() :: binary()     | [binary()]     |
                         oai_record() | [oai_record()] |
                         oai_header() | [oai_header()].
+-type supported_datestamp() :: erlang:datetime() | erlang:date().
+
 
 -type proplist() :: [{Key :: binary(), Value :: binary()}].
 
