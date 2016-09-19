@@ -140,7 +140,7 @@ check_remove_share(Code, Issuer, ShareId) ->
 create_share_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_rpc:call(Config, user_logic, create, [#onedata_user{}]),
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -167,7 +167,7 @@ create_share_test(Config) ->
     % User should be able to create shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
-    ok = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
+    {ok, _} = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
     ok = oz_test_utils:set_space_privileges(
         Config, {group, Group}, Space, [space_manage_shares]
     ),
@@ -182,7 +182,7 @@ create_share_test(Config) ->
 view_shares_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_rpc:call(Config, user_logic, create, [#onedata_user{}]),
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -249,7 +249,7 @@ view_shares_test(Config) ->
     % However, when we add him to a group and the group to the Space, it should
     % be possible again.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
-    ok = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
+    {ok, _} = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
     ?assert(check_get_share(200, User, Share1Id, Share1ExpectedData)),
     ?assert(check_get_share(200, User, Share2Id, Share2ExpectedData)),
     ?assert(check_get_share(200, User, Share3Id, Share3ExpectedData)),
@@ -262,7 +262,7 @@ view_shares_test(Config) ->
 modify_share_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_rpc:call(Config, user_logic, create, [#onedata_user{}]),
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -309,7 +309,7 @@ modify_share_test(Config) ->
     % User should be able to rename shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
-    ok = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
+    {ok, _} = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
     ok = oz_test_utils:set_space_privileges(
         Config, {group, Group}, Space, [space_manage_shares]
     ),
@@ -328,7 +328,7 @@ remove_share_test(Config) ->
     rest_test_utils:set_config(Config),
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_rpc:call(Config, user_logic, create, [#onedata_user{}]),
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -358,7 +358,7 @@ remove_share_test(Config) ->
     % User should be able to remove shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
-    ok = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
+    {ok, _} = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
     ok = oz_test_utils:set_space_privileges(
         Config, {group, Group}, Space, [space_manage_shares]
     ),
@@ -387,7 +387,7 @@ init_per_suite(Config) ->
     application:start(etls),
     hackney:start(),
     NewConfig = ?TEST_INIT(
-        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils, oz_rpc]
+        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
     ),
     NewConfig.
 

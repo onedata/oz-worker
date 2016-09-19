@@ -214,7 +214,8 @@ set_privileges(SpaceId, Member, Privileges) ->
 
 %%--------------------------------------------------------------------
 %% @doc Adds a new member to a Space identified by a token.
-%% Throws exception when call to the datastore fails, or member/token/space_from_token doesn't exist.
+%% Throws exception when call to the datastore fails,
+%% or member/token/space_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec join({group | user, Id :: binary()}, Macaroon :: macaroon:macaroon()) ->
@@ -227,7 +228,9 @@ join({group, GroupId}, Macaroon) ->
     add_group(SpaceId, GroupId).
 
 %%--------------------------------------------------------------------
-%% @doc Adds a new user to a Space.
+%% @doc Adds a new user to a Space. Does not check authorization - use join/2
+%% for user adding based on authorization!
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec add_user(SpaceId :: binary(), UserId :: binary()) ->
@@ -251,7 +254,9 @@ add_user(SpaceId, UserId) ->
     {ok, SpaceId}.
 
 %%--------------------------------------------------------------------
-%% @doc Adds a new group to a Space.
+%% @doc Adds a new group to a Space. Does not check authorization - use join/2
+%% for group adding based on authorization!
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec add_group(SpaceId :: binary(), GroupId :: binary()) ->
@@ -270,16 +275,21 @@ add_group(SpaceId, GroupId) ->
                 {ok, Group#user_group{spaces = [SpaceId | Spaces]}}
             end),
             {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
-            {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
+            {ok, #document{
+                value = #user_group{
+                    users = Users
+                }}} = user_group:get(GroupId),
             lists:foreach(fun({UserId, _}) ->
                 user_logic:set_space_name_mapping(UserId, SpaceId, Name, false)
             end, Users)
     end,
     {ok, SpaceId}.
 
+
 %%--------------------------------------------------------------------
 %% @doc Adds a new supporting provider to a Space identified by a token.
-%% Throws exception when call to the datastore fails, or provider/token/space_from_token doesn't exist.
+%% Throws exception when call to the datastore fails,
+%% or provider/token/space_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec support(ProviderId :: binary(), Macaroon :: macaroon:macaroon(),
@@ -287,18 +297,31 @@ add_group(SpaceId, GroupId) ->
     {ok, SpaceId :: binary()}.
 support(ProviderId, Macaroon, SupportedSize) ->
     {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
+    ok = add_provider(SpaceId, ProviderId, SupportedSize),
+    {ok, SpaceId}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Adds a new supporting provider to a Space. Does not check
+%% authorization - use join/2 for provider adding based on authorization!
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_provider(SpaceId :: binary(), ProviderId :: binary(),
+    SupportedSize :: integer()) -> {ok, SpaceId :: binary()}.
+add_provider(SpaceId, ProviderId, SupportedSize) ->
     case has_provider(SpaceId, ProviderId) of
-        true -> ok;
+        true ->
+            ok;
         false ->
             {ok, _} = space:update(SpaceId, fun(Space) ->
                 #space{providers_supports = Supports} = Space,
-                {ok, Space#space{
-                    providers_supports = [{ProviderId, SupportedSize} | Supports]
-                }}
+                {ok, Space#space{providers_supports = [
+                    {ProviderId, SupportedSize} | Supports
+                ]}}
             end),
             add_space_to_providers(SpaceId, [ProviderId])
-    end,
-    {ok, SpaceId}.
+    end.
 
 
 %%--------------------------------------------------------------------

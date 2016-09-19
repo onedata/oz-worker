@@ -19,7 +19,7 @@
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
     has_nested_group/2]).
--export([create/3, modify/2, add_user/2, join/2, set_privileges/3, join_group/2]).
+-export([create/3, modify/2, add_user/2, add_group/2, join/2, join_group/2, set_privileges/3]).
 -export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
     get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
     get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
@@ -165,13 +165,12 @@ modify(GroupId, Data) ->
     ok.
 
 %%--------------------------------------------------------------------
-%% @doc Adds user to a group. Does not check authorization - use join/2 for
+%% @doc Adds a user to a group. Does not check authorization - use join/2 for
 %% user adding based on authorization!
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(GroupId :: binary(), UserId :: binary()) ->
-    ok.
+-spec add_user(GroupId :: binary(), UserId :: binary()) -> ok.
 add_user(GroupId, UserId) ->
     case has_user(GroupId, UserId) of
         true ->
@@ -206,9 +205,43 @@ add_user(GroupId, UserId) ->
     end.
 
 %%--------------------------------------------------------------------
+%% @doc Adds a group to a group. Does not check authorization - use join/2 for
+%% group adding based on authorization!
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_group(ParentGroupId :: binary(), ChildGroupId :: binary()) -> ok.
+add_group(ParentGroupId, ChildGroupId) ->
+    case has_nested_group(ParentGroupId, ChildGroupId) of
+        true ->
+            ok;
+        false ->
+            case has_effective_group(ParentGroupId, ChildGroupId) of
+                true ->
+                    {error, cycle_averted};
+                false ->
+                    Privileges = privileges:group_user(),
+                    {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
+                        #user_group{nested_groups = Groups} = Group,
+                        {ok, Group#user_group{nested_groups = [
+                            {ChildGroupId, Privileges} | Groups
+                        ]}}
+                    end),
+                    {ok, _} = user_group:update(ChildGroupId, fun(Group) ->
+                        #user_group{parent_groups = Groups} = Group,
+                        {ok, Group#user_group{parent_groups = [
+                            ParentGroupId | Groups
+                        ]}}
+                    end),
+                    ok
+            end
+    end.
+
+
+%%--------------------------------------------------------------------
 %% @doc Adds user to a group identified by a token.
-%% Throws exception when call to the datastore fails, or token/user/group_from_token
-%% doesn't exist in db.
+%% Throws exception when call to the datastore fails, or
+%% token/user/group_from_token doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
 -spec join(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
@@ -217,6 +250,7 @@ join(UserId, Macaroon) ->
     {ok, {group, GroupId}} = token_logic:consume(Macaroon),
     ok = add_user(GroupId, UserId),
     {ok, GroupId}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Adds group as nested to a group identified by the given token.
@@ -228,24 +262,9 @@ join(UserId, Macaroon) ->
     {ok, ParentGroupId :: binary()} | {error, cycle_averted}.
 join_group(GroupId, Macaroon) ->
     {ok, {group, ParentGroupId}} = token_logic:consume(Macaroon),
-    case has_nested_group(ParentGroupId, GroupId) of
-        true -> {ok, ParentGroupId};
-        false ->
-            case has_effective_group(ParentGroupId, GroupId) of
-                true -> {error, cycle_averted};
-                false ->
-                    Privileges = privileges:group_user(),
-                    {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
-                        #user_group{nested_groups = Groups} = Group,
-                        {ok, Group#user_group{nested_groups = [{GroupId, Privileges} | Groups]}}
-                    end),
-                    {ok, _} = user_group:update(GroupId, fun(Group) ->
-                        #user_group{parent_groups = Groups} = Group,
-                        {ok, Group#user_group{parent_groups = [ParentGroupId | Groups]}}
-                    end),
-                    {ok, ParentGroupId}
-            end
-    end.
+    ok = add_group(ParentGroupId, GroupId),
+    {ok, ParentGroupId}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Sets privileges for a member of the group.

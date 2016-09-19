@@ -690,8 +690,12 @@ create_3_nested_groups(Config, TestUser) ->
     {ok, DummyUser} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, MiddleGroup} = oz_test_utils:create_group(Config, DummyUser, <<"gr">>),
     {ok, TopGroup} = oz_test_utils:create_group(Config, DummyUser, <<"gr">>),
-    ok = oz_test_utils:join_group(Config, {group, BottomGroup}, MiddleGroup),
-    ok = oz_test_utils:join_group(Config, {group, MiddleGroup}, TopGroup),
+    {ok, MiddleGroup} = oz_test_utils:join_group(
+        Config, {group, BottomGroup}, MiddleGroup
+    ),
+    {ok, TopGroup} = oz_test_utils:join_group(
+        Config, {group, MiddleGroup}, TopGroup
+    ),
     TopGroup.
 
 

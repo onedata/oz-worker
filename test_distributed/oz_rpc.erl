@@ -9,12 +9,24 @@
 -module(oz_rpc).
 -author("lopiola").
 
--include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 
 %% API
 -export([call/4]).
 
+%%%===================================================================
+%%% API functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Works like an rpc:call, but automatically retrieves oz_worker node to call
+%% from config and wraps the call in a try-catch, so better error reporting
+%% can be done.
+%% @end
+%%--------------------------------------------------------------------
+-spec call(Config :: term(), Module :: atom(), Function :: atom(),
+    Args :: [term()]) -> term() | {badrpc, term()}.
 call(Config, Module, Function, Args) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     Fun = fun() ->
@@ -28,7 +40,7 @@ call(Config, Module, Function, Args) ->
         {crash, Type, Reason, Stacktrace} ->
             % Log a bad rpc - very useful when debugging tests.
             ct:print(
-                "oz_proxy call crashed!~n"
+                "oz_rpc:call crashed!~n"
                 "Module: ~p~n"
                 "Function: ~p~n"
                 "Args: ~p~n"

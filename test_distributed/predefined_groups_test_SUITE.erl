@@ -189,7 +189,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     {ok, OpenSpaceId} = oz_test_utils:create_space(
         Config, {user, DummyUser}, <<"OpenSpace">>
     ),
-    ok = oz_test_utils:add_member_to_space(
+    {ok, OpenSpaceId} = oz_test_utils:add_member_to_space(
         Config, {group, <<"all_users_group">>}, OpenSpaceId
     ),
     % Now, every created user should belong to the All Users group and thus
