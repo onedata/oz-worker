@@ -204,7 +204,7 @@ modify_metadata(ShareId, Metadata, MetadataFormat) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Saves given share metadata.
+%% Returns given share metadata.
 %% Throws exception when call to the datastore fails, or share doesn't exist.
 %% @end
 %%--------------------------------------------------------------------

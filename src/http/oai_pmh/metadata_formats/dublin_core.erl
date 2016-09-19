@@ -68,6 +68,7 @@ format_info() -> ok.
 
 
 encode(Metadata) ->
+%%    todo wrap oai_dc headers around bare dc
     {MetadataXML, _} = xmerl_scan:string(binary_to_list(Metadata)),
     MetadataXML. %todo currently bare xml is saved
 %%    XMLElements = lists:flatmap(fun(Key) ->
