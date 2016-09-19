@@ -309,7 +309,7 @@ support(ProviderId, Macaroon, SupportedSize) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec add_provider(SpaceId :: binary(), ProviderId :: binary(),
-    SupportedSize :: integer()) -> ok.
+    SupportedSize :: integer()) -> {ok, SpaceId :: space:id()}.
 add_provider(SpaceId, ProviderId, SupportedSize) ->
     case has_provider(SpaceId, ProviderId) of
         true ->

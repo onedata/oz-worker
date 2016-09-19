@@ -62,7 +62,7 @@ create(UserInfo, ProposedUserId) ->
             {ok, GlobalGroups} = application:get_env(?APP_Name, global_groups),
             lists:foreach(
                 fun({GroupId, Privileges}) ->
-                    ok = group_logic:add_user(GroupId, UserId),
+                    {ok, GroupId} = group_logic:add_user(GroupId, UserId),
                     ok = group_logic:set_privileges(GroupId, UserId, Privileges)
                 end, GlobalGroups);
         _ ->
