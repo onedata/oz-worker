@@ -21,6 +21,10 @@
     required_response_elements/0, optional_response_elements/0, get_response/2]).
 
 
+%%%===================================================================
+%%% API
+%%%===================================================================
+
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% {@link oai_verb_behaviour} callback required_arguments/0
@@ -82,7 +86,7 @@ get_response(<<"baseURL">>, _Args) ->
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->
-    <<"1970-01-01T00:00:00Z">>; % TODO how to get it
+    oai_utils:datetime_to_oai_datestamp(get_earliest_datestamp());
 get_response(<<"deletedRecord">>, _Args) ->
     <<"no">>;
 get_response(<<"granularity">>, _Args) ->
@@ -95,3 +99,24 @@ get_response(<<"description">>, _Args) -> [].
 %% TODO do we need description ???
 
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%%-------------------------------------------------------------------
+%%% @private
+%%% @doc
+%%% Returns earliest metadata datestamp.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec get_earliest_datestamp() -> erlang:datetime().
+get_earliest_datestamp() ->
+    {ok, Ids} = share_logic:list(),
+    Datestamps = lists:flatmap(fun(Id) ->
+        {ok, Metadata} = share_logic:get_metadata(Id),
+        case proplists:get_value(<<"metadata_timestamp">>, Metadata) of
+            undefined -> [];
+            Timestamp -> [Timestamp]
+        end
+    end, Ids),
+    hd(lists:sort(fun oai_utils:is_earlier_or_equal/2, Datestamps)).
