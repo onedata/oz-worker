@@ -20,6 +20,10 @@
     required_response_elements/0, optional_response_elements/0, get_response/2]).
 
 
+%%%===================================================================
+%%% API
+%%%===================================================================
+
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% {@link oai_verb_behaviour} callback required_arguments/0
@@ -103,7 +107,7 @@ get_response(<<"record">>, Args) ->
 %%% Returns given share metadata.
 %%% If it fails, throws idDoesNotExist
 %%% @end
-%%%--------
+%%%-------------------------------------------------------------------
 -spec get_metadata(any()) -> any().
 get_metadata(Id) ->
     try

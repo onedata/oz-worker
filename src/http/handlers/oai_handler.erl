@@ -239,6 +239,10 @@ generate_request_element(ParsedArgs, Req) ->
 %% TODO * share should have opendata attribute
 %% TODO * TESTS !!!
 %% TODO * get_response always returnig tuple {ElementName, OAIRsponse} ???
+%% TODO * ticket dla Rafała zeby list w bazie wspieral paginacje
+%% TODO * paginacja na zasadzie base 64 z offset poczatek
+
+
 
 
 
