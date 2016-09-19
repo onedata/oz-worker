@@ -59,7 +59,7 @@ call_oz(Config, Module, Function, Args) ->
         {crash, Type, Reason, Stacktrace} ->
             % Log a bad rpc - very useful when debugging tests.
             ct:print(
-                "oz_rpc:call crashed!~n"
+                "RPC call in oz_test_utils crashed!~n"
                 "Module: ~p~n"
                 "Function: ~p~n"
                 "Args: ~p~n"
