@@ -170,11 +170,12 @@ modify(GroupId, Data) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(GroupId :: binary(), UserId :: binary()) -> ok.
+-spec add_user(GroupId :: binary(), UserId :: binary()) ->
+    {ok, GroupId :: onedata_group:id()}.
 add_user(GroupId, UserId) ->
     case has_user(GroupId, UserId) of
         true ->
-            ok;
+            {ok, GroupId};
         false ->
             Privileges = privileges:group_user(),
             {ok, _} = user_group:update(GroupId, fun(Group) ->
@@ -201,7 +202,7 @@ add_user(GroupId, UserId) ->
                         UserId, SpaceId, Name, false
                     )
                 end, Spaces),
-            ok
+            {ok, GroupId}
     end.
 
 %%--------------------------------------------------------------------
@@ -210,11 +211,12 @@ add_user(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(ParentGroupId :: binary(), ChildGroupId :: binary()) -> ok.
+-spec add_group(ParentGroupId :: binary(), ChildGroupId :: binary()) ->
+    {ok, GroupId :: onedata_group:id()} | {error, cycle_averted}.
 add_group(ParentGroupId, ChildGroupId) ->
     case has_nested_group(ParentGroupId, ChildGroupId) of
         true ->
-            ok;
+            {ok, ParentGroupId};
         false ->
             case has_effective_group(ParentGroupId, ChildGroupId) of
                 true ->
@@ -233,7 +235,7 @@ add_group(ParentGroupId, ChildGroupId) ->
                             ParentGroupId | Groups
                         ]}}
                     end),
-                    ok
+                    {ok, ParentGroupId}
             end
     end.
 
@@ -245,11 +247,10 @@ add_group(ParentGroupId, ChildGroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
-    {ok, GroupId :: binary()}.
+    {ok, GroupId :: onedata_group:id()}.
 join(UserId, Macaroon) ->
     {ok, {group, GroupId}} = token_logic:consume(Macaroon),
-    ok = add_user(GroupId, UserId),
-    {ok, GroupId}.
+    add_user(GroupId, UserId).
 
 
 %%--------------------------------------------------------------------
@@ -259,11 +260,10 @@ join(UserId, Macaroon) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_group(GroupId :: binary(), Macaroon :: macaroon:macaroon()) ->
-    {ok, ParentGroupId :: binary()} | {error, cycle_averted}.
+    {ok, GroupId :: onedata_group:id()} | {error, cycle_averted}.
 join_group(GroupId, Macaroon) ->
     {ok, {group, ParentGroupId}} = token_logic:consume(Macaroon),
-    ok = add_group(ParentGroupId, GroupId),
-    {ok, ParentGroupId}.
+    add_group(ParentGroupId, GroupId).
 
 
 %%--------------------------------------------------------------------

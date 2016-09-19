@@ -237,7 +237,8 @@ join({group, GroupId}, Macaroon) ->
     {ok, SpaceId :: binary()}.
 add_user(SpaceId, UserId) ->
     case has_user(SpaceId, UserId) of
-        true -> ok;
+        true ->
+            ok;
         false ->
             {ok, _} = space:update(SpaceId, fun(Space) ->
                 Privileges = privileges:space_user(),
@@ -263,7 +264,8 @@ add_user(SpaceId, UserId) ->
     {ok, SpaceId :: binary()}.
 add_group(SpaceId, GroupId) ->
     case has_group(SpaceId, GroupId) of
-        true -> ok;
+        true ->
+            ok;
         false ->
             Privileges = privileges:space_user(),
             {ok, _} = space:update(SpaceId, fun(Space) ->
@@ -297,8 +299,7 @@ add_group(SpaceId, GroupId) ->
     {ok, SpaceId :: binary()}.
 support(ProviderId, Macaroon, SupportedSize) ->
     {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
-    ok = add_provider(SpaceId, ProviderId, SupportedSize),
-    {ok, SpaceId}.
+    add_provider(SpaceId, ProviderId, SupportedSize).
 
 
 %%--------------------------------------------------------------------
@@ -308,11 +309,11 @@ support(ProviderId, Macaroon, SupportedSize) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec add_provider(SpaceId :: binary(), ProviderId :: binary(),
-    SupportedSize :: integer()) -> {ok, SpaceId :: binary()}.
+    SupportedSize :: integer()) -> ok.
 add_provider(SpaceId, ProviderId, SupportedSize) ->
     case has_provider(SpaceId, ProviderId) of
         true ->
-            ok;
+            {ok, SpaceId};
         false ->
             {ok, _} = space:update(SpaceId, fun(Space) ->
                 #space{providers_supports = Supports} = Space,
@@ -320,7 +321,8 @@ add_provider(SpaceId, ProviderId, SupportedSize) ->
                     {ProviderId, SupportedSize} | Supports
                 ]}}
             end),
-            add_space_to_providers(SpaceId, [ProviderId])
+            add_space_to_providers(SpaceId, [ProviderId]),
+            {ok, SpaceId}
     end.
 
 
