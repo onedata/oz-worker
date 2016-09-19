@@ -45,13 +45,17 @@
 }).
 
 -record(oai_error, {
-    code :: badArgument | badResumptionToken | badVerb | cannotDisseminateFormat |
-            idDoesNotExist | noRecordsMatch | noMetadataFormats | noSetHierarchy,
+    code :: oai_error_code(),
     description :: list()
 }).
 
 -type oai_verb() :: identify | getRecord | listIdentifiers |
                     listMedatadaFormats | listRecords | listSets.
+
+-type oai_error_code() :: badArgument | badResumptionToken | badVerb |
+                          cannotDisseminateFormat |idDoesNotExist |
+                          noRecordsMatch | noMetadataFormats | noSetHierarchy.
+
 -type oai_id() :: binary(). % todo maybe it should be record
 -type oai_header() :: #oai_header{}.
 -type oai_metadata_format() :: #oai_metadata_format{}.
@@ -59,6 +63,9 @@
 -type oai_about() :: #oai_about{}.
 -type oai_record() :: #oai_record{}.
 -type oai_error() :: #oai_error{}.
+-type oai_response() :: binary()     | [binary()]     |
+                        oai_record() | [oai_record()] |
+                        oai_header() | [oai_header()].
 
 -type proplist() :: [{Key :: binary(), Value :: binary()}].
 

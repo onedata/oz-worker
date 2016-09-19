@@ -58,7 +58,7 @@
 -define(NO_RECORDS_MATCH(Description),
     ?OAI_ERROR(noRecordsMatch, Description)).
 
--define(NO_METADATA_FORMATS, ?OAI_ERROR(
+-define(NO_METADATA_FORMATS, ?NO_METADATA_FORMATS(
     "There are no metadata formats available for the specified item.")).
 -define(NO_METADATA_FORMATS(Description),
     ?OAI_ERROR(noMetadataFormats, Description)).

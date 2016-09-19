@@ -49,6 +49,7 @@ rest_init(Req, Opts) ->
 allowed_methods(Req, State) ->
     {?ALLOWED_METHODS, Req, State}.
 
+%%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
 %% Return the list of content-types the resource provides.
 %% @end
@@ -172,17 +173,17 @@ handle_request(QueryString, Req) ->
 
 generate_response(Verb, Args) ->
     Module = oai_utils:verb_to_module(Verb),
-    try
+%%    try
         RequiredElements = generate_required_response_elements(Module, Args),
 %%        io:format("DEBUG: ~p~n", [RequiredElements]),
 
         OptionalElements = generate_optional_response_elements(Module, Args),
 %%        io:format("DEBUG2: ~p~n", [OptionalElements]),
 
-        {Verb, RequiredElements ++ OptionalElements}
-    catch
-        throw:OAIError -> OAIError
-    end.
+        {Verb, RequiredElements ++ OptionalElements}.
+%%    catch
+%%        throw:OAIError -> OAIError
+%%    end.
 
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
@@ -192,7 +193,7 @@ generate_required_response_elements(Module, Args) ->
             Elements when is_list(Elements)->
                 [ {ElementName, Element} || Element <- Elements ];
             Element -> oai_utils:ensure_list({ElementName, Element})
-        end %todo catch errors
+        end %todo catch errors, function clause
     end, Module:required_response_elements()).
 
 generate_optional_response_elements(Module, Args) ->
@@ -236,6 +237,9 @@ generate_request_element(ParsedArgs, Req) ->
 %% TODO * allowed charset
 %% TODO * define granularity as date type
 %% TODO * share should have opendata attribute
+%% TODO * TESTS !!!
+%% TODO * get_response always returnig tuple {ElementName, OAIRsponse} ???
+
 
 
 
