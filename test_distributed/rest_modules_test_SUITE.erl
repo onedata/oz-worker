@@ -71,17 +71,18 @@
     ]
 ).
 
+-define(PROXY_ENDPOINT, <<"172.17.0.9:8080/api/v1">>).
 -define(DOI_SERVICE,
     #{
         <<"name">> => <<"LifeWatch DataCite">>,
-        <<"proxyEndpoint">> => <<"some_endpoint">>,
+        <<"proxyEndpoint">> => ?PROXY_ENDPOINT,
         <<"serviceProperties">> => #{
             <<"type">> => <<"DOI">>,
             <<"host">> => <<"https://mds.test.datacite.org">>,
             <<"doiEndpoint">> => <<"/doi">>,
             <<"metadataEndpoint">> => <<"/metadata">>,
             <<"mediaEndpoint">> => <<"/media">>,
-            <<"prefix">> => <<"10.572">>,
+            <<"prefix">> => <<"10.5072">>,
             <<"username">> => <<"alice">>,
             <<"password">> => <<"*******">>,
             <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
@@ -93,7 +94,7 @@
 -define(PID_SERVICE,
     #{
         <<"name">> => <<"iMarine EPIC">>,
-        <<"proxyEndpoint">> => <<"some_endpoint2">>,
+        <<"proxyEndpoint">> => ?PROXY_ENDPOINT,
         <<"serviceProperties">> => #{
             <<"type">> => <<"PID">>,
             <<"endpoint">> => <<"https://epic.grnet.gr/api/v2/handles">>,
@@ -1530,12 +1531,7 @@ set_user_privileges_for_service_test(Config) ->
     UserId = ?config(userId, Config),
     Privileges = #{<<"privileges">> => [<<"view_handle_service">>]},
 
-    [Worker | _] = ?config(oz_worker_nodes, Config),
-    tracer:start(Worker),
-    tracer:trace_calls(handle_services_rest_module),
-    tracer:trace_calls(handle_service_logic),
     Result = set_user_privileges_for_handle_service(Id, UserId, Privileges, UserReqParams),
-    tracer:stop(),
 
     ?assertEqual(204, Result),
     ?assertEqual(Privileges, get_user_privileges_for_handle_service(Id, UserId, UserReqParams)).
@@ -1572,17 +1568,24 @@ create_doi_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
+    [Node1 | _] = ?config(oz_worker_nodes, Config),
+
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
 
-    ?assertMatch(<<_/binary>>, HId).
+    ?assertMatch(<<_/binary>>, HId),
+    test_utils:mock_assert_num_calls(Node1, handle_proxy_client, put, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
 
 create_pid_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     Id = add_handle_service(?PID_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
+    [Node1 | _] = ?config(oz_worker_nodes, Config),
+
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
 
-    ?assertMatch(<<_/binary>>, HId).
+    ?assertMatch(<<_/binary>>, HId),
+    test_utils:mock_assert_num_calls(Node1, handle_proxy_client, put, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
+
 
 list_handles_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1607,7 +1610,7 @@ get_handle_test(Config) ->
 
     ?assertMatch(#{
         <<"handle">> := <<_/binary>>,
-        <<"handleId">> := Hid,
+        <<"handleId">> := HId,
         <<"handleServiceId">> := Id,
         <<"resourceId">> := Guid
     }, Result).
@@ -1617,32 +1620,41 @@ modify_handle_test(Config) ->
     Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
-    Guid2 = <<"some_guid">>,
+    Guid2 = <<"some_guid2">>,
     Modifications = #{
         <<"resourceId">> => Guid2
     },
+    [Node1 | _] = ?config(oz_worker_nodes, Config),
 
     Result = modify_handle(Modifications, HId, UserReqParams),
 
     ?assertEqual(204, Result),
-    ?assertEqual(?HANDLE(Id, Guid2)#{<<"handle">> => <<"undefined">>, <<"handleId">> => HId},
-        get_handle(HId, UserReqParams)).
+    ?assertMatch(#{
+        <<"handle">> := <<"10.5072%2F", _/binary>>,
+        <<"handleId">> := HId,
+        <<"handleServiceId">> := Id,
+        <<"resourceId">> := Guid2,
+        <<"resourceType">> := <<"Share">>},
+        get_handle(HId, UserReqParams)),
+    test_utils:mock_assert_num_calls(Node1, handle_proxy_client, patch, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
 
 delete_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
+    [Node1 | _] = ?config(oz_worker_nodes, Config),
 
     Result = delete_handle(HId, UserReqParams),
 
     ?assertEqual(202, Result),
-    ?assertEqual({request_error, 403}, get_handle(HId, UserReqParams)). %todo change to 404
+    ?assertEqual({request_error, 403}, get_handle(HId, UserReqParams)), %todo change to 404
+    test_utils:mock_assert_num_calls(Node1, handle_proxy_client, put, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
 
 add_user_to_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
 
@@ -1654,7 +1666,7 @@ list_handle_users_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
     UserId2 = ?config(userId2, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
 
@@ -1672,7 +1684,7 @@ delete_user_from_handle_test(Config) ->
     UserReqParams2 = ?config(userReqParams2, Config),
     UserId = ?config(userId, Config),
     UserId2 = ?config(userId2, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     204 = add_user_to_handle(HId, UserId, UserReqParams),
@@ -1686,7 +1698,7 @@ delete_user_from_handle_test(Config) ->
 
 add_group_to_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
@@ -1697,7 +1709,7 @@ add_group_to_handle_test(Config) ->
 
 list_handle_groups_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     GroupId1 = create_group(<<"test_group1">>, <<"organization">>, UserReqParams),
@@ -1713,7 +1725,7 @@ list_handle_groups_test(Config) ->
 
 delete_group_from_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
@@ -1727,7 +1739,7 @@ delete_group_from_handle_test(Config) ->
 get_user_privileges_for_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     204 = add_user_to_handle(HId, UserId, UserReqParams),
@@ -1743,7 +1755,7 @@ get_user_privileges_for_handle_test(Config) ->
 
 set_user_privileges_for_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     UserId = ?config(userId, Config),
@@ -1756,7 +1768,7 @@ set_user_privileges_for_handle_test(Config) ->
 
 get_group_privileges_for_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
@@ -1772,7 +1784,7 @@ get_group_privileges_for_handle_test(Config) ->
 
 set_group_privileges_for_handle_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
-    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
     Guid = <<"some_guid">>,
     HId = add_handle(?HANDLE(Id, Guid), UserReqParams),
     GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
@@ -1883,6 +1895,7 @@ init_per_testcase(delete_user_from_handle_test, Config) ->
     init_per_testcase(register_provider_and_two_users, Config);
 init_per_testcase(non_register, Config) ->
     RestAddress = RestAddress = ?config(restAddress, Config),
+    mock_handle_proxy(Config),
     [{cert_files, generate_cert_files()} | Config];
 init_per_testcase(register_only_provider, Config) ->
     %% this init function is for tests
@@ -1924,6 +1937,7 @@ init_per_testcase(_Default, Config) ->
 
 end_per_testcase(_, Config) ->
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
+    unmock_handle_proxy(Config),
     file:delete(KeyFile),
     file:delete(CSRFile),
     file:delete(CertFile).
@@ -2975,3 +2989,26 @@ fetch_value_from_list(Val) ->
             Content;
         _ -> Val
     end.
+
+mock_handle_proxy(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, handle_proxy_client),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
+        fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
+            {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
+        end),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
+        fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
+            {ok, 204, [], <<"">>}
+        end),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
+        fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
+            {ok, 200, [], <<"">>}
+        end).
+
+unmock_handle_proxy(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, handle_proxy_client).
+
+
+

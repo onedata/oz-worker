@@ -120,13 +120,13 @@ has_effective_privilege(HandleId, UserId, Privilege) ->
 %% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create(UserId :: onedata_user:id(), HandleServiceId :: binary(),
-    ResourceType :: binary(), ResourceId :: binary(), HandleLocation :: binary()) ->
-    {ok, HandleId :: handle:id()}.
-create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation) ->
+-spec create(onedata_user:id(), handle_service:id(), handle:resource_type(),
+    handle:resource_id(), handle:public_handle()) ->
+    {ok, handle:id()}.
+create(UserId, HandleServiceId, ResourceType, ResourceId, PublicHandle) ->
     Privileges = privileges:handle_admin(),
     Handle = #handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
-        resource_id = ResourceId, handle = HandleLocation, users = [{UserId, Privileges}]},
+        resource_id = ResourceId, handle = PublicHandle, users = [{UserId, Privileges}]},
 
     {ok, HandleId} = handle:save(#document{value = Handle}),
     {ok, _} = onedata_user:update(UserId, fun(User = #onedata_user{handles = UHandles}) ->
