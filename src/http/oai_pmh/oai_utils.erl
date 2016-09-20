@@ -216,10 +216,9 @@ to_xml(#oai_metadata{metadata_format = Format, value = Value}) ->
         content = ensure_list(to_xml(Mod:encode(Value)))};
 to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
     metadataNamespace = Namespace}) ->
-
     #xmlElement{
         name = metadataFormat,
-        content = ensure_list(to_xml({metadatPrefix, MetadataPrefix})) ++
+        content = ensure_list(to_xml({metadataPrefix, MetadataPrefix})) ++
             ensure_list(to_xml({schema, Schema})) ++
             ensure_list(to_xml({metadataNamespace, Namespace}))
     };

@@ -4,7 +4,8 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% WRITEME
+%%% This module is responsible for encoding metadata to Dublin Core format.
+%%% It implements metadata_format_behaviour.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(dublin_core).
@@ -15,18 +16,13 @@
 -behaviour(metadata_format_behaviour).
 
 %% API
--export([elements/0, encode/1, metadata_prefix/0, schema_URL/0, extra_namespaces/0, schema_location/0, main_namespace/0]).
+-export([elements/0, encode/1, metadata_prefix/0, schema_URL/0,
+        extra_namespaces/0, schema_location/0, main_namespace/0]).
 
--define(OAI_DC_XML_NAMESPACE, #xmlAttribute{
-    name='xmlns:oai_dc',
-    value= "http://www.openarchives.org/OAI/2.0/oai_dc/"}).
--define(DC_XML_NAMESPACE, #xmlAttribute{
-    name='xmlns:dc',
-    value="http://purl.org/dc/elements/1.1/"}).
 
--define(DC_XSI_SCHEMA_LOCATION, #xmlAttribute{
-    name='xsi:schemaLocation',
-    value = "http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd"}).
+%%%===================================================================
+%%% API
+%%%===================================================================
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -60,7 +56,7 @@ main_namespace() ->
 %%%-------------------------------------------------------------------
 -spec extra_namespaces() -> [{atom(), binary()}].
 extra_namespaces() -> [
-    {'xmlns:dc', "http://purl.org/dc/elements/1.1/"}
+    {'xmlns:dc', <<"http://purl.org/dc/elements/1.1/">>}
 ].
 
 %%%-------------------------------------------------------------------
@@ -104,28 +100,67 @@ elements() -> [
 %%%-------------------------------------------------------------------
 -spec encode(#{} | binary()) -> #xmlElement{}.
 encode(Metadata) ->
-%%    todo wrap oai_dc headers around bare dc
-    {MetadataXML, _} = xmerl_scan:string(binary_to_list(Metadata)),
-    MetadataXML. %todo currently bare xml is saved
-%%    XMLElements = lists:flatmap(fun(Key) ->
-%%        case maps:get(Key, Metadata, undefined) of
-%%            undefined -> [];
-%%            Value -> [#xmlElement{
-%%                name=binary_to_atom(<<"dc:", Key/binary>>, latin1),
-%%                content=[str_utils:to_list(Value)]}]
-%%        end
-%%    end, elements()),
-%%
-%%    #xmlElement{
-%%        name='oai_dc:dc',
-%%        attributes = [
-%%            ?OAI_DC_XML_NAMESPACE,
-%%            ?DC_XML_NAMESPACE,
-%%            ?OAI_XML_SCHEMA_NAMESPACE,
-%%            ?DC_XSI_SCHEMA_LOCATION],
-%%        content = XMLElements}.
+
+    %todo currently bare xml is saved
+    {#xmlElement{content=MetadataContent}, _} = xmerl_scan:string(binary_to_list(Metadata)),
+    %%    MetadataXML = lists:flatmap(fun(Key) ->
+    %%        case maps:get(Key, Metadata, undefined) of
+    %%            undefined -> [];
+    %%            Value -> [#xmlElement{
+    %%                name=binary_to_atom(<<"dc:", Key/binary>>, latin1),
+    %%                content=[str_utils:to_list(Value)]}]
+    %%        end
+    %%    end, elements()),
+
+    #xmlElement{
+        name = 'oai_dc:dc',
+        attributes = get_attributes(),
+        content = MetadataContent}.
 
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%%-------------------------------------------------------------------
+%%% @private
+%%% @doc
+%%% Gets XML attributes for metadata element.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec get_attributes() -> [#xmlAttribute{}].
+get_attributes() ->
+    [main_namespace_attr()] ++
+        extra_namespaces_attr() ++
+        [schema_url_attr()] ++
+        [schema_location_attr()]
+.
+
+-spec main_namespace_attr() -> #xmlAttribute{}.
+main_namespace_attr() ->
+    {Name, Value} = main_namespace(),
+    #xmlAttribute{
+        name = Name,
+        value = str_utils:to_list(Value)
+    }.
+
+
+-spec extra_namespaces_attr() -> [#xmlAttribute{}].
+extra_namespaces_attr() ->
+    lists:map(fun({Name, Value}) ->
+        #xmlAttribute{
+            name = Name,
+            value = str_utils:to_list(Value)}
+    end, extra_namespaces()).
+
+-spec schema_url_attr() -> #xmlAttribute{}.
+schema_url_attr() ->
+    ?OAI_XML_SCHEMA_NAMESPACE.
+
+-spec schema_location_attr() -> #xmlAttribute{}.
+schema_location_attr() ->
+    Value = schema_location(),
+    #xmlAttribute{
+        name = 'xsi:schemaLocation',
+        value = str_utils:to_list(Value)
+    }.
