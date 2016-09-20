@@ -636,16 +636,15 @@ authenticate_by_basic_credentials(Login, Password) ->
             UserRole = proplists:get_value(<<"userRole">>, Props),
             UserDocument = case onedata_user:get(UserId) of
                 {error, {not_found, onedata_user}} ->
-                    UserDoc = #document{
-                        key = UserId,
-                        value = #onedata_user{
-                            name = Login,
-                            login = Login,
-                            basic_auth_enabled = true
-                        }},
-                    {ok, UserId} = onedata_user:save(UserDoc),
+                    UserRecord = #onedata_user{
+                        name = Login,
+                        login = Login,
+                        basic_auth_enabled = true
+                    },
+                    {ok, UserId} = create(UserRecord, UserId),
                     ?info("Created new account for user '~s' from onepanel "
                     "(role: '~s')", [Login, UserRole]),
+                    {ok, UserDoc} = onedata_user:get(UserId),
                     UserDoc;
                 {ok, #document{value = #onedata_user{} = UserInfo} = UserDoc} ->
                     % Make sure user login is up to date (it might have changed
