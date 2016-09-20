@@ -49,7 +49,7 @@ page_init() ->
                 % If user has a default provider, redirect him straight there
                 URL = case DefaultProvider of
                     undefined ->
-                        <<?page_after_login>>;
+                        <<"/">>;
                     ProviderId ->
                         ?debug("Automatically redirecting user `~s` "
                         "to default provider `~s`", [UserId, ProviderId]),
