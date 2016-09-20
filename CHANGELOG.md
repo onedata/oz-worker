@@ -4,6 +4,12 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc6
+
+* VFS-2582 Using GUI fix for blank notifications
+* VFS-2390 Upgrade rebar to version 3
+
+
 ### 3.0.0-rc5
 
 * VFS-2491 Add RPC call to join a space

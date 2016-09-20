@@ -444,8 +444,8 @@ list_providers_of_space_test(Config) ->
     {ok, Space1} = oz_test_utils:create_space(
         Config, {user, UserWithSpaces}, <<"sp">>
     ),
-    ok = oz_test_utils:support_space(Config, Provider1, Space1, 100),
-    ok = oz_test_utils:support_space(Config, Provider2, Space1, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider1, Space1, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider2, Space1, 100),
     ExpProviders = [
         Provider1,
         Provider2
@@ -690,8 +690,12 @@ create_3_nested_groups(Config, TestUser) ->
     {ok, DummyUser} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, MiddleGroup} = oz_test_utils:create_group(Config, DummyUser, <<"gr">>),
     {ok, TopGroup} = oz_test_utils:create_group(Config, DummyUser, <<"gr">>),
-    ok = oz_test_utils:join_group(Config, {group, BottomGroup}, MiddleGroup),
-    ok = oz_test_utils:join_group(Config, {group, MiddleGroup}, TopGroup),
+    {ok, MiddleGroup} = oz_test_utils:join_group(
+        Config, {group, BottomGroup}, MiddleGroup
+    ),
+    {ok, TopGroup} = oz_test_utils:join_group(
+        Config, {group, MiddleGroup}, TopGroup
+    ),
     TopGroup.
 
 

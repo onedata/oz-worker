@@ -17,14 +17,15 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([exists/1, has_provider/2, has_user/2, has_effective_user/2, has_group/2,
-    has_effective_privilege/3]).
+-export([exists/1, has_provider/2, has_user/2, has_effective_user/2,
+    has_group/2, has_effective_privilege/3]).
 -export([get_shares/1, has_share/2]).
 -export([create/2, create/4, get_data/2, modify/3]).
 -export([join/2, add_user/2, get_user/3, get_users/1, get_effective_users/1,
     remove_user/2]).
 -export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
--export([support/3, get_providers/2, get_provider/3, remove_provider/2]).
+-export([support/3, add_provider/3, get_providers/2, get_provider/3, 
+    remove_provider/2]).
 -export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
 -export([remove/1, cleanup/1]).
 -export([list/0]).
@@ -188,7 +189,7 @@ create({provider, ProviderId}, Name, Macaroon, Size) ->
 -spec modify(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider,
     Name :: binary()) -> ok.
 modify(SpaceId, {user, UserId}, Name) ->
-    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     ok;
 modify(SpaceId, provider, Name) ->
     {ok, _} = space:update(SpaceId, fun(Space) ->
@@ -214,7 +215,8 @@ set_privileges(SpaceId, Member, Privileges) ->
 
 %%--------------------------------------------------------------------
 %% @doc Adds a new member to a Space identified by a token.
-%% Throws exception when call to the datastore fails, or member/token/space_from_token doesn't exist.
+%% Throws exception when call to the datastore fails,
+%% or member/token/space_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec join({group | user, Id :: binary()}, Macaroon :: macaroon:macaroon()) ->
@@ -227,14 +229,17 @@ join({group, GroupId}, Macaroon) ->
     add_group(SpaceId, GroupId).
 
 %%--------------------------------------------------------------------
-%% @doc Adds a new user to a Space.
+%% @doc Adds a new user to a Space. Does not check authorization - use join/2
+%% for user adding based on authorization!
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec add_user(SpaceId :: binary(), UserId :: binary()) ->
     {ok, SpaceId :: binary()}.
 add_user(SpaceId, UserId) ->
     case has_user(SpaceId, UserId) of
-        true -> ok;
+        true ->
+            ok;
         false ->
             {ok, _} = space:update(SpaceId, fun(Space) ->
                 Privileges = privileges:space_user(),
@@ -246,19 +251,22 @@ add_user(SpaceId, UserId) ->
                 {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
             end),
             {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
-            user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+            user_logic:set_space_name_mapping(UserId, SpaceId, Name, false)
     end,
     {ok, SpaceId}.
 
 %%--------------------------------------------------------------------
-%% @doc Adds a new group to a Space.
+%% @doc Adds a new group to a Space. Does not check authorization - use join/2
+%% for group adding based on authorization!
+%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec add_group(SpaceId :: binary(), GroupId :: binary()) ->
     {ok, SpaceId :: binary()}.
 add_group(SpaceId, GroupId) ->
     case has_group(SpaceId, GroupId) of
-        true -> ok;
+        true ->
+            ok;
         false ->
             Privileges = privileges:space_user(),
             {ok, _} = space:update(SpaceId, fun(Space) ->
@@ -270,16 +278,21 @@ add_group(SpaceId, GroupId) ->
                 {ok, Group#user_group{spaces = [SpaceId | Spaces]}}
             end),
             {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
-            {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
+            {ok, #document{
+                value = #user_group{
+                    users = Users
+                }}} = user_group:get(GroupId),
             lists:foreach(fun({UserId, _}) ->
-                user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+                user_logic:set_space_name_mapping(UserId, SpaceId, Name, false)
             end, Users)
     end,
     {ok, SpaceId}.
 
+
 %%--------------------------------------------------------------------
 %% @doc Adds a new supporting provider to a Space identified by a token.
-%% Throws exception when call to the datastore fails, or provider/token/space_from_token doesn't exist.
+%% Throws exception when call to the datastore fails,
+%% or provider/token/space_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec support(ProviderId :: binary(), Macaroon :: macaroon:macaroon(),
@@ -287,18 +300,31 @@ add_group(SpaceId, GroupId) ->
     {ok, SpaceId :: binary()}.
 support(ProviderId, Macaroon, SupportedSize) ->
     {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
+    add_provider(SpaceId, ProviderId, SupportedSize).
+
+
+%%--------------------------------------------------------------------
+%% @doc Adds a new supporting provider to a Space. Does not check
+%% authorization - use join/2 for provider adding based on authorization!
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_provider(SpaceId :: binary(), ProviderId :: binary(),
+    SupportedSize :: integer()) -> {ok, SpaceId :: space:id()}.
+add_provider(SpaceId, ProviderId, SupportedSize) ->
     case has_provider(SpaceId, ProviderId) of
-        true -> ok;
+        true ->
+            {ok, SpaceId};
         false ->
             {ok, _} = space:update(SpaceId, fun(Space) ->
                 #space{providers_supports = Supports} = Space,
-                {ok, Space#space{
-                    providers_supports = [{ProviderId, SupportedSize} | Supports]
-                }}
+                {ok, Space#space{providers_supports = [
+                    {ProviderId, SupportedSize} | Supports
+                ]}}
             end),
-            add_space_to_providers(SpaceId, [ProviderId])
-    end,
-    {ok, SpaceId}.
+            add_space_to_providers(SpaceId, [ProviderId]),
+            {ok, SpaceId}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -574,7 +600,7 @@ create_with_provider({user, UserId}, Name, Supports) ->
     end),
 
     add_space_to_providers(SpaceId, Providers),
-    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     {ok, SpaceId};
 
 create_with_provider({group, GroupId}, Name, Supports) ->
@@ -591,7 +617,7 @@ create_with_provider({group, GroupId}, Name, Supports) ->
     add_space_to_providers(SpaceId, Providers),
     {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
     lists:foreach(fun({UserId, _}) ->
-        user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+        user_logic:set_space_name_mapping(UserId, SpaceId, Name, true)
     end, Users),
 
     {ok, SpaceId}.

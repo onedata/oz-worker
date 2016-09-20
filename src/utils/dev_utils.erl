@@ -315,7 +315,7 @@ create_space_with_provider({user, UserId}, Name, Support, UUID) ->
     {ok, SpaceId} = space:save(#document{key = UUID, value = Space}),
     UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
     onedata_user:save(UserDoc#document{value = UserNew}),
-    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
 
     {ok, SpaceId};
 create_space_with_provider({group, GroupId}, Name, Support, UUID) ->
@@ -330,7 +330,7 @@ create_space_with_provider({group, GroupId}, Name, Support, UUID) ->
     user_group:save(GroupDoc#document{value = GroupNew}),
 
     lists:foreach(fun({UserId, _}) ->
-        user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+        user_logic:set_space_name_mapping(UserId, SpaceId, Name, true)
     end, Users),
 
     {ok, SpaceId}.
