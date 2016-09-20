@@ -65,7 +65,7 @@
 -define(SPACE_PRIVILEGES,
     [
         space_view_data, space_change_data,
-        space_manage_shares, space_write_files,
+        space_write_files, % space_manage_shares is checked in rest_shares_test_SUITE
         space_invite_user, space_remove_user,
         space_invite_group, space_remove_group,
         space_set_privileges, space_remove,
@@ -1540,7 +1540,7 @@ get_user_privileges_for_service_test(Config) ->
     #{<<"privileges">> := PrivilegeList} =
         ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
     ?assertEqual(lists:sort([<<"register_handle_service">>, <<"list_handle_services">>, <<"delete_handle_service">>,
-        <<"modify_handle_service">>, <<"view_handle_service">>]),
+        <<"modify_handle_service">>, <<"view_handle_service">>, <<"register_handle">>]),
         lists:sort(PrivilegeList)
     ).
 
@@ -1565,7 +1565,7 @@ get_group_privileges_for_service_test(Config) ->
 
     #{<<"privileges">> := PrivilegeList} =
         ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
-    ?assertEqual(lists:sort([<<"view_handle_service">>]),
+    ?assertEqual(lists:sort([<<"register_handle">>, <<"view_handle_service">>]),
         lists:sort(PrivilegeList)
     ).
 
@@ -1769,7 +1769,7 @@ get_user_privileges_for_handle_test(Config) ->
 
     #{<<"privileges">> := PrivilegeList} =
         ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
-    ?assertEqual(lists:sort([<<"register_handle">>, <<"list_handles">>, <<"delete_handle">>,
+    ?assertEqual(lists:sort([<<"list_handles">>, <<"delete_handle">>,
         <<"modify_handle">>, <<"view_handle">>]),
         lists:sort(PrivilegeList)
     ).
