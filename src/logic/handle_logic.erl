@@ -16,7 +16,7 @@
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
--export([create/5, modify/3, set_user_privileges/3, set_group_privileges/3]).
+-export([create/6, modify/4, set_user_privileges/3, set_group_privileges/3]).
 -export([get_data/1, get_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
@@ -121,14 +121,15 @@ has_effective_privilege(HandleId, UserId, Privilege) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(onedata_user:id(), handle_service:id(), handle:resource_type(),
-    handle:resource_id(), handle:public_handle()) ->
+    handle:resource_id(), handle:public_handle(), handle:metadata()) ->
     {ok, handle:id()}.
-create(UserId, HandleServiceId, ResourceType, ResourceId, PublicHandle) ->
+create(UserId, HandleServiceId, ResourceType, ResourceId, PublicHandle, Metadata) ->
     Privileges = privileges:handle_admin(),
     Handle = #handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
-        resource_id = ResourceId, handle = PublicHandle, users = [{UserId, Privileges}]},
+        resource_id = ResourceId, handle = PublicHandle, metadata = Metadata,
+        users = [{UserId, Privileges}]},
 
-    {ok, HandleId} = handle:save(#document{value = Handle}),
+    {ok, HandleId} = handle:create(#document{value = Handle}),
     {ok, _} = onedata_user:update(UserId, fun(User = #onedata_user{handles = UHandles}) ->
         {ok, User#onedata_user{handles = [HandleId | UHandles]}}
     end),
@@ -140,15 +141,17 @@ create(UserId, HandleServiceId, ResourceType, ResourceId, PublicHandle) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(handle:id(), handle:resource_type(), handle:resource_id()) -> ok.
-modify(_HandleId, undefined, undefined) ->
+-spec modify(handle:id(), handle:resource_type(), handle:resource_id(), handle:metadata()) -> ok.
+modify(_HandleId, undefined, undefined, undefined) ->
     ok;
-modify(HandleId, NewResourceType, NewResourceId) ->
+modify(HandleId, NewResourceType, NewResourceId, NewMetadata) ->
     {ok, _} = handle:update(HandleId,
-        fun(Handle = #handle{resource_type = ResourceType, resource_id = ResourceId}) ->
+        fun(Handle = #handle{resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata}) ->
             FinalResourceType = utils:ensure_defined(NewResourceType, undefined, ResourceType),
             FinalResourceId = utils:ensure_defined(NewResourceId, undefined, ResourceId),
-            {ok, Handle#handle{resource_type = FinalResourceType, resource_id = FinalResourceId}}
+            FinalMetadata = utils:ensure_defined(NewMetadata, undefined, Metadata),
+            {ok, Handle#handle{resource_type = FinalResourceType, resource_id = FinalResourceId,
+                metadata = FinalMetadata, timestamp = handle:actual_timestamp()}}
         end),
     ok.
 
@@ -239,14 +242,15 @@ add_group(HandleId, GroupId) ->
 -spec get_data(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
 get_data(HandleId) ->
     {ok, #document{value = #handle{handle_service_id = HandleServiceId, handle = Handle,
-        resource_type = ResourceType, resource_id = ResourceId}}} =
+        resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata}}} =
         handle:get(HandleId),
     {ok, [
         {handleId, HandleId},
         {handleServiceId, HandleServiceId},
         {handle, Handle},
         {resourceType, ResourceType},
-        {resourceId, ResourceId}
+        {resourceId, ResourceId},
+        {metadata, Metadata}
     ]}.
 
 %%--------------------------------------------------------------------

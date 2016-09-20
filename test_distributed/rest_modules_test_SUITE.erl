@@ -110,11 +110,28 @@
     }
 ).
 
+-define(DC_METADATA, <<"<?xml version=\"1.0\"?>",
+    "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
+    "<dc:title>Test dataset<\/dc:title>",
+    "<dc:creator>John Johnson<\/dc:creator>",
+    "<dc:creator>Jane Doe<\/dc:creator>",
+    "<dc:subject>Test of datacite<\/dc:subject>",
+    "<dc:description>Lorem ipsum lorem ipusm<\/dc:description>",
+    "<dc:publisher>Onedata<\/dc:publisher>",
+    "<dc:publisher>EGI<\/dc:publisher>",
+    "<dc:date>2016<\/dc:date>",
+    "<dc:format>application\/pdf<\/dc:format>",
+    "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
+    "<dc:language>eng<\/dc:language>",
+    "<dc:rights>CC-0<\/dc:rights>",
+    "<\/metadata>">>).
+
 -define(HANDLE(ServiceId, ResourceId),
     #{
         <<"handleServiceId">> => ServiceId,
         <<"resourceType">> => <<"Share">>,
-        <<"resourceId">> => ResourceId
+        <<"resourceId">> => ResourceId,
+        <<"metadata">> => ?DC_METADATA
     }
 ).
 
@@ -1396,7 +1413,7 @@ list_services_test(Config) ->
     DoiId = add_handle_service(?DOI_SERVICE, UserReqParams),
     PidId = add_handle_service(?PID_SERVICE, UserReqParams),
 
-    Services = list_handle_service(UserReqParams), %todo should we list owned services or services that are accessible.
+    Services = list_handle_service(UserReqParams),
 
     #{<<"handle_services">> := ServiceList} =
         ?assertMatch(#{<<"handle_services">> := [_ | _]}, Services),
@@ -1594,7 +1611,7 @@ list_handles_test(Config) ->
     Id1 = add_handle(?HANDLE(Id, Guid), UserReqParams),
     Id2 = add_handle(?HANDLE(Id, Guid), UserReqParams),
 
-    Handles = list_handle(UserReqParams), %todo should we list owned services or services that are accessible.
+    Handles = list_handle(UserReqParams),
 
     #{<<"handles">> := HandlesList} =
         ?assertMatch(#{<<"handles">> := [_ | _]}, Handles),
@@ -1612,7 +1629,8 @@ get_handle_test(Config) ->
         <<"handle">> := <<_/binary>>,
         <<"handleId">> := HId,
         <<"handleServiceId">> := Id,
-        <<"resourceId">> := Guid
+        <<"resourceId">> := Guid,
+        <<"metadata">> := ?DC_METADATA
     }, Result).
 
 modify_handle_test(Config) ->
@@ -1634,7 +1652,8 @@ modify_handle_test(Config) ->
         <<"handleId">> := HId,
         <<"handleServiceId">> := Id,
         <<"resourceId">> := Guid2,
-        <<"resourceType">> := <<"Share">>},
+        <<"resourceType">> := <<"Share">>,
+        <<"metadata">> := ?DC_METADATA},
         get_handle(HId, UserReqParams)),
     test_utils:mock_assert_num_calls(Node1, handle_proxy_client, patch, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
 

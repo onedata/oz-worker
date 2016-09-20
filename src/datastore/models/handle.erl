@@ -21,12 +21,29 @@
 -type resource_type() :: binary().
 -type resource_id() :: binary().
 -type public_handle() :: binary().
+-type metadata() :: binary().
+-type timestamp() :: calendar:datetime().
 
--export_type([id/0, resource_type/0, resource_id/0, public_handle/0]).
+-export_type([id/0, resource_type/0, resource_id/0, public_handle/0, metadata/0,
+    timestamp/0]).
+
+%% API
+-export([actual_timestamp/0]).
 
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @equiv universaltime().
+%%--------------------------------------------------------------------
+-spec actual_timestamp() -> timestamp().
+actual_timestamp() ->
+    erlang:universaltime().
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -38,8 +55,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec save(datastore:document()) -> {ok, datastore:ext_key()} | datastore:generic_error().
-save(Document) ->
-    datastore:save(?STORE_LEVEL, Document).
+save(Document = #document{value = Handle}) ->
+    datastore:save(?STORE_LEVEL, Document#document{value = Handle#handle{timestamp = actual_timestamp()}}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -57,8 +74,8 @@ update(Key, Diff) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(datastore:document()) -> {ok, datastore:ext_key()} | datastore:create_error().
-create(Document) ->
-    datastore:create(?STORE_LEVEL, Document).
+create(Document = #document{value = Handle}) ->
+    datastore:create(?STORE_LEVEL, Document#document{value = Handle#handle{timestamp = actual_timestamp()}}).
 
 %%--------------------------------------------------------------------
 %% @doc

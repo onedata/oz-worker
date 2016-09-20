@@ -137,15 +137,17 @@ accept_resource(handles, post, _HandleId, Data, #client{type = user, id = UserId
     HandleServiceId = rest_module_helper:assert_key(<<"handleServiceId">>, Data, binary, Req),
     ResourceType = rest_module_helper:assert_key(<<"resourceType">>, Data, binary, Req),
     ResourceId = rest_module_helper:assert_key(<<"resourceId">>, Data, binary, Req),
-    {ok, HandleLocation} = handle_proxy:register_handle(HandleServiceId, ResourceType, ResourceId),
-    {ok, HandleId} = handle_logic:create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation),
+    Metadata = rest_module_helper:assert_key(<<"metadata">>, Data, binary, Req),
+    {ok, HandleLocation} = handle_proxy:register_handle(HandleServiceId, ResourceType, ResourceId, Metadata),
+    {ok, HandleId} = handle_logic:create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation, Metadata),
     {{true, <<"/handles/", HandleId/binary>>}, Req};
 
 accept_resource(handle, patch, HandleId, Data, #client{type = user, id = _UserId}, Req) ->
     ResourceType = rest_module_helper:assert_type(<<"resourceType">>, Data, binary, Req),
     ResourceId = rest_module_helper:assert_type(<<"resourceId">>, Data, binary, Req),
-    ok = handle_proxy:modify_handle(HandleId, ResourceType, ResourceId),
-    ok = handle_logic:modify(HandleId, ResourceType, ResourceId),
+    Metadata = rest_module_helper:assert_type(<<"metadata">>, Data, binary, Req),
+    ok = handle_proxy:modify_handle(HandleId, ResourceType, ResourceId, Metadata),
+    ok = handle_logic:modify(HandleId, ResourceType, ResourceId, Metadata),
     {true, Req};
 
 accept_resource(user, put, HandleId, _Data, _Client, Req) ->

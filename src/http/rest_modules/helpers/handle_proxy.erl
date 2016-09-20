@@ -18,7 +18,7 @@
 -type public_url() :: binary().
 
 %% API
--export([register_handle/3, unregister_handle/1, modify_handle/3]).
+-export([register_handle/4, unregister_handle/1, modify_handle/4]).
 
 %%%===================================================================
 %%% API
@@ -30,18 +30,17 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec register_handle(handle_service:id(), handle:resource_type(),
-    handle:resource_id()) -> {ok, handle:public_handle()}.
-register_handle(HandleServiceId, ResourceType, ResourceId) ->
+    handle:resource_id(), handle:metadata()) -> {ok, handle:public_handle()}.
+register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
     {ok, #document{value = #handle_service{
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties}}
     } = handle_service:get(HandleServiceId),
     Url = get_redirect_url(ResourceType, ResourceId),
-    Metadata = get_metadata(),
     Body = [
         {<<"url">>, Url},
         {<<"serviceProperties">>, ServiceProperties},
-        {<<"metadata">>, Metadata}
+        {<<"metadata">>, [{<<"onedata_dc">>, Metadata}]}
     ],
     Headers = [{<<"content-type">>, <<"application/json">>}, {<<"accept">>, <<"application/json">>}],
     Type = proplists:get_value(<<"type">>, ServiceProperties),
@@ -90,13 +89,14 @@ unregister_handle(HandleId)  ->
 %% Modify handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec modify_handle(handle:id(), handle:resource_type(), handle:resource_id()) ->
+-spec modify_handle(handle:id(), handle:resource_type(), handle:resource_id(), handle:metadata()) ->
     ok.
-modify_handle(_HandleId, undefined, undefined)  ->
+modify_handle(_HandleId, undefined, undefined, undefined)  ->
     ok;
-modify_handle(HandleId, NewResourceType, NewResourceId)  ->
+modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata)  ->
     {ok, #document{value = #handle{handle_service_id = HandleServiceId,
-        resource_type = ResourceType, resource_id = ResourceId, handle = PublicHandle}}} =
+        resource_type = ResourceType, resource_id = ResourceId, handle = PublicHandle,
+        metadata = Metadata}}} =
         handle:get(HandleId),
     {ok, #document{value = #handle_service{
         proxy_endpoint = ProxyEndpoint,
@@ -104,16 +104,19 @@ modify_handle(HandleId, NewResourceType, NewResourceId)  ->
     } = handle_service:get(HandleServiceId),
     case (NewResourceType =:= undefined orelse NewResourceType =:= ResourceType)
         andalso (NewResourceId =:= undefined orelse NewResourceId =:= ResourceId)
+        andalso (NewMetadata =:= undefined orelse NewMetadata =:= Metadata)
     of
         true ->
             ok;
         false ->
             FinalResourceType = utils:ensure_defined(NewResourceType, undefined, ResourceType),
             FinalResourceId = utils:ensure_defined(NewResourceId, undefined, ResourceId),
+            FinalMetadata = utils:ensure_defined(NewMetadata, undefined, Metadata),
             FinalUrl = get_redirect_url(FinalResourceType, FinalResourceId),
             Body = [
                 {<<"url">>, FinalUrl},
-                {<<"serviceProperties">>, ServiceProperties}
+                {<<"serviceProperties">>, ServiceProperties},
+                {<<"metadata">>, [{<<"onedata_dc">>, FinalMetadata}]}
             ],
             Headers = [{<<"content-type">>, <<"application/json">>}, {<<"accept">>, <<"application/json">>}],
             Type = proplists:get_value(<<"type">>, ServiceProperties),
@@ -130,34 +133,6 @@ modify_handle(HandleId, NewResourceType, NewResourceId)  ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Get metadata of public file share.
-%% @end
-%%--------------------------------------------------------------------
--spec get_metadata() -> list().
-get_metadata() ->
-    [  %todo get from file
-        {<<"cdmi_size">>, 0},
-        {<<"onedata_json">>, {struct, []}},
-        {<<"onedata_rdf">>, {struct, []}},
-        {<<"onedata_dc">>, <<"<?xml version=\"1.0\"?>",
-            "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
-            "<dc:title>Test dataset<\/dc:title>",
-            "<dc:creator>John Johnson<\/dc:creator>",
-            "<dc:creator>Jane Doe<\/dc:creator>",
-            "<dc:subject>Test of datacite<\/dc:subject>",
-            "<dc:description>Lorem ipsum lorem ipusm<\/dc:description>",
-            "<dc:publisher>Onedata<\/dc:publisher>",
-            "<dc:publisher>EGI<\/dc:publisher>",
-            "<dc:date>2016<\/dc:date>",
-            "<dc:format>application\/pdf<\/dc:format>",
-            "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
-            "<dc:language>eng<\/dc:language>",
-            "<dc:rights>CC-0<\/dc:rights>",
-            "<\/metadata>">>}
-    ].
 
 %%--------------------------------------------------------------------
 %% @doc

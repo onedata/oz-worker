@@ -128,7 +128,7 @@ create(UserId, Name, ProxyEndpoint, ServiceProperties) ->
     Privileges = privileges:handle_service_admin(),
     HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_properties = ServiceProperties,  users = [{UserId, Privileges}]},
 
-    {ok, HandleServiceId} = handle_service:save(#document{value = HandleService}),
+    {ok, HandleServiceId} = handle_service:create(#document{value = HandleService}),
     {ok, _} = onedata_user:update(UserId, fun(User) ->
         #onedata_user{handle_services = UHandleServices} = User,
         {ok, User#onedata_user{handle_services = [HandleServiceId | UHandleServices]}}

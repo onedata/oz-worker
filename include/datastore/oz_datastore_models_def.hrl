@@ -186,8 +186,10 @@
     handle :: handle:public_handle() | undefined,
     resource_type :: handle:resource_type() | undefined,
     resource_id :: handle:resource_id() | undefined,
+    metadata :: handle:metadata() | undefined,
     users = [] :: [{UserId :: binary(), [privileges:handle_privilege()]}],
-    groups = [] :: [{GroupId :: binary(), [privileges:handle_privilege()]}]
+    groups = [] :: [{GroupId :: binary(), [privileges:handle_privilege()]}],
+    timestamp = handle:actual_timestamp() :: handle:timestamp()
 }).
 
 -type user_info() :: #onedata_user{}.
