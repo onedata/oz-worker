@@ -20,13 +20,13 @@
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
--export([create/1, get_user/1, get_user_doc/1, modify/2, get_data/2]).
+-export([create/1, create/2, get_user/1, get_user_doc/1, modify/2, get_data/2]).
 -export([get_groups/1, get_effective_groups/1, get_providers/1]).
 -export([get_spaces/1, get_shares/1, get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
--export([set_space_name_mapping/3, clean_space_name_mapping/2]).
+-export([set_space_name_mapping/4, clean_space_name_mapping/2]).
 -export([authenticate_by_basic_credentials/2, change_user_password/3]).
 
 %%%===================================================================
@@ -38,10 +38,38 @@
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create(User :: #onedata_user{}) ->
-    {ok, UserId :: binary()}.
-create(User) ->
-    onedata_user:save(#document{value = User}).
+-spec create(UserInfo :: #onedata_user{}) ->
+    {ok, UserId :: onedata_user:id()}.
+create(UserInfo) ->
+    create(UserInfo, undefined).
+
+
+%%--------------------------------------------------------------------
+%% @doc Creates a user account with given Id.
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(UserInfo :: #onedata_user{},
+    ProposedUserId :: onedata_user:id() | undefined) ->
+    {ok, UserId :: onedata_user:id()}.
+create(UserInfo, ProposedUserId) ->
+    {ok, UserId} = onedata_user:save(
+        #document{key = ProposedUserId, value = UserInfo}
+    ),
+    % Check if global groups are enabled, if so add the new user to the groups.
+    case application:get_env(?APP_Name, enable_global_groups) of
+        {ok, true} ->
+            {ok, GlobalGroups} = application:get_env(?APP_Name, global_groups),
+            lists:foreach(
+                fun({GroupId, Privileges}) ->
+                    {ok, GroupId} = group_logic:add_user(GroupId, UserId),
+                    ok = group_logic:set_privileges(GroupId, UserId, Privileges)
+                end, GlobalGroups);
+        _ ->
+            ok
+    end,
+    {ok, UserId}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Retrieves user from the database.
@@ -487,41 +515,59 @@ set_provider_as_default(UserId, ProviderId, Flag) ->
 %% is a member of another space with provided name, a '#' character and prefix
 %% of space ID it prepended to the name, so that the new name is unique and the
 %% prefix of a space ID satisfies minimal length.
+%% The Overwrite argument decides if SpaceName should overwrite the existing
+%% name mapping for given SpaceId, if such exists. If there is no mapping, it is
+%% added no matter the Overwrite arg.
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec set_space_name_mapping(UserId :: binary(), SpaceId :: binary(),
-    SpaceName :: binary()) -> ok.
-set_space_name_mapping(UserId, SpaceId, SpaceName) ->
+    SpaceName :: binary(), Overwrite :: boolean()) -> ok.
+set_space_name_mapping(UserId, SpaceId, SpaceName, Overwrite) ->
     SpaceNameLen = size(SpaceName),
     UniqueSpaceName = <<SpaceName/binary, "#", SpaceId/binary>>,
 
     {ok, _} = onedata_user:update(UserId, fun(User) ->
         #onedata_user{space_names = SpaceNames} = User,
-
-        {ShortestUniquePrefLen, FilteredSpaces} = maps:fold(fun
-            (Id, _, {UniquePrefLen, SpacesAcc}) when Id == SpaceId ->
-                {UniquePrefLen, SpacesAcc};
-            (Id, Name, {UniquePrefLen, SpacesAcc}) ->
-                PrefLen = binary:longest_common_prefix([UniqueSpaceName, Name]),
-                {max(PrefLen + 1, UniquePrefLen), maps:put(Id, Name, SpacesAcc)}
-        end, {SpaceNameLen, #{}}, SpaceNames),
-
-        ValidUniquePrefLen = case ShortestUniquePrefLen > SpaceNameLen of
+        case (not Overwrite) andalso maps:is_key(SpaceId, SpaceNames) of
             true ->
-                min(max(ShortestUniquePrefLen,
-                    SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
-                    size(UniqueSpaceName));
-            false ->
-                ShortestUniquePrefLen
-        end,
+                % If the map already contains the key and Overwrite is false,
+                % nothing needs to be done.
+                {ok, User};
+            _ ->
+                % Else, we have to update or add the name mapping and check for
+                % duplicated names.
+                {ShortestUniquePfxLen, FilteredSpaces} = maps:fold(fun
+                    (Id, _, {UniquePrefLen, SpacesAcc}) when Id == SpaceId ->
+                        {UniquePrefLen, SpacesAcc};
+                    (Id, Name, {UniquePrefLen, SpacesAcc}) ->
+                        PrefLen = binary:longest_common_prefix(
+                            [UniqueSpaceName, Name]),
+                        {
+                            max(PrefLen + 1, UniquePrefLen),
+                            maps:put(Id, Name, SpacesAcc)
+                        }
+                end, {SpaceNameLen, #{}}, SpaceNames),
 
-        ShortestUniqueSpaceName = <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
-        NewUser = User#onedata_user{
-            space_names = maps:put(SpaceId, ShortestUniqueSpaceName, FilteredSpaces)
-        },
+                ValidUniquePrefLen = case ShortestUniquePfxLen > SpaceNameLen of
+                    true ->
+                        min(max(ShortestUniquePfxLen,
+                            SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
+                            size(UniqueSpaceName));
+                    false ->
+                        ShortestUniquePfxLen
+                end,
 
-        {ok, NewUser}
+                ShortestUniqueSpaceName =
+                    <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
+                NewMapping = maps:put(
+                    SpaceId, ShortestUniqueSpaceName, FilteredSpaces),
+                NewUser = User#onedata_user{
+                    space_names = NewMapping
+                },
+
+                {ok, NewUser}
+        end
     end),
     ok.
 
@@ -625,7 +671,7 @@ authenticate_by_basic_credentials(Login, Password) ->
                         false ->
                             {ok, GroupData} = group_logic:get_data(GroupId),
                             GroupName = proplists:get_value(name, GroupData),
-                            ok = group_logic:add_user(GroupId, UserId),
+                            {ok, _} = group_logic:add_user(GroupId, UserId),
                             ?info("Added user '~s' to group '~s' based on "
                             "role '~s'", [Login, GroupName, UserRole])
                     end

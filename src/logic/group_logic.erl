@@ -19,7 +19,7 @@
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
     has_nested_group/2]).
--export([create/3, modify/2, add_user/2, join/2, set_privileges/3, join_group/2]).
+-export([create/3, modify/2, add_user/2, add_group/2, join/2, join_group/2, set_privileges/3]).
 -export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
     get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
     get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
@@ -165,17 +165,17 @@ modify(GroupId, Data) ->
     ok.
 
 %%--------------------------------------------------------------------
-%% @doc Adds user to a group. Does not check authorization - use join/2 for
+%% @doc Adds a user to a group. Does not check authorization - use join/2 for
 %% user adding based on authorization!
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
 -spec add_user(GroupId :: binary(), UserId :: binary()) ->
-    ok.
+    {ok, GroupId :: onedata_group:id()}.
 add_user(GroupId, UserId) ->
     case has_user(GroupId, UserId) of
         true ->
-            ok;
+            {ok, GroupId};
         false ->
             Privileges = privileges:group_user(),
             {ok, _} = user_group:update(GroupId, fun(Group) ->
@@ -186,21 +186,72 @@ add_user(GroupId, UserId) ->
                 #onedata_user{groups = Groups} = User,
                 {ok, User#onedata_user{groups = [GroupId | Groups]}}
             end),
-            ok
+            % Update user's space name mapping for every space that
+            % the group belongs to
+            {ok, #document{
+                value = #user_group{
+                    spaces = Spaces
+                }}} = user_group:get(GroupId),
+            lists:foreach(
+                fun(SpaceId) ->
+                    {ok, #document{
+                        value = #space{
+                            name = Name
+                        }}} = space:get(SpaceId),
+                    user_logic:set_space_name_mapping(
+                        UserId, SpaceId, Name, false
+                    )
+                end, Spaces),
+            {ok, GroupId}
     end.
 
 %%--------------------------------------------------------------------
+%% @doc Adds a group to a group. Does not check authorization - use join/2 for
+%% group adding based on authorization!
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_group(ParentGroupId :: binary(), ChildGroupId :: binary()) ->
+    {ok, GroupId :: onedata_group:id()} | {error, cycle_averted}.
+add_group(ParentGroupId, ChildGroupId) ->
+    case has_nested_group(ParentGroupId, ChildGroupId) of
+        true ->
+            {ok, ParentGroupId};
+        false ->
+            case has_effective_group(ParentGroupId, ChildGroupId) of
+                true ->
+                    {error, cycle_averted};
+                false ->
+                    Privileges = privileges:group_user(),
+                    {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
+                        #user_group{nested_groups = Groups} = Group,
+                        {ok, Group#user_group{nested_groups = [
+                            {ChildGroupId, Privileges} | Groups
+                        ]}}
+                    end),
+                    {ok, _} = user_group:update(ChildGroupId, fun(Group) ->
+                        #user_group{parent_groups = Groups} = Group,
+                        {ok, Group#user_group{parent_groups = [
+                            ParentGroupId | Groups
+                        ]}}
+                    end),
+                    {ok, ParentGroupId}
+            end
+    end.
+
+
+%%--------------------------------------------------------------------
 %% @doc Adds user to a group identified by a token.
-%% Throws exception when call to the datastore fails, or token/user/group_from_token
-%% doesn't exist in db.
+%% Throws exception when call to the datastore fails, or
+%% token/user/group_from_token doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
 -spec join(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
-    {ok, GroupId :: binary()}.
+    {ok, GroupId :: onedata_group:id()}.
 join(UserId, Macaroon) ->
     {ok, {group, GroupId}} = token_logic:consume(Macaroon),
-    ok = add_user(GroupId, UserId),
-    {ok, GroupId}.
+    add_user(GroupId, UserId).
+
 
 %%--------------------------------------------------------------------
 %% @doc Adds group as nested to a group identified by the given token.
@@ -209,27 +260,11 @@ join(UserId, Macaroon) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_group(GroupId :: binary(), Macaroon :: macaroon:macaroon()) ->
-    {ok, ParentGroupId :: binary()} | {error, cycle_averted}.
+    {ok, GroupId :: onedata_group:id()} | {error, cycle_averted}.
 join_group(GroupId, Macaroon) ->
     {ok, {group, ParentGroupId}} = token_logic:consume(Macaroon),
-    case has_nested_group(ParentGroupId, GroupId) of
-        true -> {ok, ParentGroupId};
-        false ->
-            case has_effective_group(ParentGroupId, GroupId) of
-                true -> {error, cycle_averted};
-                false ->
-                    Privileges = privileges:group_user(),
-                    {ok, _} = user_group:update(ParentGroupId, fun(Group) ->
-                        #user_group{nested_groups = Groups} = Group,
-                        {ok, Group#user_group{nested_groups = [{GroupId, Privileges} | Groups]}}
-                    end),
-                    {ok, _} = user_group:update(GroupId, fun(Group) ->
-                        #user_group{parent_groups = Groups} = Group,
-                        {ok, Group#user_group{parent_groups = [ParentGroupId | Groups]}}
-                    end),
-                    {ok, ParentGroupId}
-            end
-    end.
+    add_group(ParentGroupId, GroupId).
+
 
 %%--------------------------------------------------------------------
 %% @doc Sets privileges for a member of the group.
@@ -476,6 +511,15 @@ remove_user(GroupId, UserId) ->
         {ok, User#onedata_user{groups = lists:delete(GroupId, Groups)}}
     end),
     cleanup(GroupId),
+    % Clean user's space name mapping for every space that the group belongs to
+    {ok, #document{
+        value = #user_group{
+            spaces = Spaces
+        }}} = user_group:get(GroupId),
+    lists:foreach(
+        fun(SpaceId) ->
+            user_logic:clean_space_name_mapping(UserId, SpaceId)
+        end, Spaces),
     true.
 
 %%--------------------------------------------------------------------
