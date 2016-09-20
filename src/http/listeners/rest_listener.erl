@@ -84,8 +84,6 @@ start() ->
                 {<<RESTAPIPrefix/binary, Path/binary>>, Module, InitialState}
             end, RESTRoutes),
 
-        ?critical("DUPA: ~n~p~n", [RESTRoutesWithPrefix]),
-
         Dispatch = cowboy_router:compile([
             % Redirect requests in form: alias.onedata.org
             {":alias." ++ GRHostname, [{'_', client_redirect_handler, [RestPort]}]},
@@ -94,8 +92,6 @@ start() ->
                 RESTRoutesWithPrefix
             ])}
         ]),
-
-        ?critical("DEBUG: ~n~p~n", [Dispatch]),
 
         {ok, _} = cowboy:start_https(?rest_listener, RestHttpsAcceptors,
             [
@@ -118,6 +114,7 @@ start() ->
             ?error_stacktrace("Could not start rest, error: ~p", [Error]),
             {error, Error}
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -157,7 +154,7 @@ healthcheck() ->
 %% @doc
 %% Returns list of weak ciphers.
 %% @end
-%%--------------------------------------------------------------------
 -spec weak_ciphers() -> list().
+%%--------------------------------------------------------------------
 weak_ciphers() ->
     [{dhe_rsa, des_cbc, sha}, {rsa, des_cbc, sha}].

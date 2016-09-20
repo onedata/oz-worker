@@ -79,7 +79,8 @@ process_and_validate_args(Args) ->
 %%%-------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%% Process and validate arguments list for given request.
+%%% Process and validate arguments list for given OAI-PMH request
+%%% handled by Module.
 %%% Throws suitable error otherwise.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -96,7 +97,7 @@ process_and_validate_verb_specific_arguments(Module, Args) ->
 %%%-------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%% Check if there are no repeated keys.
+%%% Check if there are no repeated keys in proplist.
 %%% @end
 %%%-------------------------------------------------------------------
 -spec all_keys_occur_exactly_once(proplist()) -> boolean().
@@ -108,6 +109,7 @@ all_keys_occur_exactly_once(Proplist) ->
 %%%-------------------------------------------------------------------
 %%% @private
 %%% @doc
+%%% Parse exclusive arguments for given OAI-PMH request handled by Module.
 %%% If exclusive argument occurs it must be an only argument (except 'verb').
 %%% Returns false if there is no exclusive argument on ArgsList, true if
 %%% it's an only argument.
@@ -130,7 +132,8 @@ parse_exclusive_arguments(Module, ArgsList) ->
 %%%-------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%% Parse arguments that are required for given request.
+%%% Parse arguments that are required for given OAI-PMH request
+%%% handled by Module.
 %%% Throws suitable error if such argument is missing.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -212,13 +215,13 @@ parse_harvesting_datestamps(ArgsList) ->
 %%% @private
 %%% @doc
 %%% Validates and converts datestamp from format defined by
-%%% OAI-PMH to erlang:datetime() or date().
+%%% OAI-PMH to erlang:datetime() or erlang:date().
 %%% Converts:
 %%%     * YYYY-MM-DDT:hh:mm:ssZ to {{Year, Month, Day},{Hour, Minutes, Seconds}}
 %%%     * YYYY-MM-DD to {Year, Month, Day}
 %%% @end
 %%%-------------------------------------------------------------------
--spec validate_and_convert_datestamp(undefined | binary()) -> undefined | supported_datestamp().
+-spec validate_and_convert_datestamp(undefined | binary()) -> supported_datestamp().
 validate_and_convert_datestamp(undefined) -> undefined;
 validate_and_convert_datestamp(Date) ->
     case oai_utils:oai_datestamp_to_datetime(Date) of
@@ -259,8 +262,9 @@ is_valid_time({H, M, S}) ->
 %%%-------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%% Checks if there aren't any illegal arguments.
-%%% Throws if such argument exist.
+%%% Checks if there aren't any illegal arguments for given OAI-PMH request
+%%% handled by Module.
+%%% Throws if such argument exists.
 %%% @end
 %%%-------------------------------------------------------------------
 -spec illegal_arguments_do_not_exist(oai_verb_module(), proplist()) -> ok.
@@ -301,11 +305,11 @@ args_values_are_not_empty(Args) ->
 %%% Throws otherwise.
 %%% @end
 %%%-------------------------------------------------------------------
--spec key_occurs_exactly_once(binary(), proplist()) -> ok.
+-spec key_occurs_exactly_once(binary(), proplist()) -> true.
 key_occurs_exactly_once(Key, Proplist) ->
     case count_key_occurrences(Key, Proplist) of
         0 -> throw({missing_key, Key});
-        1 -> ok;
+        1 -> true;
         _ -> throw({repeated_key, Key})
     end.
 

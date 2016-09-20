@@ -4,7 +4,8 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% WRITEME
+%%% This file contains types, records and macros definitions used
+%%% across modules handling OAI-PMH protocol.
 %%% @end
 %%%-------------------------------------------------------------------
 -author("Jakub Kudzia").
@@ -14,7 +15,6 @@
 -define(OAI_HRL, 1).
 -include_lib("xmerl/include/xmerl.hrl").
 
-%%TODO write docs
 
 -record(oai_header, {
     identifier :: oai_id(),
@@ -52,10 +52,6 @@
 -type oai_verb_module() :: identify | get_record | list_identifiers |
                            list_medatada_formats | list_records | list_sets.
 
-
--type oai_verb() :: identify | getRecord | listIdentifiers |
-                    listMedatadaFormats | listRecords | listSets.
-
 -type oai_error_code() :: badArgument | badResumptionToken | badVerb |
                           cannotDisseminateFormat |idDoesNotExist |
                           noRecordsMatch | noMetadataFormats | noSetHierarchy.
@@ -70,7 +66,8 @@
 -type oai_response() :: binary()     | [binary()]     |
                         oai_record() | [oai_record()] |
                         oai_header() | [oai_header()].
--type supported_datestamp() :: erlang:datetime() | erlang:date().
+-type supported_datestamp() :: erlang:datetime() | erlang:date() | undefined.
+-type oai_date_granularity() :: day_granularity | seconds_granularity.
 
 
 -type proplist() :: [{Key :: binary(), Value :: binary()}].
@@ -96,10 +93,6 @@
         ?OAI_XSI_SCHEMA_LOCATION]
 }).
 
-
--define(ALLOWED_METHODS, [<<"GET">>, <<"POST">>]).
-
--define(REQUEST_CONTENT_TYPE, <<"application/x-www-form-urlencoded">>).
 
 -define(RESPONSE_CONTENT_TYPE, <<"text/xml">>).
 

@@ -63,7 +63,6 @@ start() ->
             {"/[...]", redirector_handler, []}
         ]}
     ],
-    ct:pal("DEBUG: ~p~n", [RedirectDispatch] ),
     Result = cowboy:start_http(?HTTP_REDIRECTOR_LISTENER, RedirectNbAcceptors,
         [
             {port, RedirectPort}

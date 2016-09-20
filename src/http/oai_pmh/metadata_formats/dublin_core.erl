@@ -10,9 +10,9 @@
 -module(dublin_core).
 -author("Jakub Kudzia").
 
--behaviour(metadata_format_behaviour).
-
 -include("http/handlers/oai.hrl").
+
+-behaviour(metadata_format_behaviour).
 
 %% API
 -export([elements/0, encode/1, metadata_prefix/0, schema_URL/0, extra_namespaces/0, schema_location/0, main_namespace/0]).
@@ -28,22 +28,57 @@
     name='xsi:schemaLocation',
     value = "http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd"}).
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback metadata_prefix/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec metadata_prefix() -> binary().
 metadata_prefix() -> <<"oai_dc">>.
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback schema_URL/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec schema_URL() -> binary().
 schema_URL() -> <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>.
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback main_namespace/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec main_namespace() -> {atom(), binary()}.
 main_namespace() ->
     {'xmlns:oai_dc', <<"http://www.openarchives.org/OAI/2.0/oai_dc/">>}.
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback extra_namespaces/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec extra_namespaces() -> [{atom(), binary()}].
 extra_namespaces() -> [
     {'xmlns:dc', "http://purl.org/dc/elements/1.1/"}
 ].
 
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback schema_location/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec schema_location() -> binary().
 schema_location() ->
     {_, MainNamespace} = main_namespace(),
     str_utils:format_bin("~s ~s", [MainNamespace, schema_URL()]).
 
-
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback elements/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec elements() -> [binary()].
 elements() -> [
     <<"title">>,
     <<"creator">>,
@@ -62,11 +97,12 @@ elements() -> [
     <<"rights">>
 ].
 
-
-format_info() -> ok.
-
-
-
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback encode/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec encode(#{} | binary()) -> #xmlElement{}.
 encode(Metadata) ->
 %%    todo wrap oai_dc headers around bare dc
     {MetadataXML, _} = xmerl_scan:string(binary_to_list(Metadata)),

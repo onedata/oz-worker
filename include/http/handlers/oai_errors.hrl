@@ -4,7 +4,8 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% WRITEME
+%%% This module contains macro definitions for OAI-PMH errors.
+%%% http://www.openarchives.org/OAI/2.0/openarchivesprotocol.htm#ErrorConditions
 %%% @end
 %%%-------------------------------------------------------------------
 -author("Jakub Kudzia").
@@ -40,14 +41,12 @@
     "The metadata format identified by the value "
     "given for the metadataPrefix argument is not "
     "supported by the item or by the repository.")).
-
 -define(CANNOT_DISSEMINATE_FORMAT(Description),
     ?OAI_ERROR(cannotDisseminateFormat, Description)).
 
 -define(ID_DOES_NOT_EXIST, ?ID_DOES_NOT_EXIST(
     "The value of the identifier argument is unknown "
     "or illegal in this repository.")).
-
 -define(ID_DOES_NOT_EXIST(Description),
     ?OAI_ERROR(idDoesNotExist, Description)).
 
