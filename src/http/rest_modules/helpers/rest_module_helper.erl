@@ -22,7 +22,8 @@
 
 -type json_string() :: atom() | binary().
 -type error() :: invalid_request | invalid_client | invalid_grant |
-unauthorized_client | unsupported_grant_type | invalid_scope | would_introduce_cycle.
+unauthorized_client | unsupported_grant_type | invalid_scope | would_introduce_cycle |
+forbidden.
 -export_type([error/0]).
 
 %%%===================================================================

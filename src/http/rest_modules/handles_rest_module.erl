@@ -61,9 +61,9 @@ routes() ->
     boolean().
 is_authorized(_, _, _, #client{type = undefined}) ->
     false;
-is_authorized(handles, post, _HandleId, _Client) -> % todo what privilege should be checked here?
+is_authorized(handles, post, _HandleId, _Client) -> % permission is checked for handle_service, in accept_resource method
     true;
-is_authorized(handles, get, _HandleId, #client{type = user, id = UserId}) ->
+is_authorized(handles, get, _HandleId, #client{type = user, id = _UserId}) ->
     true;
 is_authorized(handle, get, HandleId, #client{type = user, id = UserId}) ->
     handle_logic:has_effective_privilege(HandleId, UserId, view_handle);
@@ -138,9 +138,15 @@ accept_resource(handles, post, _HandleId, Data, #client{type = user, id = UserId
     ResourceType = rest_module_helper:assert_key(<<"resourceType">>, Data, binary, Req),
     ResourceId = rest_module_helper:assert_key(<<"resourceId">>, Data, binary, Req),
     Metadata = rest_module_helper:assert_key(<<"metadata">>, Data, binary, Req),
-    {ok, HandleLocation} = handle_proxy:register_handle(HandleServiceId, ResourceType, ResourceId, Metadata),
-    {ok, HandleId} = handle_logic:create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation, Metadata),
-    {{true, <<"/handles/", HandleId/binary>>}, Req};
+    case handle_service_logic:has_effective_privilege(HandleServiceId, UserId, register_handle) of
+        true ->
+            {ok, HandleLocation} = handle_proxy:register_handle(HandleServiceId, ResourceType, ResourceId, Metadata),
+            {ok, HandleId} = handle_logic:create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation, Metadata),
+            {{true, <<"/handles/", HandleId/binary>>}, Req};
+        false ->
+            {ok, Req2} = cowboy_req:reply(403, Req),
+            {false, Req2}
+    end;
 
 accept_resource(handle, patch, HandleId, Data, #client{type = user, id = _UserId}, Req) ->
     ResourceType = rest_module_helper:assert_type(<<"resourceType">>, Data, binary, Req),
