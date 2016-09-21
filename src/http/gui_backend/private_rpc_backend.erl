@@ -79,10 +79,7 @@ handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
         {error, alias_occupied} ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
-                "Please choose other alias.">>);
-        _ ->
-            gui_error:report_warning(
-                <<"Cannot change alias due to unknown error.">>)
+                "Please choose other alias.">>)
     end;
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
