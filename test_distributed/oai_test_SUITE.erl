@@ -15,6 +15,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
 -include("oai_test_SUITE.hrl").
+-include("http/handlers/oai.hrl").
 
 %% API
 -export([all/0, init_per_suite/1, init_per_testcase/2, end_per_testcase/2, end_per_suite/1]).
@@ -25,8 +26,15 @@
     no_verb_get_test/1, no_verb_post_test/1,
     invalid_verb_get_test/1, invalid_verb_post_test/1,
     empty_verb_get_test/1, empty_verb_post_test/1,
-    illegal_arg_get_test/1, illegal_arg_post_test/1
-    , get_record_get_test/1]).
+    illegal_arg_get_test/1, illegal_arg_post_test/1,
+    get_record_get_test/1, get_record_post_test/1,
+    missing_arg_get_test/1, missing_arg_post_test/1,
+    id_not_existing_get_test/1, id_not_existing_post_test/1,
+    cannot_disseminate_format_get_test/1, cannot_disseminate_format_post_test/1,
+    no_set_hierarchy_get_test/1, no_set_hierarchy_post_test/1,
+    list_metadata_formats_get_test/1, list_metadata_formats_post_test/1,
+    list_metadata_formats_no_format_error_get_test/1,
+    list_metadata_formats_no_format_error_post_test/1]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/x-www-form-urlencoded">>}]).
@@ -36,6 +44,8 @@
 -define(ID1, <<"identifier1">>).
 -define(SPACE_NAME1, <<"space1">>).
 -define(DC_METADATA_PREFIX, <<"oai_dc">>).
+-define(DC_NAMESPACE, <<"http://www.openarchives.org/OAI/2.0/oai_dc/">>).
+-define(DC_SCHEMA, <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>).
 
 
 %%%===================================================================
@@ -46,6 +56,11 @@ all() -> ?ALL([
     identify_get_test,
     identify_post_test,
     get_record_get_test,
+    get_record_post_test,
+    list_metadata_formats_get_test,
+    list_metadata_formats_post_test,
+    list_metadata_formats_no_format_error_get_test,
+    list_metadata_formats_no_format_error_post_test,
     no_verb_get_test,
     no_verb_post_test,
     empty_verb_get_test,
@@ -53,7 +68,15 @@ all() -> ?ALL([
     invalid_verb_get_test,
     invalid_verb_post_test,
     illegal_arg_get_test,
-    illegal_arg_post_test
+    illegal_arg_post_test,
+    missing_arg_get_test,
+    missing_arg_post_test,
+    id_not_existing_get_test,
+    id_not_existing_post_test,
+    cannot_disseminate_format_get_test,
+    cannot_disseminate_format_post_test,
+    no_set_hierarchy_get_test,
+    no_set_hierarchy_post_test
 ]).
 
 %%%===================================================================
@@ -67,10 +90,16 @@ identify_post_test(Config) ->
     identify_test_base(Config, post).
 
 get_record_get_test(Config) ->
-%%    tracer:start(node()),
-%%    tracer:trace_calls(rest_test_utils, compare_xml),
     get_record_test_base(Config, get).
 
+get_record_post_test(Config) ->
+    get_record_test_base(Config, post).
+
+list_metadata_formats_get_test(Config) ->
+    list_metadata_formats_test_base(Config, get).
+
+list_metadata_formats_post_test(Config) ->
+    list_metadata_formats_test_base(Config, post).
 
 
 %%%% Tests of error handling
@@ -99,6 +128,37 @@ illegal_arg_get_test(Config) ->
 illegal_arg_post_test(Config) ->
     illegal_arg_test_base(Config, post).
 
+missing_arg_get_test(Config) ->
+    missing_arg_test_base(Config, get).
+
+missing_arg_post_test(Config) ->
+    missing_arg_test_base(Config, post).
+
+id_not_existing_get_test(Config) ->
+    id_not_existing_test_base(Config, get).
+
+id_not_existing_post_test(Config) ->
+    id_not_existing_test_base(Config, post).
+
+cannot_disseminate_format_get_test(Config) ->
+    cannot_disseminate_format_test_base(Config, get).
+
+cannot_disseminate_format_post_test(Config) ->
+    cannot_disseminate_format_test_base(Config, post).
+
+no_set_hierarchy_get_test(Config) ->
+    no_set_hierarchy_test_base(Config, get).
+
+no_set_hierarchy_post_test(Config) ->
+    no_set_hierarchy_test_base(Config, post).
+
+list_metadata_formats_no_format_error_get_test(Config) ->
+    list_metadata_formats_no_format_error_test_base(Config, get).
+
+list_metadata_formats_no_format_error_post_test(Config) ->
+    list_metadata_formats_no_format_error_test_base(Config, post).
+
+
 %%%===================================================================
 %%% Test base functions
 %%%===================================================================
@@ -122,12 +182,9 @@ identify_test_base(Config, Method) ->
 
 get_record_test_base(Config, Method) ->
 
-    [Node | _] = ?config(oz_worker_nodes, Config),
-
     {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, {user, UserWithSpaces1}, ?SPACE_NAME1),
     {ok, ?ID1} = oz_test_utils:create_share(Config, ?ID1, ?ID1, <<"root">>, Space1),
-    ct:pal("SPACE ID: ~p~n", [Space1]),
     ok = oz_test_utils:modify_share_metadata(Config, ?ID1, ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
     {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(?DC_METADATA_XML)),
 
@@ -137,21 +194,21 @@ get_record_test_base(Config, Method) ->
     ],
 
     ExpResponseContent = [
-        #xmlElement{name=record, content=[
+        #xmlElement{name = record, content = [
             #xmlElement{
-                name=header,
-                content=[
+                name = header,
+                content = [
                     #xmlElement{
-                        name=identifier,
-                        content=[#xmlText{
-                            value=binary_to_list(?ID1)
+                        name = identifier,
+                        content = [#xmlText{
+                            value = binary_to_list(?ID1)
                         }]
                     }
                 ]
             },
             #xmlElement{
-                name=metadata,
-                content=[
+                name = metadata,
+                content = [
                     #xmlElement{
                         name = 'oai_dc:dc',
                         content = DCMetadata
@@ -161,6 +218,29 @@ get_record_test_base(Config, Method) ->
         ]}
     ],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)).
+
+list_metadata_formats_test_base(Config, Method) ->
+    ExpResponseContent = [
+        #xmlElement{
+            name = metadataFormat,
+            content = [
+                #xmlElement{
+                    name = metadataPrefix,
+                    content = [#xmlText{value=binary_to_list(?DC_METADATA_PREFIX)}]
+                },
+                #xmlElement{
+                    name = schema,
+                    content = [#xmlText{value=binary_to_list(?DC_SCHEMA)}]
+                },
+                #xmlElement{
+                    name = metadataNamespace,
+                    content = [#xmlText{value=binary_to_list(?DC_NAMESPACE)}]
+                }
+            ]
+        }
+    ],
+
+    ?assert(check_list_metadata_formats(200, [], Method, ExpResponseContent, Config)).
 
 no_verb_test_base(Config, Method) ->
     ?assert(check_no_verb_error(200, [], Method, [], Config)).
@@ -174,6 +254,45 @@ invalid_verb_test_base(Config, Method) ->
 illegal_arg_test_base(Config, Method) ->
     ?assert(check_illegal_arg_error(200, [{"k", "v"}], Method, [], Config)).
 
+missing_arg_test_base(Config, Method) ->
+    Args = [{<<"identifier">>, ?ID1}],
+    %% will perform GetRecord, metadataPrefix is missing
+    ?assert(check_missing_arg_error(200, Args, Method, [], Config)).
+
+id_not_existing_test_base(Config, Method) ->
+
+    Args = [
+        {<<"identifier">>, ?ID1},
+        {<<"metadataPrefix">>, ?DC_METADATA_PREFIX}
+    ],
+    ?assert(check_id_not_existing_error(200, Args, Method, [], Config)).
+
+cannot_disseminate_format_test_base(Config, Method) ->
+
+    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Space1} = oz_test_utils:create_space(Config, {user, UserWithSpaces1}, ?SPACE_NAME1),
+    {ok, ?ID1} = oz_test_utils:create_share(Config, ?ID1, ?ID1, <<"root">>, Space1),
+    ok = oz_test_utils:modify_share_metadata(Config, ?ID1, ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+
+    Args = [
+        {<<"identifier">>, ?ID1},
+        {<<"metadataPrefix">>, <<"not_supported_format">>}
+    ],
+    ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)).
+
+no_set_hierarchy_test_base(Config, Method) ->
+    ?assert(check_no_set_hierarchy_error(200, [], Method, [], Config)).
+
+list_metadata_formats_no_format_error_test_base(Config, Method) ->
+    OtherMetadataPrefix = <<"someMetadataPrefix">>,
+    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Space1} = oz_test_utils:create_space(Config, {user, UserWithSpaces1}, ?SPACE_NAME1),
+    {ok, ?ID1} = oz_test_utils:create_share(Config, ?ID1, ?ID1, <<"root">>, Space1),
+    ok = oz_test_utils:modify_share_metadata(Config, ?ID1, ?DC_METADATA_XML, OtherMetadataPrefix),
+
+    Args = [{<<"identifier">>, ?ID1}],
+
+    ?assert(check_list_metadata_formats_error(200, Args, Method, [], Config)).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -195,38 +314,69 @@ init_per_testcase(_, Config) ->
     rest_test_utils:set_config(Config),
     Config.
 
-end_per_testcase(_, _Config) ->
+end_per_testcase(_, Config) ->
+    oz_test_utils:remove_all_entities(Config),
     ok.
 
 end_per_suite(Config) ->
-    ok.
-%%    hackney:stop(),
-%%    application:stop(etls),
-%%    test_node_starter:clean_environment(Config).
+    hackney:stop(),
+    application:stop(etls),
+    test_node_starter:clean_environment(Config).
 
 %%%===================================================================
 %%% Functions used to validate REST calls
 %%%=================================================================
 
 check_identify(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"Identify">>, Args, Method, ExpResponseContent, 'Identify',Config).
+    check_oai_request(Code, <<"Identify">>, Args, Method, ExpResponseContent,
+        'Identify', Config).
 
 check_get_record(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent, 'GetRecord',Config).
+    check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
+        'GetRecord', Config).
 
 check_no_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, none, Args, Method, ExpResponseContent, {error, badVerb}, Config).
+    check_oai_request(Code, none, Args, Method, ExpResponseContent,
+        {error, badVerb}, Config).
 
 check_empty_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"">>, Args, Method, ExpResponseContent, {error, badVerb}, Config).
+    check_oai_request(Code, <<"">>, Args, Method, ExpResponseContent,
+        {error, badVerb}, Config).
 
 check_invalid_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"invalid_verb">>, Args, Method, ExpResponseContent, {error, badVerb}, Config).
+    check_oai_request(Code, <<"invalid_verb">>, Args, Method, ExpResponseContent,
+        {error, badVerb}, Config).
 
 check_illegal_arg_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"Identify">>, Args, Method, ExpResponseContent, {error, badArgument}, Config).
+    check_oai_request(Code, <<"Identify">>, Args, Method, ExpResponseContent,
+        {error, badArgument}, Config).
 
-check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
+check_missing_arg_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
+        {error, badArgument}, Config).
+
+check_id_not_existing_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
+        {error, idDoesNotExist}, Config).
+
+check_cannot_disseminate_format_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
+        {error, cannotDisseminateFormat}, Config).
+
+check_no_set_hierarchy_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListSets">>, Args, Method, ExpResponseContent,
+        {error, noSetHierarchy}, Config).
+
+check_list_metadata_formats(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method,
+        ExpResponseContent, 'ListMetadataFormats', Config).
+
+check_list_metadata_formats_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method,
+        ExpResponseContent, {error, noMetadataFormats}, Config).
+
+check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType,
+    Config) ->
 
     URL = ?config(oai_pmh_url, Config),
     Path = ?config(oai_pmh_path, Config),
@@ -235,9 +385,9 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         _ -> add_verb(Verb, Args)
     end,
     ExpectedBody = expected_body(Config, ExpResponseContent, ResponseType, Args2),
-    ct:pal("EXPECTED: ~p", [ExpectedBody]),
-
     QueryString = prepare_querystring(Args2),
+
+    ct:pal("QS: ~p~n", [QueryString]),
 
     Request = case Method of
         get -> #{
@@ -294,7 +444,6 @@ expected_body(Config, ExpectedResponse, ResponseType, Args) ->
     Path = ?config(oai_pmh_path, Config),
     URL = ?config(oai_pmh_url, Config),
     RequestURL = binary_to_list(<<URL/binary, Path/binary>>),
-    %% todo add namespace attributes
 
     ExpectedResponseElement = case ResponseType of
         {error, Code} -> expected_response_error(Code);
@@ -311,28 +460,33 @@ expected_body(Config, ExpectedResponse, ResponseType, Args) ->
 
     #xmlElement{
         name = 'OAI-PMH',
+        attributes = [
+            ?OAI_XML_NAMESPACE,
+            ?OAI_XML_SCHEMA_NAMESPACE,
+            ?OAI_XSI_SCHEMA_LOCATION],
         content = [
-            ExpectedRequestElement,
             #xmlElement{name = responseDate},
-            ExpectedResponseElement
-        ]
+            ExpectedRequestElement,
+            ExpectedResponseElement]
     }.
 
 expected_response_error(Code) ->
-  #xmlElement{
+    #xmlElement{
         name = error,
         attributes = [#xmlAttribute{name = code, value = str_utils:to_list(Code)}]
     }.
 
+expected_response_verb(Verb, {Content, Attributes}) ->
+    #xmlElement{name = ensure_atom(Verb), attributes = Attributes, content = Content};
 expected_response_verb(Verb, Content) ->
-    #xmlElement{name = ensure_atom(Verb), content=Content}.
+    #xmlElement{name = ensure_atom(Verb), content = Content}.
 
 expected_request_element(RequestURL) ->
     expected_request_element(RequestURL, []).
 
 expected_request_element(RequestURL, Args) ->
     Attributes = lists:map(fun({K, V}) ->
-        #xmlAttribute{name=binary_to_atom(K, latin1), value=binary_to_list(V)}
+        #xmlAttribute{name = binary_to_atom(K, latin1), value = str_utils:to_list(V)}
     end, Args),
     #xmlElement{
         name = request,
