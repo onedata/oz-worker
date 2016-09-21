@@ -149,10 +149,10 @@ modify(UserId, Proplist) ->
             {error, Reason} ->
                 % Alias not allowed, return error
                 {error, Reason};
-            {ok, UpdatedAlias} ->
+            {ok, PossiblyUpdatedAlias} ->
                 NewUser = UserRecord#onedata_user{
                     name = proplists:get_value(name, Proplist, Name),
-                    alias = UpdatedAlias,
+                    alias = PossiblyUpdatedAlias,
                     email_list = proplists:get_value(
                         email_list, Proplist, Emails),
                     connected_accounts = proplists:get_value(
@@ -187,7 +187,7 @@ modify(UserId, Proplist) ->
 -spec set_alias(UserId :: onedata_user:id(), Alias :: binary()) ->
     ok | {error, disallowed_alias_prefix | invalid_alias | alias_occupied}.
 set_alias(UserId, Alias) ->
-    % Fun used to check if alias has an disallowed prefix
+    % Fun used to check if alias has a disallowed prefix
     DisallowedPrefix = fun() ->
         case Alias of
             <<?NO_ALIAS_UUID_PREFIX, _/binary>> -> true;
@@ -196,12 +196,12 @@ set_alias(UserId, Alias) ->
     end,
     % Fun used to check if alias is valid
     InvalidAlias = fun() ->
-        case re:run(Alias, ?ALIAS_VALIDATION_REGEXP) of
-            {match, _} ->
+        case Alias of
+            ?EMPTY_ALIAS ->
                 false;
             _ ->
-                case Alias of
-                    ?EMPTY_ALIAS -> false;
+                case re:run(Alias, ?ALIAS_VALIDATION_REGEXP) of
+                    {match, _} -> false;
                     _ -> true
                 end
         end
