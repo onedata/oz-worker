@@ -115,9 +115,8 @@ get_user_doc(Key) ->
     ok | {error, Reason} when
     Reason :: disallowed_alias_prefix | invalid_alias | alias_occupied | any().
 modify(UserId, Proplist) ->
-    try
-        {ok, #document{value = UserRecord} = Doc} = onedata_user:get(UserId),
-        #onedata_user{
+    {ok, #document{
+        value = #onedata_user{
             name = Name,
             alias = Alias,
             email_list = Emails,
@@ -129,30 +128,27 @@ modify(UserId, Proplist) ->
             default_provider = DefaultProvider,
             chosen_provider = ChosenProvider,
             client_tokens = ClientTokens
-        } = UserRecord,
+        }}} = onedata_user:get(UserId),
 
-        SetAliasResult = case proplists:get_value(alias, Proplist, Alias) of
-            Alias ->
-                % Alias did not change or was changed to the same value
-                {ok, Alias};
-            NewAlias ->
-                % New alias requested, try to set it
-                case set_alias(UserId, NewAlias) of
-                    ok ->
-                        {ok, NewAlias};
-                    Err ->
-                        Err
-                end
-        end,
+    SetAliasResult = case proplists:get_value(alias, Proplist, Alias) of
+        Alias ->
+            % Alias did not change or was changed to the same value
+            ok;
+        NewAlias ->
+            % New alias requested, try to set it
+            set_alias(UserId, NewAlias)
+    end,
 
-        case SetAliasResult of
-            {error, Reason} ->
-                % Alias not allowed, return error
-                {error, Reason};
-            {ok, PossiblyUpdatedAlias} ->
-                NewUser = UserRecord#onedata_user{
+    case SetAliasResult of
+        {error, Reason} ->
+            % Alias not allowed, return error
+            {error, Reason};
+        ok ->
+            % Alias ok, update user doc
+            {ok, _} = onedata_user:update(UserId, fun(User) ->
+                {ok, User#onedata_user{
                     name = proplists:get_value(name, Proplist, Name),
-                    alias = PossiblyUpdatedAlias,
+                    % Alias is already updated
                     email_list = proplists:get_value(
                         email_list, Proplist, Emails),
                     connected_accounts = proplists:get_value(
@@ -168,14 +164,10 @@ modify(UserId, Proplist) ->
                     chosen_provider = proplists:get_value(
                         chosen_provider, Proplist, ChosenProvider),
                     client_tokens = proplists:get_value(
-                        client_tokens, Proplist, ClientTokens)},
-                DocNew = Doc#document{value = NewUser},
-                {ok, _} = onedata_user:save(DocNew),
-                ok
-        end
-    catch
-        T:M ->
-            {error, {T, M}}
+                        client_tokens, Proplist, ClientTokens)}
+                }
+            end),
+            ok
     end.
 
 
