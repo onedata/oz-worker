@@ -26,8 +26,9 @@
 %% API
 -export([all/0]).
 
+-type id() :: binary().
 -type type() :: 'organization' | 'unit' | 'team' | 'role'.
--export_type([type/0]).
+-export_type([id/0, type/0]).
 
 %%%===================================================================
 %%% model_behaviour callbacks

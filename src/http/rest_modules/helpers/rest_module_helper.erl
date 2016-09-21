@@ -22,7 +22,8 @@
 
 -type json_string() :: atom() | binary().
 -type error() :: invalid_request | invalid_client | invalid_grant |
-unauthorized_client | unsupported_grant_type | invalid_scope | would_introduce_cycle.
+unauthorized_client | unsupported_grant_type | invalid_scope | would_introduce_cycle |
+forbidden.
 -export_type([error/0]).
 
 %%%===================================================================
@@ -45,31 +46,36 @@ unauthorized_client | unsupported_grant_type | invalid_scope | would_introduce_c
     float() | undefined | no_return();
     (Key :: json_string(), List :: [{json_string(), term()}],
         Type :: pos_integer, Req :: cowboy_req:req()) ->
-    pos_integer() | undefined | no_return().
+    pos_integer() | undefined | no_return();
+    (Key :: json_string(), List :: [{json_string(), term()}],
+        Type :: json, Req :: cowboy_req:req()) ->
+    [{json_string(), term()}] | undefined | no_return().
 assert_type(Key, List, Type, Req) ->
     case lists:keyfind(Key, 1, List) of
         {Key, Value} when Type =:= binary andalso is_binary(Value) ->
             Value;
-
         {Key, Value} when Type =:= list_of_bin andalso is_list(Value) ->
             case lists:all(fun is_binary/1, Value) of
                 true -> Value;
                 false -> report_invalid_value(Key, Value, Req)
             end;
-
         {Key, Value} when Type =:= pos_integer andalso is_binary(Value) ->
             Regex = <<"[1-9][0-9]*">>,
             case re:run(Value, Regex, [{capture, first, binary}]) of
                 {match, [Value]} -> binary_to_integer(Value);
                 _ -> report_invalid_value(Key, Value, Req)
             end;
-
         {Key, Value} when Type =:= float andalso is_float(Value) ->
             Value;
-
+        {Key, Value} when Type =:= json andalso is_list(Value) ->
+            case lists:all(fun({_, _}) -> true; (_) -> false end, Value) of
+                true ->
+                    Value;
+                false ->
+                    report_invalid_value(Key, json_utils:encode(Value), Req)
+            end;
         {Key, Value} ->
             report_invalid_value(Key, Value, Req);
-
         false ->
             undefined
     end.
@@ -84,7 +90,9 @@ assert_type(Key, List, Type, Req) ->
     (Key :: json_string(), List :: [{json_string(), term()}],
         Type :: binary, Req :: cowboy_req:req()) -> binary() | no_return();
     (Key :: json_string(), List :: [{json_string(), term()}],
-        Type :: pos_integer, Req :: cowboy_req:req()) -> pos_integer() | no_return().
+        Type :: pos_integer, Req :: cowboy_req:req()) -> pos_integer() | no_return();
+    (Key :: json_string(), List :: [{json_string(), term()}],
+        Type :: json, Req :: cowboy_req:req()) -> term() | no_return().
 assert_key(Key, List, Type, Req) ->
     case assert_type(Key, List, Type, Req) of
         undefined -> report_missing_key(Key, Req);
