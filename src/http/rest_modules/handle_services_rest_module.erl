@@ -136,14 +136,22 @@ resource_exists(gpriv, HandleServiceId, Req) ->
 accept_resource(handle_services, post, _HandleServiceId, Data, #client{type = user, id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     ProxyEndpoint = rest_module_helper:assert_key(<<"proxyEndpoint">>, Data, binary, Req),
-    ServiceProperties = rest_module_helper:assert_key(<<"serviceProperties">>, Data, any, Req),
+    ServiceProperties = rest_module_helper:assert_key(<<"serviceProperties">>, Data, json, Req),
+    _Type = rest_module_helper:assert_key(<<"type">>, ServiceProperties, binary, Req),
     {ok, HandleServiceId} = handle_service_logic:create(UserId, Name, ProxyEndpoint, ServiceProperties),
     {{true, <<"/handle_services/", HandleServiceId/binary>>}, Req};
 
 accept_resource(handle_service, patch, HandleServiceId, Data, #client{type = user, id = _UserId}, Req) ->
     Name = rest_module_helper:assert_type(<<"name">>, Data, binary, Req),
     ProxyEndpoint = rest_module_helper:assert_type(<<"proxyEndpoint">>, Data, binary, Req),
-    ServiceProperties = rest_module_helper:assert_type(<<"serviceProperties">>, Data, any, Req),
+    ServiceProperties = rest_module_helper:assert_type(<<"serviceProperties">>, Data, json, Req),
+    _Type =
+        case ServiceProperties of
+            undefined ->
+                ok;
+            _ ->
+                rest_module_helper:assert_type(<<"type">>, ServiceProperties, binary, Req)
+        end,
     ok = handle_service_logic:modify(HandleServiceId, Name, ProxyEndpoint, ServiceProperties),
     {ok, Req2} = cowboy_req:reply(204, Req),
     {true, Req2};
@@ -202,7 +210,7 @@ accept_resource(gpriv, put, HandleServiceId, Data, _Client, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(handle_services, _EntityId, #client{type = user, id = UserId}, Req) ->
-    {ok, HandleServiceIds} = handle_service_logic:list(UserId),
+    {ok, HandleServiceIds} = user_logic:get_handle_services(UserId),
     {HandleServiceIds, Req};
 provide_resource(handle_service, HandleServiceId, #client{type = user, id = _UserId}, Req) ->
     {ok, Data} = handle_service_logic:get_data(HandleServiceId),

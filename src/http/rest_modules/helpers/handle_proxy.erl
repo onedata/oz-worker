@@ -63,7 +63,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
 %%--------------------------------------------------------------------
 -spec unregister_handle(handle:id()) -> ok.
 unregister_handle(HandleId)  ->
-    {ok, #document{value = #handle{handle_service_id = HandleServiceId, handle = PublicHandle}}} =
+    {ok, #document{value = #handle{handle_service_id = HandleServiceId, public_handle = PublicHandle}}} =
         handle:get(HandleId),
     {ok, #document{value = #handle_service{
         proxy_endpoint = ProxyEndpoint,
@@ -95,7 +95,7 @@ modify_handle(_HandleId, undefined, undefined, undefined)  ->
     ok;
 modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata)  ->
     {ok, #document{value = #handle{handle_service_id = HandleServiceId,
-        resource_type = ResourceType, resource_id = ResourceId, handle = PublicHandle,
+        resource_type = ResourceType, resource_id = ResourceId, public_handle = PublicHandle,
         metadata = Metadata}}} =
         handle:get(HandleId),
     {ok, #document{value = #handle_service{
@@ -140,6 +140,6 @@ modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata)  ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_redirect_url(handle:resource_type(), handle:resource_id()) -> public_url().
-get_redirect_url(_ResourceType, ResourceId) ->
-    <<"https://", (list_to_binary(application:get_env(?APP_Name, public_domain_for_opendata, "onedata.org")))/binary,
-        "/share/", ResourceId/binary>>. %todo change to #share.public_url
+get_redirect_url(<<"Share">>, ShareId) ->
+    {ok, #document{value = #share{public_url = PublicUrl}}} = share:get(ShareId),
+    PublicUrl.

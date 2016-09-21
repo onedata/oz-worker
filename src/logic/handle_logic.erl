@@ -16,11 +16,10 @@
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
--export([create/6, modify/4, set_user_privileges/3, set_group_privileges/3]).
+-export([create/5, modify/4, set_user_privileges/3, set_group_privileges/3]).
 -export([get_data/1, get_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
--export([list/1]).
 
 %%%===================================================================
 %%% API
@@ -121,12 +120,13 @@ has_effective_privilege(HandleId, UserId, Privilege) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(onedata_user:id(), handle_service:id(), handle:resource_type(),
-    handle:resource_id(), handle:public_handle(), handle:metadata()) ->
+    handle:resource_id(), handle:metadata()) ->
     {ok, handle:id()}.
-create(UserId, HandleServiceId, ResourceType, ResourceId, PublicHandle, Metadata) ->
+create(UserId, HandleServiceId, ResourceType, ResourceId, Metadata) ->
+    {ok, PublicHandle} = handle_proxy:register_handle(HandleServiceId, ResourceType, ResourceId, Metadata),
     Privileges = privileges:handle_admin(),
     Handle = #handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
-        resource_id = ResourceId, handle = PublicHandle, metadata = Metadata,
+        resource_id = ResourceId, public_handle = PublicHandle, metadata = Metadata,
         users = [{UserId, Privileges}]},
 
     {ok, HandleId} = handle:create(#document{value = Handle}),
@@ -145,6 +145,7 @@ create(UserId, HandleServiceId, ResourceType, ResourceId, PublicHandle, Metadata
 modify(_HandleId, undefined, undefined, undefined) ->
     ok;
 modify(HandleId, NewResourceType, NewResourceId, NewMetadata) ->
+    ok = handle_proxy:modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata),
     {ok, _} = handle:update(HandleId,
         fun(Handle = #handle{resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata}) ->
             FinalResourceType = utils:ensure_defined(NewResourceType, undefined, ResourceType),
@@ -241,7 +242,7 @@ add_group(HandleId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec get_data(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
 get_data(HandleId) ->
-    {ok, #document{value = #handle{handle_service_id = HandleServiceId, handle = Handle,
+    {ok, #document{value = #handle{handle_service_id = HandleServiceId, public_handle = Handle,
         resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata}}} =
         handle:get(HandleId),
     {ok, [
@@ -308,6 +309,7 @@ get_group_privileges(HandleId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec remove(HandleId :: handle:id()) -> boolean().
 remove(HandleId) ->
+    ok = handle_proxy:unregister_handle(HandleId),
     {ok, #document{value = Handle}} = handle:get(HandleId),
     #handle{users = Users, groups = Groups} = Handle,
 
@@ -377,12 +379,15 @@ remove_group(HandleId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec cleanup(HandleId :: handle:id()) -> boolean() | no_return().
-cleanup(HandleId) ->
-    {ok, #document{value = #handle{groups = Groups, users = Users}}} = handle:get(HandleId),
-    case {Groups, Users} of
-        {[], []} -> remove(HandleId);
-        _ -> false
-    end.
+cleanup(_HandleId) ->
+%% Currently, handle with no users and groups are not deleted so it is
+%% possible to restore it after accidentally leaving a handle.
+%%    {ok, #document{value = #handle{groups = Groups, users = Users}}} = handle:get(HandleId),
+%%    case {Groups, Users} of
+%%        {[], []} -> remove(HandleId);
+%%        _ -> false
+%%    end.
+    false.
 
 %%--------------------------------------------------------------------
 %% @doc Retrieves effective user privileges taking into account any groups
@@ -413,42 +418,6 @@ get_effective_user_privileges(HandleId, UserId) ->
 
     {ok, ordsets:union([UserPrivileges | PrivilegesSets])}.
 
-%%--------------------------------------------------------------------
-%% @doc Returns user's handles.
-%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
-%% don't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec list(UserId :: onedata_user:id()) ->
-    {ok, [proplists:property()]}.
-list(UserId) ->
-    {ok, Doc} = onedata_user:get(UserId),
-    AllUserHandles = get_all_handles(Doc),
-    {ok, [{handles, AllUserHandles}]}.
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Returns a list of all handles that a user belongs to, directly or through
-%% a group.
-%% Throws exception when call to the datastore fails, or user's groups don't
-%% exist.
-%% @end
-%%--------------------------------------------------------------------
--spec get_all_handles(Doc :: onedata_user:doc()) ->
-    ordsets:ordset(HandleId :: handle:id()).
-get_all_handles(#document{value = #onedata_user{
-    handles = UserHandles, groups = Groups}}) ->
-
-    UserHandlesSet = ordsets:from_list(UserHandles),
-    GroupHandlesSets = lists:map(
-        fun(GroupId) ->
-            {ok, GroupDoc} = user_group:get(GroupId),
-            #document{value = #user_group{handles = GroupHandles}} = GroupDoc,
-            ordsets:from_list(GroupHandles)
-        end, Groups),
-
-    ordsets:union([UserHandlesSet | GroupHandlesSets]).

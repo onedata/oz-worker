@@ -48,8 +48,8 @@ forbidden.
         Type :: pos_integer, Req :: cowboy_req:req()) ->
     pos_integer() | undefined | no_return();
     (Key :: json_string(), List :: [{json_string(), term()}],
-        Type :: any, Req :: cowboy_req:req()) ->
-    pos_integer() | undefined | no_return().
+        Type :: json, Req :: cowboy_req:req()) ->
+    [{json_string(), term()}] | undefined | no_return().
 assert_type(Key, List, Type, Req) ->
     case lists:keyfind(Key, 1, List) of
         {Key, Value} when Type =:= binary andalso is_binary(Value) ->
@@ -67,8 +67,13 @@ assert_type(Key, List, Type, Req) ->
             end;
         {Key, Value} when Type =:= float andalso is_float(Value) ->
             Value;
-        {Key, Value} when Type =:= any ->
-            Value;
+        {Key, Value} when Type =:= json andalso is_list(Value) ->
+            case lists:all(fun({_, _}) -> true; (_) -> false end, Value) of
+                true ->
+                    Value;
+                false ->
+                    report_invalid_value(Key, json_utils:encode(Value), Req)
+            end;
         {Key, Value} ->
             report_invalid_value(Key, Value, Req);
         false ->
@@ -87,7 +92,7 @@ assert_type(Key, List, Type, Req) ->
     (Key :: json_string(), List :: [{json_string(), term()}],
         Type :: pos_integer, Req :: cowboy_req:req()) -> pos_integer() | no_return();
     (Key :: json_string(), List :: [{json_string(), term()}],
-        Type :: any, Req :: cowboy_req:req()) -> term() | no_return().
+        Type :: json, Req :: cowboy_req:req()) -> term() | no_return().
 assert_key(Key, List, Type, Req) ->
     case assert_type(Key, List, Type, Req) of
         undefined -> report_missing_key(Key, Req);

@@ -135,13 +135,12 @@ resource_exists(gpriv, HandleId, Req) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(handles, post, _HandleId, Data, #client{type = user, id = UserId}, Req) ->
     HandleServiceId = rest_module_helper:assert_key(<<"handleServiceId">>, Data, binary, Req),
-    ResourceType = rest_module_helper:assert_key(<<"resourceType">>, Data, binary, Req),
+    ResourceType = rest_module_helper:assert_key_value(<<"resourceType">>, [<<"Share">>], Data, binary, Req),
     ResourceId = rest_module_helper:assert_key(<<"resourceId">>, Data, binary, Req),
     Metadata = rest_module_helper:assert_key(<<"metadata">>, Data, binary, Req),
     case handle_service_logic:has_effective_privilege(HandleServiceId, UserId, register_handle) of
         true ->
-            {ok, HandleLocation} = handle_proxy:register_handle(HandleServiceId, ResourceType, ResourceId, Metadata),
-            {ok, HandleId} = handle_logic:create(UserId, HandleServiceId, ResourceType, ResourceId, HandleLocation, Metadata),
+            {ok, HandleId} = handle_logic:create(UserId, HandleServiceId, ResourceType, ResourceId, Metadata),
             {{true, <<"/handles/", HandleId/binary>>}, Req};
         false ->
             {ok, Req2} = cowboy_req:reply(403, Req),
@@ -152,7 +151,6 @@ accept_resource(handle, patch, HandleId, Data, #client{type = user, id = _UserId
     ResourceType = rest_module_helper:assert_type(<<"resourceType">>, Data, binary, Req),
     ResourceId = rest_module_helper:assert_type(<<"resourceId">>, Data, binary, Req),
     Metadata = rest_module_helper:assert_type(<<"metadata">>, Data, binary, Req),
-    ok = handle_proxy:modify_handle(HandleId, ResourceType, ResourceId, Metadata),
     ok = handle_logic:modify(HandleId, ResourceType, ResourceId, Metadata),
     {true, Req};
 
@@ -210,7 +208,7 @@ accept_resource(gpriv, put, HandleId, Data, _Client, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(handles, _EntityId, #client{type = user, id = UserId}, Req) ->
-    {ok, HandleIds} = handle_logic:list(UserId),
+    {ok, HandleIds} = user_logic:get_handles(UserId),
     {HandleIds, Req};
 provide_resource(handle, HandleId, #client{type = user, id = _UserId}, Req) ->
     {ok, Data} = handle_logic:get_data(HandleId),
@@ -239,7 +237,6 @@ provide_resource(gpriv, HandleId, _Client, Req) ->
     HandleId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 delete_resource(handle, HandleId, Req) ->
-    ok = handle_proxy:unregister_handle(HandleId),
     {handle_logic:remove(HandleId), Req};
 delete_resource(user, HandleId, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),

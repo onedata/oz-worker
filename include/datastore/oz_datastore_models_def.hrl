@@ -183,7 +183,7 @@
 
 -record(handle, {
     handle_service_id :: handle_service:id() | undefined,
-    handle :: handle:public_handle() | undefined,
+    public_handle :: handle:public_handle() | undefined,
     resource_type :: handle:resource_type() | undefined,
     resource_id :: handle:resource_id() | undefined,
     metadata :: handle:metadata() | undefined,

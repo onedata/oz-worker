@@ -20,7 +20,6 @@
 -export([get_data/1, get_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
--export([list/1]).
 
 %%%===================================================================
 %%% API
@@ -373,12 +372,15 @@ remove_group(HandleServiceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec cleanup(HandleServiceId :: handle_service:id()) -> boolean() | no_return().
-cleanup(HandleServiceId) ->
-    {ok, #document{value = #handle_service{groups = Groups, users = Users}}} = handle_service:get(HandleServiceId),
-    case {Groups, Users} of
-        {[], []} -> remove(HandleServiceId);
-        _ -> false
-    end.
+cleanup(_HandleServiceId) ->
+%% Currently, handle_services with no users and groups are not deleted so it is
+%% possible to restore it after accidentally leaving a handle_service.
+%%    {ok, #document{value = #handle_service{groups = Groups, users = Users}}} = handle_service:get(HandleServiceId),
+%%    case {Groups, Users} of
+%%        {[], []} -> remove(HandleServiceId);
+%%        _ -> false
+%%    end.
+    false.
 
 %%--------------------------------------------------------------------
 %% @doc Retrieves effective user privileges taking into account any groups
@@ -409,41 +411,6 @@ get_effective_user_privileges(HandleServiceId, UserId) ->
 
     {ok, ordsets:union([UserPrivileges | PrivilegesSets])}.
 
-%%--------------------------------------------------------------------
-%% @doc Returns user's handle_services.
-%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
-%% don't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec list(UserId :: onedata_user:id()) -> {ok, [proplists:property()]}.
-list(UserId) ->
-    {ok, Doc} = onedata_user:get(UserId),
-    AllUserHandleServices = get_all_handle_services(Doc),
-    {ok, [{handle_services, AllUserHandleServices}]}.
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Returns a list of all handle_services that a user belongs to, directly or through
-%% a group.
-%% Throws exception when call to the datastore fails, or user's groups don't
-%% exist.
-%% @end
-%%--------------------------------------------------------------------
--spec get_all_handle_services(Doc :: datastore:document()) ->
-    ordsets:ordset(HandleServiceId :: handle_service:id()).
-get_all_handle_services(#document{value = #onedata_user{
-    handle_services = UserHandleServices, groups = Groups}}) ->
-
-    UserHandleServicesSet = ordsets:from_list(UserHandleServices),
-    GroupHandleServicesSets = lists:map(
-        fun(GroupId) ->
-            {ok, GroupDoc} = user_group:get(GroupId),
-            #document{value = #user_group{handle_services = GroupHandleServices}} = GroupDoc,
-            ordsets:from_list(GroupHandleServices)
-        end, Groups),
-
-    ordsets:union([UserHandleServicesSet | GroupHandleServicesSets]).

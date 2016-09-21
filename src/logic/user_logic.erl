@@ -22,7 +22,8 @@
 %% API
 -export([create/1, create/2, get_user/1, get_user_doc/1, modify/2, get_data/2]).
 -export([get_groups/1, get_effective_groups/1, get_providers/1]).
--export([get_spaces/1, get_shares/1, get_default_space/1, set_default_space/2]).
+-export([get_spaces/1, get_handle_services/1, get_handles/1, get_shares/1,
+    get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
@@ -283,6 +284,32 @@ get_spaces(UserId) ->
         {spaces, AllUserSpaces},
         {default, EffectiveDefaultSpace}
     ]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns user's handle_services.
+%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
+%% don't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_services(UserId :: onedata_user:id()) -> {ok, [proplists:property()]}.
+get_handle_services(UserId) ->
+    {ok, Doc} = onedata_user:get(UserId),
+    AllUserHandleServices = get_all_handle_services(Doc),
+    {ok, [{handle_services, AllUserHandleServices}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns user's handles.
+%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
+%% don't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handles(UserId :: onedata_user:id()) ->
+    {ok, [proplists:property()]}.
+get_handles(UserId) ->
+    {ok, Doc} = onedata_user:get(UserId),
+    AllUserHandles = get_all_handles(Doc),
+    {ok, [{handles, AllUserHandles}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns user's shares, i.e. all shares of all spaces in which user has
@@ -770,6 +797,52 @@ get_all_spaces(#document{value = #onedata_user{} = User}) ->
         end, Groups),
 
     ordsets:union([UserSpacesSet | GroupSpacesSets]).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Returns a list of all handle_services that a user belongs to, directly or through
+%% a group.
+%% Throws exception when call to the datastore fails, or user's groups don't
+%% exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_handle_services(Doc :: datastore:document()) ->
+    ordsets:ordset(HandleServiceId :: handle_service:id()).
+get_all_handle_services(#document{value = #onedata_user{
+    handle_services = UserHandleServices, groups = Groups}}) ->
+
+    UserHandleServicesSet = ordsets:from_list(UserHandleServices),
+    GroupHandleServicesSets = lists:map(
+        fun(GroupId) ->
+            {ok, GroupDoc} = user_group:get(GroupId),
+            #document{value = #user_group{handle_services = GroupHandleServices}} = GroupDoc,
+            ordsets:from_list(GroupHandleServices)
+        end, Groups),
+
+    ordsets:union([UserHandleServicesSet | GroupHandleServicesSets]).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Returns a list of all handles that a user belongs to, directly or through
+%% a group.
+%% Throws exception when call to the datastore fails, or user's groups don't
+%% exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_handles(Doc :: onedata_user:doc()) ->
+    ordsets:ordset(HandleId :: handle:id()).
+get_all_handles(#document{value = #onedata_user{
+    handles = UserHandles, groups = Groups}}) ->
+
+    UserHandlesSet = ordsets:from_list(UserHandles),
+    GroupHandlesSets = lists:map(
+        fun(GroupId) ->
+            {ok, GroupDoc} = user_group:get(GroupId),
+            #document{value = #user_group{handles = GroupHandles}} = GroupDoc,
+            ordsets:from_list(GroupHandles)
+        end, Groups),
+
+    ordsets:union([UserHandlesSet | GroupHandlesSets]).
 
 %%--------------------------------------------------------------------
 %% @private

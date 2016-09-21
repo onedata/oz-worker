@@ -27,30 +27,30 @@
 %% PUT operation on handle proxy
 %% @end
 %%--------------------------------------------------------------------
--spec put(ProxyEndpoint :: handle_service:proxy_endpoint(), URL :: http_client:url(),
+-spec put(ProxyEndpoint :: handle_service:proxy_endpoint(), Path :: http_client:url(),
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
-put(ProxyEndpoint, Url, Headers, Body) ->
-    http_client:put(<<ProxyEndpoint/binary, Url/binary>>, Headers, Body).
+put(ProxyEndpoint, Path, Headers, Body) ->
+    http_client:put(<<ProxyEndpoint/binary, Path/binary>>, Headers, Body).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% PATCH operation on handle proxy
 %% @end
 %%--------------------------------------------------------------------
--spec patch(ProxyEndpoint :: handle_service:proxy_endpoint(), URL :: http_client:url(),
+-spec patch(ProxyEndpoint :: handle_service:proxy_endpoint(), Path :: http_client:url(),
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
-patch(ProxyEndpoint, Url, Headers, Body) ->
-    http_client:request(patch, <<ProxyEndpoint/binary, Url/binary>>, Headers, Body).
+patch(ProxyEndpoint, Path, Headers, Body) ->
+    http_client:request(patch, <<ProxyEndpoint/binary, Path/binary>>, Headers, Body).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% DELETE operation on handle proxy
 %% @end
 %%--------------------------------------------------------------------
--spec delete(ProxyEndpoint :: handle_service:proxy_endpoint(), URL :: http_client:url(),
+-spec delete(ProxyEndpoint :: handle_service:proxy_endpoint(), Path :: http_client:url(),
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
-delete(ProxyEndpoint, Url, Headers, Body) ->
-    http_client:delete(<<ProxyEndpoint/binary, Url/binary>>, Headers, Body).
+delete(ProxyEndpoint, Path, Headers, Body) ->
+    http_client:delete(<<ProxyEndpoint/binary, Path/binary>>, Headers, Body).
