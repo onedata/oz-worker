@@ -69,7 +69,7 @@ handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
             {ok, [
                 {<<"userAlias">>, NewAlias}
             ]};
-        {error, disallowed_prefix} ->
+        {error, disallowed_alias_prefix} ->
             gui_error:report_warning(
                 <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
         {error, invalid_alias} ->
@@ -77,10 +77,6 @@ handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
                 <<"Alias can contain only lowercase letters and digits, and "
                 "must be at least 5 characters long.">>);
         {error, alias_occupied} ->
-            gui_error:report_warning(
-                <<"This alias is occupied by someone else. "
-                "Please choose other alias.">>);
-        {error, alias_conflict} ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
                 "Please choose other alias.">>);

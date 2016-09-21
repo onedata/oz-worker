@@ -20,7 +20,8 @@
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
--export([create/1, create/2, get_user/1, get_user_doc/1, modify/2, get_data/2]).
+-export([create/1, create/2, get_user/1, get_user_doc/1, get_data/2]).
+-export([modify/2, set_alias/2]).
 -export([get_groups/1, get_effective_groups/1, get_providers/1]).
 -export([get_spaces/1, get_shares/1, get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
@@ -103,6 +104,7 @@ get_user_doc(Key) ->
             {error, {T, M}}
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc Modifies user details. Second argument is proplist with keys
 %% corresponding to record field names. The proplist may contain any
@@ -110,10 +112,11 @@ get_user_doc(Key) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec modify(UserId :: binary(), Proplist :: [{atom(), term()}]) ->
-    ok | {error, disallowed_prefix | invalid_alias | alias_occupied | alias_conflict | any()}.
+    ok | {error, Reason} when
+    Reason :: disallowed_alias_prefix | invalid_alias | alias_occupied | any().
 modify(UserId, Proplist) ->
     try
-        {ok, #document{value = User} = Doc} = onedata_user:get(UserId),
+        {ok, #document{value = UserRecord} = Doc} = onedata_user:get(UserId),
         #onedata_user{
             name = Name,
             alias = Alias,
@@ -122,113 +125,121 @@ modify(UserId, Proplist) ->
             spaces = Spaces,
             groups = Groups,
             default_space = DefaultSpace,
-            % TODO mock
             first_space_support_token = FSST,
             default_provider = DefaultProvider,
             chosen_provider = ChosenProvider,
             client_tokens = ClientTokens
-        } = User,
+        } = UserRecord,
 
-        % Check if alias was requested to be modified and if it is allowed
-        DisallowedPrefix = fun(A) ->
-            case A of
-                <<?NO_ALIAS_UUID_PREFIX, _/binary>> -> true;
-                _ -> false
-            end
-        end,
-
-        InvalidAlias = fun(A) ->
-            case re:run(A, ?ALIAS_VALIDATION_REGEXP) of
-                {match, _} ->
-                    false;
-                _ ->
-                    case A of
-                        ?EMPTY_ALIAS -> false;
-                        _ -> true
-                    end
-            end
-        end,
-
-        AliasOccupied = fun(A) ->
-            case get_user_doc({alias, A}) of
-                {ok, #document{key = UserId}} ->
-                    % DB returned the same user, so the
-                    % alias was modified but is identical, don't report errors
-                    false;
-                {ok, #document{}} ->
-                    % Alias is occupied by another user
-                    true;
-                _ ->
-                    % Alias is not occupied, ok
-                    false
-            end
-        end,
-
-        SetAlias = case proplists:get_value(alias, Proplist) of
-            undefined ->
-                Alias;
+        SetAliasResult = case proplists:get_value(alias, Proplist, Alias) of
+            Alias ->
+                % Alias did not change or was changed to the same value
+                {ok, Alias};
             NewAlias ->
-                case DisallowedPrefix(NewAlias) of
-                    true ->
-                        {error, disallowed_prefix};
-                    false ->
-                        case InvalidAlias(NewAlias) of
-                            true ->
-                                {error, invalid_alias};
-                            false ->
-                                case AliasOccupied(NewAlias) of
-                                    true ->
-                                        {error, alias_occupied};
-                                    _ -> NewAlias
-                                end
-                        end
+                % New alias requested, try to set it
+                case set_alias(UserId, NewAlias) of
+                    ok ->
+                        {ok, NewAlias};
+                    Err ->
+                        Err
                 end
         end,
 
-        case SetAlias of
+        case SetAliasResult of
             {error, Reason} ->
                 % Alias not allowed, return error
                 {error, Reason};
-            _ ->
-                NewUser = User#onedata_user{
+            {ok, UpdatedAlias} ->
+                NewUser = UserRecord#onedata_user{
                     name = proplists:get_value(name, Proplist, Name),
-                    alias = SetAlias,
-                    email_list = proplists:get_value(email_list, Proplist, Emails),
-                    connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
+                    alias = UpdatedAlias,
+                    email_list = proplists:get_value(
+                        email_list, Proplist, Emails),
+                    connected_accounts = proplists:get_value(
+                        connected_accounts, Proplist, ConnectedAccounts),
                     spaces = proplists:get_value(spaces, Proplist, Spaces),
                     groups = proplists:get_value(groups, Proplist, Groups),
-                    default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
-                    first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST),
-                    default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider),
-                    chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider),
-                    client_tokens = proplists:get_value(client_tokens, Proplist, ClientTokens)},
+                    default_space = proplists:get_value(
+                        default_space, Proplist, DefaultSpace),
+                    first_space_support_token = proplists:get_value(
+                        first_space_support_token, Proplist, FSST),
+                    default_provider = proplists:get_value(
+                        default_provider, Proplist, DefaultProvider),
+                    chosen_provider = proplists:get_value(
+                        chosen_provider, Proplist, ChosenProvider),
+                    client_tokens = proplists:get_value(
+                        client_tokens, Proplist, ClientTokens)},
                 DocNew = Doc#document{value = NewUser},
                 {ok, _} = onedata_user:save(DocNew),
-                case SetAlias of
-                    Alias ->
-                        % Alias wasn't changed
-                        ok;
-                    ?EMPTY_ALIAS ->
-                        % Alias was changed to blank
-                        ok;
-                    _ ->
-                        % Alias was changed, check for possible conflicts
-                        try
-                            {ok, NewUser} = get_user({alias, SetAlias}),
-                            ok
-                        catch
-                            _:user_duplicated ->
-                                % Alias is duplicated, revert user to initial state and leave the alias blank
-                                remove(UserId),
-                                onedata_user:save(Doc#document{value = #onedata_user{alias = ?EMPTY_ALIAS}}),
-                                {error, alias_conflict}
-                        end
-                end
+                ok
         end
     catch
         T:M ->
             {error, {T, M}}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Modifies user alias, and makes sure that alias cannot be duplicated.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_alias(UserId :: onedata_user:id(), Alias :: binary()) ->
+    ok | {error, disallowed_alias_prefix | invalid_alias | alias_occupied}.
+set_alias(UserId, Alias) ->
+    % Fun used to check if alias has an disallowed prefix
+    DisallowedPrefix = fun() ->
+        case Alias of
+            <<?NO_ALIAS_UUID_PREFIX, _/binary>> -> true;
+            _ -> false
+        end
+    end,
+    % Fun used to check if alias is valid
+    InvalidAlias = fun() ->
+        case re:run(Alias, ?ALIAS_VALIDATION_REGEXP) of
+            {match, _} ->
+                false;
+            _ ->
+                case Alias of
+                    ?EMPTY_ALIAS -> false;
+                    _ -> true
+                end
+        end
+    end,
+    % Fun used to perform alias update
+    UpdateAlias = fun() ->
+        critical_section:run({alias, Alias}, fun() ->
+            % Check if this alias is occupied
+            case get_user_doc({alias, Alias}) of
+                {ok, #document{key = UserId}} ->
+                    % DB returned the same user, so the
+                    % alias was modified but is identical, don't report errors.
+                    ok;
+                {ok, #document{}} ->
+                    % Alias is occupied by another user
+                    {error, alias_occupied};
+                _ ->
+                    % Alias is not occupied, update user doc
+                    {ok, _} = onedata_user:update(UserId, fun(User) ->
+                        {ok, User#onedata_user{alias = Alias}}
+                    end),
+                    ok
+            end
+        end)
+    end,
+    % Throw everything together
+    case DisallowedPrefix() of
+        true ->
+            {error, disallowed_alias_prefix};
+        false ->
+            case InvalidAlias() of
+                true ->
+                    {error, invalid_alias};
+                false ->
+                    UpdateAlias()
+            end
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns user details.
