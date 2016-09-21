@@ -25,12 +25,16 @@
     no_verb_get_test/1, no_verb_post_test/1,
     invalid_verb_get_test/1, invalid_verb_post_test/1,
     empty_verb_get_test/1, empty_verb_post_test/1,
-    illegal_arg_get_test/1, illegal_arg_post_test/1]).
+    illegal_arg_get_test/1, illegal_arg_post_test/1
+ ]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/x-www-form-urlencoded">>}]).
 -define(RESPONSE_CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"text/xml">>}]).
 
+%% Example test data
+-define(ID1, <<"identifier1">>).
+-define(DC_METADATA_PREFIX, <<"oai_dc">>).
 
 
 %%%===================================================================
@@ -60,9 +64,16 @@ identify_get_test(Config) ->
 identify_post_test(Config) ->
     identify_test_base(Config, post).
 
+%%get_record_test(Config) ->
+%%    get_record_test_base(Config, get).
+
+
+
+%%%% Tests of error handling
+
 no_verb_get_test(Config) ->
     no_verb_test_base(Config, get).
-
+%%
 no_verb_post_test(Config) ->
     no_verb_test_base(Config, post).
 
@@ -92,49 +103,30 @@ identify_test_base(Config, Method) ->
 
     [Node | _] = ?config(oz_worker_nodes, Config),
     Path = ?config(oai_pmh_path, Config),
-    URL = ?config(oai_pmh_url, Config),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
-    RequestURL = binary_to_list(<<URL/binary, Path/binary>>),
 
-    ExpectedBody = #xmlElement{
-        name = 'OAI-PMH',
-        content = [
-            #xmlElement{
-                name = request,
-                attributes = [#xmlAttribute{name = verb, value = "Identify"}],
-                content = [#xmlText{value = RequestURL}]},
-            #xmlElement{name = responseDate},
-            #xmlElement{
-                name = 'Identify',
-                content = [
-                    #xmlElement{name = repositoryName, content = [#xmlText{value = "unnamed"}]},
-                    #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
-                    #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
-                    #xmlElement{name = earliestDatestamp}, %todo how to check it
-                    #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
-                    #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ss:Z"}]},
-                    #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
-                ]
-            }
-        ]
-    },
-    ?assert(check_identify(200, [], Method, ExpectedBody, Config)).
+    ExpResponseContent = [
+        #xmlElement{name = repositoryName, content = [#xmlText{value = "unnamed"}]},
+        #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
+        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
+        #xmlElement{name = earliestDatestamp}, %todo how to check it
+        #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ss:Z"}]},
+        #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
+    ],
+    ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
 
 no_verb_test_base(Config, Method) ->
-    ExpectedBody = expected_body_bad_verb(Config),
-    ?assert(check_no_verb_error(200, [], Method, ExpectedBody, Config)).
+    ?assert(check_no_verb_error(200, [], Method, [], Config)).
 
 empty_verb_test_base(Config, Method) ->
-    ExpectedBody = expected_body_bad_verb(Config),
-    ?assert(check_empty_verb_error(200, [], Method, ExpectedBody, Config)).
+    ?assert(check_empty_verb_error(200, [], Method, [], Config)).
 
 invalid_verb_test_base(Config, Method) ->
-    ExpectedBody = expected_body_bad_verb(Config),
-    ?assert(check_invalid_verb_error(200, [], Method, ExpectedBody, Config)).
+    ?assert(check_invalid_verb_error(200, [], Method, [], Config)).
 
 illegal_arg_test_base(Config, Method) ->
-    ExpectedBody = expected_body_bad_argument(Config),
-    ?assert(check_illegal_arg_error(200, [{"k", "v"}], Method, ExpectedBody, Config)).
+    ?assert(check_illegal_arg_error(200, [{"k", "v"}], Method, [], Config)).
 
 
 %%%===================================================================
@@ -148,8 +140,10 @@ init_per_suite(Config) ->
         Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
     ),
     [Node1 | _] = ?config(oz_worker_nodes, NewConfig),
-    [{oai_pmh_url, get_oai_pmh_URL(Node1)},
-        {oai_pmh_path, get_oai_pmh_api_path(Node1)} | NewConfig].
+    [
+        {oai_pmh_url, get_oai_pmh_URL(Node1)},
+        {oai_pmh_path, get_oai_pmh_api_path(Node1)} | NewConfig
+    ].
 
 init_per_testcase(_, Config) ->
     rest_test_utils:set_config(Config),
@@ -157,10 +151,6 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, _Config) ->
     ok.
-%%    {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
-%%    file:delete(KeyFile),
-%%    file:delete(CSRFile),
-%%    file:delete(CertFile).
 
 end_per_suite(Config) ->
     hackney:stop(),
@@ -171,29 +161,31 @@ end_per_suite(Config) ->
 %%% Functions used to validate REST calls
 %%%=================================================================
 
-check_identify(Code, Args, Method, ExpectedBody, Config) ->
-    check_oai_request(Code, <<"Identify">>, Args, Method, ExpectedBody, Config).
+check_identify(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"Identify">>, Args, Method, ExpResponseContent, 'Identify',Config).
 
-check_no_verb_error(Code, Args, Method, ExpectedBody, Config) ->
-    check_oai_request(Code, none, Args, Method, ExpectedBody, Config).
+check_no_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, none, Args, Method, ExpResponseContent, {error, badVerb}, Config).
 
-check_empty_verb_error(Code, Args, Method, ExpectedBody, Config) ->
-    check_oai_request(Code, <<"">>, Args, Method, ExpectedBody, Config).
+check_empty_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"">>, Args, Method, ExpResponseContent, {error, badVerb}, Config).
 
-check_invalid_verb_error(Code, Args, Method, ExpectedBody, Config) ->
-    check_oai_request(Code, <<"invalid_verb">>, Args, Method, ExpectedBody, Config).
+check_invalid_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"invalid_verb">>, Args, Method, ExpResponseContent, {error, badVerb}, Config).
 
-check_illegal_arg_error(Code, Args, Method, ExpectedBody, Config) ->
-    check_oai_request(Code, <<"Identify">>, Args, Method, ExpectedBody, Config).
+check_illegal_arg_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"Identify">>, Args, Method, ExpResponseContent, {error, badArgument}, Config).
 
-check_oai_request(Code, Verb, Args, Method, ExpectedBody, Config) ->
-    
+
+check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
+
     URL = ?config(oai_pmh_url, Config),
     Path = ?config(oai_pmh_path, Config),
     Args2 = case Verb of
         none -> Args;
         _ -> add_verb(Verb, Args)
     end,
+    ExpectedBody = expected_body(Config, ExpResponseContent, ResponseType, Args2),
     QueryString = prepare_querystring(Args2),
 
     Request = case Method of
@@ -246,33 +238,57 @@ get_domain(Hostname) ->
     [_Node | Domain] = string:tokens(atom_to_list(Hostname), "."),
     string:join(Domain, ".").
 
-expected_body_bad_verb(Config) ->
-    expected_body_error(Config, badVerb).
 
-expected_body_bad_argument(Config) ->
-    expected_body_error(Config, badArgument).
-
-expected_body_error(Config, Code) ->
+expected_body(Config, ExpectedResponse, ResponseType, Args) ->
     Path = ?config(oai_pmh_path, Config),
     URL = ?config(oai_pmh_url, Config),
     RequestURL = binary_to_list(<<URL/binary, Path/binary>>),
+    %% todo add namespace attributes
+
+    ExpectedResponseElement = case ResponseType of
+        {error, Code} -> expected_response_error(Code);
+        Verb -> expected_response_verb(Verb, ExpectedResponse)
+    end,
+
+    ExpectedRequestElement = case ResponseType of
+        %% when error is badVerb or badArgument request element
+        %% should only contain request URL
+        {error, badVerb} -> expected_request_element(RequestURL);
+        {error, badArgument} -> expected_request_element(RequestURL);
+        _ -> expected_request_element(RequestURL, Args)
+    end,
+
     #xmlElement{
         name = 'OAI-PMH',
         content = [
-            #xmlElement{name = request, content = [#xmlText{value = RequestURL}]},
+            ExpectedRequestElement,
             #xmlElement{name = responseDate},
-            #xmlElement{
-                name = error,
-                attributes = [
-                    #xmlAttribute{
-                        name = code,
-                        value = str_utils:to_list(Code)
-                    }
-                ]
-            }
+            ExpectedResponseElement
         ]
     }.
 
+expected_response_error(Code) ->
+  #xmlElement{
+        name = error,
+        attributes = [#xmlAttribute{name = code, value = str_utils:to_list(Code)}]
+    }.
 
-%% TODO
-%% TODO * empty verb test
+expected_response_verb(Verb, Content) ->
+    #xmlElement{name = ensure_atom(Verb), content=Content}.
+
+expected_request_element(RequestURL) ->
+    expected_request_element(RequestURL, []).
+
+expected_request_element(RequestURL, Args) ->
+    Attributes = lists:map(fun({K, V}) ->
+        #xmlAttribute{name=binary_to_atom(K, latin1), value=binary_to_list(V)}
+    end, Args),
+    #xmlElement{
+        name = request,
+        attributes = Attributes,
+        content = [#xmlText{value = RequestURL}]
+    }.
+
+ensure_atom(Arg) when is_atom(Arg) -> Arg;
+ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
+ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
