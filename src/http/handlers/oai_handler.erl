@@ -269,21 +269,19 @@ generate_request_element(ParsedArgs, Req) ->
 
 
 %%% TODO
-%%% TODO * OAI-identifier
-%%% TODO * docs
-%%% TODO * specs
+%%% TODO * do not use shares, use handles
+%%% TODO * TESTS !!!
 %%% TODO * support resumptionToken
-%%% TODO * support sets
 %%% TODO * compression
 %%% TODO * identity encoding
+%%% TODO * OAI-identifier
 %%% TODO * allowed charset
 %%% TODO * define granularity as date type
+%%% TODO * metadata can have additional attribute "about"
 %%% TODO * share should have opendata attribute
-%%% TODO * TESTS !!!
 %%% TODO * get_response always returnig tuple {ElementName, OAIRsponse} ???
 %%% TODO * ticket dla Rafała zeby list w bazie wspieral paginacje
 %%% TODO * paginacja na zasadzie base 64 z offset poczatek
-%%% TODO * metadata can have additional attribute "about"
 
 
 

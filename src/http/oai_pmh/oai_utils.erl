@@ -244,7 +244,7 @@ to_xml({Name, Content, Attributes}) ->
             #xmlAttribute{name = ensure_atom(N), value = str_utils:to_list(V)}
         end, Attributes)
     };
-to_xml(Content) -> str_utils:to_list(Content).
+to_xml(Content) -> #xmlText{value=str_utils:to_list(Content)}.
 
 
 %%%-------------------------------------------------------------------

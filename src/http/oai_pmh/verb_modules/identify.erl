@@ -78,21 +78,30 @@ optional_response_elements() ->
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), proplist()) -> oai_response().
 get_response(<<"repositoryName">>, _Args) ->
-    <<"REPOSITORY NAME">>; % TODO what should be the repository name
+    {ok, RepositoryName} = application:get_env(?APP_Name, oz_name),
+    list_to_binary(RepositoryName);
+%%    <<"REPOSITORY NAME">>; % TODO what should be the repository name
 get_response(<<"baseURL">>, _Args) ->
-    {ok, Domain} = application:get_env(?APP_Name, http_domain),
+    Hostname = dns_query_handler:get_canonical_hostname(),
     {ok, OAI_PREFIX} = application:get_env(?APP_Name, oai_pmh_api_prefix),
-    list_to_binary(Domain ++ OAI_PREFIX);
+    list_to_binary(Hostname ++ OAI_PREFIX);
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->
-    oai_utils:datetime_to_oai_datestamp(get_earliest_datestamp());
+    case get_earliest_datestamp() of
+        none -> <<"Repository is empty">>;
+        Datestamp ->oai_utils:datetime_to_oai_datestamp(Datestamp)
+    end;
 get_response(<<"deletedRecord">>, _Args) ->
     <<"no">>;
 get_response(<<"granularity">>, _Args) ->
     <<"YYYY-MM-DDThh:mm:ss:Z">>;
 get_response(<<"adminEmail">>, _Args) ->
-    [<<"a@mail.com">>, <<"b@mail.com">>]; % TODO how to get them
+    {ok, AdminEmails} = application:get_env(?APP_Name, admin_emails),
+    lists:map(fun(AdminEmail) ->
+        list_to_binary(AdminEmail)
+    end, AdminEmails);
+%%    [<<"a@mail.com">>, <<"b@mail.com">>]; % TODO how to get them
 get_response(<<"compression">>, _Args) ->
     <<"">>; %TODO
 get_response(<<"description">>, _Args) -> [].
@@ -119,4 +128,7 @@ get_earliest_datestamp() ->
             Timestamp -> [Timestamp]
         end
     end, Ids),
-    hd(lists:sort(fun oai_utils:is_earlier_or_equal/2, Datestamps)).
+    case Datestamps of
+        [] -> none;
+        _ -> hd(lists:sort(fun oai_utils:is_earlier_or_equal/2, Datestamps))
+    end.

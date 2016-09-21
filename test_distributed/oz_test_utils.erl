@@ -29,7 +29,7 @@
 
 -export([create_provider/2, remove_provider/2]).
 
--export([remove_share/2]).
+-export([create_share/5, remove_share/2]).
 
 -export([remove_all_entities/1]).
 
@@ -252,6 +252,17 @@ modify_space(Config, SpaceId, Member, Name) ->
     boolean() | {error, Reason :: term()}.
 remove_space(Config, SpaceId) ->
     call_oz(Config, space_logic, remove, [SpaceId]).
+
+
+%%--------------------------------------------------------------------
+%% @doc Removes share.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_share(Config :: term(), ShareId :: binary(),
+    Name :: binary(), RootFileId :: binary(), ParentSpaceId :: binary()) ->
+    {ok, ShareId :: binary()} | {error, Reason :: term()}.
+create_share(Config, ShareId, Name, RootFileId, ParentSpaceId) ->
+    call_oz(Config, share_logic, create, [ShareId, Name, RootFileId, ParentSpaceId]).
 
 
 %%--------------------------------------------------------------------
