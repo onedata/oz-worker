@@ -83,12 +83,10 @@ is_authorized(_, _, _, _) ->
     Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 resource_exists(space, UserId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
+    {SID, Req2} = cowboy_req:binding(sid, Req),
     {space_logic:has_effective_user(SID, UserId), Req2};
 resource_exists(group, UserId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {gid, GID} = lists:keyfind(gid, 1, Bindings),
+    {GID, Req2} = cowboy_req:binding(gid, Req),
     {group_logic:has_effective_user(GID, UserId), Req2};
 resource_exists(_, _, Req) ->
     {true, Req}.
@@ -167,8 +165,7 @@ provide_resource(screate, UserId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, space_create_token, {user, UserId}),
     {[{token, Token}], Req};
 provide_resource(space, UserId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
+    {SID, Req2} = cowboy_req:binding(sid, Req),
     {ok, Space} = space_logic:get_data(SID, {user, UserId}),
     {Space, Req2};
 provide_resource(effective_groups, UserId, _Client, Req) ->
@@ -178,8 +175,7 @@ provide_resource(groups, UserId, _Client, Req) ->
     {ok, Groups} = user_logic:get_groups(UserId),
     {Groups, Req};
 provide_resource(group, _UserId, _Client, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {gid, GID} = lists:keyfind(gid, 1, Bindings),
+    {GID, Req2} = cowboy_req:binding(gid, Req),
     {ok, Group} = group_logic:get_data(GID),
     {Group, Req2};
 provide_resource(client_token, UserId, _Client, Req) ->
@@ -198,10 +194,8 @@ provide_resource(client_token, UserId, _Client, Req) ->
 delete_resource(user, UserId, Req) ->
     {user_logic:remove(UserId), Req};
 delete_resource(space, UserId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {sid, SID} = lists:keyfind(sid, 1, Bindings),
+    {SID, Req2} = cowboy_req:binding(sid, Req),
     {space_logic:remove_user(SID, UserId), Req2};
 delete_resource(group, UserId, Req) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    {gid, GID} = lists:keyfind(gid, 1, Bindings),
+    {GID, Req2} = cowboy_req:binding(gid, Req),
     {group_logic:remove_user(GID, UserId), Req2}.

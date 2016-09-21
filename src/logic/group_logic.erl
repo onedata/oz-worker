@@ -50,10 +50,10 @@ exists(GroupId) ->
 -spec has_user(GroupId :: binary(), UserId :: binary()) ->
     boolean().
 has_user(GroupId, UserId) ->
-    case exists(GroupId) of
-        false -> false;
-        true ->
-            {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
+    case user_group:get(GroupId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #user_group{users = Users}}} ->
             lists:keymember(UserId, 1, Users)
     end.
 
@@ -66,11 +66,10 @@ has_user(GroupId, UserId) ->
 -spec has_nested_group(ParentGroupId :: binary(), GroupId :: binary()) ->
     boolean().
 has_nested_group(ParentGroupId, GroupId) ->
-    case exists(ParentGroupId) of
-        false -> false;
-        true ->
-            {ok, #document{value = #user_group{nested_groups = Groups}}} =
-                user_group:get(ParentGroupId),
+    case user_group:get(ParentGroupId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #user_group{nested_groups = Groups}}} ->
             lists:keymember(GroupId, 1, Groups)
     end.
 
@@ -83,11 +82,10 @@ has_nested_group(ParentGroupId, GroupId) ->
 -spec has_effective_group(GroupId :: binary(), EffectiveId :: binary()) ->
     boolean().
 has_effective_group(GroupId, EffectiveId) ->
-    case exists(GroupId) of
-        false -> false;
-        true ->
-            {ok, #document{value = #user_group{effective_groups = Groups}}} =
-                user_group:get(GroupId),
+    case user_group:get(GroupId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #user_group{effective_groups = Groups}}} ->
             lists:member(EffectiveId, Groups)
     end.
 
@@ -125,11 +123,10 @@ has_effective_privilege(GroupId, UserId, Privilege) ->
 -spec has_effective_user(GroupId :: binary(), UserId :: binary()) ->
     boolean().
 has_effective_user(GroupId, UserId) ->
-    case exists(GroupId) of
-        false -> false;
-        true ->
-            {ok, #document{value = #user_group{effective_users = Users}}}
-                = user_group:get(GroupId),
+    case user_group:get(GroupId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #user_group{effective_users = Users}}} ->
             lists:keymember(UserId, 1, Users)
     end.
 
