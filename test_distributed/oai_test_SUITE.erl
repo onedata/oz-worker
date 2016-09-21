@@ -12,9 +12,9 @@
 
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/performance.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
--include_lib("xmerl/include/xmerl.hrl").
-
+-include("oai_test_SUITE.hrl").
 
 %% API
 -export([all/0, init_per_suite/1, init_per_testcase/2, end_per_testcase/2, end_per_suite/1]).
@@ -26,7 +26,7 @@
     invalid_verb_get_test/1, invalid_verb_post_test/1,
     empty_verb_get_test/1, empty_verb_post_test/1,
     illegal_arg_get_test/1, illegal_arg_post_test/1
- ]).
+    , get_record_get_test/1]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/x-www-form-urlencoded">>}]).
@@ -34,6 +34,7 @@
 
 %% Example test data
 -define(ID1, <<"identifier1">>).
+-define(SPACE_NAME1, <<"space1">>).
 -define(DC_METADATA_PREFIX, <<"oai_dc">>).
 
 
@@ -44,6 +45,7 @@
 all() -> ?ALL([
     identify_get_test,
     identify_post_test,
+    get_record_get_test,
     no_verb_get_test,
     no_verb_post_test,
     empty_verb_get_test,
@@ -64,8 +66,10 @@ identify_get_test(Config) ->
 identify_post_test(Config) ->
     identify_test_base(Config, post).
 
-%%get_record_test(Config) ->
-%%    get_record_test_base(Config, get).
+get_record_get_test(Config) ->
+%%    tracer:start(node()),
+%%    tracer:trace_calls(rest_test_utils, compare_xml),
+    get_record_test_base(Config, get).
 
 
 
@@ -116,6 +120,48 @@ identify_test_base(Config, Method) ->
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
 
+get_record_test_base(Config, Method) ->
+
+    [Node | _] = ?config(oz_worker_nodes, Config),
+
+    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Space1} = oz_test_utils:create_space(Config, {user, UserWithSpaces1}, ?SPACE_NAME1),
+    {ok, ?ID1} = oz_test_utils:create_share(Config, ?ID1, ?ID1, <<"root">>, Space1),
+    ct:pal("SPACE ID: ~p~n", [Space1]),
+    ok = oz_test_utils:modify_share_metadata(Config, ?ID1, ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+    {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(?DC_METADATA_XML)),
+
+    Args = [
+        {<<"identifier">>, ?ID1},
+        {<<"metadataPrefix">>, ?DC_METADATA_PREFIX}
+    ],
+
+    ExpResponseContent = [
+        #xmlElement{name=record, content=[
+            #xmlElement{
+                name=header,
+                content=[
+                    #xmlElement{
+                        name=identifier,
+                        content=[#xmlText{
+                            value=binary_to_list(?ID1)
+                        }]
+                    }
+                ]
+            },
+            #xmlElement{
+                name=metadata,
+                content=[
+                    #xmlElement{
+                        name = 'oai_dc:dc',
+                        content = DCMetadata
+                    }
+                ]
+            }
+        ]}
+    ],
+    ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)).
+
 no_verb_test_base(Config, Method) ->
     ?assert(check_no_verb_error(200, [], Method, [], Config)).
 
@@ -153,9 +199,10 @@ end_per_testcase(_, _Config) ->
     ok.
 
 end_per_suite(Config) ->
-    hackney:stop(),
-    application:stop(etls),
-    test_node_starter:clean_environment(Config).
+    ok.
+%%    hackney:stop(),
+%%    application:stop(etls),
+%%    test_node_starter:clean_environment(Config).
 
 %%%===================================================================
 %%% Functions used to validate REST calls
@@ -163,6 +210,9 @@ end_per_suite(Config) ->
 
 check_identify(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"Identify">>, Args, Method, ExpResponseContent, 'Identify',Config).
+
+check_get_record(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent, 'GetRecord',Config).
 
 check_no_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, none, Args, Method, ExpResponseContent, {error, badVerb}, Config).
@@ -176,7 +226,6 @@ check_invalid_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
 check_illegal_arg_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"Identify">>, Args, Method, ExpResponseContent, {error, badArgument}, Config).
 
-
 check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
 
     URL = ?config(oai_pmh_url, Config),
@@ -186,6 +235,8 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         _ -> add_verb(Verb, Args)
     end,
     ExpectedBody = expected_body(Config, ExpResponseContent, ResponseType, Args2),
+    ct:pal("EXPECTED: ~p", [ExpectedBody]),
+
     QueryString = prepare_querystring(Args2),
 
     Request = case Method of

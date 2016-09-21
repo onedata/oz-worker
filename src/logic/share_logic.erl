@@ -190,7 +190,8 @@ share_id_to_redirect_url(ShareId) ->
 %% Saves given share metadata
 %% @end
 %%--------------------------------------------------------------------
-
+-spec modify_metadata(ShareId :: binary(), Metadata :: binary(),
+    MetadataPrefix :: binary()) -> ok.
 modify_metadata(ShareId, Metadata, MetadataFormat) ->
     {ok, _} = share:update(ShareId, fun(ShareDoc) ->
         MetadataFormats = ShareDoc#share.metadata_formats,

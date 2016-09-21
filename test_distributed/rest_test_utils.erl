@@ -126,8 +126,8 @@ check_rest_call(ArgsMap) ->
             ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOpts]
         ),
 
-        ct:pal("Expected: ~p ~p ~p", [ExpCode, ExpHeaders, ExpBody]),
-        ct:pal("Response: ~p ~p ~p", [RespCode, RespHeaders, RespBody]),
+%%        ct:pal("Expected: ~p ~p ~p", [ExpCode, ExpHeaders, ExpBody]),
+%%        ct:pal("Response: ~p ~p ~p", [RespCode, RespHeaders, RespBody]),
 
         % Check response code if specified
         case ExpCode of
@@ -187,6 +187,10 @@ check_rest_call(ArgsMap) ->
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
 %%                ct:pal("RespBodyXML~n~p~n", [RespBodyXML]),
 %%                ct:pal("ExpBodyXML~n~p~n", [ExpBodyXML]),
+
+                ct:pal(lists:flatten(xmerl:export_simple([ExpBodyXML], xmerl_xml))),
+                ct:pal(lists:flatten(xmerl:export_simple([RespBodyXML], xmerl_xml))),
+
                 case compare_xml(RespBodyXML, ExpBodyXML) of
                     true -> ok;
                     false ->
@@ -243,6 +247,7 @@ sort_map(OriginalMap) ->
             end
         end, OriginalMap, maps:keys(OriginalMap)).
 
+compare_xml(_, []) -> true;
 compare_xml(#xmlText{value=V}, #xmlText{value=V}) -> true;
 compare_xml(#xmlText{value=_V1}, #xmlText{value=_V2}) -> false;
 compare_xml(#xmlAttribute{name=N, value=V}, #xmlAttribute{name=N, value=V}) -> true;
@@ -255,8 +260,17 @@ compare_xml(#xmlElement{name=Name, attributes=RespAttributes, content=RespConten
     ct:pal("COMPARE_XML: ~p~n", [Name]),
     case compare_xml(RespAttributes, ExpAttributes) of
         false -> false;
-        true -> compare_xml(RespContent, ExpContent)
+        true ->
+            ct:pal("~p~n", [RespContent]),
+            compare_xml(RespContent, ExpContent)
     end;
+compare_xml(Resp, [Exp | ExpRest]) when is_list(Resp)->
+    compare_xml(Resp, Exp) and compare_xml(Resp, ExpRest);
+compare_xml(Resp, Exp) when is_list(Resp) ->
+    lists:foldl(fun(R, Acc) ->
+        compare_xml(R, Exp) or Acc
+    end, false, Resp);
+compare_xml(_, _) -> false.
 %%    ct:pal("ATTRS: ~p~n~p", [ExpAttributes, RespAttributes]),
 
 %%    MatchAttrs = compare_xml(RespAttributes, ExpAttributes),
@@ -273,26 +287,25 @@ compare_xml(#xmlElement{name=Name, attributes=RespAttributes, content=RespConten
 
 %%    ct:pal("CONTENT: ~p~n~p", [ExpContent, RespContent]),
 
-compare_xml(RespAttributes, [ExpA = #xmlAttribute{name=N} | ExpAttributesRest]) ->
-    case lists:keyfind(N, 2, RespAttributes) of
-        RespA = #xmlAttribute{} ->
-            compare_xml(RespA, ExpA) and compare_xml(RespAttributes, ExpAttributesRest);
-        _ -> false
-    end;
-compare_xml(RespContent, [#xmlText{value=V} | ExpContentRest]) ->
-    case lists:keyfind(V, 5, RespContent) of
-        #xmlText{} ->
-            compare_xml(RespContent, ExpContentRest);
-        _ -> false
-    end;
-compare_xml(RespContent, [ExpC = #xmlElement{name=N} | ExpContentRest]) ->
-    case lists:keyfind(N, 2, RespContent) of
-        RespC = #xmlElement{} ->
-            compare_xml(RespC, ExpC) and compare_xml(RespContent, ExpContentRest);
-        _ -> false
-    end;
-compare_xml(_, []) -> true;
-compare_xml(_, _) -> false.
+
+%%compare_xml(RespAttributes, ExpA = #xmlAttribute{}) when is_list(RespAttributes) ->
+%%    lists:foldl(fun(RespA, Acc) ->
+%%        compare_xml(RespA, ExpA) or Acc
+%%    end, false, RespAttributes);
+%%compare_xml(RespAttributes, [ExpA = #xmlAttribute{} | ExpAttributesRest]) when is_list(RespAttributes)->
+%%    compare_xml(RespAttributes, ExpA) and compare_xml(RespAttributes, ExpAttributesRest);
+%%compare_xml(RespContent, [#xmlText{value=V} | ExpContentRest])  when is_list(RespContent)->
+%%    case lists:keyfind(V, 5, RespContent) of
+%%        #xmlText{} ->
+%%            compare_xml(RespContent, ExpContentRest);
+%%        _ -> false
+%%    end;
+%%compare_xml(RespContent, ExpC = #xmlElement{}) when is_list(RespContent)->
+%%    lists:foldl(fun(RespC, Acc) ->
+%%        compare_xml(RespC, ExpC) or Acc
+%%    end, false, RespContent);
+%%compare_xml(RespContent, [ExpC = #xmlElement{} | ExpContentRest]) when is_list(RespContent)->
+%%    compare_xml(RespContent, ExpC) and compare_xml(RespContent, ExpContentRest);
 
 
 
