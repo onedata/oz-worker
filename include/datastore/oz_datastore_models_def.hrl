@@ -63,7 +63,9 @@
     effective_groups = [] :: group_graph:effective_groups(),
     nested_groups = [] :: [{GroupID :: binary(), [privileges:group_privilege()]}],
     parent_groups = [] :: [GroupID :: binary()],
-    spaces = [] :: [SpaceId :: binary()]
+    spaces = [] :: [SpaceId :: binary()],
+    handle_services = [] :: [HandleServiceId :: binary()],
+    handles = [] :: [HandleId :: binary()]
 }).
 
 -record(groups_graph_caches_state, {
@@ -163,7 +165,9 @@
     % It is needed in DNS so it knows where to redirect.
     chosen_provider = undefined :: binary() | undefined,
     % List of user's client tokens
-    client_tokens = [] :: [binary()]
+    client_tokens = [] :: [binary()],
+    handle_services = [] ::[HandleServiceId :: binary()],
+    handles = [] ::[HandleId :: binary()]
 }).
 
 %% This record contains a list of privileges possessed by certain entity
@@ -172,11 +176,32 @@
     privileges = [] :: [oz_api_privileges:privilege()]
 }).
 
+-record(handle_service, {
+    name :: handle_service:name() | undefined,
+    proxy_endpoint :: handle_service:proxy_endpoint() | undefined,
+    service_properties :: handle_service:service_properties() | undefined,
+    users = [] :: [{UserId :: binary(), [privileges:handle_service_privilege()]}],
+    groups = [] :: [{GroupId :: binary(), [privileges:handle_service_privilege()]}]
+}).
+
+-record(handle, {
+    handle_service_id :: handle_service:id() | undefined,
+    public_handle :: handle:public_handle() | undefined,
+    resource_type :: handle:resource_type() | undefined,
+    resource_id :: handle:resource_id() | undefined,
+    metadata :: handle:metadata() | undefined,
+    users = [] :: [{UserId :: binary(), [privileges:handle_privilege()]}],
+    groups = [] :: [{GroupId :: binary(), [privileges:handle_privilege()]}],
+    timestamp = handle:actual_timestamp() :: handle:timestamp()
+}).
+
 -type user_info() :: #onedata_user{}.
 -type provider_info() :: #provider{}.
 -type group_info() :: #user_group{}.
 -type space_info() :: #space{}.
 -type token_info() :: #token{}.
 -type auth_info() :: #onedata_auth{}.
+-type handle_service() :: #handle_service{}.
+-type handle() :: #handle{}.
 
 -endif.
