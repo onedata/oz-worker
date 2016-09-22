@@ -53,7 +53,14 @@
     list_identifiers_wrong_date_format_error2_get_test/1,
     list_identifiers_wrong_date_format_error2_post_test/1,
     list_identifiers_wrong_date_format_error3_get_test/1,
-    list_identifiers_wrong_date_format_error3_post_test/1, list_records_get_test/1, list_records_post_test/1, selective_list_records1_get_test/1, selective_list_records1_post_test/1, selective_list_records2_get_test/1, selective_list_records2_post_test/1, selective_list_records3_get_test/1, selective_list_records3_post_test/1, selective_list_records4_get_test/1, selective_list_records4_post_test/1, list_records_no_set_error_get_test/1, list_records_no_set_error_post_test/1]).
+    list_identifiers_wrong_date_format_error3_post_test/1,
+    list_records_get_test/1, list_records_post_test/1,
+    selective_list_records1_get_test/1, selective_list_records1_post_test/1,
+    selective_list_records2_get_test/1, selective_list_records2_post_test/1,
+    selective_list_records3_get_test/1, selective_list_records3_post_test/1,
+    selective_list_records4_get_test/1, selective_list_records4_post_test/1,
+    list_records_no_set_error_get_test/1, list_records_no_set_error_post_test/1
+]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/x-www-form-urlencoded">>}]).
@@ -141,7 +148,7 @@ all() -> ?ALL([
     list_identifiers_wrong_date_format_error3_post_test,
     list_records_no_set_error_get_test,
     list_records_no_set_error_post_test
-    ]).
+]).
 
 %%%===================================================================
 %%% Test functions
@@ -703,8 +710,6 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
     end,
     ExpectedBody = expected_body(Config, ExpResponseContent, ResponseType, Args2),
     QueryString = prepare_querystring(Args2),
-
-    ct:pal("QS: ~p~n", [QueryString]),
 
     Request = case Method of
         get -> #{
