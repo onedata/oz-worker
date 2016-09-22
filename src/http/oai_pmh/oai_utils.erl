@@ -91,7 +91,7 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
         [] -> throw({noRecordsMatch, str_utils:format(
             "The combination of the values of the from= ~s, "
             "until= ~s and metadataPrefix= ~s arguments results "
-            "in an empty list.", [From, Until, MetadataPrefix])});
+            "in an empty list.", [FromDatestamp, UntilDatestamp, MetadataPrefix])});
         _ -> HarvestedMetadata
     end.
 
@@ -296,6 +296,9 @@ granularity_days_to_seconds({max, {{Y, M, D}, {H, Min, S}}}) ->
 %%% @end
 %%%-------------------------------------------------------------------
 -spec ensure_atom(term()) -> atom().
+ensure_atom(Arg) when is_atom(Arg) -> Arg;
+ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
+ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 
 %%%-------------------------------------------------------------------
 %%% @private

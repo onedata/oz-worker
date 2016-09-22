@@ -126,9 +126,6 @@ check_rest_call(ArgsMap) ->
             ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOpts]
         ),
 
-%%        ct:pal("Expected: ~p ~p ~p", [ExpCode, ExpHeaders, ExpBody]),
-%%        ct:pal("Response: ~p ~p ~p", [RespCode, RespHeaders, RespBody]),
-
         % Check response code if specified
         case ExpCode of
             undefined ->
@@ -183,18 +180,10 @@ check_rest_call(ArgsMap) ->
                         throw({body, RespBodyMap, ExpBody})
                 end;
             #xmlElement{} = ExpBodyXML ->
-%%                ct:pal("DUPA2~n"),
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
-%%                ct:pal("RespBodyXML~n~p~n", [RespBodyXML]),
-%%                ct:pal("ExpBodyXML~n~p~n", [ExpBodyXML]),
-
-                ct:pal(lists:flatten(xmerl:export_simple([ExpBodyXML], xmerl_xml))),
-                ct:pal(lists:flatten(xmerl:export_simple([RespBodyXML], xmerl_xml))),
-
                 case compare_xml(RespBodyXML, ExpBodyXML) of
                     true -> ok;
                     false ->
-                        ct:pal("CAUGHT: ~p", [ExpBodyXML]),
                         throw({body, RespBodyXML, ExpBodyXML})
                 end
         end,
@@ -255,14 +244,10 @@ compare_xml(#xmlAttribute{name=_N1, value=_V1}, #xmlAttribute{name=_N2, value=_V
 compare_xml(#xmlElement{name=Name, attributes=_, content=_},
             #xmlElement{name=Name, attributes=[], content=[]}) -> true;
 compare_xml(#xmlElement{name=Name, attributes=RespAttributes, content=RespContent},
-            #xmlElement{name=Name, attributes=ExpAttributes, content=ExpContent}) -> %TODO match name
-
-    ct:pal("COMPARE_XML: ~p~n", [Name]),
+            #xmlElement{name=Name, attributes=ExpAttributes, content=ExpContent}) ->
     case compare_xml(RespAttributes, ExpAttributes) of
         false -> false;
-        true ->
-            ct:pal("~p~n", [RespContent]),
-            compare_xml(RespContent, ExpContent)
+        true -> compare_xml(RespContent, ExpContent)
     end;
 compare_xml(Resp, [Exp | ExpRest]) when is_list(Resp)->
     compare_xml(Resp, Exp) and compare_xml(Resp, ExpRest);
@@ -271,81 +256,3 @@ compare_xml(Resp, Exp) when is_list(Resp) ->
         compare_xml(R, Exp) or Acc
     end, false, Resp);
 compare_xml(_, _) -> false.
-%%    ct:pal("ATTRS: ~p~n~p", [ExpAttributes, RespAttributes]),
-
-%%    MatchAttrs = compare_xml(RespAttributes, ExpAttributes),
-
-%%    MatchAttrs = lists:foldl(fun(ExpA=#xmlAttribute{name=N}, Acc) ->
-%%        case lists:keyfind(N, 2, RespAttributes) of
-%%            false -> false;
-%%            RespA = #xmlAttribute{} -> Acc and compare_xml(RespA, ExpA);
-%%            _ -> false
-%%        end
-%%    end, true, ExpAttributes),
-
-%%    ct:pal("MatchAttrs = ~p~n", [MatchAttrs]),
-
-%%    ct:pal("CONTENT: ~p~n~p", [ExpContent, RespContent]),
-
-
-%%compare_xml(RespAttributes, ExpA = #xmlAttribute{}) when is_list(RespAttributes) ->
-%%    lists:foldl(fun(RespA, Acc) ->
-%%        compare_xml(RespA, ExpA) or Acc
-%%    end, false, RespAttributes);
-%%compare_xml(RespAttributes, [ExpA = #xmlAttribute{} | ExpAttributesRest]) when is_list(RespAttributes)->
-%%    compare_xml(RespAttributes, ExpA) and compare_xml(RespAttributes, ExpAttributesRest);
-%%compare_xml(RespContent, [#xmlText{value=V} | ExpContentRest])  when is_list(RespContent)->
-%%    case lists:keyfind(V, 5, RespContent) of
-%%        #xmlText{} ->
-%%            compare_xml(RespContent, ExpContentRest);
-%%        _ -> false
-%%    end;
-%%compare_xml(RespContent, ExpC = #xmlElement{}) when is_list(RespContent)->
-%%    lists:foldl(fun(RespC, Acc) ->
-%%        compare_xml(RespC, ExpC) or Acc
-%%    end, false, RespContent);
-%%compare_xml(RespContent, [ExpC = #xmlElement{} | ExpContentRest]) when is_list(RespContent)->
-%%    compare_xml(RespContent, ExpC) and compare_xml(RespContent, ExpContentRest);
-
-
-
-%%filter(List = [#xmlText{} | _], _) -> List;
-%%filter([A = #xmlAttribute{name=Name}], AttributesToBeChecked) ->
-%%    case lists:member(Name, AttributesToBeChecked) of
-%%        true -> [A];
-%%        _ -> []
-%%    end;
-%%filter([A = #xmlAttribute{} | Rest], AttributesToBeChecked) ->
-%%    filter([A], AttributesToBeChecked) ++ filter(Rest, AttributesToBeChecked);
-%%filter([E = #xmlElement{name=Name}], MatchPrecisionContent) ->
-%%    ElementsToBeChecked = maps:keys(MatchPrecisionContent),
-%%    case lists:member(Name, ElementsToBeChecked) of
-%%        true -> [E];
-%%        _ -> []
-%%    end;
-%%filter([E = #xmlElement{} | Rest], MatchPrecisionContent) ->
-%%    filter([E], MatchPrecisionContent) ++ filter(Rest, MatchPrecisionContent).
-%%
-%%
-%%%%filter(ListXML, MatchPrecision) ->
-%%%%    lists:filter(fun(E) ->
-%%%%        case E of
-%%%%            #xmlElement{name=Name} ->
-%%%%                ok;
-%%%%            #xmlAttribute{name=Name} ->
-%%%%                maps:get()
-%%%%            #xmlText{} -> true
-%%%%        end
-%%%%    end, ListXML).
-%%
-%%zip(ListXML1, ListXML2) ->
-%%    ct:pal("ListXML1:~n~p", [ListXML1]),
-%%    ct:pal("ListXML2:~n~p", [ListXML2]),
-%%    ct:pal("SORT1:~n~p", [lists:sort(fun sort_xml/2, ListXML1)]),
-%%    ct:pal("SORT2:~n~p", [lists:sort(fun sort_xml/2, ListXML2)]),
-%%    lists:zip(lists:sort(fun sort_xml/2, ListXML1), lists:sort(fun sort_xml/2, ListXML2)).
-%%
-%%sort_xml(#xmlText{}, #xmlText{}) -> true;
-%%sort_xml(#xmlAttribute{name=Name1}, #xmlAttribute{name=Name2}) -> Name1 =< Name2;
-%%sort_xml(#xmlElement{name=Name1}, #xmlElement{name=Name2}) -> Name1 =< Name2;
-%%sort_xml(X, Y) -> ct:pal("MATCHED: ~p~n~p", [X, Y]).

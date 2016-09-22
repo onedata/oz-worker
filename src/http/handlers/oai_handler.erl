@@ -270,13 +270,11 @@ generate_request_element(ParsedArgs, Req) ->
 
 %%% TODO
 %%% TODO * do not use shares, use handles
-%%% TODO * TESTS !!!
 %%% TODO * support resumptionToken
 %%% TODO * compression
 %%% TODO * identity encoding
 %%% TODO * OAI-identifier
 %%% TODO * allowed charset
-%%% TODO * define granularity as date type
 %%% TODO * metadata can have additional attribute "about"
 %%% TODO * share should have opendata attribute
 %%% TODO * get_response always returnig tuple {ElementName, OAIRsponse} ???

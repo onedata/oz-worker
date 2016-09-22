@@ -35,7 +35,25 @@
     list_metadata_formats_get_test/1, list_metadata_formats_post_test/1,
     list_metadata_formats_no_format_error_get_test/1,
     list_metadata_formats_no_format_error_post_test/1,
-    list_identifiers_get_test/1]).
+    list_identifiers_get_test/1, list_identifiers_post_test/1,
+    list_identifiers_empty_repository_error_get_test/1,
+    list_identifiers_empty_repository_error_post_test/1,
+    selective_list_identifiers1_get_test/1, selective_list_identifiers1_post_test/1,
+    selective_list_identifiers2_get_test/1, selective_list_identifiers2_post_test/1,
+    selective_list_identifiers3_get_test/1, selective_list_identifiers3_post_test/1,
+    selective_list_identifiers4_get_test/1, selective_list_identifiers4_post_test/1,
+    list_identifiers_no_records_match_error1_get_test/1,
+    list_identifiers_no_records_match_error1_post_test/1,
+    list_identifiers_no_records_match_error2_get_test/1,
+    list_identifiers_no_records_match_error2_post_test/1,
+    list_identifiers_granularity_mismatch_error_get_test/1,
+    list_identifiers_granularity_mismatch_error_post_test/1,
+    list_identifiers_wrong_date_format_error1_get_test/1,
+    list_identifiers_wrong_date_format_error1_post_test/1,
+    list_identifiers_wrong_date_format_error2_get_test/1,
+    list_identifiers_wrong_date_format_error2_post_test/1,
+    list_identifiers_wrong_date_format_error3_get_test/1,
+    list_identifiers_wrong_date_format_error3_post_test/1, list_records_get_test/1, list_records_post_test/1, selective_list_records1_get_test/1, selective_list_records1_post_test/1, selective_list_records2_get_test/1, selective_list_records2_post_test/1, selective_list_records3_get_test/1, selective_list_records3_post_test/1, selective_list_records4_get_test/1, selective_list_records4_post_test/1, list_records_no_set_error_get_test/1, list_records_no_set_error_post_test/1]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/x-www-form-urlencoded">>}]).
@@ -63,32 +81,67 @@
 %%%===================================================================
 
 all() -> ?ALL([
-%%    identify_get_test,
-%%    identify_post_test,
-%%    get_record_get_test,
-%%    get_record_post_test,
-%%    list_metadata_formats_get_test,
-%%    list_metadata_formats_post_test,
-%%    list_metadata_formats_no_format_error_get_test,
-%%    list_metadata_formats_no_format_error_post_test,
-    list_identifiers_get_test
-%%    no_verb_get_test,
-%%    no_verb_post_test,
-%%    empty_verb_get_test,
-%%    empty_verb_post_test,
-%%    invalid_verb_get_test,
-%%    invalid_verb_post_test,
-%%    illegal_arg_get_test,
-%%    illegal_arg_post_test,
-%%    missing_arg_get_test,
-%%    missing_arg_post_test,
-%%    id_not_existing_get_test,
-%%    id_not_existing_post_test,
-%%    cannot_disseminate_format_get_test,
-%%    cannot_disseminate_format_post_test,
-%%    no_set_hierarchy_get_test,
-%%    no_set_hierarchy_post_test
-]).
+    identify_get_test,
+    identify_post_test,
+    get_record_get_test,
+    get_record_post_test,
+    list_metadata_formats_get_test,
+    list_metadata_formats_post_test,
+    list_metadata_formats_no_format_error_get_test,
+    list_metadata_formats_no_format_error_post_test,
+    list_identifiers_get_test,
+    list_identifiers_post_test,
+    selective_list_identifiers1_get_test,
+    selective_list_identifiers1_post_test,
+    selective_list_identifiers2_get_test,
+    selective_list_identifiers2_post_test,
+    selective_list_identifiers3_get_test,
+    selective_list_identifiers3_post_test,
+    selective_list_identifiers4_get_test,
+    selective_list_identifiers4_post_test,
+    list_records_get_test,
+    list_records_post_test,
+    selective_list_records1_get_test,
+    selective_list_records1_post_test,
+    selective_list_records2_get_test,
+    selective_list_records2_post_test,
+    selective_list_records3_get_test,
+    selective_list_records3_post_test,
+    selective_list_records4_get_test,
+    selective_list_records4_post_test,
+    no_verb_get_test,
+    no_verb_post_test,
+    empty_verb_get_test,
+    empty_verb_post_test,
+    invalid_verb_get_test,
+    invalid_verb_post_test,
+    illegal_arg_get_test,
+    illegal_arg_post_test,
+    missing_arg_get_test,
+    missing_arg_post_test,
+    id_not_existing_get_test,
+    id_not_existing_post_test,
+    cannot_disseminate_format_get_test,
+    cannot_disseminate_format_post_test,
+    no_set_hierarchy_get_test,
+    no_set_hierarchy_post_test,
+    list_identifiers_empty_repository_error_get_test,
+    list_identifiers_empty_repository_error_post_test,
+    list_identifiers_no_records_match_error1_get_test,
+    list_identifiers_no_records_match_error1_post_test,
+    list_identifiers_no_records_match_error2_get_test,
+    list_identifiers_no_records_match_error2_post_test,
+    list_identifiers_granularity_mismatch_error_post_test,
+    list_identifiers_granularity_mismatch_error_get_test,
+    list_identifiers_wrong_date_format_error1_get_test,
+    list_identifiers_wrong_date_format_error1_post_test,
+    list_identifiers_wrong_date_format_error2_get_test,
+    list_identifiers_wrong_date_format_error2_post_test,
+    list_identifiers_wrong_date_format_error3_get_test,
+    list_identifiers_wrong_date_format_error3_post_test,
+    list_records_no_set_error_get_test,
+    list_records_no_set_error_post_test
+    ]).
 
 %%%===================================================================
 %%% Test functions
@@ -113,9 +166,64 @@ list_metadata_formats_post_test(Config) ->
     list_metadata_formats_test_base(Config, post).
 
 list_identifiers_get_test(Config) ->
-    list_identifiers_base_test(Config, get, 10).
+    list_identifiers_test_base(Config, get, 10, undefined, undefined).
 
+list_identifiers_post_test(Config) ->
+    list_identifiers_test_base(Config, post, 10, undefined, undefined).
 
+selective_list_identifiers1_get_test(Config) ->
+    list_identifiers_test_base(Config, get, 10, 0, 5).
+
+selective_list_identifiers1_post_test(Config) ->
+    list_identifiers_test_base(Config, post, 10, 0, 5).
+
+selective_list_identifiers2_get_test(Config) ->
+    list_identifiers_test_base(Config, get, 10, 0, 0).
+
+selective_list_identifiers2_post_test(Config) ->
+    list_identifiers_test_base(Config, post, 10, 0, 0).
+
+selective_list_identifiers3_get_test(Config) ->
+    list_identifiers_test_base(Config, get, 10, undefined, 7).
+
+selective_list_identifiers3_post_test(Config) ->
+    list_identifiers_test_base(Config, get, 10, undefined, 7).
+
+selective_list_identifiers4_get_test(Config) ->
+    list_identifiers_test_base(Config, get, 10, 3, undefined).
+
+selective_list_identifiers4_post_test(Config) ->
+    list_identifiers_test_base(Config, post, 10, 3, undefined).
+
+list_records_get_test(Config) ->
+    list_records_test_base(Config, get, 10, undefined, undefined).
+
+list_records_post_test(Config) ->
+    list_records_test_base(Config, post, 10, undefined, undefined).
+
+selective_list_records1_get_test(Config) ->
+    list_records_test_base(Config, get, 10, 1, 7).
+
+selective_list_records1_post_test(Config) ->
+    list_records_test_base(Config, post, 10, 1, 7).
+
+selective_list_records2_get_test(Config) ->
+    list_records_test_base(Config, get, 10, 9, 9).
+
+selective_list_records2_post_test(Config) ->
+    list_records_test_base(Config, post, 10, 9, 9).
+
+selective_list_records3_get_test(Config) ->
+    list_records_test_base(Config, get, 10, undefined, 2).
+
+selective_list_records3_post_test(Config) ->
+    list_records_test_base(Config, get, 10, undefined, 2).
+
+selective_list_records4_get_test(Config) ->
+    list_records_test_base(Config, get, 10, 9, undefined).
+
+selective_list_records4_post_test(Config) ->
+    list_records_test_base(Config, post, 10, 9, undefined).
 
 %%% Tests of error handling
 
@@ -173,6 +281,53 @@ list_metadata_formats_no_format_error_get_test(Config) ->
 list_metadata_formats_no_format_error_post_test(Config) ->
     list_metadata_formats_no_format_error_test_base(Config, post).
 
+list_identifiers_empty_repository_error_get_test(Config) ->
+    list_identifiers_empty_repository_error_test_base(Config, get).
+
+list_identifiers_empty_repository_error_post_test(Config) ->
+    list_identifiers_empty_repository_error_test_base(Config, post).
+
+list_identifiers_no_records_match_error1_get_test(Config) ->
+    list_identifiers_no_records_match_error_test_base(Config, get, 10, 11, 15).
+
+list_identifiers_no_records_match_error1_post_test(Config) ->
+    list_identifiers_no_records_match_error_test_base(Config, post, 10, 11, 15).
+
+list_identifiers_no_records_match_error2_get_test(Config) ->
+    list_identifiers_no_records_match_error_test_base(Config, get, 10, -11, -5).
+
+list_identifiers_no_records_match_error2_post_test(Config) ->
+    list_identifiers_no_records_match_error_test_base(Config, post, 10, -11, -5).
+
+list_identifiers_granularity_mismatch_error_get_test(Config) ->
+    list_identifiers_granularity_mismatch_error_test_base(Config, get).
+
+list_identifiers_granularity_mismatch_error_post_test(Config) ->
+    list_identifiers_granularity_mismatch_error_test_base(Config, post).
+
+list_identifiers_wrong_date_format_error1_get_test(Config) ->
+    list_identifiers_wrong_date_format_error_test_base(Config, get, <<"1111-01">>, undefined).
+
+list_identifiers_wrong_date_format_error1_post_test(Config) ->
+    list_identifiers_wrong_date_format_error_test_base(Config, post, <<"1111-01">>, undefined).
+
+list_identifiers_wrong_date_format_error2_get_test(Config) ->
+    list_identifiers_wrong_date_format_error_test_base(Config, get, undefined, <<"1111-01-25T00:01:25">>).
+
+list_identifiers_wrong_date_format_error2_post_test(Config) ->
+    list_identifiers_wrong_date_format_error_test_base(Config, post, undefined, <<"1111-01-25T00:01:25">>).
+
+list_identifiers_wrong_date_format_error3_get_test(Config) ->
+    list_identifiers_wrong_date_format_error_test_base(Config, get, undefined, <<"1111-13-25T65:01:25">>).
+
+list_identifiers_wrong_date_format_error3_post_test(Config) ->
+    list_identifiers_wrong_date_format_error_test_base(Config, post, undefined, <<"1111-13-25T65:01:25">>).
+
+list_records_no_set_error_get_test(Config) ->
+    list_records_no_set_error_test_base(Config, get).
+
+list_records_no_set_error_post_test(Config) ->
+    list_records_no_set_error_test_base(Config, post).
 
 %%%===================================================================
 %%% Test base functions
@@ -257,20 +412,21 @@ list_metadata_formats_test_base(Config, Method) ->
 
     ?assert(check_list_metadata_formats(200, [], Method, ExpResponseContent, Config)).
 
-list_identifiers_base_test(Config, Method, HeadersNum) ->
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
-    SpaceIds = create_spaces(Config, ?SPACE_NAMES(HeadersNum), {user, User}),
-    Identifiers = create_shares(Config, SpaceIds),
+list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
+
     BeginTime = erlang:universaltime(),
-    TimeOffsets = lists:seq(0, HeadersNum-1),
+    TimeOffsets = lists:seq(0, IdentifiersNum-1), % timestamps will differ with 1 second each
 
-    ct:pal("IDS: ~p", [Identifiers]),
-    ct:pal("BeginTime: ~p", [BeginTime]),
-    ct:pal("TimeOffsets: ~p", [TimeOffsets]),
-    create_records_with_mocked_timestamps(Config, BeginTime, TimeOffsets,
-        Identifiers, ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+    Identifiers =
+        setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
+            ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
 
-    Args = [{<<"metadataPrefix">>, ?DC_METADATA_PREFIX}],
+    From = convert(increase_timestamp(BeginTime, FromOffset)),
+    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
+
+    IdsAndTimestamps =
+        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
 
     ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
         #xmlElement{
@@ -285,15 +441,68 @@ list_identifiers_base_test(Config, Method, HeadersNum) ->
                 #xmlElement{
                     name = datestamp,
                     content = [#xmlText{
-                        value = convert_datetime(increase_timestamp(BeginTime, TimeOffset))
+                        value = convert(increase_timestamp(BeginTime, TimeOffset))
                     }]
                 }
             ]
         }
-        end, lists:zip(Identifiers, TimeOffsets)),
+    end, IdsAndTimestamps),
 
     ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent, Config)).
 
+list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
+
+    BeginTime = erlang:universaltime(),
+    TimeOffsets = lists:seq(0, IdentifiersNum-1), % timestamps will differ with 1 second each
+
+    Identifiers =
+        setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
+            ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+
+    From = convert(increase_timestamp(BeginTime, FromOffset)),
+    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
+
+    {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(?DC_METADATA_XML)),
+
+    IdsAndTimestamps =
+        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
+
+    ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
+        #xmlElement{
+            name=record,
+            content=[
+                #xmlElement{
+                    name = header,
+                    content = [
+                        #xmlElement{
+                            name = identifier,
+                            content = [#xmlText{
+                                value = binary_to_list(Id)
+                            }]
+                        },
+                        #xmlElement{
+                            name = datestamp,
+                            content = [#xmlText{
+                                value = convert(increase_timestamp(BeginTime, TimeOffset))
+                            }]
+                        }
+                    ]
+                },
+                #xmlElement{
+                    name = metadata,
+                    content = [
+                        #xmlElement{
+                            name = 'oai_dc:dc',
+                            content = DCMetadata
+                        }
+                    ]
+                }
+            ]
+        }
+    end, IdsAndTimestamps),
+
+    ?assert(check_list_records(200, Args, Method, ExpResponseContent, Config)).
 
 no_verb_test_base(Config, Method) ->
     ?assert(check_no_verb_error(200, [], Method, [], Config)).
@@ -346,6 +555,42 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
     Args = [{<<"identifier">>, ?ID1}],
 
     ?assert(check_list_metadata_formats_error(200, Args, Method, [], Config)).
+
+list_identifiers_empty_repository_error_test_base(Config, Method) ->
+    Args = [{<<"metadataPrefix">>, ?DC_METADATA_PREFIX}],
+    ?assert(check_list_identifiers_no_records_match_error(200, Args, Method, [], Config)).
+
+list_identifiers_no_records_match_error_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
+
+    BeginTime = erlang:universaltime(),
+    TimeOffsets = lists:seq(0, IdentifiersNum-1), % timestamps will differ with 1 second each
+
+    setup_test_for_harvesting(Config, IdentifiersNum, BeginTime,
+        TimeOffsets, ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+
+    From = convert(increase_timestamp(BeginTime, FromOffset)),
+    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
+
+    ?assert(check_list_identifiers_no_records_match_error(200, Args, Method, [], Config)).
+
+list_identifiers_granularity_mismatch_error_test_base(Config, Method) ->
+
+    Args = [
+        {<<"metadataPrefix">>, <<"oai_dc">>},
+        {<<"from">>, <<"1111-12-01">>},
+        {<<"until">>, <<"1111-12-01T00:00:00Z">>}
+    ],
+    ?assert(check_list_identifiers_bad_argument_error(200, Args, Method, [], Config)).
+
+list_identifiers_wrong_date_format_error_test_base(Config, Method, From, Until) ->
+
+    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
+    ?assert(check_list_identifiers_bad_argument_error(200, Args, Method, [], Config)).
+
+list_records_no_set_error_test_base(Config, Method) ->
+    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, undefined, undefined, <<"some_set">>),
+    ?assert(check_list_records_no_set_error(200, Args, Method, [], Config)).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -432,9 +677,23 @@ check_list_identifiers(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListIdentifiers">>, Args, Method,
         ExpResponseContent, 'ListIdentifiers', Config).
 
+check_list_identifiers_no_records_match_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListIdentifiers">>, Args, Method,
+        ExpResponseContent, {error, noRecordsMatch}, Config).
 
-check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType,
-    Config) ->
+check_list_identifiers_bad_argument_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListIdentifiers">>, Args, Method,
+        ExpResponseContent, {error, badArgument}, Config).
+
+check_list_records(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListRecords">>, Args, Method,
+        ExpResponseContent, 'ListRecords', Config).
+
+check_list_records_no_set_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListRecords">>, Args, Method,
+        ExpResponseContent, {error, noSetHierarchy}, Config).
+
+check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
 
     URL = ?config(oai_pmh_url, Config),
     Path = ?config(oai_pmh_path, Config),
@@ -484,14 +743,24 @@ get_oai_pmh_api_path(Node) ->
     list_to_binary(OAIPrefix).
 
 prepare_querystring(Proplist) ->
-    lists:foldl(fun({K, V}, Acc) ->
+    QS = lists:foldl(fun({K, V}, Acc) ->
         KBin = str_utils:to_binary(K),
         VBin = str_utils:to_binary(V),
         <<Acc/binary, KBin/binary, "=", VBin/binary, "&">>
-    end, <<"">>, Proplist).
+    end, <<"">>, Proplist),
+
+    case QS of
+        <<"">> -> <<"">>;
+        _ -> binary_part(QS, 0, size(QS) - 1)
+    end.
 
 add_verb(Verb, Args) ->
-    [{<<"verb">>, str_utils:to_binary(Verb)} | Args].
+    add_to_args(<<"verb">>, Verb, Args).
+
+add_to_args(_Key, undefined, Args) ->
+    Args;
+add_to_args(Key, Value, Args) ->
+    [{str_utils:to_binary(Key), str_utils:to_binary(Value)} | Args].
 
 get_domain(Hostname) ->
     [_Node | Domain] = string:tokens(atom_to_list(Hostname), "."),
@@ -593,9 +862,6 @@ create_records_with_mocked_timestamps(Config, BeginTime, TimeOffsets, ShareIds, 
     MetadataFormat) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
 
-    ct:pal("ShareIds ~p", [ShareIds]),
-    ct:pal("TimeOffsets ~p", [TimeOffsets]),
-
     lists:foreach(fun({ShareId, TimeOffset}) ->
         mock_getting_timestamp_when_adding_metadata(
             Node, increase_timestamp(BeginTime, TimeOffset)),
@@ -604,17 +870,46 @@ create_records_with_mocked_timestamps(Config, BeginTime, TimeOffsets, ShareIds, 
     end, lists:zip(ShareIds, TimeOffsets)).
 
 
+increase_timestamp(_, undefined) -> undefined;
+increase_timestamp(undefined, _) -> undefined;
 increase_timestamp(Datetime, ExtraSeconds) ->
     Seconds = calendar:datetime_to_gregorian_seconds(Datetime),
     calendar:gregorian_seconds_to_datetime(Seconds + ExtraSeconds).
 
-convert_datetime(DateTime) ->
+convert(undefined) -> undefined;
+convert(DateTime) ->
     {{Year, Month, Day}, {Hour, Minute, Second}} = DateTime,
     str_utils:format(
         "~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ",
         [Year, Month, Day, Hour, Minute, Second]).
 
-%% TODO
-%% TODO * ListIdentifiers
-%% TODO * ListIdentifiers
-%% TODO * above tests with different variants of args
+offset_in_range(undefined, undefined, _) -> true;
+offset_in_range(undefined, Until, Offset) ->
+    Offset =< Until;
+offset_in_range(From, undefined, Offset) ->
+    From =< Offset;
+offset_in_range(From, Until, Offset) ->
+    (From =< Offset) and (Offset =< Until).
+
+
+setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix) ->
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    SpaceIds = create_spaces(Config, ?SPACE_NAMES(RecordsNum), {user, User}),
+    Identifiers = create_shares(Config, SpaceIds),
+    create_records_with_mocked_timestamps(Config, BeginTime, TimeOffsets,
+        Identifiers, Metadata, MetadataPrefix),
+    Identifiers.
+
+prepare_harvesting_args(MetadataPrefix, From, Until) ->
+    prepare_harvesting_args(MetadataPrefix, From, Until, undefined).
+
+prepare_harvesting_args(MetadataPrefix, From, Until, Set) ->
+    Args = add_to_args(<<"metadataPrefix">>, MetadataPrefix, []),
+    Args2 = add_to_args(<<"from">>, From, Args),
+    Args3 = add_to_args(<<"until">>, Until, Args2),
+    add_to_args(<<"set">>, Set, Args3).
+
+ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset) ->
+    lists:filter(fun({_Id, TimeOffset}) ->
+        offset_in_range(FromOffset, UntilOffset, TimeOffset)
+    end, lists:zip(Identifiers, TimeOffsets)).
