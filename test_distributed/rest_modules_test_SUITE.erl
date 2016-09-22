@@ -618,7 +618,7 @@ update_user_test(Config) ->
     ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(ParamsWithOtherAddress)),
     % Make sure alias cannot be duplicated
     {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
-    ?assertMatch({request_error, ?BAD_REQUEST}, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], User2ReqParams))),
+    ?assertMatch({bad_response_code, 400}, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], User2ReqParams))),
     % But setting the same alias does not report an error
     ?assertMatch(ok, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], UserReqParams))),
     ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(UserReqParams)),
@@ -642,17 +642,16 @@ create_space_for_user_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     ParamsWithOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
+    % Every user automatically gets his first space
+    [[FirstUserSpace], DefaultUserSpace] = get_user_spaces(UserReqParams),
+    ?assertMatch(DefaultUserSpace, FirstUserSpace),
+
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
     SID2 = create_space_for_user(?SPACE_NAME1, ParamsWithOtherAddress),
-
-    [Sids, Default] = get_user_spaces(UserReqParams),
-    ?assertMatch(<<"undefined">>, Default),
-    case SID1 < SID2 of
-        true ->
-            ?assertMatch([SID1, SID2], lists:sort(Sids));
-        false ->
-            ?assertMatch([SID2, SID1], lists:sort(Sids))
-    end.
+    [SpaceIds, NewDefaultUserSpace] = get_user_spaces(UserReqParams),
+    % Default space should not have changed
+    ?assertMatch(NewDefaultUserSpace, DefaultUserSpace),
+    ?assertMatch(lists:sort([SID1, SID2]), lists:sort(SpaceIds)).
 
 set_user_default_space_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),

@@ -70,12 +70,10 @@ create(UserInfo, ProposedUserId) ->
     {ok, SupportToken} = token_logic:create(
         #client{type = user, id = UserId}, space_support_token, {space, SpaceId}
     ),
-    {ok, _} = onedata_user:update(UserId, fun(User) ->
-        {ok, User#onedata_user{
-            default_space = SpaceId,
-            first_space_support_token = SupportToken
-        }}
-    end),
+    {ok, _} = onedata_user:update(UserId, #{
+        default_space => SpaceId,
+        first_space_support_token => SupportToken
+    }),
 
     % Check if global groups are enabled, if so add the new user to the groups.
     case application:get_env(?APP_Name, enable_global_groups) of
@@ -142,9 +140,7 @@ modify(UserId, Proplist) ->
             ok;
         NewName ->
             % New name requested, set it
-            {ok, _} = onedata_user:update(UserId, fun(User) ->
-                {ok, User#onedata_user{name = NewName}}
-            end)
+            {ok, _} = onedata_user:update(UserId, #{name => NewName})
     end,
     % Update alias if needed
     case proplists:get_value(alias, Proplist) of
@@ -198,9 +194,7 @@ set_alias(UserId, Alias) ->
                     {error, alias_occupied};
                 _ ->
                     % Alias is not occupied, update user doc
-                    {ok, _} = onedata_user:update(UserId, fun(User) ->
-                        {ok, User#onedata_user{alias = Alias}}
-                    end),
+                    {ok, _} = onedata_user:update(UserId, #{alias => Alias}),
                     ok
             end
         end)
@@ -242,14 +236,12 @@ add_oauth_account(UserId, OAuthAccount) ->
         <<"">> -> OAuthName;
         _ -> Name
     end,
-    {ok, _} = onedata_user:update(UserId, fun(User) ->
-        {ok, User#onedata_user{
-            name = NewName,
-            % Add emails from provider that are not yet added to account
-            email_list = lists:usort(Emails ++ OAuthEmails),
-            connected_accounts = ConnectedAccounts ++ [OAuthAccount]
-        }}
-    end),
+    {ok, _} = onedata_user:update(UserId, #{
+        name => NewName,
+        % Add emails from provider that are not yet added to account
+        email_list => lists:usort(Emails ++ OAuthEmails),
+        connected_accounts => ConnectedAccounts ++ [OAuthAccount]
+    }),
     ok.
 
 

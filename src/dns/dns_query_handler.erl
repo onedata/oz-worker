@@ -514,11 +514,9 @@ get_provider_data_by_alias(Alias) ->
                 catch _:_ ->
                     {ok, NewChosenProv} =
                         provider_logic:choose_provider_for_user(UserId),
-                    {ok, _} = onedata_user:update(UserId, fun(User) ->
-                        {ok, User#onedata_user{
-                            chosen_provider = NewChosenProv
-                        }}
-                    end),
+                    {ok, _} = onedata_user:update(UserId, #{
+                        chosen_provider => NewChosenProv
+                    }),
                     {ok, Data2} = provider_logic:get_data(NewChosenProv),
                     Data2
                 end,
