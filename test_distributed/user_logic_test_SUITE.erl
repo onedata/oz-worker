@@ -121,8 +121,9 @@ remove_space_test(Config) ->
     {ok, #document{
         value = #onedata_user{
             spaces = [FirstSpace],
-            space_names = #{FirstSpace := FirstSpaceName}
+            space_names = SpaceNames
         }}} = oz_test_utils:get_user(Config, UserId),
+    FirstSpaceName = maps:get(FirstSpace, SpaceNames),
     {ok, SpaceId} = ?assertMatch(
         {ok, _}, oz_test_utils:create_space(Config, {user, UserId}, SpaceName)
     ),
