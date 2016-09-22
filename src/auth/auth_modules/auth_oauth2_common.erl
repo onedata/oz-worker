@@ -113,7 +113,7 @@ validate_login(ProviderName, SecretSendMethod) ->
         UserInfoEndpoint = user_info_endpoint(XRDS),
         URL = <<UserInfoEndpoint/binary, "?access_token=", AccessToken/binary>>,
 
-        % Send request to user infoo endpoint
+        % Send request to user info endpoint
         {ok, 200, _, Response2} = http_client:get(URL,
             [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}]),
 
