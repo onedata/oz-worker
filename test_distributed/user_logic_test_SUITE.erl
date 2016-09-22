@@ -117,12 +117,22 @@ remove_space_test(Config) ->
     {ok, UserId} = ?assertMatch(
         {ok, _}, oz_test_utils:create_user(Config, #onedata_user{})
     ),
+    % Every user gets his first space upon creation, account it
+    {ok, #document{
+        value = #onedata_user{
+            spaces = [FirstSpace],
+            space_names = #{FirstSpace := FirstSpaceName}
+        }}} = oz_test_utils:get_user(Config, UserId),
     {ok, SpaceId} = ?assertMatch(
         {ok, _}, oz_test_utils:create_space(Config, {user, UserId}, SpaceName)
     ),
 
     ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
+    ?assertEqual(FirstSpaceName,
+        get_space_name_mapping(Node, UserId, FirstSpace)
+    ),
     oz_test_utils:remove_space(Config, SpaceId),
+    oz_test_utils:remove_space(Config, FirstSpaceName),
     ?assertMatch({ok, #document{value = #onedata_user{
         spaces = [], space_names = #{}
     }}}, rpc:call(Node, onedata_user, get, [UserId])).
