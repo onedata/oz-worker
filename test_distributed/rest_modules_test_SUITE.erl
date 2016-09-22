@@ -643,28 +643,43 @@ create_space_for_user_test(Config) ->
     ParamsWithOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     % Every user automatically gets his first space
-    [[FirstUserSpace], DefaultUserSpace] = get_user_spaces(UserReqParams),
-    ?assertMatch(DefaultUserSpace, FirstUserSpace),
+    [[FirstSpace], DefaultSpace] = get_user_spaces(UserReqParams),
+    ?assertMatch(DefaultSpace, FirstSpace),
 
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
     SID2 = create_space_for_user(?SPACE_NAME1, ParamsWithOtherAddress),
     [SpaceIds, NewDefaultUserSpace] = get_user_spaces(UserReqParams),
     % Default space should not have changed
-    ?assertMatch(NewDefaultUserSpace, DefaultUserSpace),
-    ?assertMatch(lists:sort([SID1, SID2]), lists:sort(SpaceIds)).
+    ?assertMatch(NewDefaultUserSpace, DefaultSpace),
+    ExpectedSpaces = lists:sort([FirstSpace, SID1, SID2]),
+    ?assertMatch(ExpectedSpaces, lists:sort(SpaceIds)).
 
 set_user_default_space_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
     ParamsWithOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
 
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams)),
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(ParamsWithOtherAddress)),
+    % Every user automatically gets his first space
+    [[FirstSpace], DefaultSpace] = get_user_spaces(UserReqParams),
+    ?assertMatch(DefaultSpace, FirstSpace),
+
+    SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
+    ExpectedSpaces = lists:sort([SID1, FirstSpace]),
+    [NewSpaces1, NewDefaultSpace1] = get_user_spaces(UserReqParams),
+    ?assertMatch(ExpectedSpaces, lists:sort(NewSpaces1)),
+    ?assertMatch(NewDefaultSpace1, DefaultSpace),
+    [NewSpaces2, NewDefaultSpace2] = get_user_spaces(ParamsWithOtherAddress),
+    ?assertMatch(ExpectedSpaces, lists:sort(NewSpaces2)),
+    ?assertMatch(NewDefaultSpace2, DefaultSpace),
+
     ?assertMatch(ok, check_status(set_default_space_for_user(SID1, UserReqParams))),
-    ?assertMatch([[SID1], SID1], get_user_spaces(UserReqParams)),
-    ?assertMatch([[SID1], SID1], get_user_spaces(ParamsWithOtherAddress)),
+    [NewSpaces3, NewDefaultSpace3] = get_user_spaces(UserReqParams),
+    ?assertMatch(ExpectedSpaces, lists:sort(NewSpaces3)),
+    ?assertMatch(NewDefaultSpace3, SID1),
+    [NewSpaces4, NewDefaultSpace4] = get_user_spaces(ParamsWithOtherAddress),
+    ?assertMatch(ExpectedSpaces, lists:sort(NewSpaces4)),
+    ?assertMatch(NewDefaultSpace4, SID1),
     ?assertMatch(SID1, get_user_default_space(UserReqParams)),
     ?assertMatch(SID1, get_user_default_space(ParamsWithOtherAddress)).
 
@@ -677,11 +692,12 @@ set_user_default_space_without_permission_test(Config) ->
 
     {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
     SID1 = create_space_for_user(?SPACE_NAME1, ParamsWithOtherAddress),
-
-    ?assertMatch([[], <<"undefined">>], get_user_spaces(User2ReqParams)),
+    % Every user automatically gets his first space
+    [[FirstSpace], DefaultSpace] = get_user_spaces(User2ReqParams),
+    ?assertMatch(DefaultSpace, FirstSpace),
     ?assertMatch({bad_response_code, _}, check_status(set_default_space_for_user(SID1, User2ReqParams))),
-    ?assertMatch([[], <<"undefined">>], get_user_spaces(User2ReqParams)),
-    ?assertMatch(<<"undefined">>, get_user_default_space(User2ReqParams)).
+    ?assertMatch([[FirstSpace], DefaultSpace], get_user_spaces(User2ReqParams)),
+    ?assertMatch(DefaultSpace, get_user_default_space(User2ReqParams)).
 
 set_non_existing_space_as_user_default_space_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -691,11 +707,12 @@ set_non_existing_space_as_user_default_space_test(Config) ->
     SID1 = create_space_for_user(?SPACE_NAME1, UserReqParams),
     SID2 = <<"0">>,
 
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams)),
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(ParamsWithOtherAddress)),
+    [UserSpaces, DefaultSpace] = get_user_spaces(UserReqParams),
+    ?assert(lists:member(SID1, UserSpaces)),
+    ?assertMatch([UserSpaces, DefaultSpace], get_user_spaces(ParamsWithOtherAddress)),
     ?assertMatch({bad_response_code, _}, check_status(set_default_space_for_user(SID2, UserReqParams))),
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(UserReqParams)),
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(ParamsWithOtherAddress)).
+    ?assertMatch([UserSpaces, DefaultSpace], get_user_spaces(UserReqParams)),
+    ?assertMatch([UserSpaces, DefaultSpace], get_user_spaces(ParamsWithOtherAddress)).
 
 user_gets_space_info_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -734,17 +751,24 @@ not_last_user_leaves_space_test(Config) ->
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
 
     {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    % Every user automatically gets his first space
+    [[User1FirstSpace], User1DefaultSpace] = get_user_spaces(User1ReqParams),
+    ?assertMatch(User1DefaultSpace, User1FirstSpace),
+    [[User2FirstSpace], User2DefaultSpace] = get_user_spaces(User2ReqParams),
+    ?assertMatch(User2DefaultSpace, User2FirstSpace),
+
     SID1 = create_space_for_user(?SPACE_NAME1, User1ParamsOtherAddress),
     InvitationToken = get_space_invitation_token(users, SID1, User1ReqParams),
-
     join_user_to_space(InvitationToken, User2ReqParams),
 
     User2ParamsOtherAddress = update_req_params(User2ReqParams, OtherRestAddress, address),
     ?assertMatch(ok, check_status(user_leaves_space(SID1, User2ReqParams))),
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(User1ReqParams)),
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(User1ParamsOtherAddress)),
-    ?assertMatch([[], <<"undefined">>], get_user_spaces(User2ReqParams)),
-    ?assertMatch([[], <<"undefined">>], get_user_spaces(User2ParamsOtherAddress)).
+    [User1NewSpaces, _] = ?assertMatch([_, User1DefaultSpace], get_user_spaces(User1ReqParams)),
+    User1ExpectedSpaces = lists:sort([User1FirstSpace, SID1]),
+    ?assertMatch(User1ExpectedSpaces, lists:sort(User1NewSpaces)),
+    ?assertMatch([User1ExpectedSpaces, User1DefaultSpace], get_user_spaces(User1ParamsOtherAddress)),
+    ?assertMatch([[User2FirstSpace], User2DefaultSpace], get_user_spaces(User2ReqParams)),
+    ?assertMatch([[User2FirstSpace], User2DefaultSpace], get_user_spaces(User2ParamsOtherAddress)).
 
 invite_user_to_space_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -761,8 +785,9 @@ invite_user_to_space_test(Config) ->
     User2ParamsOtherAddress = update_req_params(User2ReqParams2, OtherRestAddress, address),
 
     %% check if space is in list of user2 space
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(User2ReqParams2)),
-    ?assertMatch([[SID1], <<"undefined">>], get_user_spaces(User2ParamsOtherAddress)),
+    [User2Spaces, _] = get_user_spaces(User2ReqParams2),
+    ?assert(lists:member(SID1, User2Spaces)),
+    ?assertMatch([User2Spaces, _], get_user_spaces(User2ParamsOtherAddress)),
 
     %% check if user2 is in list of space's users
     ?assertMatch(true, is_included([UserId2], get_space_users(SID1, User2ReqParams2))),
