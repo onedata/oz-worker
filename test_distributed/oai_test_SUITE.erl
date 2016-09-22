@@ -34,7 +34,8 @@
     no_set_hierarchy_get_test/1, no_set_hierarchy_post_test/1,
     list_metadata_formats_get_test/1, list_metadata_formats_post_test/1,
     list_metadata_formats_no_format_error_get_test/1,
-    list_metadata_formats_no_format_error_post_test/1]).
+    list_metadata_formats_no_format_error_post_test/1,
+    list_identifiers_get_test/1]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/x-www-form-urlencoded">>}]).
@@ -42,7 +43,16 @@
 
 %% Example test data
 -define(ID1, <<"identifier1">>).
+-define(IDS(Num),
+    lists:map(fun(N) ->
+        list_to_binary("identifier" ++ integer_to_list(N))
+    end, lists:seq(0, Num-1))
+).
 -define(SPACE_NAME1, <<"space1">>).
+-define(SPACE_NAMES(Num),
+    lists:map(fun(N) ->
+        list_to_binary("space" ++ integer_to_list(N))
+    end, lists:seq(0, Num-1))).
 -define(DC_METADATA_PREFIX, <<"oai_dc">>).
 -define(DC_NAMESPACE, <<"http://www.openarchives.org/OAI/2.0/oai_dc/">>).
 -define(DC_SCHEMA, <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>).
@@ -53,30 +63,31 @@
 %%%===================================================================
 
 all() -> ?ALL([
-    identify_get_test,
-    identify_post_test,
-    get_record_get_test,
-    get_record_post_test,
-    list_metadata_formats_get_test,
-    list_metadata_formats_post_test,
-    list_metadata_formats_no_format_error_get_test,
-    list_metadata_formats_no_format_error_post_test,
-    no_verb_get_test,
-    no_verb_post_test,
-    empty_verb_get_test,
-    empty_verb_post_test,
-    invalid_verb_get_test,
-    invalid_verb_post_test,
-    illegal_arg_get_test,
-    illegal_arg_post_test,
-    missing_arg_get_test,
-    missing_arg_post_test,
-    id_not_existing_get_test,
-    id_not_existing_post_test,
-    cannot_disseminate_format_get_test,
-    cannot_disseminate_format_post_test,
-    no_set_hierarchy_get_test,
-    no_set_hierarchy_post_test
+%%    identify_get_test,
+%%    identify_post_test,
+%%    get_record_get_test,
+%%    get_record_post_test,
+%%    list_metadata_formats_get_test,
+%%    list_metadata_formats_post_test,
+%%    list_metadata_formats_no_format_error_get_test,
+%%    list_metadata_formats_no_format_error_post_test,
+    list_identifiers_get_test
+%%    no_verb_get_test,
+%%    no_verb_post_test,
+%%    empty_verb_get_test,
+%%    empty_verb_post_test,
+%%    invalid_verb_get_test,
+%%    invalid_verb_post_test,
+%%    illegal_arg_get_test,
+%%    illegal_arg_post_test,
+%%    missing_arg_get_test,
+%%    missing_arg_post_test,
+%%    id_not_existing_get_test,
+%%    id_not_existing_post_test,
+%%    cannot_disseminate_format_get_test,
+%%    cannot_disseminate_format_post_test,
+%%    no_set_hierarchy_get_test,
+%%    no_set_hierarchy_post_test
 ]).
 
 %%%===================================================================
@@ -101,12 +112,16 @@ list_metadata_formats_get_test(Config) ->
 list_metadata_formats_post_test(Config) ->
     list_metadata_formats_test_base(Config, post).
 
+list_identifiers_get_test(Config) ->
+    list_identifiers_base_test(Config, get, 10).
 
-%%%% Tests of error handling
+
+
+%%% Tests of error handling
 
 no_verb_get_test(Config) ->
     no_verb_test_base(Config, get).
-%%
+
 no_verb_post_test(Config) ->
     no_verb_test_base(Config, post).
 
@@ -242,6 +257,44 @@ list_metadata_formats_test_base(Config, Method) ->
 
     ?assert(check_list_metadata_formats(200, [], Method, ExpResponseContent, Config)).
 
+list_identifiers_base_test(Config, Method, HeadersNum) ->
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    SpaceIds = create_spaces(Config, ?SPACE_NAMES(HeadersNum), {user, User}),
+    Identifiers = create_shares(Config, SpaceIds),
+    BeginTime = erlang:universaltime(),
+    TimeOffsets = lists:seq(0, HeadersNum-1),
+
+    ct:pal("IDS: ~p", [Identifiers]),
+    ct:pal("BeginTime: ~p", [BeginTime]),
+    ct:pal("TimeOffsets: ~p", [TimeOffsets]),
+    create_records_with_mocked_timestamps(Config, BeginTime, TimeOffsets,
+        Identifiers, ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+
+    Args = [{<<"metadataPrefix">>, ?DC_METADATA_PREFIX}],
+
+    ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
+        #xmlElement{
+            name = header,
+            content = [
+                #xmlElement{
+                    name = identifier,
+                    content = [#xmlText{
+                        value = binary_to_list(Id)
+                    }]
+                },
+                #xmlElement{
+                    name = datestamp,
+                    content = [#xmlText{
+                        value = convert_datetime(increase_timestamp(BeginTime, TimeOffset))
+                    }]
+                }
+            ]
+        }
+        end, lists:zip(Identifiers, TimeOffsets)),
+
+    ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent, Config)).
+
+
 no_verb_test_base(Config, Method) ->
     ?assert(check_no_verb_error(200, [], Method, [], Config)).
 
@@ -375,6 +428,11 @@ check_list_metadata_formats_error(Code, Args, Method, ExpResponseContent, Config
     check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method,
         ExpResponseContent, {error, noMetadataFormats}, Config).
 
+check_list_identifiers(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListIdentifiers">>, Args, Method,
+        ExpResponseContent, 'ListIdentifiers', Config).
+
+
 check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType,
     Config) ->
 
@@ -439,7 +497,6 @@ get_domain(Hostname) ->
     [_Node | Domain] = string:tokens(atom_to_list(Hostname), "."),
     string:join(Domain, ".").
 
-
 expected_body(Config, ExpectedResponse, ResponseType, Args) ->
     Path = ?config(oai_pmh_path, Config),
     URL = ?config(oai_pmh_url, Config),
@@ -497,3 +554,67 @@ expected_request_element(RequestURL, Args) ->
 ensure_atom(Arg) when is_atom(Arg) -> Arg;
 ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
 ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
+
+create_spaces(Config, SpacesNames, Member) ->
+    lists:map(fun(SpaceName) ->
+        {ok, SpaceId} = oz_test_utils:create_space(Config, Member, SpaceName),
+        SpaceId
+    end, SpacesNames).
+
+create_shares(Config, SpaceIds) ->
+    ShareIds = ?IDS(length(SpaceIds)),
+    lists:map(fun({ShareId, SpaceId}) ->
+        {ok, ShareId} =
+            oz_test_utils:create_share(Config, ShareId, ShareId, <<"root_file_id">>, SpaceId),
+        ShareId
+    end, lists:zip(ShareIds, SpaceIds)).
+
+mock_getting_timestamp_when_adding_metadata(Node, Timestamp) ->
+    test_utils:mock_new(Node, share_logic, [passthrough]),
+    test_utils:mock_expect(Node, share_logic, modify_metadata,
+        fun(ShareId, Metadata, MetadataFormat) ->
+            {ok, _} = share:update(ShareId, fun(ShareDoc) ->
+                MetadataFormats = ShareDoc#share.metadata_formats,
+                {ok, ShareDoc#share{
+                    metadata = Metadata,
+                    metadata_formats = [MetadataFormat | MetadataFormats],
+                    metadata_timestamp = Timestamp
+                }}
+            end),
+            ok
+        end).
+
+unmock_getting_timestamp_when_adding_metadata(Node) ->
+    test_utils:mock_validate_and_unload(Node, share_logic).
+
+%% for each SpaceId in SpaceIds creates share,
+%% adds metadata to this share and mock timestamp
+create_records_with_mocked_timestamps(Config, BeginTime, TimeOffsets, ShareIds, Metadata,
+    MetadataFormat) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
+
+    ct:pal("ShareIds ~p", [ShareIds]),
+    ct:pal("TimeOffsets ~p", [TimeOffsets]),
+
+    lists:foreach(fun({ShareId, TimeOffset}) ->
+        mock_getting_timestamp_when_adding_metadata(
+            Node, increase_timestamp(BeginTime, TimeOffset)),
+            ok = oz_test_utils:modify_share_metadata(Config, ShareId, Metadata, MetadataFormat),
+        unmock_getting_timestamp_when_adding_metadata(Node)
+    end, lists:zip(ShareIds, TimeOffsets)).
+
+
+increase_timestamp(Datetime, ExtraSeconds) ->
+    Seconds = calendar:datetime_to_gregorian_seconds(Datetime),
+    calendar:gregorian_seconds_to_datetime(Seconds + ExtraSeconds).
+
+convert_datetime(DateTime) ->
+    {{Year, Month, Day}, {Hour, Minute, Second}} = DateTime,
+    str_utils:format(
+        "~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ",
+        [Year, Month, Day, Hour, Minute, Second]).
+
+%% TODO
+%% TODO * ListIdentifiers
+%% TODO * ListIdentifiers
+%% TODO * above tests with different variants of args

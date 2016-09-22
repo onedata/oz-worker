@@ -296,9 +296,6 @@ granularity_days_to_seconds({max, {{Y, M, D}, {H, Min, S}}}) ->
 %%% @end
 %%%-------------------------------------------------------------------
 -spec ensure_atom(term()) -> atom().
-ensure_atom(Arg) when is_atom(Arg) -> Arg;
-ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
-ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 
 %%%-------------------------------------------------------------------
 %%% @private
