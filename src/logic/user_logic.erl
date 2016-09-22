@@ -21,7 +21,7 @@
 
 %% API
 -export([create/1, create/2, get_user/1, get_user_doc/1, get_data/2]).
--export([modify/2, set_alias/2]).
+-export([modify/2, set_alias/2, add_oauth_account/2, is_email_occupied/2]).
 -export([get_groups/1, get_effective_groups/1, get_providers/1]).
 -export([get_spaces/1, get_handle_services/1, get_handles/1, get_shares/1,
     get_default_space/1, set_default_space/2]).
@@ -55,9 +55,28 @@ create(UserInfo) ->
     ProposedUserId :: onedata_user:id() | undefined) ->
     {ok, UserId :: onedata_user:id()}.
 create(UserInfo, ProposedUserId) ->
-    {ok, UserId} = onedata_user:save(
+    {ok, UserId} = onedata_user:create(
         #document{key = ProposedUserId, value = UserInfo}
     ),
+
+    % Create default space for the user
+    SpaceName = case UserInfo#onedata_user.name of
+        <<"">> ->
+            <<"Your First Space">>;
+        Name ->
+            <<Name/binary, "'s space">>
+    end,
+    {ok, SpaceId} = space_logic:create({user, UserId}, SpaceName),
+    {ok, SupportToken} = token_logic:create(
+        #client{type = user, id = UserId}, space_support_token, {space, SpaceId}
+    ),
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        {ok, User#onedata_user{
+            default_space = SpaceId,
+            first_space_support_token = SupportToken
+        }}
+    end),
+
     % Check if global groups are enabled, if so add the new user to the groups.
     case application:get_env(?APP_Name, enable_global_groups) of
         {ok, true} ->
@@ -116,59 +135,25 @@ get_user_doc(Key) ->
     ok | {error, Reason} when
     Reason :: disallowed_alias_prefix | invalid_alias | alias_occupied | any().
 modify(UserId, Proplist) ->
-    {ok, #document{
-        value = #onedata_user{
-            name = Name,
-            alias = Alias,
-            email_list = Emails,
-            connected_accounts = ConnectedAccounts,
-            spaces = Spaces,
-            groups = Groups,
-            default_space = DefaultSpace,
-            first_space_support_token = FSST,
-            default_provider = DefaultProvider,
-            chosen_provider = ChosenProvider,
-            client_tokens = ClientTokens
-        }}} = onedata_user:get(UserId),
-
-    SetAliasResult = case proplists:get_value(alias, Proplist, Alias) of
-        Alias ->
-            % Alias did not change or was changed to the same value
+    % Name update should always succeed, start with it
+    case proplists:get_value(name, Proplist) of
+        undefined ->
+            % Name did not change
+            ok;
+        NewName ->
+            % New name requested, set it
+            {ok, _} = onedata_user:update(UserId, fun(User) ->
+                {ok, User#onedata_user{name = NewName}}
+            end)
+    end,
+    % Update alias if needed
+    case proplists:get_value(alias, Proplist) of
+        undefined ->
+            % Alias did not change
             ok;
         NewAlias ->
             % New alias requested, try to set it
             set_alias(UserId, NewAlias)
-    end,
-
-    case SetAliasResult of
-        {error, Reason} ->
-            % Alias not allowed, return error
-            {error, Reason};
-        ok ->
-            % Alias ok, update user doc
-            {ok, _} = onedata_user:update(UserId, fun(User) ->
-                {ok, User#onedata_user{
-                    name = proplists:get_value(name, Proplist, Name),
-                    % Alias is already updated
-                    email_list = proplists:get_value(
-                        email_list, Proplist, Emails),
-                    connected_accounts = proplists:get_value(
-                        connected_accounts, Proplist, ConnectedAccounts),
-                    spaces = proplists:get_value(spaces, Proplist, Spaces),
-                    groups = proplists:get_value(groups, Proplist, Groups),
-                    default_space = proplists:get_value(
-                        default_space, Proplist, DefaultSpace),
-                    first_space_support_token = proplists:get_value(
-                        first_space_support_token, Proplist, FSST),
-                    default_provider = proplists:get_value(
-                        default_provider, Proplist, DefaultProvider),
-                    chosen_provider = proplists:get_value(
-                        chosen_provider, Proplist, ChosenProvider),
-                    client_tokens = proplists:get_value(
-                        client_tokens, Proplist, ClientTokens)}
-                }
-            end),
-            ok
     end.
 
 
@@ -231,6 +216,58 @@ set_alias(UserId, Alias) ->
                 false ->
                     UpdateAlias()
             end
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds an oauth account to user's accounts.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_oauth_account(UserId :: onedata_user:id(),
+    OAuthAccount :: #oauth_account{}) -> ok.
+add_oauth_account(UserId, OAuthAccount) ->
+    {ok, #document{
+        value = #onedata_user{
+            name = Name,
+            email_list = Emails,
+            connected_accounts = ConnectedAccounts
+        }}} = onedata_user:get(UserId),
+    #oauth_account{
+        name = OAuthName,
+        email_list = OAuthEmails
+    } = OAuthAccount,
+    % If no name is specified, take the one provided with new info
+    NewName = case Name of
+        <<"">> -> OAuthName;
+        _ -> Name
+    end,
+    {ok, _} = onedata_user:update(UserId, fun(User) ->
+        {ok, User#onedata_user{
+            name = NewName,
+            % Add emails from provider that are not yet added to account
+            email_list = lists:usort(Emails ++ OAuthEmails),
+            connected_accounts = ConnectedAccounts ++ [OAuthAccount]
+        }}
+    end),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate telling if given email is occupied from the point of view of
+%% given user. It is not recognized as occupied if the same user already has it.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_email_occupied(UserId :: onedata_user:id(), Email :: binary()) -> ok.
+is_email_occupied(UserId, Email) ->
+    case get_user_doc({email, Email}) of
+        {ok, #document{key = UserId}} ->
+            false;
+        {ok, #document{}} ->
+            true;
+        _ ->
+            false
     end.
 
 

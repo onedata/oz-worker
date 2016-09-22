@@ -607,6 +607,8 @@ update_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
     ParamsWithOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
     ?assertMatch(ok, check_status(update_user([{<<"name">>, ?USER_NAME2}], UserReqParams))),
     ?assertMatch([UserId, ?USER_NAME2, ?DEFAULT_USER_ALIAS], get_user_info(UserReqParams)),
@@ -614,6 +616,14 @@ update_user_test(Config) ->
     ?assertMatch(ok, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], UserReqParams))),
     ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(UserReqParams)),
     ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(ParamsWithOtherAddress)),
+    % Make sure alias cannot be duplicated
+    {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    ?assertMatch({request_error, ?BAD_REQUEST}, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], User2ReqParams))),
+    % But setting the same alias does not report an error
+    ?assertMatch(ok, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(ParamsWithOtherAddress)),
+    % Change the name and alias together
     ?assertMatch(ok, check_status(update_user([{<<"name">>, ?USER_NAME2}, {<<"alias">>, ?USER_ALIAS2}], UserReqParams))),
     ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS2], get_user_info(UserReqParams)),
     ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS2], get_user_info(ParamsWithOtherAddress)).

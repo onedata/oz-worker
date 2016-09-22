@@ -61,7 +61,11 @@ handle(Req, RequestedPort = State) ->
             catch _:_ ->
                 {ok, NewChosenProv} =
                     provider_logic:choose_provider_for_user(UserId),
-                ok = user_logic:modify(UserId, [{chosen_provider, NewChosenProv}]),
+                {ok, _} = onedata_user:update(UserId, fun(User) ->
+                    {ok, User#onedata_user{
+                        chosen_provider = NewChosenProv
+                    }}
+                end),
                 {ok, Data2} = provider_logic:get_data(NewChosenProv),
                 Data2
             end,

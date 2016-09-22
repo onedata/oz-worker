@@ -64,7 +64,7 @@ handle(<<"changePassword">>, Props) ->
 
 handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
     UserId = g_session:get_user_id(),
-    case user_logic:modify(UserId, [{alias, NewAlias}]) of
+    case user_logic:set_alias(UserId, NewAlias) of
         ok ->
             {ok, [
                 {<<"userAlias">>, NewAlias}
