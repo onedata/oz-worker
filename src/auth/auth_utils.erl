@@ -94,7 +94,7 @@ validate_login() ->
                                     _ ->
                                         % Error -> this is a first login
                                         % Check if any of emails is in use
-                                        case is_any_email_in_use(undefined, Emails) of
+                                        case is_any_email_in_use(<<"">>, Emails) of
                                             true ->
                                                 % At least one email is in database, cannot create account
                                                 {error, ?error_auth_new_email_occupied};

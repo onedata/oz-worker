@@ -251,7 +251,8 @@ add_oauth_account(UserId, OAuthAccount) ->
 %% given user. It is not recognized as occupied if the same user already has it.
 %% @end
 %%--------------------------------------------------------------------
--spec is_email_occupied(UserId :: onedata_user:id(), Email :: binary()) -> ok.
+-spec is_email_occupied(UserId :: onedata_user:id(), Email :: binary()) ->
+    boolean().
 is_email_occupied(UserId, Email) ->
     case get_user_doc({email, Email}) of
         {ok, #document{key = UserId}} ->
