@@ -288,6 +288,16 @@ list_spaces_test(Config) ->
     {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, UserWithSpaces2} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, UserWithSpaces3} = oz_test_utils:create_user(Config, #onedata_user{}),
+    % Every user gets his first space upon creation.
+    FirstSpaces = lists:map(
+        fun(UserId) ->
+            {ok, #document{
+                value = #onedata_user{
+                    spaces = [FirstSpace]
+                }}} = oz_test_utils:get_user(Config, UserId),
+            FirstSpace
+        end, [UserWithSpaces1, UserWithSpaces2, UserWithSpaces3]),
+    % Create some additional spaces
     {ok, Space1} = oz_test_utils:create_space(
         Config, {user, UserWithSpaces1}, <<"sp">>
     ),
@@ -300,7 +310,7 @@ list_spaces_test(Config) ->
     {ok, Space4} = oz_test_utils:create_space(
         Config, {user, UserWithSpaces3}, <<"sp">>
     ),
-    ExpectedSpaces = [
+    ExpectedSpaces = FirstSpaces ++ [
         Space1,
         Space2,
         Space3,
