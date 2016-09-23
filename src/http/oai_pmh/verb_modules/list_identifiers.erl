@@ -70,13 +70,13 @@ optional_response_elements() -> [].
 %%% {@link oai_verb_behaviour} callback get_response/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_response(binary(), proplist()) -> oai_response().
+-spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"header">>, Args) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     From = proplists:get_value(<<"from">>, Args),
     Until = proplists:get_value(<<"until">>, Args),
     HarvestingFun = fun(Id, Metadata) ->
-        Timestamp = proplists:get_value(<<"metadata_timestamp">>, Metadata),
+        Timestamp = proplists:get_value(timestamp, Metadata),
         #oai_header{
             identifier = Id,
             datestamp = oai_utils:datetime_to_oai_datestamp(Timestamp)

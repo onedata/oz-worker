@@ -69,7 +69,7 @@ optional_response_elements() -> [].
 %%% {@link oai_verb_behaviour} callback get_response/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_response(binary(), proplist()) -> oai_response().
+-spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(metadataFormat, Args) ->
     case proplists:get_value(<<"identifier">>, Args) of
         undefined ->
@@ -78,13 +78,13 @@ get_response(metadataFormat, Args) ->
             end, metadata_formats:supported_formats());
         Id ->
             try
-                {ok, MetadataInfo} = share_logic:get_metadata(Id),
-                case proplists:get_value(<<"metadata_formats">>, MetadataInfo) of
-                    [] -> throw(noMetadataFormats);
-                    SupportedMetadataPrefixes ->
+                {ok, MetadataInfo} = handle_logic:get_metadata(Id),
+                case proplists:get_value(metadata, MetadataInfo) of
+                    undefined -> throw(noMetadataFormats);
+                    _ ->
                         lists:map(fun(MetadataPrefix) ->
                             get_metadata_format_info(MetadataPrefix)
-                        end, SupportedMetadataPrefixes)
+                        end, metadata_formats:supported_formats()) %TODO currently only oai_dc is supported
                 end
             catch
                 throw:noMetadataFormats ->

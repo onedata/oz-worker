@@ -12,6 +12,7 @@
 -author("Jakub Kudzia").
 
 -include("http/handlers/oai.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -71,15 +72,15 @@ optional_response_elements() -> [].
 %%% {@link oai_verb_behaviour} callback get_response/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_response(binary(), proplist()) -> oai_response().
+-spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"record">>, Args) ->
     Id = proplists:get_value(<<"identifier">>, Args),
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     Metadata = get_metadata(Id),
-    MetadataValue = proplists:get_value(<<"metadata">>, Metadata),
-    DateTime = proplists:get_value(<<"metadata_timestamp">>, Metadata),
-    SupportedMetadataFormats = proplists:get_value(<<"metadata_formats">>, Metadata),
-    case lists:member(MetadataPrefix, SupportedMetadataFormats) of
+    MetadataValue = proplists:get_value(metadata, Metadata),
+    DateTime = proplists:get_value(timestamp, Metadata),
+    %% TODO check if metadataPrefix is available for given identifier
+    case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
         true ->
             #oai_record{
                 header = #oai_header{
@@ -104,14 +105,14 @@ get_response(<<"record">>, Args) ->
 %%%-------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%% Returns given share metadata.
+%%% Returns given handle metadata.
 %%% If it fails, throws idDoesNotExist
 %%% @end
 %%%-------------------------------------------------------------------
 -spec get_metadata(any()) -> any().
 get_metadata(Id) ->
     try
-        {ok, Metadata} = share_logic:get_metadata(Id),
+        {ok, Metadata} = handle_logic:get_metadata(Id),
         Metadata
     catch
         _:_ ->

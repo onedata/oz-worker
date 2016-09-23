@@ -69,4 +69,4 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
--callback get_response(Element :: binary(), Args :: proplist()) -> oai_response().
+-callback get_response(Element :: binary(), Args :: [proplists:property()]) -> oai_response().

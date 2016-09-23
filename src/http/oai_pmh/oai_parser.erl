@@ -22,7 +22,7 @@
 %%% Throws suitable error otherwise.
 %%% @end
 %%%-------------------------------------------------------------------
--spec process_and_validate_args(Args :: proplist()) -> {binary(), proplist()}.
+-spec process_and_validate_args(Args :: [proplists:property()]) -> {binary(), [proplists:property()]}.
 process_and_validate_args(Args) ->
     try
         key_occurs_exactly_once(<<"verb">>, Args),
@@ -84,7 +84,7 @@ process_and_validate_args(Args) ->
 %%% Throws suitable error otherwise.
 %%% @end
 %%%-------------------------------------------------------------------
--spec process_and_validate_verb_specific_arguments(oai_verb_module(), proplist()) -> ok.
+-spec process_and_validate_verb_specific_arguments(oai_verb_module(), [proplists:property()]) -> ok.
 process_and_validate_verb_specific_arguments(Module, Args) ->
     all_keys_occur_exactly_once(Args),
     case parse_exclusive_arguments(Module, Args) of
@@ -100,7 +100,7 @@ process_and_validate_verb_specific_arguments(Module, Args) ->
 %%% Check if there are no repeated keys in proplist.
 %%% @end
 %%%-------------------------------------------------------------------
--spec all_keys_occur_exactly_once(proplist()) -> boolean().
+-spec all_keys_occur_exactly_once([proplists:property()]) -> boolean().
 all_keys_occur_exactly_once(Proplist) ->
     lists:foldl(fun(K, Acc) ->
         key_occurs_exactly_once(K, Proplist) and Acc
@@ -116,7 +116,7 @@ all_keys_occur_exactly_once(Proplist) ->
 %%% Throws otherwise.
 %%% @end
 %%%-------------------------------------------------------------------
--spec parse_exclusive_arguments(oai_verb_module(), proplist()) -> boolean().
+-spec parse_exclusive_arguments(oai_verb_module(), [proplists:property()]) -> boolean().
 parse_exclusive_arguments(Module, ArgsList) ->
     ExclusiveArgumentsSet = sets:from_list(Module:exclusive_arguments()),
     ExistingArgumentsSet = sets:from_list(proplists:get_keys(ArgsList)),
@@ -137,7 +137,7 @@ parse_exclusive_arguments(Module, ArgsList) ->
 %%% Throws suitable error if such argument is missing.
 %%% @end
 %%%-------------------------------------------------------------------
--spec parse_required_arguments(oai_verb_module(), proplist()) -> ok.
+-spec parse_required_arguments(oai_verb_module(), [proplists:property()]) -> ok.
 parse_required_arguments(Module, ArgsList) ->
     RequiredArgumentsSet = sets:from_list(Module:required_arguments()),
     ExistingArgumentsSet = sets:from_list(proplists:get_keys(ArgsList)),
@@ -157,7 +157,7 @@ parse_required_arguments(Module, ArgsList) ->
 %%% doesn't support sets.
 %%% @end
 %%%-------------------------------------------------------------------
--spec parse_harvesting_arguments(proplist()) -> ok.
+-spec parse_harvesting_arguments([proplists:property()]) -> ok.
 parse_harvesting_arguments(ArgsList) ->
     case proplists:get_value(<<"set">>, ArgsList) of
         undefined ->
@@ -174,7 +174,7 @@ parse_harvesting_arguments(ArgsList) ->
 %%% Throws suitable error if given metadata prefix is not supported.
 %%% @end
 %%%-------------------------------------------------------------------
--spec parse_harvesting_metadata_prefix(proplist()) -> ok.
+-spec parse_harvesting_metadata_prefix([proplists:property()]) -> ok.
 parse_harvesting_metadata_prefix(ArgsList) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, ArgsList),
     case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
@@ -192,7 +192,7 @@ parse_harvesting_metadata_prefix(ArgsList) ->
 %%%     * datestamp has invalid date format -> invalid_date_format
 %%% @end
 %%%-------------------------------------------------------------------
--spec parse_harvesting_datestamps(proplist()) -> ok.
+-spec parse_harvesting_datestamps([proplists:property()]) -> ok.
 parse_harvesting_datestamps(ArgsList) ->
     From = proplists:get_value(<<"from">>, ArgsList),
     Until = proplists:get_value(<<"until">>, ArgsList),
@@ -267,7 +267,7 @@ is_valid_time({H, M, S}) ->
 %%% Throws if such argument exists.
 %%% @end
 %%%-------------------------------------------------------------------
--spec illegal_arguments_do_not_exist(oai_verb_module(), proplist()) -> ok.
+-spec illegal_arguments_do_not_exist(oai_verb_module(), [proplists:property()]) -> ok.
 illegal_arguments_do_not_exist(Module, ArgsList) ->
     KnownArgumentsSet = sets:from_list(Module:required_arguments() ++
         Module:optional_arguments() ++
@@ -288,7 +288,7 @@ illegal_arguments_do_not_exist(Module, ArgsList) ->
 %%% Throws if value is empty.
 %%% @end
 %%%-------------------------------------------------------------------
--spec args_values_are_not_empty(proplist()) -> ok.
+-spec args_values_are_not_empty([proplists:property()]) -> ok.
 args_values_are_not_empty(Args) ->
     lists:foreach(fun({K, V}) ->
         case V of
@@ -305,7 +305,7 @@ args_values_are_not_empty(Args) ->
 %%% Throws otherwise.
 %%% @end
 %%%-------------------------------------------------------------------
--spec key_occurs_exactly_once(binary(), proplist()) -> true.
+-spec key_occurs_exactly_once(binary(), [proplists:property()]) -> true.
 key_occurs_exactly_once(Key, Proplist) ->
     case count_key_occurrences(Key, Proplist) of
         0 -> throw({missing_key, Key});
@@ -320,7 +320,7 @@ key_occurs_exactly_once(Key, Proplist) ->
 %%% Counts occurrences of a Key in Proplist.
 %%% @end
 %%%-------------------------------------------------------------------
--spec count_key_occurrences(binary(), proplist()) -> non_neg_integer().
+-spec count_key_occurrences(binary(), [proplists:property()]) -> non_neg_integer().
 count_key_occurrences(Key, Proplist) ->
     lists:foldl(fun({K, _V}, Sum) ->
         case K of

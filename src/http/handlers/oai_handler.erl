@@ -16,7 +16,8 @@
 
 %%% API
 -export([init/3, rest_init/2, allowed_methods/2, content_types_accepted/2,
-    content_types_provided/2, accept_resource/2, provide_resource/2]).
+    content_types_provided/2, accept_resource/2, provide_resource/2,
+    generate_response_date_element/0]).
 
 
 %%%===================================================================
@@ -133,7 +134,7 @@ accept_resource(Req, State) ->
 %%% returned.
 %%% @end
 %%%--------------------------------------------------------------------
--spec handle_request(QueryString :: proplist(), Req :: cowboy_req:req()) -> tuple().
+-spec handle_request(QueryString :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
 handle_request(QueryString, Req) ->
     Response = try
         {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryString),
@@ -154,7 +155,7 @@ handle_request(QueryString, Req) ->
         _ -> generate_request_element(QueryString, Req)
     end,
 
-    ResponseDate = generate_response_date_element(),
+    ResponseDate = oai_handler:generate_response_date_element(),
 
     ResponseXML = oai_utils:to_xml(Response),
     RequestElementXML = oai_utils:to_xml(RequestElement),
@@ -173,7 +174,7 @@ handle_request(QueryString, Req) ->
 %%% OAI-PMH Verb (request).
 %%% @end
 %%%--------------------------------------------------------------------
--spec generate_response(Verb :: binary(), Args :: proplist()) ->
+-spec generate_response(Verb :: binary(), Args :: [proplists:property()]) ->
     {binary(), [{binary(), oai_response()}]}.
 generate_response(Verb, Args) ->
     Module = oai_utils:verb_to_module(Verb),
@@ -189,7 +190,7 @@ generate_response(Verb, Args) ->
 %%% @end
 %%%--------------------------------------------------------------------
 -spec generate_required_response_elements(
-    Module :: oai_verb_module(), Args :: proplist()) -> [{binary(), oai_response()}].
+    Module :: oai_verb_module(), Args :: [proplists:property()]) -> [{binary(), oai_response()}].
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of
@@ -208,7 +209,7 @@ generate_required_response_elements(Module, Args) ->
 %%% @end
 %%%--------------------------------------------------------------------
 -spec generate_optional_response_elements(
-    Module :: oai_verb_module(), Args :: proplist()) -> [{binary(), oai_response()}].
+    Module :: oai_verb_module(), Args :: [proplists:property()]) -> [{binary(), oai_response()}].
 generate_optional_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         try Module:get_response(ElementName, Args) of
@@ -249,7 +250,7 @@ generate_response_date_element() ->
 %%% Generate element of response which contains info about request.
 %%% @end
 %%%--------------------------------------------------------------------
--spec generate_request_element(cowboy_req:req()) -> {request, binary(), proplist()}.
+-spec generate_request_element(cowboy_req:req()) -> {request, binary(), [proplists:property()]}.
 generate_request_element(Req) ->
     generate_request_element([], Req).
 
@@ -260,7 +261,8 @@ generate_request_element(Req) ->
 %%% @end
 %%%--------------------------------------------------------------------
 -spec generate_request_element(
-    ParsedArgs :: proplist(), Req :: cowboy_req:req()) -> {request, binary(), proplist()}.
+    ParsedArgs :: [proplists:property()], Req :: cowboy_req:req()) ->
+    {request, binary(), [proplists:property()]}.
 generate_request_element(ParsedArgs, Req) ->
     {Path, Req2} = cowboy_req:path(Req),
     {URL, _Req3} = cowboy_req:host_url(Req2),
@@ -269,17 +271,13 @@ generate_request_element(ParsedArgs, Req) ->
 
 
 %%% TODO
-%%% TODO * do not use shares, use handles
 %%% TODO * support resumptionToken
 %%% TODO * compression
 %%% TODO * identity encoding
 %%% TODO * OAI-identifier
 %%% TODO * allowed charset
 %%% TODO * metadata can have additional attribute "about"
-%%% TODO * share should have opendata attribute
-%%% TODO * get_response always returnig tuple {ElementName, OAIRsponse} ???
-%%% TODO * ticket dla Rafała zeby list w bazie wspieral paginacje
-%%% TODO * paginacja na zasadzie base 64 z offset poczatek
+
 
 
 

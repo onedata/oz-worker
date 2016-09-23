@@ -76,11 +76,10 @@ optional_response_elements() ->
 %%% {@link oai_verb_behaviour} callback get_response/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_response(binary(), proplist()) -> oai_response().
+-spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"repositoryName">>, _Args) ->
     {ok, RepositoryName} = application:get_env(?APP_Name, oz_name),
     list_to_binary(RepositoryName);
-%%    <<"REPOSITORY NAME">>; % TODO what should be the repository name
 get_response(<<"baseURL">>, _Args) ->
     Hostname = dns_query_handler:get_canonical_hostname(),
     {ok, OAI_PREFIX} = application:get_env(?APP_Name, oai_pmh_api_prefix),
@@ -101,7 +100,6 @@ get_response(<<"adminEmail">>, _Args) ->
     lists:map(fun(AdminEmail) ->
         list_to_binary(AdminEmail)
     end, AdminEmails);
-%%    [<<"a@mail.com">>, <<"b@mail.com">>]; % TODO how to get them
 get_response(<<"compression">>, _Args) ->
     <<"">>; %TODO
 get_response(<<"description">>, _Args) -> [].
@@ -120,10 +118,10 @@ get_response(<<"description">>, _Args) -> [].
 %%%-------------------------------------------------------------------
 -spec get_earliest_datestamp() -> erlang:datetime().
 get_earliest_datestamp() ->
-    {ok, Ids} = share_logic:list(),
+    {ok, Ids} = handle_logic:list(),
     Datestamps = lists:flatmap(fun(Id) ->
-        {ok, Metadata} = share_logic:get_metadata(Id),
-        case proplists:get_value(<<"metadata_timestamp">>, Metadata) of
+        {ok, Metadata} = handle_logic:get_metadata(Id),
+        case proplists:get_value(timestamp, Metadata) of
             undefined -> [];
             Timestamp -> [Timestamp]
         end

@@ -71,6 +71,6 @@ optional_response_elements() -> [].
 %%% {@link oai_verb_behaviour} callback get_response/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_response(binary(), proplist()) -> oai_response().
+-spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(set, _Args) ->
     throw(noSetHierarchy).

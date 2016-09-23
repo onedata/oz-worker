@@ -68,6 +68,8 @@ get_config(Key) ->
 %%    expect => #{
 %%      code => 200, % Optional, by default not validated
 %%      headers => [{<<"key">>, <<"value">>}], % Optional, by def. not validated
+%%                 {contains, [{<<"key">>, <<"value">>}]} % checks if given
+%%                      (key, value) pair is included in response headers
 %%      body => <<"binary">> orelse #{} % Optional, by default not validated
 %%      % Specifying a map here will cause validation of JSON content-wise
 %%      % (if the JSON object specified by map is equal to the one in reply)
@@ -182,7 +184,8 @@ check_rest_call(ArgsMap) ->
             #xmlElement{} = ExpBodyXML ->
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
                 case compare_xml(RespBodyXML, ExpBodyXML) of
-                    true -> ok;
+                    true ->
+                        ok;
                     false ->
                         throw({body, RespBodyXML, ExpBodyXML})
                 end

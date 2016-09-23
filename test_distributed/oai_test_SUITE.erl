@@ -4,7 +4,8 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% WRITEME
+%%% This module contains CT tests of OAI-PMH repository interface
+%%% supported by oz-worker.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(oai_test_SUITE).
@@ -60,28 +61,45 @@
     selective_list_records3_get_test/1, selective_list_records3_post_test/1,
     selective_list_records4_get_test/1, selective_list_records4_post_test/1,
     list_records_no_set_error_get_test/1, list_records_no_set_error_post_test/1
-]).
+    , identify_change_earliest_datestamp_get_test/1, identify_change_earliest_datestamp_post_test/1]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/x-www-form-urlencoded">>}]).
 -define(RESPONSE_CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"text/xml">>}]).
 
 %% Example test data
--define(ID1, <<"identifier1">>).
--define(IDS(Num),
+-define(SHARE_ID, <<"identifier1">>).
+-define(SHARE_IDS(Num),
     lists:map(fun(N) ->
         list_to_binary("identifier" ++ integer_to_list(N))
-    end, lists:seq(0, Num-1))
+    end, lists:seq(0, Num - 1))
 ).
 -define(SPACE_NAME1, <<"space1">>).
 -define(SPACE_NAMES(Num),
     lists:map(fun(N) ->
         list_to_binary("space" ++ integer_to_list(N))
-    end, lists:seq(0, Num-1))).
+    end, lists:seq(0, Num - 1))).
 -define(DC_METADATA_PREFIX, <<"oai_dc">>).
 -define(DC_NAMESPACE, <<"http://www.openarchives.org/OAI/2.0/oai_dc/">>).
 -define(DC_SCHEMA, <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>).
 
+-define(PROXY_ENDPOINT, <<"172.17.0.9:8080/api/v1">>).
+
+-define(DOI_NAME, <<"LifeWatch DataCite">>).
+-define(DOI_SERVICE_PROPERTIES, [
+    {<<"type">>, <<"DOI">>},
+    {<<"host">>, <<"https://mds.test.datacite.org">>},
+    {<<"doiEndpoint">>, <<"/doi">>},
+    {<<"metadataEndpoint">>, <<"/metadata">>},
+    {<<"mediaEndpoint">>, <<"/media">>},
+    {<<"prefix">>, <<"10.5072">>},
+    {<<"username">>, <<"alice">>},
+    {<<"password">>, <<"*******">>},
+    {<<"identifierTemplate">>, <<"{{space.name}}-{{space.guid}}">>},
+    {<<"allowTemplateOverride">>, false}
+]).
+
+-define(HANDLE_RESOURCE_TYPE, <<"Share">>).
 
 %%%===================================================================
 %%% API functions
@@ -90,12 +108,12 @@
 all() -> ?ALL([
     identify_get_test,
     identify_post_test,
+    identify_change_earliest_datestamp_get_test,
+    identify_change_earliest_datestamp_post_test,
     get_record_get_test,
     get_record_post_test,
     list_metadata_formats_get_test,
     list_metadata_formats_post_test,
-    list_metadata_formats_no_format_error_get_test,
-    list_metadata_formats_no_format_error_post_test,
     list_identifiers_get_test,
     list_identifiers_post_test,
     selective_list_identifiers1_get_test,
@@ -128,6 +146,8 @@ all() -> ?ALL([
     missing_arg_post_test,
     id_not_existing_get_test,
     id_not_existing_post_test,
+    list_metadata_formats_no_format_error_get_test,
+    list_metadata_formats_no_format_error_post_test,
     cannot_disseminate_format_get_test,
     cannot_disseminate_format_post_test,
     no_set_hierarchy_get_test,
@@ -159,6 +179,12 @@ identify_get_test(Config) ->
 
 identify_post_test(Config) ->
     identify_test_base(Config, post).
+
+identify_change_earliest_datestamp_get_test(Config) ->
+    identify_change_earliest_datestamp_test_base(Config, get).
+
+identify_change_earliest_datestamp_post_test(Config) ->
+    identify_change_earliest_datestamp_test_base(Config, post).
 
 get_record_get_test(Config) ->
     get_record_test_base(Config, get).
@@ -346,27 +372,82 @@ identify_test_base(Config, Method) ->
     Path = ?config(oai_pmh_path, Config),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
 
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
+    {ok, ?SHARE_ID} = oz_test_utils:create_share(Config, ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1),
+    HSId = create_handle_service(Config, User),
+    Timestamp = erlang:universaltime(),
+    create_handle_with_mocked_timestamp(Config, User, HSId, ?SHARE_ID,
+        ?DC_METADATA_XML, Timestamp),
+    
     ExpResponseContent = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "unnamed"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
-        #xmlElement{name = earliestDatestamp}, %todo how to check it
+        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ss:Z"}]},
         #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
 
+identify_change_earliest_datestamp_test_base(Config, Method) ->
+
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    Path = ?config(oai_pmh_path, Config),
+    ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
+
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+     SpaceIds = create_spaces(Config, ?SPACE_NAMES(2), {user, User}),
+    [ShareId1, ShareId2] = create_shares(Config, SpaceIds),
+    HSId = create_handle_service(Config, User),
+    Timestamp1 = erlang:universaltime(),
+    Timestamp2 = increase_timestamp(Timestamp1, 1),
+    Timestamp3 = increase_timestamp(Timestamp2, 1),
+    Identifier1 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId1,
+        ?DC_METADATA_XML, Timestamp1),
+    _Identifier2 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId2,
+        ?DC_METADATA_XML, Timestamp2),
+
+    ExpResponseContent = [
+        #xmlElement{name = repositoryName, content = [#xmlText{value = "unnamed"}]},
+        #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
+        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
+        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp1)}]},
+        #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ss:Z"}]},
+        #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
+    ],
+    ?assert(check_identify(200, [], Method, ExpResponseContent, Config)),
+
+    modify_handle_with_mocked_timestamp(Config, Identifier1, ?DC_METADATA_XML, Timestamp3),
+
+    ExpResponseContent = [
+        #xmlElement{name = repositoryName, content = [#xmlText{value = "unnamed"}]},
+        #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
+        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
+        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp2)}]},
+        #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ss:Z"}]},
+        #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
+    ],
+    ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
+
+
 get_record_test_base(Config, Method) ->
 
-    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
-    {ok, Space1} = oz_test_utils:create_space(Config, {user, UserWithSpaces1}, ?SPACE_NAME1),
-    {ok, ?ID1} = oz_test_utils:create_share(Config, ?ID1, ?ID1, <<"root">>, Space1),
-    ok = oz_test_utils:modify_share_metadata(Config, ?ID1, ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
+    {ok, ?SHARE_ID} = oz_test_utils:create_share(Config, ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1),
+    HSId = create_handle_service(Config, User),
+    Timestamp = erlang:universaltime(),
+    Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ?SHARE_ID,
+        ?DC_METADATA_XML, Timestamp),
+
     {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(?DC_METADATA_XML)),
 
     Args = [
-        {<<"identifier">>, ?ID1},
+        {<<"identifier">>, Identifier},
         {<<"metadataPrefix">>, ?DC_METADATA_PREFIX}
     ],
 
@@ -378,7 +459,13 @@ get_record_test_base(Config, Method) ->
                     #xmlElement{
                         name = identifier,
                         content = [#xmlText{
-                            value = binary_to_list(?ID1)
+                            value = binary_to_list(Identifier)
+                        }]
+                    },
+                    #xmlElement{
+                        name = datestamp,
+                        content = [#xmlText{
+                            value = convert(Timestamp)
                         }]
                     }
                 ]
@@ -403,15 +490,15 @@ list_metadata_formats_test_base(Config, Method) ->
             content = [
                 #xmlElement{
                     name = metadataPrefix,
-                    content = [#xmlText{value=binary_to_list(?DC_METADATA_PREFIX)}]
+                    content = [#xmlText{value = binary_to_list(?DC_METADATA_PREFIX)}]
                 },
                 #xmlElement{
                     name = schema,
-                    content = [#xmlText{value=binary_to_list(?DC_SCHEMA)}]
+                    content = [#xmlText{value = binary_to_list(?DC_SCHEMA)}]
                 },
                 #xmlElement{
                     name = metadataNamespace,
-                    content = [#xmlText{value=binary_to_list(?DC_NAMESPACE)}]
+                    content = [#xmlText{value = binary_to_list(?DC_NAMESPACE)}]
                 }
             ]
         }
@@ -422,11 +509,11 @@ list_metadata_formats_test_base(Config, Method) ->
 list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
 
     BeginTime = erlang:universaltime(),
-    TimeOffsets = lists:seq(0, IdentifiersNum-1), % timestamps will differ with 1 second each
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
     Identifiers =
         setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
-            ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+            ?DC_METADATA_XML),
 
     From = convert(increase_timestamp(BeginTime, FromOffset)),
     Until = convert(increase_timestamp(BeginTime, UntilOffset)),
@@ -460,11 +547,11 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
 list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
 
     BeginTime = erlang:universaltime(),
-    TimeOffsets = lists:seq(0, IdentifiersNum-1), % timestamps will differ with 1 second each
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
     Identifiers =
         setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
-            ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+            ?DC_METADATA_XML),
 
     From = convert(increase_timestamp(BeginTime, FromOffset)),
     Until = convert(increase_timestamp(BeginTime, UntilOffset)),
@@ -477,8 +564,8 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
 
     ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
         #xmlElement{
-            name=record,
-            content=[
+            name = record,
+            content = [
                 #xmlElement{
                     name = header,
                     content = [
@@ -524,27 +611,28 @@ illegal_arg_test_base(Config, Method) ->
     ?assert(check_illegal_arg_error(200, [{"k", "v"}], Method, [], Config)).
 
 missing_arg_test_base(Config, Method) ->
-    Args = [{<<"identifier">>, ?ID1}],
+    Args = [{<<"identifier">>, ?SHARE_ID}],
     %% will perform GetRecord, metadataPrefix is missing
     ?assert(check_missing_arg_error(200, Args, Method, [], Config)).
 
 id_not_existing_test_base(Config, Method) ->
 
     Args = [
-        {<<"identifier">>, ?ID1},
+        {<<"identifier">>, ?SHARE_ID},
         {<<"metadataPrefix">>, ?DC_METADATA_PREFIX}
     ],
     ?assert(check_id_not_existing_error(200, Args, Method, [], Config)).
 
 cannot_disseminate_format_test_base(Config, Method) ->
 
-    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
-    {ok, Space1} = oz_test_utils:create_space(Config, {user, UserWithSpaces1}, ?SPACE_NAME1),
-    {ok, ?ID1} = oz_test_utils:create_share(Config, ?ID1, ?ID1, <<"root">>, Space1),
-    ok = oz_test_utils:modify_share_metadata(Config, ?ID1, ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
+    {ok, ?SHARE_ID} = oz_test_utils:create_share(Config, ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1),
+    HSId = create_handle_service(Config, User),
+    Identifier = create_handle(Config, User, HSId, ?SHARE_ID, ?DC_METADATA_XML),
 
     Args = [
-        {<<"identifier">>, ?ID1},
+        {<<"identifier">>, Identifier},
         {<<"metadataPrefix">>, <<"not_supported_format">>}
     ],
     ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)).
@@ -553,13 +641,13 @@ no_set_hierarchy_test_base(Config, Method) ->
     ?assert(check_no_set_hierarchy_error(200, [], Method, [], Config)).
 
 list_metadata_formats_no_format_error_test_base(Config, Method) ->
-    OtherMetadataPrefix = <<"someMetadataPrefix">>,
-    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
-    {ok, Space1} = oz_test_utils:create_space(Config, {user, UserWithSpaces1}, ?SPACE_NAME1),
-    {ok, ?ID1} = oz_test_utils:create_share(Config, ?ID1, ?ID1, <<"root">>, Space1),
-    ok = oz_test_utils:modify_share_metadata(Config, ?ID1, ?DC_METADATA_XML, OtherMetadataPrefix),
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
+    {ok, ?SHARE_ID} = oz_test_utils:create_share(Config, ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1),
+    HSId = create_handle_service(Config, User),
+    Identifier = create_handle(Config, User, HSId, ?SHARE_ID, undefined),
 
-    Args = [{<<"identifier">>, ?ID1}],
+    Args = [{<<"identifier">>, Identifier}],
 
     ?assert(check_list_metadata_formats_error(200, Args, Method, [], Config)).
 
@@ -570,10 +658,10 @@ list_identifiers_empty_repository_error_test_base(Config, Method) ->
 list_identifiers_no_records_match_error_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
 
     BeginTime = erlang:universaltime(),
-    TimeOffsets = lists:seq(0, IdentifiersNum-1), % timestamps will differ with 1 second each
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
     setup_test_for_harvesting(Config, IdentifiersNum, BeginTime,
-        TimeOffsets, ?DC_METADATA_XML, ?DC_METADATA_PREFIX),
+        TimeOffsets, ?DC_METADATA_XML),
 
     From = convert(increase_timestamp(BeginTime, FromOffset)),
     Until = convert(increase_timestamp(BeginTime, UntilOffset)),
@@ -617,10 +705,12 @@ init_per_suite(Config) ->
 
 init_per_testcase(_, Config) ->
     rest_test_utils:set_config(Config),
+    mock_handle_proxy(Config),
     Config.
 
 end_per_testcase(_, Config) ->
     oz_test_utils:remove_all_entities(Config),
+    unmock_handle_proxy(Config),
     ok.
 
 end_per_suite(Config) ->
@@ -708,8 +798,16 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         none -> Args;
         _ -> add_verb(Verb, Args)
     end,
-    ExpectedBody = expected_body(Config, ExpResponseContent, ResponseType, Args2),
+    ResponseDate = erlang:universaltime(),
+    ExpectedBody = expected_body(Config, ExpResponseContent, ResponseType, Args2, ResponseDate),
     QueryString = prepare_querystring(Args2),
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_new(Nodes, oai_handler, [passthrough]),
+    test_utils:mock_expect(Nodes, oai_handler, generate_response_date_element,
+        fun() ->
+            {responseDate, list_to_binary(convert(ResponseDate))}
+        end
+    ),
 
     Request = case Method of
         get -> #{
@@ -726,14 +824,17 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         }
     end,
 
-    rest_test_utils:check_rest_call(#{
+    Check = rest_test_utils:check_rest_call(#{
         request => Request,
         expect => #{
             code => Code,
             body => ExpectedBody,
             headers => {contains, ?RESPONSE_CONTENT_TYPE_HEADER}
         }
-    }).
+    }),
+    ok = test_utils:mock_validate_and_unload(Nodes, oai_handler),
+    Check.
+
 
 %%%===================================================================
 %%% Internal functions
@@ -771,7 +872,7 @@ get_domain(Hostname) ->
     [_Node | Domain] = string:tokens(atom_to_list(Hostname), "."),
     string:join(Domain, ".").
 
-expected_body(Config, ExpectedResponse, ResponseType, Args) ->
+expected_body(Config, ExpectedResponse, ResponseType, Args, ResponseDate) ->
     Path = ?config(oai_pmh_path, Config),
     URL = ?config(oai_pmh_url, Config),
     RequestURL = binary_to_list(<<URL/binary, Path/binary>>),
@@ -796,7 +897,10 @@ expected_body(Config, ExpectedResponse, ResponseType, Args) ->
             ?OAI_XML_SCHEMA_NAMESPACE,
             ?OAI_XSI_SCHEMA_LOCATION],
         content = [
-            #xmlElement{name = responseDate},
+            #xmlElement{
+                name = responseDate,
+                content = [#xmlText{value = convert(ResponseDate)}]
+            },
             ExpectedRequestElement,
             ExpectedResponseElement]
     }.
@@ -836,44 +940,95 @@ create_spaces(Config, SpacesNames, Member) ->
     end, SpacesNames).
 
 create_shares(Config, SpaceIds) ->
-    ShareIds = ?IDS(length(SpaceIds)),
+    ShareIds = ?SHARE_IDS(length(SpaceIds)),
     lists:map(fun({ShareId, SpaceId}) ->
         {ok, ShareId} =
             oz_test_utils:create_share(Config, ShareId, ShareId, <<"root_file_id">>, SpaceId),
         ShareId
     end, lists:zip(ShareIds, SpaceIds)).
 
-mock_getting_timestamp_when_adding_metadata(Node, Timestamp) ->
-    test_utils:mock_new(Node, share_logic, [passthrough]),
-    test_utils:mock_expect(Node, share_logic, modify_metadata,
-        fun(ShareId, Metadata, MetadataFormat) ->
-            {ok, _} = share:update(ShareId, fun(ShareDoc) ->
-                MetadataFormats = ShareDoc#share.metadata_formats,
-                {ok, ShareDoc#share{
-                    metadata = Metadata,
-                    metadata_formats = [MetadataFormat | MetadataFormats],
-                    metadata_timestamp = Timestamp
-                }}
-            end),
-            ok
-        end).
+modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
 
-unmock_getting_timestamp_when_adding_metadata(Node) ->
-    test_utils:mock_validate_and_unload(Node, share_logic).
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, handle, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, handle, actual_timestamp, fun() -> Timestamp end),
+    ok = modify_handle(Config, HId, Metadata),
+    ok = test_utils:mock_validate_and_unload(Nodes, handle).
+
+
+setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata) ->
+    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    SpaceIds = create_spaces(Config, ?SPACE_NAMES(RecordsNum), {user, User}),
+    ShareIds = create_shares(Config, SpaceIds),
+    HSId = create_handle_service(Config, User),
+    create_handles_with_mocked_timestamps(Config, User, HSId, ShareIds, BeginTime,
+        TimeOffsets, Metadata).
 
 %% for each SpaceId in SpaceIds creates share,
 %% adds metadata to this share and mock timestamp
-create_records_with_mocked_timestamps(Config, BeginTime, TimeOffsets, ShareIds, Metadata,
-    MetadataFormat) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
+create_handles_with_mocked_timestamps(Config, User, HSId, ResourceIds, BeginTime,
+    TimeOffsets, Metadata) ->
 
-    lists:foreach(fun({ShareId, TimeOffset}) ->
-        mock_getting_timestamp_when_adding_metadata(
-            Node, increase_timestamp(BeginTime, TimeOffset)),
-            ok = oz_test_utils:modify_share_metadata(Config, ShareId, Metadata, MetadataFormat),
-        unmock_getting_timestamp_when_adding_metadata(Node)
-    end, lists:zip(ShareIds, TimeOffsets)).
+    lists:map(fun({ResourceId, TimeOffset}) ->
+        MockedTimestamp = increase_timestamp(BeginTime, TimeOffset),
+        create_handle_with_mocked_timestamp(Config, User, HSId, ResourceId, Metadata, MockedTimestamp)
+    end, lists:zip(ResourceIds, TimeOffsets)).
 
+create_handle_service(Config, User) ->
+    {ok, HSId} = oz_test_utils:create_handle_service(Config, User, ?DOI_NAME,
+        ?PROXY_ENDPOINT, ?DOI_SERVICE_PROPERTIES),
+    HSId.
+
+create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, Metadata, Timestamp) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, handle, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, handle, actual_timestamp, fun() -> Timestamp end),
+    HId = create_handle(Config, User, HandleServiceId, ResourceId, Metadata),
+    ok = test_utils:mock_validate_and_unload(Nodes, handle),
+    HId.
+
+create_handle(Config, User, HandleServiceId, ResourceId, Metadata) ->
+    {ok, HId} = oz_test_utils:create_handle(Config, User, HandleServiceId,
+        ?HANDLE_RESOURCE_TYPE, ResourceId, Metadata),
+    HId.
+
+modify_handle(Config, HandleId, Metadata) ->
+    ok = oz_test_utils:modify_handle(Config, HandleId, undefined, undefined, Metadata).
+
+mock_handle_proxy(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+
+    ok = test_utils:mock_new(Nodes, handle_proxy_client),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
+        fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
+            {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
+        end),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
+        fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
+            {ok, 204, [], <<"">>}
+        end),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
+        fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
+            {ok, 200, [], <<"">>}
+        end).
+
+unmock_handle_proxy(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, handle_proxy_client).
+
+prepare_harvesting_args(MetadataPrefix, From, Until) ->
+    prepare_harvesting_args(MetadataPrefix, From, Until, undefined).
+
+prepare_harvesting_args(MetadataPrefix, From, Until, Set) ->
+    Args = add_to_args(<<"metadataPrefix">>, MetadataPrefix, []),
+    Args2 = add_to_args(<<"from">>, From, Args),
+    Args3 = add_to_args(<<"until">>, Until, Args2),
+    add_to_args(<<"set">>, Set, Args3).
+
+ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset) ->
+    lists:filter(fun({_Id, TimeOffset}) ->
+        offset_in_range(FromOffset, UntilOffset, TimeOffset)
+    end, lists:zip(Identifiers, TimeOffsets)).
 
 increase_timestamp(_, undefined) -> undefined;
 increase_timestamp(undefined, _) -> undefined;
@@ -897,24 +1052,5 @@ offset_in_range(From, Until, Offset) ->
     (From =< Offset) and (Offset =< Until).
 
 
-setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix) ->
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
-    SpaceIds = create_spaces(Config, ?SPACE_NAMES(RecordsNum), {user, User}),
-    Identifiers = create_shares(Config, SpaceIds),
-    create_records_with_mocked_timestamps(Config, BeginTime, TimeOffsets,
-        Identifiers, Metadata, MetadataPrefix),
-    Identifiers.
-
-prepare_harvesting_args(MetadataPrefix, From, Until) ->
-    prepare_harvesting_args(MetadataPrefix, From, Until, undefined).
-
-prepare_harvesting_args(MetadataPrefix, From, Until, Set) ->
-    Args = add_to_args(<<"metadataPrefix">>, MetadataPrefix, []),
-    Args2 = add_to_args(<<"from">>, From, Args),
-    Args3 = add_to_args(<<"until">>, Until, Args2),
-    add_to_args(<<"set">>, Set, Args3).
-
-ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset) ->
-    lists:filter(fun({_Id, TimeOffset}) ->
-        offset_in_range(FromOffset, UntilOffset, TimeOffset)
-    end, lists:zip(Identifiers, TimeOffsets)).
+%% TODO
+%% TODO * tests with modifying timestamp

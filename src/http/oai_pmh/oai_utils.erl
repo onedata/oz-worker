@@ -78,10 +78,10 @@ oai_datestamp_to_datetime(Datestamp) ->
 harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
     From = oai_datestamp_to_datetime(FromDatestamp),
     Until = oai_datestamp_to_datetime(UntilDatestamp),
-    {ok, Identifiers} = share_logic:list(),
+    {ok, Identifiers} = handle_logic:list(),
     HarvestedMetadata = lists:flatmap(fun(Identifier) ->
-        {ok, Metadata} = share_logic:get_metadata(Identifier),
-        case should_be_harvested(Identifier, From, Until, MetadataPrefix) of
+        {ok, Metadata} = handle_logic:get_metadata(Identifier),
+        case should_be_harvested(From, Until, MetadataPrefix, Metadata) of
             false -> [];
             true ->
                 [HarvestingFun(Identifier, Metadata)]
@@ -102,17 +102,16 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
 %%% MetadataPrefix).
 %%% @end
 %%%--------------------------------------------------------------------
--spec should_be_harvested(
-    binary(), supported_datestamp(), supported_datestamp(), binary()) -> boolean().
-should_be_harvested(Identifier, From, Until, MetadataPrefix) ->
-    {ok, Metadata} = share_logic:get_metadata(Identifier),
-    case proplists:get_value(<<"metadata">>, Metadata) of
+-spec should_be_harvested(supported_datestamp(), supported_datestamp(), binary(),
+    [proplists:property()]) -> boolean().
+should_be_harvested(From, Until, MetadataPrefix, Metadata) ->
+    case proplists:get_value(metadata, Metadata) of
         undefined -> false;
         _ ->
-            Datestamp = proplists:get_value(<<"metadata_timestamp">>, Metadata),
-            MetadataFormats = proplists:get_value(<<"metadata_formats">>, Metadata),
+            Datestamp = proplists:get_value(timestamp, Metadata),
+            MetadataFormats = metadata_formats:supported_formats(),
             is_in_time_range(From, Until, Datestamp) and
-                is_requested_format_available(MetadataPrefix, MetadataFormats)
+                lists:member(MetadataPrefix, MetadataFormats)
     end.
 
 %%%--------------------------------------------------------------------
@@ -299,13 +298,3 @@ granularity_days_to_seconds({max, {{Y, M, D}, {H, Min, S}}}) ->
 ensure_atom(Arg) when is_atom(Arg) -> Arg;
 ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
 ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
-
-%%%-------------------------------------------------------------------
-%%% @private
-%%% @doc
-%%% Returns true if MetadataPrefix is in SupportedMetadataFormats.
-%%% @end
-%%%-------------------------------------------------------------------
--spec is_requested_format_available(binary(), [binary()]) -> boolean().
-is_requested_format_available(MetadataPrefix, SupportedMetadataFormats) ->
-    lists:member(MetadataPrefix, SupportedMetadataFormats).

@@ -69,9 +69,6 @@
 -type supported_datestamp() :: erlang:datetime() | erlang:date() | undefined.
 -type oai_date_granularity() :: day_granularity | seconds_granularity.
 
-
--type proplist() :: [{Key :: binary(), Value :: binary()}].
-
 -define(OAI_XML_NAMESPACE, #xmlAttribute{
         name=xmlns,
         value= "http://www.openarchives.org/OAI/2.0/"}).
