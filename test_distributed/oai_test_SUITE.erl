@@ -422,7 +422,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
 
     modify_handle_with_mocked_timestamp(Config, Identifier1, ?DC_METADATA_XML, Timestamp3),
 
-    ExpResponseContent = [
+    ExpResponseContent2 = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "unnamed"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
@@ -431,7 +431,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ss:Z"}]},
         #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
     ],
-    ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
+    ?assert(check_identify(200, [], Method, ExpResponseContent2, Config)).
 
 
 get_record_test_base(Config, Method) ->
