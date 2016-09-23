@@ -288,19 +288,6 @@ list_spaces_test(Config) ->
     {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, UserWithSpaces2} = oz_test_utils:create_user(Config, #onedata_user{}),
     {ok, UserWithSpaces3} = oz_test_utils:create_user(Config, #onedata_user{}),
-    % Create some additional spaces
-    {ok, Space1} = oz_test_utils:create_space(
-        Config, {user, UserWithSpaces1}, <<"sp">>
-    ),
-    {ok, Space2} = oz_test_utils:create_space(
-        Config, {user, UserWithSpaces1}, <<"sp">>
-    ),
-    {ok, Space3} = oz_test_utils:create_space(
-        Config, {user, UserWithSpaces2}, <<"sp">>
-    ),
-    {ok, Space4} = oz_test_utils:create_space(
-        Config, {user, UserWithSpaces3}, <<"sp">>
-    ),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
     set_privileges(Config, Admin, onedata_user, [set_privileges]),
@@ -323,6 +310,19 @@ list_spaces_test(Config) ->
                 }}} = oz_test_utils:get_user(Config, UserId),
             FirstSpace
         end, AllUsers),
+    % Create some additional spaces
+    {ok, Space1} = oz_test_utils:create_space(
+        Config, {user, UserWithSpaces1}, <<"sp">>
+    ),
+    {ok, Space2} = oz_test_utils:create_space(
+        Config, {user, UserWithSpaces1}, <<"sp">>
+    ),
+    {ok, Space3} = oz_test_utils:create_space(
+        Config, {user, UserWithSpaces2}, <<"sp">>
+    ),
+    {ok, Space4} = oz_test_utils:create_space(
+        Config, {user, UserWithSpaces3}, <<"sp">>
+    ),
     % The expected list of spaces is first spaces of users plus
     % the four spaces that were created.
     ExpectedSpaces = FirstSpaces ++ [
