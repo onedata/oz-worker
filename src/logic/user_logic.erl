@@ -59,21 +59,29 @@ create(UserInfo, ProposedUserId) ->
         #document{key = ProposedUserId, value = UserInfo}
     ),
 
-    % Create default space for the user
-    SpaceName = case UserInfo#onedata_user.name of
-        <<"">> ->
-            <<"Your First Space">>;
-        Name ->
-            <<Name/binary, "'s space">>
+    % Check if automatic first space is enabled, if so create a space
+    % for the user.
+    case application:get_env(?APP_Name, enable_automatic_first_space) of
+        {ok, true} ->
+            SpaceName = case UserInfo#onedata_user.name of
+                <<"">> ->
+                    <<"Your First Space">>;
+                Name ->
+                    <<Name/binary, "'s space">>
+            end,
+            {ok, SpaceId} = space_logic:create({user, UserId}, SpaceName),
+            {ok, SupportToken} = token_logic:create(
+                #client{type = user, id = UserId},
+                space_support_token,
+                {space, SpaceId}
+            ),
+            {ok, _} = onedata_user:update(UserId, #{
+                default_space => SpaceId,
+                first_space_support_token => SupportToken
+            });
+        _ ->
+            ok
     end,
-    {ok, SpaceId} = space_logic:create({user, UserId}, SpaceName),
-    {ok, SupportToken} = token_logic:create(
-        #client{type = user, id = UserId}, space_support_token, {space, SpaceId}
-    ),
-    {ok, _} = onedata_user:update(UserId, #{
-        default_space => SpaceId,
-        first_space_support_token => SupportToken
-    }),
 
     % Check if global groups are enabled, if so add the new user to the groups.
     case application:get_env(?APP_Name, enable_global_groups) of
