@@ -60,8 +60,9 @@
     selective_list_records2_get_test/1, selective_list_records2_post_test/1,
     selective_list_records3_get_test/1, selective_list_records3_post_test/1,
     selective_list_records4_get_test/1, selective_list_records4_post_test/1,
-    list_records_no_set_error_get_test/1, list_records_no_set_error_post_test/1
-    , identify_change_earliest_datestamp_get_test/1, identify_change_earliest_datestamp_post_test/1]).
+    list_records_no_set_error_get_test/1, list_records_no_set_error_post_test/1,
+    identify_change_earliest_datestamp_get_test/1,
+    identify_change_earliest_datestamp_post_test/1]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/x-www-form-urlencoded">>}]).

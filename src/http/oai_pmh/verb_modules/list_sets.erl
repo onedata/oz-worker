@@ -56,7 +56,7 @@ exclusive_arguments() -> [].
 %%% @end
 %%%-------------------------------------------------------------------
 -spec required_response_elements() -> [binary()].
-required_response_elements() -> [set].
+required_response_elements() -> [<<"set">>].
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -71,6 +71,6 @@ optional_response_elements() -> [].
 %%% {@link oai_verb_behaviour} callback get_response/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_response(binary(), [proplists:property()]) -> oai_response().
-get_response(set, _Args) ->
+-spec get_response(binary(), [proplists:property()]) -> no_return().
+get_response(<<"set">>, _Args) ->
     throw(noSetHierarchy).

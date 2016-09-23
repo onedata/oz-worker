@@ -93,7 +93,7 @@ get_response(<<"record">>, Args) ->
                 }
             };
         false ->
-            throw({cannotDisseminateFormat, str_utils:format(
+            throw({cannotDisseminateFormat, str_utils:format_bin(
                 "Metadata format ~s is not supported by this repository",
                 [MetadataPrefix])})
     end.
@@ -116,7 +116,7 @@ get_metadata(Id) ->
         Metadata
     catch
         _:_ ->
-            throw({idDoesNotExist, str_utils:format(
+            throw({idDoesNotExist, str_utils:format_bin(
                 "The value of the identifier argument \"~s\" "
                 "is unknown in this repository.", [Id])})
     end.

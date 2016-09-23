@@ -48,7 +48,7 @@ datetime_to_oai_datestamp(DateTime) ->
 %%%     * YYYY-MM-DD to {Year, Month, Day}
 %%% @end
 %%%--------------------------------------------------------------------
--spec oai_datestamp_to_datetime(undefined | binary()) -> undefined | supported_datestamp().
+-spec oai_datestamp_to_datetime(undefined | binary()) -> maybe_invalid_datestamp().
 oai_datestamp_to_datetime(undefined) -> undefined;
 oai_datestamp_to_datetime(Datestamp) ->
     {ok, Regex} = re:compile(?DATESTAMP_REGEX),
@@ -88,7 +88,7 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
         end
     end, Identifiers),
     case HarvestedMetadata of
-        [] -> throw({noRecordsMatch, str_utils:format(
+        [] -> throw({noRecordsMatch, str_utils:format_bin(
             "The combination of the values of the from= ~s, "
             "until= ~s and metadataPrefix= ~s arguments results "
             "in an empty list.", [FromDatestamp, UntilDatestamp, MetadataPrefix])});
@@ -192,7 +192,7 @@ to_xml(#oai_error{code = Code, description = Description}) ->
     #xmlElement{
         name = error,
         attributes = [#xmlAttribute{name = code, value = Code}],
-        content = [Description]
+        content = [#xmlText{value = str_utils:to_list(Description)}]
     };
 to_xml(#oai_record{header = Header, metadata = Metadata, about = About}) ->
     #xmlElement{
@@ -201,12 +201,11 @@ to_xml(#oai_record{header = Header, metadata = Metadata, about = About}) ->
             ensure_list(to_xml(Metadata)) ++
             ensure_list(to_xml(About))
     };
-to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, setSpec = SetSpec}) ->
+to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp}) ->
     #xmlElement{
         name = header,
         content = ensure_list(to_xml({identifier, Identifier})) ++
-            ensure_list(to_xml({datestamp, Datestamp})) ++
-            ensure_list(to_xml({setSpec, SetSpec}))};
+            ensure_list(to_xml({datestamp, Datestamp}))};
 to_xml(#oai_metadata{metadata_format = Format, value = Value}) ->
     MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
     Mod = metadata_formats:module(MetadataPrefix),
@@ -221,12 +220,17 @@ to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
             ensure_list(to_xml({schema, Schema})) ++
             ensure_list(to_xml({metadataNamespace, Namespace}))
     };
+to_xml(#oai_about{value=Value}) ->
+    #xmlElement{
+        name = about,
+        content = ensure_list(to_xml(Value))
+    };
 to_xml({Name, Content}) ->
     to_xml({Name, Content, []});
 to_xml([{Name, Content}]) ->
     [to_xml({Name, Content})];
 to_xml([{Name, Content} | Rest]) ->
-    [to_xml({Name, Content}) | to_xml(Rest)];
+    [to_xml({Name, Content}) | ensure_list(to_xml(Rest))];
 to_xml({Name, ContentList = [{_, _} | _], Attributes}) ->
     #xmlElement{
         name = ensure_atom(Name),
@@ -278,9 +282,9 @@ granularity({{_, _, _}, {_, _, _}}) -> seconds_granularity.
 %%% to maximal or minimal datetime() with given date().
 %%% @end
 %%%-------------------------------------------------------------------
--spec granularity_days_to_seconds(
-    undefined | {Direction :: max | min, supported_datestamp() }) -> undefined | erlang:datetime().
-granularity_days_to_seconds(undefined) -> undefined;
+-spec granularity_days_to_seconds({Direction :: max | min, supported_datestamp() })
+        -> undefined | erlang:datetime().
+granularity_days_to_seconds({_, undefined}) -> undefined;
 granularity_days_to_seconds({min, {Y, M, D}}) -> {{Y, M, D}, {0, 0, 0}};
 granularity_days_to_seconds({max, {Y, M, D}}) -> {{Y, M, D}, {23, 59, 59}};
 granularity_days_to_seconds({min, {{Y, M, D}, {H, Min, S}}}) ->

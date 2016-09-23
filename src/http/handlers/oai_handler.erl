@@ -140,7 +140,6 @@ handle_request(QueryString, Req) ->
         {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryString),
         generate_response(Verb, ParsedArgs)
     catch
-
         throw:Error ->
             oai_errors:handle(Error);
         ErrorType:Error ->
@@ -189,15 +188,15 @@ generate_response(Verb, Args) ->
 %%% of response to given OAI-PMH request handled by Module.
 %%% @end
 %%%--------------------------------------------------------------------
--spec generate_required_response_elements(
-    Module :: oai_verb_module(), Args :: [proplists:property()]) -> [{binary(), oai_response()}].
+-spec generate_required_response_elements(Module :: oai_verb_module(),
+    Args :: [proplists:property()]) -> [{binary(), oai_response()}].
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of
             Elements when is_list(Elements)->
                 [ {ElementName, Element} || Element <- Elements ];
             Element -> oai_utils:ensure_list({ElementName, Element})
-        end %todo catch errors, function clause
+        end
     end, Module:required_response_elements()).
 
 
@@ -208,8 +207,8 @@ generate_required_response_elements(Module, Args) ->
 %%% of response to given OAI-PMH request handled by Module.
 %%% @end
 %%%--------------------------------------------------------------------
--spec generate_optional_response_elements(
-    Module :: oai_verb_module(), Args :: [proplists:property()]) -> [{binary(), oai_response()}].
+-spec generate_optional_response_elements(Module :: oai_verb_module(),
+    Args :: [proplists:property()]) -> [{binary(), oai_response()}].
 generate_optional_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         try Module:get_response(ElementName, Args) of
@@ -228,11 +227,9 @@ generate_optional_response_elements(Module, Args) ->
 %%% Inserts Content as content of root XML.
 %%% @end
 %%%--------------------------------------------------------------------
--spec insert_to_root_xml_element(#xmlElement{} | [#xmlElement{}]) -> #xmlElement{}.
+-spec insert_to_root_xml_element([#xmlElement{}]) -> #xmlElement{}.
 insert_to_root_xml_element(Content) when is_list(Content) ->
-    ?ROOT_ELEMENT#xmlElement{content = Content};
-insert_to_root_xml_element(Content) ->
-    ?ROOT_ELEMENT#xmlElement{content = [Content]}.
+    ?ROOT_ELEMENT#xmlElement{content = Content}.
 
 %%%--------------------------------------------------------------------
 %%% @private

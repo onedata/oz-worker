@@ -18,15 +18,13 @@
 
 -record(oai_header, {
     identifier :: oai_id(),
-    datestamp,
-    setSpec :: list(),
-    status :: undefined | deleted
+    datestamp :: binary()
 }).
 
 -record(oai_metadata_format, {
-    metadataPrefix :: binary(),
-    schema ::binary(),
-    metadataNamespace ::binary()
+    metadataPrefix :: binary() | undefined,
+    schema ::binary() | undefined,
+    metadataNamespace ::binary() | undefined
 }).
 
 -record(oai_metadata, {
@@ -35,18 +33,18 @@
 }).
 
 -record(oai_about, {
-    %% TODO
+    value :: #xmlElement{}
 }).
 
 -record(oai_record, {
     header :: oai_header(),
     metadata :: oai_metadata(),
-    about :: oai_about()
+    about :: oai_about() | undefined
 }).
 
 -record(oai_error, {
     code :: oai_error_code(),
-    description :: list()
+    description :: binary()
 }).
 
 -type oai_verb_module() :: identify | get_record | list_identifiers |
@@ -56,18 +54,25 @@
                           cannotDisseminateFormat |idDoesNotExist |
                           noRecordsMatch | noMetadataFormats | noSetHierarchy.
 
--type oai_id() :: binary(). % todo maybe it should be record
+-type oai_id() :: binary().
 -type oai_header() :: #oai_header{}.
 -type oai_metadata_format() :: #oai_metadata_format{}.
 -type oai_metadata() :: #oai_metadata{}.
 -type oai_about() :: #oai_about{}.
 -type oai_record() :: #oai_record{}.
 -type oai_error() :: #oai_error{}.
--type oai_response() :: binary()     | [binary()]     |
+-type oai_response() :: binary() | [binary()] |
                         oai_record() | [oai_record()] |
-                        oai_header() | [oai_header()].
+                        oai_header() | [oai_header()] |
+                        oai_metadata_format() | [oai_metadata_format()].
+
+-type maybe_invalid_date() :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}.
+-type maybe_invalid_time() :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}.
+-type maybe_invalid_datetime() :: {maybe_invalid_date(), maybe_invalid_time()}.
+-type maybe_invalid_datestamp() :: supported_datestamp() | maybe_invalid_date() | maybe_invalid_datetime().
 -type supported_datestamp() :: erlang:datetime() | erlang:date() | undefined.
 -type oai_date_granularity() :: day_granularity | seconds_granularity.
+
 
 -define(OAI_XML_NAMESPACE, #xmlAttribute{
         name=xmlns,

@@ -184,14 +184,3 @@ share_id_to_redirect_url(ShareId) ->
     ChosenProvider = lists:nth(rand:uniform(length(Choice)), Choice),
     {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
     str_utils:format_bin("~s/#/public/shares/~s", [ProviderURL, ShareId]).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns given share metadata.
-%% Throws exception when call to the datastore fails, or share doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
-
-get_metadata(ShareId) ->
-    {ok, []}. % todo delete this method

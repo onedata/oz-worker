@@ -100,10 +100,9 @@ get_response(<<"adminEmail">>, _Args) ->
     lists:map(fun(AdminEmail) ->
         list_to_binary(AdminEmail)
     end, AdminEmails);
-get_response(<<"compression">>, _Args) ->
-    <<"">>; %TODO
-get_response(<<"description">>, _Args) -> [].
-%% TODO do we need description ???
+get_response(<<"compression">>, _Args) -> <<"">>; %TODO
+get_response(<<"description">>, _Args) -> [].     %TODO
+
 
 
 %%%===================================================================

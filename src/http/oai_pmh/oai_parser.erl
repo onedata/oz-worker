@@ -37,38 +37,38 @@ process_and_validate_args(Args) ->
         {Verb, Args2}
     catch
         throw:{missing_key, <<"verb">>}  ->
-            throw({badVerb, "The verb argument is missing."});
+            throw({badVerb, <<"The verb argument is missing.">>});
         throw:{repeated_key, <<"verb">>}  ->
-            throw({badVerb, "The verb argument is repeated."});
+            throw({badVerb, <<"The verb argument is repeated.">>});
         throw:{not_legal_verb, BadVerb} -> throw({badVerb,
-            str_utils:format("The verb argument ~s is not a legal OAI-PMH verb.",[BadVerb])});
+            str_utils:format_bin("The verb argument ~s is not a legal OAI-PMH verb.",[BadVerb])});
         throw:{repeated_key, Key}  -> throw({badArgument,
-            str_utils:format("The request includes repeated argument ~s.",[Key])});
+            str_utils:format_bin("The request includes repeated argument ~s.",[Key])});
         throw:{value_is_empty, Key}  -> throw({badArgument,
-            str_utils:format("The request argument ~s has empty value.",[Key])});
+            str_utils:format_bin("The request argument ~s has empty value.",[Key])});
         throw:{cannotDisseminateFormat, MetadataPrefix}  -> throw({cannotDisseminateFormat,
-            str_utils:format(
+            str_utils:format_bin(
                 "The metadata format identified by the value ~s"
                 "given for the metadataPrefix argument is not "
                 "supported by this repository.",[MetadataPrefix])});
         throw:{missing_key, Keys}  ->
             KeysStr = [str_utils:to_list(K) || K <- Keys],
             throw({badArgument,
-            str_utils:format("The request is missing required arguments: ~p.",[KeysStr])});
+            str_utils:format_bin("The request is missing required arguments: ~p.",[KeysStr])});
         throw:exclusive_argument  -> throw({badArgument,
-            "Exclusive argument is not an only argument"});
+            <<"Exclusive argument is not an only argument">>});
         throw:{illegal_argument, IllegalArgs} ->
             IllegalArgsStr = [str_utils:to_list(A) || A <- IllegalArgs],
             throw({badArgument,
-            str_utils:format("The request includes illegal arguments: ~p.", [IllegalArgsStr])});
+            str_utils:format_bin("The request includes illegal arguments: ~p.", [IllegalArgsStr])});
         throw:set_not_supported -> throw(noSetHierarchy);
         throw:{granularity_mismatch, From, Until} -> throw({badArgument,
-            str_utils:format("Datestamps from=~s and until=~s "
+            str_utils:format_bin("Datestamps from=~s and until=~s "
                              "have different granularity.", [From, Until])});
         throw:{invalid_date_format, Date} -> throw({badArgument,
-            str_utils:format("Datestamp ~s has invalid format.", [Date])});
+            str_utils:format_bin("Datestamp ~s has invalid format.", [Date])});
         throw:{wrong_datestamps_relation, From, Until} ->throw({badArgument,
-            str_utils:format("Datestamp from=~s is greater than until=~s: ", [From, Until])})
+            str_utils:format_bin("Datestamp from=~s is greater than until=~s: ", [From, Until])})
     end
 .
 
@@ -240,7 +240,7 @@ validate_and_convert_datestamp(Date) ->
 %%% Throws error if datestamp is in wrong format.
 %%% @end
 %%%-------------------------------------------------------------------
--spec is_valid_datestamp(supported_datestamp()) -> boolean.
+-spec is_valid_datestamp(maybe_invalid_datestamp()) -> boolean().
 is_valid_datestamp(Date = {_Y, _M, _D}) -> calendar:valid_date(Date);
 is_valid_datestamp({Date = {_, _, _}, Time = {_H, _Min, _S}}) ->
     is_valid_datestamp(Date) and is_valid_time(Time);

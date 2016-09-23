@@ -64,8 +64,7 @@ schema_URL(MetadataPrefix) ->
 -spec main_namespace(MetadataPrefix :: binary()) -> {atom(), binary()}.
 main_namespace(MetadataPrefix) ->
     Module= module(MetadataPrefix),
-    {_, Namespace} = Module:main_namespace(),
-    Namespace.
+    Module:main_namespace().
 
 
 

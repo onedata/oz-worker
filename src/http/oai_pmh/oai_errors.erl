@@ -26,7 +26,7 @@
 %% Function responsible for handling OAI-PMH errors.
 %% @end
 %%--------------------------------------------------------------------
--spec handle({oai_error_code(), list()} | oai_error_code() | term()) ->
+-spec handle({oai_error_code(), binary()} | oai_error_code() | term()) ->
     oai_error() | {halt, cowboy_req:req(), any()}.
 handle({ErrorCode, Description}) -> ?OAI_ERROR(ErrorCode, Description);
 handle(badVerb) -> ?BAD_VERB;
