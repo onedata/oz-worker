@@ -22,7 +22,7 @@
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
 %% API
--export([space_record/4]).
+-export([space_record/5]).
 
 
 %%%===================================================================
@@ -48,14 +48,32 @@ init() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"space">>, SpaceId) ->
     UserId = g_session:get_user_id(),
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-    {ok, #document{
-        value = #onedata_user{
-            space_names = SpaceNamesMap,
-            default_space = DefaultSpaceId
-        }}} = onedata_user:get(UserId),
-    Res = space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders),
-    {ok, Res}.
+    % Check if the user belongs to this space
+    case space_logic:has_effective_user(SpaceId, UserId) of
+        false ->
+            gui_error:unauthorized();
+        true ->
+            % Check if that user has view privileges in that space
+            HasViewPrivileges = space_logic:has_effective_privilege(
+                SpaceId, UserId, space_view_data
+            ),
+            {ok, [{providers, UserProviders}]} = user_logic:get_providers(
+                UserId
+            ),
+            {ok, #document{
+                value = #onedata_user{
+                    space_names = SpaceNamesMap,
+                    default_space = DefaultSpaceId
+                }}} = onedata_user:get(UserId),
+            Res = space_record(
+                SpaceId,
+                SpaceNamesMap,
+                DefaultSpaceId,
+                UserProviders,
+                HasViewPrivileges
+            ),
+            {ok, Res}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -77,7 +95,16 @@ find_all(<<"space">>) ->
         }}} = onedata_user:get(UserId),
     Res = lists:map(
         fun(SpaceId) ->
-            space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders)
+            HasViewPrivileges = space_logic:has_effective_privilege(
+                SpaceId, g_session:get_user_id(), space_view_data
+            ),
+            space_record(
+                SpaceId,
+                SpaceNamesMap,
+                DefaultSpaceId,
+                UserProviders,
+                HasViewPrivileges
+            )
         end, SpaceIds),
     {ok, Res}.
 
@@ -153,24 +180,37 @@ delete_record(<<"space">>, _Id) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_record(SpaceId :: binary(), SpaceNamesMap :: #{},
-    DefaultSpaceId :: binary(), UserProviders :: [binary()]) ->
-    proplists:proplist().
-space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
-    % Try to get space name from personal user's mapping, if not use its
-    % default name.
+    DefaultSpaceId :: binary(), UserProviders :: [binary()],
+    HasViewPrivileges :: boolean()) -> proplists:proplist().
+space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
+    HasViewPrivileges) ->
     {ok, #document{value = #space{
         name = DefaultName,
         providers_supports = ProvidersSupports
     }}} = space:get(SpaceId),
+    % Try to get space name from personal user's mapping, if not use its
+    % default name.
     Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),
-    {Providers, _} = lists:unzip(ProvidersSupports),
-    ProvidersToDisplay = lists:filter(
-        fun(Provider) ->
-            lists:member(Provider, UserProviders)
-        end, Providers),
-    [
-        {<<"id">>, SpaceId},
-        {<<"name">>, Name},
-        {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
-        {<<"providers">>, ProvidersToDisplay}
-    ].
+    case HasViewPrivileges of
+        false ->
+            [
+                {<<"id">>, SpaceId},
+                {<<"name">>, Name},
+                {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
+                {<<"hasViewPrivilege">>, false},
+                {<<"providers">>, []}
+            ];
+        true ->
+            {Providers, _} = lists:unzip(ProvidersSupports),
+            ProvidersToDisplay = lists:filter(
+                fun(Provider) ->
+                    lists:member(Provider, UserProviders)
+                end, Providers),
+            [
+                {<<"id">>, SpaceId},
+                {<<"name">>, Name},
+                {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
+                {<<"hasViewPrivilege">>, true},
+                {<<"providers">>, ProvidersToDisplay}
+            ]
+    end.
