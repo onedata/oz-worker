@@ -103,4 +103,6 @@
 
 -define(PROTOCOL_VERSION, <<"2.0">>).
 
+-define(OAI_IDENTIFIER_PREFIX, <<"oai:onedata.org:">>).
+
 -endif.

@@ -78,8 +78,10 @@ get_response(<<"header">>, Args) ->
     HarvestingFun = fun(Id, Metadata) ->
         Timestamp = proplists:get_value(timestamp, Metadata),
         #oai_header{
-            identifier = Id,
+            identifier = oai_utils:oai_identifier_encode(Id),
             datestamp = oai_utils:datetime_to_oai_datestamp(Timestamp)
         }
     end,
     oai_utils:harvest(MetadataPrefix, From, Until, HarvestingFun).
+
+%%% TODO * support resumptionToken

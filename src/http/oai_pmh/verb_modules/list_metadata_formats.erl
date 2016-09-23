@@ -76,8 +76,9 @@ get_response(<<"metadataFormat">>, Args) ->
             lists:map(fun(MetadataPrefix) ->
                 get_metadata_format_info(MetadataPrefix)
             end, metadata_formats:supported_formats());
-        Id ->
+        OAIId ->
             try
+                Id = oai_utils:oai_identifier_decode(OAIId),
                 {ok, MetadataInfo} = handle_logic:get_metadata(Id),
                 case proplists:get_value(metadata, MetadataInfo) of
                     undefined -> throw(noMetadataFormats);
@@ -89,11 +90,16 @@ get_response(<<"metadataFormat">>, Args) ->
             catch
                 throw:noMetadataFormats ->
                     throw({noMetadataFormats, str_utils:format_bin(
-                        "There are no metadata formats available for item ~s", [Id])});
+                        "There are no metadata formats available for item ~s", [OAIId])});
+                throw:{illegalId, OAIId} ->
+                    throw({idDoesNotExist, str_utils:format_bin(
+                        "The value of the identifier argument \"~s\" "
+                        "is illegal in this repository. Identifier must "
+                        "be in form oai:onedata.org:<id>", [OAIId])});
                 _:_ ->
                     throw({idDoesNotExist, str_utils:format_bin(
                         "The value of the identifier argument \"~s\" "
-                        "is unknown in this repository.", [Id])})
+                        "is unknown in this repository.", [OAIId])})
             end
     end.
 

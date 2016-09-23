@@ -109,14 +109,20 @@ get_response(<<"record">>, Args) ->
 %%% If it fails, throws idDoesNotExist
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_metadata(any()) -> any().
-get_metadata(Id) ->
+-spec get_metadata(oai_id()) -> any().
+get_metadata(OAIId) ->
     try
+        Id = oai_utils:oai_identifier_decode(OAIId),
         {ok, Metadata} = handle_logic:get_metadata(Id),
         Metadata
     catch
+        throw:{illegalId, OAIId} ->
+            throw({idDoesNotExist, str_utils:format_bin(
+                "The value of the identifier argument \"~s\" "
+                "is illegal in this repository. Identifier must "
+                "be in form oai:onedata.org:<id>", [OAIId])});
         _:_ ->
             throw({idDoesNotExist, str_utils:format_bin(
                 "The value of the identifier argument \"~s\" "
-                "is unknown in this repository.", [Id])})
+                "is unknown in this repository.", [OAIId])})
     end.

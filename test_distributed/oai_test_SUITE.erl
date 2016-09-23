@@ -448,7 +448,7 @@ get_record_test_base(Config, Method) ->
     {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(?DC_METADATA_XML)),
 
     Args = [
-        {<<"identifier">>, Identifier},
+        {<<"identifier">>, oai_identifier(Identifier)},
         {<<"metadataPrefix">>, ?DC_METADATA_PREFIX}
     ],
 
@@ -460,7 +460,7 @@ get_record_test_base(Config, Method) ->
                     #xmlElement{
                         name = identifier,
                         content = [#xmlText{
-                            value = binary_to_list(Identifier)
+                            value = binary_to_list(oai_identifier(Identifier))
                         }]
                     },
                     #xmlElement{
@@ -530,7 +530,7 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
                 #xmlElement{
                     name = identifier,
                     content = [#xmlText{
-                        value = binary_to_list(Id)
+                        value = binary_to_list(oai_identifier(Id))
                     }]
                 },
                 #xmlElement{
@@ -573,7 +573,7 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
                         #xmlElement{
                             name = identifier,
                             content = [#xmlText{
-                                value = binary_to_list(Id)
+                                value = binary_to_list(oai_identifier(Id))
                             }]
                         },
                         #xmlElement{
@@ -633,7 +633,7 @@ cannot_disseminate_format_test_base(Config, Method) ->
     Identifier = create_handle(Config, User, HSId, ?SHARE_ID, ?DC_METADATA_XML),
 
     Args = [
-        {<<"identifier">>, Identifier},
+        {<<"identifier">>, oai_identifier(Identifier)},
         {<<"metadataPrefix">>, <<"not_supported_format">>}
     ],
     ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)).
@@ -648,7 +648,7 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
     HSId = create_handle_service(Config, User),
     Identifier = create_handle(Config, User, HSId, ?SHARE_ID, undefined),
 
-    Args = [{<<"identifier">>, Identifier}],
+    Args = [{<<"identifier">>, oai_identifier(Identifier)}],
 
     ?assert(check_list_metadata_formats_error(200, Args, Method, [], Config)).
 
@@ -1051,6 +1051,10 @@ offset_in_range(From, undefined, Offset) ->
     From =< Offset;
 offset_in_range(From, Until, Offset) ->
     (From =< Offset) and (Offset =< Until).
+
+
+oai_identifier(HandleId) ->
+    <<"oai:onedata.org:", HandleId/binary>>.
 
 
 %% TODO

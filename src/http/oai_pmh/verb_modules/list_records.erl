@@ -78,7 +78,7 @@ get_response(<<"record">>, Args) ->
         MetadataValue = proplists:get_value(metadata, Metadata),
         #oai_record{
             header = #oai_header{
-                identifier = Id,
+                identifier = oai_utils:oai_identifier_encode(Id),
                 datestamp = oai_utils:datetime_to_oai_datestamp(Timestamp)
             },
             metadata = #oai_metadata{
@@ -88,3 +88,5 @@ get_response(<<"record">>, Args) ->
         }
     end,
     oai_utils:harvest(MetadataPrefix, From, Until, HarvestingFun).
+
+%%% TODO * support resumptionToken

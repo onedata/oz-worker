@@ -1,6 +1,7 @@
 %%%--------------------------------------------------------------------
 %%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @author Jakub Kudzia
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -57,9 +58,10 @@ start() ->
         http_number_of_http_acceptors),
     {ok, Timeout} = application:get_env(?CLUSTER_WORKER_APP_NAME,
         http_socket_timeout_seconds),
+    {ok, OAI_PMH_PATH} = application:get_env(?APP_Name, oai_pmh_api_prefix),
     RedirectDispatch = [
         {'_', [
-            {"/oai_pmh/[...]", oai_handler, []},
+            {OAI_PMH_PATH ++ "/[...]", oai_handler, []},
             {"/[...]", redirector_handler, []}
         ]}
     ],

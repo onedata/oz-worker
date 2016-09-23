@@ -17,7 +17,7 @@
 %% API
 -export([datetime_to_oai_datestamp/1, oai_datestamp_to_datetime/1,
     is_harvesting/1, verb_to_module/1, is_earlier_or_equal/2,
-    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4]).
+    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4, oai_identifier_encode/1, oai_identifier_decode/1]).
 
 
 %% Macro with regex matching allowed datestamps
@@ -25,6 +25,34 @@
 %%  * YYYY-MM-DD
 -define(DATESTAMP_REGEX,
     "(\\d{4})-(\\d{2})-(\\d{2})(?:$|(?:T(\\d{2}):(\\d{2}):(\\d{2})Z){1})").
+
+%%%--------------------------------------------------------------------
+%%% @doc
+%%% Encode handle id to oai identifier supported by oz-worker.
+%%% oai identifier is in form:
+%%%     oai:onedata.org:<handle_id>
+%%% @end
+%%%--------------------------------------------------------------------
+-spec oai_identifier_encode(handle:id()) -> oai_id().
+oai_identifier_encode(Id) ->
+    <<?OAI_IDENTIFIER_PREFIX/binary, Id/binary>>.
+
+%%%--------------------------------------------------------------------
+%%% @doc
+%%% Decode handle id from oai identifier supported by oz-worker.
+%%% oai identifier is in form:
+%%%     oai:onedata.org:<handle_id>
+%%% @end
+%%%--------------------------------------------------------------------
+-spec oai_identifier_decode(oai_id()) -> handle:id().
+oai_identifier_decode(OAIId) ->
+    PrefixSize = size(?OAI_IDENTIFIER_PREFIX),
+    case binary:match(OAIId, ?OAI_IDENTIFIER_PREFIX) of
+        {0, PrefixSize} ->
+            binary:part(OAIId, size(OAIId), PrefixSize - size(OAIId));
+        _ ->
+            throw({illegalId, OAIId})
+    end.
 
 %%%--------------------------------------------------------------------
 %%% @doc

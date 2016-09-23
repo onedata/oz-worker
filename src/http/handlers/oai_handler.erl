@@ -267,14 +267,6 @@ generate_request_element(ParsedArgs, Req) ->
     {request, BaseURL,  ParsedArgs}.
 
 
-%%% TODO
-%%% TODO * support resumptionToken
-%%% TODO * identifier MAY conform to OAI-identifier syntax
-%%% TODO   http://www.openarchives.org/OAI/2.0/openarchivesprotocol.htm#UniqueIdentifier
-%%% TODO * allowed charset
-
-
-
 
 
 
