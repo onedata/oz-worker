@@ -35,6 +35,9 @@
 -record(oai_about, {
     value :: #xmlElement{}
 }).
+%%% TODO record can have additional attribute "about" to hold data about the
+%%% TODO metadata part of the record, this field is supported by oai_utils:to_xml
+%%% TODO function, but we don't keep suitable information in handle
 
 -record(oai_record, {
     header :: oai_header(),

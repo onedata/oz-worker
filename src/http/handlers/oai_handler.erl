@@ -269,11 +269,11 @@ generate_request_element(ParsedArgs, Req) ->
 
 %%% TODO
 %%% TODO * support resumptionToken
-%%% TODO * compression
-%%% TODO * identity encoding
-%%% TODO * OAI-identifier
+%%% TODO * identifier MAY conform to OAI-identifier syntax
+%%% TODO   http://www.openarchives.org/OAI/2.0/openarchivesprotocol.htm#UniqueIdentifier
 %%% TODO * allowed charset
-%%% TODO * metadata can have additional attribute "about"
+
+
 
 
 

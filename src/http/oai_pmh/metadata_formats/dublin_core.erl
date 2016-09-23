@@ -101,8 +101,8 @@ elements() -> [
 -spec encode(#{} | binary()) -> #xmlElement{}.
 encode(Metadata) ->
 
-    %todo currently bare xml is saved
     {#xmlElement{content=MetadataContent}, _} = xmerl_scan:string(binary_to_list(Metadata)),
+    %%TODO  currently bare xml is saved in  handle
     %%    MetadataXML = lists:flatmap(fun(Key) ->
     %%        case maps:get(Key, Metadata, undefined) of
     %%            undefined -> [];
