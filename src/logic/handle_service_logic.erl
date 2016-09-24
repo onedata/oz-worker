@@ -17,7 +17,7 @@
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
 -export([create/4, modify/4, set_user_privileges/3, set_group_privileges/3]).
--export([get_data/1, get_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
+-export([get_data/1, get_users/1, get_effective_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
 
@@ -125,7 +125,7 @@ has_effective_privilege(HandleServiceId, UserId, Privilege) ->
     {ok, HandleServiceId :: handle_service:id()}.
 create(UserId, Name, ProxyEndpoint, ServiceProperties) ->
     Privileges = privileges:handle_service_admin(),
-    HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_properties = ServiceProperties,  users = [{UserId, Privileges}]},
+    HandleService = #handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_properties = ServiceProperties, users = [{UserId, Privileges}]},
 
     {ok, HandleServiceId} = handle_service:create(#document{value = HandleService}),
     {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -259,6 +259,28 @@ get_users(HandleServiceId) ->
     {ok, #document{value = #handle_service{users = Users}}} = handle_service:get(HandleServiceId),
     {UserIds, _} = lists:unzip(Users),
     {ok, [{users, UserIds}]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns a list of all effective users of a handle_service.
+%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_users(HandleServiceId :: handle_service:id()) ->
+    {ok, [proplists:property()]}.
+get_effective_users(HandleServiceId) ->
+    {ok, #document{
+        value = #handle_service{
+            users = UserPerms,
+            groups = GroupPerms
+        }}} = handle_service:get(HandleServiceId),
+    {Users, _} = lists:unzip(UserPerms),
+    UsersViaGroups = lists:foldl(
+        fun({GroupId, _}, Acc) ->
+            Acc ++ group_logic:get_effective_users(GroupId)
+        end, [], GroupPerms),
+    {ok, [{users, ordsets:union(Users, UsersViaGroups)}]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about handle_service's groups.

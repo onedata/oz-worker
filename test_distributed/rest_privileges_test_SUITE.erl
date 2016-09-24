@@ -49,7 +49,7 @@ all() ->
         list_providers_test,          % list_providers
         list_providers_of_space_test, % list_providers_of_space
         modify_space_members_test     % add_member_to_space,
-        % remove_member_from_space
+                                      % remove_member_from_space
     ]).
 
 %%%===================================================================

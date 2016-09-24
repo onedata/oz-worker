@@ -30,6 +30,7 @@
 -export([exists/1, remove/1]).
 -export([set_space_name_mapping/4, clean_space_name_mapping/2]).
 -export([authenticate_by_basic_credentials/2, change_user_password/3]).
+-export([get_all_handle_services/1, get_all_handles/1]).
 
 %%%===================================================================
 %%% API functions

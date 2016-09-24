@@ -129,6 +129,44 @@ get_msg(Seq, Doc, provider = Model) ->
         {space_ids, SpaceIDs},
         {public_only, false}
     ]}];
+get_msg(Seq, Doc, handle_service = Model) ->
+    #document{value = Value, key = ID} = Doc,
+    #handle_service{
+        name = Name,
+        proxy_endpoint = ProxyEndpoint,
+        service_properties = ServiceProperties,
+        users = Users,
+        groups = Groups
+    } = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {id, ID},
+        {name, Name},
+        {proxy_endpoint, ProxyEndpoint},
+        {service_properties, ServiceProperties},
+        {users, Users},
+        {groups, Groups}
+    ]}];
+get_msg(Seq, Doc, handle = Model) ->
+    #document{value = Value, key = ID} = Doc,
+    #handle{
+        handle_service_id = HandleServiceId,
+        public_handle = PublicHandle,
+        resource_type = ResourceType,
+        resource_id = ResourceId,
+        metadata = Metadata,
+        users = Users,
+        groups = Groups
+    } = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {id, ID},
+        {handle_service_id, HandleServiceId},
+        {public_handle, PublicHandle},
+        {resource_type, ResourceType},
+        {resource_id, ResourceId},
+        {metadata, Metadata},
+        {users, Users},
+        {groups, Groups}
+    ]}];
 get_msg(_Seq, _Doc, _Model) ->
     ?warning("Requesting message for unexpected model ~p", [_Model]),
     [].
@@ -184,4 +222,6 @@ message_model(space) -> space;
 message_model(share) -> share;
 message_model(provider) -> provider;
 message_model(onedata_user) -> user;
-message_model(user_group) -> group.
+message_model(user_group) -> group;
+message_model(handle) -> handle;
+message_model(handle_service) -> handle_service.
