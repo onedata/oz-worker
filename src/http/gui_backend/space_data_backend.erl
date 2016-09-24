@@ -22,7 +22,7 @@
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
 %% API
--export([space_record/5]).
+-export([space_record/4, space_record/5]).
 
 
 %%%===================================================================
@@ -53,10 +53,6 @@ find(<<"space">>, SpaceId) ->
         false ->
             gui_error:unauthorized();
         true ->
-            % Check if that user has view privileges in that space
-            HasViewPrivileges = space_logic:has_effective_privilege(
-                SpaceId, UserId, space_view_data
-            ),
             {ok, [{providers, UserProviders}]} = user_logic:get_providers(
                 UserId
             ),
@@ -66,11 +62,7 @@ find(<<"space">>, SpaceId) ->
                     default_space = DefaultSpaceId
                 }}} = onedata_user:get(UserId),
             Res = space_record(
-                SpaceId,
-                SpaceNamesMap,
-                DefaultSpaceId,
-                UserProviders,
-                HasViewPrivileges
+                SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders
             ),
             {ok, Res}
     end.
@@ -95,15 +87,11 @@ find_all(<<"space">>) ->
         }}} = onedata_user:get(UserId),
     Res = lists:map(
         fun(SpaceId) ->
-            HasViewPrivileges = space_logic:has_effective_privilege(
-                SpaceId, g_session:get_user_id(), space_view_data
-            ),
             space_record(
                 SpaceId,
                 SpaceNamesMap,
                 DefaultSpaceId,
-                UserProviders,
-                HasViewPrivileges
+                UserProviders
             )
         end, SpaceIds),
     {ok, Res}.
@@ -134,6 +122,7 @@ create_record(<<"space">>, Data) ->
         {<<"id">>, SpaceId},
         {<<"name">>, Name},
         {<<"isDefault">>, false},
+        {<<"hasViewPrivilege">>, true},
         {<<"providers">>, []}
     ],
     {ok, NewSpaceData}.
@@ -173,6 +162,22 @@ delete_record(<<"space">>, _Id) ->
 %%%===================================================================
 %%% API functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a client-compliant space record.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_record(SpaceId :: binary(), SpaceNamesMap :: #{},
+    DefaultSpaceId :: binary(), UserProviders :: [binary()],
+    HasViewPrivileges :: boolean()) -> proplists:proplist().
+space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
+    % Check if that user has view privileges in that space
+    HasViewPrivs = space_logic:has_effective_privilege(
+        SpaceId, g_session:get_user_id(), space_view_data
+    ),
+    space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
+        HasViewPrivs).
 
 %%--------------------------------------------------------------------
 %% @doc

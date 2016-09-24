@@ -127,7 +127,7 @@ handle(<<"unsupportSpace">>, Props) ->
             {ok, UserSpaces} = user_logic:get_spaces(UserId),
             SpaceIds = proplists:get_value(spaces, UserSpaces),
             SpaceRecord = space_data_backend:space_record(
-                SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders, true
+                SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders
             ),
             gui_async:push_updated(<<"space">>, SpaceRecord),
             ProviderRecord = provider_data_backend:provider_record(
@@ -163,14 +163,10 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
                 value = #onedata_user{
                     space_names = SpaceNamesMap
                 }}} = onedata_user:get(UserId),
-            % Check if that user has view privileges in that space
-            HasViewPrivileges = space_logic:has_effective_privilege(
-                SpaceId, UserId, space_view_data
-            ),
             SpaceRecord = space_data_backend:space_record(
                 % DefaultSpaceId and UserProviders do not matter because this is
                 % a new space - it's not default and has no providers
-                SpaceId, SpaceNamesMap, <<"">>, [], HasViewPrivileges
+                SpaceId, SpaceNamesMap, <<"">>, []
             ),
             gui_async:push_created(<<"space">>, SpaceRecord),
             {ok, [{<<"spaceId">>, SpaceId}]}
