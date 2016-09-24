@@ -364,7 +364,9 @@ get_public_data(GroupId) ->
         user_group:get(GroupId),
     {ok, [
         {groupId, GroupId},
-        {name, Name}
+        {name, Name},
+        % This is an information that only public data is available.
+        {type, public}
     ]}.
 
 %%--------------------------------------------------------------------
