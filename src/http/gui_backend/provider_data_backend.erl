@@ -48,6 +48,18 @@ init() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"provider">>, ProviderId) ->
     UserId = g_session:get_user_id(),
+    %% TODO Currently, perms to view provider are not checked
+%%    % Check if the user is supported by this provider
+%%    case user_logic:has_provider(UserId, ProviderId) of
+%%        false ->
+%%            gui_error:unauthorized();
+%%        true ->
+%%            {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
+%%            {ok, UserSpaces} = user_logic:get_spaces(UserId),
+%%            SpaceIds = proplists:get_value(spaces, UserSpaces),
+%%            Res = provider_record(ProviderId, DefaultProvider, SpaceIds),
+%%            {ok, Res}
+%%    end,
     {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
     {ok, UserSpaces} = user_logic:get_spaces(UserId),
     SpaceIds = proplists:get_value(spaces, UserSpaces),

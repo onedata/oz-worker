@@ -22,7 +22,7 @@
 %% API
 -export([create/1, create/2, get_user/1, get_user_doc/1, get_data/2]).
 -export([modify/2, set_alias/2, add_oauth_account/2, is_email_occupied/2]).
--export([get_groups/1, get_effective_groups/1, get_providers/1]).
+-export([get_groups/1, get_effective_groups/1, get_providers/1, has_provider/2]).
 -export([get_spaces/1, get_handle_services/1, get_handles/1, get_shares/1,
     get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
@@ -404,18 +404,33 @@ get_groups(UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_providers(UserId :: binary()) ->
-    {ok, [proplists:property()]}.
+-spec get_providers(UserId :: binary()) -> {ok, [proplists:property()]}.
 get_providers(UserId) ->
     {ok, Doc} = onedata_user:get(UserId),
     Spaces = get_all_spaces(Doc),
     UserProviders = lists:foldl(fun(Space, Providers) ->
-        {ok, #document{value = #space{providers_supports = Supports}}}
-            = space:get(Space),
+        {ok, #document{
+            value = #space{
+                providers_supports = Supports
+            }}} = space:get(Space),
         {SpaceProviders, _} = lists:unzip(Supports),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)
     end, ordsets:new(), Spaces),
     {ok, [{providers, UserProviders}]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate telling if given user is effectively supported by given provider.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_provider(UserId :: onedata_user:id(), ProviderId :: provider:id()) ->
+    boolean().
+has_provider(UserId, ProviderId) ->
+    {ok, [{providers, UserProviders}]} = get_providers(UserId),
+    lists:member(ProviderId, UserProviders).
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns true if user was found by a given key.
