@@ -109,15 +109,22 @@ is_authorized(provider, delete, SpaceId, #client{type = user, id = UserId}) ->
 is_authorized(R, put, SpaceId, #client{type = user, id = UserId})
     when R =:= upriv; R =:= gpriv ->
     space_logic:has_effective_privilege(SpaceId, UserId, space_set_privileges);
-is_authorized(R, get, SpaceId, #client{type = user, id = UserId}) ->
-    Result = space_logic:has_effective_privilege(
-        SpaceId, UserId, space_view_data),
-    case {R, Result} of
-        {space, false} ->
+is_authorized(space, get, SpaceId, #client{type = user, id = UserId}) ->
+    % To get data about a space, it is enough to be its user, but without view
+    % data privilege only space name is returned.
+    case space_logic:has_effective_user(SpaceId, UserId) of
+        false ->
             % If the user is not authorized by perms in space to view spaces,
             % check if he has oz_api_privileges to list spaces
             oz_api_privileges_logic:has_effective_privilege(
                 UserId, list_spaces);
+        true ->
+            true
+    end;
+is_authorized(R, get, SpaceId, #client{type = user, id = UserId}) ->
+    Result = space_logic:has_effective_privilege(
+        SpaceId, UserId, space_view_data),
+    case {R, Result} of
         {providers, false} ->
             % If the user is not authorized by perms in space to view providers,
             % check if he has oz_api_privileges to list providers
@@ -256,18 +263,22 @@ provide_resource(spaces, _EntityId, _Client, Req) ->
     {ok, SpaceIds} = space_logic:list(),
     {[{spaces, SpaceIds}], Req};
 provide_resource(space, SpaceId, #client{type = user, id = UserId}, Req) ->
-    % Check if the user has view permissions to given space. If yes, return the
+    % Check if the user belongs to given space. If yes, return the
     % space data as he sees it. If not, it means that he used his OZ API
     % privileges to access it (use 'provider' client for public space data).
-    CanViewSpace = space_logic:has_effective_privilege(
-        SpaceId, UserId, space_view_data),
-    Client = case CanViewSpace of
+    {ok, Data} = case space_logic:has_effective_user(SpaceId, UserId) of
         true ->
-            {user, UserId};
+            HasViewPrivs = space_logic:has_effective_privilege(
+                SpaceId, UserId, space_view_data),
+            case HasViewPrivs of
+                true ->
+                    space_logic:get_data(SpaceId, {user, UserId});
+                false ->
+                    space_logic:get_public_data(SpaceId, {user, UserId})
+            end;
         false ->
-            provider
+            space_logic:get_data(SpaceId, provider)
     end,
-    {ok, Data} = space_logic:get_data(SpaceId, Client),
     {Data, Req};
 provide_resource(space, SpaceId, #client{type = provider}, Req) ->
     {ok, Data} = space_logic:get_data(SpaceId, provider),

@@ -18,9 +18,9 @@
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
-    has_nested_group/2]).
+    has_nested_group/2, can_view_public_data/2]).
 -export([create/3, modify/2, add_user/2, add_group/2, join/2, join_group/2, set_privileges/3]).
--export([get_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
+-export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
     get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
     get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
     get_parent_groups/1, get_parent_group/2, get_effective_user/2]).
@@ -72,6 +72,46 @@ has_nested_group(ParentGroupId, GroupId) ->
         {ok, #document{value = #user_group{nested_groups = Groups}}} ->
             lists:keymember(GroupId, 1, Groups)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether given user can view public data in a group, i.e.
+%% belongs to the group (doesn't need view data priv for public data), or
+%% belongs to any space of this group and has view privileges there.
+%% Shall return false in any other case (group doesn't exist, etc).
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec can_view_public_data(GroupId :: user_group:id(),
+    UserId :: onedata_user:id()) -> boolean().
+can_view_public_data(GroupId, UserId) ->
+    case has_effective_user(GroupId, UserId) of
+        true ->
+            true;
+        false ->
+            {ok, #document{
+                value = #user_group{
+                    spaces = Spaces
+                }}} = user_group:get(GroupId),
+            {ok, #document{
+                value = #onedata_user{
+                    space_names = UserSpaces
+                }}} = onedata_user:get(UserId),
+            lists:any(
+                fun(SpaceId) ->
+                    case maps:is_key(SpaceId, UserSpaces) of
+                        false ->
+                            false;
+                        true ->
+                            space_logic:has_effective_privilege(
+                                SpaceId,
+                                UserId,
+                                space_view_data
+                            )
+                    end
+                end, Spaces)
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether the given group is a ancestor of the other given group.
@@ -309,6 +349,22 @@ get_data(GroupId) ->
         {groupId, GroupId},
         {name, Name},
         {type, Type}
+    ]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns the groupId and name of the group (data that users without
+%% group view data privilege are allowed to see).
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_public_data(GroupId :: binary()) ->
+    {ok, [proplists:property()]}.
+get_public_data(GroupId) ->
+    {ok, #document{value = #user_group{name = Name}}} =
+        user_group:get(GroupId),
+    {ok, [
+        {groupId, GroupId},
+        {name, Name}
     ]}.
 
 %%--------------------------------------------------------------------

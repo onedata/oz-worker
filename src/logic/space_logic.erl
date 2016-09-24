@@ -20,7 +20,7 @@
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2,
     has_group/2, has_effective_privilege/3]).
 -export([get_shares/1, has_share/2]).
--export([create/2, create/4, get_data/2, modify/3]).
+-export([create/2, create/4, get_data/2, get_public_data/2, modify/3]).
 -export([join/2, add_user/2, get_user/3, get_users/1, get_effective_users/1,
     remove_user/2]).
 -export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
@@ -357,6 +357,29 @@ get_data(SpaceId, provider) ->
         {name, CanonicalName},
         {providersSupports, Supports}
     ]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns the spaceId and name of the space (data that users without
+%% space view data privilege are allowed to see).
+%% Throws exception when call to the datastore fails, or space doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_public_data(SpaceId :: binary(), Client :: {user, UserId :: binary()}) ->
+    {ok, [proplists:property()]}.
+get_public_data(SpaceId, {user, UserId}) ->
+    {ok, #document{
+        value = #space{
+            name = CanonicalName
+        }}} = space:get(SpaceId),
+    {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
+    {ok, Name} = maps:find(SpaceId, SpaceNames),
+    {ok, [
+        {spaceId, SpaceId},
+        {name, Name},
+        {canonicalName, CanonicalName}
+    ]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's users.
