@@ -166,8 +166,13 @@ has_effective_user(GroupId, UserId) ->
     case user_group:get(GroupId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #user_group{effective_users = Users}}} ->
-            lists:keymember(UserId, 1, Users)
+        {ok, Doc} ->
+            #document{
+                value = #user_group{
+                    users = Users,
+                    effective_users = EffectiveUsers
+                }} = Doc,
+            lists:keymember(UserId, 1, Users ++ EffectiveUsers)
     end.
 
 %%--------------------------------------------------------------------
