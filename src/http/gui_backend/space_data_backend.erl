@@ -165,12 +165,13 @@ delete_record(<<"space">>, _Id) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a client-compliant space record.
+%% Returns a client-compliant space record based on space id. Automatically
+%% check if the user has view privileges in that space and returns proper data.
 %% @end
 %%--------------------------------------------------------------------
 -spec space_record(SpaceId :: binary(), SpaceNamesMap :: #{},
-    DefaultSpaceId :: binary(), UserProviders :: [binary()],
-    HasViewPrivileges :: boolean()) -> proplists:proplist().
+    DefaultSpaceId :: binary(), UserProviders :: [binary()]) ->
+    proplists:proplist().
 space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
     % Check if that user has view privileges in that space
     HasViewPrivs = space_logic:has_effective_privilege(
@@ -179,9 +180,11 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
     space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
         HasViewPrivs).
 
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a client-compliant space record.
+%% Returns a client-compliant space record based on space id. Allows to
+%% override HasViewPrivileges.
 %% @end
 %%--------------------------------------------------------------------
 -spec space_record(SpaceId :: binary(), SpaceNamesMap :: #{},
