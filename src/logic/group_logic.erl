@@ -36,8 +36,7 @@
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(GroupId :: binary()) ->
-    boolean().
+-spec exists(GroupId :: binary()) -> boolean().
 exists(GroupId) ->
     user_group:exists(GroupId).
 
@@ -85,31 +84,32 @@ has_nested_group(ParentGroupId, GroupId) ->
 -spec can_view_public_data(GroupId :: user_group:id(),
     UserId :: onedata_user:id()) -> boolean().
 can_view_public_data(GroupId, UserId) ->
-    case has_effective_user(GroupId, UserId) of
-        true ->
-            true;
-        false ->
-            {ok, #document{
-                value = #user_group{
-                    spaces = Spaces
-                }}} = user_group:get(GroupId),
-            {ok, #document{
-                value = #onedata_user{
-                    space_names = UserSpaces
-                }}} = onedata_user:get(UserId),
-            lists:any(
-                fun(SpaceId) ->
-                    case maps:is_key(SpaceId, UserSpaces) of
-                        false ->
-                            false;
-                        true ->
-                            space_logic:has_effective_privilege(
-                                SpaceId,
-                                UserId,
-                                space_view_data
-                            )
-                    end
-                end, Spaces)
+    case user_group:get(GroupId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #user_group{spaces = Spaces}}} ->
+            case has_effective_user(GroupId, UserId) of
+                true ->
+                    true;
+                false ->
+                    {ok, #document{
+                        value = #onedata_user{
+                            space_names = UserSpaces
+                        }}} = onedata_user:get(UserId),
+                    lists:any(
+                        fun(SpaceId) ->
+                            case maps:is_key(SpaceId, UserSpaces) of
+                                false ->
+                                    false;
+                                true ->
+                                    space_logic:has_effective_privilege(
+                                        SpaceId,
+                                        UserId,
+                                        space_view_data
+                                    )
+                            end
+                        end, Spaces)
+            end
     end.
 
 
@@ -166,8 +166,13 @@ has_effective_user(GroupId, UserId) ->
     case user_group:get(GroupId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #user_group{effective_users = Users}}} ->
-            lists:keymember(UserId, 1, Users)
+        {ok, Doc} ->
+            #document{
+                value = #user_group{
+                    users = Users,
+                    effective_users = EffectiveUsers
+                }} = Doc,
+            lists:keymember(UserId, 1, Users ++ EffectiveUsers)
     end.
 
 %%--------------------------------------------------------------------
@@ -389,10 +394,14 @@ get_users(GroupId) ->
 -spec get_effective_users(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_effective_users(GroupId) ->
-    {ok, #document{value = #user_group{effective_users = UserTuples}}}
-        = user_group:get(GroupId),
+    {ok, #document{
+        value = #user_group{
+            users = UserTuples,
+            effective_users = EffUserTuples
+        }}} = user_group:get(GroupId),
     {Users, _} = lists:unzip(UserTuples),
-    {ok, [{users, Users}]}.
+    {EffUsers, _} = lists:unzip(EffUserTuples),
+    {ok, [{users, ordsets:union(Users, EffUsers)}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about group's nested groups members.
