@@ -169,7 +169,7 @@ get_msg(Seq, Doc, handle = Model) ->
         {metadata, Metadata},
         {users, Users},
         {groups, Groups},
-        {timestamp, erlang:term_to_binary(Timestamp)}
+        {timestamp, serialize_timestamp(Timestamp)}
     ]}];
 get_msg(_Seq, _Doc, _Model) ->
     ?warning("Requesting message for unexpected model ~p", [_Model]),
@@ -229,3 +229,15 @@ message_model(onedata_user) -> user;
 message_model(user_group) -> group;
 message_model(handle) -> handle;
 message_model(handle_service) -> handle_service.
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% @private
+%% Translates erlang datetime format into a list of integers, which can be
+%% safely send in JSON.
+%% @end
+%%-------------------------------------------------------------------
+-spec serialize_timestamp(calendar:datetime()) -> [integer()].
+serialize_timestamp({{A, B, C}, {D, E, F}}) ->
+    [A, B, C, D, E, F].

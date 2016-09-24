@@ -224,7 +224,7 @@ handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
         {<<"metadata">>, Metadata},
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"groups">>, privileges_as_binaries(Groups)},
-        {<<"timestamp">>, erlang:term_to_binary(Timestamp)}
+        {<<"timestamp">>, serialize_timestamp(Timestamp)}
     ]}].
 
 user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace) ->
@@ -384,3 +384,6 @@ undefined_to_binary(Value) ->
         undefined -> <<"undefined">>;
         Bin when is_binary(Bin) -> Bin
     end.
+
+serialize_timestamp({{A, B, C}, {D, E, F}}) ->
+    [A, B, C, D, E, F].
