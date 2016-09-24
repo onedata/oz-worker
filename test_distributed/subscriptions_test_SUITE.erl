@@ -302,6 +302,58 @@ handle_update_through_groups_test(Config) ->
     ]),
     ok.
 
+% Checks if update is pushed to providers where user that have access to handle_service is logged-in
+handle_service_update_through_users_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
+    HS1 = #handle_service{name = <<"initial">>, users = [{?ID(u1), []}]},
+    U1 = #onedata_user{name = <<"u1">>},
+
+    subscriptions_test_utils:save(Node, ?ID(u1), U1),
+    subscriptions_test_utils:save(Node, ?ID(hs1), HS1),
+
+    % when
+    Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
+    Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(hs1), HS1)),
+    subscriptions_test_utils:update_document(Node, handle_service, ?ID(hs1), #{name => <<"updated">>}),
+
+    % then
+    subscriptions_test_utils:verify_messages_present(Context, [
+        subscriptions_test_utils:expectation(?ID(hs1), HS1#handle_service{name = <<"updated">>})
+    ]),
+    ok.
+
+% Checks if update is pushed to providers where user that have access to handle_service is logged-n
+% and user is connected with handle_service through group
+handle_service_update_through_groups_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
+    HS1 = #handle_service{name = <<"initial">>, groups = [{?ID(g1), []}]},
+    U1 = #onedata_user{name = <<"u1">>},
+
+    G1 = #user_group{
+        name = <<"g1">>,
+        users = [{?ID(u1), privileges:group_admin()}],
+        handle_services = [?ID(hs1)]
+    },
+
+    subscriptions_test_utils:save(Node, ?ID(u1), U1),
+    subscriptions_test_utils:save(Node, ?ID(hs1), HS1),
+    subscriptions_test_utils:save(Node, ?ID(g1), G1),
+
+    % when
+    Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
+    Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(hs1), HS1)),
+    subscriptions_test_utils:update_document(Node, handle_service, ?ID(hs1), #{name => <<"updated">>}),
+
+    % then
+    subscriptions_test_utils:verify_messages_present(Context, [
+        subscriptions_test_utils:expectation(?ID(hs1), HS1#handle_service{name = <<"updated">>})
+    ]),
+    ok.
+
 % Checks if update is pushed to providers that support changed space
 share_update_through_support_test(Config) ->
     % given
