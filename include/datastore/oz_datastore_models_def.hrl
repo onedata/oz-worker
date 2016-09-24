@@ -177,7 +177,7 @@
 -record(handle_service, {
     name :: handle_service:name() | undefined,
     proxy_endpoint :: handle_service:proxy_endpoint() | undefined,
-    service_properties :: handle_service:service_properties() | undefined,
+    service_properties = [] :: handle_service:service_properties(),
     users = [] :: [{UserId :: binary(), [privileges:handle_service_privilege()]}],
     groups = [] :: [{GroupId :: binary(), [privileges:handle_service_privilege()]}]
 }).
