@@ -142,10 +142,11 @@ expectation(ID, #space{name = Name, providers_supports = Supports,
     groups = Groups, users = Users, shares = Shares}) ->
     space_expectation(ID, Name, Users, Groups, Supports, Shares);
 expectation(ID, #share{name = Name, parent_space = ParentSpace,
-    root_file_id = RootFileId, public_url = PublicUrl}) ->
+    root_file_id = RootFileId, public_url = PublicUrl, handle = Handle}) ->
     RootFileIdBin = undefined_to_binary(RootFileId),
     PublicUrlBin = undefined_to_binary(PublicUrl),
-    share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin);
+    HandleBin = undefined_to_binary(Handle),
+    share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin, HandleBin);
 expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
     default_space = DefaultSpace, effective_groups = EGroups}) ->
     user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups, undefined_to_binary(DefaultSpace));
@@ -171,14 +172,15 @@ expectation(ID, #handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
 
 expectation(ID, #handle{handle_service_id = HandleServiceId, public_handle = PublicHandle,
     resource_type = ResourceType, resource_id = ResourceId,
-    metadata = Metadata, groups = Groups, users = Users}) ->
+    metadata = Metadata, groups = Groups, users = Users, timestamp = Timestamp}) ->
+    HandleServiceIdBin = undefined_to_binary(HandleServiceId),
     PublicHandleBin = undefined_to_binary(PublicHandle),
     ResourceTypeBin = undefined_to_binary(ResourceType),
     ResourceIdBin = undefined_to_binary(ResourceId),
     MetadataBin = undefined_to_binary(Metadata),
     handle_expectation(
-        ID, HandleServiceId, PublicHandleBin, ResourceTypeBin,
-        ResourceIdBin, MetadataBin, Users, Groups
+        ID, HandleServiceIdBin, PublicHandleBin, ResourceTypeBin,
+        ResourceIdBin, MetadataBin, Users, Groups, Timestamp
     ).
 
 space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
@@ -191,13 +193,14 @@ space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
         {<<"shares">>, Shares}
     ]}].
 
-share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl) ->
+share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl, Handle) ->
     [{<<"id">>, ID}, {<<"share">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
         {<<"parent_space">>, ParentSpace},
         {<<"root_file_id">>, RootFileId},
-        {<<"public_url">>, PublicUrl}
+        {<<"public_url">>, PublicUrl},
+        {<<"handle">>, Handle}
     ]}].
 
 handle_service_expectation(ID, Name, ProxyEndpoint, ServiceProperties, Users, Groups) ->
@@ -210,7 +213,8 @@ handle_service_expectation(ID, Name, ProxyEndpoint, ServiceProperties, Users, Gr
         {<<"groups">>, privileges_as_binaries(Groups)}
     ]}].
 
-handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId, Metadata, Users, Groups) ->
+handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
+    Metadata, Users, Groups, Timestamp) ->
     [{<<"id">>, ID}, {<<"handle">>, [
         {<<"id">>, ID},
         {<<"handle_service_id">>, HandleServiceId},
@@ -219,7 +223,8 @@ handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId, 
         {<<"resource_id">>, ResourceId},
         {<<"metadata">>, Metadata},
         {<<"users">>, privileges_as_binaries(Users)},
-        {<<"groups">>, privileges_as_binaries(Groups)}
+        {<<"groups">>, privileges_as_binaries(Groups)},
+        {<<"timestamp">>, erlang:term_to_binary(Timestamp)}
     ]}].
 
 user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace) ->
@@ -323,7 +328,7 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
 
-    % ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
+    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),

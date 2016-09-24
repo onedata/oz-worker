@@ -30,6 +30,10 @@
     no_space_update_test/1,
     share_update_through_support_test/1,
     no_share_update_test/1,
+    handle_update_through_users_test/1,
+    handle_update_through_groups_test/1,
+%%    handle_service_update_through_users_test/1,
+%%    handle_service_update_through_groups_test/1,
     user_update_test/1,
     only_public_user_update_test/1,
     group_update_through_users_test/1,
@@ -66,6 +70,8 @@ all() -> ?ALL([
     no_space_update_test,
     share_update_through_support_test,
     no_share_update_test,
+    handle_update_through_users_test,
+    handle_update_through_groups_test,
     all_data_in_space_update_test,
     all_data_in_user_update_test,
     all_data_in_group_update_test,
@@ -239,6 +245,60 @@ no_share_update_test(Config) ->
     subscriptions_test_utils:verify_messages_absent(Context, [
         subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"initial">>}),
         subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
+    ]),
+    ok.
+
+% Checks if update is pushed to providers where user that have access to handle is logged-in
+handle_update_through_users_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
+    Timestamp = handle:actual_timestamp(),
+    H1 = #handle{metadata = <<"initial">>, users = [{?ID(u1), []}], timestamp = Timestamp},
+    U1 = #onedata_user{name = <<"u1">>},
+
+    subscriptions_test_utils:save(Node, ?ID(u1), U1),
+    subscriptions_test_utils:save(Node, ?ID(h1), H1),
+
+    % when
+    Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
+    Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(h1), H1)),
+    subscriptions_test_utils:update_document(Node, handle, ?ID(h1), #{metadata => <<"updated">>}),
+
+    % then
+    subscriptions_test_utils:verify_messages_present(Context, [
+        subscriptions_test_utils:expectation(?ID(h1), H1#handle{metadata = <<"updated">>, timestamp = Timestamp})
+    ]),
+    ok.
+
+% Checks if update is pushed to providers where user that have access to handle is logged-n
+% and user is connected with handle through group
+handle_update_through_groups_test(Config) ->
+    % given
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
+    Timestamp = handle:actual_timestamp(),
+    H1 = #handle{metadata = <<"initial">>, groups = [{?ID(g1), []}], timestamp = Timestamp},
+    U1 = #onedata_user{name = <<"u1">>},
+
+    G1 = #user_group{
+        name = <<"g1">>,
+        users = [{?ID(u1), privileges:group_admin()}],
+        handles = [?ID(h1)]
+    },
+
+    subscriptions_test_utils:save(Node, ?ID(u1), U1),
+    subscriptions_test_utils:save(Node, ?ID(h1), H1),
+    subscriptions_test_utils:save(Node, ?ID(g1), G1),
+
+    % when
+    Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
+    Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(h1), H1)),
+    subscriptions_test_utils:update_document(Node, handle, ?ID(h1), #{metadata => <<"updated">>}),
+
+    % then
+    subscriptions_test_utils:verify_messages_present(Context, [
+        subscriptions_test_utils:expectation(?ID(h1), H1#handle{metadata = <<"updated">>, timestamp = Timestamp})
     ]),
     ok.
 

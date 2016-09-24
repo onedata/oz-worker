@@ -86,14 +86,16 @@ get_msg(Seq, Doc, share = Model) ->
         name = Name,
         public_url = PublicURL,
         root_file_id = RootFileId,
-        parent_space = ParentSpace
+        parent_space = ParentSpace,
+        handle = Handle
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {id, ID},
         {name, Name},
         {parent_space, ParentSpace},
         {root_file_id, RootFileId},
-        {public_url, PublicURL}
+        {public_url, PublicURL},
+        {handle, Handle}
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
@@ -155,7 +157,8 @@ get_msg(Seq, Doc, handle = Model) ->
         resource_id = ResourceId,
         metadata = Metadata,
         users = Users,
-        groups = Groups
+        groups = Groups,
+        timestamp = Timestamp
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {id, ID},
@@ -165,7 +168,8 @@ get_msg(Seq, Doc, handle = Model) ->
         {resource_id, ResourceId},
         {metadata, Metadata},
         {users, Users},
-        {groups, Groups}
+        {groups, Groups},
+        {timestamp, erlang:term_to_binary(Timestamp)}
     ]}];
 get_msg(_Seq, _Doc, _Model) ->
     ?warning("Requesting message for unexpected model ~p", [_Model]),

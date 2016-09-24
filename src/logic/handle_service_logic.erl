@@ -277,7 +277,10 @@ get_effective_users(HandleServiceId) ->
     {Users, _} = lists:unzip(UserPerms),
     UsersViaGroups = lists:foldl(
         fun({GroupId, _}, Acc) ->
-            Acc ++ group_logic:get_effective_users(GroupId)
+            {ok, [{users, GroupUsers}]} = group_logic:get_effective_users(
+                GroupId
+            ),
+            GroupUsers ++ Acc
         end, [], GroupPerms),
     {ok, [{users, ordsets:union(Users, UsersViaGroups)}]}.
 
