@@ -4,6 +4,34 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc7
+
+* VFS-2567 Rework space_record API in space data backend
+* VFS-2607 Fix a bug in group_logic can_view_public_data
+* VFS-2607 Fix a bug in group_logic has effective user
+* VFS-2607 Add public group type for groups that users do not have view data privs
+* VFS-2607 Allow viewing group details for users that have view privs in any space that contains the group
+* VFS-2607 Allow access to public data of groups and spaces for users without view privileges
+* VFS-2567 Check view permissions during space find in GUI backend
+* VFS-2607 Introduce env variable deciding about automatic first space creation
+* VFS-2567 Add verification of view perms in provider GUI backend
+* VFS-2607 Add better error reporting in REST user PATCH
+* VFS-2607 Add OIDC integration with EGI
+* VFS-2607 Fix onepanel users not being added to global groups
+* VFS-2548 Disable global groups by default
+* VFS-2548 Fix bugs in space name mapping mechanism, add CT tests verifying automatic space membership by global grups
+* VFS-2548 Add overwrite argument to set_space_name_mapping function
+* VFS-2548 Add mechanism for automatic groups in OZ
+* VFS-2469 Add modifying handles via proxy.
+* VFS-2469 Add registering and unregistering of handles via proxy.
+* VFS-2469 Update cluster_worker and cluster_manager, add loading of gen_server2 to relx.
+* VFS-2405 Treat share as different record than space, create corresponding modules
+* VFS-2405 Update share redirection path to provider
+* VFS-2407 Use separate record for shares rather then space
+* VFS-2469 Reorganize rest_modules_test_SUITE and add empty test mocks for handles management.
+* VFS-2397 Implement oai_handler
+
+
 ### 3.0.0-rc6
 
 * VFS-2582 Using GUI fix for blank notifications
