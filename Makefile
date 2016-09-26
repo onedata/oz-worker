@@ -50,9 +50,6 @@ compile:
 ## Generates a production release
 generate: compile deps
 	$(REBAR) release $(OVERLAY_VARS)
-	# Copy GUI static files into release
-	@mkdir -p $(REL_DIRS)/oz_worker/data/gui_static/
-	cp -R $(LIB_DIR)/gui_static/* $(REL_DIRS)/oz_worker/data/gui_static/
 
 ## Generates a dev release
 generate_dev: generate
