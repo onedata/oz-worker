@@ -56,7 +56,7 @@ actual_timestamp() ->
 %%--------------------------------------------------------------------
 -spec save(datastore:document()) -> {ok, datastore:ext_key()} | datastore:generic_error().
 save(Document = #document{value = Handle}) ->
-    datastore:save(?STORE_LEVEL, Document#document{value = Handle#handle{timestamp = actual_timestamp()}}).
+    datastore:save(?STORE_LEVEL, Document#document{value = Handle#handle{timestamp = handle:actual_timestamp()}}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -75,7 +75,7 @@ update(Key, Diff) ->
 %%--------------------------------------------------------------------
 -spec create(datastore:document()) -> {ok, datastore:ext_key()} | datastore:create_error().
 create(Document = #document{value = Handle}) ->
-    datastore:create(?STORE_LEVEL, Document#document{value = Handle#handle{timestamp = actual_timestamp()}}).
+    datastore:create(?STORE_LEVEL, Document#document{value = Handle#handle{timestamp = handle:actual_timestamp()}}).
 
 %%--------------------------------------------------------------------
 %% @doc

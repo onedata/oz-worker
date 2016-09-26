@@ -63,10 +63,12 @@ db_nodes() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
-listeners() -> node_manager:cluster_worker_listeners() ++ [
+listeners() ->  [
+    oz_redirector_listener,
     subscriptions_wss_listener,
     rest_listener,
-    gui_listener
+    gui_listener |
+    node_manager:cluster_worker_listeners() -- [redirector_listener]
 ].
 
 %%--------------------------------------------------------------------
