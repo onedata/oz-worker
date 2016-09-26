@@ -62,7 +62,19 @@
     selective_list_records4_get_test/1, selective_list_records4_post_test/1,
     list_records_no_set_error_get_test/1, list_records_no_set_error_post_test/1,
     identify_change_earliest_datestamp_get_test/1,
-    identify_change_earliest_datestamp_post_test/1]).
+    identify_change_earliest_datestamp_post_test/1,
+    list_identifiers_modify_timestamp_get_test/1,
+    list_identifiers_modify_timestamp_post_test/1,
+    list_identifiers_modify_timestamp1_get_test/1,
+    list_identifiers_modify_timestamp1_post_test/1,
+    list_identifiers_modify_timestamp2_get_test/1,
+    list_identifiers_modify_timestamp2_post_test/1, 
+    list_records_modify_timestamp_get_test/1, 
+    list_records_modify_timestamp_post_test/1, 
+    list_records_modify_timestamp1_get_test/1, 
+    list_records_modify_timestamp1_post_test/1,
+    list_records_modify_timestamp2_get_test/1, 
+    list_records_modify_timestamp2_post_test/1]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER, [{<<"content-type">>, <<"application/x-www-form-urlencoded">>}]).
@@ -125,6 +137,12 @@ all() -> ?ALL([
     selective_list_identifiers3_post_test,
     selective_list_identifiers4_get_test,
     selective_list_identifiers4_post_test,
+    list_identifiers_modify_timestamp_get_test,
+    list_identifiers_modify_timestamp_post_test,
+    list_identifiers_modify_timestamp1_get_test,
+    list_identifiers_modify_timestamp1_post_test,
+    list_identifiers_modify_timestamp2_get_test,
+    list_identifiers_modify_timestamp2_post_test,
     list_records_get_test,
     list_records_post_test,
     selective_list_records1_get_test,
@@ -135,6 +153,12 @@ all() -> ?ALL([
     selective_list_records3_post_test,
     selective_list_records4_get_test,
     selective_list_records4_post_test,
+    list_records_modify_timestamp_get_test,
+    list_records_modify_timestamp_post_test,
+    list_records_modify_timestamp1_get_test,
+    list_records_modify_timestamp1_post_test,
+    list_records_modify_timestamp2_get_test,
+    list_records_modify_timestamp2_post_test,
     no_verb_get_test,
     no_verb_post_test,
     empty_verb_get_test,
@@ -229,6 +253,24 @@ selective_list_identifiers4_get_test(Config) ->
 selective_list_identifiers4_post_test(Config) ->
     list_identifiers_test_base(Config, post, 10, 3, undefined).
 
+list_identifiers_modify_timestamp_get_test(Config) ->
+    list_identifiers_modify_timestamp_test_base(Config, get, 10, undefined, undefined, 2).
+
+list_identifiers_modify_timestamp_post_test(Config) ->
+    list_identifiers_modify_timestamp_test_base(Config, get, 10, undefined, undefined, 2).
+
+list_identifiers_modify_timestamp1_get_test(Config) ->
+    list_identifiers_modify_timestamp_test_base(Config, get, 10, 1, undefined, 6).
+
+list_identifiers_modify_timestamp1_post_test(Config) ->
+    list_identifiers_modify_timestamp_test_base(Config, get, 10, 1, undefined, 6).
+
+list_identifiers_modify_timestamp2_get_test(Config) ->
+    list_identifiers_modify_timestamp_test_base(Config, get, 10, undefined, 9, 9).
+
+list_identifiers_modify_timestamp2_post_test(Config) ->
+    list_identifiers_modify_timestamp_test_base(Config, get, 10, undefined, 9, 9).
+
 list_records_get_test(Config) ->
     list_records_test_base(Config, get, 10, undefined, undefined).
 
@@ -258,6 +300,24 @@ selective_list_records4_get_test(Config) ->
 
 selective_list_records4_post_test(Config) ->
     list_records_test_base(Config, post, 10, 9, undefined).
+
+list_records_modify_timestamp_get_test(Config) ->
+    list_records_modify_timestamp_test_base(Config, get, 10, undefined, undefined, 10).
+
+list_records_modify_timestamp_post_test(Config) ->
+    list_records_modify_timestamp_test_base(Config, get, 10, undefined, undefined, 10).
+
+list_records_modify_timestamp1_get_test(Config) ->
+    list_records_modify_timestamp_test_base(Config, get, 10, 1, undefined, 7).
+
+list_records_modify_timestamp1_post_test(Config) ->
+    list_records_modify_timestamp_test_base(Config, get, 10, 1, undefined, 7).
+
+list_records_modify_timestamp2_get_test(Config) ->
+    list_records_modify_timestamp_test_base(Config, get, 10, undefined, 9, 8).
+
+list_records_modify_timestamp2_post_test(Config) ->
+    list_records_modify_timestamp_test_base(Config, get, 10, undefined, 9, 8).
 
 %%% Tests of error handling
 
@@ -545,6 +605,82 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
 
     ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent, Config)).
 
+list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
+    FromOffset, UntilOffset, IdentifiersToBeModified) ->
+
+    %% IdentifiersToBeModified is number of identifiers that will be modified
+    %% so that their timestamps will be set to Until + 1 (if Until is undefined
+
+    BeginTime = erlang:universaltime(),
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
+
+    Identifiers =
+        setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
+            ?DC_METADATA_XML),
+
+    From = convert(increase_timestamp(BeginTime, FromOffset)),
+    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
+
+    IdsAndTimestamps =
+        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
+
+    ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
+        #xmlElement{
+            name = header,
+            content = [
+                #xmlElement{
+                    name = identifier,
+                    content = [#xmlText{
+                        value = binary_to_list(oai_identifier(Id))
+                    }]
+                },
+                #xmlElement{
+                    name = datestamp,
+                    content = [#xmlText{
+                        value = convert(increase_timestamp(BeginTime, TimeOffset))
+                    }]
+                }
+            ]
+        }
+    end, IdsAndTimestamps),
+    ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent, Config)),
+
+    TimeOffsets2 = lists:map(fun({T, N}) ->
+        case N =< IdentifiersToBeModified of
+            true -> exclude_offset_from_range(T, FromOffset, UntilOffset);
+            _ -> T
+        end
+    end, lists:zip(TimeOffsets, lists:seq(1, length(TimeOffsets)))),
+
+    Identifiers =  modify_handles_with_mocked_timestamp(Config, Identifiers,
+        BeginTime, TimeOffsets2, ?DC_METADATA_XML),
+
+    IdsAndTimestamps2 =
+        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets2, FromOffset, UntilOffset),
+
+    ExpResponseContent2 = lists:map(fun({Id, TimeOffset}) ->
+        #xmlElement{
+            name = header,
+            content = [
+                #xmlElement{
+                    name = identifier,
+                    content = [#xmlText{
+                        value = binary_to_list(oai_identifier(Id))
+                    }]
+               },
+                #xmlElement{
+                    name = datestamp,
+                    content = [#xmlText{
+                        value = convert(increase_timestamp(BeginTime, TimeOffset))
+                    }]
+                }
+            ]
+        }
+    end, IdsAndTimestamps2),
+    ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent2, Config)).
+
+
 list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
 
     BeginTime = erlang:universaltime(),
@@ -598,6 +734,112 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
     end, IdsAndTimestamps),
 
     ?assert(check_list_records(200, Args, Method, ExpResponseContent, Config)).
+
+list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
+    FromOffset, UntilOffset, IdentifiersToBeModified) ->
+
+    %% IdentifiersToBeModified is number of identifiers that will be modified
+    %% so that their timestamps will be set to Until + 1 (if Until is undefined
+
+    BeginTime = erlang:universaltime(),
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
+
+    Identifiers =
+        setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
+            ?DC_METADATA_XML),
+
+    From = convert(increase_timestamp(BeginTime, FromOffset)),
+    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
+
+    {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(?DC_METADATA_XML)),
+
+    IdsAndTimestamps =
+        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
+
+    ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
+        #xmlElement{
+            name = record,
+            content = [
+                #xmlElement{
+                    name = header,
+                    content = [
+                        #xmlElement{
+                            name = identifier,
+                            content = [#xmlText{
+                                value = binary_to_list(oai_identifier(Id))
+                            }]
+                        },
+                        #xmlElement{
+                            name = datestamp,
+                            content = [#xmlText{
+                                value = convert(increase_timestamp(BeginTime, TimeOffset))
+                            }]
+                        }
+                    ]
+                },
+                #xmlElement{
+                    name = metadata,
+                    content = [
+                        #xmlElement{
+                            name = 'oai_dc:dc',
+                            content = DCMetadata
+                        }
+                    ]
+                }
+            ]
+        }
+    end, IdsAndTimestamps),
+    ?assert(check_list_records(200, Args, Method, ExpResponseContent, Config)),
+
+    TimeOffsets2 = lists:map(fun({T, N}) ->
+        case N =< IdentifiersToBeModified of
+            true -> exclude_offset_from_range(T, FromOffset, UntilOffset);
+            _ -> T
+        end
+    end, lists:zip(TimeOffsets, lists:seq(1, length(TimeOffsets)))),
+
+    Identifiers =  modify_handles_with_mocked_timestamp(Config, Identifiers,
+        BeginTime, TimeOffsets2, ?DC_METADATA_XML),
+
+    IdsAndTimestamps2 =
+        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets2, FromOffset, UntilOffset),
+
+    ExpResponseContent2 = lists:map(fun({Id, TimeOffset}) ->
+        #xmlElement{
+            name = record,
+            content = [
+                #xmlElement{
+                    name = header,
+                    content = [
+                        #xmlElement{
+                            name = identifier,
+                            content = [#xmlText{
+                                value = binary_to_list(oai_identifier(Id))
+                            }]
+                        },
+                        #xmlElement{
+                            name = datestamp,
+                            content = [#xmlText{
+                                value = convert(increase_timestamp(BeginTime, TimeOffset))
+                            }]
+                        }
+                    ]
+                },
+                #xmlElement{
+                    name = metadata,
+                    content = [
+                        #xmlElement{
+                            name = 'oai_dc:dc',
+                            content = DCMetadata
+                        }
+                    ]
+                }
+            ]
+        }
+    end, IdsAndTimestamps2),
+    ?assert(check_list_records(200, Args, Method, ExpResponseContent2, Config)).
+
 
 no_verb_test_base(Config, Method) ->
     ?assert(check_no_verb_error(200, [], Method, [], Config)).
@@ -948,6 +1190,15 @@ create_shares(Config, SpaceIds) ->
         ShareId
     end, lists:zip(ShareIds, SpaceIds)).
 
+modify_handles_with_mocked_timestamp(Config, Identifiers, BeginTime, TimeOffsets,
+    Metadata) ->
+
+    lists:map(fun({Id, TimeOffset}) ->
+        MockedTimestamp = increase_timestamp(BeginTime, TimeOffset),
+        ok = modify_handle_with_mocked_timestamp(Config, Id, Metadata, MockedTimestamp),
+        Id
+    end, lists:zip(Identifiers, TimeOffsets)).
+
 modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
 
     Nodes = ?config(oz_worker_nodes, Config),
@@ -955,7 +1206,6 @@ modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
     ok = test_utils:mock_expect(Nodes, handle, actual_timestamp, fun() -> Timestamp end),
     ok = modify_handle(Config, HId, Metadata),
     ok = test_utils:mock_validate_and_unload(Nodes, handle).
-
 
 setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata) ->
     {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
@@ -1056,6 +1306,14 @@ offset_in_range(From, Until, Offset) ->
 oai_identifier(HandleId) ->
     <<"oai:onedata.org:", HandleId/binary>>.
 
+exclude_offset_from_range(Offset, undefined, undefined) -> Offset;
+exclude_offset_from_range(_Offset, From, undefined) -> From - rand:uniform(100);
+exclude_offset_from_range(_Offset, undefined, Until) -> Until + rand:uniform(100);
+exclude_offset_from_range(Offset, From, Until) -> Offset + random_out_of_range(From, Until, 100).
 
-%% TODO
-%% TODO * tests with modifying timestamp
+random_out_of_range(Lower, Upper, Max) ->
+    Number = rand:uniform(Max) * (Upper  +  Lower - 1),
+    case rand:uniform(2) rem 2 of
+        0 -> -1 * Number;
+        _ -> Number
+    end.

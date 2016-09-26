@@ -140,6 +140,7 @@ check_rest_call(ArgsMap) ->
                         throw({code, RespCode, ExpCode})
                 end
         end,
+
         % Check response headers if specified
         case ExpHeaders of
             undefined ->
