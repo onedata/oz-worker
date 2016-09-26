@@ -115,9 +115,9 @@ get_data(ShareId, _Client) ->
     {ok, [
         {shareId, ShareId},
         {name, Name},
-        {public_url, PublicURL},
-        {root_file_id, RootFileId},
-        {parent_space, ParentSpace}
+        {publicUrl, PublicURL},
+        {rootFileId, RootFileId},
+        {parentSpace, ParentSpace}
     ]}.
 
 

@@ -64,12 +64,12 @@ handle(<<"changePassword">>, Props) ->
 
 handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
     UserId = g_session:get_user_id(),
-    case user_logic:modify(UserId, [{alias, NewAlias}]) of
+    case user_logic:set_alias(UserId, NewAlias) of
         ok ->
             {ok, [
                 {<<"userAlias">>, NewAlias}
             ]};
-        {error, disallowed_prefix} ->
+        {error, disallowed_alias_prefix} ->
             gui_error:report_warning(
                 <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
         {error, invalid_alias} ->
@@ -79,14 +79,7 @@ handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
         {error, alias_occupied} ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
-                "Please choose other alias.">>);
-        {error, alias_conflict} ->
-            gui_error:report_warning(
-                <<"This alias is occupied by someone else. "
-                "Please choose other alias.">>);
-        _ ->
-            gui_error:report_warning(
-                <<"Cannot change alias due to unknown error.">>)
+                "Please choose other alias.">>)
     end;
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->

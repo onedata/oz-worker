@@ -20,8 +20,9 @@
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
--export([create/1, create/2, get_user/1, get_user_doc/1, modify/2, get_data/2]).
--export([get_groups/1, get_effective_groups/1, get_providers/1]).
+-export([create/1, create/2, get_user/1, get_user_doc/1, get_data/2]).
+-export([modify/2, set_alias/2, add_oauth_account/2, is_email_occupied/2]).
+-export([get_groups/1, get_effective_groups/1, get_providers/1, has_provider/2]).
 -export([get_spaces/1, get_handle_services/1, get_handles/1, get_shares/1,
     get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
@@ -54,9 +55,34 @@ create(UserInfo) ->
     ProposedUserId :: onedata_user:id() | undefined) ->
     {ok, UserId :: onedata_user:id()}.
 create(UserInfo, ProposedUserId) ->
-    {ok, UserId} = onedata_user:save(
+    {ok, UserId} = onedata_user:create(
         #document{key = ProposedUserId, value = UserInfo}
     ),
+
+    % Check if automatic first space is enabled, if so create a space
+    % for the user.
+    case application:get_env(?APP_Name, enable_automatic_first_space) of
+        {ok, true} ->
+            SpaceName = case UserInfo#onedata_user.name of
+                <<"">> ->
+                    <<"Your First Space">>;
+                Name ->
+                    <<Name/binary, "'s space">>
+            end,
+            {ok, SpaceId} = space_logic:create({user, UserId}, SpaceName),
+            {ok, SupportToken} = token_logic:create(
+                #client{type = user, id = UserId},
+                space_support_token,
+                {space, SpaceId}
+            ),
+            {ok, _} = onedata_user:update(UserId, #{
+                default_space => SpaceId,
+                first_space_support_token => SupportToken
+            });
+        _ ->
+            ok
+    end,
+
     % Check if global groups are enabled, if so add the new user to the groups.
     case application:get_env(?APP_Name, enable_global_groups) of
         {ok, true} ->
@@ -104,6 +130,7 @@ get_user_doc(Key) ->
             {error, {T, M}}
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc Modifies user details. Second argument is proplist with keys
 %% corresponding to record field names. The proplist may contain any
@@ -111,125 +138,139 @@ get_user_doc(Key) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec modify(UserId :: binary(), Proplist :: [{atom(), term()}]) ->
-    ok | {error, disallowed_prefix | invalid_alias | alias_occupied | alias_conflict | any()}.
+    ok | {error, Reason} when
+    Reason :: disallowed_alias_prefix | invalid_alias | alias_occupied | any().
 modify(UserId, Proplist) ->
-    try
-        {ok, #document{value = User} = Doc} = onedata_user:get(UserId),
-        #onedata_user{
-            name = Name,
-            alias = Alias,
-            email_list = Emails,
-            connected_accounts = ConnectedAccounts,
-            spaces = Spaces,
-            groups = Groups,
-            default_space = DefaultSpace,
-            % TODO mock
-            first_space_support_token = FSST,
-            default_provider = DefaultProvider,
-            chosen_provider = ChosenProvider,
-            client_tokens = ClientTokens
-        } = User,
+    % Name update should always succeed, start with it
+    case proplists:get_value(name, Proplist) of
+        undefined ->
+            % Name did not change
+            ok;
+        NewName ->
+            % New name requested, set it
+            {ok, _} = onedata_user:update(UserId, #{name => NewName})
+    end,
+    % Update alias if needed
+    case proplists:get_value(alias, Proplist) of
+        undefined ->
+            % Alias did not change
+            ok;
+        NewAlias ->
+            % New alias requested, try to set it
+            set_alias(UserId, NewAlias)
+    end.
 
-        % Check if alias was requested to be modified and if it is allowed
-        DisallowedPrefix = fun(A) ->
-            case A of
-                <<?NO_ALIAS_UUID_PREFIX, _/binary>> -> true;
-                _ -> false
-            end
-        end,
 
-        InvalidAlias = fun(A) ->
-            case re:run(A, ?ALIAS_VALIDATION_REGEXP) of
-                {match, _} ->
-                    false;
-                _ ->
-                    case A of
-                        ?EMPTY_ALIAS -> false;
-                        _ -> true
-                    end
-            end
-        end,
-
-        AliasOccupied = fun(A) ->
-            case get_user_doc({alias, A}) of
-                {ok, #document{key = UserId}} ->
-                    % DB returned the same user, so the
-                    % alias was modified but is identical, don't report errors
-                    false;
-                {ok, #document{}} ->
-                    % Alias is occupied by another user
-                    true;
-                _ ->
-                    % Alias is not occupied, ok
-                    false
-            end
-        end,
-
-        SetAlias = case proplists:get_value(alias, Proplist) of
-            undefined ->
-                Alias;
-            NewAlias ->
-                case DisallowedPrefix(NewAlias) of
-                    true ->
-                        {error, disallowed_prefix};
-                    false ->
-                        case InvalidAlias(NewAlias) of
-                            true ->
-                                {error, invalid_alias};
-                            false ->
-                                case AliasOccupied(NewAlias) of
-                                    true ->
-                                        {error, alias_occupied};
-                                    _ -> NewAlias
-                                end
-                        end
-                end
-        end,
-
-        case SetAlias of
-            {error, Reason} ->
-                % Alias not allowed, return error
-                {error, Reason};
+%%--------------------------------------------------------------------
+%% @doc
+%% Modifies user alias, and makes sure that alias cannot be duplicated.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_alias(UserId :: onedata_user:id(), Alias :: binary()) ->
+    ok | {error, disallowed_alias_prefix | invalid_alias | alias_occupied}.
+set_alias(UserId, Alias) ->
+    % Fun used to check if alias has a disallowed prefix
+    DisallowedPrefix = fun() ->
+        case Alias of
+            <<?NO_ALIAS_UUID_PREFIX, _/binary>> -> true;
+            _ -> false
+        end
+    end,
+    % Fun used to check if alias is valid
+    InvalidAlias = fun() ->
+        case Alias of
+            ?EMPTY_ALIAS ->
+                false;
             _ ->
-                NewUser = User#onedata_user{
-                    name = proplists:get_value(name, Proplist, Name),
-                    alias = SetAlias,
-                    email_list = proplists:get_value(email_list, Proplist, Emails),
-                    connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
-                    spaces = proplists:get_value(spaces, Proplist, Spaces),
-                    groups = proplists:get_value(groups, Proplist, Groups),
-                    default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
-                    first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST),
-                    default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider),
-                    chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider),
-                    client_tokens = proplists:get_value(client_tokens, Proplist, ClientTokens)},
-                DocNew = Doc#document{value = NewUser},
-                {ok, _} = onedata_user:save(DocNew),
-                case SetAlias of
-                    Alias ->
-                        % Alias wasn't changed
-                        ok;
-                    ?EMPTY_ALIAS ->
-                        % Alias was changed to blank
-                        ok;
-                    _ ->
-                        % Alias was changed, check for possible conflicts
-                        try
-                            {ok, NewUser} = get_user({alias, SetAlias}),
-                            ok
-                        catch
-                            _:user_duplicated ->
-                                % Alias is duplicated, revert user to initial state and leave the alias blank
-                                remove(UserId),
-                                onedata_user:save(Doc#document{value = #onedata_user{alias = ?EMPTY_ALIAS}}),
-                                {error, alias_conflict}
-                        end
+                case re:run(Alias, ?ALIAS_VALIDATION_REGEXP) of
+                    {match, _} -> false;
+                    _ -> true
                 end
         end
-    catch
-        T:M ->
-            {error, {T, M}}
+    end,
+    % Fun used to perform alias update
+    UpdateAlias = fun() ->
+        critical_section:run({alias, Alias}, fun() ->
+            % Check if this alias is occupied
+            case get_user_doc({alias, Alias}) of
+                {ok, #document{key = UserId}} ->
+                    % DB returned the same user, so the
+                    % alias was modified but is identical, don't report errors.
+                    ok;
+                {ok, #document{}} ->
+                    % Alias is occupied by another user
+                    {error, alias_occupied};
+                _ ->
+                    % Alias is not occupied, update user doc
+                    {ok, _} = onedata_user:update(UserId, #{alias => Alias}),
+                    ok
+            end
+        end)
+    end,
+    % Throw everything together
+    case DisallowedPrefix() of
+        true ->
+            {error, disallowed_alias_prefix};
+        false ->
+            case InvalidAlias() of
+                true ->
+                    {error, invalid_alias};
+                false ->
+                    UpdateAlias()
+            end
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds an oauth account to user's accounts.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_oauth_account(UserId :: onedata_user:id(),
+    OAuthAccount :: #oauth_account{}) -> ok.
+add_oauth_account(UserId, OAuthAccount) ->
+    {ok, #document{
+        value = #onedata_user{
+            name = Name,
+            email_list = Emails,
+            connected_accounts = ConnectedAccounts
+        }}} = onedata_user:get(UserId),
+    #oauth_account{
+        name = OAuthName,
+        email_list = OAuthEmails
+    } = OAuthAccount,
+    % If no name is specified, take the one provided with new info
+    NewName = case Name of
+        <<"">> -> OAuthName;
+        _ -> Name
+    end,
+    {ok, _} = onedata_user:update(UserId, #{
+        name => NewName,
+        % Add emails from provider that are not yet added to account
+        email_list => lists:usort(Emails ++ OAuthEmails),
+        connected_accounts => ConnectedAccounts ++ [OAuthAccount]
+    }),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate telling if given email is occupied from the point of view of
+%% given user. It is not recognized as occupied if the same user already has it.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_email_occupied(UserId :: onedata_user:id(), Email :: binary()) ->
+    boolean().
+is_email_occupied(UserId, Email) ->
+    case get_user_doc({email, Email}) of
+        {ok, #document{key = UserId}} ->
+            false;
+        {ok, #document{}} ->
+            true;
+        _ ->
+            false
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns user details.
@@ -363,18 +404,33 @@ get_groups(UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_providers(UserId :: binary()) ->
-    {ok, [proplists:property()]}.
+-spec get_providers(UserId :: binary()) -> {ok, [proplists:property()]}.
 get_providers(UserId) ->
     {ok, Doc} = onedata_user:get(UserId),
     Spaces = get_all_spaces(Doc),
     UserProviders = lists:foldl(fun(Space, Providers) ->
-        {ok, #document{value = #space{providers_supports = Supports}}}
-            = space:get(Space),
+        {ok, #document{
+            value = #space{
+                providers_supports = Supports
+            }}} = space:get(Space),
         {SpaceProviders, _} = lists:unzip(Supports),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)
     end, ordsets:new(), Spaces),
     {ok, [{providers, UserProviders}]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate telling if given user is effectively supported by given provider.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_provider(UserId :: onedata_user:id(), ProviderId :: provider:id()) ->
+    boolean().
+has_provider(UserId, ProviderId) ->
+    {ok, [{providers, UserProviders}]} = get_providers(UserId),
+    lists:member(ProviderId, UserProviders).
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns true if user was found by a given key.
@@ -663,16 +719,15 @@ authenticate_by_basic_credentials(Login, Password) ->
             UserRole = proplists:get_value(<<"userRole">>, Props),
             UserDocument = case onedata_user:get(UserId) of
                 {error, {not_found, onedata_user}} ->
-                    UserDoc = #document{
-                        key = UserId,
-                        value = #onedata_user{
-                            name = Login,
-                            login = Login,
-                            basic_auth_enabled = true
-                        }},
-                    {ok, UserId} = onedata_user:save(UserDoc),
+                    UserRecord = #onedata_user{
+                        name = Login,
+                        login = Login,
+                        basic_auth_enabled = true
+                    },
+                    {ok, UserId} = create(UserRecord, UserId),
                     ?info("Created new account for user '~s' from onepanel "
                     "(role: '~s')", [Login, UserRole]),
+                    {ok, UserDoc} = onedata_user:get(UserId),
                     UserDoc;
                 {ok, #document{value = #onedata_user{} = UserInfo} = UserDoc} ->
                     % Make sure user login is up to date (it might have changed

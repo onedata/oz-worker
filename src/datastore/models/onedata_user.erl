@@ -24,7 +24,6 @@
 %% API
 -export([get_all_ids/0, get_by_criterion/1]).
 
-
 -type id() :: binary().
 -type doc() :: datastore:document().
 -export_type([id/0, doc/0]).

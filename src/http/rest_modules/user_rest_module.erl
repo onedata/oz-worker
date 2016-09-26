@@ -102,12 +102,29 @@ resource_exists(_, _, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
 accept_resource(user, patch, UserId, Data, _Client, Req) ->
-    rest_module_helper:assert_type(<<"name">>, Data, binary, Req),
-    rest_module_helper:assert_type(<<"alias">>, Data, binary, Req),
-    % Convert proplist keys to atoms as user_logic expects them as atoms.
-    DataAtoms = [{binary_to_existing_atom(K, utf8), V} || {K, V} <- Data],
-    ok = user_logic:modify(UserId, DataAtoms),
-    {true, Req};
+    Name = rest_module_helper:assert_type(<<"name">>, Data, binary, Req),
+    Alias = rest_module_helper:assert_type(<<"alias">>, Data, binary, Req),
+    case user_logic:modify(UserId, [{name, Name}, {alias, Alias}]) of
+        ok ->
+            {true, Req};
+        {error, disallowed_alias_prefix} ->
+            Description = <<
+                "Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\"."
+            >>,
+            rest_module_helper:report_error(invalid_request, Description, Req);
+        {error, invalid_alias} ->
+            Description = <<
+                "Alias can contain only lowercase letters and digits, and "
+                "must be at least 5 characters long."
+            >>,
+            rest_module_helper:report_error(invalid_request, Description, Req);
+        {error, alias_occupied} ->
+            Description = <<
+                "This alias is occupied by someone else. "
+                "Please choose other alias."
+            >>,
+            rest_module_helper:report_error(invalid_request, Description, Req)
+    end;
 accept_resource(auth, post, _User, Data, _Client, Req) ->
     Identifier = rest_module_helper:assert_key(<<"identifier">>, Data, binary, Req),
     case auth_logic:authenticate_user(Identifier) of

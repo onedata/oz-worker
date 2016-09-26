@@ -35,7 +35,7 @@
 -spec local_auth_endpoint() -> binary().
 local_auth_endpoint() ->
     <<(http_utils:fully_qualified_url(g_ctx:get_requested_hostname()))/binary,
-    ?local_auth_endpoint>>.
+        ?local_auth_endpoint>>.
 
 %%--------------------------------------------------------------------
 %% @doc Function used to validate login by processing a redirect that came from
@@ -83,7 +83,7 @@ validate_login() ->
                                 ok
                         end,
                         OAuthAccount = OriginalOAuthAccount#oauth_account{email_list = Emails, provider_id = ProviderId},
-                        Result = case proplists:get_value(connect_account, Props) of
+                        case proplists:get_value(connect_account, Props) of
                             false ->
                                 % Standard login, check if there is an account belonging to the user
                                 case user_logic:get_user_doc({connected_account_user_id, {ProviderId, UserID}}) of
@@ -92,10 +92,9 @@ validate_login() ->
                                         g_session:log_in(UserId),
                                         {redirect, Redirect};
                                     _ ->
-                                        % Error
-                                        % This is a first login
+                                        % Error -> this is a first login
                                         % Check if any of emails is in use
-                                        case is_any_email_in_use(Emails, <<"">>) of
+                                        case is_any_email_in_use(<<"">>, Emails) of
                                             true ->
                                                 % At least one email is in database, cannot create account
                                                 {error, ?error_auth_new_email_occupied};
@@ -109,15 +108,14 @@ validate_login() ->
                                                     _ ->
                                                         Name
                                                 end,
-                                                UserInfo = #onedata_user{email_list = Emails, name = NameToSet, connected_accounts = [
-                                                    OAuthAccount
-                                                ]},
+                                                UserInfo = #onedata_user{
+                                                    email_list = Emails,
+                                                    name = NameToSet,
+                                                    connected_accounts = [
+                                                        OAuthAccount
+                                                    ]
+                                                },
                                                 {ok, UserId} = user_logic:create(UserInfo),
-                                                % Create a default space for the user and generate a token to support it
-                                                {ok, SpaceID} = space_logic:create({user, UserId}, <<NameToSet/binary, "'s space">>),
-                                                true = user_logic:set_default_space(UserId, SpaceID),
-                                                {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_support_token, {space, SpaceID}),
-                                                user_logic:modify(UserId, [{first_space_support_token, Token}]),
                                                 g_session:log_in(UserId),
                                                 g_session:put_value(firstLogin, true),
                                                 new_user
@@ -134,21 +132,18 @@ validate_login() ->
                                     _ ->
                                         % Not found, ok
                                         % Check if any of emails is in use by another user
-                                        case is_any_email_in_use(Emails, g_session:get_user_id()) of
+                                        case is_any_email_in_use(g_session:get_user_id(), Emails) of
                                             true ->
                                                 % At least one email is in database, cannot connect account
                                                 {error, ?error_auth_connect_email_occupied};
                                             false ->
                                                 % Everything ok, get the user and add new provider info
                                                 UserId = g_session:get_user_id(),
-                                                {ok, #onedata_user{} = UserRecord} = user_logic:get_user(UserId),
-                                                ModificationProplist = merge_connected_accounts(OAuthAccount, UserRecord),
-                                                user_logic:modify(UserId, ModificationProplist),
+                                                ok = user_logic:add_oauth_account(UserId, OAuthAccount),
                                                 {redirect, <<?page_after_login, "?expand_accounts=true">>}
                                         end
                                 end
-                        end,
-                        Result
+                        end
                 end
         end
     catch
@@ -163,51 +158,14 @@ validate_login() ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Returns true if any of the given emails is occupied (but not by the specified user).
-%%--------------------------------------------------------------------
--spec is_any_email_in_use(Emails :: [binary()], binary()) -> true | false.
-is_any_email_in_use(Emails, UserID) ->
-    lists:foldl(
-        fun(Email, Acc) ->
-            case Acc of
-                true ->
-                    true;
-                _ ->
-                    case user_logic:get_user_doc({email, Email}) of
-                        {ok, #document{key = UserID}} ->
-                            false;
-                        {ok, #document{}} ->
-                            true;
-                        _ ->
-                            false
-                    end
-            end
-        end, false, Emails).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Merges user account with information gathered from new connected account.
+%% @doc
+%% Returns true if any of the given emails is occupied
+%% (but not by the specified user).
 %% @end
 %%--------------------------------------------------------------------
--spec merge_connected_accounts(OAuthAccount :: #oauth_account{}, UserInfo :: #onedata_user{}) -> [tuple()].
-merge_connected_accounts(OAuthAccount, UserInfo) ->
-    #onedata_user{name = Name, email_list = Emails, connected_accounts = ConnectedAccounts} = UserInfo,
-    #oauth_account{name = ProvName, email_list = ConnAccEmails} = OAuthAccount,
-    % If no name is specified, take the one provided with new info
-    NewName = case Name of
-                  <<"">> -> ProvName;
-                  _ -> Name
-              end,
-    % Add emails from provider that are not yet added to account
-    NewEmails = lists:foldl(
-        fun(Email, Acc) ->
-            case lists:member(Email, Acc) of
-                true -> Acc;
-                false -> Acc ++ [Email]
-            end
-        end, Emails, ConnAccEmails),
-    [
-        {name, NewName},
-        {email_list, NewEmails},
-        {connected_accounts, ConnectedAccounts ++ [OAuthAccount]}
-    ].
+-spec is_any_email_in_use(UserId :: onedata_user:id(), Emails :: [binary()]) ->
+    boolean().
+is_any_email_in_use(UserId, Emails) ->
+    lists:any(fun(Email) ->
+        user_logic:is_email_occupied(UserId, Email)
+    end, Emails).

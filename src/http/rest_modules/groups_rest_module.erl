@@ -104,6 +104,13 @@ is_authorized(screate, get, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_create_space_token);
 is_authorized(space, delete, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_leave_space);
+is_authorized(group, get, GroupId, #client{id = UserId}) ->
+    % To get data about a group, it is enough to be its user, but without view
+    % data privilege only group name is returned.
+    % A user can also be allowed to view public data if he has view
+    % privileges in any space that contains this group.
+    % These conditions are checked in provide_resource/4.
+    group_logic:can_view_public_data(GroupId, UserId);
 is_authorized(_, get, GroupId, #client{id = UserId}) ->
     group_logic:has_effective_privilege(GroupId, UserId, group_view_data);
 is_authorized(_, _, _, _) ->
@@ -197,8 +204,19 @@ accept_resource(njoin, post, GroupId, Data, _Client, Req) ->
 -spec provide_resource(Resource :: provided_resource(), GroupId :: binary() | undefined,
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
-provide_resource(group, GroupId, _Client, Req) ->
-    {ok, Data} = group_logic:get_data(GroupId),
+provide_resource(group, GroupId, #client{type = user, id = UserId}, Req) ->
+    HasViewPrivs = group_logic:has_effective_privilege(
+        GroupId, UserId, group_view_data),
+    {ok, Data} = case HasViewPrivs of
+        true ->
+            % The user has view privileges, give him all the details.
+            group_logic:get_data(GroupId);
+        false ->
+            % The user does not have view privileges, but is allowed to see
+            % public group data, via his membership in this group or any
+            % space that contains this group.
+            group_logic:get_public_data(GroupId)
+    end,
     {Data, Req};
 provide_resource(users, GroupId, _Client, Req) ->
     {ok, Users} = group_logic:get_users(GroupId),
