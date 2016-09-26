@@ -17,7 +17,9 @@
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
 -export([create/5, modify/4, set_user_privileges/3, set_group_privileges/3]).
--export([get_data/1, get_users/1, get_effective_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
+-export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1,
+    get_groups/1, get_user_privileges/2, get_group_privileges/2,
+    get_effective_user_privileges/2]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
 
@@ -262,6 +264,25 @@ get_data(HandleId) ->
         {resourceId, ResourceId},
         {metadata, Metadata}
     ]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns details about the handle that are publicly available.
+%% Throws exception when call to the datastore fails, or handle doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_public_data(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
+get_public_data(HandleId) ->
+    {ok, #document{value = #handle{
+        public_handle = Handle,
+        metadata = Metadata
+    }}} = handle:get(HandleId),
+    {ok, [
+        {handleId, HandleId},
+        {handle, Handle},
+        {metadata, Metadata}
+    ]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about handle's users.

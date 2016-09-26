@@ -42,6 +42,7 @@ routes() ->
     [
         {<<"/handles">>, M, S#rstate{resource = handles, methods = [post, get]}},
         {<<"/handles/:id">>, M, S#rstate{resource = handle, methods = [get, patch, delete]}},
+        {<<"/handles/:id/public">>, M, S#rstate{resource = handle_public, methods = [get], noauth = [get]}},
         {<<"/handles/:id/users">>, M, S#rstate{resource = users, methods = [get]}},
         {<<"/handles/:id/users/:uid">>, M, S#rstate{resource = user, methods = [put, delete]}},
         {<<"/handles/:id/users/:uid/privileges">>, M, S#rstate{resource = upriv, methods = [get, put]}},
@@ -63,7 +64,9 @@ is_authorized(_, _, _, #client{type = undefined}) ->
     false;
 is_authorized(handles, post, _HandleId, _Client) -> % permission is checked for handle_service, in accept_resource method
     true;
-is_authorized(handles, get, _HandleId, #client{type = user, id = _UserId}) ->
+is_authorized(handle_public, get, _HandleId, _Client) ->
+    true;
+is_authorized(ports, post, _, _) ->
     true;
 is_authorized(handle, get, HandleId, #client{type = user, id = UserId}) ->
     handle_logic:has_effective_privilege(HandleId, UserId, view_handle);
@@ -212,6 +215,9 @@ provide_resource(handles, _EntityId, #client{type = user, id = UserId}, Req) ->
     {HandleIds, Req};
 provide_resource(handle, HandleId, #client{type = user, id = _UserId}, Req) ->
     {ok, Data} = handle_logic:get_data(HandleId),
+    {Data, Req};
+provide_resource(handle_public, HandleId, _Client, Req) ->
+    {ok, Data} = handle_logic:get_public_data(HandleId),
     {Data, Req};
 provide_resource(users, HandleId, _Client, Req) ->
     {ok, Users} = handle_logic:get_users(HandleId),
