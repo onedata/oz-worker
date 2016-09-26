@@ -134,6 +134,15 @@ create(UserId, HandleServiceId, ResourceType, ResourceId, Metadata) ->
         {ok, User#onedata_user{handles = [HandleId | UHandles]}}
     end),
 
+    case ResourceType of
+        <<"Share">> ->
+            {ok, _} = share:update(ResourceId, fun(Share = #share{}) ->
+                {ok, Share#share{handle = HandleId}}
+            end);
+        _ ->
+            ok
+    end,
+
     {ok, HandleId}.
 
 %%--------------------------------------------------------------------
@@ -336,7 +345,12 @@ get_group_privileges(HandleId, GroupId) ->
 remove(HandleId) ->
     ok = handle_proxy:unregister_handle(HandleId),
     {ok, #document{value = Handle}} = handle:get(HandleId),
-    #handle{users = Users, groups = Groups} = Handle,
+    #handle{
+        users = Users,
+        groups = Groups,
+        resource_id = ResourceId,
+        resource_type = ResourceType
+    } = Handle,
 
     lists:foreach(fun({UserId, _}) ->
         {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -353,6 +367,15 @@ remove(HandleId) ->
             {ok, Group#user_group{handles = lists:delete(HandleId, GHandles)}}
         end)
     end, Groups),
+
+    case ResourceType of
+        <<"Share">> ->
+            {ok, _} = share:update(ResourceId, fun(Share = #share{}) ->
+                {ok, Share#share{handle = undefined}}
+            end);
+        _ ->
+            ok
+    end,
 
     case handle:delete(HandleId) of
         ok -> true;

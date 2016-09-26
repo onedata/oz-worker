@@ -18,6 +18,7 @@ location-service/node_modules/
 *.pyc
 
 .rebar
+rebar3.crashdump
 .eunit
 .dialyzer.plt
 test/eunit_results

@@ -100,7 +100,8 @@ get_msg(Seq, Doc, share = Model) ->
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
     #user_group{name = Name, spaces = Spaces, users = Users, nested_groups = NGroups,
-        parent_groups = PGroups, effective_users = EUsers, type = Type} = Value,
+        parent_groups = PGroups, effective_users = EUsers, type = Type,
+        handle_services = HandleServices, handles = Handles} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {type, Type},
@@ -108,18 +109,23 @@ get_msg(Seq, Doc, user_group = Model) ->
         {users, Users},
         {effective_users, EUsers},
         {nested_groups, NGroups},
-        {parent_groups, PGroups}
+        {parent_groups, PGroups},
+        {handle_services, HandleServices},
+        {handles, Handles}
     ]}];
 get_msg(Seq, Doc, onedata_user = Model) ->
     #document{value = Value, key = ID} = Doc,
     #onedata_user{name = Name, space_names = SpaceNames, groups = Groups,
-        default_space = DefaultSpace, effective_groups = EGroups} = Value,
+        default_space = DefaultSpace, effective_groups = EGroups,
+        handle_services = HandleServices, handles = Handles} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {space_names, maps:to_list(SpaceNames)},
         {group_ids, Groups},
         {effective_group_ids, EGroups},
         {default_space, DefaultSpace},
+        {handle_services, HandleServices},
+        {handles, Handles},
         {public_only, false}
     ]}];
 get_msg(Seq, Doc, provider = Model) ->
@@ -195,6 +201,8 @@ get_public_msg(Seq, Doc, onedata_user = Model) ->
         {group_ids, []},
         {effective_group_ids, []},
         {default_space, undefined},
+        {handle_services, []},
+        {handles, []},
         {public_only, true}
     ]}];
 

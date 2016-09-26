@@ -19,8 +19,9 @@
 %% API
 -export([save/3, update_document/4, delete_document/3, get_rev/3,
     create_provider/3, call_worker/2, generate_group_ids/1, generate_user_ids/1,
-    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1, empty_cache/1, create_provider/4, delete_all/2, list/2, get_last_sequence_number/1]).
--export([expectation/2, public_only_user_expectation/2, group_expectation/8,
+    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1,
+    empty_cache/1, create_provider/4, delete_all/2, list/2, get_last_sequence_number/1]).
+-export([expectation/2, public_only_user_expectation/2, group_expectation/10,
     privileges_as_binaries/1, expectation_with_rev/2, public_only_provider_expectation/3]).
 -export([verify_messages_present/2, verify_messages_absent/2, init_messages/3,
     flush_messages/2, flush/0, verify_messages/3]).
@@ -148,11 +149,15 @@ expectation(ID, #share{name = Name, parent_space = ParentSpace,
     HandleBin = undefined_to_binary(Handle),
     share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin, HandleBin);
 expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
-    default_space = DefaultSpace, effective_groups = EGroups}) ->
-    user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups, undefined_to_binary(DefaultSpace));
+    default_space = DefaultSpace, effective_groups = EGroups,
+    handle_services = HandleServices, handles = Handles}) ->
+    user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups,
+        undefined_to_binary(DefaultSpace), HandleServices, Handles);
 expectation(ID, #user_group{name = Name, type = Type, users = Users, spaces = Spaces,
-    effective_users = EUsers, nested_groups = NGroups, parent_groups = PGroups}) ->
-    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups);
+    effective_users = EUsers, nested_groups = NGroups, parent_groups = PGroups,
+    handle_services = HandleServices, handles = Handles}) ->
+    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups,
+        HandleServices, Handles);
 
 expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) ->
     [{<<"id">>, ID}, {<<"provider">>, [
@@ -227,13 +232,15 @@ handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
         {<<"timestamp">>, serialize_timestamp(Timestamp)}
     ]}].
 
-user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace) ->
+user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace, HandleServices, Handles) ->
     [{<<"id">>, ID}, {<<"user">>, [
         {<<"name">>, Name},
         {<<"space_names">>, Spaces},
         {<<"group_ids">>, Groups},
         {<<"effective_group_ids">>, EGroups},
         {<<"default_space">>, DefaultSpace},
+        {<<"handle_services">>, HandleServices},
+        {<<"handles">>, Handles},
         {<<"public_only">>, false}
     ]}].
 
@@ -252,10 +259,12 @@ public_only_user_expectation(ID, Name) ->
         {<<"group_ids">>, []},
         {<<"effective_group_ids">>, []},
         {<<"default_space">>, <<"undefined">>},
+        {<<"handle_services">>, []},
+        {<<"handles">>, []},
         {<<"public_only">>, true}
     ]}].
 
-group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups) ->
+group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups, HandleServices, Handles) ->
     [{<<"id">>, ID}, {<<"group">>, [
         {<<"name">>, Name},
         {<<"type">>, atom_to_binary(Type, latin1)},
@@ -263,7 +272,9 @@ group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups) ->
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"effective_users">>, privileges_as_binaries(EUsers)},
         {<<"nested_groups">>, privileges_as_binaries(NGroups)},
-        {<<"parent_groups">>, PGroups}
+        {<<"parent_groups">>, PGroups},
+        {<<"handle_services">>, HandleServices},
+        {<<"handles">>, Handles}
     ]}].
 
 privileges_as_binaries(IDsWithPrivileges) ->
