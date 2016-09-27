@@ -16,7 +16,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([get_ignore_msg/1, as_msg/3]).
+-export([get_ignore_msg/1, as_msg/3, serialize_timestamp/1]).
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -86,19 +86,22 @@ get_msg(Seq, Doc, share = Model) ->
         name = Name,
         public_url = PublicURL,
         root_file_id = RootFileId,
-        parent_space = ParentSpace
+        parent_space = ParentSpace,
+        handle = Handle
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {id, ID},
         {name, Name},
         {parent_space, ParentSpace},
         {root_file_id, RootFileId},
-        {public_url, PublicURL}
+        {public_url, PublicURL},
+        {handle, Handle}
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
     #user_group{name = Name, spaces = Spaces, users = Users, nested_groups = NGroups,
-        parent_groups = PGroups, effective_users = EUsers, type = Type} = Value,
+        parent_groups = PGroups, effective_users = EUsers, type = Type,
+        handle_services = HandleServices, handles = Handles} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {type, Type},
@@ -106,18 +109,23 @@ get_msg(Seq, Doc, user_group = Model) ->
         {users, Users},
         {effective_users, EUsers},
         {nested_groups, NGroups},
-        {parent_groups, PGroups}
+        {parent_groups, PGroups},
+        {handle_services, HandleServices},
+        {handles, Handles}
     ]}];
 get_msg(Seq, Doc, onedata_user = Model) ->
     #document{value = Value, key = ID} = Doc,
     #onedata_user{name = Name, space_names = SpaceNames, groups = Groups,
-        default_space = DefaultSpace, effective_groups = EGroups} = Value,
+        default_space = DefaultSpace, effective_groups = EGroups,
+        handle_services = HandleServices, handles = Handles} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
         {space_names, maps:to_list(SpaceNames)},
         {group_ids, Groups},
         {effective_group_ids, EGroups},
         {default_space, DefaultSpace},
+        {handle_services, HandleServices},
+        {handles, Handles},
         {public_only, false}
     ]}];
 get_msg(Seq, Doc, provider = Model) ->
@@ -128,6 +136,46 @@ get_msg(Seq, Doc, provider = Model) ->
         {urls, URLs},
         {space_ids, SpaceIDs},
         {public_only, false}
+    ]}];
+get_msg(Seq, Doc, handle_service = Model) ->
+    #document{value = Value, key = ID} = Doc,
+    #handle_service{
+        name = Name,
+        proxy_endpoint = ProxyEndpoint,
+        service_properties = ServiceProperties,
+        users = Users,
+        groups = Groups
+    } = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {id, ID},
+        {name, Name},
+        {proxy_endpoint, ProxyEndpoint},
+        {service_properties, ServiceProperties},
+        {users, Users},
+        {groups, Groups}
+    ]}];
+get_msg(Seq, Doc, handle = Model) ->
+    #document{value = Value, key = ID} = Doc,
+    #handle{
+        handle_service_id = HandleServiceId,
+        public_handle = PublicHandle,
+        resource_type = ResourceType,
+        resource_id = ResourceId,
+        metadata = Metadata,
+        users = Users,
+        groups = Groups,
+        timestamp = Timestamp
+    } = Value,
+    [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
+        {id, ID},
+        {handle_service_id, HandleServiceId},
+        {public_handle, PublicHandle},
+        {resource_type, ResourceType},
+        {resource_id, ResourceId},
+        {metadata, Metadata},
+        {users, Users},
+        {groups, Groups},
+        {timestamp, serialize_timestamp(Timestamp)}
     ]}];
 get_msg(_Seq, _Doc, _Model) ->
     ?warning("Requesting message for unexpected model ~p", [_Model]),
@@ -153,6 +201,8 @@ get_public_msg(Seq, Doc, onedata_user = Model) ->
         {group_ids, []},
         {effective_group_ids, []},
         {default_space, undefined},
+        {handle_services, []},
+        {handles, []},
         {public_only, true}
     ]}];
 
@@ -184,4 +234,18 @@ message_model(space) -> space;
 message_model(share) -> share;
 message_model(provider) -> provider;
 message_model(onedata_user) -> user;
-message_model(user_group) -> group.
+message_model(user_group) -> group;
+message_model(handle) -> handle;
+message_model(handle_service) -> handle_service.
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% @private
+%% Translates erlang datetime format into a list of integers, which can be
+%% safely send in JSON.
+%% @end
+%%-------------------------------------------------------------------
+-spec serialize_timestamp(calendar:datetime()) -> [integer()].
+serialize_timestamp({{A, B, C}, {D, E, F}}) ->
+    [A, B, C, D, E, F].
