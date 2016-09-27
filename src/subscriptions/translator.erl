@@ -16,7 +16,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([get_ignore_msg/1, as_msg/3]).
+-export([get_ignore_msg/1, as_msg/3, serialize_timestamp/1]).
 
 %%%-------------------------------------------------------------------
 %%% @doc

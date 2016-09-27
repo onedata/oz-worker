@@ -254,7 +254,8 @@ add_group(HandleId, GroupId) ->
 -spec get_data(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
 get_data(HandleId) ->
     {ok, #document{value = #handle{handle_service_id = HandleServiceId, public_handle = Handle,
-        resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata}}} =
+        resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata,
+        timestamp = Timestamp}}} =
         handle:get(HandleId),
     {ok, [
         {handleId, HandleId},
@@ -262,7 +263,8 @@ get_data(HandleId) ->
         {handle, Handle},
         {resourceType, ResourceType},
         {resourceId, ResourceId},
-        {metadata, Metadata}
+        {metadata, Metadata},
+        {timestamp, translator:serialize_timestamp(Timestamp)}
     ]}.
 
 
