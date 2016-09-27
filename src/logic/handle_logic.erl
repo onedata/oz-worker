@@ -418,7 +418,7 @@ remove(HandleId) ->
 
     case ResourceType of
         <<"Share">> ->
-            {ok, _} = share:update(ResourceId, fun(Share = #share{}) ->
+            share:update(ResourceId, fun(Share = #share{}) ->
                 {ok, Share#share{handle = undefined}}
             end);
         _ ->
