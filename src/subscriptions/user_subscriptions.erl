@@ -146,7 +146,7 @@ get_group_spaces(ProviderID, GroupChanges) ->
 
 %%--------------------------------------------------------------------
 %% @doc @private
-%% Fetches all handle_services in given list of spaces.
+%% Fetches all shares in given list of spaces.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_shares(ProviderID :: binary(),
