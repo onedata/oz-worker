@@ -1661,7 +1661,7 @@ modify_handle_test(Config) ->
 
     ?assertEqual(204, Result),
     ?assertMatch(#{
-        <<"handle">> := <<"10.5072%2F", _/binary>>,
+        <<"handle">> := <<"10.5072/", _/binary>>,
         <<"handleId">> := HId,
         <<"handleServiceId">> := Id,
         <<"resourceId">> := ?SHARE_ID_2,

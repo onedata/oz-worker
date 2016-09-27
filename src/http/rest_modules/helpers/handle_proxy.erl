@@ -48,8 +48,10 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
         <<"DOI">> ->
             Prefix = proplists:get_value(<<"prefix">>, ServiceProperties),
             DoiId = base64url:encode(crypto:rand_bytes(5)),
-            DoiHandle = <<Prefix/binary, "%2F", DoiId/binary>>,
-            {ok, 201, _, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandle/binary>>, Headers, json_utils:encode(Body)),
+            DoiHandle = <<Prefix/binary, "/", DoiId/binary>>,
+            % '/' = '%2F', needs to be encoded for registration
+            DoiHandleEncoded =  http_utils:url_encode(DoiHandle),
+            {ok, 201, _, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, json_utils:encode(Body)),
             {ok, DoiHandle};
         _ ->
             {ok, 201, ResponseHeaders, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body)),
@@ -78,7 +80,8 @@ unregister_handle(HandleId)  ->
     {ok, 200, _, _} =
         case Type of
             <<"DOI">> ->
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle?hndl=", PublicHandle/binary>>, Headers,  json_utils:encode(Body));
+                PublicHandleEncoded =  http_utils:url_encode(PublicHandle),
+                handle_proxy_client:delete(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers,  json_utils:encode(Body));
             _ ->
                 handle_proxy_client:delete(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
         end,
@@ -123,7 +126,8 @@ modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata)  ->
             {ok, 204, _, _} =
                 case Type of
                     <<"DOI">> ->
-                        handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandle/binary>>, Headers, json_utils:encode(Body));
+                        PublicHandleEncoded =  http_utils:url_encode(PublicHandle),
+                        handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
                     _ ->
                         handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
                 end,
