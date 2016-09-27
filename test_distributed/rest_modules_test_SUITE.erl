@@ -3024,6 +3024,16 @@ mock_handle_proxy(Config) ->
                 meck:passthrough()
         end),
 
+    ok = test_utils:mock_expect(Nodes, share, update,
+        fun
+            (?SHARE_ID_1, _UpdateFun) ->
+                {ok, whatever};
+            (?SHARE_ID_2, _UpdateFun) ->
+                {ok, whatever};
+            (_, _) ->
+                meck:passthrough()
+        end),
+
     ok = test_utils:mock_new(Nodes, handle_proxy_client),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
         fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
@@ -3042,6 +3052,3 @@ unmock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, share),
     test_utils:mock_unload(Nodes, handle_proxy_client).
-
-
-

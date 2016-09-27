@@ -66,7 +66,7 @@ is_authorized(handles, post, _HandleId, _Client) -> % permission is checked for 
     true;
 is_authorized(handle_public, get, _HandleId, _Client) ->
     true;
-is_authorized(ports, post, _, _) ->
+is_authorized(handles, get, _HandleId, #client{type = user, id = _UserId}) ->
     true;
 is_authorized(handle, get, HandleId, #client{type = user, id = UserId}) ->
     handle_logic:has_effective_privilege(HandleId, UserId, view_handle);
