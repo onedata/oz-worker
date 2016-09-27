@@ -19,7 +19,7 @@
 -export([create/5, modify/4, set_user_privileges/3, set_group_privileges/3]).
 -export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1,
     get_groups/1, get_user_privileges/2, get_group_privileges/2,
-    get_effective_user_privileges/2]).
+    get_effective_user_privileges/2, get_metadata/1, list/0]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
 
@@ -285,6 +285,31 @@ get_public_data(HandleId) ->
         {metadata, Metadata}
     ]}.
 
+
+%%--------------------------------------------------------------------
+%% @doc Returns handle metadata and timestamp
+%% Throws exception when call to the datastore fails, or handle doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_metadata(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
+get_metadata(HandleId) ->
+    {ok, #document{value = #handle{metadata = Metadata, timestamp = Timestamp}}} =
+        handle:get(HandleId),
+    {ok, [
+        {metadata, Metadata},
+        {timestamp, Timestamp}
+    ]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns a list of all handles (their ids).
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [binary()]}.
+list() ->
+    {ok, HandleDocs} = handle:list(),
+    HandleIds = lists:map(fun(#document{key = HandleId}) ->
+        HandleId
+    end, HandleDocs),
+    {ok, HandleIds}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about handle's users.

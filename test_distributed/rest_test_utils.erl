@@ -15,6 +15,8 @@
 -include("subscriptions/subscriptions.hrl").
 -include_lib("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("xmerl/include/xmerl.hrl").
+
 
 %% API
 -export([set_config/1, check_rest_call/1]).
@@ -66,6 +68,8 @@ get_config(Key) ->
 %%    expect => #{
 %%      code => 200, % Optional, by default not validated
 %%      headers => [{<<"key">>, <<"value">>}], % Optional, by def. not validated
+%%                 {contains, [{<<"key">>, <<"value">>}]} % checks if given
+%%                      (key, value) pair is included in response headers
 %%      body => <<"binary">> orelse #{} % Optional, by default not validated
 %%      % Specifying a map here will cause validation of JSON content-wise
 %%      % (if the JSON object specified by map is equal to the one in reply)
@@ -95,12 +99,13 @@ check_rest_call(ArgsMap) ->
         end,
         ReqAuth = maps:get(auth, RequestMap, undefined),
         ReqOpts = maps:get(opts, RequestMap, []),
+        ReqURL = maps:get(url, RequestMap, get_random_oz_url()),
 
         ExpCode = maps:get(code, ExpectMap, undefined),
         ExpHeaders = maps:get(headers, ExpectMap, undefined),
         ExpBody = maps:get(body, ExpectMap, undefined),
 
-        URL = str_utils:join_binary([get_random_oz_url() | ReqPath], <<"">>),
+        URL = str_utils:join_binary([ReqURL | ReqPath], <<"">>),
         HeadersPlusAuth = case ReqAuth of
             undefined ->
                 ReqHeaders;
@@ -140,6 +145,13 @@ check_rest_call(ArgsMap) ->
         case ExpHeaders of
             undefined ->
                 ok;
+            {contains, ActualExpHeaders} ->
+                NormExpHeaders = normalize_headers(ActualExpHeaders),
+                NormRespHeaders = normalize_headers(RespHeaders),
+                case NormExpHeaders -- NormRespHeaders of
+                    [] -> ok;
+                    _ -> throw({headers, NormRespHeaders, NormExpHeaders})
+                end;
             _ ->
                 NormExpHeaders = normalize_headers(ExpHeaders),
                 NormRespHeaders = normalize_headers(RespHeaders),
@@ -169,6 +181,14 @@ check_rest_call(ArgsMap) ->
                         ok;
                     false ->
                         throw({body, RespBodyMap, ExpBody})
+                end;
+            #xmlElement{} = ExpBodyXML ->
+                {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
+                case compare_xml(RespBodyXML, ExpBodyXML) of
+                    true ->
+                        ok;
+                    false ->
+                        throw({body, RespBodyXML, ExpBodyXML})
                 end
         end,
 
@@ -219,3 +239,24 @@ sort_map(OriginalMap) ->
                     MapAcc
             end
         end, OriginalMap, maps:keys(OriginalMap)).
+
+compare_xml(_, []) -> true;
+compare_xml(#xmlText{value=V}, #xmlText{value=V}) -> true;
+compare_xml(#xmlText{value=_V1}, #xmlText{value=_V2}) -> false;
+compare_xml(#xmlAttribute{name=N, value=V}, #xmlAttribute{name=N, value=V}) -> true;
+compare_xml(#xmlAttribute{name=_N1, value=_V1}, #xmlAttribute{name=_N2, value=_V2}) -> false;
+compare_xml(#xmlElement{name=Name, attributes=_, content=_},
+            #xmlElement{name=Name, attributes=[], content=[]}) -> true;
+compare_xml(#xmlElement{name=Name, attributes=RespAttributes, content=RespContent},
+            #xmlElement{name=Name, attributes=ExpAttributes, content=ExpContent}) ->
+    case compare_xml(RespAttributes, ExpAttributes) of
+        false -> false;
+        true -> compare_xml(RespContent, ExpContent)
+    end;
+compare_xml(Resp, [Exp | ExpRest]) when is_list(Resp)->
+    compare_xml(Resp, Exp) and compare_xml(Resp, ExpRest);
+compare_xml(Resp, Exp) when is_list(Resp) ->
+    lists:foldl(fun(R, Acc) ->
+        compare_xml(R, Exp) or Acc
+    end, false, Resp);
+compare_xml(_, _) -> false.
