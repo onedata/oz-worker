@@ -34,7 +34,16 @@ updates(ProviderID, NewUserIDs) ->
     SpaceChanges = get_spaces(ProviderID, UserChanges)
         ++ get_group_spaces(ProviderID, GroupChanges),
     ShareChanges = get_shares(ProviderID, SpaceChanges),
-    UserChanges ++ SpaceChanges ++ GroupChanges ++ ShareChanges.
+    HandleServiceChanges = get_handle_services(ProviderID, UserChanges),
+    HandleChanges = get_handles(ProviderID, UserChanges),
+    lists:flatten([
+        UserChanges,
+        SpaceChanges,
+        GroupChanges,
+        ShareChanges,
+        HandleServiceChanges,
+        HandleChanges
+    ]).
 
 
 %%%===================================================================
@@ -155,6 +164,50 @@ get_shares(ProviderID, SpaceChanges) ->
             end
         end, Shares)
     end, SpaceChanges).
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches all handle_services of given users.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_services(ProviderID :: binary(),
+    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+get_handle_services(ProviderID, UserChanges) ->
+    lists:flatmap(fun({_, UserDoc, _}) ->
+        HandleServices = user_logic:get_all_handle_services(UserDoc),
+        lists:filtermap(fun(HandleServiceId) ->
+            case get_with_revs(handle_service, HandleServiceId) of
+                {ok, Doc} -> {true, {-1, Doc, handle_service}};
+                {error, _} ->
+                    ?warning("Missing handle_service ~p; provider ~p",
+                        [HandleServiceId, ProviderID]),
+                    false
+            end
+        end, HandleServices)
+    end, UserChanges).
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches all handles of given users.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handles(ProviderID :: binary(),
+    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+get_handles(ProviderID, UserChanges) ->
+    lists:flatmap(fun({_, UserDoc, _}) ->
+        Handles = user_logic:get_all_handles(UserDoc),
+        lists:filtermap(fun(HandleId) ->
+            case get_with_revs(handle, HandleId) of
+                {ok, Doc} -> {true, {-1, Doc, handle}};
+                {error, _} ->
+                    ?warning("Missing handle ~p; provider ~p",
+                        [HandleId, ProviderID]),
+                    false
+            end
+        end, Handles)
+    end, UserChanges).
 
 %%--------------------------------------------------------------------
 %% @doc @private

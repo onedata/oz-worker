@@ -17,7 +17,8 @@
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
 -export([create/5, modify/4, set_user_privileges/3, set_group_privileges/3]).
--export([get_data/1, get_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2,
+-export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1,
+    get_groups/1, get_user_privileges/2, get_group_privileges/2,
     get_effective_user_privileges/2, get_metadata/1, list/0]).
 -export([add_user/2, add_group/2]).
 -export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
@@ -135,6 +136,15 @@ create(UserId, HandleServiceId, ResourceType, ResourceId, Metadata) ->
         {ok, User#onedata_user{handles = [HandleId | UHandles]}}
     end),
 
+    case ResourceType of
+        <<"Share">> ->
+            {ok, _} = share:update(ResourceId, fun(Share = #share{}) ->
+                {ok, Share#share{handle = HandleId}}
+            end);
+        _ ->
+            ok
+    end,
+
     {ok, HandleId}.
 
 %%--------------------------------------------------------------------
@@ -244,7 +254,8 @@ add_group(HandleId, GroupId) ->
 -spec get_data(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
 get_data(HandleId) ->
     {ok, #document{value = #handle{handle_service_id = HandleServiceId, public_handle = Handle,
-        resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata}}} =
+        resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata,
+        timestamp = Timestamp}}} =
         handle:get(HandleId),
     {ok, [
         {handleId, HandleId},
@@ -252,8 +263,28 @@ get_data(HandleId) ->
         {handle, Handle},
         {resourceType, ResourceType},
         {resourceId, ResourceId},
+        {metadata, Metadata},
+        {timestamp, translator:serialize_timestamp(Timestamp)}
+    ]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns details about the handle that are publicly available.
+%% Throws exception when call to the datastore fails, or handle doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_public_data(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
+get_public_data(HandleId) ->
+    {ok, #document{value = #handle{
+        public_handle = Handle,
+        metadata = Metadata
+    }}} = handle:get(HandleId),
+    {ok, [
+        {handleId, HandleId},
+        {handle, Handle},
         {metadata, Metadata}
     ]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns handle metadata and timestamp
@@ -291,6 +322,31 @@ get_users(HandleId) ->
     {ok, #document{value = #handle{users = Users}}} = handle:get(HandleId),
     {UserIds, _} = lists:unzip(Users),
     {ok, [{users, UserIds}]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns a list of all effective users of a handle_service.
+%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_users(HandleId :: handle:id()) ->
+    {ok, [proplists:property()]}.
+get_effective_users(HandleId) ->
+    {ok, #document{
+        value = #handle{
+            users = UserPerms,
+            groups = GroupPerms
+        }}} = handle:get(HandleId),
+    {Users, _} = lists:unzip(UserPerms),
+    UsersViaGroups = lists:foldl(
+        fun({GroupId, _}, Acc) ->
+            {ok, [{users, GroupUsers}]} = group_logic:get_effective_users(
+                GroupId
+            ),
+            GroupUsers ++ Acc
+        end, [], GroupPerms),
+    {ok, [{users, ordsets:union(Users, UsersViaGroups)}]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about handle's groups.
@@ -337,7 +393,12 @@ get_group_privileges(HandleId, GroupId) ->
 remove(HandleId) ->
     ok = handle_proxy:unregister_handle(HandleId),
     {ok, #document{value = Handle}} = handle:get(HandleId),
-    #handle{users = Users, groups = Groups} = Handle,
+    #handle{
+        users = Users,
+        groups = Groups,
+        resource_id = ResourceId,
+        resource_type = ResourceType
+    } = Handle,
 
     lists:foreach(fun({UserId, _}) ->
         {ok, _} = onedata_user:update(UserId, fun(User) ->
@@ -354,6 +415,15 @@ remove(HandleId) ->
             {ok, Group#user_group{handles = lists:delete(HandleId, GHandles)}}
         end)
     end, Groups),
+
+    case ResourceType of
+        <<"Share">> ->
+            share:update(ResourceId, fun(Share = #share{}) ->
+                {ok, Share#share{handle = undefined}}
+            end);
+        _ ->
+            ok
+    end,
 
     case handle:delete(HandleId) of
         ok -> true;

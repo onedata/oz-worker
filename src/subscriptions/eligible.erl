@@ -42,7 +42,7 @@ providers(Doc, space) ->
 
     SpaceProviders ++ through_users(SpaceUsersSet ++ GroupUsersSets);
 
-% For share, the eligible providers are the as for its parent space.
+% For share, the eligible providers are the same as for its parent space.
 providers(Doc, share) ->
     #document{value = #share{parent_space = ParentId}} = Doc,
     {ok, ParentDoc} = space:get(ParentId),
@@ -76,6 +76,16 @@ providers(Doc, onedata_user) ->
 
 providers(Doc, provider) ->
     [Doc#document.key];
+
+providers(Doc, handle) ->
+    {ok, [{users, Users}]} = handle_logic:get_effective_users(Doc#document.key),
+    through_users(Users);
+
+providers(Doc, handle_service) ->
+    {ok, [{users, Users}]} = handle_service_logic:get_effective_users(
+        Doc#document.key
+    ),
+    through_users(Users);
 
 providers(_Doc, _Type) ->
     [].

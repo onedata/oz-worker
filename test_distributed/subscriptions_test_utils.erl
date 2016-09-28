@@ -19,8 +19,9 @@
 %% API
 -export([save/3, update_document/4, delete_document/3, get_rev/3,
     create_provider/3, call_worker/2, generate_group_ids/1, generate_user_ids/1,
-    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1, empty_cache/1, create_provider/4, delete_all/2, list/2, get_last_sequence_number/1]).
--export([expectation/2, public_only_user_expectation/2, group_expectation/8,
+    generate_space_ids/1, create_users/3, create_spaces/4, create_groups/4, id/1,
+    empty_cache/1, create_provider/4, delete_all/2, list/2, get_last_sequence_number/1]).
+-export([expectation/2, public_only_user_expectation/2, group_expectation/10,
     privileges_as_binaries/1, expectation_with_rev/2, public_only_provider_expectation/3]).
 -export([verify_messages_present/2, verify_messages_absent/2, init_messages/3,
     flush_messages/2, flush/0, verify_messages/3]).
@@ -38,7 +39,7 @@ save(Node, ID, Value) ->
         [#document{key = ID, value = Value}])).
 
 delete_all(Node, Documents) ->
-    lists:foreach(fun(#document{key= Key, value=Value}) ->
+    lists:foreach(fun(#document{key = Key, value = Value}) ->
         subscriptions_test_utils:delete_document(Node, element(1, Value), Key)
     end, Documents).
 
@@ -82,7 +83,7 @@ generate_ids(Prefix, Number) ->
 
 create_spaces(SIDs, UIDs, GIDs, Node) ->
     Groups = [{GID, []} || GID <- GIDs],
-    Users =  [{UID, []} || UID <- UIDs],
+    Users = [{UID, []} || UID <- UIDs],
     lists:map(fun({SID, N}) ->
         Space = #space{
             name = list_to_binary("s" ++ integer_to_list(N) ++ integer_to_list(erlang:system_time(micro_seconds))),
@@ -96,7 +97,7 @@ create_spaces(SIDs, UIDs, GIDs, Node) ->
 create_users(UIDs, GIDs, Node) ->
     lists:map(fun({UID, N}) ->
         User = #onedata_user{
-            name=list_to_binary("u" ++ integer_to_list(N)),
+            name = list_to_binary("u" ++ integer_to_list(N)),
             groups = GIDs
         },
         subscriptions_test_utils:save(Node, UID, User),
@@ -113,7 +114,7 @@ create_groups(GIDs, UIDs, SIDs, Node) ->
         },
         subscriptions_test_utils:save(Node, GID, Group),
         {GID, Group}
-end, lists:zip(GIDs, lists:seq(1, length(GIDs)))).
+    end, lists:zip(GIDs, lists:seq(1, length(GIDs)))).
 
 
 generate_cert_files() ->
@@ -130,9 +131,8 @@ generate_cert_files() ->
 
 get_last_sequence_number(Node) ->
     {ok, Start, _} =
-        rpc:call(Node, couchdb_datastore_driver, db_run, [couchbeam_changes,follow_once, [], 30]),
+        rpc:call(Node, couchdb_datastore_driver, db_run, [couchbeam_changes, follow_once, [], 30]),
     Start.
-
 
 
 %%%===================================================================
@@ -143,25 +143,21 @@ expectation(ID, #space{name = Name, providers_supports = Supports,
     groups = Groups, users = Users, shares = Shares}) ->
     space_expectation(ID, Name, Users, Groups, Supports, Shares);
 expectation(ID, #share{name = Name, parent_space = ParentSpace,
-    root_file_id = RootFileId, public_url = PublicUrl}) ->
-    RootFileIdBin = case RootFileId of
-        undefined -> <<"undefined">>;
-        RFIBin when is_binary(RFIBin) -> RFIBin
-    end,
-    PublicUrlBin = case PublicUrl of
-        undefined -> <<"undefined">>;
-        PUBin when is_binary(PUBin) -> PUBin
-    end,
-    share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin);
+    root_file_id = RootFileId, public_url = PublicUrl, handle = Handle}) ->
+    RootFileIdBin = undefined_to_binary(RootFileId),
+    PublicUrlBin = undefined_to_binary(PublicUrl),
+    HandleBin = undefined_to_binary(Handle),
+    share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin, HandleBin);
 expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
-    default_space = DefaultSpace, effective_groups = EGroups}) ->
-    user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups, case DefaultSpace of
-        undefined -> <<"undefined">>;
-        _ -> DefaultSpace
-    end);
+    default_space = DefaultSpace, effective_groups = EGroups,
+    handle_services = HandleServices, handles = Handles}) ->
+    user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups,
+        undefined_to_binary(DefaultSpace), HandleServices, Handles);
 expectation(ID, #user_group{name = Name, type = Type, users = Users, spaces = Spaces,
-    effective_users = EUsers, nested_groups = NGroups, parent_groups = PGroups}) ->
-    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups);
+    effective_users = EUsers, nested_groups = NGroups, parent_groups = PGroups,
+    handle_services = HandleServices, handles = Handles}) ->
+    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups,
+        HandleServices, Handles);
 
 expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) ->
     [{<<"id">>, ID}, {<<"provider">>, [
@@ -169,7 +165,28 @@ expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) -
         {<<"urls">>, URLs},
         {<<"space_ids">>, SpaceIDs},
         {<<"public_only">>, false}
-    ]}].
+    ]}];
+
+expectation(ID, #handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
+    service_properties = ServiceProperties, groups = Groups, users = Users}) ->
+    NameBin = undefined_to_binary(Name),
+    ProxyEndpointBin = undefined_to_binary(ProxyEndpoint),
+    handle_service_expectation(
+        ID, NameBin, ProxyEndpointBin, ServiceProperties, Users, Groups
+    );
+
+expectation(ID, #handle{handle_service_id = HandleServiceId, public_handle = PublicHandle,
+    resource_type = ResourceType, resource_id = ResourceId,
+    metadata = Metadata, groups = Groups, users = Users, timestamp = Timestamp}) ->
+    HandleServiceIdBin = undefined_to_binary(HandleServiceId),
+    PublicHandleBin = undefined_to_binary(PublicHandle),
+    ResourceTypeBin = undefined_to_binary(ResourceType),
+    ResourceIdBin = undefined_to_binary(ResourceId),
+    MetadataBin = undefined_to_binary(Metadata),
+    handle_expectation(
+        ID, HandleServiceIdBin, PublicHandleBin, ResourceTypeBin,
+        ResourceIdBin, MetadataBin, Users, Groups, Timestamp
+    ).
 
 space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
     [{<<"id">>, ID}, {<<"space">>, [
@@ -181,22 +198,49 @@ space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
         {<<"shares">>, Shares}
     ]}].
 
-share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl) ->
+share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl, Handle) ->
     [{<<"id">>, ID}, {<<"share">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
         {<<"parent_space">>, ParentSpace},
         {<<"root_file_id">>, RootFileId},
-        {<<"public_url">>, PublicUrl}
+        {<<"public_url">>, PublicUrl},
+        {<<"handle">>, Handle}
     ]}].
 
-user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace) ->
+handle_service_expectation(ID, Name, ProxyEndpoint, ServiceProperties, Users, Groups) ->
+    [{<<"id">>, ID}, {<<"handle_service">>, [
+        {<<"id">>, ID},
+        {<<"name">>, Name},
+        {<<"proxy_endpoint">>, ProxyEndpoint},
+        {<<"service_properties">>, ServiceProperties},
+        {<<"users">>, privileges_as_binaries(Users)},
+        {<<"groups">>, privileges_as_binaries(Groups)}
+    ]}].
+
+handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
+    Metadata, Users, Groups, Timestamp) ->
+    [{<<"id">>, ID}, {<<"handle">>, [
+        {<<"id">>, ID},
+        {<<"handle_service_id">>, HandleServiceId},
+        {<<"public_handle">>, PublicHandle},
+        {<<"resource_type">>, ResourceType},
+        {<<"resource_id">>, ResourceId},
+        {<<"metadata">>, Metadata},
+        {<<"users">>, privileges_as_binaries(Users)},
+        {<<"groups">>, privileges_as_binaries(Groups)},
+        {<<"timestamp">>, serialize_timestamp(Timestamp)}
+    ]}].
+
+user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace, HandleServices, Handles) ->
     [{<<"id">>, ID}, {<<"user">>, [
         {<<"name">>, Name},
         {<<"space_names">>, Spaces},
         {<<"group_ids">>, Groups},
         {<<"effective_group_ids">>, EGroups},
         {<<"default_space">>, DefaultSpace},
+        {<<"handle_services">>, HandleServices},
+        {<<"handles">>, Handles},
         {<<"public_only">>, false}
     ]}].
 
@@ -215,10 +259,12 @@ public_only_user_expectation(ID, Name) ->
         {<<"group_ids">>, []},
         {<<"effective_group_ids">>, []},
         {<<"default_space">>, <<"undefined">>},
+        {<<"handle_services">>, []},
+        {<<"handles">>, []},
         {<<"public_only">>, true}
     ]}].
 
-group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups) ->
+group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups, HandleServices, Handles) ->
     [{<<"id">>, ID}, {<<"group">>, [
         {<<"name">>, Name},
         {<<"type">>, atom_to_binary(Type, latin1)},
@@ -226,7 +272,9 @@ group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups) ->
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"effective_users">>, privileges_as_binaries(EUsers)},
         {<<"nested_groups">>, privileges_as_binaries(NGroups)},
-        {<<"parent_groups">>, PGroups}
+        {<<"parent_groups">>, PGroups},
+        {<<"handle_services">>, HandleServices},
+        {<<"handles">>, Handles}
     ]}].
 
 privileges_as_binaries(IDsWithPrivileges) ->
@@ -291,7 +339,7 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
 
-    % ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
+    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),
@@ -324,12 +372,12 @@ largest(List) ->
 extract_seqs(Messages) ->
     lists:map(fun(Message) ->
         proplists:get_value(<<"seq">>, Message, -2)
-              end, Messages).
+    end, Messages).
 
 remove_matched_expectations(Expected, Messages) ->
     lists:filter(fun(Exp) ->
         lists:all(fun(Msg) -> length(Exp -- Msg) =/= 0 end, Messages)
-                 end, Expected).
+    end, Expected).
 
 
 id(Id) when is_atom(Id) ->
@@ -341,3 +389,12 @@ empty_cache(Node) ->
     subscriptions_test_utils:update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{
         cache => gb_trees:empty()
     }).
+
+undefined_to_binary(Value) ->
+    case Value of
+        undefined -> <<"undefined">>;
+        Bin when is_binary(Bin) -> Bin
+    end.
+
+serialize_timestamp({{A, B, C}, {D, E, F}}) ->
+    [A, B, C, D, E, F].
