@@ -56,8 +56,8 @@ find(<<"authorizer">>, _AuthorizerId) ->
 -spec find_all(ResourceType :: binary()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"authorizer">>) ->
-    {ok, #document{value = #onedata_user{connected_accounts = OAuthAccounts}}} =
-        onedata_user:get(g_session:get_user_id()),
+    {ok, #document{value = #od_user{connected_accounts = OAuthAccounts}}} =
+        od_user:get(g_session:get_user_id()),
     % One connected account can have multiple email addresses - create
     % a separate authorizer record for every
     Res = lists:foldl(

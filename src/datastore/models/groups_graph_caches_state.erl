@@ -23,6 +23,11 @@
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
 
+-type doc() :: datastore:document().
+-type info() :: #groups_graph_caches_state{}.
+-type id() :: binary().
+-export_type([doc/0, info/0, id/0]).
+
 %%%===================================================================
 %%% model_behaviour callbacks
 %%%===================================================================

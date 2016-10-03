@@ -63,10 +63,10 @@ create(ClientName, URLs, RedirectionPoint, CSRBin, OptionalArgs) ->
     Latitude = maps:get(latitude, OptionalArgs, undefined),
     Longitude = maps:get(longitude, OptionalArgs, undefined),
 
-    Provider = #provider{client_name = ClientName, urls = URLs,
+    Provider = #od_provider{client_name = ClientName, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
         latitude = Latitude, longitude = Longitude},
-    provider:save(#document{key = ProviderId, value = Provider}),
+    od_provider:save(#document{key = ProviderId, value = Provider}),
 
     {ok, ProviderId, ProviderCertPem}.
 
@@ -78,14 +78,14 @@ create(ClientName, URLs, RedirectionPoint, CSRBin, OptionalArgs) ->
 -spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
     ok.
 modify(ProviderId, Data) ->
-    {ok, _} = provider:update(ProviderId, fun(Provider) ->
-        URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
-        RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
-        ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
-        Latitude = proplists:get_value(<<"latitude">>, Data, Provider#provider.latitude),
-        Longitude = proplists:get_value(<<"longitude">>, Data, Provider#provider.longitude),
+    {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
+        URLs = proplists:get_value(<<"urls">>, Data, Provider#od_provider.urls),
+        RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#od_provider.redirection_point),
+        ClientName = proplists:get_value(<<"clientName">>, Data, Provider#od_provider.client_name),
+        Latitude = proplists:get_value(<<"latitude">>, Data, Provider#od_provider.latitude),
+        Longitude = proplists:get_value(<<"longitude">>, Data, Provider#od_provider.longitude),
 
-        {ok, Provider#provider{
+        {ok, Provider#od_provider{
             urls = URLs,
             redirection_point = RedirectionPoint,
             client_name = ClientName,
@@ -103,7 +103,7 @@ modify(ProviderId, Data) ->
 -spec exists(ProviderId :: binary()) ->
     boolean().
 exists(ProviderId) ->
-    provider:exists(ProviderId).
+    od_provider:exists(ProviderId).
 
 %%--------------------------------------------------------------------
 %% @doc Get provider's details.
@@ -113,13 +113,13 @@ exists(ProviderId) ->
 -spec get_data(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_data(ProviderId) ->
-    {ok, #document{value = #provider{
+    {ok, #document{value = #od_provider{
         client_name = ClientName,
         urls = URLs,
         redirection_point = RedirectionPoint,
         latitude = Latitude,
         longitude = Longitude
-    }}} = provider:get(ProviderId),
+    }}} = od_provider:get(ProviderId),
 
     {ok, [
         {clientName, ClientName},
@@ -138,7 +138,7 @@ get_data(ProviderId) ->
 -spec get_spaces(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_spaces(ProviderId) ->
-    {ok, #document{value = #provider{spaces = Spaces}}} = provider:get(ProviderId),
+    {ok, #document{value = #od_provider{spaces = Spaces}}} = od_provider:get(ProviderId),
     {ok, [{spaces, Spaces}]}.
 
 
@@ -165,19 +165,19 @@ get_url(ProviderId) ->
 -spec remove(ProviderId :: binary()) ->
     true.
 remove(ProviderId) ->
-    {ok, #document{value = #provider{spaces = Spaces, serial = Serial}}} = provider:get(ProviderId),
+    {ok, #document{value = #od_provider{spaces = Spaces, serial = Serial}}} = od_provider:get(ProviderId),
 
     lists:foreach(fun(SpaceId) ->
-        {ok, _} = space:update(SpaceId, fun(Space) ->
-            #space{providers_supports = Supports} = Space,
-            {ok, Space#space{
+        {ok, _} = od_space:update(SpaceId, fun(Space) ->
+            #od_space{providers_supports = Supports} = Space,
+            {ok, Space#od_space{
                 providers_supports = proplists:delete(ProviderId, Supports)
             }}
         end)
     end, Spaces),
 
     worker_proxy:call(ozpca_worker, {revoke, Serial}),
-    case (provider:delete(ProviderId)) of
+    case (od_provider:delete(ProviderId)) of
         ok -> true;
         _ -> false
     end.
@@ -300,7 +300,7 @@ choose_provider_for_user(UserID) ->
 %%--------------------------------------------------------------------
 -spec list() -> {ok, [binary()]}.
 list() ->
-    {ok, ProviderDocs} = provider:list(),
+    {ok, ProviderDocs} = od_provider:list(),
     ProviderIds = lists:map(fun(#document{key = ProviderId}) ->
         ProviderId
     end, ProviderDocs),

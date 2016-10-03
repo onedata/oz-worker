@@ -6,10 +6,10 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for onedata_user record - representing a user in the system.
+%%% API for user_group record - representing a group in the system.
 %%% @end
 %%%-------------------------------------------------------------------
--module(onedata_user).
+-module(od_group).
 -author("Michal Zmuda").
 -behaviour(model_behaviour).
 
@@ -17,16 +17,19 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
+-type doc() :: datastore:document().
+-type info() :: #od_group{}.
+-type id() :: binary().
+-type type() :: 'organization' | 'unit' | 'team' | 'role'.
+-export_type([doc/0, info/0, id/0]).
+-export_type([type/0]).
+
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
 
-%% API
--export([get_all_ids/0, get_by_criterion/1]).
+-define(USER_MODULE, onedata_user).
 
--type id() :: binary().
--type doc() :: datastore:document().
--export_type([id/0, doc/0]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -99,15 +102,16 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link model_behaviour} callback model_init/0.
-%% todo: change level once list is supported by the datastore (couchbase)
 %% @end
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_Name, user_store_level, ?DISK_ONLY_LEVEL),
-    Hooks = record_location_hooks:get_hooks(),
-    ?MODEL_CONFIG(onedata_user_bucket, Hooks, StoreLevel).
+    StoreLevel = application:get_env(?APP_Name, group_store_level, ?DISK_ONLY_LEVEL),
+    UserHooks = [{?USER_MODULE, save}, {?USER_MODULE, update}, {?USER_MODULE, create},
+        {?USER_MODULE, create_or_opdate}],
+    Hooks = [{?MODULE, save}, {?MODULE, update}, {?MODULE, create}, {?MODULE, create_or_opdate}],
+    ?MODEL_CONFIG(user_group_bucket, Hooks ++ UserHooks, StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -117,8 +121,12 @@ model_init() ->
 -spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term(),
     ReturnValue :: term()) -> ok.
-'after'(ModelName, Method, _Level, Context, ReturnValue) ->
-    record_location_hooks:handle_after(ModelName, Method, Context, ReturnValue).
+'after'(?MODULE, _Method, _Level, _Context, {ok, ID}) ->
+    group_graph:mark_group_changed(ID);
+'after'(?USER_MODULE, _Method, _Level, _Context, {ok, ID}) ->
+    group_graph:mark_user_changed(ID);
+'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -127,93 +135,5 @@ model_init() ->
 %%--------------------------------------------------------------------
 -spec before(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
-before(ModelName, Method, _Level, Context) ->
-    record_location_hooks:handle_before(ModelName, Method, Context).
-
-%%%===================================================================
-%%% API callbacks
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc 
-%% @private
-%% Gets all users from DB (that have at least one email address set).
-%% This function is used for development purposes, there appears to be no production use case.
-%% @end
-%%--------------------------------------------------------------------
--spec get_all_ids() -> {ok, [binary()]}.
-get_all_ids() ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #onedata_user{}, key = Id}, Acc) ->
-            {next, [Id | Acc]};
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).
-
-%%--------------------------------------------------------------------
-%% @doc 
-%% @private
-%% Gets first user matching given criterion.
-%% todo: change implementation to something fast (connected with VFS-1498)
-%% @end
-%%--------------------------------------------------------------------
-
--spec get_by_criterion(Criterion :: {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
-{email, binary()} | {alias, binary()}) ->
-    {ok, #document{}} | {error, any()}.
-
-get_by_criterion({email, Value}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #onedata_user{email_list = EmailList}} = Doc, Acc) ->
-            case lists:member(Value, EmailList) of
-                true -> {abort, [Doc | Acc]};
-                false -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result};
-
-get_by_criterion({alias, Value}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #onedata_user{alias = Alias}} = Doc, Acc) ->
-            case Alias of
-                Value -> {abort, [Doc | Acc]};
-                _ -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result};
-
-get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #onedata_user{connected_accounts = Accounts}} = Doc, Acc) ->
-            Found = lists:any(fun
-                (#oauth_account{provider_id = PID, user_id = UID}) ->
-                    case {PID, UID} of
-                        {ProviderID, UserID} -> true;
-                        _ -> false
-                    end;
-                (_) -> false
-            end, Accounts),
-            case Found of
-                true -> {abort, [Doc | Acc]};
-                _ -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result}.
+before(_ModelName, _Method, _Level, _Context) ->
+    ok.

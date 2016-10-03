@@ -42,7 +42,7 @@
 -spec exists(SpaceId :: binary()) ->
     boolean().
 exists(SpaceId) ->
-    space:exists(SpaceId).
+    od_space:exists(SpaceId).
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether the provider identified by ProviderId supports the
@@ -53,10 +53,10 @@ exists(SpaceId) ->
 -spec has_provider(SpaceId :: binary(), ProviderId :: binary()) ->
     boolean().
 has_provider(SpaceId, ProviderId) ->
-    case space:get(SpaceId) of
+    case od_space:get(SpaceId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #space{providers_supports = ProvidersSupports}}} ->
+        {ok, #document{value = #od_space{providers_supports = ProvidersSupports}}} ->
             {Providers, _} = lists:unzip(ProvidersSupports),
             lists:member(ProviderId, Providers)
     end.
@@ -70,10 +70,10 @@ has_provider(SpaceId, ProviderId) ->
 -spec has_user(SpaceId :: binary(), UserId :: binary()) ->
     boolean().
 has_user(SpaceId, UserId) ->
-    case space:get(SpaceId) of
+    case od_space:get(SpaceId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #space{users = Users}}} ->
+        {ok, #document{value = #od_space{users = Users}}} ->
             lists:keymember(UserId, 1, Users)
     end.
 
@@ -87,18 +87,18 @@ has_user(SpaceId, UserId) ->
 -spec has_effective_user(SpaceId :: binary(), UserId :: binary()) ->
     boolean().
 has_effective_user(SpaceId, UserId) ->
-    case space:get(SpaceId) of
+    case od_space:get(SpaceId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #space{users = Users, groups = SpaceGroups}}} ->
+        {ok, #document{value = #od_space{users = Users, groups = SpaceGroups}}} ->
             case lists:keymember(UserId, 1, Users) of
                 true ->
                     true;
                 false ->
-                    case onedata_user:get(UserId) of
+                    case od_user:get(UserId) of
                         {error, {not_found, _}} ->
                             false;
-                        {ok, #document{value = #onedata_user{groups = UserGroups}}} ->
+                        {ok, #document{value = #od_user{groups = UserGroups}}} ->
                             SpaceGroupsSet = ordsets:from_list([GroupId || {GroupId, _} <- SpaceGroups]),
                             UserGroupsSet = ordsets:from_list(UserGroups),
                             not ordsets:is_disjoint(SpaceGroupsSet, UserGroupsSet)
@@ -115,10 +115,10 @@ has_effective_user(SpaceId, UserId) ->
 -spec has_group(SpaceId :: binary(), GroupId :: binary()) ->
     boolean().
 has_group(SpaceId, GroupId) ->
-    case space:get(SpaceId) of
+    case od_space:get(SpaceId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #space{groups = Groups}}} ->
+        {ok, #document{value = #od_space{groups = Groups}}} ->
             lists:keymember(GroupId, 1, Groups)
     end.
 
@@ -153,9 +153,9 @@ has_share(SpaceId, ShareId) ->
         false -> false;
         true ->
             {ok, #document{
-                value = #space{
+                value = #od_space{
                     shares = Shares
-                }}} = space:get(SpaceId),
+                }}} = od_space:get(SpaceId),
             lists:member(ShareId, Shares)
     end.
 
@@ -192,8 +192,8 @@ modify(SpaceId, {user, UserId}, Name) ->
     user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     ok;
 modify(SpaceId, provider, Name) ->
-    {ok, _} = space:update(SpaceId, fun(Space) ->
-        {ok, Space#space{name = Name}}
+    {ok, _} = od_space:update(SpaceId, fun(Space) ->
+        {ok, Space#od_space{name = Name}}
     end),
     ok.
 
@@ -206,7 +206,7 @@ modify(SpaceId, provider, Name) ->
     Privileges :: [privileges:space_privilege()]) ->
     ok.
 set_privileges(SpaceId, Member, Privileges) ->
-    {ok, _} = space:update(SpaceId, fun(Space) ->
+    {ok, _} = od_space:update(SpaceId, fun(Space) ->
         PrivilegesNew = ordsets:from_list(Privileges),
         SpaceNew = set_privileges_aux(Space, Member, PrivilegesNew),
         {ok, SpaceNew}
@@ -241,16 +241,16 @@ add_user(SpaceId, UserId) ->
         true ->
             ok;
         false ->
-            {ok, _} = space:update(SpaceId, fun(Space) ->
+            {ok, _} = od_space:update(SpaceId, fun(Space) ->
                 Privileges = privileges:space_user(),
-                #space{users = Users} = Space,
-                {ok, Space#space{users = [{UserId, Privileges} | Users]}}
+                #od_space{users = Users} = Space,
+                {ok, Space#od_space{users = [{UserId, Privileges} | Users]}}
             end),
-            {ok, _} = onedata_user:update(UserId, fun(User) ->
-                #onedata_user{spaces = USpaces} = User,
-                {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
+            {ok, _} = od_user:update(UserId, fun(User) ->
+                #od_user{spaces = USpaces} = User,
+                {ok, User#od_user{spaces = [SpaceId | USpaces]}}
             end),
-            {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
+            {ok, #document{value = #od_space{name = Name}}} = od_space:get(SpaceId),
             user_logic:set_space_name_mapping(UserId, SpaceId, Name, false)
     end,
     {ok, SpaceId}.
@@ -269,19 +269,19 @@ add_group(SpaceId, GroupId) ->
             ok;
         false ->
             Privileges = privileges:space_user(),
-            {ok, _} = space:update(SpaceId, fun(Space) ->
-                #space{groups = Groups} = Space,
-                {ok, Space#space{groups = [{GroupId, Privileges} | Groups]}}
+            {ok, _} = od_space:update(SpaceId, fun(Space) ->
+                #od_space{groups = Groups} = Space,
+                {ok, Space#od_space{groups = [{GroupId, Privileges} | Groups]}}
             end),
-            {ok, _} = user_group:update(GroupId, fun(Group) ->
-                #user_group{spaces = Spaces} = Group,
-                {ok, Group#user_group{spaces = [SpaceId | Spaces]}}
+            {ok, _} = od_group:update(GroupId, fun(Group) ->
+                #od_group{spaces = Spaces} = Group,
+                {ok, Group#od_group{spaces = [SpaceId | Spaces]}}
             end),
-            {ok, #document{value = #space{name = Name}}} = space:get(SpaceId),
+            {ok, #document{value = #od_space{name = Name}}} = od_space:get(SpaceId),
             {ok, #document{
-                value = #user_group{
+                value = #od_group{
                     users = Users
-                }}} = user_group:get(GroupId),
+                }}} = od_group:get(GroupId),
             lists:foreach(fun({UserId, _}) ->
                 user_logic:set_space_name_mapping(UserId, SpaceId, Name, false)
             end, Users)
@@ -310,15 +310,15 @@ support(ProviderId, Macaroon, SupportedSize) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec add_provider(SpaceId :: binary(), ProviderId :: binary(),
-    SupportedSize :: integer()) -> {ok, SpaceId :: space:id()}.
+    SupportedSize :: integer()) -> {ok, SpaceId :: od_space:id()}.
 add_provider(SpaceId, ProviderId, SupportedSize) ->
     case has_provider(SpaceId, ProviderId) of
         true ->
             {ok, SpaceId};
         false ->
-            {ok, _} = space:update(SpaceId, fun(Space) ->
-                #space{providers_supports = Supports} = Space,
-                {ok, Space#space{providers_supports = [
+            {ok, _} = od_space:update(SpaceId, fun(Space) ->
+                #od_space{providers_supports = Supports} = Space,
+                {ok, Space#od_space{providers_supports = [
                     {ProviderId, SupportedSize} | Supports
                 ]}}
             end),
@@ -336,12 +336,12 @@ add_provider(SpaceId, ProviderId, SupportedSize) ->
     {ok, [proplists:property()]}.
 get_data(SpaceId, {user, UserId}) ->
     {ok, #document{
-        value = #space{
+        value = #od_space{
             name = CanonicalName,
             providers_supports = Supports,
             shares = Shares
-        }}} = space:get(SpaceId),
-    {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
+        }}} = od_space:get(SpaceId),
+    {ok, #document{value = #od_user{space_aliases = SpaceNames}}} = od_user:get(UserId),
     {ok, Name} = maps:find(SpaceId, SpaceNames),
     {ok, [
         {spaceId, SpaceId},
@@ -351,7 +351,7 @@ get_data(SpaceId, {user, UserId}) ->
         {shares, Shares}
     ]};
 get_data(SpaceId, provider) ->
-    {ok, #document{value = #space{name = CanonicalName, providers_supports = Supports}}} = space:get(SpaceId),
+    {ok, #document{value = #od_space{name = CanonicalName, providers_supports = Supports}}} = od_space:get(SpaceId),
     {ok, [
         {spaceId, SpaceId},
         {name, CanonicalName},
@@ -369,10 +369,10 @@ get_data(SpaceId, provider) ->
     {ok, [proplists:property()]}.
 get_public_data(SpaceId, {user, UserId}) ->
     {ok, #document{
-        value = #space{
+        value = #od_space{
             name = CanonicalName
-        }}} = space:get(SpaceId),
-    {ok, #document{value = #onedata_user{space_names = SpaceNames}}} = onedata_user:get(UserId),
+        }}} = od_space:get(SpaceId),
+    {ok, #document{value = #od_user{space_aliases = SpaceNames}}} = od_user:get(UserId),
     {ok, Name} = maps:find(SpaceId, SpaceNames),
     {ok, [
         {spaceId, SpaceId},
@@ -389,7 +389,7 @@ get_public_data(SpaceId, {user, UserId}) ->
 -spec get_users(SpaceId :: binary()) ->
     {ok, [proplists:property()]}.
 get_users(SpaceId) ->
-    {ok, #document{value = #space{users = Users}}} = space:get(SpaceId),
+    {ok, #document{value = #od_space{users = Users}}} = od_space:get(SpaceId),
     {UserIds, _} = lists:unzip(Users),
     {ok, [{users, UserIds}]}.
 
@@ -402,10 +402,10 @@ get_users(SpaceId) ->
 -spec get_effective_users(SpaceId :: binary()) ->
     {ok, [proplists:property()]}.
 get_effective_users(SpaceId) ->
-    {ok, #document{value = #space{users = SpaceUserTuples, groups = GroupTuples}}} = space:get(SpaceId),
+    {ok, #document{value = #od_space{users = SpaceUserTuples, groups = GroupTuples}}} = od_space:get(SpaceId),
 
     GroupUsersSets = lists:map(fun({GroupId, _}) ->
-        {ok, #document{value = #user_group{users = GroupUserTuples}}} = user_group:get(GroupId),
+        {ok, #document{value = #od_group{users = GroupUserTuples}}} = od_group:get(GroupId),
         {GroupUsers, _} = lists:unzip(GroupUserTuples),
         ordsets:from_list(GroupUsers)
     end, GroupTuples),
@@ -424,7 +424,7 @@ get_effective_users(SpaceId) ->
 -spec get_groups(SpaceId :: binary()) ->
     {ok, [proplists:property()]}.
 get_groups(SpaceId) ->
-    {ok, #document{value = #space{groups = GroupTuples}}} = space:get(SpaceId),
+    {ok, #document{value = #od_space{groups = GroupTuples}}} = od_space:get(SpaceId),
     {Groups, _} = lists:unzip(GroupTuples),
     {ok, [{groups, Groups}]}.
 
@@ -436,8 +436,8 @@ get_groups(SpaceId) ->
 -spec get_providers(SpaceId :: binary(), Client :: user | provider) ->
     {ok, [proplists:property()]}.
 get_providers(SpaceId, _Client) ->
-    {ok, #document{value = #space{providers_supports = ProvidersSupports}}}
-        = space:get(SpaceId),
+    {ok, #document{value = #od_space{providers_supports = ProvidersSupports}}}
+        = od_space:get(SpaceId),
     {Providers, _} = lists:unzip(ProvidersSupports),
     {ok, [{providers, Providers}]}.
 
@@ -483,11 +483,11 @@ get_provider(_SpaceId, _Client, ProviderId) ->
 -spec get_privileges(SpaceId :: binary(), {user | group, Id :: binary()}) ->
     {ok, [privileges:space_privilege()]}.
 get_privileges(SpaceId, {user, UserId}) ->
-    {ok, #document{value = #space{users = Users}}} = space:get(SpaceId),
+    {ok, #document{value = #od_space{users = Users}}} = od_space:get(SpaceId),
     {_, Privileges} = lists:keyfind(UserId, 1, Users),
     {ok, Privileges};
 get_privileges(SpaceId, {group, GroupId}) ->
-    {ok, #document{value = #space{groups = Groups}}} = space:get(SpaceId),
+    {ok, #document{value = #od_space{groups = Groups}}} = od_space:get(SpaceId),
     {_, Privileges} = lists:keyfind(GroupId, 1, Groups),
     {ok, Privileges}.
 
@@ -500,42 +500,42 @@ get_privileges(SpaceId, {group, GroupId}) ->
     true.
 remove(SpaceId) ->
     {ok, #document{
-        value = #space{
+        value = #od_space{
             users = Users,
             groups = Groups,
             providers_supports = Supports,
             shares = Shares
-        }}} = space:get(SpaceId),
+        }}} = od_space:get(SpaceId),
 
     lists:foreach(fun({UserId, _}) ->
-        {ok, _} = onedata_user:update(UserId, fun(User) ->
-            #onedata_user{spaces = USpaces, space_names = SpaceNames} = User,
-            {ok, User#onedata_user{
+        {ok, _} = od_user:update(UserId, fun(User) ->
+            #od_user{spaces = USpaces, space_aliases = SpaceNames} = User,
+            {ok, User#od_user{
                 spaces = lists:delete(SpaceId, USpaces),
-                space_names = maps:remove(SpaceId, SpaceNames)
+                space_aliases = maps:remove(SpaceId, SpaceNames)
             }}
         end)
     end, Users),
 
     lists:foreach(fun({GroupId, _}) ->
-        {ok, _} = user_group:update(GroupId, fun(Group) ->
-            #user_group{spaces = GSpaces} = Group,
-            {ok, Group#user_group{spaces = lists:delete(SpaceId, GSpaces)}}
+        {ok, _} = od_group:update(GroupId, fun(Group) ->
+            #od_group{spaces = GSpaces} = Group,
+            {ok, Group#od_group{spaces = lists:delete(SpaceId, GSpaces)}}
         end)
     end, Groups),
 
     lists:foreach(fun({ProviderId, _}) ->
-        {ok, _} = provider:update(ProviderId, fun(Provider) ->
-            #provider{spaces = PSpaces} = Provider,
-            {ok, Provider#provider{spaces = lists:delete(SpaceId, PSpaces)}}
+        {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
+            #od_provider{spaces = PSpaces} = Provider,
+            {ok, Provider#od_provider{spaces = lists:delete(SpaceId, PSpaces)}}
         end)
     end, Supports),
 
     lists:foreach(fun(ShareId) ->
-        ok = share:delete(ShareId)
+        ok = od_share:delete(ShareId)
     end, Shares),
 
-    case space:delete(SpaceId) of
+    case od_space:delete(SpaceId) of
         ok -> true;
         _ -> false
     end.
@@ -548,13 +548,13 @@ remove(SpaceId) ->
 -spec remove_user(SpaceId :: binary(), UserId :: binary()) ->
     true.
 remove_user(SpaceId, UserId) ->
-    {ok, _} = onedata_user:update(UserId, fun(User) ->
-        #onedata_user{spaces = USpaces} = User,
-        {ok, User#onedata_user{spaces = lists:delete(SpaceId, USpaces)}}
+    {ok, _} = od_user:update(UserId, fun(User) ->
+        #od_user{spaces = USpaces} = User,
+        {ok, User#od_user{spaces = lists:delete(SpaceId, USpaces)}}
     end),
-    {ok, _} = space:update(SpaceId, fun(Space) ->
-        #space{users = Users} = Space,
-        {ok, Space#space{users = lists:keydelete(UserId, 1, Users)}}
+    {ok, _} = od_space:update(SpaceId, fun(Space) ->
+        #od_space{users = Users} = Space,
+        {ok, Space#od_space{users = lists:keydelete(UserId, 1, Users)}}
     end),
     user_logic:clean_space_name_mapping(UserId, SpaceId),
     cleanup(SpaceId),
@@ -568,14 +568,14 @@ remove_user(SpaceId, UserId) ->
 -spec remove_group(SpaceId :: binary(), GroupId :: binary()) ->
     true.
 remove_group(SpaceId, GroupId) ->
-    {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
-    {ok, _} = user_group:update(GroupId, fun(Group) ->
-        #user_group{spaces = Spaces} = Group,
-        {ok, Group#user_group{spaces = lists:delete(SpaceId, Spaces)}}
+    {ok, #document{value = #od_group{users = Users}}} = od_group:get(GroupId),
+    {ok, _} = od_group:update(GroupId, fun(Group) ->
+        #od_group{spaces = Spaces} = Group,
+        {ok, Group#od_group{spaces = lists:delete(SpaceId, Spaces)}}
     end),
-    {ok, _} = space:update(SpaceId, fun(Space) ->
-        #space{groups = Groups} = Space,
-        {ok, Space#space{groups = lists:keydelete(GroupId, 1, Groups)}}
+    {ok, _} = od_space:update(SpaceId, fun(Space) ->
+        #od_space{groups = Groups} = Space,
+        {ok, Space#od_space{groups = lists:keydelete(GroupId, 1, Groups)}}
     end),
     lists:foreach(fun({UserId, _}) ->
         user_logic:clean_space_name_mapping(UserId, SpaceId)
@@ -591,13 +591,13 @@ remove_group(SpaceId, GroupId) ->
 -spec remove_provider(SpaceId :: binary(), ProviderId :: binary()) ->
     true.
 remove_provider(SpaceId, ProviderId) ->
-    {ok, _} = provider:update(ProviderId, fun(Provider) ->
-        #provider{spaces = Spaces} = Provider,
-        {ok, Provider#provider{spaces = lists:delete(SpaceId, Spaces)}}
+    {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
+        #od_provider{spaces = Spaces} = Provider,
+        {ok, Provider#od_provider{spaces = lists:delete(SpaceId, Spaces)}}
     end),
-    {ok, _} = space:update(SpaceId, fun(Space) ->
-        #space{providers_supports = Supports} = Space,
-        {ok, Space#space{
+    {ok, _} = od_space:update(SpaceId, fun(Space) ->
+        #od_space{providers_supports = Supports} = Space,
+        {ok, Space#od_space{
             providers_supports = proplists:delete(ProviderId, Supports)
         }}
     end),
@@ -613,13 +613,13 @@ remove_provider(SpaceId, ProviderId) ->
     {ok, SpaceId :: binary()}.
 create_with_provider({user, UserId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, providers_supports = Supports, users = [{UserId, Privileges}]},
+    Space = #od_space{name = Name, providers_supports = Supports, users = [{UserId, Privileges}]},
     {Providers, _} = lists:unzip(Supports),
 
-    {ok, SpaceId} = space:save(#document{value = Space}),
-    {ok, _} = onedata_user:update(UserId, fun(User) ->
-        #onedata_user{spaces = USpaces} = User,
-        {ok, User#onedata_user{spaces = [SpaceId | USpaces]}}
+    {ok, SpaceId} = od_space:save(#document{value = Space}),
+    {ok, _} = od_user:update(UserId, fun(User) ->
+        #od_user{spaces = USpaces} = User,
+        {ok, User#od_user{spaces = [SpaceId | USpaces]}}
     end),
 
     add_space_to_providers(SpaceId, Providers),
@@ -628,17 +628,17 @@ create_with_provider({user, UserId}, Name, Supports) ->
 
 create_with_provider({group, GroupId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, providers_supports = Supports, groups = [{GroupId, Privileges}]},
-    {ok, SpaceId} = space:save(#document{value = Space}),
+    Space = #od_space{name = Name, providers_supports = Supports, groups = [{GroupId, Privileges}]},
+    {ok, SpaceId} = od_space:save(#document{value = Space}),
     {Providers, _} = lists:unzip(Supports),
 
-    {ok, _} = user_group:update(GroupId, fun(Group) ->
-        #user_group{spaces = Spaces} = Group,
-        {ok, Group#user_group{spaces = [SpaceId | Spaces]}}
+    {ok, _} = od_group:update(GroupId, fun(Group) ->
+        #od_group{spaces = Spaces} = Group,
+        {ok, Group#od_group{spaces = [SpaceId | Spaces]}}
     end),
 
     add_space_to_providers(SpaceId, Providers),
-    {ok, #document{value = #user_group{users = Users}}} = user_group:get(GroupId),
+    {ok, #document{value = #od_group{users = Users}}} = od_group:get(GroupId),
     lists:foreach(fun({UserId, _}) ->
         user_logic:set_space_name_mapping(UserId, SpaceId, Name, true)
     end, Users),
@@ -654,9 +654,9 @@ create_with_provider({group, GroupId}, Name, Supports) ->
         -> ok.
 add_space_to_providers(_SpaceId, []) -> ok;
 add_space_to_providers(SpaceId, [ProviderId | RestProviders]) ->
-    {ok, _} = provider:update(ProviderId, fun(Provider) ->
-        #provider{spaces = Spaces} = Provider,
-        {ok, Provider#provider{spaces = [SpaceId | Spaces]}}
+    {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
+        #od_provider{spaces = Spaces} = Provider,
+        {ok, Provider#od_provider{spaces = [SpaceId | Spaces]}}
     end),
     add_space_to_providers(SpaceId, RestProviders).
 
@@ -686,8 +686,8 @@ cleanup(_SpaceId) ->
 -spec get_effective_privileges(SpaceId :: binary(), UserId :: binary()) ->
     {ok, ordsets:ordset(privileges:space_privilege())}.
 get_effective_privileges(SpaceId, UserId) ->
-    {ok, #document{value = #onedata_user{groups = UGroups}}} = onedata_user:get(UserId),
-    {ok, #document{value = #space{users = UserTuples, groups = SGroupTuples}}} = space:get(SpaceId),
+    {ok, #document{value = #od_user{groups = UGroups}}} = od_user:get(UserId),
+    {ok, #document{value = #od_space{users = UserTuples, groups = SGroupTuples}}} = od_space:get(SpaceId),
 
     UserGroups = sets:from_list(UGroups),
 
@@ -716,31 +716,31 @@ get_effective_privileges(SpaceId, UserId) ->
 -spec get_shares(SpaceId :: binary()) -> {ok, [{shares, [binary()]}]} | no_return().
 get_shares(SpaceId) ->
     {ok, #document{
-        value = #space{
+        value = #od_space{
             shares = Shares
-        }}} = space:get(SpaceId),
+        }}} = od_space:get(SpaceId),
     {ok, [{shares, Shares}]}.
 
 
 %%--------------------------------------------------------------------
 %% @doc Transforms a space to include new privileges.
 %%--------------------------------------------------------------------
--spec set_privileges_aux(Space :: space_info(), {user | group, Id :: binary()},
+-spec set_privileges_aux(Space :: od_space:info(), {user | group, Id :: binary()},
     Privileges :: [privileges:space_privilege()]) ->
-    space_info().
-set_privileges_aux(#space{users = Users} = Space, {user, UserId}, Privileges) ->
+    od_space:info().
+set_privileges_aux(#od_space{users = Users} = Space, {user, UserId}, Privileges) ->
     UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, Privileges}),
-    Space#space{users = UsersNew};
-set_privileges_aux(#space{groups = Groups} = Space, {group, GroupId}, Privileges) ->
+    Space#od_space{users = UsersNew};
+set_privileges_aux(#od_space{groups = Groups} = Space, {group, GroupId}, Privileges) ->
     GroupsNew = lists:keyreplace(GroupId, 1, Groups, {GroupId, Privileges}),
-    Space#space{groups = GroupsNew}.
+    Space#od_space{groups = GroupsNew}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns a list of all spaces (their ids).
 %%--------------------------------------------------------------------
 -spec list() -> {ok, [binary()]}.
 list() ->
-    {ok, SpaceDocs} = space:list(),
+    {ok, SpaceDocs} = od_space:list(),
     SpaceIds = lists:map(fun(#document{key = SpaceId}) ->
         SpaceId
     end, SpaceDocs),

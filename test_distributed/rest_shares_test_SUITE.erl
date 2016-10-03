@@ -140,7 +140,7 @@ check_remove_share(Code, Issuer, ShareId) ->
 create_share_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -182,7 +182,7 @@ create_share_test(Config) ->
 view_shares_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -262,7 +262,7 @@ view_shares_test(Config) ->
 modify_share_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -328,7 +328,7 @@ remove_share_test(Config) ->
     rest_test_utils:set_config(Config),
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),

@@ -32,7 +32,7 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
-    {ok, UserIds} = onedata_user:get_all_ids(),
+    {ok, UserIds} = od_user:get_all_ids(),
     Buttons = lists:map(
         fun(UserId) ->
             Path = str_utils:format_bin("/validate_dev_login?user=~s",

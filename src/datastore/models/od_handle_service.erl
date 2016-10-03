@@ -1,34 +1,35 @@
 %%%-------------------------------------------------------------------
-%%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @author Tomasz Lichon
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for user_group record - representing a group in the system.
+%%% Database model representing service allowing for registration of file handles.
 %%% @end
 %%%-------------------------------------------------------------------
--module(user_group).
--author("Michal Zmuda").
+-module(od_handle_service).
+-author("Tomasz Lichon").
 -behaviour(model_behaviour).
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
+-type doc() :: datastore:document().
+-type info() :: #od_handle_service{}.
+-type id() :: binary().
+-type name() :: binary().
+-type proxy_endpoint() :: binary().
+-type service_properties() :: json_term().
+
+-export_type([doc/0, info/0, id/0]).
+-export_type([name/0, proxy_endpoint/0, service_properties/0]).
+
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
-
--define(USER_MODULE, onedata_user).
-
-%% API
--export([all/0]).
-
--type id() :: binary().
--type type() :: 'organization' | 'unit' | 'team' | 'role'.
--export_type([id/0, type/0]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -105,12 +106,8 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_Name, group_store_level, ?DISK_ONLY_LEVEL),
-    UserHooks = [{?USER_MODULE, save}, {?USER_MODULE, update}, {?USER_MODULE, create},
-        {?USER_MODULE, create_or_opdate}],
-    Hooks = [{?MODULE, save}, {?MODULE, update}, {?MODULE, create}, {?MODULE, create_or_opdate}],
-    ?MODEL_CONFIG(user_group_bucket, Hooks ++ UserHooks, StoreLevel).
+    StoreLevel = ?DISK_ONLY_LEVEL,
+    ?MODEL_CONFIG(handle_service_bucket, [], StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -120,10 +117,6 @@ model_init() ->
 -spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term(),
     ReturnValue :: term()) -> ok.
-'after'(?MODULE, _Method, _Level, _Context, {ok, ID}) ->
-    group_graph:mark_group_changed(ID);
-'after'(?USER_MODULE, _Method, _Level, _Context, {ok, ID}) ->
-    group_graph:mark_user_changed(ID);
 'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
     ok.
 
@@ -136,16 +129,3 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
-
-%%%===================================================================
-%%% API callbacks
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Return all documents
-%% @end
-%%--------------------------------------------------------------------
--spec all() -> {ok, [datastore:document()]} | no_return().
-all() ->
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).

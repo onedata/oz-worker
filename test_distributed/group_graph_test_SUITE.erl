@@ -45,7 +45,7 @@ all() -> ?ALL([
 
 nested_groups_in_dev_setup_test(Config) ->
     [Node] = ?config(oz_worker_nodes, Config),
-    save(Node, #document{key = <<"user1">>, value = #onedata_user{groups = []}}),
+    save(Node, #document{key = <<"user1">>, value = #od_user{groups = []}}),
 
     ?assertMatch(ok, rpc:call(Node, dev_utils, set_up_test_entities, [[], [
         {<<"group1">>, [{<<"users">>, [<<"user1">>]}, {<<"groups">>, [<<"group2">>]}]},
@@ -54,13 +54,13 @@ nested_groups_in_dev_setup_test(Config) ->
         {<<"group4">>, [{<<"users">>, [<<"user1">>]}, {<<"groups">>, []}]}
     ], []])),
 
-    #document{value = #user_group{nested_groups = C1, parent_groups = P1, effective_groups = EG1}}
+    #document{value = #od_group{nested_groups = C1, parent_groups = P1, eff_parent_groups = EG1}}
         = get(Node, user_group, <<"group1">>),
-    #document{value = #user_group{nested_groups = C2, parent_groups = P2, effective_groups = EG2}}
+    #document{value = #od_group{nested_groups = C2, parent_groups = P2, eff_parent_groups = EG2}}
         = get(Node, user_group, <<"group2">>),
-    #document{value = #user_group{nested_groups = C3, parent_groups = P3, effective_groups = EG3}}
+    #document{value = #od_group{nested_groups = C3, parent_groups = P3, eff_parent_groups = EG3}}
         = get(Node, user_group, <<"group3">>),
-    #document{value = #user_group{nested_groups = C4, parent_groups = P4, effective_groups = EG4}}
+    #document{value = #od_group{nested_groups = C4, parent_groups = P4, eff_parent_groups = EG4}}
         = get(Node, user_group, <<"group4">>),
 
     ?assertUnorderedMatch([{<<"group2">>, [group_view_data]}], C1),
@@ -90,35 +90,35 @@ concurrent_updates_test(Config) ->
     User = privileges:group_user(),
     Manager = privileges:group_manager(),
 
-    save(Node, #document{key = U1, value = #onedata_user{}}),
-    save(Node, #document{key = U2, value = #onedata_user{}}),
-    save(Node, #document{key = U3, value = #onedata_user{}}),
-    save(Node, #document{key = U4, value = #onedata_user{}}),
-    save(Node, #document{key = U5, value = #onedata_user{}}),
-    save(Node, #document{key = U6, value = #onedata_user{}}),
-    save(Node, #document{key = U7, value = #onedata_user{}}),
-    save(Node, #document{key = U8, value = #onedata_user{}}),
-    save(Node, #document{key = U9, value = #onedata_user{}}),
-    save(Node, #document{key = U10, value = #onedata_user{}}),
-    save(Node, #document{key = U11, value = #onedata_user{}}),
-    save(Node, #document{key = U12, value = #onedata_user{}}),
-    save(Node, #document{key = U13, value = #onedata_user{}}),
-    save(Node, #document{key = U14, value = #onedata_user{}}),
+    save(Node, #document{key = U1, value = #od_user{}}),
+    save(Node, #document{key = U2, value = #od_user{}}),
+    save(Node, #document{key = U3, value = #od_user{}}),
+    save(Node, #document{key = U4, value = #od_user{}}),
+    save(Node, #document{key = U5, value = #od_user{}}),
+    save(Node, #document{key = U6, value = #od_user{}}),
+    save(Node, #document{key = U7, value = #od_user{}}),
+    save(Node, #document{key = U8, value = #od_user{}}),
+    save(Node, #document{key = U9, value = #od_user{}}),
+    save(Node, #document{key = U10, value = #od_user{}}),
+    save(Node, #document{key = U11, value = #od_user{}}),
+    save(Node, #document{key = U12, value = #od_user{}}),
+    save(Node, #document{key = U13, value = #od_user{}}),
+    save(Node, #document{key = U14, value = #od_user{}}),
 
-    save(Node, #document{key = A, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = B, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = C, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = D, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = E, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = F, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = G, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = H, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = I, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = J, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = K, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = L, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = M, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
-    save(Node, #document{key = N, value = #user_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = A, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = B, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = C, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = D, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = E, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = F, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = G, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = H, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = I, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = J, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = K, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = L, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = M, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
+    save(Node, #document{key = N, value = #od_group{parent_groups = [], nested_groups = [], users = []}}),
 
     FirstLinkOps = [
         {user_group, A, #{parent_groups => [], nested_groups => [{B, User}], users => []}},
@@ -250,18 +250,18 @@ concurrent_updates_test(Config) ->
 conditional_update_test(Config) ->
     [Node] = ?config(oz_worker_nodes, Config),
 
-    G1 = #user_group{
+    G1 = #od_group{
         users = [{<<"U1">>, [group_change_data]}],
         nested_groups = [{<<"2">>, [group_change_data]}],
         parent_groups = [],
-        effective_users = [{<<"U1">>, [group_change_data]}],
-        effective_groups = [<<"1">>]},
-    G2 = #user_group{
+        eff_users = [{<<"U1">>, [group_change_data]}],
+        eff_parent_groups = [<<"1">>]},
+    G2 = #od_group{
         users = [{<<"U2">>, [group_change_data]}],
         nested_groups = [],
         parent_groups = [<<"1">>],
-        effective_users = [{<<"U2">>, [group_change_data]}],
-        effective_groups = [<<"2">>]},
+        eff_users = [{<<"U2">>, [group_change_data]}],
+        eff_parent_groups = [<<"2">>]},
 
     save(Node, <<"1">>, G1),
     save(Node, <<"2">>, G2),
@@ -294,9 +294,9 @@ cycles_elimination_test(Config) ->
 
     %% given
     Users = [{<<"u">>, []}],
-    G1 = #user_group{users = Users, nested_groups = [{<<"2">>, [group_view_data]}], parent_groups = []},
-    G2 = #user_group{users = Users, nested_groups = [{<<"3">>, [group_view_data]}], parent_groups = [<<"1">>]},
-    G3 = #user_group{users = Users, nested_groups = [], parent_groups = [<<"2">>]},
+    G1 = #od_group{users = Users, nested_groups = [{<<"2">>, [group_view_data]}], parent_groups = []},
+    G2 = #od_group{users = Users, nested_groups = [{<<"3">>, [group_view_data]}], parent_groups = [<<"1">>]},
+    G3 = #od_group{users = Users, nested_groups = [], parent_groups = [<<"2">>]},
 
     save(Node, <<"1">>, G1),
     save(Node, <<"2">>, G2),
@@ -307,8 +307,8 @@ cycles_elimination_test(Config) ->
     refresh(Node),
 
     %% when
-    NewG1 = #user_group{users = Users, nested_groups = [{<<"2">>, [group_view_data]}], parent_groups = [<<"3">>]},
-    NewG3 = #user_group{users = Users, nested_groups = [{<<"1">>, [group_view_data]}], parent_groups = [<<"2">>]},
+    NewG1 = #od_group{users = Users, nested_groups = [{<<"2">>, [group_view_data]}], parent_groups = [<<"3">>]},
+    NewG3 = #od_group{users = Users, nested_groups = [{<<"1">>, [group_view_data]}], parent_groups = [<<"2">>]},
     save(Node, <<"1">>, NewG1),
     save(Node, <<"3">>, NewG3),
     mark_group_changed(Node, <<"1">>),
@@ -316,9 +316,9 @@ cycles_elimination_test(Config) ->
     refresh(Node),
 
     %% then
-    #document{value = #user_group{parent_groups = P1}} = get(Node, user_group, <<"1">>),
-    #document{value = #user_group{parent_groups = P2}} = get(Node, user_group, <<"2">>),
-    #document{value = #user_group{parent_groups = P3}} = get(Node, user_group, <<"3">>),
+    #document{value = #od_group{parent_groups = P1}} = get(Node, user_group, <<"1">>),
+    #document{value = #od_group{parent_groups = P2}} = get(Node, user_group, <<"2">>),
+    #document{value = #od_group{parent_groups = P3}} = get(Node, user_group, <<"3">>),
 
     ?assertEqual(true, P1 =/= [<<"3">>] orelse P2 =/= [<<"1">>] orelse P3 =/= [<<"2">>]),
     ok.
@@ -329,15 +329,15 @@ user_becoming_groupless_test(Config) ->
     UID = <<"user@user_becoming_groupless_test">>,
 
     %% given
-    save(Node, #document{key = GID, value = #user_group{users = [{UID, []}]}}),
-    save(Node, #document{key = UID, value = #onedata_user{groups = [GID]}}),
+    save(Node, #document{key = GID, value = #od_group{users = [{UID, []}]}}),
+    save(Node, #document{key = UID, value = #od_user{groups = [GID]}}),
     mark_group_changed(Node, GID),
     mark_user_changed(Node, UID),
     refresh(Node),
     ?assertMatch([GID], effective_groups(get(Node, onedata_user, UID))),
 
     %% when
-    ?assertMatch(ok, rpc:call(Node, user_group, delete, [GID])),
+    ?assertMatch(ok, rpc:call(Node, od_group, delete, [GID])),
     update(Node, onedata_user, UID, #{groups => []}),
     mark_user_changed(Node, UID),
     refresh(Node),
@@ -357,9 +357,9 @@ grand_scenario_test(Config) ->
     %% Part A - single group
     %% given
     U1G1 = {<<"U1">>, [P1, P2]},
-    G1 = #user_group{users = [U1G1], nested_groups = [], parent_groups = []},
+    G1 = #od_group{users = [U1G1], nested_groups = [], parent_groups = []},
     save(Node, ID1, G1),
-    save(Node, #document{key = <<"U1">>, value = #onedata_user{groups = [ID1]}}),
+    save(Node, #document{key = <<"U1">>, value = #od_user{groups = [ID1]}}),
 
     %% given
     mark_group_changed(Node, ID1),
@@ -374,11 +374,11 @@ grand_scenario_test(Config) ->
     %% given
     U1G2 = {<<"U1">>, [P1, P3, P10]},
     U2G2 = {<<"U2">>, [P1, P2]},
-    G2 = #user_group{users = [U1G2, U2G2], nested_groups = [], parent_groups = [ID1]},
+    G2 = #od_group{users = [U1G2, U2G2], nested_groups = [], parent_groups = [ID1]},
     save(Node, ID2, G2),
     update(Node, user_group, ID1, #{nested_groups => [{ID2, [P2, P3, P4, P6]}]}),
-    save(Node, #document{key = <<"U1">>, value = #onedata_user{groups = [ID1, ID2]}}),
-    save(Node, #document{key = <<"U2">>, value = #onedata_user{groups = [ID1]}}),
+    save(Node, #document{key = <<"U1">>, value = #od_user{groups = [ID1, ID2]}}),
+    save(Node, #document{key = <<"U2">>, value = #od_user{groups = [ID1]}}),
 
     %% when
     mark_group_changed(Node, ID1),
@@ -398,11 +398,11 @@ grand_scenario_test(Config) ->
     %% given
     U2G3 = {<<"U2">>, [P1, P2, P3, P4, P6]},
     U3G3 = {<<"U3">>, [P1, P2, P5, P6]},
-    G3 = #user_group{users = [U2G3, U3G3], nested_groups = [], parent_groups = [ID2]},
+    G3 = #od_group{users = [U2G3, U3G3], nested_groups = [], parent_groups = [ID2]},
     save(Node, ID3, G3),
     update(Node, user_group, ID2, #{nested_groups => [{ID3, [P3, P4, P5, P6]}]}),
-    save(Node, #document{key = <<"U2">>, value = #onedata_user{groups = [ID1, ID3]}}),
-    save(Node, #document{key = <<"U3">>, value = #onedata_user{groups = [ID3]}}),
+    save(Node, #document{key = <<"U2">>, value = #od_user{groups = [ID1, ID3]}}),
+    save(Node, #document{key = <<"U3">>, value = #od_user{groups = [ID3]}}),
 
     %% when
     mark_group_changed(Node, ID2),
@@ -426,11 +426,11 @@ grand_scenario_test(Config) ->
     %% given
     U1G4 = {<<"U1">>, [P3]},
     U4G4 = {<<"U4">>, [P4]},
-    G4 = #user_group{users = [U1G4, U4G4], nested_groups = [
+    G4 = #od_group{users = [U1G4, U4G4], nested_groups = [
         {ID1, [P1, P2, P9]}], parent_groups = []},
     save(Node, ID4, G4),
     update(Node, user_group, ID1, #{parent_groups => [ID4]}),
-    save(Node, #document{key = <<"U4">>, value = #onedata_user{groups = [ID4]}}),
+    save(Node, #document{key = <<"U4">>, value = #od_user{groups = [ID4]}}),
 
     %% when
     mark_group_changed(Node, ID1),
@@ -459,7 +459,7 @@ grand_scenario_test(Config) ->
     %% given
     U2G5 = {<<"U2">>, [P3]},
     U4G5 = {<<"U4">>, [P4, P5]},
-    G5 = #user_group{users = [U2G5, U4G5], nested_groups = [],
+    G5 = #od_group{users = [U2G5, U4G5], nested_groups = [],
         parent_groups = [ID4]},
     save(Node, ID5, G5),
     update(Node, user_group, ID4, #{nested_groups => [
@@ -526,18 +526,18 @@ grand_scenario_test(Config) ->
     U1G6 = {<<"U1">>, [P1, P2, P7, P8, P9]},
     U2G7 = {<<"U2">>, [P2, P7, P9]},
     U3G8 = {<<"U3">>, [P3, P8]},
-    G6 = #user_group{users = [U1G6], nested_groups = [
+    G6 = #od_group{users = [U1G6], nested_groups = [
         {ID7, [P1, P2, P6, P7, P8]}], parent_groups = []},
-    G7 = #user_group{users = [U2G7], nested_groups = [
+    G7 = #od_group{users = [U2G7], nested_groups = [
         {ID8, [P1, P2, P6, P8, P9]}], parent_groups = [ID6]},
-    G8 = #user_group{users = [U3G8], nested_groups = [],
+    G8 = #od_group{users = [U3G8], nested_groups = [],
         parent_groups = [ID7]},
     save(Node, ID6, G6),
     save(Node, ID7, G7),
     save(Node, ID8, G8),
-    save(Node, #document{key = <<"U1">>, value = #onedata_user{groups = [ID1, ID2, ID6]}}),
-    save(Node, #document{key = <<"U2">>, value = #onedata_user{groups = [ID1, ID7]}}),
-    save(Node, #document{key = <<"U3">>, value = #onedata_user{groups = [ID3, ID8]}}),
+    save(Node, #document{key = <<"U1">>, value = #od_user{groups = [ID1, ID2, ID6]}}),
+    save(Node, #document{key = <<"U2">>, value = #od_user{groups = [ID1, ID7]}}),
+    save(Node, #document{key = <<"U3">>, value = #od_user{groups = [ID3, ID8]}}),
 
     %% given
     mark_group_changed(Node, ID6),
@@ -710,12 +710,12 @@ get(Node, Model, ID) ->
     {ok, Doc} = Result,
     Doc.
 
-effective_users(#document{value = #user_group{effective_users = Users}}) ->
+effective_users(#document{value = #od_group{eff_users = Users}}) ->
     Users.
 
-effective_groups(#document{value = #onedata_user{effective_groups = Groups}}) ->
+effective_groups(#document{value = #od_user{eff_groups = Groups}}) ->
     Groups;
-effective_groups(#document{value = #user_group{effective_groups = Groups}}) ->
+effective_groups(#document{value = #od_group{eff_parent_groups = Groups}}) ->
     Groups.
 
 update(Node, Type, ID, Diff) ->

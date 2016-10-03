@@ -66,7 +66,7 @@ create_provider(Node, Name, Spaces, URLs) ->
     {ok, CSR} = file:read_file(CSRFile),
     Params = [Name, URLs, <<"https://127.0.0.1:443">>, CSR],
     {ok, ID, _} = rpc:call(Node, provider_logic, create, Params),
-    {ok, ID} = rpc:call(Node, provider, update, [ID, #{spaces => Spaces}]),
+    {ok, ID} = rpc:call(Node, od_provider, update, [ID, #{spaces => Spaces}]),
     ID.
 
 generate_space_ids(Number) ->
@@ -85,7 +85,7 @@ create_spaces(SIDs, UIDs, GIDs, Node) ->
     Groups = [{GID, []} || GID <- GIDs],
     Users = [{UID, []} || UID <- UIDs],
     lists:map(fun({SID, N}) ->
-        Space = #space{
+        Space = #od_space{
             name = list_to_binary("s" ++ integer_to_list(N) ++ integer_to_list(erlang:system_time(micro_seconds))),
             groups = Groups,
             users = Users
@@ -96,7 +96,7 @@ create_spaces(SIDs, UIDs, GIDs, Node) ->
 
 create_users(UIDs, GIDs, Node) ->
     lists:map(fun({UID, N}) ->
-        User = #onedata_user{
+        User = #od_user{
             name = list_to_binary("u" ++ integer_to_list(N)),
             groups = GIDs
         },
@@ -107,7 +107,7 @@ create_users(UIDs, GIDs, Node) ->
 create_groups(GIDs, UIDs, SIDs, Node) ->
     Users = [{UID, []} || UID <- UIDs],
     lists:map(fun({GID, N}) ->
-        Group = #user_group{
+        Group = #od_group{
             name = list_to_binary("g" ++ integer_to_list(N)),
             users = Users,
             spaces = SIDs
@@ -139,27 +139,27 @@ get_last_sequence_number(Node) ->
 %%% Message expectations
 %%%===================================================================
 
-expectation(ID, #space{name = Name, providers_supports = Supports,
+expectation(ID, #od_space{name = Name, providers_supports = Supports,
     groups = Groups, users = Users, shares = Shares}) ->
     space_expectation(ID, Name, Users, Groups, Supports, Shares);
-expectation(ID, #share{name = Name, parent_space = ParentSpace,
+expectation(ID, #od_share{name = Name, parent_space = ParentSpace,
     root_file_id = RootFileId, public_url = PublicUrl, handle = Handle}) ->
     RootFileIdBin = undefined_to_binary(RootFileId),
     PublicUrlBin = undefined_to_binary(PublicUrl),
     HandleBin = undefined_to_binary(Handle),
     share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin, HandleBin);
-expectation(ID, #onedata_user{name = Name, groups = Groups, space_names = SpaceNames,
-    default_space = DefaultSpace, effective_groups = EGroups,
+expectation(ID, #od_user{name = Name, groups = Groups, space_aliases = SpaceNames,
+    default_space = DefaultSpace, eff_groups = EGroups,
     handle_services = HandleServices, handles = Handles}) ->
     user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups,
         undefined_to_binary(DefaultSpace), HandleServices, Handles);
-expectation(ID, #user_group{name = Name, type = Type, users = Users, spaces = Spaces,
-    effective_users = EUsers, nested_groups = NGroups, parent_groups = PGroups,
+expectation(ID, #od_group{name = Name, type = Type, users = Users, spaces = Spaces,
+    eff_users = EUsers, nested_groups = NGroups, parent_groups = PGroups,
     handle_services = HandleServices, handles = Handles}) ->
     group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups,
         HandleServices, Handles);
 
-expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) ->
+expectation(ID, #od_provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) ->
     [{<<"id">>, ID}, {<<"provider">>, [
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
@@ -167,7 +167,7 @@ expectation(ID, #provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) -
         {<<"public_only">>, false}
     ]}];
 
-expectation(ID, #handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
+expectation(ID, #od_handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
     service_properties = ServiceProperties, groups = Groups, users = Users}) ->
     NameBin = undefined_to_binary(Name),
     ProxyEndpointBin = undefined_to_binary(ProxyEndpoint),
@@ -175,7 +175,7 @@ expectation(ID, #handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
         ID, NameBin, ProxyEndpointBin, ServiceProperties, Users, Groups
     );
 
-expectation(ID, #handle{handle_service_id = HandleServiceId, public_handle = PublicHandle,
+expectation(ID, #od_handle{handle_service_id = HandleServiceId, public_handle = PublicHandle,
     resource_type = ResourceType, resource_id = ResourceId,
     metadata = Metadata, groups = Groups, users = Users, timestamp = Timestamp}) ->
     HandleServiceIdBin = undefined_to_binary(HandleServiceId),

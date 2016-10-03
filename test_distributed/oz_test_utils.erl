@@ -81,7 +81,7 @@ call_oz(Config, Module, Function, Args) ->
 %% @doc Creates user in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user(Config :: term(), User :: #onedata_user{}) ->
+-spec create_user(Config :: term(), User :: #od_user{}) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_user(Config, User) ->
     call_oz(Config, user_logic, create, [User]).
@@ -283,11 +283,11 @@ remove_share(Config, ShareId) ->
 %% @doc Creates a handle_service
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle_service(Config :: term(), UserId :: onedata_user:id(), 
-    Name :: handle_service:name(),
-    ProxyEndpoint :: handle_service:proxy_endpoint(), 
-    ServiceProperties :: handle_service:service_properties()) ->
-    {ok, HandleServiceId :: handle_service:id()}.
+-spec create_handle_service(Config :: term(), UserId :: od_user:id(),
+    Name :: od_handle_service:name(),
+    ProxyEndpoint :: od_handle_service:proxy_endpoint(),
+    ServiceProperties :: od_handle_service:service_properties()) ->
+    {ok, HandleServiceId :: od_handle_service:id()}.
 create_handle_service(Config, UserId, Name, ProxyEndpoint, ServiceProperties) ->
     call_oz(Config, handle_service_logic, create, 
         [UserId, Name, ProxyEndpoint, ServiceProperties]).
@@ -296,7 +296,7 @@ create_handle_service(Config, UserId, Name, ProxyEndpoint, ServiceProperties) ->
 %% @doc Removes handle_service
 %% @end
 %%--------------------------------------------------------------------
--spec remove_handle_service(Config :: term(), HandleServiceId :: handle_service:id()) -> boolean().
+-spec remove_handle_service(Config :: term(), HandleServiceId :: od_handle_service:id()) -> boolean().
 remove_handle_service(Config, HandleServiceId) ->
     call_oz(Config, handle_service_logic, remove, [HandleServiceId]).
 
@@ -305,9 +305,9 @@ remove_handle_service(Config, HandleServiceId) ->
 %% @doc Creates a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle(Config :: term(), onedata_user:id(), handle_service:id(), 
-    handle:resource_type(), handle:resource_id(), handle:metadata()) ->
-    {ok, handle:id()}.
+-spec create_handle(Config :: term(), od_user:id(), od_handle_service:id(),
+    od_handle:resource_type(), od_handle:resource_id(), od_handle:metadata()) ->
+    {ok, od_handle:id()}.
 create_handle(Config, UserId, HandleServiceId, ResourceType, ResourceId, Metadata) ->
     call_oz(Config, handle_logic, create,
         [UserId, HandleServiceId, ResourceType, ResourceId, Metadata]).
@@ -316,7 +316,7 @@ create_handle(Config, UserId, HandleServiceId, ResourceType, ResourceId, Metadat
 %% @doc Removes handle
 %% @end
 %%--------------------------------------------------------------------
--spec remove_handle(Config :: term(), HandleId :: handle:id()) -> boolean().
+-spec remove_handle(Config :: term(), HandleId :: od_handle:id()) -> boolean().
 remove_handle(Config, HandleId) ->
     call_oz(Config, handle_logic, remove, [HandleId]).
 
@@ -325,8 +325,8 @@ remove_handle(Config, HandleId) ->
 %% @doc Modifies handle
 %% @end
 %%--------------------------------------------------------------------
--spec modify_handle(Config :: term(), handle:id(), handle:resource_type(),
-    handle:resource_id(), handle:metadata()) -> ok.
+-spec modify_handle(Config :: term(), od_handle:id(), od_handle:resource_type(),
+    od_handle:resource_id(), od_handle:metadata()) -> ok.
 modify_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
     call_oz(Config, handle_logic, modify, 
         [HandleId, NewResourceType, NewResourceId, NewMetadata]).

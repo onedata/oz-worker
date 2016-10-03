@@ -144,7 +144,7 @@ no_space_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    S1 = #space{name = <<"initial">>, providers_supports = []},
+    S1 = #od_space{name = <<"initial">>, providers_supports = []},
     subscriptions_test_utils:save(Node, ?ID(s1), S1),
 
     % when
@@ -153,8 +153,8 @@ no_space_update_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_absent(Context, [
-        subscriptions_test_utils:expectation(?ID(s1), S1#space{name = <<"initial">>}),
-        subscriptions_test_utils:expectation(?ID(s1), S1#space{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(s1), S1#od_space{name = <<"initial">>}),
+        subscriptions_test_utils:expectation(?ID(s1), S1#od_space{name = <<"updated">>})
     ]),
     ok.
 
@@ -163,7 +163,7 @@ space_update_through_support_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1)]),
-    S1 = #space{name = <<"initial">>, providers_supports = [{PID, 0}]},
+    S1 = #od_space{name = <<"initial">>, providers_supports = [{PID, 0}]},
     subscriptions_test_utils:save(Node, ?ID(s1), S1),
 
     % when
@@ -173,7 +173,7 @@ space_update_through_support_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(s1), S1#space{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(s1), S1#od_space{name = <<"updated">>})
     ]),
     ok.
 
@@ -182,8 +182,8 @@ space_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    S1 = #space{name = <<"initial">>, users = [{?ID(u1), []}]},
-    U1 = #onedata_user{name = <<"u1">>},
+    S1 = #od_space{name = <<"initial">>, users = [{?ID(u1), []}]},
+    U1 = #od_user{name = <<"u1">>},
 
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(s1), S1),
@@ -195,7 +195,7 @@ space_update_through_users_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(s1), S1#space{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(s1), S1#od_space{name = <<"updated">>})
     ]),
     ok.
 
@@ -205,10 +205,10 @@ space_update_through_groups_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    S1 = #space{name = <<"initial">>, groups = [{?ID(g1), []}]},
-    U1 = #onedata_user{name = <<"u1">>},
+    S1 = #od_space{name = <<"initial">>, groups = [{?ID(g1), []}]},
+    U1 = #od_user{name = <<"u1">>},
 
-    G1 = #user_group{
+    G1 = #od_group{
         name = <<"g1">>,
         users = [{?ID(u1), privileges:group_admin()}],
         spaces = [?ID(s1)]
@@ -225,7 +225,7 @@ space_update_through_groups_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(s1), S1#space{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(s1), S1#od_space{name = <<"updated">>})
     ]),
     ok.
 
@@ -234,8 +234,8 @@ no_share_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    Sp1 = #space{name = <<"whatever">>, providers_supports = [], shares = [?ID(sh1)]},
-    Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
+    Sp1 = #od_space{name = <<"whatever">>, providers_supports = [], shares = [?ID(sh1)]},
+    Sh1 = #od_share{name = <<"initial">>, parent_space = ?ID(sp1)},
     subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
     subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
 
@@ -245,8 +245,8 @@ no_share_update_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_absent(Context, [
-        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"initial">>}),
-        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(sh1), Sh1#od_share{name = <<"initial">>}),
+        subscriptions_test_utils:expectation(?ID(sh1), Sh1#od_share{name = <<"updated">>})
     ]),
     ok.
 
@@ -255,9 +255,9 @@ handle_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    Timestamp = handle:actual_timestamp(),
-    H1 = #handle{metadata = <<"initial">>, users = [{?ID(u1), []}], timestamp = Timestamp},
-    U1 = #onedata_user{name = <<"u1">>},
+    Timestamp = od_handle:actual_timestamp(),
+    H1 = #od_handle{metadata = <<"initial">>, users = [{?ID(u1), []}], timestamp = Timestamp},
+    U1 = #od_user{name = <<"u1">>},
 
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(h1), H1),
@@ -269,7 +269,7 @@ handle_update_through_users_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(h1), H1#handle{metadata = <<"updated">>, timestamp = Timestamp})
+        subscriptions_test_utils:expectation(?ID(h1), H1#od_handle{metadata = <<"updated">>, timestamp = Timestamp})
     ]),
     ok.
 
@@ -279,11 +279,11 @@ handle_update_through_groups_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    Timestamp = handle:actual_timestamp(),
-    H1 = #handle{metadata = <<"initial">>, groups = [{?ID(g1), []}], timestamp = Timestamp},
-    U1 = #onedata_user{name = <<"u1">>},
+    Timestamp = od_handle:actual_timestamp(),
+    H1 = #od_handle{metadata = <<"initial">>, groups = [{?ID(g1), []}], timestamp = Timestamp},
+    U1 = #od_user{name = <<"u1">>},
 
-    G1 = #user_group{
+    G1 = #od_group{
         name = <<"g1">>,
         users = [{?ID(u1), privileges:group_admin()}],
         handles = [?ID(h1)]
@@ -300,7 +300,7 @@ handle_update_through_groups_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(h1), H1#handle{metadata = <<"updated">>, timestamp = Timestamp})
+        subscriptions_test_utils:expectation(?ID(h1), H1#od_handle{metadata = <<"updated">>, timestamp = Timestamp})
     ]),
     ok.
 
@@ -309,8 +309,8 @@ handle_service_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    HS1 = #handle_service{name = <<"initial">>, users = [{?ID(u1), []}]},
-    U1 = #onedata_user{name = <<"u1">>},
+    HS1 = #od_handle_service{name = <<"initial">>, users = [{?ID(u1), []}]},
+    U1 = #od_user{name = <<"u1">>},
 
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(hs1), HS1),
@@ -322,7 +322,7 @@ handle_service_update_through_users_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(hs1), HS1#handle_service{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(hs1), HS1#od_handle_service{name = <<"updated">>})
     ]),
     ok.
 
@@ -332,10 +332,10 @@ handle_service_update_through_groups_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    HS1 = #handle_service{name = <<"initial">>, groups = [{?ID(g1), []}]},
-    U1 = #onedata_user{name = <<"u1">>},
+    HS1 = #od_handle_service{name = <<"initial">>, groups = [{?ID(g1), []}]},
+    U1 = #od_user{name = <<"u1">>},
 
-    G1 = #user_group{
+    G1 = #od_group{
         name = <<"g1">>,
         users = [{?ID(u1), privileges:group_admin()}],
         handle_services = [?ID(hs1)]
@@ -352,7 +352,7 @@ handle_service_update_through_groups_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(hs1), HS1#handle_service{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(hs1), HS1#od_handle_service{name = <<"updated">>})
     ]),
     ok.
 
@@ -361,8 +361,8 @@ share_update_through_support_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(sp1)]),
-    Sp1 = #space{name = <<"whatever">>, providers_supports = [{PID, 0}], shares = [?ID(sh1)]},
-    Sh1 = #share{name = <<"initial">>, parent_space = ?ID(sp1)},
+    Sp1 = #od_space{name = <<"whatever">>, providers_supports = [{PID, 0}], shares = [?ID(sh1)]},
+    Sh1 = #od_share{name = <<"initial">>, parent_space = ?ID(sp1)},
     subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
     subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
 
@@ -373,7 +373,7 @@ share_update_through_support_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(sh1), Sh1#share{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(sh1), Sh1#od_share{name = <<"updated">>})
     ]),
     ok.
 
@@ -383,8 +383,8 @@ all_data_in_space_update_test(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1)]),
     PID2 = subscriptions_test_utils:create_provider(Node, ?ID(p2), [?ID(s1)]),
     PID3 = subscriptions_test_utils:create_provider(Node, ?ID(p3), [?ID(s1)]),
-    User = #onedata_user{name = <<"user">>},
-    Group = #user_group{name = <<"group">>},
+    User = #od_user{name = <<"user">>},
+    Group = #od_group{name = <<"group">>},
 
     subscriptions_test_utils:save(Node, ?ID(u1), User),
     subscriptions_test_utils:save(Node, ?ID(u2), User),
@@ -393,7 +393,7 @@ all_data_in_space_update_test(Config) ->
 
 
     % when
-    Space = #space{
+    Space = #od_space{
         name = <<"space">>,
         users = [{?ID(u1), privileges:space_manager()}, {?ID(u2), []}],
         groups = [{?ID(g1), privileges:space_admin()}, {?ID(g2), []}],
@@ -414,12 +414,12 @@ all_data_in_user_update_test(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
 
     % when
-    User = #onedata_user{
+    User = #od_user{
         name = <<"user">>,
         groups = [?ID(g1), ?ID(g2)],
         spaces = [?ID(s1), ?ID(s2)],
         default_space = <<"s1">>,
-        effective_groups = [?ID(g1), ?ID(g3), ?ID(g3)]
+        eff_groups = [?ID(g1), ?ID(g3), ?ID(g3)]
     },
     Context = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     subscriptions_test_utils:save(Node, ?ID(u1), User),
@@ -434,15 +434,15 @@ all_data_in_group_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    User = #onedata_user{name = <<"user">>, groups = [?ID(g1)]},
+    User = #od_user{name = <<"user">>, groups = [?ID(g1)]},
     subscriptions_test_utils:save(Node, ?ID(u1), User),
 
     % when
-    Group = #user_group{
+    Group = #od_group{
         name = <<"Group">>,
         users = [{?ID(u1), privileges:group_admin()},
             {?ID(u2), privileges:group_user()}],
-        effective_users = [{?ID(u1), privileges:group_admin()},
+        eff_users = [{?ID(u1), privileges:group_admin()},
             {?ID(u3), privileges:group_privileges()}],
         nested_groups = [{?ID(g1), privileges:group_admin()},
             {?ID(g3), privileges:group_privileges()}],
@@ -472,15 +472,15 @@ all_data_in_provider_update_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(PID, #provider{spaces = Spaces, urls = Urls, client_name = Name})
+        subscriptions_test_utils:expectation(PID, #od_provider{spaces = Spaces, urls = Urls, client_name = Name})
     ]).
 
 updates_for_with_providers_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1), ?ID(s2)], [<<"p1-url1">>]),
-    P2 = #provider{spaces = [?ID(s2)], urls = [<<"p2-url1">>, <<"p2-url2">>], client_name = <<"p2">>},
-    P3 = #provider{spaces = [?ID(s1)], urls = [<<"p3-url1">>], client_name = <<"p3">>},
+    P2 = #od_provider{spaces = [?ID(s2)], urls = [<<"p2-url1">>, <<"p2-url2">>], client_name = <<"p2">>},
+    P3 = #od_provider{spaces = [?ID(s1)], urls = [<<"p3-url1">>], client_name = <<"p3">>},
 
 
     % when
@@ -490,9 +490,9 @@ updates_for_with_providers_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(PID, #provider{spaces = [?ID(s1), ?ID(s2)], urls = [<<"p1-url1">>], client_name = ?ID(p1)}),
-        subscriptions_test_utils:public_only_provider_expectation(?ID(p2), P2#provider.client_name, P2#provider.urls),
-        subscriptions_test_utils:public_only_provider_expectation(?ID(p3), P3#provider.client_name, P3#provider.urls)
+        subscriptions_test_utils:expectation(PID, #od_provider{spaces = [?ID(s1), ?ID(s2)], urls = [<<"p1-url1">>], client_name = ?ID(p1)}),
+        subscriptions_test_utils:public_only_provider_expectation(?ID(p2), P2#od_provider.client_name, P2#od_provider.urls),
+        subscriptions_test_utils:public_only_provider_expectation(?ID(p3), P3#od_provider.client_name, P3#od_provider.urls)
     ]),
     ok.
 
@@ -500,7 +500,7 @@ only_public_user_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1)]),
-    U1 = #onedata_user{name = <<"u1">>},
+    U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
 
     % when
@@ -512,7 +512,7 @@ only_public_user_update_test(Config) ->
         subscriptions_test_utils:public_only_user_expectation(?ID(u1), <<"updated">>)
     ], [
         subscriptions_test_utils:expectation(?ID(u1), U1),
-        subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(u1), U1#od_user{name = <<"updated">>})
     ]),
     ok.
 
@@ -520,7 +520,7 @@ user_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1)]),
-    U1 = #onedata_user{name = <<"u1">>},
+    U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
 
     % when
@@ -530,7 +530,7 @@ user_update_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(u1), U1#od_user{name = <<"updated">>})
     ]),
     ok.
 
@@ -538,10 +538,10 @@ simple_delete_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1)]),
-    U1 = #onedata_user{name = <<"u1">>, groups = [?ID(g1)]},
-    S1 = #space{name = <<"s1">>, providers_supports = [{PID, 0}],
+    U1 = #od_user{name = <<"u1">>, groups = [?ID(g1)]},
+    S1 = #od_space{name = <<"s1">>, providers_supports = [{PID, 0}],
         users = [{?ID(u1), []}]},
-    G1 = #user_group{name = <<"g1">>, users = [{?ID(u1), []}]},
+    G1 = #od_group{name = <<"g1">>, users = [{?ID(u1), []}]},
 
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(s1), S1),
@@ -567,7 +567,7 @@ multiple_updates_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1)]),
-    U1 = #onedata_user{name = <<"u1">>},
+    U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
 
     % when
@@ -581,7 +581,7 @@ multiple_updates_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>, groups = [<<"gr2">>], spaces = [<<"sp1">>]})
+        subscriptions_test_utils:expectation(?ID(u1), U1#od_user{name = <<"updated4">>, groups = [<<"gr2">>], spaces = [<<"sp1">>]})
     ]),
     ok.
 
@@ -589,7 +589,7 @@ no_group_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    G1 = #user_group{name = <<"g1">>},
+    G1 = #od_group{name = <<"g1">>},
     subscriptions_test_utils:save(Node, ?ID(g1), G1),
 
     % when
@@ -598,7 +598,7 @@ no_group_update_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_absent(Context, [
-        subscriptions_test_utils:expectation(?ID(g1), G1#user_group{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(g1), G1#od_group{name = <<"updated">>})
     ]),
     ok.
 
@@ -606,8 +606,8 @@ group_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    U1 = #onedata_user{name = <<"u1">>},
-    G1 = #user_group{name = <<"g1">>, users = [{?ID(u1), []}]},
+    U1 = #od_user{name = <<"u1">>},
+    G1 = #od_group{name = <<"g1">>, users = [{?ID(u1), []}]},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(g1), G1),
 
@@ -618,7 +618,7 @@ group_update_through_users_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(g1), G1#user_group{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(g1), G1#od_group{name = <<"updated">>})
     ]),
     ok.
 
@@ -626,21 +626,21 @@ ancestor_group_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    U1 = #onedata_user{name = <<"u1">>,
-        effective_groups = [?ID(g1), ?ID(g2), ?ID(g3)]},
-    G1 = #user_group{name = <<"g1">>,
+    U1 = #od_user{name = <<"u1">>,
+        eff_groups = [?ID(g1), ?ID(g2), ?ID(g3)]},
+    G1 = #od_group{name = <<"g1">>,
         users = [{?ID(u1), []}],
         parent_groups = [?ID(g2)],
-        effective_users = [{?ID(u1), []}]},
-    G2 = #user_group{name = <<"g2">>,
+        eff_users = [{?ID(u1), []}]},
+    G2 = #od_group{name = <<"g2">>,
         users = [],
         parent_groups = [?ID(g3)],
         nested_groups = [{?ID(g1), []}],
-        effective_users = [{?ID(u1), []}]},
-    G3 = #user_group{name = <<"g3">>,
+        eff_users = [{?ID(u1), []}]},
+    G3 = #od_group{name = <<"g3">>,
         users = [],
         nested_groups = [{?ID(g2), []}],
-        effective_users = [{?ID(u1), []}]},
+        eff_users = [{?ID(u1), []}]},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(g1), G1),
     subscriptions_test_utils:save(Node, ?ID(g2), G2),
@@ -655,9 +655,9 @@ ancestor_group_update_through_users_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(g1), G1#user_group{name = <<"updated">>}),
-        subscriptions_test_utils:expectation(?ID(g2), G2#user_group{name = <<"updated">>}),
-        subscriptions_test_utils:expectation(?ID(g3), G3#user_group{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(g1), G1#od_group{name = <<"updated">>}),
+        subscriptions_test_utils:expectation(?ID(g2), G2#od_group{name = <<"updated">>}),
+        subscriptions_test_utils:expectation(?ID(g3), G3#od_group{name = <<"updated">>})
     ]),
     ok.
 
@@ -666,21 +666,21 @@ child_group_update_through_users_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
 
-    U1 = #onedata_user{name = <<"u1">>,
-        effective_groups = [?ID(g1)]},
-    U2 = #onedata_user{name = <<"u2">>,
-        effective_groups = [?ID(g2)]},
+    U1 = #od_user{name = <<"u1">>,
+        eff_groups = [?ID(g1)]},
+    U2 = #od_user{name = <<"u2">>,
+        eff_groups = [?ID(g2)]},
 
-    G1 = #user_group{name = <<"g1">>,
+    G1 = #od_group{name = <<"g1">>,
         users = [{?ID(u1), []}],
         parent_groups = [?ID(g2)],
-        effective_groups = [?ID(g2), ?ID(g1)],
-        effective_users = [{?ID(u1), []}]},
-    G2 = #user_group{name = <<"g2">>,
+        eff_parent_groups = [?ID(g2), ?ID(g1)],
+        eff_users = [{?ID(u1), []}]},
+    G2 = #od_group{name = <<"g2">>,
         users = [{?ID(u2), []}],
         nested_groups = [{?ID(g1), []}],
-        effective_groups = [?ID(g1)],
-        effective_users = [{?ID(u1), []}, {?ID(u2), []}]},
+        eff_parent_groups = [?ID(g1)],
+        eff_users = [{?ID(u1), []}, {?ID(u2), []}]},
 
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(u2), U2),
@@ -694,7 +694,7 @@ child_group_update_through_users_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(g1), G1#user_group{name = <<"updated">>})
+        subscriptions_test_utils:expectation(?ID(g1), G1#od_group{name = <<"updated">>})
     ]),
     ok.
 
@@ -702,19 +702,19 @@ updates_for_added_user_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1), ?ID(s2)]),
-    U1 = #onedata_user{name = <<"u1">>, groups = [?ID(g1)],
-        effective_groups = [?ID(g1), ?ID(g2)], spaces = [?ID(s2)]},
-    G1 = #user_group{name = <<"g1">>, users = [{?ID(u1), []}],
-        spaces = [?ID(s1)], effective_groups = [?ID(g1), ?ID(g2)],
+    U1 = #od_user{name = <<"u1">>, groups = [?ID(g1)],
+        eff_groups = [?ID(g1), ?ID(g2)], spaces = [?ID(s2)]},
+    G1 = #od_group{name = <<"g1">>, users = [{?ID(u1), []}],
+        spaces = [?ID(s1)], eff_parent_groups = [?ID(g1), ?ID(g2)],
         parent_groups = [?ID(g2)]},
-    G2 = #user_group{name = <<"g1">>, users = [],
-        spaces = [], effective_groups = [?ID(g2)],
+    G2 = #od_group{name = <<"g1">>, users = [],
+        spaces = [], eff_parent_groups = [?ID(g2)],
         nested_groups = [{?ID(g1), []}, {?ID(g3), []}]},
-    G3 = #user_group{name = <<"g1">>, users = [],
-        spaces = [], effective_groups = [?ID(g3), ?ID(g2)],
+    G3 = #od_group{name = <<"g1">>, users = [],
+        spaces = [], eff_parent_groups = [?ID(g3), ?ID(g2)],
         parent_groups = [?ID(g2)]},
-    S1 = #space{name = <<"s1">>, providers_supports = [{PID, 0}], groups = [{?ID(g1), []}]},
-    S2 = #space{name = <<"s2">>, providers_supports = [{PID, 0}], users = [{?ID(u1), []}]},
+    S1 = #od_space{name = <<"s1">>, providers_supports = [{PID, 0}], groups = [{?ID(g1), []}]},
+    S2 = #od_space{name = <<"s2">>, providers_supports = [{PID, 0}], users = [{?ID(u1), []}]},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(g1), G1),
     subscriptions_test_utils:save(Node, ?ID(g2), G2),
@@ -741,7 +741,7 @@ updates_for_added_user_have_revisions_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    U1 = #onedata_user{name = <<"u1">>},
+    U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     Rev0 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
 
@@ -760,7 +760,7 @@ updates_for_added_user_have_revisions_test(Config) ->
     subscriptions_test_utils:verify_messages_present(Context#subs_ctx{users = [(?ID(u1))]}, [
         subscriptions_test_utils:expectation_with_rev(
             [Rev4, Rev3, Rev2, Rev1, Rev0],
-            subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>}))
+            subscriptions_test_utils:expectation(?ID(u1), U1#od_user{name = <<"updated4">>}))
     ]),
     ok.
 
@@ -768,7 +768,7 @@ updates_have_revisions_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    U1 = #onedata_user{name = <<"u1">>},
+    U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     Rev0 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
 
@@ -788,7 +788,7 @@ updates_have_revisions_test(Config) ->
     subscriptions_test_utils:verify_messages_present(Context, [
         subscriptions_test_utils:expectation_with_rev(
             [Rev4, Rev3, Rev2, Rev1, Rev0],
-            subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>}))
+            subscriptions_test_utils:expectation(?ID(u1), U1#od_user{name = <<"updated4">>}))
     ]),
     ok.
 
@@ -796,7 +796,7 @@ fetches_changes_older_than_in_cache(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    U1 = #onedata_user{name = <<"u1">>},
+    U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>}),
     subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
@@ -807,14 +807,14 @@ fetches_changes_older_than_in_cache(Config) ->
 
     % when
     _ForgottenContext = subscriptions_test_utils:flush_messages(Context,
-        subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>})),
+        subscriptions_test_utils:expectation(?ID(u1), U1#od_user{name = <<"updated4">>})),
 
     subscriptions_test_utils:empty_cache(Node),
-    subscriptions_test_utils:save(Node, ?ID(u2), #onedata_user{name = <<"u2">>}),
+    subscriptions_test_utils:save(Node, ?ID(u2), #od_user{name = <<"u2">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>})
+        subscriptions_test_utils:expectation(?ID(u1), U1#od_user{name = <<"updated4">>})
     ]),
     ok.
 
@@ -824,7 +824,7 @@ fetches_changes_older_than_in_cache_without_save(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
     timer:sleep(timer:seconds(5)), % sleep to save provider at disk
 
-    U1 = #onedata_user{name = <<"u1">>},
+    U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>}),
     subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
@@ -835,13 +835,13 @@ fetches_changes_older_than_in_cache_without_save(Config) ->
 
     % when
     _ForgottenContext = subscriptions_test_utils:flush_messages(Context,
-        subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>})),
+        subscriptions_test_utils:expectation(?ID(u1), U1#od_user{name = <<"updated4">>})),
 
     subscriptions_test_utils:empty_cache(Node),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(?ID(u1), U1#onedata_user{name = <<"updated4">>})
+        subscriptions_test_utils:expectation(?ID(u1), U1#od_user{name = <<"updated4">>})
     ]),
     ok.
 
@@ -851,7 +851,7 @@ fetches_changes_from_both_cache_and_db(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [
         ?ID(s1), ?ID(s2), ?ID(s3), ?ID(s4), ?ID(s5), ?ID(s6), ?ID(s7), ?ID(s8), ?ID(s9)
     ]),
-    Space = #space{name = <<"initial">>, providers_supports = [{PID, 0}]},
+    Space = #od_space{name = <<"initial">>, providers_supports = [{PID, 0}]},
     subscriptions_test_utils:save(Node, ?ID(s1), Space),
     subscriptions_test_utils:save(Node, ?ID(s3), Space),
     subscriptions_test_utils:save(Node, ?ID(s2), Space),
@@ -887,7 +887,7 @@ fetches_changes_when_cache_has_gaps(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [
         ?ID(s1), ?ID(s2), ?ID(s3), ?ID(s4), ?ID(s5), ?ID(s6), ?ID(s7), ?ID(s8), ?ID(s9)
     ]),
-    Space = #space{name = <<"initial">>, providers_supports = [{PID, 0}]},
+    Space = #od_space{name = <<"initial">>, providers_supports = [{PID, 0}]},
     subscriptions_test_utils:save(Node, ?ID(s1), Space),
     subscriptions_test_utils:save(Node, ?ID(s2), Space),
     subscriptions_test_utils:save(Node, ?ID(s3), Space),

@@ -217,7 +217,7 @@ check_remove_member_from_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
 
 view_privileges_test(Config) ->
     rest_test_utils:set_config(Config),
-    {ok, User1} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User1} = oz_test_utils:create_user(Config, #od_user{}),
     % Unauthenticated requests should be discarded (401)
     ?assert(check_view_privileges(401, undefined, User1, onedata_user,
         undefined)),
@@ -228,7 +228,7 @@ view_privileges_test(Config) ->
     ?assert(check_view_privileges(200, User1, User1, onedata_user,
         [<<"view_privileges">>])),
     % New users and groups should have no permissions by default
-    {ok, User2} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Group2} = oz_test_utils:create_group(Config, User2, <<"gr">>),
     ?assert(check_view_privileges(200, User1, User2, onedata_user, [])),
     ?assert(check_view_privileges(200, User1, Group2, user_group, [])),
@@ -241,7 +241,7 @@ view_privileges_test(Config) ->
 
 set_privileges_test(Config) ->
     rest_test_utils:set_config(Config),
-    {ok, User1} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User1} = oz_test_utils:create_user(Config, #od_user{}),
     % Give the user perms to view and set privileges
     set_privileges(
         Config, User1, onedata_user, [view_privileges, set_privileges]
@@ -252,7 +252,7 @@ set_privileges_test(Config) ->
     % And now a nonexistent user
     ?assert(check_set_privileges(404, User1, <<"bad_user">>, onedata_user, [])),
     % Create a user and a group for testing
-    {ok, User2} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Group2} = oz_test_utils:create_group(Config, User2, <<"gr">>),
     % Get all possible privileges
     [Node | _] = ?config(oz_worker_nodes, Config),
@@ -285,9 +285,9 @@ set_privileges_test(Config) ->
 list_spaces_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create some spaces belonging to some users
-    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
-    {ok, UserWithSpaces2} = oz_test_utils:create_user(Config, #onedata_user{}),
-    {ok, UserWithSpaces3} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserWithSpaces2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserWithSpaces3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(
         Config, {user, UserWithSpaces1}, <<"sp">>
     ),
@@ -307,10 +307,10 @@ list_spaces_test(Config) ->
         Space4
     ],
     % Admin will be used to grant or revoke privileges
-    {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     set_privileges(Config, Admin, onedata_user, [set_privileges]),
     % User will be used to test the functionality
-    {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
     %% PRIVILEGES AS A USER
 
@@ -377,10 +377,10 @@ list_providers_test(Config) ->
         Provider3
     ],
     % Admin will be used to grant or revoke privileges
-    {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     set_privileges(Config, Admin, onedata_user, [set_privileges]),
     % User will be used to test the functionality
-    {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
     %% PRIVILEGES AS A USER
 
@@ -438,7 +438,7 @@ list_providers_test(Config) ->
 
 list_providers_of_space_test(Config) ->
     rest_test_utils:set_config(Config),
-    {ok, UserWithSpaces} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, UserWithSpaces} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Provider1, _} = oz_test_utils:create_provider(Config, <<"pr">>),
     {ok, Provider2, _} = oz_test_utils:create_provider(Config, <<"pr">>),
     {ok, Space1} = oz_test_utils:create_space(
@@ -451,10 +451,10 @@ list_providers_of_space_test(Config) ->
         Provider2
     ],
     % Admin will be used to grant or revoke privileges
-    {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     set_privileges(Config, Admin, onedata_user, [set_privileges]),
     % User will be used to test the functionality
-    {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
     %% PRIVILEGES AS A USER
 
@@ -517,19 +517,19 @@ list_providers_of_space_test(Config) ->
 modify_space_members_test(Config) ->
     rest_test_utils:set_config(Config),
     % Admin will be used to grant or revoke privileges
-    {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     set_privileges(Config, Admin, onedata_user, [set_privileges]),
     % TestUser will be used to test the privileges
-    {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
     % AddedUser will be added to spaces and removed by TestUser
-    {ok, AddedUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, AddedUser} = oz_test_utils:create_user(Config, #od_user{}),
     % AddedGroup will be added to spaces and removed by TestUser
-    {ok, GroupOwner} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, GroupOwner} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, AddedGroup} = oz_test_utils:create_group(
         Config, GroupOwner, <<"gr">>
     ),
     % Create a space
-    {ok, SpaceOwner} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, SpaceOwner} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, TestSpace} = oz_test_utils:create_space(
         Config, {user, SpaceOwner}, <<"sp">>
     ),
@@ -687,7 +687,7 @@ modify_space_members_test(Config) ->
 create_3_nested_groups(Config, TestUser) ->
     {ok, BottomGroup} = oz_test_utils:create_group(Config, TestUser, <<"gr">>),
     % Dummy user will be used only to create groups
-    {ok, DummyUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, DummyUser} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, MiddleGroup} = oz_test_utils:create_group(Config, DummyUser, <<"gr">>),
     {ok, TopGroup} = oz_test_utils:create_group(Config, DummyUser, <<"gr">>),
     {ok, MiddleGroup} = oz_test_utils:join_group(

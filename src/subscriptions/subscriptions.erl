@@ -21,7 +21,7 @@
 
 -type seq() :: non_neg_integer() | -1.
 -type model() :: onedata_user | user_group | space | share | provider |
-handle | handle_service.
+od_handle | handle_service.
 -export_type([seq/0, model/0]).
 
 %%--------------------------------------------------------------------

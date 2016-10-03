@@ -57,10 +57,10 @@ find(<<"space">>, SpaceId) ->
                 UserId
             ),
             {ok, #document{
-                value = #onedata_user{
-                    space_names = SpaceNamesMap,
+                value = #od_user{
+                    space_aliases = SpaceNamesMap,
                     default_space = DefaultSpaceId
-                }}} = onedata_user:get(UserId),
+                }}} = od_user:get(UserId),
             Res = space_record(
                 SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders
             ),
@@ -81,10 +81,10 @@ find_all(<<"space">>) ->
     SpaceIds = proplists:get_value(spaces, UserSpaces),
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, #document{
-        value = #onedata_user{
-            space_names = SpaceNamesMap,
+        value = #od_user{
+            space_aliases = SpaceNamesMap,
             default_space = DefaultSpaceId
-        }}} = onedata_user:get(UserId),
+        }}} = od_user:get(UserId),
     Res = lists:map(
         fun(SpaceId) ->
             space_record(
@@ -192,10 +192,10 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
     HasViewPrivileges :: boolean()) -> proplists:proplist().
 space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
     HasViewPrivileges) ->
-    {ok, #document{value = #space{
+    {ok, #document{value = #od_space{
         name = DefaultName,
         providers_supports = ProvidersSupports
-    }}} = space:get(SpaceId),
+    }}} = od_space:get(SpaceId),
     % Try to get space name from personal user's mapping, if not use its
     % default name.
     Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),

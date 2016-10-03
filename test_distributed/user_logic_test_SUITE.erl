@@ -50,7 +50,7 @@ set_space_name_mapping_test(Config) ->
     [Node | _] = Nodes = ?config(oz_worker_nodes, Config),
 
     {ok, UserId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_user(Config, #onedata_user{})
+        {ok, _}, oz_test_utils:create_user(Config, #od_user{})
     ),
 
     SpaceName1 = <<"space_name">>,
@@ -87,7 +87,7 @@ clean_space_name_mapping_test(Config) ->
 
     SpaceName = <<"space_name">>,
     {ok, UserId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_user(Config, #onedata_user{})
+        {ok, _}, oz_test_utils:create_user(Config, #od_user{})
     ),
     {ok, GroupId} = ?assertMatch(
         {ok, _}, oz_test_utils:create_group(Config, UserId, <<"group">>)
@@ -107,15 +107,15 @@ clean_space_name_mapping_test(Config) ->
 
     ?assert(oz_test_utils:leave_space(Config, {user, UserId}, SpaceId)),
     ?assert(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertMatch({ok, #document{value = #onedata_user{space_names = #{}}}},
-        rpc:call(Node, onedata_user, get, [UserId])).
+    ?assertMatch({ok, #document{value = #od_user{space_aliases = #{}}}},
+        rpc:call(Node, od_user, get, [UserId])).
 
 remove_space_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
 
     SpaceName = <<"space_name">>,
     {ok, UserId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_user(Config, #onedata_user{})
+        {ok, _}, oz_test_utils:create_user(Config, #od_user{})
     ),
     {ok, SpaceId} = ?assertMatch(
         {ok, _}, oz_test_utils:create_space(Config, {user, UserId}, SpaceName)
@@ -123,9 +123,9 @@ remove_space_test(Config) ->
 
     ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
     oz_test_utils:remove_space(Config, SpaceId),
-    ?assertMatch({ok, #document{value = #onedata_user{
-        spaces = [], space_names = #{}
-    }}}, rpc:call(Node, onedata_user, get, [UserId])).
+    ?assertMatch({ok, #document{value = #od_user{
+        spaces = [], space_aliases = #{}
+    }}}, rpc:call(Node, od_user, get, [UserId])).
 
 % Check if basic auth login endpoint works.
 basic_auth_login_test(Config) ->

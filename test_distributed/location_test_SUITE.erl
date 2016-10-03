@@ -110,10 +110,10 @@ location_of_records_are_set_upon_creation(Config) ->
     Host3 = get_hostname(Node3),
 
     %% when
-    ID1 = create(Node1, #onedata_user{}),
-    ID2 = create(Node2, #user_group{}),
-    ID3 = create(Node3, #provider{}),
-    ID4 = create(Node1, #space{}),
+    ID1 = create(Node1, #od_user{}),
+    ID2 = create(Node2, #od_group{}),
+    ID3 = create(Node3, #od_provider{}),
+    ID4 = create(Node1, #od_space{}),
 
     %% then
     ?assertMatch({ok, Host1}, resolve(Node1, onedata_user, ID1)),

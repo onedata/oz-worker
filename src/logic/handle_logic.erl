@@ -32,10 +32,10 @@
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(HandleId :: handle:id()) ->
+-spec exists(HandleId :: od_handle:id()) ->
     boolean().
 exists(HandleId) ->
-    handle:exists(HandleId).
+    od_handle:exists(HandleId).
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether the user identified by UserId is a member of the handle.
@@ -43,13 +43,13 @@ exists(HandleId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_user(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
+-spec has_user(HandleId :: od_handle:id(), UserId :: od_user:id()) ->
     boolean().
 has_user(HandleId, UserId) ->
-    case handle:get(HandleId) of
+    case od_handle:get(HandleId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #handle{users = Users}}} ->
+        {ok, #document{value = #od_handle{users = Users}}} ->
             lists:keymember(UserId, 1, Users)
     end.
 
@@ -60,21 +60,21 @@ has_user(HandleId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_user(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
+-spec has_effective_user(HandleId :: od_handle:id(), UserId :: od_user:id()) ->
     boolean().
 has_effective_user(HandleId, UserId) ->
-    case handle:get(HandleId) of
+    case od_handle:get(HandleId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #handle{users = Users, groups = HandleGroups}}} ->
+        {ok, #document{value = #od_handle{users = Users, groups = HandleGroups}}} ->
             case lists:keymember(UserId, 1, Users) of
                 true ->
                     true;
                 false ->
-                    case onedata_user:get(UserId) of
+                    case od_user:get(UserId) of
                         {error, {not_found, _}} ->
                             false;
-                        {ok, #document{value = #onedata_user{groups = UserGroups}}} ->
+                        {ok, #document{value = #od_user{groups = UserGroups}}} ->
                             HandleGroupsSet = ordsets:from_list([GroupId || {GroupId, _} <- HandleGroups]),
                             UserGroupsSet = ordsets:from_list(UserGroups),
                             not ordsets:is_disjoint(HandleGroupsSet, UserGroupsSet)
@@ -88,13 +88,13 @@ has_effective_user(HandleId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_group(HandleId :: handle:id(), GroupId :: user_group:id()) ->
+-spec has_group(HandleId :: od_handle:id(), GroupId :: od_group:id()) ->
     boolean().
 has_group(HandleId, GroupId) ->
-    case handle:get(HandleId) of
+    case od_handle:get(HandleId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #handle{groups = Groups}}} ->
+        {ok, #document{value = #od_handle{groups = Groups}}} ->
             lists:keymember(GroupId, 1, Groups)
     end.
 
@@ -105,7 +105,7 @@ has_group(HandleId, GroupId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_privilege(HandleId :: handle:id(), UserId :: onedata_user:id(),
+-spec has_effective_privilege(HandleId :: od_handle:id(), UserId :: od_user:id(),
     Privilege :: privileges:handle_privilege()) ->
     boolean().
 has_effective_privilege(HandleId, UserId, Privilege) ->
@@ -121,25 +121,25 @@ has_effective_privilege(HandleId, UserId, Privilege) ->
 %% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create(onedata_user:id(), handle_service:id(), handle:resource_type(),
-    handle:resource_id(), handle:metadata()) ->
-    {ok, handle:id()}.
+-spec create(od_user:id(), od_handle_service:id(), od_handle:resource_type(),
+    od_handle:resource_id(), od_handle:metadata()) ->
+    {ok, od_handle:id()}.
 create(UserId, HandleServiceId, ResourceType, ResourceId, Metadata) ->
     {ok, PublicHandle} = handle_proxy:register_handle(HandleServiceId, ResourceType, ResourceId, Metadata),
     Privileges = privileges:handle_admin(),
-    Handle = #handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
+    Handle = #od_handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
         resource_id = ResourceId, public_handle = PublicHandle, metadata = Metadata,
         users = [{UserId, Privileges}]},
 
-    {ok, HandleId} = handle:create(#document{value = Handle}),
-    {ok, _} = onedata_user:update(UserId, fun(User = #onedata_user{handles = UHandles}) ->
-        {ok, User#onedata_user{handles = [HandleId | UHandles]}}
+    {ok, HandleId} = od_handle:create(#document{value = Handle}),
+    {ok, _} = od_user:update(UserId, fun(User = #od_user{handles = UHandles}) ->
+        {ok, User#od_user{handles = [HandleId | UHandles]}}
     end),
 
     case ResourceType of
         <<"Share">> ->
-            {ok, _} = share:update(ResourceId, fun(Share = #share{}) ->
-                {ok, Share#share{handle = HandleId}}
+            {ok, _} = od_share:update(ResourceId, fun(Share = #od_share{}) ->
+                {ok, Share#od_share{handle = HandleId}}
             end);
         _ ->
             ok
@@ -152,18 +152,18 @@ create(UserId, HandleServiceId, ResourceType, ResourceId, Metadata) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(handle:id(), handle:resource_type(), handle:resource_id(), handle:metadata()) -> ok.
+-spec modify(od_handle:id(), od_handle:resource_type(), od_handle:resource_id(), od_handle:metadata()) -> ok.
 modify(_HandleId, undefined, undefined, undefined) ->
     ok;
 modify(HandleId, NewResourceType, NewResourceId, NewMetadata) ->
     ok = handle_proxy:modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata),
-    {ok, _} = handle:update(HandleId,
-        fun(Handle = #handle{resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata}) ->
+    {ok, _} = od_handle:update(HandleId,
+        fun(Handle = #od_handle{resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata}) ->
             FinalResourceType = utils:ensure_defined(NewResourceType, undefined, ResourceType),
             FinalResourceId = utils:ensure_defined(NewResourceId, undefined, ResourceId),
             FinalMetadata = utils:ensure_defined(NewMetadata, undefined, Metadata),
-            {ok, Handle#handle{resource_type = FinalResourceType, resource_id = FinalResourceId,
-                metadata = FinalMetadata, timestamp = handle:actual_timestamp()}}
+            {ok, Handle#od_handle{resource_type = FinalResourceType, resource_id = FinalResourceId,
+                metadata = FinalMetadata, timestamp = od_handle:actual_timestamp()}}
         end),
     ok.
 
@@ -172,15 +172,15 @@ modify(HandleId, NewResourceType, NewResourceId, NewMetadata) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_user_privileges(HandleId :: handle:id(), UserId :: onedata_user:id(),
+-spec set_user_privileges(HandleId :: od_handle:id(), UserId :: od_user:id(),
     Privileges :: [privileges:handle_privilege()]) ->
     ok.
 set_user_privileges(HandleId, UserId, Privileges) ->
-    {ok, _} = handle:update(HandleId,
-        fun(Handle = #handle{users = Users}) ->
+    {ok, _} = od_handle:update(HandleId,
+        fun(Handle = #od_handle{users = Users}) ->
             PrivilegesNew = ordsets:from_list(Privileges),
             UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, PrivilegesNew}),
-            {ok, Handle#handle{users = UsersNew}}
+            {ok, Handle#od_handle{users = UsersNew}}
         end),
     ok.
 
@@ -189,15 +189,15 @@ set_user_privileges(HandleId, UserId, Privileges) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_group_privileges(HandleId :: handle:id(), GroupId :: user_group:id(),
+-spec set_group_privileges(HandleId :: od_handle:id(), GroupId :: od_group:id(),
     Privileges :: [privileges:handle_privilege()]) ->
     ok.
 set_group_privileges(HandleId, GroupId, Privileges) ->
-    {ok, _} = handle:update(HandleId,
-        fun(Handle = #handle{groups = Groups}) ->
+    {ok, _} = od_handle:update(HandleId,
+        fun(Handle = #od_handle{groups = Groups}) ->
             PrivilegesNew = ordsets:from_list(Privileges),
             GroupsNew = lists:keyreplace(GroupId, 1, Groups, {GroupId, PrivilegesNew}),
-            {ok, Handle#handle{groups = GroupsNew}}
+            {ok, Handle#od_handle{groups = GroupsNew}}
         end),
     ok.
 
@@ -205,20 +205,20 @@ set_group_privileges(HandleId, GroupId, Privileges) ->
 %% @doc Adds a new user to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
-    {ok, HandleId :: handle:id()}.
+-spec add_user(HandleId :: od_handle:id(), UserId :: od_user:id()) ->
+    {ok, HandleId :: od_handle:id()}.
 add_user(HandleId, UserId) ->
     case has_user(HandleId, UserId) of
         true -> ok;
         false ->
-            {ok, _} = handle:update(HandleId, fun(Handle) ->
+            {ok, _} = od_handle:update(HandleId, fun(Handle) ->
                 Privileges = privileges:handle_user(),
-                #handle{users = Users} = Handle,
-                {ok, Handle#handle{users = [{UserId, Privileges} | Users]}}
+                #od_handle{users = Users} = Handle,
+                {ok, Handle#od_handle{users = [{UserId, Privileges} | Users]}}
             end),
-            {ok, _} = onedata_user:update(UserId, fun(User) ->
-                #onedata_user{handles = UHandles} = User,
-                {ok, User#onedata_user{handles = [HandleId | UHandles]}}
+            {ok, _} = od_user:update(UserId, fun(User) ->
+                #od_user{handles = UHandles} = User,
+                {ok, User#od_user{handles = [HandleId | UHandles]}}
             end)
     end,
     {ok, HandleId}.
@@ -227,20 +227,20 @@ add_user(HandleId, UserId) ->
 %% @doc Adds a new group to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(HandleId :: handle:id(), GroupId :: user_group:id()) ->
-    {ok, HandleId :: handle:id()}.
+-spec add_group(HandleId :: od_handle:id(), GroupId :: od_group:id()) ->
+    {ok, HandleId :: od_handle:id()}.
 add_group(HandleId, GroupId) ->
     case has_group(HandleId, GroupId) of
         true -> ok;
         false ->
-            {ok, _} = handle:update(HandleId, fun(Handle) ->
+            {ok, _} = od_handle:update(HandleId, fun(Handle) ->
                 Privileges = privileges:handle_user(),
-                #handle{groups = Groups} = Handle,
-                {ok, Handle#handle{groups = [{GroupId, Privileges} | Groups]}}
+                #od_handle{groups = Groups} = Handle,
+                {ok, Handle#od_handle{groups = [{GroupId, Privileges} | Groups]}}
             end),
-            {ok, _} = user_group:update(GroupId, fun(Group) ->
-                #user_group{handles = Handles} = Group,
-                {ok, Group#user_group{handles = [HandleId | Handles]}}
+            {ok, _} = od_group:update(GroupId, fun(Group) ->
+                #od_group{handles = Handles} = Group,
+                {ok, Group#od_group{handles = [HandleId | Handles]}}
             end)
     end,
     {ok, HandleId}.
@@ -251,12 +251,12 @@ add_group(HandleId, GroupId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
+-spec get_data(HandleId :: od_handle:id()) -> {ok, [proplists:property()]}.
 get_data(HandleId) ->
-    {ok, #document{value = #handle{handle_service_id = HandleServiceId, public_handle = Handle,
+    {ok, #document{value = #od_handle{handle_service_id = HandleServiceId, public_handle = Handle,
         resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata,
         timestamp = Timestamp}}} =
-        handle:get(HandleId),
+        od_handle:get(HandleId),
     {ok, [
         {handleId, HandleId},
         {handleServiceId, HandleServiceId},
@@ -273,12 +273,12 @@ get_data(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_public_data(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
+-spec get_public_data(HandleId :: od_handle:id()) -> {ok, [proplists:property()]}.
 get_public_data(HandleId) ->
-    {ok, #document{value = #handle{
+    {ok, #document{value = #od_handle{
         public_handle = Handle,
         metadata = Metadata
-    }}} = handle:get(HandleId),
+    }}} = od_handle:get(HandleId),
     {ok, [
         {handleId, HandleId},
         {handle, Handle},
@@ -291,10 +291,10 @@ get_public_data(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_metadata(HandleId :: handle:id()) -> {ok, [proplists:property()]}.
+-spec get_metadata(HandleId :: od_handle:id()) -> {ok, [proplists:property()]}.
 get_metadata(HandleId) ->
-    {ok, #document{value = #handle{metadata = Metadata, timestamp = Timestamp}}} =
-        handle:get(HandleId),
+    {ok, #document{value = #od_handle{metadata = Metadata, timestamp = Timestamp}}} =
+        od_handle:get(HandleId),
     {ok, [
         {metadata, Metadata},
         {timestamp, Timestamp}
@@ -305,7 +305,7 @@ get_metadata(HandleId) ->
 %%--------------------------------------------------------------------
 -spec list() -> {ok, [binary()]}.
 list() ->
-    {ok, HandleDocs} = handle:list(),
+    {ok, HandleDocs} = od_handle:list(),
     HandleIds = lists:map(fun(#document{key = HandleId}) ->
         HandleId
     end, HandleDocs),
@@ -316,10 +316,10 @@ list() ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(HandleId :: handle:id()) ->
+-spec get_users(HandleId :: od_handle:id()) ->
     {ok, [proplists:property()]}.
 get_users(HandleId) ->
-    {ok, #document{value = #handle{users = Users}}} = handle:get(HandleId),
+    {ok, #document{value = #od_handle{users = Users}}} = od_handle:get(HandleId),
     {UserIds, _} = lists:unzip(Users),
     {ok, [{users, UserIds}]}.
 
@@ -329,14 +329,14 @@ get_users(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle_service doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_users(HandleId :: handle:id()) ->
+-spec get_effective_users(HandleId :: od_handle:id()) ->
     {ok, [proplists:property()]}.
 get_effective_users(HandleId) ->
     {ok, #document{
-        value = #handle{
+        value = #od_handle{
             users = UserPerms,
             groups = GroupPerms
-        }}} = handle:get(HandleId),
+        }}} = od_handle:get(HandleId),
     {Users, _} = lists:unzip(UserPerms),
     UsersViaGroups = lists:foldl(
         fun({GroupId, _}, Acc) ->
@@ -353,10 +353,10 @@ get_effective_users(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(HandleId :: handle:id()) ->
+-spec get_groups(HandleId :: od_handle:id()) ->
     {ok, [proplists:property()]}.
 get_groups(HandleId) ->
-    {ok, #document{value = #handle{groups = GroupTuples}}} = handle:get(HandleId),
+    {ok, #document{value = #od_handle{groups = GroupTuples}}} = od_handle:get(HandleId),
     {Groups, _} = lists:unzip(GroupTuples),
     {ok, [{groups, Groups}]}.
 
@@ -365,10 +365,10 @@ get_groups(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_privileges(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
+-spec get_user_privileges(HandleId :: od_handle:id(), UserId :: od_user:id()) ->
     {ok, [{privileges, [privileges:handle_privilege()]}]}.
 get_user_privileges(HandleId, UserId) ->
-    {ok, #document{value = #handle{users = Users}}} = handle:get(HandleId),
+    {ok, #document{value = #od_handle{users = Users}}} = od_handle:get(HandleId),
     {_, Privileges} = lists:keyfind(UserId, 1, Users),
     {ok, [{privileges, Privileges}]}.
 
@@ -377,10 +377,10 @@ get_user_privileges(HandleId, UserId) ->
 %% Throws exception when call to the datastore fails, or handle doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_privileges(HandleId :: handle:id(), GroupId :: user_group:id()) ->
+-spec get_group_privileges(HandleId :: od_handle:id(), GroupId :: od_group:id()) ->
     {ok, [{privileges, [privileges:handle_privilege()]}]}.
 get_group_privileges(HandleId, GroupId) ->
-    {ok, #document{value = #handle{groups = Groups}}} = handle:get(HandleId),
+    {ok, #document{value = #od_handle{groups = Groups}}} = od_handle:get(HandleId),
     {_, Privileges} = lists:keyfind(GroupId, 1, Groups),
     {ok, [{privileges, Privileges}]}.
 
@@ -389,11 +389,11 @@ get_group_privileges(HandleId, GroupId) ->
 %% Throws exception when call to the datastore fails, or handle is already removed.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(HandleId :: handle:id()) -> boolean().
+-spec remove(HandleId :: od_handle:id()) -> boolean().
 remove(HandleId) ->
     ok = handle_proxy:unregister_handle(HandleId),
-    {ok, #document{value = Handle}} = handle:get(HandleId),
-    #handle{
+    {ok, #document{value = Handle}} = od_handle:get(HandleId),
+    #od_handle{
         users = Users,
         groups = Groups,
         resource_id = ResourceId,
@@ -401,31 +401,31 @@ remove(HandleId) ->
     } = Handle,
 
     lists:foreach(fun({UserId, _}) ->
-        {ok, _} = onedata_user:update(UserId, fun(User) ->
-            #onedata_user{handles = UHandles} = User,
-            {ok, User#onedata_user{
+        {ok, _} = od_user:update(UserId, fun(User) ->
+            #od_user{handles = UHandles} = User,
+            {ok, User#od_user{
                 handles = lists:delete(HandleId, UHandles)
             }}
         end)
     end, Users),
 
     lists:foreach(fun({GroupId, _}) ->
-        {ok, _} = user_group:update(GroupId, fun(Group) ->
-            #user_group{handles = GHandles} = Group,
-            {ok, Group#user_group{handles = lists:delete(HandleId, GHandles)}}
+        {ok, _} = od_group:update(GroupId, fun(Group) ->
+            #od_group{handles = GHandles} = Group,
+            {ok, Group#od_group{handles = lists:delete(HandleId, GHandles)}}
         end)
     end, Groups),
 
     case ResourceType of
         <<"Share">> ->
-            share:update(ResourceId, fun(Share = #share{}) ->
-                {ok, Share#share{handle = undefined}}
+            od_share:update(ResourceId, fun(Share = #od_share{}) ->
+                {ok, Share#od_share{handle = undefined}}
             end);
         _ ->
             ok
     end,
 
-    case handle:delete(HandleId) of
+    case od_handle:delete(HandleId) of
         ok -> true;
         _ -> false
     end.
@@ -435,16 +435,16 @@ remove(HandleId) ->
 %% Throws exception when call to the datastore fails, or handle/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
+-spec remove_user(HandleId :: od_handle:id(), UserId :: od_user:id()) ->
     true.
 remove_user(HandleId, UserId) ->
-    {ok, _} = onedata_user:update(UserId, fun(User) ->
-        #onedata_user{handles = UHandles} = User,
-        {ok, User#onedata_user{handles = lists:delete(HandleId, UHandles)}}
+    {ok, _} = od_user:update(UserId, fun(User) ->
+        #od_user{handles = UHandles} = User,
+        {ok, User#od_user{handles = lists:delete(HandleId, UHandles)}}
     end),
-    {ok, _} = handle:update(HandleId, fun(Handle) ->
-        #handle{users = Users} = Handle,
-        {ok, Handle#handle{users = lists:keydelete(UserId, 1, Users)}}
+    {ok, _} = od_handle:update(HandleId, fun(Handle) ->
+        #od_handle{users = Users} = Handle,
+        {ok, Handle#od_handle{users = lists:keydelete(UserId, 1, Users)}}
     end),
     cleanup(HandleId),
     true.
@@ -454,16 +454,16 @@ remove_user(HandleId, UserId) ->
 %% Throws exception when call to the datastore fails, or handle/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(HandleId :: handle:id(), GroupId :: user_group:id()) ->
+-spec remove_group(HandleId :: od_handle:id(), GroupId :: od_group:id()) ->
     true.
 remove_group(HandleId, GroupId) ->
-    {ok, _} = user_group:update(GroupId, fun(Group) ->
-        #user_group{handles = Handles} = Group,
-        {ok, Group#user_group{handles = lists:delete(HandleId, Handles)}}
+    {ok, _} = od_group:update(GroupId, fun(Group) ->
+        #od_group{handles = Handles} = Group,
+        {ok, Group#od_group{handles = lists:delete(HandleId, Handles)}}
     end),
-    {ok, _} = handle:update(HandleId, fun(Handle) ->
-        #handle{groups = Groups} = Handle,
-        {ok, Handle#handle{groups = lists:keydelete(GroupId, 1, Groups)}}
+    {ok, _} = od_handle:update(HandleId, fun(Handle) ->
+        #od_handle{groups = Groups} = Handle,
+        {ok, Handle#od_handle{groups = lists:keydelete(GroupId, 1, Groups)}}
     end),
 
     cleanup(HandleId),
@@ -474,7 +474,7 @@ remove_group(HandleId, GroupId) ->
 %% Throws exception when call to the datastore fails, or handle is already removed.
 %% @end
 %%--------------------------------------------------------------------
--spec cleanup(HandleId :: handle:id()) -> boolean() | no_return().
+-spec cleanup(HandleId :: od_handle:id()) -> boolean() | no_return().
 cleanup(_HandleId) ->
 %% Currently, handle with no users and groups are not deleted so it is
 %% possible to restore it after accidentally leaving a handle.
@@ -491,11 +491,11 @@ cleanup(_HandleId) ->
 %% Throws exception when call to the datastore fails, or handle/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_user_privileges(HandleId :: handle:id(), UserId :: onedata_user:id()) ->
+-spec get_effective_user_privileges(HandleId :: od_handle:id(), UserId :: od_user:id()) ->
     {ok, ordsets:ordset(privileges:handle_privilege())}.
 get_effective_user_privileges(HandleId, UserId) ->
-    {ok, #document{value = #onedata_user{groups = UGroups}}} = onedata_user:get(UserId),
-    {ok, #document{value = #handle{users = UserTuples, groups = SGroupTuples}}} = handle:get(HandleId),
+    {ok, #document{value = #od_user{groups = UGroups}}} = od_user:get(UserId),
+    {ok, #document{value = #od_handle{users = UserTuples, groups = SGroupTuples}}} = od_handle:get(HandleId),
 
     UserGroups = sets:from_list(UGroups),
 

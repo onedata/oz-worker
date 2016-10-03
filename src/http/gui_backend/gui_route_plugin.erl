@@ -140,10 +140,10 @@ public_rpc_backend() -> public_rpc_backend.
     {ok, proplists:proplist()} | gui_error:error_result().
 session_details() ->
     {ok, #document{
-        value = #onedata_user{
+        value = #od_user{
             name = Name,
             basic_auth_enabled = BasicAuthEnabled
-        }}} = onedata_user:get(g_session:get_user_id()),
+        }}} = od_user:get(g_session:get_user_id()),
     FirstLogin = g_session:get_value(firstLogin, false),
     Res = [
         {<<"userName">>, Name},

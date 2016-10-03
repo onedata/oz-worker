@@ -29,13 +29,13 @@
 %% Register handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec register_handle(handle_service:id(), handle:resource_type(),
-    handle:resource_id(), handle:metadata()) -> {ok, handle:public_handle()}.
+-spec register_handle(od_handle_service:id(), od_handle:resource_type(),
+    od_handle:resource_id(), od_handle:metadata()) -> {ok, od_handle:public_handle()}.
 register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
-    {ok, #document{value = #handle_service{
+    {ok, #document{value = #od_handle_service{
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties}}
-    } = handle_service:get(HandleServiceId),
+    } = od_handle_service:get(HandleServiceId),
     Url = get_redirect_url(ResourceType, ResourceId),
     Body = [
         {<<"url">>, Url},
@@ -62,14 +62,14 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
 %% Unregister handle from external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec unregister_handle(handle:id()) -> ok.
+-spec unregister_handle(od_handle:id()) -> ok.
 unregister_handle(HandleId)  ->
-    {ok, #document{value = #handle{handle_service_id = HandleServiceId, public_handle = PublicHandle}}} =
-        handle:get(HandleId),
-    {ok, #document{value = #handle_service{
+    {ok, #document{value = #od_handle{handle_service_id = HandleServiceId, public_handle = PublicHandle}}} =
+        od_handle:get(HandleId),
+    {ok, #document{value = #od_handle_service{
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties}}
-    } = handle_service:get(HandleServiceId),
+    } = od_handle_service:get(HandleServiceId),
 %%    Body = [
 %%        {<<"serviceProperties">>, ServiceProperties}
 %%    ],
@@ -91,19 +91,19 @@ unregister_handle(HandleId)  ->
 %% Modify handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec modify_handle(handle:id(), handle:resource_type(), handle:resource_id(), handle:metadata()) ->
+-spec modify_handle(od_handle:id(), od_handle:resource_type(), od_handle:resource_id(), od_handle:metadata()) ->
     ok.
 modify_handle(_HandleId, undefined, undefined, undefined)  ->
     ok;
 modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata)  ->
-    {ok, #document{value = #handle{handle_service_id = HandleServiceId,
+    {ok, #document{value = #od_handle{handle_service_id = HandleServiceId,
         resource_type = ResourceType, resource_id = ResourceId, public_handle = PublicHandle,
         metadata = Metadata}}} =
-        handle:get(HandleId),
-    {ok, #document{value = #handle_service{
+        od_handle:get(HandleId),
+    {ok, #document{value = #od_handle_service{
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties}}
-    } = handle_service:get(HandleServiceId),
+    } = od_handle_service:get(HandleServiceId),
     case (NewResourceType =:= undefined orelse NewResourceType =:= ResourceType)
         andalso (NewResourceId =:= undefined orelse NewResourceId =:= ResourceId)
         andalso (NewMetadata =:= undefined orelse NewMetadata =:= Metadata)
@@ -142,7 +142,7 @@ modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata)  ->
 %% Get public url for share.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(handle:resource_type(), handle:resource_id()) -> public_url().
+-spec get_redirect_url(od_handle:resource_type(), od_handle:resource_id()) -> public_url().
 get_redirect_url(<<"Share">>, ShareId) ->
-    {ok, #document{value = #share{public_url = PublicUrl}}} = share:get(ShareId),
+    {ok, #document{value = #od_share{public_url = PublicUrl}}} = od_share:get(ShareId),
     PublicUrl.

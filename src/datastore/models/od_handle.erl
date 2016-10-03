@@ -1,25 +1,52 @@
 %%%-------------------------------------------------------------------
-%%% @author Lukasz Opiola
+%%% @author Tomasz Lichon
 %%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for share record - representing a file share in the system.
+%%% Database model representing file handles.
 %%% @end
 %%%-------------------------------------------------------------------
--module(share).
--author("Lukasz Opiola").
+-module(od_handle).
+-author("Tomasz Lichon").
 -behaviour(model_behaviour).
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
+-type doc() :: datastore:document().
+-type info() :: #od_handle{}.
+-type id() :: binary().
+-type resource_type() :: binary().
+-type resource_id() :: binary().
+-type public_handle() :: binary().
+-type metadata() :: binary().
+-type timestamp() :: calendar:datetime().
+
+-export_type([doc/0, info/0, id/0]).
+-export_type([resource_type/0, resource_id/0, public_handle/0, metadata/0,
+    timestamp/0]).
+
+%% API
+-export([actual_timestamp/0]).
+
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @equiv erlang:universaltime().
+%%--------------------------------------------------------------------
+-spec actual_timestamp() -> timestamp().
+actual_timestamp() ->
+    erlang:universaltime().
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -31,8 +58,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec save(datastore:document()) -> {ok, datastore:ext_key()} | datastore:generic_error().
-save(Document) ->
-    datastore:save(?STORE_LEVEL, Document).
+save(Document = #document{value = Handle}) ->
+    datastore:save(?STORE_LEVEL, Document#document{value = Handle#od_handle{timestamp = od_handle:actual_timestamp()}}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -50,8 +77,8 @@ update(Key, Diff) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(datastore:document()) -> {ok, datastore:ext_key()} | datastore:create_error().
-create(Document) ->
-    datastore:create(?STORE_LEVEL, Document).
+create(Document = #document{value = Handle}) ->
+    datastore:create(?STORE_LEVEL, Document#document{value = Handle#od_handle{timestamp = od_handle:actual_timestamp()}}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -96,9 +123,8 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_Name, share_store_level, ?DISK_ONLY_LEVEL),
-    ?MODEL_CONFIG(share_bucket, [], StoreLevel).
+    StoreLevel = ?DISK_ONLY_LEVEL,
+    ?MODEL_CONFIG(handle_bucket, [], StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc

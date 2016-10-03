@@ -78,7 +78,7 @@ get_users(ProviderID, NewUserIDs) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_spaces(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        #document{value = #onedata_user{spaces = Spaces}} = UserDoc,
+        #document{value = #od_user{spaces = Spaces}} = UserDoc,
         lists:filtermap(fun(SpaceID) ->
             case get_with_revs(space, SpaceID) of
                 {ok, Doc} -> {true, {-1, Doc, space}};
@@ -100,11 +100,11 @@ get_spaces(ProviderID, UserChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_groups(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        #document{value = #onedata_user{effective_groups = Groups}} = UserDoc,
+        #document{value = #od_user{eff_groups = Groups}} = UserDoc,
 
         AllGroups = lists:usort(lists:flatmap(fun(GroupID) ->
-            case user_group:get(GroupID) of
-                {ok, #document{value = #user_group{nested_groups = Tuples}}} ->
+            case od_group:get(GroupID) of
+                {ok, #document{value = #od_group{nested_groups = Tuples}}} ->
                     {NestedIDs, _} = lists:unzip(Tuples),
                     [GroupID | NestedIDs];
                 {error, _} ->
@@ -133,7 +133,7 @@ get_groups(ProviderID, UserChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_group_spaces(ProviderID, GroupChanges) ->
     lists:flatmap(fun({_, GroupDoc, _}) ->
-        #document{value = #user_group{spaces = Spaces}} = GroupDoc,
+        #document{value = #od_group{spaces = Spaces}} = GroupDoc,
         lists:filtermap(fun(SpaceID) ->
             case get_with_revs(space, SpaceID) of
                 {ok, Doc} -> {true, {-1, Doc, space}};
@@ -154,7 +154,7 @@ get_group_spaces(ProviderID, GroupChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_shares(ProviderID, SpaceChanges) ->
     lists:flatmap(fun({_, SpaceDoc, _}) ->
-        #document{value = #space{shares = Shares}} = SpaceDoc,
+        #document{value = #od_space{shares = Shares}} = SpaceDoc,
         lists:filtermap(fun(ShareId) ->
             case get_with_revs(share, ShareId) of
                 {ok, Doc} -> {true, {-1, Doc, share}};

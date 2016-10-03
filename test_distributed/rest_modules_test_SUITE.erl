@@ -2188,7 +2188,7 @@ support_space(Token, Size, {RestAddress, Headers, Options}) ->
 %% User functions =========================================================
 
 create_user(UserName, Node) ->
-    {ok, UserId} = rpc:call(Node, user_logic, create, [#onedata_user{name = UserName}]),
+    {ok, UserId} = rpc:call(Node, user_logic, create, [#od_user{name = UserName}]),
     UserId.
 
 %% this function authorizes users
@@ -3017,9 +3017,9 @@ mock_handle_proxy(Config) ->
     ok = test_utils:mock_expect(Nodes, share, get,
         fun
             (?SHARE_ID_1) ->
-                {ok, #document{value = #share{public_url = ?SHARE_1_PUBLIC_URL}}};
+                {ok, #document{value = #od_share{public_url = ?SHARE_1_PUBLIC_URL}}};
             (?SHARE_ID_2) ->
-                {ok, #document{value = #share{public_url = ?SHARE_2_PUBLIC_URL}}};
+                {ok, #document{value = #od_share{public_url = ?SHARE_2_PUBLIC_URL}}};
             (_) ->
                 meck:passthrough()
         end),
