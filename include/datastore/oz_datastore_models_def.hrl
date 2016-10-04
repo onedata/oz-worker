@@ -26,6 +26,21 @@
 % Aliases are not allowed to start with this string.
 -define(NO_ALIAS_UUID_PREFIX, "uuid_").
 
+
+%%%===================================================================
+%%% DB records definitions
+%%%===================================================================
+
+%% This record defines user's account info
+%% received from an openid / oauth provider
+-record(oauth_account, {
+    provider_id = undefined :: atom(),
+    user_id = <<"">> :: binary(),
+    login = <<"">> :: binary(),
+    name = <<"">> :: binary(),
+    email_list = [] :: [binary()]
+}).
+
 % Records starting with prefix od_ are special records that represent entities
 % in the system and are synchronized to providers via subscriptions.
 % The entities can have various relations between them, especially effective
@@ -270,17 +285,6 @@
 -record(onedata_auth, {
     secret :: undefined | binary(),
     user_id :: undefined | binary()
-}).
-
-
-%% This record defines user's account info
-%% received from an openid / oauth provider
--record(oauth_account, {
-    provider_id = undefined :: atom(),
-    user_id = <<"">> :: binary(),
-    login = <<"">> :: binary(),
-    name = <<"">> :: binary(),
-    email_list = [] :: [binary()]
 }).
 
 
