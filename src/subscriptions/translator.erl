@@ -99,8 +99,8 @@ get_msg(Seq, Doc, share = Model) ->
     ]}];
 get_msg(Seq, Doc, user_group = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #od_group{name = Name, spaces = Spaces, users = Users, nested_groups = NGroups,
-        parent_groups = PGroups, eff_users = EUsers, type = Type,
+    #od_group{name = Name, spaces = Spaces, users = Users, children = NGroups,
+        parents = PGroups, eff_users = EUsers, type = Type,
         handle_services = HandleServices, handles = Handles} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},

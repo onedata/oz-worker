@@ -53,7 +53,7 @@ providers(Doc, user_group) ->
         value = #od_group{
             users = UsersWithPrivileges,
             eff_users = EUsersWithPrivileges,
-            eff_parent_groups = EGroups}} = Doc,
+            eff_children = EGroups}} = Doc,
     {Users, _} = lists:unzip(UsersWithPrivileges),
     {EUsers, _} = lists:unzip(EUsersWithPrivileges),
     AncestorsUsers = lists:foldl(

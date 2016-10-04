@@ -104,7 +104,7 @@ get_groups(ProviderID, UserChanges) ->
 
         AllGroups = lists:usort(lists:flatmap(fun(GroupID) ->
             case od_group:get(GroupID) of
-                {ok, #document{value = #od_group{nested_groups = Tuples}}} ->
+                {ok, #document{value = #od_group{children = Tuples}}} ->
                     {NestedIDs, _} = lists:unzip(Tuples),
                     [GroupID | NestedIDs];
                 {error, _} ->

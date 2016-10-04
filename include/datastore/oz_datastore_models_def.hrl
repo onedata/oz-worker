@@ -26,6 +26,46 @@
 % Aliases are not allowed to start with this string.
 -define(NO_ALIAS_UUID_PREFIX, "uuid_").
 
+% Records starting with prefix od_ are special records that represent entities
+% in the system and are synchronized to providers via subscriptions.
+% The entities can have various relations between them, especially effective
+% membership is possible via groups and nested groups.
+% The effective relations are calculated top-down,
+% to obtain effective memberships to other entities for every user,
+% and bottom-up to obtain effective members for every entity. The records
+% contain the fields top_down_dirty and bottom_up_dirty that mark records
+% that have not yet been calculated in given direction.
+% The below ASCII visual shows possible relations in entities graph.
+%
+%  provider    share
+%      ^         ^
+%       \       /
+%        \     /
+%         space    handle_service     handle
+%         ^  ^        ^        ^       ^   ^
+%         |   \      /         |      /    |
+%         |    \    /          |     /     |
+%        user    group          user      group
+%                  ^                        ^
+%                  |                        |
+%                  |                        |
+%                group                     user
+%                ^   ^
+%               /     \
+%              /       \
+%            user     user
+%
+% Members of providers, shares, handle_services and handles are
+% calculated bottom-up.
+%
+% Memberships of users are calculated top-down.
+%
+% Groups and spaces must be processed top-down and bottom-up, as they hold the
+% information about users' memberships and members of entities.
+%
+% After a new relation appears, the parent is marked bottom_up_dirty and the
+% child is marked top_down_dirty.
+
 
 %% This record defines a user and is handled as a database document
 -record(od_user, {
@@ -61,7 +101,10 @@
     eff_shares = [] :: [od_share:id()],
     eff_providers = [] :: [od_provider:id()],
     eff_handle_services = [] :: [od_handle_service:id()],
-    eff_handles = [] :: [od_handle:id()]
+    eff_handles = [] :: [od_handle:id()],
+
+    % Marks that the record's effective relations are not up to date.
+    top_down_dirty = true :: boolean()
 }).
 
 
@@ -71,10 +114,11 @@
     name = undefined :: binary() | undefined,
     type = undefined :: od_group:type() | undefined,
 
-    % Group graph related entities
-    parent_groups = [] :: [od_group:id()],
-    eff_parent_groups = [] :: [od_group:id()],
-    nested_groups = [] :: [{od_group:id(), [privileges:group_privilege()]}],
+    % Group graph related entities (direct and effective)
+    parents = [] :: [od_group:id()],
+    eff_parents = [] :: [od_group:id()],
+    children = [] :: [{od_group:id(), [privileges:group_privilege()]}],
+    eff_children = [] :: [od_group:id()],
 
     % Direct relations to other entities
     users = [] :: [{od_user:id(), [privileges:group_privilege()]}],
@@ -88,18 +132,34 @@
     eff_shares = [] :: [od_share:id()],
     eff_providers = [] :: [od_provider:id()],
     eff_handle_services = [] :: [od_handle_service:id()],
-    eff_handles = [] :: [od_handle:id()]
+    eff_handles = [] :: [od_handle:id()],
+
+    % Marks that the record's effective relations are not up to date.
+    % Groups' effective relations must be calculated top-down and bottom-up.
+    top_down_dirty = true :: boolean(),
+    bottom_up_dirty = true :: boolean()
 }).
 
 
 %% This record defines a space that can be used by users to store their files
 -record(od_space, {
     name :: undefined | binary(),
+
+    % Direct relations to other entities
     providers_supports = [] :: [{od_provider:id(), Size :: pos_integer()}],
     users = [] :: [{od_user:id(), [privileges:space_privilege()]}],
     groups = [] :: [{od_group:id(), [privileges:space_privilege()]}],
     % All shares that belong to this space.
-    shares = [] :: [od_share:id()]
+    shares = [] :: [od_share:id()],
+
+    % Effective relations to other entities
+    eff_users = [] :: [od_user:id()],
+    eff_groups = [] :: [od_group:id()],
+
+    % Marks that the record's effective relations are not up to date.
+    % Groups' effective relations must be calculated top-down and bottom-up.
+    top_down_dirty = true :: boolean(),
+    bottom_up_dirty = true :: boolean()
 }).
 
 
@@ -108,29 +168,17 @@
     name = undefined :: undefined | binary(),
     public_url = undefined :: undefined | binary(),
     root_file_id = undefined :: undefined | binary(),
-    parent_space = undefined :: undefined | binary(),
-    handle = undefined :: undefined | od_handle:id()
-}).
 
+    % Direct relations to other entities
+    parent_space = undefined :: undefined | od_space:id(),
+    handle = undefined :: undefined | od_handle:id(),
 
--record(od_handle_service, {
-    name :: od_handle_service:name() | undefined,
-    proxy_endpoint :: od_handle_service:proxy_endpoint() | undefined,
-    service_properties = [] :: od_handle_service:service_properties(),
-    users = [] :: [{od_user:id(), [privileges:handle_service_privilege()]}],
-    groups = [] :: [{od_group:id(), [privileges:handle_service_privilege()]}]
-}).
+    % Effective relations to other entities
+    eff_users = [] :: [od_user:id()],
+    eff_groups = [] :: [od_group:id()],
 
-
--record(od_handle, {
-    handle_service_id :: od_handle_service:id() | undefined,
-    public_handle :: od_handle:public_handle() | undefined,
-    resource_type :: od_handle:resource_type() | undefined,
-    resource_id :: od_handle:resource_id() | undefined,
-    metadata :: od_handle:metadata() | undefined,
-    users = [] :: [{od_user:id(), [privileges:handle_privilege()]}],
-    groups = [] :: [{od_group:id(), [privileges:handle_privilege()]}],
-    timestamp = od_handle:actual_timestamp() :: od_handle:timestamp()
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
 }).
 
 
@@ -139,10 +187,58 @@
     client_name :: undefined | binary(),
     redirection_point :: undefined | binary(),
     urls :: undefined | [binary()],
-    spaces = [] :: [od_space:id()],
     serial :: undefined | binary(),
     latitude :: undefined | float(),
-    longitude :: undefined | float()
+    longitude :: undefined | float(),
+
+    % Direct relations to other entities
+    spaces = [] :: [od_space:id()],
+
+    % Effective relations to other entities
+    eff_users = [] :: [od_user:id()],
+    eff_groups = [] :: [od_group:id()],
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
+}).
+
+
+-record(od_handle_service, {
+    name :: od_handle_service:name() | undefined,
+    proxy_endpoint :: od_handle_service:proxy_endpoint() | undefined,
+    service_properties = [] :: od_handle_service:service_properties(),
+
+    % Direct relations to other entities
+    users = [] :: [{od_user:id(), [privileges:handle_service_privilege()]}],
+    groups = [] :: [{od_group:id(), [privileges:handle_service_privilege()]}],
+
+    % Effective relations to other entities
+    eff_users = [] :: [od_user:id()],
+    eff_groups = [] :: [od_group:id()],
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
+}).
+
+
+-record(od_handle, {
+    public_handle :: od_handle:public_handle() | undefined,
+    resource_type :: od_handle:resource_type() | undefined,
+    resource_id :: od_handle:resource_id() | undefined,
+    metadata :: od_handle:metadata() | undefined,
+    timestamp = od_handle:actual_timestamp() :: od_handle:timestamp(),
+
+    % Direct relations to other entities
+    handle_service_id :: od_handle_service:id() | undefined,
+    users = [] :: [{od_user:id(), [privileges:handle_privilege()]}],
+    groups = [] :: [{od_group:id(), [privileges:handle_privilege()]}],
+
+    % Effective relations to other entities
+    eff_users = [] :: [od_user:id()],
+    eff_groups = [] :: [od_group:id()],
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
 }).
 
 

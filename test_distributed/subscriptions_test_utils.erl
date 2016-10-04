@@ -154,7 +154,7 @@ expectation(ID, #od_user{name = Name, groups = Groups, space_aliases = SpaceName
     user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups,
         undefined_to_binary(DefaultSpace), HandleServices, Handles);
 expectation(ID, #od_group{name = Name, type = Type, users = Users, spaces = Spaces,
-    eff_users = EUsers, nested_groups = NGroups, parent_groups = PGroups,
+    eff_users = EUsers, children = NGroups, parents = PGroups,
     handle_services = HandleServices, handles = Handles}) ->
     group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups,
         HandleServices, Handles);

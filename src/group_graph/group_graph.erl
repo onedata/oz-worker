@@ -145,7 +145,7 @@ effective_users_update_traverse(GroupIDs) ->
     InContext :: #{GID :: binary() => effective_users()}) ->
     OutContext :: #{GID :: binary() => effective_users()}.
 update_effective_groups_visitor(GroupDoc, Context) ->
-    #document{key = ID, value = #od_group{parent_groups = ParentGroups}} = GroupDoc,
+    #document{key = ID, value = #od_group{parents = ParentGroups}} = GroupDoc,
     EffectiveOfParents = lists:foldl(fun(ParentID, All) ->
         case maps:get(ParentID, Context, undef) of
             undef -> All ++ get_effective_groups(ParentID);
@@ -165,7 +165,7 @@ update_effective_groups_visitor(GroupDoc, Context) ->
     InContext :: #{GID :: binary() => effective_users()}) ->
     OutContext :: #{GID :: binary() => effective_users()}.
 update_effective_users_visitor(GroupDoc, Context) ->
-    #document{key = ID, value = #od_group{nested_groups = ChildGroups,
+    #document{key = ID, value = #od_group{children = ChildGroups,
         users = Users}} = GroupDoc,
     EffectiveFromChildren = lists:foldl(fun({ChildID, ChildPrivileges}, All) ->
         ChildEffective = case maps:get(ChildID, Context, undef) of
@@ -211,7 +211,7 @@ get_effective_users(ID) ->
 -spec get_effective_groups(GroupID :: binary()) -> effective_groups().
 get_effective_groups(ID) ->
     case od_group:get(ID) of
-        {ok, #document{value = #od_group{eff_parent_groups = Groups}}} ->
+        {ok, #document{value = #od_group{eff_children = Groups}}} ->
             Groups;
         _Err ->
             ?warning_stacktrace("Unable to access group ~p due to ~p", [ID, _Err]),
@@ -219,12 +219,12 @@ get_effective_groups(ID) ->
     end.
 
 -spec children(#od_group{}) -> [binary()].
-children(#od_group{nested_groups = Tuples}) ->
+children(#od_group{children = Tuples}) ->
     {Groups, _} = lists:unzip(Tuples),
     Groups.
 
 -spec parents(#od_group{}) -> [binary()].
-parents(#od_group{parent_groups = Groups}) ->
+parents(#od_group{parents = Groups}) ->
     Groups.
 
 %%--------------------------------------------------------------------
@@ -319,7 +319,7 @@ break_cycles(Groups, Ancestors) ->
                 ?warning("Cycle detected - breaking relation: ~p - ~p", [ID, Parent]),
                 group_logic:remove_nested_group(Parent, ID);
             false -> case od_group:get(ID) of
-                {ok, #document{value = #od_group{nested_groups = GroupsTuples}}} ->
+                {ok, #document{value = #od_group{children = GroupsTuples}}} ->
                     {GroupIDs, _} = lists:unzip(GroupsTuples),
                     break_cycles(GroupIDs, [ID | Ancestors]);
                 _Err ->
@@ -335,12 +335,12 @@ break_cycles(Groups, Ancestors) ->
 -spec update_effective_groups(GroupID :: binary(), effective_groups()) -> ok.
 update_effective_groups(ID, Effective) ->
     od_group:update(ID, fun(Group) ->
-        Current = ordsets:from_list(Group#od_group.eff_parent_groups),
+        Current = ordsets:from_list(Group#od_group.eff_children),
         Removed = ordsets:subtract(Current, Effective),
         Added = ordsets:subtract(Effective, Current),
         case {Added, Removed} of
             {[], []} -> {error, update_not_needed};
-            _ -> {ok, Group#od_group{eff_parent_groups = Effective}}
+            _ -> {ok, Group#od_group{eff_children = Effective}}
         end
     end), ok.
 
@@ -420,7 +420,7 @@ gather_effective_groups(GIDs) ->
         case maps:get(GID, GroupsMap, undefined) of
             undefined ->
                 case od_group:get(GID) of
-                    {ok, #document{value = #od_group{eff_parent_groups = Effective}}} ->
+                    {ok, #document{value = #od_group{eff_children = Effective}}} ->
                         maps:put(GID, Effective, GroupsMap);
                     _Err ->
                         ?warning_stacktrace("Unable to access group ~p due to ~p", [GID, _Err]),

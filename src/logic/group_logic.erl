@@ -68,7 +68,7 @@ has_nested_group(ParentGroupId, GroupId) ->
     case od_group:get(ParentGroupId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #od_group{nested_groups = Groups}}} ->
+        {ok, #document{value = #od_group{children = Groups}}} ->
             lists:keymember(GroupId, 1, Groups)
     end.
 
@@ -125,7 +125,7 @@ has_effective_group(GroupId, EffectiveId) ->
     case od_group:get(GroupId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #od_group{eff_parent_groups = Groups}}} ->
+        {ok, #document{value = #od_group{eff_children = Groups}}} ->
             lists:member(EffectiveId, Groups)
     end.
 
@@ -266,14 +266,14 @@ add_group(ParentGroupId, ChildGroupId) ->
                 false ->
                     Privileges = privileges:group_user(),
                     {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
-                        #od_group{nested_groups = Groups} = Group,
-                        {ok, Group#od_group{nested_groups = [
+                        #od_group{children = Groups} = Group,
+                        {ok, Group#od_group{children = [
                             {ChildGroupId, Privileges} | Groups
                         ]}}
                     end),
                     {ok, _} = od_group:update(ChildGroupId, fun(Group) ->
-                        #od_group{parent_groups = Groups} = Group,
-                        {ok, Group#od_group{parent_groups = [
+                        #od_group{parents = Groups} = Group,
+                        {ok, Group#od_group{parents = [
                             ParentGroupId | Groups
                         ]}}
                     end),
@@ -334,9 +334,9 @@ set_privileges(GroupId, UserId, Privileges) ->
     ok.
 set_nested_group_privileges(ParentGroupId, GroupId, Privileges) ->
     {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
-        #od_group{nested_groups = Groups} = Group,
+        #od_group{children = Groups} = Group,
         GroupsNew = lists:keyreplace(GroupId, 1, Groups, {GroupId, Privileges}),
-        {ok, Group#od_group{nested_groups = GroupsNew}}
+        {ok, Group#od_group{children = GroupsNew}}
     end),
     ok.
 
@@ -411,7 +411,7 @@ get_effective_users(GroupId) ->
 -spec get_nested_groups(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_nested_groups(GroupId) ->
-    {ok, #document{value = #od_group{nested_groups = GroupTuples}}}
+    {ok, #document{value = #od_group{children = GroupTuples}}}
         = od_group:get(GroupId),
     {Groups, _} = lists:unzip(GroupTuples),
     {ok, [{nested_groups, Groups}]}.
@@ -424,7 +424,7 @@ get_nested_groups(GroupId) ->
 -spec get_parent_groups(GroupId :: binary()) ->
     {ok, [proplists:property()]}.
 get_parent_groups(GroupId) ->
-    {ok, #document{value = #od_group{parent_groups = GroupIds}}}
+    {ok, #document{value = #od_group{parents = GroupIds}}}
         = od_group:get(GroupId),
     {ok, [{parent_groups, GroupIds}]}.
 
@@ -518,7 +518,7 @@ get_privileges(GroupId, UserId) ->
 -spec get_nested_group_privileges(ParentGroupId :: binary(), GroupId :: binary()) ->
     {ok, [privileges:group_privilege()]}.
 get_nested_group_privileges(ParentGroupId, GroupId) ->
-    {ok, #document{value = #od_group{nested_groups = GroupTuples}}} = od_group:get(ParentGroupId),
+    {ok, #document{value = #od_group{children = GroupTuples}}} = od_group:get(ParentGroupId),
     {_, Privileges} = lists:keyfind(GroupId, 1, GroupTuples),
     {ok, Privileges}.
 
@@ -595,12 +595,12 @@ remove_user(GroupId, UserId) ->
     true.
 remove_nested_group(ParentGroupId, GroupId) ->
     {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
-        #od_group{nested_groups = Nested} = Group,
-        {ok, Group#od_group{nested_groups = lists:keydelete(GroupId, 1, Nested)}}
+        #od_group{children = Nested} = Group,
+        {ok, Group#od_group{children = lists:keydelete(GroupId, 1, Nested)}}
     end),
     {ok, _} = od_group:update(GroupId, fun(Group) ->
-        #od_group{parent_groups = Parents} = Group,
-        {ok, Group#od_group{parent_groups = lists:delete(ParentGroupId, Parents)}}
+        #od_group{parents = Parents} = Group,
+        {ok, Group#od_group{parents = lists:delete(ParentGroupId, Parents)}}
     end),
     cleanup(ParentGroupId),
     true.
