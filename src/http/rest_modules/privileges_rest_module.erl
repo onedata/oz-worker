@@ -43,9 +43,10 @@ routes() ->
     S = #rstate{module = ?MODULE, root = oz_api_privileges},
     M = rest_handler,
     [
-        {<<"/privileges/users/:id/">>, M, S#rstate{resource = od_user, methods = [get, patch, delete]}},
+        {<<"/privileges/users/:id/">>, M, S#rstate{resource = user, methods = [get, patch, delete]}},
         {<<"/privileges/groups/:id/">>, M, S#rstate{resource = group, methods = [get, patch, delete]}}
     ].
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns a boolean() determining if the authenticated client is
@@ -67,6 +68,7 @@ is_authorized(group, _, _EntityId, #client{type = user, id = UserId}) ->
 is_authorized(_, _, _, _) ->
     false.
 
+
 %%--------------------------------------------------------------------
 %% @doc Returns whether a resource exists.
 %% @see rest_module_behavior
@@ -86,13 +88,14 @@ resource_exists(group, GroupId, Req) ->
 resource_exists(_, _, Req) ->
     {false, Req}.
 
+
 %%--------------------------------------------------------------------
 %% @doc Processes data submitted by a client through POST, PATCH, PUT on a REST
 %% resource.
 %% @see rest_module_behavior
 %% @end
 %%--------------------------------------------------------------------
--spec accept_resource(Resource :: accepted_resource(), Method :: accept_method(),
+-spec accept_resource(Res :: accepted_resource(), Method :: accept_method(),
     ProviderId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
@@ -101,13 +104,14 @@ accept_resource(Resource, patch, EntityId, Data, _Client, Req) ->
         [atom_to_binary(P, latin1) || P <- oz_api_privileges:all_privileges()],
         Data, list_of_bin, Req),
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
-    % Resource is (od_user | od_group) so it can be used directly here.
-    case oz_api_privileges_logic:modify(EntityId, Resource, Privileges) of
+    EntityType = resource_to_entity_type(Resource),
+    case oz_api_privileges_logic:modify(EntityId, EntityType, Privileges) of
         ok ->
             {true, Req};
         _ ->
             {false, Req}
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns data requested by a client through GET on a REST resource.
@@ -119,9 +123,10 @@ accept_resource(Resource, patch, EntityId, Data, _Client, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(Resource, EntityId, _Client, Req) ->
-    % Resource is (od_user | od_group) so it can be used directly here.
-    {ok, Privileges} = oz_api_privileges_logic:get(EntityId, Resource),
+    EntityType = resource_to_entity_type(Resource),
+    {ok, Privileges} = oz_api_privileges_logic:get(EntityId, EntityType),
     {[{privileges, Privileges}], Req}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Deletes the resource identified by the SpaceId parameter.
@@ -132,5 +137,21 @@ provide_resource(Resource, EntityId, _Client, Req) ->
     EntityId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 delete_resource(Resource, EntityId, Req) ->
-    % Resource is (od_user | od_group) so it can be used directly here.
-    {oz_api_privileges_logic:remove(EntityId, Resource), Req}.
+    EntityType = resource_to_entity_type(Resource),
+    {oz_api_privileges_logic:remove(EntityId, EntityType), Req}.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts resource type as defined in routes to entity type
+%% of oz_api_privilege.
+%% @end
+%%--------------------------------------------------------------------
+-spec resource_to_entity_type(Resource :: resource()) ->
+    oz_api_privileges:entity_type().
+resource_to_entity_type(user) -> od_user;
+resource_to_entity_type(group) -> od_group.

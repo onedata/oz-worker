@@ -27,7 +27,8 @@
 %% If such record does not exist, an empty list of privileges is returned.
 %% @end
 %%--------------------------------------------------------------------
--spec get(EntityId :: binary(), EntityType :: od_user | od_group) ->
+-spec get(EntityId :: binary(),
+    EntityType :: oz_api_privileges:entity_type()) ->
     {ok, [oz_api_privileges:privilege()]}.
 get(EntityId, EntityType) ->
     Key = resolve_id(EntityId, EntityType),
@@ -85,8 +86,8 @@ modify(EntityId, EntityType, NewPrivileges) ->
 %% oz_api_privileges record (succeeds as well when the record is not present).
 %% @end
 %%--------------------------------------------------------------------
--spec remove(EntityId :: binary(), EntityType :: od_user | od_group) ->
-    boolean().
+-spec remove(EntityId :: binary(),
+    EntityType :: oz_api_privileges:entity_type()) -> boolean().
 remove(EntityId, EntityType) ->
     Key = resolve_id(EntityId, EntityType),
     ok = oz_api_privileges:delete(Key),

@@ -238,7 +238,7 @@ ensure_state_initialised() ->
 
     case Result of
         {ok, _} ->
-            {ok, AllGroups} = od_group:all(),
+            {ok, AllGroups} = od_group:list(),
             lists:foreach(fun(#document{key = GID}) ->
                 mark_group_changed(GID)
             end, AllGroups);

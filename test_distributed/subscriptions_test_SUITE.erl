@@ -552,13 +552,13 @@ simple_delete_test(Config) ->
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(u1), U1)),
     subscriptions_test_utils:delete_document(Node, od_user, ?ID(u1)),
     subscriptions_test_utils:delete_document(Node, od_group, ?ID(g1)),
-    subscriptions_test_utils:delete_document(Node, space, ?ID(s1)),
+    subscriptions_test_utils:delete_document(Node, od_space, ?ID(s1)),
 
     % then
     subscriptions_test_utils:verify_messages(Context, [
-        [{<<"id">>, ?ID(g1)}, {<<"group">>, <<"delete">>}],
-        [{<<"id">>, ?ID(u1)}, {<<"user">>, <<"delete">>}],
-        [{<<"id">>, ?ID(s1)}, {<<"space">>, <<"delete">>}]
+        [{<<"id">>, ?ID(g1)}, {<<"od_group">>, <<"delete">>}],
+        [{<<"id">>, ?ID(u1)}, {<<"od_user">>, <<"delete">>}],
+        [{<<"id">>, ?ID(s1)}, {<<"od_space">>, <<"delete">>}]
     ], []),
     ok.
 
