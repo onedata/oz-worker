@@ -122,12 +122,12 @@ location_of_records_are_set_upon_creation(Config) ->
     ?assertMatch({ok, Host2}, resolve(Node1, od_group, ID2)),
     ?assertMatch({ok, Host2}, resolve(Node2, od_group, ID2)),
     ?assertMatch({ok, Host2}, resolve(Node3, od_group, ID2)),
-    ?assertMatch({ok, Host3}, resolve(Node1, provider, ID3)),
-    ?assertMatch({ok, Host3}, resolve(Node2, provider, ID3)),
-    ?assertMatch({ok, Host3}, resolve(Node3, provider, ID3)),
-    ?assertMatch({ok, Host1}, resolve(Node1, space, ID4)),
-    ?assertMatch({ok, Host1}, resolve(Node2, space, ID4)),
-    ?assertMatch({ok, Host1}, resolve(Node3, space, ID4)),
+    ?assertMatch({ok, Host3}, resolve(Node1, od_provider, ID3)),
+    ?assertMatch({ok, Host3}, resolve(Node2, od_provider, ID3)),
+    ?assertMatch({ok, Host3}, resolve(Node3, od_provider, ID3)),
+    ?assertMatch({ok, Host1}, resolve(Node1, od_space, ID4)),
+    ?assertMatch({ok, Host1}, resolve(Node2, od_space, ID4)),
+    ?assertMatch({ok, Host1}, resolve(Node3, od_space, ID4)),
     ok.
 
 

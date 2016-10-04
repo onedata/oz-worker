@@ -17,9 +17,9 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: od_user | od_group.
--type accepted_resource() :: od_user | od_group.
--type removable_resource() :: od_user | od_group.
+-type provided_resource() :: user | group.
+-type accepted_resource() :: user | group.
+-type removable_resource() :: user | group.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
 %% API
@@ -44,7 +44,7 @@ routes() ->
     M = rest_handler,
     [
         {<<"/privileges/users/:id/">>, M, S#rstate{resource = od_user, methods = [get, patch, delete]}},
-        {<<"/privileges/groups/:id/">>, M, S#rstate{resource = od_group, methods = [get, patch, delete]}}
+        {<<"/privileges/groups/:id/">>, M, S#rstate{resource = group, methods = [get, patch, delete]}}
     ].
 
 %%--------------------------------------------------------------------
@@ -56,13 +56,13 @@ routes() ->
 -spec is_authorized(Resource :: resource(), Method :: method(),
     EntityId :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
-is_authorized(od_user, get, _EntityId, #client{type = user, id = UserId}) ->
+is_authorized(user, get, _EntityId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, view_privileges);
-is_authorized(od_user, _, _EntityId, #client{type = user, id = UserId}) ->
+is_authorized(user, _, _EntityId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, set_privileges);
-is_authorized(od_group, get, _EntityId, #client{type = user, id = UserId}) ->
+is_authorized(group, get, _EntityId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, view_privileges);
-is_authorized(od_group, _, _EntityId, #client{type = user, id = UserId}) ->
+is_authorized(group, _, _EntityId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, set_privileges);
 is_authorized(_, _, _, _) ->
     false.
@@ -77,10 +77,10 @@ is_authorized(_, _, _, _) ->
     {boolean(), cowboy_req:req()}.
 % Every existing entity has privileges to OZ API - however they can be an empty
 % list, which is usually the case.
-resource_exists(od_user, UserId, Req) ->
+resource_exists(user, UserId, Req) ->
     Result = user_logic:exists(UserId),
     {Result, Req};
-resource_exists(od_group, GroupId, Req) ->
+resource_exists(group, GroupId, Req) ->
     Result = group_logic:exists(GroupId),
     {Result, Req};
 resource_exists(_, _, Req) ->

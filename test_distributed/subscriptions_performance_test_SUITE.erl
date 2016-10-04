@@ -30,7 +30,7 @@ all() -> ?ALL([], [
 
 -define(NUMBER_OF_DOCS, 10).
 
--define(MODELS_TO_CLEAN, [provider, space, od_group, od_user]).
+-define(MODELS_TO_CLEAN, [od_provider, od_space, od_group, od_user]).
 
 %%%===================================================================
 %%% Test functions
@@ -167,7 +167,7 @@ space_update_test_base(Config) ->
             ?SUBSCRIPTIONS_WORKER_NAME, {
                 handle_change, Seq,
                 #document{key= SID1, value=Space},
-                space
+                od_space
             }])
     end, ModifiedSpaces),
 

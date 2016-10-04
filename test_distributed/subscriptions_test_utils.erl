@@ -148,10 +148,10 @@ expectation(ID, #od_share{name = Name, parent_space = ParentSpace,
     PublicUrlBin = undefined_to_binary(PublicUrl),
     HandleBin = undefined_to_binary(Handle),
     share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin, HandleBin);
-expectation(ID, #od_user{name = Name, groups = Groups, space_aliases = SpaceNames,
+expectation(ID, #od_user{name = Name, groups = Groups, space_aliases = SpaceAliases,
     default_space = DefaultSpace, eff_groups = EGroups,
     handle_services = HandleServices, handles = Handles}) ->
-    user_expectation(ID, Name, maps:to_list(SpaceNames), Groups, EGroups,
+    user_expectation(ID, Name, maps:to_list(SpaceAliases), Groups, EGroups,
         undefined_to_binary(DefaultSpace), HandleServices, Handles);
 expectation(ID, #od_group{name = Name, type = Type, users = Users, spaces = Spaces,
     eff_users = EUsers, children = NGroups, parents = PGroups,
@@ -160,7 +160,7 @@ expectation(ID, #od_group{name = Name, type = Type, users = Users, spaces = Spac
         HandleServices, Handles);
 
 expectation(ID, #od_provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) ->
-    [{<<"id">>, ID}, {<<"provider">>, [
+    [{<<"id">>, ID}, {<<"od_provider">>, [
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
         {<<"space_ids">>, SpaceIDs},
@@ -189,7 +189,7 @@ expectation(ID, #od_handle{handle_service_id = HandleServiceId, public_handle = 
     ).
 
 space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
-    [{<<"id">>, ID}, {<<"space">>, [
+    [{<<"id">>, ID}, {<<"od_space">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
         {<<"providers_supports">>, Supports},
@@ -199,7 +199,7 @@ space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
     ]}].
 
 share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl, Handle) ->
-    [{<<"id">>, ID}, {<<"share">>, [
+    [{<<"id">>, ID}, {<<"od_share">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
         {<<"parent_space">>, ParentSpace},
@@ -209,7 +209,7 @@ share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl, Handle) ->
     ]}].
 
 handle_service_expectation(ID, Name, ProxyEndpoint, ServiceProperties, Users, Groups) ->
-    [{<<"id">>, ID}, {<<"handle_service">>, [
+    [{<<"id">>, ID}, {<<"od_handle_service">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
         {<<"proxy_endpoint">>, ProxyEndpoint},
@@ -220,7 +220,7 @@ handle_service_expectation(ID, Name, ProxyEndpoint, ServiceProperties, Users, Gr
 
 handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
     Metadata, Users, Groups, Timestamp) ->
-    [{<<"id">>, ID}, {<<"handle">>, [
+    [{<<"id">>, ID}, {<<"od_handle">>, [
         {<<"id">>, ID},
         {<<"handle_service_id">>, HandleServiceId},
         {<<"public_handle">>, PublicHandle},
@@ -233,9 +233,9 @@ handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
     ]}].
 
 user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace, HandleServices, Handles) ->
-    [{<<"id">>, ID}, {<<"user">>, [
+    [{<<"id">>, ID}, {<<"od_user">>, [
         {<<"name">>, Name},
-        {<<"space_names">>, Spaces},
+        {<<"space_aliases">>, Spaces},
         {<<"group_ids">>, Groups},
         {<<"effective_group_ids">>, EGroups},
         {<<"default_space">>, DefaultSpace},
@@ -245,7 +245,7 @@ user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace, HandleServices
     ]}].
 
 public_only_provider_expectation(ID, Name, URLs) ->
-    [{<<"id">>, ID}, {<<"provider">>, [
+    [{<<"id">>, ID}, {<<"od_provider">>, [
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
         {<<"space_ids">>, []},
@@ -253,7 +253,7 @@ public_only_provider_expectation(ID, Name, URLs) ->
     ]}].
 
 public_only_user_expectation(ID, Name) ->
-    [{<<"id">>, ID}, {<<"user">>, [
+    [{<<"id">>, ID}, {<<"od_user">>, [
         {<<"name">>, Name},
         {<<"space_ids">>, []},
         {<<"group_ids">>, []},
@@ -265,7 +265,7 @@ public_only_user_expectation(ID, Name) ->
     ]}].
 
 group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups, HandleServices, Handles) ->
-    [{<<"id">>, ID}, {<<"group">>, [
+    [{<<"id">>, ID}, {<<"od_group">>, [
         {<<"name">>, Name},
         {<<"type">>, atom_to_binary(Type, latin1)},
         {<<"spaces">>, Spaces},
@@ -339,7 +339,7 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
     All = lists:append(get_messages()),
 
-    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
+%%    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),

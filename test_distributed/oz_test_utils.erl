@@ -373,17 +373,17 @@ remove_provider(Config, ProviderId) ->
 remove_all_entities(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     % Delete all providers
-    {ok, PrDocs} = call_oz(Config, provider, list, []),
+    {ok, PrDocs} = call_oz(Config, od_provider, list, []),
     [true = remove_provider(Config, PId) || #document{key = PId} <- PrDocs],
     % Delete all shares
-    {ok, ShareDocs} = call_oz(Config, share, list, []),
+    {ok, ShareDocs} = call_oz(Config, od_share, list, []),
     [true = remove_share(Config, SId) || #document{key = SId} <- ShareDocs],
     % Delete all spaces
-    {ok, SpaceDocs} = call_oz(Config, space, list, []),
+    {ok, SpaceDocs} = call_oz(Config, od_space, list, []),
     [true = remove_space(Config, SId) || #document{key = SId} <- SpaceDocs],
-    {ok, HandleDocs} = call_oz(Config, handle, list, []),
+    {ok, HandleDocs} = call_oz(Config, od_handle, list, []),
     [true = remove_handle(Config, HId) || #document{key = HId} <- HandleDocs],
-    {ok, HandleServiceDocs} = call_oz(Config, handle_service, list, []),
+    {ok, HandleServiceDocs} = call_oz(Config, od_handle_service, list, []),
     [true = remove_handle_service(Config, HSId) || #document{key = HSId} <- HandleServiceDocs],
     % Delete all groups, excluding predefined groups
     {ok, GroupDocsAll} = call_oz(Config, od_group, list, []),

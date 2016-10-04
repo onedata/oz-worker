@@ -115,12 +115,12 @@ get_msg(Seq, Doc, od_group = Model) ->
     ]}];
 get_msg(Seq, Doc, od_user = Model) ->
     #document{value = Value, key = ID} = Doc,
-    #od_user{name = Name, space_aliases = SpaceNames, groups = Groups,
+    #od_user{name = Name, space_aliases = SpaceAliases, groups = Groups,
         default_space = DefaultSpace, eff_groups = EGroups,
         handle_services = HandleServices, handles = Handles} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
-        {space_names, maps:to_list(SpaceNames)},
+        {space_aliases, maps:to_list(SpaceAliases)},
         {group_ids, Groups},
         {effective_group_ids, EGroups},
         {default_space, DefaultSpace},
