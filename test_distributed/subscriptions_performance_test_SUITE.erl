@@ -30,7 +30,7 @@ all() -> ?ALL([], [
 
 -define(NUMBER_OF_DOCS, 10).
 
--define(MODELS_TO_CLEAN, [provider, space, user_group, onedata_user]).
+-define(MODELS_TO_CLEAN, [provider, space, od_group, od_user]).
 
 %%%===================================================================
 %%% Test functions

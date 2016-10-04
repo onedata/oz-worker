@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for onedata_user record - representing a user in the system.
+%%% API for od_user record - representing a user in the system.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(od_user).
@@ -108,7 +108,7 @@ model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
     StoreLevel = application:get_env(?APP_Name, user_store_level, ?DISK_ONLY_LEVEL),
     Hooks = record_location_hooks:get_hooks(),
-    ?MODEL_CONFIG(onedata_user_bucket, Hooks, StoreLevel).
+    ?MODEL_CONFIG(od_user_bucket, Hooks, StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc

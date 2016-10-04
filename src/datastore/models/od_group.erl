@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for user_group record - representing a group in the system.
+%%% API for od_group record - representing a group in the system.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(od_group).
@@ -28,7 +28,7 @@
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
 
--define(USER_MODULE, onedata_user).
+-define(USER_MODULE, od_user).
 
 
 %%%===================================================================
@@ -111,7 +111,7 @@ model_init() ->
     UserHooks = [{?USER_MODULE, save}, {?USER_MODULE, update}, {?USER_MODULE, create},
         {?USER_MODULE, create_or_opdate}],
     Hooks = [{?MODULE, save}, {?MODULE, update}, {?MODULE, create}, {?MODULE, create_or_opdate}],
-    ?MODEL_CONFIG(user_group_bucket, Hooks ++ UserHooks, StoreLevel).
+    ?MODEL_CONFIG(od_group_bucket, Hooks ++ UserHooks, StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc

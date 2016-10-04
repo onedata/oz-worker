@@ -60,8 +60,8 @@ updates(ProviderID, NewUserIDs) ->
     [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}].
 get_users(ProviderID, NewUserIDs) ->
     lists:filtermap(fun(UserID) ->
-        case get_with_revs(onedata_user, UserID) of
-            {ok, Doc} -> {true, {-1, Doc, onedata_user}};
+        case get_with_revs(od_user, UserID) of
+            {ok, Doc} -> {true, {-1, Doc, od_user}};
             {error, _} ->
                 ?warning("Missing user ~p; provider ~p", [UserID, ProviderID]),
                 false
@@ -80,8 +80,8 @@ get_spaces(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         #document{value = #od_user{spaces = Spaces}} = UserDoc,
         lists:filtermap(fun(SpaceID) ->
-            case get_with_revs(space, SpaceID) of
-                {ok, Doc} -> {true, {-1, Doc, space}};
+            case get_with_revs(od_space, SpaceID) of
+                {ok, Doc} -> {true, {-1, Doc, od_space}};
                 {error, _} ->
                     ?warning("Missing space ~p; provider ~p", [SpaceID, ProviderID]),
                     false
@@ -114,8 +114,8 @@ get_groups(ProviderID, UserChanges) ->
         end, Groups)),
 
         lists:filtermap(fun(GroupID) ->
-            case get_with_revs(user_group, GroupID) of
-                {ok, Doc} -> {true, {-1, Doc, user_group}};
+            case get_with_revs(od_group, GroupID) of
+                {ok, Doc} -> {true, {-1, Doc, od_group}};
                 {error, _} ->
                     ?warning("Missing group ~p; provider ~p", [GroupID, ProviderID]),
                     false
@@ -135,8 +135,8 @@ get_group_spaces(ProviderID, GroupChanges) ->
     lists:flatmap(fun({_, GroupDoc, _}) ->
         #document{value = #od_group{spaces = Spaces}} = GroupDoc,
         lists:filtermap(fun(SpaceID) ->
-            case get_with_revs(space, SpaceID) of
-                {ok, Doc} -> {true, {-1, Doc, space}};
+            case get_with_revs(od_space, SpaceID) of
+                {ok, Doc} -> {true, {-1, Doc, od_space}};
                 {error, _} ->
                     ?warning("Missing space ~p; provider ~p", [SpaceID, ProviderID]),
                     false
@@ -156,8 +156,8 @@ get_shares(ProviderID, SpaceChanges) ->
     lists:flatmap(fun({_, SpaceDoc, _}) ->
         #document{value = #od_space{shares = Shares}} = SpaceDoc,
         lists:filtermap(fun(ShareId) ->
-            case get_with_revs(share, ShareId) of
-                {ok, Doc} -> {true, {-1, Doc, share}};
+            case get_with_revs(od_share, ShareId) of
+                {ok, Doc} -> {true, {-1, Doc, od_share}};
                 {error, _} ->
                     ?warning("Missing share ~p; provider ~p", [ShareId, ProviderID]),
                     false
@@ -177,8 +177,8 @@ get_handle_services(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         HandleServices = user_logic:get_all_handle_services(UserDoc),
         lists:filtermap(fun(HandleServiceId) ->
-            case get_with_revs(handle_service, HandleServiceId) of
-                {ok, Doc} -> {true, {-1, Doc, handle_service}};
+            case get_with_revs(od_handle_service, HandleServiceId) of
+                {ok, Doc} -> {true, {-1, Doc, od_handle_service}};
                 {error, _} ->
                     ?warning("Missing handle_service ~p; provider ~p",
                         [HandleServiceId, ProviderID]),
@@ -199,8 +199,8 @@ get_handles(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         Handles = user_logic:get_all_handles(UserDoc),
         lists:filtermap(fun(HandleId) ->
-            case get_with_revs(handle, HandleId) of
-                {ok, Doc} -> {true, {-1, Doc, handle}};
+            case get_with_revs(od_handle, HandleId) of
+                {ok, Doc} -> {true, {-1, Doc, od_handle}};
                 {error, _} ->
                     ?warning("Missing handle ~p; provider ~p",
                         [HandleId, ProviderID]),

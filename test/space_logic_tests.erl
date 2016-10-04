@@ -21,8 +21,8 @@
 
 has_effective_privilege_test() ->
     ok = meck:new(space),
-    ok = meck:new(user_group),
-    ok = meck:new(onedata_user),
+    ok = meck:new(od_group),
+    ok = meck:new(od_user),
 
     GroupId = <<"GroupId">>,
     SpaceId = <<"SpaceId">>,
@@ -39,11 +39,11 @@ has_effective_privilege_test() ->
     User2Doc = #document{key = User2Id, value = User2},
 
     ok = meck:expect(space, exists, fun(_) -> true end),
-    ok = meck:expect(user_group, exists, fun(_) -> true end),
-    ok = meck:expect(onedata_user, exists, fun(_) -> true end),
+    ok = meck:expect(od_group, exists, fun(_) -> true end),
+    ok = meck:expect(od_user, exists, fun(_) -> true end),
     ok = meck:expect(space, get, fun(_) -> {ok, SpaceDoc} end),
-    ok = meck:expect(user_group, get, fun(_) -> {ok, GroupDoc} end),
-    ok = meck:expect(onedata_user, get,
+    ok = meck:expect(od_group, get, fun(_) -> {ok, GroupDoc} end),
+    ok = meck:expect(od_user, get,
         fun
             (UserId) -> {ok, UserDoc};
             (User2Id) -> {ok, User2Doc}

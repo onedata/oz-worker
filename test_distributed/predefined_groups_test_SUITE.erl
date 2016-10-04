@@ -76,7 +76,7 @@ predefined_groups_test(Config) ->
         ?assertEqual(ExpName, ActualName),
         % Check if OZ API privileges are correct
         PrivsResult = rpc:call(Node, oz_api_privileges_logic, get, [
-            ExpId, user_group
+            ExpId, od_group
         ]),
         % Check if privileges were found by group ID
         ?assertMatch({ok, _}, PrivsResult),

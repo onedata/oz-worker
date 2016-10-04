@@ -94,7 +94,7 @@ create_user(Config, User) ->
 -spec get_user(Config :: term(), UserId :: binary()) ->
     {ok, #document{}} | {error, Reason :: term()}.
 get_user(Config, UserId) ->
-    call_oz(Config, onedata_user, get, [UserId]).
+    call_oz(Config, od_user, get, [UserId]).
 
 
 %%--------------------------------------------------------------------
@@ -132,7 +132,7 @@ create_group(Config, UserId, Name) ->
 -spec get_group(Config :: term(), GroupId :: binary()) ->
     {ok, #document{}} | {error, Reason :: term()}.
 get_group(Config, GroupId) ->
-    call_oz(Config, user_group, get, [GroupId]).
+    call_oz(Config, od_group, get, [GroupId]).
 
 
 %%--------------------------------------------------------------------
@@ -386,7 +386,7 @@ remove_all_entities(Config) ->
     {ok, HandleServiceDocs} = call_oz(Config, handle_service, list, []),
     [true = remove_handle_service(Config, HSId) || #document{key = HSId} <- HandleServiceDocs],
     % Delete all groups, excluding predefined groups
-    {ok, GroupDocsAll} = call_oz(Config, user_group, list, []),
+    {ok, GroupDocsAll} = call_oz(Config, od_group, list, []),
     % Filter out predefined groups
     {ok, PredefinedGroupsMapping} = test_utils:get_env(
         Node, oz_worker, predefined_groups
@@ -398,6 +398,6 @@ remove_all_entities(Config) ->
         end, GroupDocsAll),
     [true = remove_group(Config, GId) || #document{key = GId} <- GroupDocs],
     % Delete all users
-    {ok, UserDocs} = call_oz(Config, onedata_user, list, []),
+    {ok, UserDocs} = call_oz(Config, od_user, list, []),
     [true = remove_user(Config, UId) || #document{key = UId} <- UserDocs],
     ok.

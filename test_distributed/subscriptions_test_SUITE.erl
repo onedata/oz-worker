@@ -149,7 +149,7 @@ no_space_update_test(Config) ->
 
     % when
     Context = subscriptions_test_utils:init_messages(Node, PID, []),
-    subscriptions_test_utils:update_document(Node, space, ?ID(s1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_space, ?ID(s1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_absent(Context, [
@@ -169,7 +169,7 @@ space_update_through_support_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(s1), S1)),
-    subscriptions_test_utils:update_document(Node, space, ?ID(s1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_space, ?ID(s1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -191,7 +191,7 @@ space_update_through_users_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(s1), S1)),
-    subscriptions_test_utils:update_document(Node, space, ?ID(s1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_space, ?ID(s1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -221,7 +221,7 @@ space_update_through_groups_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(s1), S1)),
-    subscriptions_test_utils:update_document(Node, space, ?ID(s1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_space, ?ID(s1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -241,7 +241,7 @@ no_share_update_test(Config) ->
 
     % when
     Context = subscriptions_test_utils:init_messages(Node, PID, []),
-    subscriptions_test_utils:update_document(Node, share, ?ID(sh1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_share, ?ID(sh1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_absent(Context, [
@@ -265,7 +265,7 @@ handle_update_through_users_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(h1), H1)),
-    subscriptions_test_utils:update_document(Node, handle, ?ID(h1), #{metadata => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_handle, ?ID(h1), #{metadata => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -296,7 +296,7 @@ handle_update_through_groups_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(h1), H1)),
-    subscriptions_test_utils:update_document(Node, handle, ?ID(h1), #{metadata => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_handle, ?ID(h1), #{metadata => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -318,7 +318,7 @@ handle_service_update_through_users_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(hs1), HS1)),
-    subscriptions_test_utils:update_document(Node, handle_service, ?ID(hs1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_handle_service, ?ID(hs1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -348,7 +348,7 @@ handle_service_update_through_groups_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(hs1), HS1)),
-    subscriptions_test_utils:update_document(Node, handle_service, ?ID(hs1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_handle_service, ?ID(hs1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -369,7 +369,7 @@ share_update_through_support_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, []),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(sh1), Sh1)),
-    subscriptions_test_utils:update_document(Node, share, ?ID(sh1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_share, ?ID(sh1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -468,7 +468,7 @@ all_data_in_provider_update_test(Config) ->
 
     % when
     Context = subscriptions_test_utils:init_messages(Node, PID, []),
-    subscriptions_test_utils:update_document(Node, provider, PID, #{client_name => Name}),
+    subscriptions_test_utils:update_document(Node, od_provider, PID, #{client_name => Name}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -505,7 +505,7 @@ only_public_user_update_test(Config) ->
 
     % when
     Context = subscriptions_test_utils:init_messages(Node, PID, []),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages(Context, [
@@ -526,7 +526,7 @@ user_update_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(u1), U1)),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -550,8 +550,8 @@ simple_delete_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(u1), U1)),
-    subscriptions_test_utils:delete_document(Node, onedata_user, ?ID(u1)),
-    subscriptions_test_utils:delete_document(Node, user_group, ?ID(g1)),
+    subscriptions_test_utils:delete_document(Node, od_user, ?ID(u1)),
+    subscriptions_test_utils:delete_document(Node, od_group, ?ID(g1)),
     subscriptions_test_utils:delete_document(Node, space, ?ID(s1)),
 
     % then
@@ -574,10 +574,10 @@ multiple_updates_test(Config) ->
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(u1), U1)),
 
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>, groups => [<<"gr1">>]}),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated3">>, groups => [<<"gr2">>], spaces => [<<"sp1">>]}),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated4">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated1">>, groups => [<<"gr1">>]}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated2">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated3">>, groups => [<<"gr2">>], spaces => [<<"sp1">>]}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated4">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -594,7 +594,7 @@ no_group_update_test(Config) ->
 
     % when
     Context = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
-    subscriptions_test_utils:update_document(Node, user_group, ?ID(g1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_group, ?ID(g1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_absent(Context, [
@@ -614,7 +614,7 @@ group_update_through_users_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(g1), G1)),
-    subscriptions_test_utils:update_document(Node, user_group, ?ID(g1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_group, ?ID(g1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -649,9 +649,9 @@ ancestor_group_update_through_users_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(g3), G3)),
-    subscriptions_test_utils:update_document(Node, user_group, ?ID(g1), #{name => <<"updated">>}),
-    subscriptions_test_utils:update_document(Node, user_group, ?ID(g2), #{name => <<"updated">>}),
-    subscriptions_test_utils:update_document(Node, user_group, ?ID(g3), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_group, ?ID(g1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_group, ?ID(g2), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_group, ?ID(g3), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -690,7 +690,7 @@ child_group_update_through_users_test(Config) ->
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [?ID(u1)]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(g1), G1)),
-    subscriptions_test_utils:update_document(Node, user_group, ?ID(g1), #{name => <<"updated">>}),
+    subscriptions_test_utils:update_document(Node, od_group, ?ID(g1), #{name => <<"updated">>}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -743,18 +743,18 @@ updates_for_added_user_have_revisions_test(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
     U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
-    Rev0 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
+    Rev0 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
 
     % when
     Context = subscriptions_test_utils:init_messages(Node, PID, []),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>}),
-    Rev1 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
-    Rev2 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated3">>}),
-    Rev3 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated4">>}),
-    Rev4 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated1">>}),
+    Rev1 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated2">>}),
+    Rev2 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated3">>}),
+    Rev3 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated4">>}),
+    Rev4 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context#subs_ctx{users = [(?ID(u1))]}, [
@@ -770,19 +770,19 @@ updates_have_revisions_test(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
     U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
-    Rev0 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
+    Rev0 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
 
     % when
     Context1 = subscriptions_test_utils:init_messages(Node, PID, [(?ID(u1))]),
     Context = subscriptions_test_utils:flush_messages(Context1, subscriptions_test_utils:expectation(?ID(u1), U1)),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>}),
-    Rev1 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
-    Rev2 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated3">>}),
-    Rev3 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated4">>}),
-    Rev4 = subscriptions_test_utils:get_rev(Node, onedata_user, ?ID(u1)),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated1">>}),
+    Rev1 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated2">>}),
+    Rev2 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated3">>}),
+    Rev3 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated4">>}),
+    Rev4 = subscriptions_test_utils:get_rev(Node, od_user, ?ID(u1)),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
@@ -798,12 +798,12 @@ fetches_changes_older_than_in_cache(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
     U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>}),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated3">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated1">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated2">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated3">>}),
 
     Context = subscriptions_test_utils:init_messages(Node, PID, [(?ID(u1))]),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated4">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated4">>}),
 
     % when
     _ForgottenContext = subscriptions_test_utils:flush_messages(Context,
@@ -826,12 +826,12 @@ fetches_changes_older_than_in_cache_without_save(Config) ->
 
     U1 = #od_user{name = <<"u1">>},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated1">>}),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated2">>}),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated3">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated1">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated2">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated3">>}),
 
     Context = subscriptions_test_utils:init_messages(Node, PID, [(?ID(u1))]),
-    subscriptions_test_utils:update_document(Node, onedata_user, ?ID(u1), #{name => <<"updated4">>}),
+    subscriptions_test_utils:update_document(Node, od_user, ?ID(u1), #{name => <<"updated4">>}),
 
     % when
     _ForgottenContext = subscriptions_test_utils:flush_messages(Context,

@@ -713,7 +713,7 @@ authenticate_by_basic_credentials(Login, Password) ->
             UserId = proplists:get_value(<<"userId">>, Props),
             UserRole = proplists:get_value(<<"userRole">>, Props),
             UserDocument = case od_user:get(UserId) of
-                {error, {not_found, onedata_user}} ->
+                {error, {not_found, od_user}} ->
                     UserRecord = #od_user{
                         name = Login,
                         login = Login,

@@ -116,12 +116,12 @@ location_of_records_are_set_upon_creation(Config) ->
     ID4 = create(Node1, #od_space{}),
 
     %% then
-    ?assertMatch({ok, Host1}, resolve(Node1, onedata_user, ID1)),
-    ?assertMatch({ok, Host1}, resolve(Node2, onedata_user, ID1)),
-    ?assertMatch({ok, Host1}, resolve(Node3, onedata_user, ID1)),
-    ?assertMatch({ok, Host2}, resolve(Node1, user_group, ID2)),
-    ?assertMatch({ok, Host2}, resolve(Node2, user_group, ID2)),
-    ?assertMatch({ok, Host2}, resolve(Node3, user_group, ID2)),
+    ?assertMatch({ok, Host1}, resolve(Node1, od_user, ID1)),
+    ?assertMatch({ok, Host1}, resolve(Node2, od_user, ID1)),
+    ?assertMatch({ok, Host1}, resolve(Node3, od_user, ID1)),
+    ?assertMatch({ok, Host2}, resolve(Node1, od_group, ID2)),
+    ?assertMatch({ok, Host2}, resolve(Node2, od_group, ID2)),
+    ?assertMatch({ok, Host2}, resolve(Node3, od_group, ID2)),
     ?assertMatch({ok, Host3}, resolve(Node1, provider, ID3)),
     ?assertMatch({ok, Host3}, resolve(Node2, provider, ID3)),
     ?assertMatch({ok, Host3}, resolve(Node3, provider, ID3)),

@@ -17,9 +17,9 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: onedata_user | user_group.
--type accepted_resource() :: onedata_user | user_group.
--type removable_resource() :: onedata_user | user_group.
+-type provided_resource() :: od_user | od_group.
+-type accepted_resource() :: od_user | od_group.
+-type removable_resource() :: od_user | od_group.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
 %% API
@@ -43,8 +43,8 @@ routes() ->
     S = #rstate{module = ?MODULE, root = oz_api_privileges},
     M = rest_handler,
     [
-        {<<"/privileges/users/:id/">>, M, S#rstate{resource = onedata_user, methods = [get, patch, delete]}},
-        {<<"/privileges/groups/:id/">>, M, S#rstate{resource = user_group, methods = [get, patch, delete]}}
+        {<<"/privileges/users/:id/">>, M, S#rstate{resource = od_user, methods = [get, patch, delete]}},
+        {<<"/privileges/groups/:id/">>, M, S#rstate{resource = od_group, methods = [get, patch, delete]}}
     ].
 
 %%--------------------------------------------------------------------
@@ -56,13 +56,13 @@ routes() ->
 -spec is_authorized(Resource :: resource(), Method :: method(),
     EntityId :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
-is_authorized(onedata_user, get, _EntityId, #client{type = user, id = UserId}) ->
+is_authorized(od_user, get, _EntityId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, view_privileges);
-is_authorized(onedata_user, _, _EntityId, #client{type = user, id = UserId}) ->
+is_authorized(od_user, _, _EntityId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, set_privileges);
-is_authorized(user_group, get, _EntityId, #client{type = user, id = UserId}) ->
+is_authorized(od_group, get, _EntityId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, view_privileges);
-is_authorized(user_group, _, _EntityId, #client{type = user, id = UserId}) ->
+is_authorized(od_group, _, _EntityId, #client{type = user, id = UserId}) ->
     oz_api_privileges_logic:has_effective_privilege(UserId, set_privileges);
 is_authorized(_, _, _, _) ->
     false.
@@ -77,10 +77,10 @@ is_authorized(_, _, _, _) ->
     {boolean(), cowboy_req:req()}.
 % Every existing entity has privileges to OZ API - however they can be an empty
 % list, which is usually the case.
-resource_exists(onedata_user, UserId, Req) ->
+resource_exists(od_user, UserId, Req) ->
     Result = user_logic:exists(UserId),
     {Result, Req};
-resource_exists(user_group, GroupId, Req) ->
+resource_exists(od_group, GroupId, Req) ->
     Result = group_logic:exists(GroupId),
     {Result, Req};
 resource_exists(_, _, Req) ->
@@ -101,7 +101,7 @@ accept_resource(Resource, patch, EntityId, Data, _Client, Req) ->
         [atom_to_binary(P, latin1) || P <- oz_api_privileges:all_privileges()],
         Data, list_of_bin, Req),
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
-    % Resource is (onedata_user | user_group) so it can be used directly here.
+    % Resource is (od_user | od_group) so it can be used directly here.
     case oz_api_privileges_logic:modify(EntityId, Resource, Privileges) of
         ok ->
             {true, Req};
@@ -119,7 +119,7 @@ accept_resource(Resource, patch, EntityId, Data, _Client, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(Resource, EntityId, _Client, Req) ->
-    % Resource is (onedata_user | user_group) so it can be used directly here.
+    % Resource is (od_user | od_group) so it can be used directly here.
     {ok, Privileges} = oz_api_privileges_logic:get(EntityId, Resource),
     {[{privileges, Privileges}], Req}.
 
@@ -132,5 +132,5 @@ provide_resource(Resource, EntityId, _Client, Req) ->
     EntityId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 delete_resource(Resource, EntityId, Req) ->
-    % Resource is (onedata_user | user_group) so it can be used directly here.
+    % Resource is (od_user | od_group) so it can be used directly here.
     {oz_api_privileges_logic:remove(EntityId, Resource), Req}.

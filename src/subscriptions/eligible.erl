@@ -25,7 +25,7 @@
 %%--------------------------------------------------------------------
 -spec providers(Doc :: datastore:document(), Model :: subscriptions:model())
         -> [ProviderID :: binary()].
-providers(Doc, space) ->
+providers(Doc, od_space) ->
     #document{value = #od_space{users = SpaceUserTuples, groups = GroupTuples,
         providers_supports = ProvidersSupports}} = Doc,
     {SpaceProviders, _} = lists:unzip(ProvidersSupports),
@@ -43,12 +43,12 @@ providers(Doc, space) ->
     SpaceProviders ++ through_users(SpaceUsersSet ++ GroupUsersSets);
 
 % For share, the eligible providers are the same as for its parent space.
-providers(Doc, share) ->
+providers(Doc, od_share) ->
     #document{value = #od_share{parent_space = ParentId}} = Doc,
     {ok, ParentDoc} = od_space:get(ParentId),
-    providers(ParentDoc, space);
+    providers(ParentDoc, od_space);
 
-providers(Doc, user_group) ->
+providers(Doc, od_group) ->
     #document{
         value = #od_group{
             users = UsersWithPrivileges,
@@ -71,17 +71,17 @@ providers(Doc, user_group) ->
         end, [], EGroups -- [Doc#document.key]),
     through_users(Users ++ EUsers ++ AncestorsUsers);
 
-providers(Doc, onedata_user) ->
+providers(Doc, od_user) ->
     through_users([Doc#document.key]);
 
-providers(Doc, provider) ->
+providers(Doc, od_provider) ->
     [Doc#document.key];
 
-providers(Doc, handle) ->
+providers(Doc, od_handle) ->
     {ok, [{users, Users}]} = handle_logic:get_effective_users(Doc#document.key),
     through_users(Users);
 
-providers(Doc, handle_service) ->
+providers(Doc, od_handle_service) ->
     {ok, [{users, Users}]} = handle_service_logic:get_effective_users(
         Doc#document.key
     ),

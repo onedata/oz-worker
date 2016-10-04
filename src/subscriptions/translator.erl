@@ -63,7 +63,7 @@ get_ignore_msg(Seq) ->
 
 get_msg(Seq, Doc = #document{deleted = true, key = ID}, Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), delete}];
-get_msg(Seq, Doc, space = Model) ->
+get_msg(Seq, Doc, od_space = Model) ->
     #document{value = Value, key = ID} = Doc,
     #od_space{
         name = Name,
@@ -80,7 +80,7 @@ get_msg(Seq, Doc, space = Model) ->
         {groups, Groups},
         {shares, Shares}
     ]}];
-get_msg(Seq, Doc, share = Model) ->
+get_msg(Seq, Doc, od_share = Model) ->
     #document{value = Value, key = ID} = Doc,
     #od_share{
         name = Name,
@@ -97,7 +97,7 @@ get_msg(Seq, Doc, share = Model) ->
         {public_url, PublicURL},
         {handle, Handle}
     ]}];
-get_msg(Seq, Doc, user_group = Model) ->
+get_msg(Seq, Doc, od_group = Model) ->
     #document{value = Value, key = ID} = Doc,
     #od_group{name = Name, spaces = Spaces, users = Users, children = NGroups,
         parents = PGroups, eff_users = EUsers, type = Type,
@@ -113,7 +113,7 @@ get_msg(Seq, Doc, user_group = Model) ->
         {handle_services, HandleServices},
         {handles, Handles}
     ]}];
-get_msg(Seq, Doc, onedata_user = Model) ->
+get_msg(Seq, Doc, od_user = Model) ->
     #document{value = Value, key = ID} = Doc,
     #od_user{name = Name, space_aliases = SpaceNames, groups = Groups,
         default_space = DefaultSpace, eff_groups = EGroups,
@@ -128,7 +128,7 @@ get_msg(Seq, Doc, onedata_user = Model) ->
         {handles, Handles},
         {public_only, false}
     ]}];
-get_msg(Seq, Doc, provider = Model) ->
+get_msg(Seq, Doc, od_provider = Model) ->
     #document{value = Value, key = ID} = Doc,
     #od_provider{client_name = Name, urls = URLs, spaces = SpaceIDs} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
@@ -137,7 +137,7 @@ get_msg(Seq, Doc, provider = Model) ->
         {space_ids, SpaceIDs},
         {public_only, false}
     ]}];
-get_msg(Seq, Doc, handle_service = Model) ->
+get_msg(Seq, Doc, od_handle_service = Model) ->
     #document{value = Value, key = ID} = Doc,
     #od_handle_service{
         name = Name,
@@ -154,7 +154,7 @@ get_msg(Seq, Doc, handle_service = Model) ->
         {users, Users},
         {groups, Groups}
     ]}];
-get_msg(Seq, Doc, handle = Model) ->
+get_msg(Seq, Doc, od_handle = Model) ->
     #document{value = Value, key = ID} = Doc,
     #od_handle{
         handle_service_id = HandleServiceId,
@@ -193,7 +193,7 @@ get_msg(_Seq, _Doc, _Model) ->
 -spec get_public_msg(Seq :: subscriptions:seq(), Doc :: datastore:document(),
     Model :: subscriptions:model()) -> term().
 
-get_public_msg(Seq, Doc, onedata_user = Model) ->
+get_public_msg(Seq, Doc, od_user = Model) ->
     #document{value = #od_user{name = Name}, key = ID} = Doc,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {name, Name},
@@ -206,7 +206,7 @@ get_public_msg(Seq, Doc, onedata_user = Model) ->
         {public_only, true}
     ]}];
 
-get_public_msg(Seq, Doc, provider = Model) ->
+get_public_msg(Seq, Doc, od_provider = Model) ->
     #document{key = ID, value = #od_provider{client_name = Name, urls = URLs}} = Doc,
     [{seq, Seq}, revs_prop(Doc), {id, ID}, {message_model(Model), [
         {client_name, Name},
@@ -230,13 +230,13 @@ revs_prop(#document{rev = Rev}) ->
     {revs, [Rev]}.
 
 -spec message_model(subscriptions:model()) -> atom().
-message_model(space) -> space;
-message_model(share) -> share;
-message_model(provider) -> provider;
-message_model(onedata_user) -> user;
-message_model(user_group) -> group;
-message_model(handle) -> handle;
-message_model(handle_service) -> handle_service.
+message_model(od_space) -> od_space;
+message_model(od_share) -> od_share;
+message_model(od_provider) -> od_provider;
+message_model(od_user) -> od_user;
+message_model(od_group) -> od_group;
+message_model(od_handle) -> od_handle;
+message_model(od_handle_service) -> od_handle_service.
 
 
 %%-------------------------------------------------------------------

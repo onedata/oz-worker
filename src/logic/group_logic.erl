@@ -615,9 +615,9 @@ cleanup(_GroupId) ->
     false.
 %% Currently, groups with no users and groups are not deleted so it is
 %% possible to restore membership after accidentally leaving a group.
-%%    {ok, #document{value = Group}} = user_group:get(GroupId),
+%%    {ok, #document{value = Group}} = od_group:get(GroupId),
 %%    case Group of
-%%        #user_group{users = [], nested_groups = []} -> remove(GroupId);
+%%        #od_group{users = [], nested_groups = []} -> remove(GroupId);
 %%        _ -> false
 %%    end.
 
@@ -675,7 +675,7 @@ create_predefined_group(Id, Name, Privileges) ->
             case od_group:create(NewGroup) of
                 {ok, Id} ->
                     ok = oz_api_privileges_logic:modify(
-                        Id, user_group, Privileges),
+                        Id, od_group, Privileges),
                     ?info("Created predefined group '~s'", [Name]),
                     ok;
                 Other ->

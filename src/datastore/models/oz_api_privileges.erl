@@ -40,7 +40,7 @@
 list_providers | list_providers_of_space | add_member_to_space |
 remove_member_from_space.
 % Types of entities that can possess those privileges.
--type entity_type() :: onedata_user | user_group.
+-type entity_type() :: od_user | od_group.
 -export_type([privilege/0, entity_type/0]).
 
 %%%===================================================================
