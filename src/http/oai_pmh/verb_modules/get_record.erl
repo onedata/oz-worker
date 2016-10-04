@@ -93,9 +93,7 @@ get_response(<<"record">>, Args) ->
                 }
             };
         false ->
-            throw({cannotDisseminateFormat, str_utils:format_bin(
-                "Metadata format ~s is not supported by this repository",
-                [MetadataPrefix])})
+            throw({cannotDisseminateFormat, MetadataPrefix})
     end.
 
 %%%===================================================================
@@ -117,12 +115,7 @@ get_metadata(OAIId) ->
         Metadata
     catch
         throw:{illegalId, OAIId} ->
-            throw({idDoesNotExist, str_utils:format_bin(
-                "The value of the identifier argument \"~s\" "
-                "is illegal in this repository. Identifier must "
-                "be in form oai:onedata.org:<id>", [OAIId])});
+            throw({illegalId, OAIId});
         _:_ ->
-            throw({idDoesNotExist, str_utils:format_bin(
-                "The value of the identifier argument \"~s\" "
-                "is unknown in this repository.", [OAIId])})
+            throw({idDoesNotExist, OAIId})
     end.

@@ -89,17 +89,11 @@ get_response(<<"metadataFormat">>, Args) ->
                 end
             catch
                 throw:noMetadataFormats ->
-                    throw({noMetadataFormats, str_utils:format_bin(
-                        "There are no metadata formats available for item ~s", [OAIId])});
+                    throw({noMetadataFormats, OAIId});
                 throw:{illegalId, OAIId} ->
-                    throw({idDoesNotExist, str_utils:format_bin(
-                        "The value of the identifier argument \"~s\" "
-                        "is illegal in this repository. Identifier must "
-                        "be in form oai:onedata.org:<id>", [OAIId])});
+                    throw({illegalId, OAIId});
                 _:_ ->
-                    throw({idDoesNotExist, str_utils:format_bin(
-                        "The value of the identifier argument \"~s\" "
-                        "is unknown in this repository.", [OAIId])})
+                    throw({idDoesNotExist, OAIId})
             end
     end.
 
