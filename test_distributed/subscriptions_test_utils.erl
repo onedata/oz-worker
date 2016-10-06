@@ -214,11 +214,11 @@ group_expectation(ID, Name, Type, Users, EUsers, Spaces, Children, Parents, Hand
     [{<<"id">>, ID}, {<<"od_group">>, [
         {<<"name">>, Name},
         {<<"type">>, atom_to_binary(Type, latin1)},
-        {<<"spaces">>, Spaces},
-        {<<"users">>, privileges_as_binaries(Users)},
-        {<<"eff_users">>, privileges_as_binaries(EUsers)},
         {<<"children">>, privileges_as_binaries(Children)},
         {<<"parents">>, Parents},
+        {<<"users">>, privileges_as_binaries(Users)},
+        {<<"eff_users">>, privileges_as_binaries(EUsers)},
+        {<<"spaces">>, Spaces},
         {<<"handle_services">>, HandleServices},
         {<<"handles">>, Handles}
     ]}].

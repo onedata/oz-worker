@@ -86,23 +86,23 @@ get_msg(Seq, Doc, od_group = Model) ->
     #document{value = Value, key = Id} = Doc,
     #od_group{
         name = Name,
-        spaces = Spaces,
-        users = Users,
+        type = Type,
         children = NGroups,
         parents = PGroups,
+        users = Users,
         eff_users = EUsers,
-        type = Type,
+        spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {name, Name},
         {type, Type},
-        {spaces, Spaces},
+        {children, NGroups},
+        {parents, PGroups},
         {users, Users},
         {eff_users, EUsers},
-        {nested_groups, NGroups},
-        {parent_groups, PGroups},
+        {spaces, Spaces},
         {handle_services, HandleServices},
         {handles, Handles}
     ]}];
