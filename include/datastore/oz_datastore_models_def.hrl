@@ -131,9 +131,9 @@
 
     % Group graph related entities (direct and effective)
     parents = [] :: [od_group:id()],
-    eff_parents = [] :: [od_group:id()],
     children = [] :: [{od_group:id(), [privileges:group_privilege()]}],
-    eff_children = [] :: [od_group:id()],
+    eff_parents = [] :: [od_group:id()],
+    eff_children = [] :: [{od_group:id(), [privileges:group_privilege()]}],
 
     % Direct relations to other entities
     users = [] :: [{od_user:id(), [privileges:group_privilege()]}],
@@ -169,7 +169,7 @@
 
     % Effective relations to other entities
     eff_users = [] :: [{od_user:id(), [privileges:space_privilege()]}],
-    eff_groups = [] :: [od_group:id()],
+    eff_groups = [] :: [{od_group:id(), [privileges:space_privilege()]}],
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -182,11 +182,11 @@
 -record(od_share, {
     name = undefined :: undefined | binary(),
     public_url = undefined :: undefined | binary(),
-    root_file = undefined :: undefined | binary(),
 
     % Direct relations to other entities
     space = undefined :: undefined | od_space:id(),
     handle = undefined :: undefined | od_handle:id(),
+    root_file = undefined :: undefined | binary(),
 
     % Effective relations to other entities
     eff_users = [] :: [od_user:id()],
