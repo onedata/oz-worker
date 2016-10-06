@@ -209,10 +209,9 @@ get_public_msg(Seq, Doc, od_user = Model) ->
     #document{value = #od_user{name = Name}, key = Id} = Doc,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {name, Name},
-        {spaces, []},
-        {group_ids, []},
-        {effective_group_ids, []},
         {default_space, undefined},
+        {space_aliases, []},
+        {groups, []},
         {handle_services, []},
         {handles, []},
         {public_only, true}

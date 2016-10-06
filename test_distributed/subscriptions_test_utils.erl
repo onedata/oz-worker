@@ -79,7 +79,7 @@ generate_user_ids(Number) ->
     generate_ids("u", Number).
 
 generate_ids(Prefix, Number) ->
-    [?Id(list_to_atom(Prefix ++ integer_to_list(N))) || N <- lists:seq(1, Number)].
+    [?ID(list_to_atom(Prefix ++ integer_to_list(N))) || N <- lists:seq(1, Number)].
 
 create_spaces(SIds, UIds, GIds, Node) ->
     Groups = [{GId, []} || GId <- GIds],
@@ -379,9 +379,9 @@ remove_matched_expectations(Expected, Messages) ->
 
 
 id(Id) when is_atom(Id) ->
-    ?Id(Id);
+    ?ID(Id);
 id(Id) ->
-    ?Id(list_to_atom(Id)).
+    ?ID(list_to_atom(Id)).
 
 empty_cache(Node) ->
     subscriptions_test_utils:update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{
