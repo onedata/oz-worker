@@ -142,12 +142,12 @@ get_last_sequence_number(Node) ->
 expectation(ID, #od_space{name = Name, providers_supports = Supports,
     groups = Groups, users = Users, shares = Shares}) ->
     space_expectation(ID, Name, Users, Groups, Supports, Shares);
-expectation(ID, #od_share{name = Name, space = ParentSpace,
+expectation(ID, #od_share{name = Name, space = Space,
     root_file = RootFileId, public_url = PublicUrl, handle = Handle}) ->
-    RootFileIdBin = undefined_to_binary(RootFileId),
+    RootFileBin = undefined_to_binary(RootFileId),
     PublicUrlBin = undefined_to_binary(PublicUrl),
     HandleBin = undefined_to_binary(Handle),
-    share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin, HandleBin);
+    share_expectation(ID, Name, Space, RootFileBin, PublicUrlBin, HandleBin);
 expectation(ID, #od_user{name = Name, space_aliases = SpaceAliases,
     default_space = DefaultSpace, eff_groups = Groups,
     handle_services = HandleServices, handles = Handles}) ->
@@ -233,13 +233,13 @@ space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
         {<<"providers_supports">>, Supports}
     ]}].
 
-share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl, Handle) ->
+share_expectation(ID, Name, Space, RootFile, PublicUrl, Handle) ->
     [{<<"id">>, ID}, {<<"od_share">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
-        {<<"parent_space">>, ParentSpace},
-        {<<"root_file">>, RootFileId},
         {<<"public_url">>, PublicUrl},
+        {<<"space">>, Space},
+        {<<"root_file">>, RootFile},
         {<<"handle">>, Handle}
     ]}].
 

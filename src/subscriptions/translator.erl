@@ -128,16 +128,16 @@ get_msg(Seq, Doc, od_share = Model) ->
     #od_share{
         name = Name,
         public_url = PublicURL,
-        root_file = RootFile,
         space = Space,
+        root_file = RootFile,
         handle = Handle
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {id, Id},
         {name, Name},
+        {public_url, PublicURL},
         {space, Space},
         {root_file, RootFile},
-        {public_url, PublicURL},
         {handle, Handle}
     ]}];
 get_msg(Seq, Doc, od_provider = Model) ->
