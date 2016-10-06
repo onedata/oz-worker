@@ -22,8 +22,8 @@
 % Regexp to validate aliases - at least 5 alphanumeric chars
 -define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9]{5,}$">>).
 
-% String that will be put in front of uuid when a user does not have an alias set.
-% Aliases are not allowed to start with this string.
+% String that will be put in front of uuid when a user does not have
+% an alias set. Aliases are not allowed to start with this string.
 -define(NO_ALIAS_UUID_PREFIX, "uuid_").
 
 
@@ -168,7 +168,7 @@
     shares = [] :: [od_share:id()],
 
     % Effective relations to other entities
-    eff_users = [] :: [od_user:id()],
+    eff_users = [] :: [{od_user:id(), [privileges:space_privilege()]}],
     eff_groups = [] :: [od_group:id()],
 
     % Marks that the record's effective relations are not up to date.
@@ -182,10 +182,10 @@
 -record(od_share, {
     name = undefined :: undefined | binary(),
     public_url = undefined :: undefined | binary(),
-    root_file_id = undefined :: undefined | binary(),
+    root_file = undefined :: undefined | binary(),
 
     % Direct relations to other entities
-    parent_space = undefined :: undefined | od_space:id(),
+    space = undefined :: undefined | od_space:id(),
     handle = undefined :: undefined | od_handle:id(),
 
     % Effective relations to other entities
@@ -228,8 +228,8 @@
     groups = [] :: [{od_group:id(), [privileges:handle_service_privilege()]}],
 
     % Effective relations to other entities
-    eff_users = [] :: [od_user:id()],
-    eff_groups = [] :: [od_group:id()],
+    eff_users = [] :: [{od_user:id(), [privileges:handle_service_privilege()]}],
+    eff_groups = [] :: [{od_group:id(), [privileges:handle_service_privilege()]}],
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -244,13 +244,13 @@
     timestamp = od_handle:actual_timestamp() :: od_handle:timestamp(),
 
     % Direct relations to other entities
-    handle_service_id :: od_handle_service:id() | undefined,
+    handle_service :: od_handle_service:id() | undefined,
     users = [] :: [{od_user:id(), [privileges:handle_privilege()]}],
     groups = [] :: [{od_group:id(), [privileges:handle_privilege()]}],
 
     % Effective relations to other entities
-    eff_users = [] :: [od_user:id()],
-    eff_groups = [] :: [od_group:id()],
+    eff_users = [] :: [{od_user:id(), [privileges:handle_privilege()]}],
+    eff_groups = [] :: [{od_group:id(), [privileges:handle_privilege()]}],
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()

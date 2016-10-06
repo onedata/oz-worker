@@ -127,7 +127,7 @@ has_effective_privilege(HandleId, UserId, Privilege) ->
 create(UserId, HandleServiceId, ResourceType, ResourceId, Metadata) ->
     {ok, PublicHandle} = handle_proxy:register_handle(HandleServiceId, ResourceType, ResourceId, Metadata),
     Privileges = privileges:handle_admin(),
-    Handle = #od_handle{handle_service_id = HandleServiceId, resource_type = ResourceType,
+    Handle = #od_handle{handle_service = HandleServiceId, resource_type = ResourceType,
         resource_id = ResourceId, public_handle = PublicHandle, metadata = Metadata,
         users = [{UserId, Privileges}]},
 
@@ -253,7 +253,7 @@ add_group(HandleId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec get_data(HandleId :: od_handle:id()) -> {ok, [proplists:property()]}.
 get_data(HandleId) ->
-    {ok, #document{value = #od_handle{handle_service_id = HandleServiceId, public_handle = Handle,
+    {ok, #document{value = #od_handle{handle_service = HandleServiceId, public_handle = Handle,
         resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata,
         timestamp = Timestamp}}} =
         od_handle:get(HandleId),

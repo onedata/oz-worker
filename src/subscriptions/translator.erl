@@ -118,25 +118,25 @@ get_msg(Seq, Doc, od_space = Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {id, Id},
         {name, Name},
-        {providers_supports, Supports},
         {users, Users},
         {groups, Groups},
-        {shares, Shares}
+        {shares, Shares},
+        {providers_supports, Supports}
     ]}];
 get_msg(Seq, Doc, od_share = Model) ->
     #document{value = Value, key = Id} = Doc,
     #od_share{
         name = Name,
         public_url = PublicURL,
-        root_file_id = RootFileId,
-        parent_space = ParentSpace,
+        root_file = RootFile,
+        space = Space,
         handle = Handle
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {id, Id},
         {name, Name},
-        {parent_space, ParentSpace},
-        {root_file_id, RootFileId},
+        {space, Space},
+        {root_file, RootFile},
         {public_url, PublicURL},
         {handle, Handle}
     ]}];
@@ -146,7 +146,7 @@ get_msg(Seq, Doc, od_provider = Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {client_name, Name},
         {urls, URLs},
-        {space_ids, SpaceIds},
+        {spaces, SpaceIds},
         {public_only, false}
     ]}];
 get_msg(Seq, Doc, od_handle_service = Model) ->
@@ -169,7 +169,7 @@ get_msg(Seq, Doc, od_handle_service = Model) ->
 get_msg(Seq, Doc, od_handle = Model) ->
     #document{value = Value, key = Id} = Doc,
     #od_handle{
-        handle_service_id = HandleServiceId,
+        handle_service = HandleService,
         public_handle = PublicHandle,
         resource_type = ResourceType,
         resource_id = ResourceId,
@@ -180,7 +180,7 @@ get_msg(Seq, Doc, od_handle = Model) ->
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {id, Id},
-        {handle_service_id, HandleServiceId},
+        {handle_service, HandleService},
         {public_handle, PublicHandle},
         {resource_type, ResourceType},
         {resource_id, ResourceId},
@@ -209,7 +209,7 @@ get_public_msg(Seq, Doc, od_user = Model) ->
     #document{value = #od_user{name = Name}, key = Id} = Doc,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {name, Name},
-        {space_ids, []},
+        {spaces, []},
         {group_ids, []},
         {effective_group_ids, []},
         {default_space, undefined},
@@ -223,7 +223,7 @@ get_public_msg(Seq, Doc, od_provider = Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {client_name, Name},
         {urls, URLs},
-        {space_ids, []},
+        {spaces, []},
         {public_only, true}
     ]}].
 

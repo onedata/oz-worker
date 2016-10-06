@@ -64,7 +64,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
 %%--------------------------------------------------------------------
 -spec unregister_handle(od_handle:id()) -> ok.
 unregister_handle(HandleId)  ->
-    {ok, #document{value = #od_handle{handle_service_id = HandleServiceId, public_handle = PublicHandle}}} =
+    {ok, #document{value = #od_handle{handle_service = HandleServiceId, public_handle = PublicHandle}}} =
         od_handle:get(HandleId),
     {ok, #document{value = #od_handle_service{
         proxy_endpoint = ProxyEndpoint,
@@ -96,7 +96,7 @@ unregister_handle(HandleId)  ->
 modify_handle(_HandleId, undefined, undefined, undefined)  ->
     ok;
 modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata)  ->
-    {ok, #document{value = #od_handle{handle_service_id = HandleServiceId,
+    {ok, #document{value = #od_handle{handle_service = HandleServiceId,
         resource_type = ResourceType, resource_id = ResourceId, public_handle = PublicHandle,
         metadata = Metadata}}} =
         od_handle:get(HandleId),

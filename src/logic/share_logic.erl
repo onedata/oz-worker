@@ -39,8 +39,8 @@ create(ShareId, Name, RootFileId, ParentSpaceId) ->
 
     Share = #od_share{
         name = Name,
-        parent_space = ParentSpaceId,
-        root_file_id = RootFileId,
+        space = ParentSpaceId,
+        root_file = RootFileId,
         public_url = share_id_to_public_url(ShareId)
     },
     {ok, ShareId} = od_share:save(#document{key = ShareId, value = Share}),
@@ -85,7 +85,7 @@ modify(ShareId, NewName) ->
 remove(ShareId) ->
     {ok, #document{
         value = #od_share{
-            parent_space = ParentSpaceId
+            space = ParentSpaceId
         }}} = od_share:get(ShareId),
     ok = od_share:delete(ShareId),
     {ok, _} = od_space:update(ParentSpaceId, fun(SpaceDoc) ->
@@ -108,8 +108,8 @@ get_data(ShareId, _Client) ->
         value = #od_share{
             name = Name,
             public_url = PublicURL,
-            root_file_id = RootFileId,
-            parent_space = ParentSpace
+            root_file = RootFileId,
+            space = ParentSpace
         }}} = od_share:get(ShareId),
     {ok, [
         {shareId, ShareId},
@@ -129,7 +129,7 @@ get_data(ShareId, _Client) ->
     {ok, undefined | binary()} | datastore:get_error().
 get_parent(ShareId) ->
     case od_share:get(ShareId) of
-        {ok, #document{value = #od_share{parent_space = ParentSpaceId}}} ->
+        {ok, #document{value = #od_share{space = ParentSpaceId}}} ->
             {ok, ParentSpaceId};
         Error ->
             Error
@@ -167,7 +167,7 @@ share_id_to_public_url(ShareId) ->
 share_id_to_redirect_url(ShareId) ->
     {ok, #document{
         value = #od_share{
-            parent_space = ParentSpaceId
+            space = ParentSpaceId
         }}} = od_share:get(ShareId),
     {ok, [{providers, Providers}]} =
         space_logic:get_providers(ParentSpaceId, provider),

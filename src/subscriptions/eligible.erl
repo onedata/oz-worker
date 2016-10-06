@@ -44,7 +44,7 @@ providers(Doc, od_space) ->
 
 % For share, the eligible providers are the same as for its parent space.
 providers(Doc, od_share) ->
-    #document{value = #od_share{parent_space = ParentId}} = Doc,
+    #document{value = #od_share{space = ParentId}} = Doc,
     {ok, ParentDoc} = od_space:get(ParentId),
     providers(ParentDoc, od_space);
 

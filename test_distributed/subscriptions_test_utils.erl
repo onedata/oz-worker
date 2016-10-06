@@ -163,7 +163,7 @@ expectation(ID, #od_provider{client_name = Name, urls = URLs, spaces = SpaceIDs}
     [{<<"id">>, ID}, {<<"od_provider">>, [
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
-        {<<"space_ids">>, SpaceIDs},
+        {<<"spaces">>, SpaceIDs},
         {<<"public_only">>, false}
     ]}];
 
@@ -175,7 +175,7 @@ expectation(ID, #od_handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
         ID, NameBin, ProxyEndpointBin, ServiceProperties, Users, Groups
     );
 
-expectation(ID, #od_handle{handle_service_id = HandleServiceId, public_handle = PublicHandle,
+expectation(ID, #od_handle{handle_service = HandleServiceId, public_handle = PublicHandle,
     resource_type = ResourceType, resource_id = ResourceId,
     metadata = Metadata, groups = Groups, users = Users, timestamp = Timestamp}) ->
     HandleServiceIdBin = undefined_to_binary(HandleServiceId),
@@ -199,6 +199,17 @@ user_expectation(ID, Name, Spaces, Groups, DefaultSpace, HandleServices, Handles
         {<<"public_only">>, false}
     ]}].
 
+public_only_user_expectation(ID, Name) ->
+    [{<<"id">>, ID}, {<<"od_user">>, [
+        {<<"name">>, Name},
+        {<<"default_space">>, <<"undefined">>},
+        {<<"space_aliases">>, []},
+        {<<"groups">>, []},
+        {<<"handle_services">>, []},
+        {<<"handles">>, []},
+        {<<"public_only">>, true}
+    ]}].
+
 group_expectation(ID, Name, Type, Users, EUsers, Spaces, Children, Parents, HandleServices, Handles) ->
     [{<<"id">>, ID}, {<<"od_group">>, [
         {<<"name">>, Name},
@@ -216,10 +227,10 @@ space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
     [{<<"id">>, ID}, {<<"od_space">>, [
         {<<"id">>, ID},
         {<<"name">>, Name},
-        {<<"providers_supports">>, Supports},
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"groups">>, privileges_as_binaries(Groups)},
-        {<<"shares">>, Shares}
+        {<<"shares">>, Shares},
+        {<<"providers_supports">>, Supports}
     ]}].
 
 share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl, Handle) ->
@@ -227,7 +238,7 @@ share_expectation(ID, Name, ParentSpace, RootFileId, PublicUrl, Handle) ->
         {<<"id">>, ID},
         {<<"name">>, Name},
         {<<"parent_space">>, ParentSpace},
-        {<<"root_file_id">>, RootFileId},
+        {<<"root_file">>, RootFileId},
         {<<"public_url">>, PublicUrl},
         {<<"handle">>, Handle}
     ]}].
@@ -246,7 +257,7 @@ handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
     Metadata, Users, Groups, Timestamp) ->
     [{<<"id">>, ID}, {<<"od_handle">>, [
         {<<"id">>, ID},
-        {<<"handle_service_id">>, HandleServiceId},
+        {<<"handle_service">>, HandleServiceId},
         {<<"public_handle">>, PublicHandle},
         {<<"resource_type">>, ResourceType},
         {<<"resource_id">>, ResourceId},
@@ -260,19 +271,7 @@ public_only_provider_expectation(ID, Name, URLs) ->
     [{<<"id">>, ID}, {<<"od_provider">>, [
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
-        {<<"space_ids">>, []},
-        {<<"public_only">>, true}
-    ]}].
-
-public_only_user_expectation(ID, Name) ->
-    [{<<"id">>, ID}, {<<"od_user">>, [
-        {<<"name">>, Name},
-        {<<"space_ids">>, []},
-        {<<"group_ids">>, []},
-        {<<"effective_group_ids">>, []},
-        {<<"default_space">>, <<"undefined">>},
-        {<<"handle_services">>, []},
-        {<<"handles">>, []},
+        {<<"spaces">>, []},
         {<<"public_only">>, true}
     ]}].
 
