@@ -271,7 +271,7 @@ end_per_suite(Config) ->
 
 end_per_testcase(Config, set_space_name_mapping_test) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_validate_and_unload(Nodes, space);
+    test_utils:mock_validate_and_unload(Nodes, od_space);
 end_per_testcase(_Config, _) ->
     ok.
 
@@ -280,8 +280,8 @@ end_per_testcase(_Config, _) ->
 %%%===================================================================
 
 space_save_mock(Nodes, SpaceId) ->
-    test_utils:mock_new(Nodes, space),
-    test_utils:mock_expect(Nodes, space, save, fun(Doc) ->
+    test_utils:mock_new(Nodes, od_space),
+    test_utils:mock_expect(Nodes, od_space, save, fun(Doc) ->
         meck:passthrough([Doc#document{key = SpaceId}])
     end).
 

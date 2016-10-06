@@ -58,7 +58,7 @@ is_authorized(_, _, _, #client{type = undefined}) ->
     false;
 is_authorized(share, get, ShareId, #client{type = user, id = UserId}) ->
     case share_logic:get_parent(ShareId) of
-        {error, {not_found, share}} ->
+        {error, {not_found, od_share}} ->
             false;
         {ok, ParentSpace} ->
             % Share - to view shares, it's enough to belong to parent space
@@ -70,7 +70,7 @@ is_authorized(share, get, _ShareId, #client{type = provider}) ->
     true;
 is_authorized(share, patch, ShareId, #client{type = user, id = UserId}) ->
     case share_logic:get_parent(ShareId) of
-        {error, {not_found, share}} ->
+        {error, {not_found, od_share}} ->
             false;
         {ok, ParentSpace} ->
             space_logic:has_effective_privilege(
@@ -78,7 +78,7 @@ is_authorized(share, patch, ShareId, #client{type = user, id = UserId}) ->
     end;
 is_authorized(share, delete, ShareId, #client{type = user, id = UserId}) ->
     case share_logic:get_parent(ShareId) of
-        {error, {not_found, share}} ->
+        {error, {not_found, od_share}} ->
             false;
         {ok, ParentSpace} ->
             space_logic:has_effective_privilege(

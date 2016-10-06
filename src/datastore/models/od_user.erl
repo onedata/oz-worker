@@ -18,7 +18,7 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
 -type doc() :: datastore:document().
--type info() :: #onedata_auth{}.
+-type info() :: #od_user{}.
 -type id() :: binary().
 -export_type([doc/0, info/0, id/0]).
 

@@ -17,7 +17,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
--type doc() :: #document{}.
+-type doc() :: datastore:document().
 -type info() :: #od_space{}.
 -type id() :: binary().
 -export_type([doc/0, info/0, id/0]).
