@@ -4,6 +4,19 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc8
+
+* VFS-2625 Removing share's reference to handle is now not obligatory
+* VFS-2625 Fix handles not being properly retrieved via REST
+* VFS-2625 Use unencoded shalsh character in public handle field oh handle
+* VFS-2625 Add handle services and handles to user and group subscriptions
+* VFS-2625 Set default value of service properties in handle services to empty list
+* VFS-2625 Add tests for handle_services subscriptions
+* VFS-2625 Fix handle subscription tests
+* VFS-2625 Add tests for handles and handle_services subscriptions
+* VFS-2625 Add handle_services and handles to subscriptions
+
+
 ### 3.0.0-rc7
 
 * VFS-2567 Rework space_record API in space data backend
