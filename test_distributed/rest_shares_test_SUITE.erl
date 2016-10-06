@@ -148,12 +148,12 @@ create_share_test(Config) ->
     % privilege by default in his space.
     ?assert(check_create_share(204, User, Space, <<"someShareId">>, #{
         <<"name">> => <<"whatever">>,
-        <<"rootFileId">> => <<"whatever">>
+        <<"rootFile">> => <<"whatever">>
     })),
     % Shares cannot be overwritten, so the same request should now fail
     ?assert(check_create_share(400, User, Space, <<"someShareId">>, #{
         <<"name">> => <<"whatever">>,
-        <<"rootFileId">> => <<"whatever">>
+        <<"rootFile">> => <<"whatever">>
     })),
     % Take the space_manages_shares privilege from user and try to create
     % another share, it should fail.
@@ -162,7 +162,7 @@ create_share_test(Config) ->
     ),
     ?assert(check_create_share(403, User, Space, <<"anotherShareId">>, #{
         <<"name">> => <<"whatever">>,
-        <<"rootFileId">> => <<"whatever">>
+        <<"rootFile">> => <<"whatever">>
     })),
     % User should be able to create shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
@@ -174,7 +174,7 @@ create_share_test(Config) ->
     % Now the user should be able to create a share
     ?assert(check_create_share(204, User, Space, <<"anotherShareId">>, #{
         <<"name">> => <<"whatever">>,
-        <<"rootFileId">> => <<"whatever">>
+        <<"rootFile">> => <<"whatever">>
     })),
     ok.
 
@@ -190,14 +190,14 @@ view_shares_test(Config) ->
     {Share1Id, Share1Name, Share1File} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
     ?assert(check_create_share(204, User, Space, Share1Id, #{
         <<"name">> => Share1Name,
-        <<"rootFileId">> => Share1File
+        <<"rootFile">> => Share1File
     })),
     % Retrieve it and validate the obtained data
     Share1ExpectedData = #{
         <<"shareId">> => Share1Id,
         <<"name">> => Share1Name,
-        <<"parentSpace">> => Space,
-        <<"rootFileId">> => Share1File,
+        <<"space">> => Space,
+        <<"rootFile">> => Share1File,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
         <<"publicUrl">> => get_public_share_url(Config, Share1Id)
@@ -208,18 +208,18 @@ view_shares_test(Config) ->
     {Share3Id, Share3Name, Share3File} = {<<"s3id">>, <<"s3nm">>, <<"s3rf">>},
     ?assert(check_create_share(204, User, Space, Share2Id, #{
         <<"name">> => Share2Name,
-        <<"rootFileId">> => Share2File
+        <<"rootFile">> => Share2File
     })),
     ?assert(check_create_share(204, User, Space, Share3Id, #{
         <<"name">> => Share3Name,
-        <<"rootFileId">> => Share3File
+        <<"rootFile">> => Share3File
     })),
     % Retrieve them and validate the obtained data
     Share2ExpectedData = #{
         <<"shareId">> => Share2Id,
         <<"name">> => Share2Name,
-        <<"parentSpace">> => Space,
-        <<"rootFileId">> => Share2File,
+        <<"space">> => Space,
+        <<"rootFile">> => Share2File,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
         <<"publicUrl">> => get_public_share_url(Config, Share2Id)
@@ -228,8 +228,8 @@ view_shares_test(Config) ->
     Share3ExpectedData = #{
         <<"shareId">> => Share3Id,
         <<"name">> => Share3Name,
-        <<"parentSpace">> => Space,
-        <<"rootFileId">> => Share3File,
+        <<"space">> => Space,
+        <<"rootFile">> => Share3File,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
         <<"publicUrl">> => get_public_share_url(Config, Share3Id)
@@ -270,14 +270,14 @@ modify_share_test(Config) ->
     {ShareId, ShareName, ShareFile} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
     ?assert(check_create_share(204, User, Space, ShareId, #{
         <<"name">> => ShareName,
-        <<"rootFileId">> => ShareFile
+        <<"rootFile">> => ShareFile
     })),
     % Make sure share data is correct
     ShareExpectedData = #{
         <<"shareId">> => ShareId,
         <<"name">> => ShareName,
-        <<"parentSpace">> => Space,
-        <<"rootFileId">> => ShareFile,
+        <<"space">> => Space,
+        <<"rootFile">> => ShareFile,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
         <<"publicUrl">> => get_public_share_url(Config, ShareId)
@@ -337,11 +337,11 @@ remove_share_test(Config) ->
     {Share2Id, Share2Name, Share2File} = {<<"s2id">>, <<"s2nm">>, <<"s2rf">>},
     ?assert(check_create_share(204, User, Space, Share1Id, #{
         <<"name">> => Share1Name,
-        <<"rootFileId">> => Share1File
+        <<"rootFile">> => Share1File
     })),
     ?assert(check_create_share(204, User, Space, Share2Id, #{
         <<"name">> => Share2Name,
-        <<"rootFileId">> => Share2File
+        <<"rootFile">> => Share2File
     })),
     % Try to remove a share
     ?assert(check_remove_share(202, User, Share1Id)),

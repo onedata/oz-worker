@@ -34,9 +34,9 @@ call_worker(Node, Req) ->
 %%% Datastore setup
 %%%===================================================================
 
-save(Node, ID, Value) ->
-    ?assertMatch({ok, ID}, rpc:call(Node, element(1, Value), save,
-        [#document{key = ID, value = Value}])).
+save(Node, Id, Value) ->
+    ?assertMatch({ok, Id}, rpc:call(Node, element(1, Value), save,
+        [#document{key = Id, value = Value}])).
 
 delete_all(Node, Documents) ->
     lists:foreach(fun(#document{key = Key, value = Value}) ->
@@ -47,14 +47,14 @@ list(Node, Model) ->
     {ok, Documents} = rpc:call(Node, Model, list, []),
     Documents.
 
-update_document(Node, Model, ID, Diff) ->
-    ?assertMatch({ok, _}, rpc:call(Node, Model, update, [ID, Diff])).
+update_document(Node, Model, Id, Diff) ->
+    ?assertMatch({ok, _}, rpc:call(Node, Model, update, [Id, Diff])).
 
-delete_document(Node, Model, ID) ->
-    ?assertMatch(ok, rpc:call(Node, Model, delete, [ID])).
+delete_document(Node, Model, Id) ->
+    ?assertMatch(ok, rpc:call(Node, Model, delete, [Id])).
 
-get_rev(Node, Model, ID) ->
-    Result = rpc:call(Node, Model, get, [ID]),
+get_rev(Node, Model, Id) ->
+    Result = rpc:call(Node, Model, get, [Id]),
     ?assertMatch({ok, _}, Result),
     {ok, #document{rev = Rev}} = Result,
     Rev.
@@ -65,9 +65,9 @@ create_provider(Node, Name, Spaces, URLs) ->
     {_, CSRFile, _} = generate_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
     Params = [Name, URLs, <<"https://127.0.0.1:443">>, CSR],
-    {ok, ID, _} = rpc:call(Node, provider_logic, create, Params),
-    {ok, ID} = rpc:call(Node, od_provider, update, [ID, #{spaces => Spaces}]),
-    ID.
+    {ok, Id, _} = rpc:call(Node, provider_logic, create, Params),
+    {ok, Id} = rpc:call(Node, od_provider, update, [Id, #{spaces => Spaces}]),
+    Id.
 
 generate_space_ids(Number) ->
     generate_ids("s", Number).
@@ -79,42 +79,42 @@ generate_user_ids(Number) ->
     generate_ids("u", Number).
 
 generate_ids(Prefix, Number) ->
-    [?ID(list_to_atom(Prefix ++ integer_to_list(N))) || N <- lists:seq(1, Number)].
+    [?Id(list_to_atom(Prefix ++ integer_to_list(N))) || N <- lists:seq(1, Number)].
 
-create_spaces(SIDs, UIDs, GIDs, Node) ->
-    Groups = [{GID, []} || GID <- GIDs],
-    Users = [{UID, []} || UID <- UIDs],
-    lists:map(fun({SID, N}) ->
+create_spaces(SIds, UIds, GIds, Node) ->
+    Groups = [{GId, []} || GId <- GIds],
+    Users = [{UId, []} || UId <- UIds],
+    lists:map(fun({SId, N}) ->
         Space = #od_space{
             name = list_to_binary("s" ++ integer_to_list(N) ++ integer_to_list(erlang:system_time(micro_seconds))),
             groups = Groups,
             users = Users
         },
-        subscriptions_test_utils:save(Node, SID, Space),
-        {SID, Space}
-    end, lists:zip(SIDs, lists:seq(1, length(SIDs)))).
+        subscriptions_test_utils:save(Node, SId, Space),
+        {SId, Space}
+    end, lists:zip(SIds, lists:seq(1, length(SIds)))).
 
-create_users(UIDs, GIDs, Node) ->
-    lists:map(fun({UID, N}) ->
+create_users(UIds, GIds, Node) ->
+    lists:map(fun({UId, N}) ->
         User = #od_user{
             name = list_to_binary("u" ++ integer_to_list(N)),
-            groups = GIDs
+            groups = GIds
         },
-        subscriptions_test_utils:save(Node, UID, User),
-        {UID, User}
-    end, lists:zip(UIDs, lists:seq(1, length(UIDs)))).
+        subscriptions_test_utils:save(Node, UId, User),
+        {UId, User}
+    end, lists:zip(UIds, lists:seq(1, length(UIds)))).
 
-create_groups(GIDs, UIDs, SIDs, Node) ->
-    Users = [{UID, []} || UID <- UIDs],
-    lists:map(fun({GID, N}) ->
+create_groups(GIds, UIds, SIds, Node) ->
+    Users = [{UId, []} || UId <- UIds],
+    lists:map(fun({GId, N}) ->
         Group = #od_group{
             name = list_to_binary("g" ++ integer_to_list(N)),
             users = Users,
-            spaces = SIDs
+            spaces = SIds
         },
-        subscriptions_test_utils:save(Node, GID, Group),
-        {GID, Group}
-    end, lists:zip(GIDs, lists:seq(1, length(GIDs)))).
+        subscriptions_test_utils:save(Node, GId, Group),
+        {GId, Group}
+    end, lists:zip(GIds, lists:seq(1, length(GIds)))).
 
 
 generate_cert_files() ->
@@ -139,43 +139,43 @@ get_last_sequence_number(Node) ->
 %%% Message expectations
 %%%===================================================================
 
-expectation(ID, #od_space{name = Name, providers_supports = Supports,
+expectation(Id, #od_space{name = Name, providers_supports = Supports,
     groups = Groups, users = Users, shares = Shares}) ->
-    space_expectation(ID, Name, Users, Groups, Supports, Shares);
-expectation(ID, #od_share{name = Name, space = Space,
+    space_expectation(Id, Name, Users, Groups, Supports, Shares);
+expectation(Id, #od_share{name = Name, space = Space,
     root_file = RootFileId, public_url = PublicUrl, handle = Handle}) ->
     RootFileBin = undefined_to_binary(RootFileId),
     PublicUrlBin = undefined_to_binary(PublicUrl),
     HandleBin = undefined_to_binary(Handle),
-    share_expectation(ID, Name, Space, RootFileBin, PublicUrlBin, HandleBin);
-expectation(ID, #od_user{name = Name, space_aliases = SpaceAliases,
+    share_expectation(Id, Name, Space, RootFileBin, PublicUrlBin, HandleBin);
+expectation(Id, #od_user{name = Name, space_aliases = SpaceAliases,
     default_space = DefaultSpace, eff_groups = Groups,
     handle_services = HandleServices, handles = Handles}) ->
-    user_expectation(ID, Name, maps:to_list(SpaceAliases), Groups,
+    user_expectation(Id, Name, maps:to_list(SpaceAliases), Groups,
         undefined_to_binary(DefaultSpace), HandleServices, Handles);
-expectation(ID, #od_group{name = Name, type = Type, users = Users, spaces = Spaces,
+expectation(Id, #od_group{name = Name, type = Type, users = Users, spaces = Spaces,
     eff_users = EUsers, children = Children, parents = Parents,
     handle_services = HandleServices, handles = Handles}) ->
-    group_expectation(ID, Name, Type, Users, EUsers, Spaces, Children, Parents,
+    group_expectation(Id, Name, Type, Users, EUsers, Spaces, Children, Parents,
         HandleServices, Handles);
 
-expectation(ID, #od_provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) ->
-    [{<<"id">>, ID}, {<<"od_provider">>, [
+expectation(Id, #od_provider{client_name = Name, urls = URLs, spaces = SpaceIds}) ->
+    [{<<"id">>, Id}, {<<"od_provider">>, [
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
-        {<<"spaces">>, SpaceIDs},
+        {<<"spaces">>, SpaceIds},
         {<<"public_only">>, false}
     ]}];
 
-expectation(ID, #od_handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
+expectation(Id, #od_handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
     service_properties = ServiceProperties, groups = Groups, users = Users}) ->
     NameBin = undefined_to_binary(Name),
     ProxyEndpointBin = undefined_to_binary(ProxyEndpoint),
     handle_service_expectation(
-        ID, NameBin, ProxyEndpointBin, ServiceProperties, Users, Groups
+        Id, NameBin, ProxyEndpointBin, ServiceProperties, Users, Groups
     );
 
-expectation(ID, #od_handle{handle_service = HandleServiceId, public_handle = PublicHandle,
+expectation(Id, #od_handle{handle_service = HandleServiceId, public_handle = PublicHandle,
     resource_type = ResourceType, resource_id = ResourceId,
     metadata = Metadata, groups = Groups, users = Users, timestamp = Timestamp}) ->
     HandleServiceIdBin = undefined_to_binary(HandleServiceId),
@@ -184,12 +184,12 @@ expectation(ID, #od_handle{handle_service = HandleServiceId, public_handle = Pub
     ResourceIdBin = undefined_to_binary(ResourceId),
     MetadataBin = undefined_to_binary(Metadata),
     handle_expectation(
-        ID, HandleServiceIdBin, PublicHandleBin, ResourceTypeBin,
+        Id, HandleServiceIdBin, PublicHandleBin, ResourceTypeBin,
         ResourceIdBin, MetadataBin, Users, Groups, Timestamp
     ).
 
-user_expectation(ID, Name, Spaces, Groups, DefaultSpace, HandleServices, Handles) ->
-    [{<<"id">>, ID}, {<<"od_user">>, [
+user_expectation(Id, Name, Spaces, Groups, DefaultSpace, HandleServices, Handles) ->
+    [{<<"id">>, Id}, {<<"od_user">>, [
         {<<"name">>, Name},
         {<<"default_space">>, DefaultSpace},
         {<<"space_aliases">>, Spaces},
@@ -199,8 +199,8 @@ user_expectation(ID, Name, Spaces, Groups, DefaultSpace, HandleServices, Handles
         {<<"public_only">>, false}
     ]}].
 
-public_only_user_expectation(ID, Name) ->
-    [{<<"id">>, ID}, {<<"od_user">>, [
+public_only_user_expectation(Id, Name) ->
+    [{<<"id">>, Id}, {<<"od_user">>, [
         {<<"name">>, Name},
         {<<"default_space">>, <<"undefined">>},
         {<<"space_aliases">>, []},
@@ -210,8 +210,8 @@ public_only_user_expectation(ID, Name) ->
         {<<"public_only">>, true}
     ]}].
 
-group_expectation(ID, Name, Type, Users, EUsers, Spaces, Children, Parents, HandleServices, Handles) ->
-    [{<<"id">>, ID}, {<<"od_group">>, [
+group_expectation(Id, Name, Type, Users, EUsers, Spaces, Children, Parents, HandleServices, Handles) ->
+    [{<<"id">>, Id}, {<<"od_group">>, [
         {<<"name">>, Name},
         {<<"type">>, atom_to_binary(Type, latin1)},
         {<<"children">>, privileges_as_binaries(Children)},
@@ -223,9 +223,9 @@ group_expectation(ID, Name, Type, Users, EUsers, Spaces, Children, Parents, Hand
         {<<"handles">>, Handles}
     ]}].
 
-space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
-    [{<<"id">>, ID}, {<<"od_space">>, [
-        {<<"id">>, ID},
+space_expectation(Id, Name, Users, Groups, Supports, Shares) ->
+    [{<<"id">>, Id}, {<<"od_space">>, [
+        {<<"id">>, Id},
         {<<"name">>, Name},
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"groups">>, privileges_as_binaries(Groups)},
@@ -233,9 +233,9 @@ space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
         {<<"providers_supports">>, Supports}
     ]}].
 
-share_expectation(ID, Name, Space, RootFile, PublicUrl, Handle) ->
-    [{<<"id">>, ID}, {<<"od_share">>, [
-        {<<"id">>, ID},
+share_expectation(Id, Name, Space, RootFile, PublicUrl, Handle) ->
+    [{<<"id">>, Id}, {<<"od_share">>, [
+        {<<"id">>, Id},
         {<<"name">>, Name},
         {<<"public_url">>, PublicUrl},
         {<<"space">>, Space},
@@ -243,9 +243,9 @@ share_expectation(ID, Name, Space, RootFile, PublicUrl, Handle) ->
         {<<"handle">>, Handle}
     ]}].
 
-handle_service_expectation(ID, Name, ProxyEndpoint, ServiceProperties, Users, Groups) ->
-    [{<<"id">>, ID}, {<<"od_handle_service">>, [
-        {<<"id">>, ID},
+handle_service_expectation(Id, Name, ProxyEndpoint, ServiceProperties, Users, Groups) ->
+    [{<<"id">>, Id}, {<<"od_handle_service">>, [
+        {<<"id">>, Id},
         {<<"name">>, Name},
         {<<"proxy_endpoint">>, ProxyEndpoint},
         {<<"service_properties">>, ServiceProperties},
@@ -253,10 +253,10 @@ handle_service_expectation(ID, Name, ProxyEndpoint, ServiceProperties, Users, Gr
         {<<"groups">>, privileges_as_binaries(Groups)}
     ]}].
 
-handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
+handle_expectation(Id, HandleServiceId, PublicHandle, ResourceType, ResourceId,
     Metadata, Users, Groups, Timestamp) ->
-    [{<<"id">>, ID}, {<<"od_handle">>, [
-        {<<"id">>, ID},
+    [{<<"id">>, Id}, {<<"od_handle">>, [
+        {<<"id">>, Id},
         {<<"handle_service">>, HandleServiceId},
         {<<"public_handle">>, PublicHandle},
         {<<"resource_type">>, ResourceType},
@@ -267,20 +267,20 @@ handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
         {<<"timestamp">>, serialize_timestamp(Timestamp)}
     ]}].
 
-public_only_provider_expectation(ID, Name, URLs) ->
-    [{<<"id">>, ID}, {<<"od_provider">>, [
+public_only_provider_expectation(Id, Name, URLs) ->
+    [{<<"id">>, Id}, {<<"od_provider">>, [
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
         {<<"spaces">>, []},
         {<<"public_only">>, true}
     ]}].
 
-privileges_as_binaries(IDsWithPrivileges) ->
-    lists:map(fun({ID, Privileges}) ->
-        {ID, lists:map(fun(Privilege) ->
+privileges_as_binaries(IdsWithPrivileges) ->
+    lists:map(fun({Id, Privileges}) ->
+        {Id, lists:map(fun(Privilege) ->
             atom_to_binary(Privilege, latin1)
         end, Privileges)}
-    end, IDsWithPrivileges).
+    end, IdsWithPrivileges).
 
 expectation_with_rev(Revs, Expectation) ->
     [{<<"revs">>, Revs} | Expectation].
@@ -299,15 +299,15 @@ verify_messages_present(Context, Expected, AttemptsLimit) ->
 verify_messages_absent(Context, Forbidden) ->
     verify_messages(Context, ?MESSAGES_RECEIVE_ATTEMPTS, [], Forbidden).
 
-init_messages(Node, ProviderID, Users) ->
-    call_worker(Node, {add_connection, ProviderID, self()}),
+init_messages(Node, ProviderId, Users) ->
+    call_worker(Node, {add_connection, ProviderId, self()}),
 
     Start = case rpc:call(Node, changes_cache, newest_seq, []) of
         {ok, Val} -> Val; _ -> 0
     end,
 
 
-    #subs_ctx{node = Node, provider = ProviderID,
+    #subs_ctx{node = Node, provider = ProviderId,
         users = Users, resume_at = Start, missing = []}.
 
 flush_messages(Context, LastExpected) ->
@@ -330,14 +330,14 @@ verify_messages(Context, 0, Expected, _) ->
     ?assertMatch(Expected, []),
     Context;
 verify_messages(Context, Retries, Expected, Forbidden) ->
-    #subs_ctx{node = Node, provider = ProviderID,
+    #subs_ctx{node = Node, provider = ProviderId,
         users = Users, resume_at = ResumeAt, missing = Missing} = Context,
 
-    call_worker(Node, {update_users, ProviderID, Users}),
-    call_worker(Node, {update_missing_seq, ProviderID, ResumeAt, Missing}),
+    call_worker(Node, {update_users, ProviderId, Users}),
+    call_worker(Node, {update_missing_seq, ProviderId, ResumeAt, Missing}),
     All = lists:append(get_messages()),
 
-%%    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
+    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIdDEN: ~p~n", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),
     NextResumeAt = largest([ResumeAt | Seqs]),
@@ -379,9 +379,9 @@ remove_matched_expectations(Expected, Messages) ->
 
 
 id(Id) when is_atom(Id) ->
-    ?ID(Id);
+    ?Id(Id);
 id(Id) ->
-    ?ID(list_to_atom(Id)).
+    ?Id(list_to_atom(Id)).
 
 empty_cache(Node) ->
     subscriptions_test_utils:update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{

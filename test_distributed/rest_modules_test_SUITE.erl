@@ -135,7 +135,7 @@
 
 -define(HANDLE(ServiceId, ResourceId),
     #{
-        <<"handleServiceId">> => ServiceId,
+        <<"handleService">> => ServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => ?DC_METADATA
@@ -1443,7 +1443,7 @@ get_service_test(Config) ->
 
     Result = get_handle_service(Id, UserReqParams),
 
-    ?assertEqual(?DOI_SERVICE#{<<"handleServiceId">> => Id}, Result).
+    ?assertEqual(?DOI_SERVICE#{<<"handleService">> => Id}, Result).
 
 modify_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1643,7 +1643,7 @@ get_handle_test(Config) ->
     ?assertMatch(#{
         <<"handle">> := <<_/binary>>,
         <<"handleId">> := HId,
-        <<"handleServiceId">> := Id,
+        <<"handleService">> := Id,
         <<"resourceId">> := ?SHARE_ID_1,
         <<"metadata">> := ?DC_METADATA
     }, Result).
@@ -1663,7 +1663,7 @@ modify_handle_test(Config) ->
     ?assertMatch(#{
         <<"handle">> := <<"10.5072/", _/binary>>,
         <<"handleId">> := HId,
-        <<"handleServiceId">> := Id,
+        <<"handleService">> := Id,
         <<"resourceId">> := ?SHARE_ID_2,
         <<"resourceType">> := <<"Share">>,
         <<"metadata">> := ?DC_METADATA},
