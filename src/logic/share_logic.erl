@@ -17,7 +17,7 @@
 
 %% API
 -export([create/4, exists/1, modify/2, remove/1]).
--export([get_data/2, get_parent/1]).
+-export([get_data/2, get_space/1]).
 -export([list/0]).
 -export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
 
@@ -108,15 +108,15 @@ get_data(ShareId, _Client) ->
         value = #od_share{
             name = Name,
             public_url = PublicURL,
-            root_file = RootFileId,
-            space = ParentSpace
+            root_file = RootFile,
+            space = Space
         }}} = od_share:get(ShareId),
     {ok, [
         {shareId, ShareId},
         {name, Name},
         {publicUrl, PublicURL},
-        {rootFileId, RootFileId},
-        {parentSpace, ParentSpace}
+        {rootFile, RootFile},
+        {space, Space}
     ]}.
 
 
@@ -125,9 +125,9 @@ get_data(ShareId, _Client) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec get_parent(ShareId :: binary()) ->
+-spec get_space(ShareId :: binary()) ->
     {ok, undefined | binary()} | datastore:get_error().
-get_parent(ShareId) ->
+get_space(ShareId) ->
     case od_share:get(ShareId) of
         {ok, #document{value = #od_share{space = ParentSpaceId}}} ->
             {ok, ParentSpaceId};

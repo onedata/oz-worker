@@ -253,13 +253,13 @@ add_group(HandleId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec get_data(HandleId :: od_handle:id()) -> {ok, [proplists:property()]}.
 get_data(HandleId) ->
-    {ok, #document{value = #od_handle{handle_service = HandleServiceId, public_handle = Handle,
+    {ok, #document{value = #od_handle{handle_service = HandleService, public_handle = Handle,
         resource_type = ResourceType, resource_id = ResourceId, metadata = Metadata,
         timestamp = Timestamp}}} =
         od_handle:get(HandleId),
     {ok, [
         {handleId, HandleId},
-        {handleServiceId, HandleServiceId},
+        {handleService, HandleService},
         {handle, Handle},
         {resourceType, ResourceType},
         {resourceId, ResourceId},

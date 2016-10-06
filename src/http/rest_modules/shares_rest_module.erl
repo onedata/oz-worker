@@ -57,7 +57,7 @@ routes() ->
 is_authorized(_, _, _, #client{type = undefined}) ->
     false;
 is_authorized(share, get, ShareId, #client{type = user, id = UserId}) ->
-    case share_logic:get_parent(ShareId) of
+    case share_logic:get_space(ShareId) of
         {error, {not_found, od_share}} ->
             false;
         {ok, ParentSpace} ->
@@ -69,7 +69,7 @@ is_authorized(share, get, _ShareId, #client{type = provider}) ->
     % and all of them should be able to display the shared data.
     true;
 is_authorized(share, patch, ShareId, #client{type = user, id = UserId}) ->
-    case share_logic:get_parent(ShareId) of
+    case share_logic:get_space(ShareId) of
         {error, {not_found, od_share}} ->
             false;
         {ok, ParentSpace} ->
@@ -77,7 +77,7 @@ is_authorized(share, patch, ShareId, #client{type = user, id = UserId}) ->
                 ParentSpace, UserId, space_manage_shares)
     end;
 is_authorized(share, delete, ShareId, #client{type = user, id = UserId}) ->
-    case share_logic:get_parent(ShareId) of
+    case share_logic:get_space(ShareId) of
         {error, {not_found, od_share}} ->
             false;
         {ok, ParentSpace} ->

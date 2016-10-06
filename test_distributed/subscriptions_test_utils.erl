@@ -142,8 +142,8 @@ get_last_sequence_number(Node) ->
 expectation(ID, #od_space{name = Name, providers_supports = Supports,
     groups = Groups, users = Users, shares = Shares}) ->
     space_expectation(ID, Name, Users, Groups, Supports, Shares);
-expectation(ID, #od_share{name = Name, parent_space = ParentSpace,
-    root_file_id = RootFileId, public_url = PublicUrl, handle = Handle}) ->
+expectation(ID, #od_share{name = Name, space = ParentSpace,
+    root_file = RootFileId, public_url = PublicUrl, handle = Handle}) ->
     RootFileIdBin = undefined_to_binary(RootFileId),
     PublicUrlBin = undefined_to_binary(PublicUrl),
     HandleBin = undefined_to_binary(Handle),
