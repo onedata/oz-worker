@@ -105,8 +105,8 @@
     space_aliases = #{} :: #{od_space:id() => binary()},
 
     % Direct relations to other entities
-    spaces = [] :: [od_space:id()],
     groups = [] :: [od_group:id()],
+    spaces = [] :: [od_space:id()],
     handle_services = [] :: [od_handle_service:id()],
     handles = [] :: [od_handle:id()],
 

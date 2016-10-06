@@ -148,15 +148,15 @@ expectation(ID, #od_share{name = Name, parent_space = ParentSpace,
     PublicUrlBin = undefined_to_binary(PublicUrl),
     HandleBin = undefined_to_binary(Handle),
     share_expectation(ID, Name, ParentSpace, RootFileIdBin, PublicUrlBin, HandleBin);
-expectation(ID, #od_user{name = Name, groups = Groups, space_aliases = SpaceAliases,
-    default_space = DefaultSpace, eff_groups = EGroups,
+expectation(ID, #od_user{name = Name, space_aliases = SpaceAliases,
+    default_space = DefaultSpace, eff_groups = Groups,
     handle_services = HandleServices, handles = Handles}) ->
-    user_expectation(ID, Name, maps:to_list(SpaceAliases), Groups, EGroups,
+    user_expectation(ID, Name, maps:to_list(SpaceAliases), Groups,
         undefined_to_binary(DefaultSpace), HandleServices, Handles);
 expectation(ID, #od_group{name = Name, type = Type, users = Users, spaces = Spaces,
-    eff_users = EUsers, children = NGroups, parents = PGroups,
+    eff_users = EUsers, children = Children, parents = Parents,
     handle_services = HandleServices, handles = Handles}) ->
-    group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups,
+    group_expectation(ID, Name, Type, Users, EUsers, Spaces, Children, Parents,
         HandleServices, Handles);
 
 expectation(ID, #od_provider{client_name = Name, urls = URLs, spaces = SpaceIDs}) ->
@@ -187,6 +187,30 @@ expectation(ID, #od_handle{handle_service_id = HandleServiceId, public_handle = 
         ID, HandleServiceIdBin, PublicHandleBin, ResourceTypeBin,
         ResourceIdBin, MetadataBin, Users, Groups, Timestamp
     ).
+
+user_expectation(ID, Name, Spaces, Groups, DefaultSpace, HandleServices, Handles) ->
+    [{<<"id">>, ID}, {<<"od_user">>, [
+        {<<"name">>, Name},
+        {<<"default_space">>, DefaultSpace},
+        {<<"space_aliases">>, Spaces},
+        {<<"groups">>, Groups},
+        {<<"handle_services">>, HandleServices},
+        {<<"handles">>, Handles},
+        {<<"public_only">>, false}
+    ]}].
+
+group_expectation(ID, Name, Type, Users, EUsers, Spaces, Children, Parents, HandleServices, Handles) ->
+    [{<<"id">>, ID}, {<<"od_group">>, [
+        {<<"name">>, Name},
+        {<<"type">>, atom_to_binary(Type, latin1)},
+        {<<"spaces">>, Spaces},
+        {<<"users">>, privileges_as_binaries(Users)},
+        {<<"eff_users">>, privileges_as_binaries(EUsers)},
+        {<<"children">>, privileges_as_binaries(Children)},
+        {<<"parents">>, Parents},
+        {<<"handle_services">>, HandleServices},
+        {<<"handles">>, Handles}
+    ]}].
 
 space_expectation(ID, Name, Users, Groups, Supports, Shares) ->
     [{<<"id">>, ID}, {<<"od_space">>, [
@@ -232,18 +256,6 @@ handle_expectation(ID, HandleServiceId, PublicHandle, ResourceType, ResourceId,
         {<<"timestamp">>, serialize_timestamp(Timestamp)}
     ]}].
 
-user_expectation(ID, Name, Spaces, Groups, EGroups, DefaultSpace, HandleServices, Handles) ->
-    [{<<"id">>, ID}, {<<"od_user">>, [
-        {<<"name">>, Name},
-        {<<"space_aliases">>, Spaces},
-        {<<"group_ids">>, Groups},
-        {<<"effective_group_ids">>, EGroups},
-        {<<"default_space">>, DefaultSpace},
-        {<<"handle_services">>, HandleServices},
-        {<<"handles">>, Handles},
-        {<<"public_only">>, false}
-    ]}].
-
 public_only_provider_expectation(ID, Name, URLs) ->
     [{<<"id">>, ID}, {<<"od_provider">>, [
         {<<"client_name">>, Name},
@@ -262,19 +274,6 @@ public_only_user_expectation(ID, Name) ->
         {<<"handle_services">>, []},
         {<<"handles">>, []},
         {<<"public_only">>, true}
-    ]}].
-
-group_expectation(ID, Name, Type, Users, EUsers, Spaces, NGroups, PGroups, HandleServices, Handles) ->
-    [{<<"id">>, ID}, {<<"od_group">>, [
-        {<<"name">>, Name},
-        {<<"type">>, atom_to_binary(Type, latin1)},
-        {<<"spaces">>, Spaces},
-        {<<"users">>, privileges_as_binaries(Users)},
-        {<<"effective_users">>, privileges_as_binaries(EUsers)},
-        {<<"nested_groups">>, privileges_as_binaries(NGroups)},
-        {<<"parent_groups">>, PGroups},
-        {<<"handle_services">>, HandleServices},
-        {<<"handles">>, Handles}
     ]}].
 
 privileges_as_binaries(IDsWithPrivileges) ->
