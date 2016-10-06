@@ -3013,8 +3013,8 @@ fetch_value_from_list(Val) ->
 
 mock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, share),
-    ok = test_utils:mock_expect(Nodes, share, get,
+    ok = test_utils:mock_new(Nodes, od_share),
+    ok = test_utils:mock_expect(Nodes, od_share, get,
         fun
             (?SHARE_ID_1) ->
                 {ok, #document{value = #od_share{public_url = ?SHARE_1_PUBLIC_URL}}};
@@ -3024,7 +3024,7 @@ mock_handle_proxy(Config) ->
                 meck:passthrough()
         end),
 
-    ok = test_utils:mock_expect(Nodes, share, update,
+    ok = test_utils:mock_expect(Nodes, od_share, update,
         fun
             (?SHARE_ID_1, _UpdateFun) ->
                 {ok, whatever};
@@ -3050,5 +3050,5 @@ mock_handle_proxy(Config) ->
 
 unmock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, share),
+    test_utils:mock_unload(Nodes, od_share),
     test_utils:mock_unload(Nodes, handle_proxy_client).

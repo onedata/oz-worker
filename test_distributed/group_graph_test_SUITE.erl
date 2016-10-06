@@ -121,50 +121,50 @@ concurrent_updates_test(Config) ->
     save(Node, #document{key = N, value = #od_group{parents = [], children = [], users = []}}),
 
     FirstLinkOps = [
-        {od_group, A, #{parent_groups => [], nested_groups => [{B, User}], users => []}},
-        {od_group, B, #{parent_groups => [A], nested_groups => [], users => []}},
-        {od_group, C, #{parent_groups => [], nested_groups => [{D, User}], users => []}},
-        {od_group, D, #{parent_groups => [C], nested_groups => [], users => []}},
-        {od_group, E, #{parent_groups => [], nested_groups => [{F, User}], users => []}},
-        {od_group, F, #{parent_groups => [E], nested_groups => [], users => []}},
-        {od_group, G, #{parent_groups => [], nested_groups => [{H, User}], users => []}},
-        {od_group, H, #{parent_groups => [G], nested_groups => [], users => []}},
-        {od_group, I, #{parent_groups => [], nested_groups => [{J, User}], users => []}},
-        {od_group, J, #{parent_groups => [I], nested_groups => [], users => []}},
-        {od_group, K, #{parent_groups => [], nested_groups => [{L, User}], users => []}},
-        {od_group, L, #{parent_groups => [K], nested_groups => [], users => []}},
-        {od_group, M, #{parent_groups => [], nested_groups => [{N, User}], users => []}},
-        {od_group, N, #{parent_groups => [M], nested_groups => [], users => []}}
+        {od_group, A, #{parents => [], children => [{B, User}], users => []}},
+        {od_group, B, #{parents => [A], children => [], users => []}},
+        {od_group, C, #{parents => [], children => [{D, User}], users => []}},
+        {od_group, D, #{parents => [C], children => [], users => []}},
+        {od_group, E, #{parents => [], children => [{F, User}], users => []}},
+        {od_group, F, #{parents => [E], children => [], users => []}},
+        {od_group, G, #{parents => [], children => [{H, User}], users => []}},
+        {od_group, H, #{parents => [G], children => [], users => []}},
+        {od_group, I, #{parents => [], children => [{J, User}], users => []}},
+        {od_group, J, #{parents => [I], children => [], users => []}},
+        {od_group, K, #{parents => [], children => [{L, User}], users => []}},
+        {od_group, L, #{parents => [K], children => [], users => []}},
+        {od_group, M, #{parents => [], children => [{N, User}], users => []}},
+        {od_group, N, #{parents => [M], children => [], users => []}}
     ],
     SecondLinkOps = [
-        {od_group, A, #{parent_groups => [], nested_groups => [{B, User}], users => []}},
-        {od_group, B, #{parent_groups => [A], nested_groups => [{C, User}], users => []}},
-        {od_group, C, #{parent_groups => [B], nested_groups => [{D, User}], users => []}},
-        {od_group, D, #{parent_groups => [C], nested_groups => [{E, User}], users => []}},
-        {od_group, E, #{parent_groups => [D], nested_groups => [{F, User}], users => []}},
-        {od_group, F, #{parent_groups => [E], nested_groups => [{G, User}], users => []}},
-        {od_group, G, #{parent_groups => [F], nested_groups => [{H, User}], users => []}},
-        {od_group, H, #{parent_groups => [G], nested_groups => [{I, User}], users => []}},
-        {od_group, I, #{parent_groups => [H], nested_groups => [{J, User}], users => []}},
-        {od_group, J, #{parent_groups => [I], nested_groups => [{K, User}], users => []}},
-        {od_group, K, #{parent_groups => [J], nested_groups => [{L, User}], users => []}},
-        {od_group, L, #{parent_groups => [K], nested_groups => [{M, User}], users => []}},
-        {od_group, M, #{parent_groups => [L], nested_groups => [{N, User}], users => []}},
-        {od_group, N, #{parent_groups => [M], nested_groups => [], users => []}}
+        {od_group, A, #{parents => [], children => [{B, User}], users => []}},
+        {od_group, B, #{parents => [A], children => [{C, User}], users => []}},
+        {od_group, C, #{parents => [B], children => [{D, User}], users => []}},
+        {od_group, D, #{parents => [C], children => [{E, User}], users => []}},
+        {od_group, E, #{parents => [D], children => [{F, User}], users => []}},
+        {od_group, F, #{parents => [E], children => [{G, User}], users => []}},
+        {od_group, G, #{parents => [F], children => [{H, User}], users => []}},
+        {od_group, H, #{parents => [G], children => [{I, User}], users => []}},
+        {od_group, I, #{parents => [H], children => [{J, User}], users => []}},
+        {od_group, J, #{parents => [I], children => [{K, User}], users => []}},
+        {od_group, K, #{parents => [J], children => [{L, User}], users => []}},
+        {od_group, L, #{parents => [K], children => [{M, User}], users => []}},
+        {od_group, M, #{parents => [L], children => [{N, User}], users => []}},
+        {od_group, N, #{parents => [M], children => [], users => []}}
     ],
     FirstBreakOps = [
-        {od_group, E, #{parent_groups => [D], nested_groups => [], users => []}},
-        {od_group, F, #{parent_groups => [], nested_groups => [{G, User}], users => []}},
+        {od_group, E, #{parents => [D], children => [], users => []}},
+        {od_group, F, #{parents => [], children => [{G, User}], users => []}},
 
-        {od_group, K, #{parent_groups => [J], nested_groups => [], users => []}},
-        {od_group, L, #{parent_groups => [], nested_groups => [{M, User}], users => []}}
+        {od_group, K, #{parents => [J], children => [], users => []}},
+        {od_group, L, #{parents => [], children => [{M, User}], users => []}}
     ],
     SecondBreakOps = [
-        {od_group, B, #{parent_groups => [A], nested_groups => [], users => []}},
-        {od_group, C, #{parent_groups => [], nested_groups => [{D, User}], users => []}},
+        {od_group, B, #{parents => [A], children => [], users => []}},
+        {od_group, C, #{parents => [], children => [{D, User}], users => []}},
 
-        {od_group, G, #{parent_groups => [F], nested_groups => [], users => []}},
-        {od_group, H, #{parent_groups => [], nested_groups => [{I, User}], users => []}}
+        {od_group, G, #{parents => [F], children => [], users => []}},
+        {od_group, H, #{parents => [], children => [{I, User}], users => []}}
     ],
 
     UIDsWithManagerPrivileges = lists:map(fun(UID) -> {UID, Manager} end, UIDs),
@@ -376,7 +376,7 @@ grand_scenario_test(Config) ->
     U2G2 = {<<"U2">>, [P1, P2]},
     G2 = #od_group{users = [U1G2, U2G2], children = [], parents = [ID1]},
     save(Node, ID2, G2),
-    update(Node, od_group, ID1, #{nested_groups => [{ID2, [P2, P3, P4, P6]}]}),
+    update(Node, od_group, ID1, #{children => [{ID2, [P2, P3, P4, P6]}]}),
     save(Node, #document{key = <<"U1">>, value = #od_user{groups = [ID1, ID2]}}),
     save(Node, #document{key = <<"U2">>, value = #od_user{groups = [ID1]}}),
 
@@ -400,7 +400,7 @@ grand_scenario_test(Config) ->
     U3G3 = {<<"U3">>, [P1, P2, P5, P6]},
     G3 = #od_group{users = [U2G3, U3G3], children = [], parents = [ID2]},
     save(Node, ID3, G3),
-    update(Node, od_group, ID2, #{nested_groups => [{ID3, [P3, P4, P5, P6]}]}),
+    update(Node, od_group, ID2, #{children => [{ID3, [P3, P4, P5, P6]}]}),
     save(Node, #document{key = <<"U2">>, value = #od_user{groups = [ID1, ID3]}}),
     save(Node, #document{key = <<"U3">>, value = #od_user{groups = [ID3]}}),
 
@@ -429,7 +429,7 @@ grand_scenario_test(Config) ->
     G4 = #od_group{users = [U1G4, U4G4], children = [
         {ID1, [P1, P2, P9]}], parents = []},
     save(Node, ID4, G4),
-    update(Node, od_group, ID1, #{parent_groups => [ID4]}),
+    update(Node, od_group, ID1, #{parents => [ID4]}),
     save(Node, #document{key = <<"U4">>, value = #od_user{groups = [ID4]}}),
 
     %% when
@@ -462,7 +462,7 @@ grand_scenario_test(Config) ->
     G5 = #od_group{users = [U2G5, U4G5], children = [],
         parents = [ID4]},
     save(Node, ID5, G5),
-    update(Node, od_group, ID4, #{nested_groups => [
+    update(Node, od_group, ID4, #{children => [
         {ID1, [P1, P2, P9]}, {ID5, [P2, P3, P4, P5, P6]}]}),
 
     %% when
@@ -492,8 +492,8 @@ grand_scenario_test(Config) ->
 
     %% Part F - sibling-grandchild link
     %% given
-    update(Node, od_group, ID5, #{nested_groups => [{ID3, [P1, P5, P6]}]}),
-    update(Node, od_group, ID3, #{parent_groups => [ID2, ID5]}),
+    update(Node, od_group, ID5, #{children => [{ID3, [P1, P5, P6]}]}),
+    update(Node, od_group, ID3, #{parents => [ID2, ID5]}),
 
     %% when
     mark_group_changed(Node, ID3),
@@ -579,9 +579,9 @@ grand_scenario_test(Config) ->
 
     %% Part H - components linked
     %% given
-    update(Node, od_group, ID1, #{nested_groups => [
+    update(Node, od_group, ID1, #{children => [
         {ID2, [P2, P3, P4, P6]}, {ID7, [P7, P8, P9]}]}),
-    update(Node, od_group, ID7, #{parent_groups => [ID6, ID1]}),
+    update(Node, od_group, ID7, #{parents => [ID6, ID1]}),
 
     %% when
     mark_group_changed(Node, ID7),
@@ -623,8 +623,8 @@ grand_scenario_test(Config) ->
 
     %% Part I - new components as links lost
     %% given
-    update(Node, od_group, ID1, #{nested_groups => [{ID2, [P2, P3, P4, P6]}]}),
-    update(Node, od_group, ID7, #{parent_groups => [ID6]}),
+    update(Node, od_group, ID1, #{children => [{ID2, [P2, P3, P4, P6]}]}),
+    update(Node, od_group, ID7, #{parents => [ID6]}),
 
     %% when
     mark_group_changed(Node, ID7),

@@ -1202,10 +1202,10 @@ modify_handles_with_mocked_timestamp(Config, Identifiers, BeginTime, TimeOffsets
 modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
 
     Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, handle, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, handle, actual_timestamp, fun() -> Timestamp end),
+    ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, od_handle, actual_timestamp, fun() -> Timestamp end),
     ok = modify_handle(Config, HId, Metadata),
-    ok = test_utils:mock_validate_and_unload(Nodes, handle).
+    ok = test_utils:mock_validate_and_unload(Nodes, od_handle).
 
 setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
@@ -1232,10 +1232,10 @@ create_handle_service(Config, User) ->
 
 create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, Metadata, Timestamp) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, handle, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, handle, actual_timestamp, fun() -> Timestamp end),
+    ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, od_handle, actual_timestamp, fun() -> Timestamp end),
     HId = create_handle(Config, User, HandleServiceId, ResourceId, Metadata),
-    ok = test_utils:mock_validate_and_unload(Nodes, handle),
+    ok = test_utils:mock_validate_and_unload(Nodes, od_handle),
     HId.
 
 create_handle(Config, User, HandleServiceId, ResourceId, Metadata) ->
