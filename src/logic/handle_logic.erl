@@ -259,7 +259,7 @@ get_data(HandleId) ->
         od_handle:get(HandleId),
     {ok, [
         {handleId, HandleId},
-        {handleService, HandleService},
+        {handleServiceId, HandleService},
         {handle, Handle},
         {resourceType, ResourceType},
         {resourceId, ResourceId},

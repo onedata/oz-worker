@@ -188,7 +188,7 @@ accept_resource(share, put, SpaceId, Data, _Client, Req) ->
             ok
     end,
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
-    RootFileId = rest_module_helper:assert_key(<<"rootFile">>, Data, binary, Req),
+    RootFileId = rest_module_helper:assert_key(<<"rootFileId">>, Data, binary, Req),
     {ok, ShareId} = share_logic:create(ShareId, Name, RootFileId, SpaceId),
     {true, Req};
 accept_resource(spaces, post, _SpaceId, Data, #client{type = provider, id = ProviderId}, Req) ->

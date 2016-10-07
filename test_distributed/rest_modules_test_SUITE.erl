@@ -135,7 +135,7 @@
 
 -define(HANDLE(ServiceId, ResourceId),
     #{
-        <<"handleService">> => ServiceId,
+        <<"handleServiceId">> => ServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => ?DC_METADATA
@@ -1443,7 +1443,7 @@ get_service_test(Config) ->
 
     Result = get_handle_service(Id, UserReqParams),
 
-    ?assertEqual(?DOI_SERVICE#{<<"handleService">> => Id}, Result).
+    ?assertEqual(?DOI_SERVICE#{<<"handleServiceId">> => Id}, Result).
 
 modify_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
