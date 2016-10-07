@@ -1643,7 +1643,7 @@ get_handle_test(Config) ->
     ?assertMatch(#{
         <<"handle">> := <<_/binary>>,
         <<"handleId">> := HId,
-        <<"handleService">> := Id,
+        <<"handleServiceId">> := Id,
         <<"resourceId">> := ?SHARE_ID_1,
         <<"metadata">> := ?DC_METADATA
     }, Result).
@@ -1663,7 +1663,7 @@ modify_handle_test(Config) ->
     ?assertMatch(#{
         <<"handle">> := <<"10.5072/", _/binary>>,
         <<"handleId">> := HId,
-        <<"handleService">> := Id,
+        <<"handleServiceId">> := Id,
         <<"resourceId">> := ?SHARE_ID_2,
         <<"resourceType">> := <<"Share">>,
         <<"metadata">> := ?DC_METADATA},
