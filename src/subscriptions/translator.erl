@@ -121,10 +121,10 @@ get_msg(Seq, Doc, od_group = Model) ->
         {type, Type},
 
         % Group graph related entities (direct and effective)
-        {children, Children},
         {parents, Parents},
-        {eff_parents, []}, % TODO currently always empty
+        {children, Children},
         {eff_children, []}, % TODO currently always empty
+        {eff_parents, []}, % TODO currently always empty
 
         % Direct relations to other entities
         {users, Users},
