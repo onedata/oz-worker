@@ -50,6 +50,7 @@
 % and bottom-up to obtain effective members for every entity. The records
 % contain the fields top_down_dirty and bottom_up_dirty that mark records
 % that have not yet been calculated in given direction.
+%
 % The below ASCII visual shows possible relations in entities graph.
 %
 %  provider    share
@@ -112,11 +113,11 @@
 
     % Effective relations to other entities
     eff_groups = [] :: [od_group:id()],
-    eff_spaces = [] :: [od_space:id()],
-    eff_shares = [] :: [od_share:id()],
-    eff_providers = [] :: [od_provider:id()],
-    eff_handle_services = [] :: [od_handle_service:id()],
-    eff_handles = [] :: [od_handle:id()],
+    eff_spaces = [] :: [od_space:id()], % TODO currently always empty
+    eff_shares = [] :: [od_share:id()], % TODO currently always empty
+    eff_providers = [] :: [od_provider:id()], % TODO currently always empty
+    eff_handle_services = [] :: [od_handle_service:id()], % TODO currently always empty
+    eff_handles = [] :: [od_handle:id()], % TODO currently always empty
 
     % Marks that the record's effective relations are not up to date.
     top_down_dirty = true :: boolean()
@@ -132,7 +133,7 @@
     % Group graph related entities (direct and effective)
     parents = [] :: [od_group:id()],
     children = [] :: [{od_group:id(), [privileges:group_privilege()]}],
-    eff_parents = [] :: [od_group:id()],
+    eff_parents = [] :: [od_group:id()], % TODO currently always empty
     eff_children = [] :: [od_group:id()],
     % TODO  when entities graph is reworked, this field should hold pairs
     % TODO  of {GroupId, Privileges}
@@ -146,11 +147,11 @@
 
     % Effective relations to other entities
     eff_users = [] :: [{od_user:id(), [privileges:group_privilege()]}],
-    eff_spaces = [] :: [od_space:id()],
-    eff_shares = [] :: [od_share:id()],
-    eff_providers = [] :: [od_provider:id()],
-    eff_handle_services = [] :: [od_handle_service:id()],
-    eff_handles = [] :: [od_handle:id()],
+    eff_spaces = [] :: [od_space:id()], % TODO currently always empty
+    eff_shares = [] :: [od_share:id()], % TODO currently always empty
+    eff_providers = [] :: [od_provider:id()], % TODO currently always empty
+    eff_handle_services = [] :: [od_handle_service:id()], % TODO currently always empty
+    eff_handles = [] :: [od_handle:id()], % TODO currently always empty
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -171,8 +172,8 @@
     shares = [] :: [od_share:id()],
 
     % Effective relations to other entities
-    eff_users = [] :: [{od_user:id(), [privileges:space_privilege()]}],
-    eff_groups = [] :: [{od_group:id(), [privileges:space_privilege()]}],
+    eff_users = [] :: [{od_user:id(), [privileges:space_privilege()]}], % TODO currently always empty
+    eff_groups = [] :: [{od_group:id(), [privileges:space_privilege()]}], % TODO currently always empty
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -192,8 +193,8 @@
     root_file = undefined :: undefined | binary(),
 
     % Effective relations to other entities
-    eff_users = [] :: [od_user:id()],
-    eff_groups = [] :: [od_group:id()],
+    eff_users = [] :: [od_user:id()], % TODO currently always empty
+    eff_groups = [] :: [od_group:id()], % TODO currently always empty
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -213,8 +214,8 @@
     spaces = [] :: [od_space:id()],
 
     % Effective relations to other entities
-    eff_users = [] :: [od_user:id()],
-    eff_groups = [] :: [od_group:id()],
+    eff_users = [] :: [od_user:id()], % TODO currently always empty
+    eff_groups = [] :: [od_group:id()], % TODO currently always empty
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -231,8 +232,8 @@
     groups = [] :: [{od_group:id(), [privileges:handle_service_privilege()]}],
 
     % Effective relations to other entities
-    eff_users = [] :: [{od_user:id(), [privileges:handle_service_privilege()]}],
-    eff_groups = [] :: [{od_group:id(), [privileges:handle_service_privilege()]}],
+    eff_users = [] :: [{od_user:id(), [privileges:handle_service_privilege()]}], % TODO currently always empty
+    eff_groups = [] :: [{od_group:id(), [privileges:handle_service_privilege()]}], % TODO currently always empty
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -252,8 +253,8 @@
     groups = [] :: [{od_group:id(), [privileges:handle_privilege()]}],
 
     % Effective relations to other entities
-    eff_users = [] :: [{od_user:id(), [privileges:handle_privilege()]}],
-    eff_groups = [] :: [{od_group:id(), [privileges:handle_privilege()]}],
+    eff_users = [] :: [{od_user:id(), [privileges:handle_privilege()]}], % TODO currently always empty
+    eff_groups = [] :: [{od_group:id(), [privileges:handle_privilege()]}], % TODO currently always empty
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()

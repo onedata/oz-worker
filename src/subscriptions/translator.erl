@@ -69,17 +69,35 @@ get_msg(Seq, Doc, od_user = Model) ->
         name = Name,
         default_space = DefaultSpace,
         space_aliases = SpaceAliases,
-        eff_groups = Groups,
+
+        groups = Groups,
         handle_services = HandleServices,
-        handles = Handles
+        handles = Handles,
+
+        eff_groups = EffGroups
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {name, Name},
+        {alias, <<"">>}, % TODO currently always empty
+        {email_list, []}, % TODO currently always empty
+        {connected_accounts, []}, % TODO currently always empty
         {default_space, DefaultSpace},
         {space_aliases, maps:to_list(SpaceAliases)},
+
+        % Direct relations to other entities
         {groups, Groups},
+        {spaces, []}, % TODO currently always empty
         {handle_services, HandleServices},
         {handles, Handles},
+
+        % Effective relations to other entities
+        {eff_groups, EffGroups},
+        {eff_spaces, []}, % TODO currently always empty
+        {eff_shares, []}, % TODO currently always empty
+        {eff_providers, []}, % TODO currently always empty
+        {eff_handle_services, []}, % TODO currently always empty
+        {eff_handles, []}, % TODO currently always empty
+
         {public_only, false}
     ]}];
 get_msg(Seq, Doc, od_group = Model) ->
@@ -87,58 +105,88 @@ get_msg(Seq, Doc, od_group = Model) ->
     #od_group{
         name = Name,
         type = Type,
-        children = NGroups,
-        parents = PGroups,
+
+        children = Children,
+        parents = Parents,
+
         users = Users,
-        eff_users = EUsers,
         spaces = Spaces,
         handle_services = HandleServices,
-        handles = Handles
+        handles = Handles,
+
+        eff_users = EUsers
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {name, Name},
         {type, Type},
-        {children, NGroups},
-        {parents, PGroups},
+
+        % Group graph related entities (direct and effective)
+        {children, Children},
+        {parents, Parents},
+        {eff_parents, []}, % TODO currently always empty
+        {eff_children, []}, % TODO currently always empty
+
+        % Direct relations to other entities
         {users, Users},
-        {eff_users, EUsers},
         {spaces, Spaces},
         {handle_services, HandleServices},
-        {handles, Handles}
+        {handles, Handles},
+
+        % Effective relations to other entities
+        {eff_users, EUsers},
+        {eff_spaces, []}, % TODO currently always empty
+        {eff_shares, []}, % TODO currently always empty
+        {eff_providers, []}, % TODO currently always empty
+        {eff_handle_services, []}, % TODO currently always empty
+        {eff_handles, []} % TODO currently always empty
     ]}];
 get_msg(Seq, Doc, od_space = Model) ->
     #document{value = Value, key = Id} = Doc,
     #od_space{
         name = Name,
+
+        providers_supports = Supports,
         users = Users,
         groups = Groups,
-        providers_supports = Supports,
         shares = Shares
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {id, Id},
         {name, Name},
+
+        % Direct relations to other entities
+        {providers_supports, Supports},
         {users, Users},
         {groups, Groups},
         {shares, Shares},
-        {providers_supports, Supports}
+
+        % Effective relations to other entities
+        {eff_users, []}, % TODO currently always empty
+        {eff_groups, []} % TODO currently always empty
     ]}];
 get_msg(Seq, Doc, od_share = Model) ->
     #document{value = Value, key = Id} = Doc,
     #od_share{
         name = Name,
         public_url = PublicURL,
+
         space = Space,
-        root_file = RootFile,
-        handle = Handle
+        handle = Handle,
+        root_file = RootFile
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {id, Id},
         {name, Name},
         {public_url, PublicURL},
+
+        % Direct relations to other entities
         {space, Space},
+        {handle, Handle},
         {root_file, RootFile},
-        {handle, Handle}
+
+        % Effective relations to other entities
+        {eff_users, []}, % TODO currently always empty
+        {eff_groups, []} % TODO currently always empty
     ]}];
 get_msg(Seq, Doc, od_provider = Model) ->
     #document{value = Value, key = Id} = Doc,
@@ -146,7 +194,10 @@ get_msg(Seq, Doc, od_provider = Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {client_name, Name},
         {urls, URLs},
+
+        % Direct relations to other entities
         {spaces, SpaceIds},
+
         {public_only, false}
     ]}];
 get_msg(Seq, Doc, od_handle_service = Model) ->
@@ -163,31 +214,44 @@ get_msg(Seq, Doc, od_handle_service = Model) ->
         {name, Name},
         {proxy_endpoint, ProxyEndpoint},
         {service_properties, ServiceProperties},
+
+        % Direct relations to other entities
         {users, Users},
-        {groups, Groups}
+        {groups, Groups},
+
+        % Effective relations to other entities
+        {eff_users, []}, % TODO currently always empty
+        {eff_groups, []} % TODO currently always empty
     ]}];
 get_msg(Seq, Doc, od_handle = Model) ->
     #document{value = Value, key = Id} = Doc,
     #od_handle{
-        handle_service = HandleService,
         public_handle = PublicHandle,
         resource_type = ResourceType,
         resource_id = ResourceId,
         metadata = Metadata,
+        timestamp = Timestamp,
+
+        handle_service = HandleService,
         users = Users,
-        groups = Groups,
-        timestamp = Timestamp
+        groups = Groups
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {id, Id},
-        {handle_service, HandleService},
         {public_handle, PublicHandle},
         {resource_type, ResourceType},
         {resource_id, ResourceId},
         {metadata, Metadata},
+        {timestamp, serialize_timestamp(Timestamp)},
+
+        % Direct relations to other entities
+        {handle_service, HandleService},
         {users, Users},
         {groups, Groups},
-        {timestamp, serialize_timestamp(Timestamp)}
+
+        % Effective relations to other entities
+        {eff_users, []}, % TODO currently always empty
+        {eff_groups, []} % TODO currently always empty
     ]}];
 get_msg(_Seq, _Doc, _Model) ->
     ?warning("Requesting message for unexpected model ~p", [_Model]),

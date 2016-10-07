@@ -159,13 +159,8 @@ expectation(Id, #od_group{name = Name, type = Type, users = Users, spaces = Spac
     group_expectation(Id, Name, Type, Users, EUsers, Spaces, Children, Parents,
         HandleServices, Handles);
 
-expectation(Id, #od_provider{client_name = Name, urls = URLs, spaces = SpaceIds}) ->
-    [{<<"id">>, Id}, {<<"od_provider">>, [
-        {<<"client_name">>, Name},
-        {<<"urls">>, URLs},
-        {<<"spaces">>, SpaceIds},
-        {<<"public_only">>, false}
-    ]}];
+expectation(Id, #od_provider{client_name = Name, urls = URLs, spaces = Spaces}) ->
+    provider_expectation(Id, Name, URLs, Spaces);
 
 expectation(Id, #od_handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
     service_properties = ServiceProperties, groups = Groups, users = Users}) ->
@@ -191,46 +186,86 @@ expectation(Id, #od_handle{handle_service = HandleServiceId, public_handle = Pub
 user_expectation(Id, Name, Spaces, Groups, DefaultSpace, HandleServices, Handles) ->
     [{<<"id">>, Id}, {<<"od_user">>, [
         {<<"name">>, Name},
+        {<<"alias">>, <<"">>}, % TODO currently always empty
+        {<<"email_list">>, []}, % TODO currently always empty
+        {<<"connected_accounts">>, []}, % TODO currently always empty
         {<<"default_space">>, DefaultSpace},
         {<<"space_aliases">>, Spaces},
+
         {<<"groups">>, Groups},
+        {<<"spaces">>, []}, % TODO currently always empty
         {<<"handle_services">>, HandleServices},
         {<<"handles">>, Handles},
+
+        {<<"eff_groups">>, Groups},
+        {<<"eff_spaces">>, []}, % TODO currently always empty
+        {<<"eff_shares">>, []}, % TODO currently always empty
+        {<<"eff_providers">>, []}, % TODO currently always empty
+        {<<"eff_handle_services">>, []}, % TODO currently always empty
+        {<<"eff_handles">>, []}, % TODO currently always empty
+
         {<<"public_only">>, false}
     ]}].
 
 public_only_user_expectation(Id, Name) ->
     [{<<"id">>, Id}, {<<"od_user">>, [
         {<<"name">>, Name},
+        {<<"alias">>, <<"">>},
+        {<<"email_list">>, []},
+        {<<"connected_accounts">>, []},
         {<<"default_space">>, <<"undefined">>},
         {<<"space_aliases">>, []},
+
         {<<"groups">>, []},
+        {<<"spaces">>, []},
         {<<"handle_services">>, []},
         {<<"handles">>, []},
+
+        {<<"eff_groups">>, []},
+        {<<"eff_spaces">>, []},
+        {<<"eff_shares">>, []},
+        {<<"eff_providers">>, []},
+        {<<"eff_handle_services">>, []},
+        {<<"eff_handles">>, []},
+
         {<<"public_only">>, true}
     ]}].
 
 group_expectation(Id, Name, Type, Users, EUsers, Spaces, Children, Parents, HandleServices, Handles) ->
     [{<<"id">>, Id}, {<<"od_group">>, [
         {<<"name">>, Name},
-        {<<"type">>, atom_to_binary(Type, latin1)},
+        {<<"type">>, atom_to_binary(Type, utf8)},
+
         {<<"children">>, privileges_as_binaries(Children)},
         {<<"parents">>, Parents},
+        {<<"eff_children">>, []}, % TODO currently always empty
+        {<<"eff_parents">>, []}, % TODO currently always empty
+
         {<<"users">>, privileges_as_binaries(Users)},
-        {<<"eff_users">>, privileges_as_binaries(EUsers)},
         {<<"spaces">>, Spaces},
         {<<"handle_services">>, HandleServices},
-        {<<"handles">>, Handles}
+        {<<"handles">>, Handles},
+
+        {<<"eff_users">>, privileges_as_binaries(EUsers)},
+        {<<"eff_spaces">>, []}, % TODO currently always empty
+        {<<"eff_shares">>, []}, % TODO currently always empty
+        {<<"eff_providers">>, []}, % TODO currently always empty
+        {<<"eff_handle_services">>, []}, % TODO currently always empty
+        {<<"eff_handles">>, []} % TODO currently always empty
     ]}].
 
 space_expectation(Id, Name, Users, Groups, Supports, Shares) ->
     [{<<"id">>, Id}, {<<"od_space">>, [
         {<<"id">>, Id},
         {<<"name">>, Name},
+
+        {<<"providers_supports">>, Supports},
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"groups">>, privileges_as_binaries(Groups)},
         {<<"shares">>, Shares},
-        {<<"providers_supports">>, Supports}
+
+        {<<"eff_users">>, []}, % TODO currently always empty
+        {<<"eff_groups">>, []} % TODO currently always empty
     ]}].
 
 share_expectation(Id, Name, Space, RootFile, PublicUrl, Handle) ->
@@ -238,9 +273,33 @@ share_expectation(Id, Name, Space, RootFile, PublicUrl, Handle) ->
         {<<"id">>, Id},
         {<<"name">>, Name},
         {<<"public_url">>, PublicUrl},
+
         {<<"space">>, Space},
+        {<<"handle">>, Handle},
         {<<"root_file">>, RootFile},
-        {<<"handle">>, Handle}
+
+        {<<"eff_users">>, []}, % TODO currently always empty
+        {<<"eff_groups">>, []} % TODO currently always empty
+    ]}].
+
+provider_expectation(Id, Name, URLs, Spaces) ->
+    [{<<"id">>, Id}, {<<"od_provider">>, [
+        {<<"client_name">>, Name},
+        {<<"urls">>, URLs},
+
+        {<<"spaces">>, Spaces},
+
+        {<<"public_only">>, false}
+    ]}].
+
+public_only_provider_expectation(Id, Name, URLs) ->
+    [{<<"id">>, Id}, {<<"od_provider">>, [
+        {<<"client_name">>, Name},
+        {<<"urls">>, URLs},
+
+        {<<"spaces">>, []},
+
+        {<<"public_only">>, true}
     ]}].
 
 handle_service_expectation(Id, Name, ProxyEndpoint, ServiceProperties, Users, Groups) ->
@@ -249,30 +308,30 @@ handle_service_expectation(Id, Name, ProxyEndpoint, ServiceProperties, Users, Gr
         {<<"name">>, Name},
         {<<"proxy_endpoint">>, ProxyEndpoint},
         {<<"service_properties">>, ServiceProperties},
+
         {<<"users">>, privileges_as_binaries(Users)},
-        {<<"groups">>, privileges_as_binaries(Groups)}
+        {<<"groups">>, privileges_as_binaries(Groups)},
+
+        {<<"eff_users">>, []}, % TODO currently always empty
+        {<<"eff_groups">>, []} % TODO currently always empty
     ]}].
 
 handle_expectation(Id, HandleServiceId, PublicHandle, ResourceType, ResourceId,
     Metadata, Users, Groups, Timestamp) ->
     [{<<"id">>, Id}, {<<"od_handle">>, [
         {<<"id">>, Id},
-        {<<"handle_service">>, HandleServiceId},
         {<<"public_handle">>, PublicHandle},
         {<<"resource_type">>, ResourceType},
         {<<"resource_id">>, ResourceId},
         {<<"metadata">>, Metadata},
+        {<<"timestamp">>, serialize_timestamp(Timestamp)},
+
+        {<<"handle_service">>, HandleServiceId},
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"groups">>, privileges_as_binaries(Groups)},
-        {<<"timestamp">>, serialize_timestamp(Timestamp)}
-    ]}].
 
-public_only_provider_expectation(Id, Name, URLs) ->
-    [{<<"id">>, Id}, {<<"od_provider">>, [
-        {<<"client_name">>, Name},
-        {<<"urls">>, URLs},
-        {<<"spaces">>, []},
-        {<<"public_only">>, true}
+        {<<"eff_users">>, []}, % TODO currently always empty
+        {<<"eff_groups">>, []} % TODO currently always empty
     ]}].
 
 privileges_as_binaries(IdsWithPrivileges) ->
