@@ -149,9 +149,9 @@ expectation(Id, #od_share{name = Name, space = Space,
     HandleBin = undefined_to_binary(Handle),
     share_expectation(Id, Name, Space, RootFileBin, PublicUrlBin, HandleBin);
 expectation(Id, #od_user{name = Name, space_aliases = SpaceAliases,
-    default_space = DefaultSpace, eff_groups = Groups,
+    default_space = DefaultSpace, groups = Groups, eff_groups = EffGroups,
     handle_services = HandleServices, handles = Handles}) ->
-    user_expectation(Id, Name, maps:to_list(SpaceAliases), Groups,
+    user_expectation(Id, Name, maps:to_list(SpaceAliases), Groups, EffGroups,
         undefined_to_binary(DefaultSpace), HandleServices, Handles);
 expectation(Id, #od_group{name = Name, type = Type, users = Users, spaces = Spaces,
     eff_users = EUsers, children = Children, parents = Parents,
@@ -183,7 +183,7 @@ expectation(Id, #od_handle{handle_service = HandleServiceId, public_handle = Pub
         ResourceIdBin, MetadataBin, Users, Groups, Timestamp
     ).
 
-user_expectation(Id, Name, Spaces, Groups, DefaultSpace, HandleServices, Handles) ->
+user_expectation(Id, Name, Spaces, Groups, EffGroups, DefaultSpace, HandleServices, Handles) ->
     [{<<"id">>, Id}, {<<"od_user">>, [
         {<<"name">>, Name},
         {<<"alias">>, <<"">>}, % TODO currently always empty
@@ -197,7 +197,7 @@ user_expectation(Id, Name, Spaces, Groups, DefaultSpace, HandleServices, Handles
         {<<"handle_services">>, HandleServices},
         {<<"handles">>, Handles},
 
-        {<<"eff_groups">>, Groups},
+        {<<"eff_groups">>, EffGroups},
         {<<"eff_spaces">>, []}, % TODO currently always empty
         {<<"eff_shares">>, []}, % TODO currently always empty
         {<<"eff_providers">>, []}, % TODO currently always empty
