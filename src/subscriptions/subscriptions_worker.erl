@@ -221,7 +221,6 @@ fetch_from_db(Seqs) ->
 
         receive
             {'EXIT', Pid, Reason} ->
-                ?dump(Reason),
                 ignore_all(Seqs)
         after
             timer:seconds(Timeout) ->
@@ -244,7 +243,6 @@ ignore_all(Seqs) ->
     Subscriptions = subscriptions:all(),
     lists:foreach(fun(#document{value = #provider_subscription{provider = ID}}) ->
         outboxes:put(ID, fun push_messages/2, lists:map(fun(Seq) ->
-            ?dump(Seqs),
             translator:get_ignore_msg(Seq)
         end, Seqs))
     end, Subscriptions), ok.

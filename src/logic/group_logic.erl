@@ -530,9 +530,18 @@ get_nested_group_privileges(ParentGroupId, GroupId) ->
 -spec get_effective_privileges(GroupId :: binary(), UserId :: binary()) ->
     {ok, [privileges:group_privilege()]}.
 get_effective_privileges(GroupId, UserId) ->
-    {ok, #document{value = #od_group{eff_users = UserTuples}}} = od_group:get(GroupId),
-    {_, Privileges} = lists:keyfind(UserId, 1, UserTuples),
-    {ok, Privileges}.
+    {ok, #document{value = #od_group{
+        users = UserTuples, eff_users = EffUserTuples
+    }}} = od_group:get(GroupId),
+    case lists:keyfind(UserId, 1, EffUserTuples) of
+        {_, Privileges} ->
+            {ok, Privileges};
+        false ->
+            % It is possible that effective users are not yet synchronized, in
+            % this case look in direct users.
+            {_, USerPrivs} = lists:keyfind(UserId, 1, UserTuples),
+            {ok, USerPrivs}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Removes the group.

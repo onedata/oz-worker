@@ -27,8 +27,8 @@
 %% API
 -export([mark_group_changed/1, mark_user_changed/1, refresh_effective_caches/0]).
 
--type effective_users() :: [{UserID :: binary(), [privileges:group_privilege()]}].
--type effective_groups() :: [GroupID :: binary()].
+-type effective_users() :: [{od_user:id(), [privileges:group_privilege()]}].
+-type effective_groups() :: [od_group:id()].
 -export_type([effective_users/0, effective_groups/0]).
 
 %%%===================================================================
