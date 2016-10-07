@@ -242,7 +242,7 @@ get_data(HandleServiceId) ->
     {ok, #document{value = #od_handle_service{name = Name, proxy_endpoint = Proxy, service_properties = Desc}}} =
         od_handle_service:get(HandleServiceId),
     {ok, [
-        {handleServiceId, HandleServiceId},
+        {handleService, HandleServiceId},
         {name, Name},
         {proxyEndpoint, Proxy},
         {serviceProperties, Desc}
