@@ -236,8 +236,8 @@ group_expectation(Id, Name, Type, Users, EUsers, Spaces, Children, Parents, Hand
         {<<"name">>, Name},
         {<<"type">>, atom_to_binary(Type, utf8)},
 
-        {<<"children">>, privileges_as_binaries(Children)},
         {<<"parents">>, Parents},
+        {<<"children">>, privileges_as_binaries(Children)},
         {<<"eff_children">>, []}, % TODO currently always empty
         {<<"eff_parents">>, []}, % TODO currently always empty
 
