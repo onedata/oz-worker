@@ -273,11 +273,26 @@ get_public_msg(Seq, Doc, od_user = Model) ->
     #document{value = #od_user{name = Name}, key = Id} = Doc,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {name, Name},
+        {alias, <<"">>},
+        {email_list, []},
+        {connected_accounts, []},
         {default_space, undefined},
         {space_aliases, []},
+
+        % Direct relations to other entities
         {groups, []},
+        {spaces, []},
         {handle_services, []},
         {handles, []},
+
+        % Effective relations to other entities
+        {eff_groups, []},
+        {eff_spaces, []},
+        {eff_shares, []},
+        {eff_providers, []},
+        {eff_handle_services, []},
+        {eff_handles, []},
+
         {public_only, true}
     ]}];
 
@@ -286,7 +301,9 @@ get_public_msg(Seq, Doc, od_provider = Model) ->
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {client_name, Name},
         {urls, URLs},
+
         {spaces, []},
+
         {public_only, true}
     ]}].
 
