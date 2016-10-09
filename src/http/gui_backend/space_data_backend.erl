@@ -117,15 +117,24 @@ find_query(<<"space">>, _Data) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 create_record(<<"space">>, Data) ->
     Name = proplists:get_value(<<"name">>, Data),
-    {ok, SpaceId} = space_logic:create({user, g_session:get_user_id()}, Name),
-    NewSpaceData = [
-        {<<"id">>, SpaceId},
-        {<<"name">>, Name},
-        {<<"isDefault">>, false},
-        {<<"hasViewPrivilege">>, true},
-        {<<"providers">>, []}
-    ],
-    {ok, NewSpaceData}.
+    case Name of
+        <<"">> ->
+            gui_error:report_error(<<"Empty space names are not allowed">>);
+        Bin when is_binary(Bin) ->
+            {ok, SpaceId} = space_logic:create(
+                {user, g_session:get_user_id()}, Name
+            ),
+            NewSpaceData = [
+                {<<"id">>, SpaceId},
+                {<<"name">>, Name},
+                {<<"isDefault">>, false},
+                {<<"hasViewPrivilege">>, true},
+                {<<"providers">>, []}
+            ],
+            {ok, NewSpaceData};
+        _ ->
+            gui_error:report_error(<<"Invalid space name">>)
+    end.
 
 
 %%--------------------------------------------------------------------
