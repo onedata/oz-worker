@@ -24,53 +24,16 @@
 %%%-------------------------------------------------------------------
 -spec process_and_validate_args(Args :: [proplists:property()]) -> {binary(), [proplists:property()]}.
 process_and_validate_args(Args) ->
-    try
-        key_occurs_exactly_once(<<"verb">>, Args),
-        Verb = proplists:get_value(<<"verb">>, Args),
-        Module = oai_utils:verb_to_module(Verb),
-        Args2 = proplists:delete(<<"verb">>, Args),
-        process_and_validate_verb_specific_arguments(Module, Args2),
-        case oai_utils:is_harvesting(Verb) of
-            false -> ok;
-            true -> parse_harvesting_arguments(Args)
-        end,
-        {Verb, Args2}
-    catch
-        throw:{missing_key, <<"verb">>}  ->
-            throw({badVerb, <<"The verb argument is missing.">>});
-        throw:{repeated_key, <<"verb">>}  ->
-            throw({badVerb, <<"The verb argument is repeated.">>});
-        throw:{not_legal_verb, BadVerb} -> throw({badVerb,
-            str_utils:format_bin("The verb argument ~s is not a legal OAI-PMH verb.",[BadVerb])});
-        throw:{repeated_key, Key}  -> throw({badArgument,
-            str_utils:format_bin("The request includes repeated argument ~s.",[Key])});
-        throw:{value_is_empty, Key}  -> throw({badArgument,
-            str_utils:format_bin("The request argument ~s has empty value.",[Key])});
-        throw:{cannotDisseminateFormat, MetadataPrefix}  -> throw({cannotDisseminateFormat,
-            str_utils:format_bin(
-                "The metadata format identified by the value ~s"
-                "given for the metadataPrefix argument is not "
-                "supported by this repository.",[MetadataPrefix])});
-        throw:{missing_key, Keys}  ->
-            KeysStr = [str_utils:to_list(K) || K <- Keys],
-            throw({badArgument,
-            str_utils:format_bin("The request is missing required arguments: ~p.",[KeysStr])});
-        throw:exclusive_argument  -> throw({badArgument,
-            <<"Exclusive argument is not an only argument">>});
-        throw:{illegal_argument, IllegalArgs} ->
-            IllegalArgsStr = [str_utils:to_list(A) || A <- IllegalArgs],
-            throw({badArgument,
-            str_utils:format_bin("The request includes illegal arguments: ~p.", [IllegalArgsStr])});
-        throw:set_not_supported -> throw(noSetHierarchy);
-        throw:{granularity_mismatch, From, Until} -> throw({badArgument,
-            str_utils:format_bin("Datestamps from=~s and until=~s "
-                             "have different granularity.", [From, Until])});
-        throw:{invalid_date_format, Date} -> throw({badArgument,
-            str_utils:format_bin("Datestamp ~s has invalid format.", [Date])});
-        throw:{wrong_datestamps_relation, From, Until} ->throw({badArgument,
-            str_utils:format_bin("Datestamp from=~s is greater than until=~s: ", [From, Until])})
-    end
-.
+    key_occurs_exactly_once(<<"verb">>, Args),
+    Verb = proplists:get_value(<<"verb">>, Args),
+    Module = oai_utils:verb_to_module(Verb),
+    Args2 = proplists:delete(<<"verb">>, Args),
+    process_and_validate_verb_specific_arguments(Module, Args2),
+    case oai_utils:is_harvesting(Verb) of
+        false -> ok;
+        true -> parse_harvesting_arguments(Args)
+    end,
+    {Verb, Args2}.
 
 %%%===================================================================
 %%% Internal functions

@@ -17,7 +17,8 @@
 %% API
 -export([datetime_to_oai_datestamp/1, oai_datestamp_to_datetime/1,
     is_harvesting/1, verb_to_module/1, is_earlier_or_equal/2,
-    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4, oai_identifier_encode/1, oai_identifier_decode/1]).
+    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4,
+    oai_identifier_encode/1, oai_identifier_decode/1]).
 
 
 %% Macro with regex matching allowed datestamps
@@ -116,10 +117,7 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
         end
     end, Identifiers),
     case HarvestedMetadata of
-        [] -> throw({noRecordsMatch, str_utils:format_bin(
-            "The combination of the values of the from= ~s, "
-            "until= ~s and metadataPrefix= ~s arguments results "
-            "in an empty list.", [FromDatestamp, UntilDatestamp, MetadataPrefix])});
+        [] -> throw({noRecordsMatch, FromDatestamp, UntilDatestamp, MetadataPrefix});
         _ -> HarvestedMetadata
     end.
 

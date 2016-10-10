@@ -57,9 +57,9 @@ exclusive_arguments() -> [].
 -spec required_response_elements() -> [binary()].
 required_response_elements() -> [
     <<"repositoryName">>, <<"baseURL">>,
-    <<"protocolVersion">>, <<"earliestDatestamp">>,
-    <<"deletedRecord">>, <<"granularity">>,
-    <<"adminEmail">>
+    <<"protocolVersion">>, <<"adminEmail">>,
+    <<"earliestDatestamp">>, <<"deletedRecord">>,
+    <<"granularity">>
 ].
 
 %%%-------------------------------------------------------------------
@@ -94,7 +94,7 @@ get_response(<<"earliestDatestamp">>, _Args) ->
 get_response(<<"deletedRecord">>, _Args) ->
     <<"no">>;
 get_response(<<"granularity">>, _Args) ->
-    <<"YYYY-MM-DDThh:mm:ss:Z">>;
+    <<"YYYY-MM-DDThh:mm:ssZ">>;
 get_response(<<"adminEmail">>, _Args) ->
     {ok, AdminEmails} = application:get_env(?APP_Name, admin_emails),
     lists:map(fun(AdminEmail) ->

@@ -447,7 +447,7 @@ identify_test_base(Config, Method) ->
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
-        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ss:Z"}]},
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]},
         #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
@@ -476,7 +476,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp1)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
-        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ss:Z"}]},
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]},
         #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)),
@@ -489,7 +489,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp2)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
-        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ss:Z"}]},
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]},
         #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent2, Config)).
