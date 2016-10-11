@@ -20,30 +20,30 @@
 %%%===================================================================
 
 has_effective_privilege_test() ->
-    ok = meck:new(space),
-    ok = meck:new(user_group),
-    ok = meck:new(onedata_user),
+    ok = meck:new(od_space),
+    ok = meck:new(od_group),
+    ok = meck:new(od_user),
 
     GroupId = <<"GroupId">>,
     SpaceId = <<"SpaceId">>,
     UserId = <<"UserId">>,
     User2Id = <<"User2Id">>,
 
-    Space = #space{name = <<"Space">>, groups = [{GroupId, [space_view_data]}], users = [{UserId, [space_invite_user]}]},
-    Group = #user_group{name = <<"Group">>, spaces = [SpaceId], users = [{UserId, privileges:group_admin()}, {User2Id, privileges:group_admin()}]},
-    User = #onedata_user{name = <<"User">>, groups = [GroupId], spaces = [SpaceId]},
-    User2 = #onedata_user{name = <<"User2">>, groups = [GroupId]},
+    Space = #od_space{name = <<"Space">>, groups = [{GroupId, [space_view_data]}], users = [{UserId, [space_invite_user]}]},
+    Group = #od_group{name = <<"Group">>, spaces = [SpaceId], users = [{UserId, privileges:group_admin()}, {User2Id, privileges:group_admin()}]},
+    User = #od_user{name = <<"User">>, groups = [GroupId], spaces = [SpaceId]},
+    User2 = #od_user{name = <<"User2">>, groups = [GroupId]},
     SpaceDoc = #document{key = SpaceId, value = Space},
     GroupDoc = #document{key = GroupId, value = Group},
     UserDoc = #document{key = UserId, value = User},
     User2Doc = #document{key = User2Id, value = User2},
 
-    ok = meck:expect(space, exists, fun(_) -> true end),
-    ok = meck:expect(user_group, exists, fun(_) -> true end),
-    ok = meck:expect(onedata_user, exists, fun(_) -> true end),
-    ok = meck:expect(space, get, fun(_) -> {ok, SpaceDoc} end),
-    ok = meck:expect(user_group, get, fun(_) -> {ok, GroupDoc} end),
-    ok = meck:expect(onedata_user, get,
+    ok = meck:expect(od_space, exists, fun(_) -> true end),
+    ok = meck:expect(od_group, exists, fun(_) -> true end),
+    ok = meck:expect(od_user, exists, fun(_) -> true end),
+    ok = meck:expect(od_space, get, fun(_) -> {ok, SpaceDoc} end),
+    ok = meck:expect(od_group, get, fun(_) -> {ok, GroupDoc} end),
+    ok = meck:expect(od_user, get,
         fun
             (UserId) -> {ok, UserDoc};
             (User2Id) -> {ok, User2Doc}

@@ -27,7 +27,7 @@
 %% PUT operation on handle proxy
 %% @end
 %%--------------------------------------------------------------------
--spec put(ProxyEndpoint :: handle_service:proxy_endpoint(), Path :: http_client:url(),
+-spec put(ProxyEndpoint :: od_handle_service:proxy_endpoint(), Path :: http_client:url(),
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
 put(ProxyEndpoint, Path, Headers, Body) ->
@@ -38,7 +38,7 @@ put(ProxyEndpoint, Path, Headers, Body) ->
 %% PATCH operation on handle proxy
 %% @end
 %%--------------------------------------------------------------------
--spec patch(ProxyEndpoint :: handle_service:proxy_endpoint(), Path :: http_client:url(),
+-spec patch(ProxyEndpoint :: od_handle_service:proxy_endpoint(), Path :: http_client:url(),
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
 patch(ProxyEndpoint, Path, Headers, Body) ->
@@ -49,7 +49,7 @@ patch(ProxyEndpoint, Path, Headers, Body) ->
 %% DELETE operation on handle proxy
 %% @end
 %%--------------------------------------------------------------------
--spec delete(ProxyEndpoint :: handle_service:proxy_endpoint(), Path :: http_client:url(),
+-spec delete(ProxyEndpoint :: od_handle_service:proxy_endpoint(), Path :: http_client:url(),
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
 delete(ProxyEndpoint, Path, Headers, Body) ->

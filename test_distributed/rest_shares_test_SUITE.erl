@@ -140,7 +140,7 @@ check_remove_share(Code, Issuer, ShareId) ->
 create_share_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -182,7 +182,7 @@ create_share_test(Config) ->
 view_shares_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -196,7 +196,7 @@ view_shares_test(Config) ->
     Share1ExpectedData = #{
         <<"shareId">> => Share1Id,
         <<"name">> => Share1Name,
-        <<"parentSpace">> => Space,
+        <<"spaceId">> => Space,
         <<"rootFileId">> => Share1File,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
@@ -218,7 +218,7 @@ view_shares_test(Config) ->
     Share2ExpectedData = #{
         <<"shareId">> => Share2Id,
         <<"name">> => Share2Name,
-        <<"parentSpace">> => Space,
+        <<"spaceId">> => Space,
         <<"rootFileId">> => Share2File,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
@@ -228,7 +228,7 @@ view_shares_test(Config) ->
     Share3ExpectedData = #{
         <<"shareId">> => Share3Id,
         <<"name">> => Share3Name,
-        <<"parentSpace">> => Space,
+        <<"spaceId">> => Space,
         <<"rootFileId">> => Share3File,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
@@ -262,7 +262,7 @@ view_shares_test(Config) ->
 modify_share_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),
@@ -276,7 +276,7 @@ modify_share_test(Config) ->
     ShareExpectedData = #{
         <<"shareId">> => ShareId,
         <<"name">> => ShareName,
-        <<"parentSpace">> => Space,
+        <<"spaceId">> => Space,
         <<"rootFileId">> => ShareFile,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
@@ -328,7 +328,7 @@ remove_share_test(Config) ->
     rest_test_utils:set_config(Config),
     rest_test_utils:set_config(Config),
     % Create a user and a space
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space} = oz_test_utils:create_space(
         Config, {user, User}, <<"sp">>
     ),

@@ -97,8 +97,8 @@ accept_resource(provider, _, ID, Data, _Client, Req) ->
 
     case plugins:apply(identity_repository, publish, [ID, EncodedPublicKey]) of
         ok ->
-            Provider = #provider{client_name = ID, urls = URLs, redirection_point = RedirectionPoint},
-            {ok, _} = provider:save(#document{key = ID, value = Provider}),
+            Provider = #od_provider{client_name = ID, urls = URLs, redirection_point = RedirectionPoint},
+            {ok, _} = od_provider:save(#document{key = ID, value = Provider}),
             {true, Req};
         {error, Reason} ->
             ?warning("Unable to create new provider with ID ~p due to ~p", [ID, Reason]),

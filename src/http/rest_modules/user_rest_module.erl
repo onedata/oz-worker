@@ -130,7 +130,7 @@ accept_resource(auth, post, _User, Data, _Client, Req) ->
     case auth_logic:authenticate_user(Identifier) of
         {ok, DischargeMacaroonToken} ->
             {ok, Req2} = cowboy_req:reply(200, [], DischargeMacaroonToken, Req),
-            {true, Req2};
+            {halt, Req2};
         _ ->
             {false, Req}
     end;

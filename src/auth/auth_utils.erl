@@ -108,7 +108,7 @@ validate_login() ->
                                                     _ ->
                                                         Name
                                                 end,
-                                                UserInfo = #onedata_user{
+                                                UserInfo = #od_user{
                                                     email_list = Emails,
                                                     name = NameToSet,
                                                     connected_accounts = [
@@ -163,7 +163,7 @@ validate_login() ->
 %% (but not by the specified user).
 %% @end
 %%--------------------------------------------------------------------
--spec is_any_email_in_use(UserId :: onedata_user:id(), Emails :: [binary()]) ->
+-spec is_any_email_in_use(UserId :: od_user:id(), Emails :: [binary()]) ->
     boolean().
 is_any_email_in_use(UserId, Emails) ->
     lists:any(fun(Email) ->

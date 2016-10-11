@@ -30,7 +30,7 @@ all() -> ?ALL([], [
 
 -define(NUMBER_OF_DOCS, 10).
 
--define(MODELS_TO_CLEAN, [provider, space, user_group, onedata_user]).
+-define(MODELS_TO_CLEAN, [od_provider, od_space, od_group, od_user]).
 
 %%%===================================================================
 %%% Test functions
@@ -80,7 +80,7 @@ generate_spaces_test_base(Config) ->
 
         %% when
         PID = subscriptions_test_utils:create_provider(Node, PName, SIDs),
-        Space = #space{name = <<"name">>, providers_supports = [{PID, 0}]},
+        Space = #od_space{name = <<"name">>, providers_supports = [{PID, 0}]},
         Context = subscriptions_test_utils:init_messages(Node, PID, []),
 
         lists:map(fun(SID) ->
@@ -157,7 +157,7 @@ space_update_test_base(Config) ->
     SeqStart = Start1 + 100,
 
     ModifiedSpaces = lists:map(fun(N) ->
-        {N + SeqStart, S1#space{name=list_to_binary("modified" ++ integer_to_list(N))}}
+        {N + SeqStart, S1#od_space{name=list_to_binary("modified" ++ integer_to_list(N))}}
     end, lists:seq(1, UpdatesNum)),
 
     StartTime = erlang:system_time(milli_seconds),
@@ -167,7 +167,7 @@ space_update_test_base(Config) ->
             ?SUBSCRIPTIONS_WORKER_NAME, {
                 handle_change, Seq,
                 #document{key= SID1, value=Space},
-                space
+                od_space
             }])
     end, ModifiedSpaces),
 

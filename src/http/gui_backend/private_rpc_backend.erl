@@ -34,7 +34,7 @@
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
 handle(<<"getUserAlias">>, _) ->
     UserId = g_session:get_user_id(),
-    {ok, #onedata_user{
+    {ok, #od_user{
         alias = Alias
     }} = user_logic:get_user(UserId),
     UserAlias = case str_utils:to_binary(Alias) of
@@ -47,7 +47,7 @@ handle(<<"getUserAlias">>, _) ->
 
 handle(<<"changePassword">>, Props) ->
     UserId = g_session:get_user_id(),
-    {ok, #onedata_user{
+    {ok, #od_user{
         login = Login
     }} = user_logic:get_user(UserId),
     OldPassword = proplists:get_value(<<"oldPassword">>, Props),
@@ -119,11 +119,11 @@ handle(<<"unsupportSpace">>, Props) ->
             {ok, [{providers, UserProviders}]} =
                 user_logic:get_providers(UserId),
             {ok, #document{
-                value = #onedata_user{
-                    space_names = SpaceNamesMap,
+                value = #od_user{
+                    space_aliases = SpaceNamesMap,
                     default_space = DefaultSpaceId,
                     default_provider = DefaultProvider
-                }}} = onedata_user:get(UserId),
+                }}} = od_user:get(UserId),
             {ok, UserSpaces} = user_logic:get_spaces(UserId),
             SpaceIds = proplists:get_value(spaces, UserSpaces),
             SpaceRecord = space_data_backend:space_record(
@@ -160,9 +160,9 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
             {ok, SpaceId} = space_logic:join({user, UserId}, Macaroon),
             % Push the newly joined space to the client's model
             {ok, #document{
-                value = #onedata_user{
-                    space_names = SpaceNamesMap
-                }}} = onedata_user:get(UserId),
+                value = #od_user{
+                    space_aliases = SpaceNamesMap
+                }}} = od_user:get(UserId),
             SpaceRecord = space_data_backend:space_record(
                 % DefaultSpaceId and UserProviders do not matter because this is
                 % a new space - it's not default and has no providers

@@ -433,7 +433,7 @@ identify_test_base(Config, Method) ->
     Path = ?config(oai_pmh_path, Config),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
 
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(Config, ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1),
     HSId = create_handle_service(Config, User),
@@ -458,7 +458,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     Path = ?config(oai_pmh_path, Config),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
 
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
      SpaceIds = create_spaces(Config, ?SPACE_NAMES(2), {user, User}),
     [ShareId1, ShareId2] = create_shares(Config, SpaceIds),
     HSId = create_handle_service(Config, User),
@@ -497,7 +497,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
 
 get_record_test_base(Config, Method) ->
 
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(Config, ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1),
     HSId = create_handle_service(Config, User),
@@ -868,7 +868,7 @@ id_not_existing_test_base(Config, Method) ->
 
 cannot_disseminate_format_test_base(Config, Method) ->
 
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(Config, ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1),
     HSId = create_handle_service(Config, User),
@@ -884,7 +884,7 @@ no_set_hierarchy_test_base(Config, Method) ->
     ?assert(check_no_set_hierarchy_error(200, [], Method, [], Config)).
 
 list_metadata_formats_no_format_error_test_base(Config, Method) ->
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(Config, ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1),
     HSId = create_handle_service(Config, User),
@@ -1202,13 +1202,13 @@ modify_handles_with_mocked_timestamp(Config, Identifiers, BeginTime, TimeOffsets
 modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
 
     Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, handle, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, handle, actual_timestamp, fun() -> Timestamp end),
+    ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, od_handle, actual_timestamp, fun() -> Timestamp end),
     ok = modify_handle(Config, HId, Metadata),
-    ok = test_utils:mock_validate_and_unload(Nodes, handle).
+    ok = test_utils:mock_validate_and_unload(Nodes, od_handle).
 
 setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata) ->
-    {ok, User} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     SpaceIds = create_spaces(Config, ?SPACE_NAMES(RecordsNum), {user, User}),
     ShareIds = create_shares(Config, SpaceIds),
     HSId = create_handle_service(Config, User),
@@ -1232,10 +1232,10 @@ create_handle_service(Config, User) ->
 
 create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, Metadata, Timestamp) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, handle, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, handle, actual_timestamp, fun() -> Timestamp end),
+    ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, od_handle, actual_timestamp, fun() -> Timestamp end),
     HId = create_handle(Config, User, HandleServiceId, ResourceId, Metadata),
-    ok = test_utils:mock_validate_and_unload(Nodes, handle),
+    ok = test_utils:mock_validate_and_unload(Nodes, od_handle),
     HId.
 
 create_handle(Config, User, HandleServiceId, ResourceId, Metadata) ->

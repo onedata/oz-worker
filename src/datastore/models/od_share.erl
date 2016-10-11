@@ -1,29 +1,31 @@
 %%%-------------------------------------------------------------------
-%%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @author Lukasz Opiola
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for provider record - representing a provider in the system.
+%%% API for share record - representing a file share in the system.
 %%% @end
 %%%-------------------------------------------------------------------
--module(provider).
--author("Michal Zmuda").
+-module(od_share).
+-author("Lukasz Opiola").
 -behaviour(model_behaviour).
 
--include_lib("ctool/include/logging.hrl").
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
+
+-type doc() :: datastore:document().
+-type info() :: #od_share{}.
+-type id() :: binary().
+-export_type([doc/0, info/0, id/0]).
+
 
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
-
--type id() :: binary().
--type doc() :: datastore:document().
--export_type([id/0, doc/0]).
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -100,7 +102,9 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(provider_bucket, [], ?GLOBALLY_CACHED_LEVEL).
+    % TODO migrate to GLOBALLY_CACHED_LEVEL
+    StoreLevel = application:get_env(?APP_Name, share_store_level, ?DISK_ONLY_LEVEL),
+    ?MODEL_CONFIG(share_bucket, [], StoreLevel).
 
 %%--------------------------------------------------------------------
 %% @doc

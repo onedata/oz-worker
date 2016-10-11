@@ -34,7 +34,7 @@
 %%%     oai:onedata.org:<handle_id>
 %%% @end
 %%%--------------------------------------------------------------------
--spec oai_identifier_encode(handle:id()) -> oai_id().
+-spec oai_identifier_encode(od_handle:id()) -> oai_id().
 oai_identifier_encode(Id) ->
     <<?OAI_IDENTIFIER_PREFIX/binary, Id/binary>>.
 
@@ -45,7 +45,7 @@ oai_identifier_encode(Id) ->
 %%%     oai:onedata.org:<handle_id>
 %%% @end
 %%%--------------------------------------------------------------------
--spec oai_identifier_decode(oai_id()) -> handle:id().
+-spec oai_identifier_decode(oai_id()) -> od_handle:id().
 oai_identifier_decode(OAIId) ->
     PrefixSize = size(?OAI_IDENTIFIER_PREFIX),
     case binary:match(OAIId, ?OAI_IDENTIFIER_PREFIX) of

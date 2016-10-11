@@ -27,8 +27,8 @@
 %% API
 -export([mark_group_changed/1, mark_user_changed/1, refresh_effective_caches/0]).
 
--type effective_users() :: [{UserID :: binary(), [privileges:group_privilege()]}].
--type effective_groups() :: [GroupID :: binary()].
+-type effective_users() :: [{od_user:id(), [privileges:group_privilege()]}].
+-type effective_groups() :: [od_group:id()].
 -export_type([effective_users/0, effective_groups/0]).
 
 %%%===================================================================
@@ -145,7 +145,7 @@ effective_users_update_traverse(GroupIDs) ->
     InContext :: #{GID :: binary() => effective_users()}) ->
     OutContext :: #{GID :: binary() => effective_users()}.
 update_effective_groups_visitor(GroupDoc, Context) ->
-    #document{key = ID, value = #user_group{parent_groups = ParentGroups}} = GroupDoc,
+    #document{key = ID, value = #od_group{parents = ParentGroups}} = GroupDoc,
     EffectiveOfParents = lists:foldl(fun(ParentID, All) ->
         case maps:get(ParentID, Context, undef) of
             undef -> All ++ get_effective_groups(ParentID);
@@ -165,7 +165,7 @@ update_effective_groups_visitor(GroupDoc, Context) ->
     InContext :: #{GID :: binary() => effective_users()}) ->
     OutContext :: #{GID :: binary() => effective_users()}.
 update_effective_users_visitor(GroupDoc, Context) ->
-    #document{key = ID, value = #user_group{nested_groups = ChildGroups,
+    #document{key = ID, value = #od_group{children = ChildGroups,
         users = Users}} = GroupDoc,
     EffectiveFromChildren = lists:foldl(fun({ChildID, ChildPrivileges}, All) ->
         ChildEffective = case maps:get(ChildID, Context, undef) of
@@ -200,8 +200,8 @@ merge_effective_users(CurrentPrivileges, PrivilegesToAdd, PrivilegesMask) ->
 
 -spec get_effective_users(GroupID :: binary()) -> effective_users().
 get_effective_users(ID) ->
-    case user_group:get(ID) of
-        {ok, #document{value = #user_group{effective_users = Users}}} ->
+    case od_group:get(ID) of
+        {ok, #document{value = #od_group{eff_users = Users}}} ->
             Users;
         _Err ->
             ?warning_stacktrace("Unable to access group ~p due to ~p", [ID, _Err]),
@@ -210,21 +210,21 @@ get_effective_users(ID) ->
 
 -spec get_effective_groups(GroupID :: binary()) -> effective_groups().
 get_effective_groups(ID) ->
-    case user_group:get(ID) of
-        {ok, #document{value = #user_group{effective_groups = Groups}}} ->
+    case od_group:get(ID) of
+        {ok, #document{value = #od_group{eff_children = Groups}}} ->
             Groups;
         _Err ->
             ?warning_stacktrace("Unable to access group ~p due to ~p", [ID, _Err]),
             []
     end.
 
--spec children(#user_group{}) -> [binary()].
-children(#user_group{nested_groups = Tuples}) ->
+-spec children(#od_group{}) -> [binary()].
+children(#od_group{children = Tuples}) ->
     {Groups, _} = lists:unzip(Tuples),
     Groups.
 
--spec parents(#user_group{}) -> [binary()].
-parents(#user_group{parent_groups = Groups}) ->
+-spec parents(#od_group{}) -> [binary()].
+parents(#od_group{parents = Groups}) ->
     Groups.
 
 %%--------------------------------------------------------------------
@@ -238,7 +238,7 @@ ensure_state_initialised() ->
 
     case Result of
         {ok, _} ->
-            {ok, AllGroups} = user_group:all(),
+            {ok, AllGroups} = od_group:list(),
             lists:foreach(fun(#document{key = GID}) ->
                 mark_group_changed(GID)
             end, AllGroups);
@@ -257,7 +257,7 @@ ensure_state_initialised() ->
     InitialContext :: #{GroupID :: binary() => term()}.
 traverse([], _, _) -> ok;
 traverse([ID | NextIDsToVisit], Visitor, Context) ->
-    NewContext = case user_group:get(ID) of
+    NewContext = case od_group:get(ID) of
         {ok, Doc} ->
             Visitor(Doc, Context);
         _Err ->
@@ -271,12 +271,12 @@ traverse([ID | NextIDsToVisit], Visitor, Context) ->
 %% @doc @private traverses group graph and returns ordered ids
 %% @end
 %%--------------------------------------------------------------------
--spec topsort(StartingIDs :: [binary()], fun((#user_group{}) -> NextIDs :: [binary()])) ->
+-spec topsort(StartingIDs :: [binary()], fun((#od_group{}) -> NextIDs :: [binary()])) ->
     OrderedGroups :: [binary()].
 topsort(StartingIDs, GetNext) ->
     topsort(StartingIDs, GetNext, [], []).
 
--spec topsort(Groups :: [binary()], fun((#user_group{}) -> NextIDs :: [binary()]),
+-spec topsort(Groups :: [binary()], fun((#od_group{}) -> NextIDs :: [binary()]),
     AlreadyOrdered :: [binary()], Parents :: [binary()]) ->
     OrderedGroups :: [binary()].
 topsort(Groups, GetNext, Ordered, Parents) ->
@@ -289,7 +289,7 @@ topsort(Groups, GetNext, Ordered, Parents) ->
         end,
         case lists:member(ID, AlreadyOrdered) of
             true -> AlreadyOrdered;
-            false -> case user_group:get(ID) of
+            false -> case od_group:get(ID) of
                 {ok, #document{value = Val}} ->
                     Children = GetNext(Val),
                     OrderedUpdated = topsort(Children, GetNext, AlreadyOrdered, [ID | Parents]),
@@ -318,8 +318,8 @@ break_cycles(Groups, Ancestors) ->
                 Parent = hd(Ancestors),
                 ?warning("Cycle detected - breaking relation: ~p - ~p", [ID, Parent]),
                 group_logic:remove_nested_group(Parent, ID);
-            false -> case user_group:get(ID) of
-                {ok, #document{value = #user_group{nested_groups = GroupsTuples}}} ->
+            false -> case od_group:get(ID) of
+                {ok, #document{value = #od_group{children = GroupsTuples}}} ->
                     {GroupIDs, _} = lists:unzip(GroupsTuples),
                     break_cycles(GroupIDs, [ID | Ancestors]);
                 _Err ->
@@ -334,26 +334,26 @@ break_cycles(Groups, Ancestors) ->
 
 -spec update_effective_groups(GroupID :: binary(), effective_groups()) -> ok.
 update_effective_groups(ID, Effective) ->
-    user_group:update(ID, fun(Group) ->
-        Current = ordsets:from_list(Group#user_group.effective_groups),
+    od_group:update(ID, fun(Group) ->
+        Current = ordsets:from_list(Group#od_group.eff_children),
         Removed = ordsets:subtract(Current, Effective),
         Added = ordsets:subtract(Effective, Current),
         case {Added, Removed} of
             {[], []} -> {error, update_not_needed};
-            _ -> {ok, Group#user_group{effective_groups = Effective}}
+            _ -> {ok, Group#od_group{eff_children = Effective}}
         end
     end), ok.
 
 -spec update_effective_users(GroupID :: binary(), effective_users()) -> ok.
 update_effective_users(ID, Effective) ->
-    user_group:update(ID, fun(Group) ->
+    od_group:update(ID, fun(Group) ->
         EffectiveOrdset = ordsets:from_list(Effective),
-        Current = ordsets:from_list(Group#user_group.effective_users),
+        Current = ordsets:from_list(Group#od_group.eff_users),
         Removed = ordsets:subtract(Current, EffectiveOrdset),
         Added = ordsets:subtract(EffectiveOrdset, Current),
         case {Added, Removed} of
             {[], []} -> {error, update_not_needed};
-            _ -> {ok, Group#user_group{effective_users = Effective}}
+            _ -> {ok, Group#od_group{eff_users = Effective}}
         end
     end), ok.
 
@@ -364,8 +364,8 @@ update_effective_groups_in_users(UserIDs, ChangedGroupIDs) ->
         gather_user_effective_groups_context(ChangedGroupIDs, UserIDs),
 
     lists:foreach(fun(UID) ->
-        onedata_user:update(UID, fun(User) ->
-            #onedata_user{groups = GIDs, effective_groups = EGIDs} = User,
+        od_user:update(UID, fun(User) ->
+            #od_user{groups = GIDs, eff_groups = EGIDs} = User,
 
             NewEGIDs = lists:usort(lists:foldl(fun(GID, Acc) ->
                 Acc ++ maps:get(GID, EffectiveGroupsMap, [])
@@ -373,7 +373,7 @@ update_effective_groups_in_users(UserIDs, ChangedGroupIDs) ->
 
             case lists:usort(EGIDs) of
                 NewEGIDs -> {error, update_not_needed};
-                _ -> {ok, User#onedata_user{effective_groups = NewEGIDs}}
+                _ -> {ok, User#od_user{eff_groups = NewEGIDs}}
             end
         end)
     end, AffectedUsers),
@@ -391,8 +391,8 @@ gather_user_effective_groups_context(GIDs, UIDs) ->
 -spec gather_affected_users(GIDs :: [binary()]) -> AffectedUsers :: [binary()].
 gather_affected_users(GIDs) ->
     lists:foldl(fun(GID, UsersList) ->
-        case user_group:get(GID) of
-            {ok, #document{value = #user_group{users = Users}}} ->
+        case od_group:get(GID) of
+            {ok, #document{value = #od_group{users = Users}}} ->
                 {UIDs, _} = lists:unzip(Users),
                 UsersList ++ UIDs;
             _Err ->
@@ -404,8 +404,8 @@ gather_affected_users(GIDs) ->
 -spec gather_users_groups(UIDs :: [binary()]) -> GIDs :: [binary()].
 gather_users_groups(Users) ->
     lists:foldl(fun(UID, Acc) ->
-        case onedata_user:get(UID) of
-            {ok, #document{value = #onedata_user{groups = Groups}}} ->
+        case od_user:get(UID) of
+            {ok, #document{value = #od_user{groups = Groups}}} ->
                 Acc ++ Groups;
             _Err ->
                 ?warning_stacktrace("Unable to access user ~p due to ~p", [UID, _Err]),
@@ -419,8 +419,8 @@ gather_effective_groups(GIDs) ->
     lists:foldl(fun(GID, GroupsMap) ->
         case maps:get(GID, GroupsMap, undefined) of
             undefined ->
-                case user_group:get(GID) of
-                    {ok, #document{value = #user_group{effective_groups = Effective}}} ->
+                case od_group:get(GID) of
+                    {ok, #document{value = #od_group{eff_children = Effective}}} ->
                         maps:put(GID, Effective, GroupsMap);
                     _Err ->
                         ?warning_stacktrace("Unable to access group ~p due to ~p", [GID, _Err]),

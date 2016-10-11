@@ -17,7 +17,7 @@
 
 %% API
 -export([create/4, exists/1, modify/2, remove/1]).
--export([get_data/2, get_parent/1]).
+-export([get_data/2, get_space/1]).
 -export([list/0]).
 -export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
 
@@ -37,17 +37,17 @@
 create(ShareId, Name, RootFileId, ParentSpaceId) ->
     true = space_logic:exists(ParentSpaceId),
 
-    Share = #share{
+    Share = #od_share{
         name = Name,
-        parent_space = ParentSpaceId,
-        root_file_id = RootFileId,
+        space = ParentSpaceId,
+        root_file = RootFileId,
         public_url = share_id_to_public_url(ShareId)
     },
-    {ok, ShareId} = share:save(#document{key = ShareId, value = Share}),
+    {ok, ShareId} = od_share:save(#document{key = ShareId, value = Share}),
 
-    {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
-        Shares = SpaceDoc#space.shares,
-        {ok, SpaceDoc#space{shares = [ShareId | Shares]}}
+    {ok, _} = od_space:update(ParentSpaceId, fun(SpaceDoc) ->
+        Shares = SpaceDoc#od_space.shares,
+        {ok, SpaceDoc#od_space{shares = [ShareId | Shares]}}
     end),
 
     {ok, ShareId}.
@@ -60,7 +60,7 @@ create(ShareId, Name, RootFileId, ParentSpaceId) ->
 %%--------------------------------------------------------------------
 -spec exists(ShareId :: binary()) -> boolean().
 exists(ShareId) ->
-    share:exists(ShareId).
+    od_share:exists(ShareId).
 
 
 %%--------------------------------------------------------------------
@@ -70,8 +70,8 @@ exists(ShareId) ->
 %%--------------------------------------------------------------------
 -spec modify(ShareId :: binary(), NewName :: binary()) -> ok.
 modify(ShareId, NewName) ->
-    {ok, _} = share:update(ShareId, fun(ShareDoc) ->
-        {ok, ShareDoc#share{name = NewName}}
+    {ok, _} = od_share:update(ShareId, fun(ShareDoc) ->
+        {ok, ShareDoc#od_share{name = NewName}}
     end),
     ok.
 
@@ -84,13 +84,13 @@ modify(ShareId, NewName) ->
 -spec remove(ShareId :: binary()) -> true.
 remove(ShareId) ->
     {ok, #document{
-        value = #share{
-            parent_space = ParentSpaceId
-        }}} = share:get(ShareId),
-    ok = share:delete(ShareId),
-    {ok, _} = space:update(ParentSpaceId, fun(SpaceDoc) ->
-        Shares = SpaceDoc#space.shares,
-        {ok, SpaceDoc#space{shares = Shares -- [ShareId]}}
+        value = #od_share{
+            space = ParentSpaceId
+        }}} = od_share:get(ShareId),
+    ok = od_share:delete(ShareId),
+    {ok, _} = od_space:update(ParentSpaceId, fun(SpaceDoc) ->
+        Shares = SpaceDoc#od_space.shares,
+        {ok, SpaceDoc#od_space{shares = Shares -- [ShareId]}}
     end),
     true.
 
@@ -105,18 +105,18 @@ remove(ShareId) ->
     {ok, [proplists:property()]}.
 get_data(ShareId, _Client) ->
     {ok, #document{
-        value = #share{
+        value = #od_share{
             name = Name,
             public_url = PublicURL,
-            root_file_id = RootFileId,
-            parent_space = ParentSpace
-        }}} = share:get(ShareId),
+            root_file = RootFile,
+            space = Space
+        }}} = od_share:get(ShareId),
     {ok, [
         {shareId, ShareId},
         {name, Name},
         {publicUrl, PublicURL},
-        {rootFileId, RootFileId},
-        {parentSpace, ParentSpace}
+        {rootFileId, RootFile},
+        {spaceId, Space}
     ]}.
 
 
@@ -125,11 +125,11 @@ get_data(ShareId, _Client) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec get_parent(ShareId :: binary()) ->
+-spec get_space(ShareId :: binary()) ->
     {ok, undefined | binary()} | datastore:get_error().
-get_parent(ShareId) ->
-    case share:get(ShareId) of
-        {ok, #document{value = #share{parent_space = ParentSpaceId}}} ->
+get_space(ShareId) ->
+    case od_share:get(ShareId) of
+        {ok, #document{value = #od_share{space = ParentSpaceId}}} ->
             {ok, ParentSpaceId};
         Error ->
             Error
@@ -141,7 +141,7 @@ get_parent(ShareId) ->
 %%--------------------------------------------------------------------
 -spec list() -> {ok, [binary()]}.
 list() ->
-    {ok, ShareDocs} = share:list(),
+    {ok, ShareDocs} = od_share:list(),
     ShareIds = lists:map(fun(#document{key = ShareId}) ->
         ShareId
     end, ShareDocs),
@@ -166,9 +166,9 @@ share_id_to_public_url(ShareId) ->
 -spec share_id_to_redirect_url(ShareId :: binary()) -> binary().
 share_id_to_redirect_url(ShareId) ->
     {ok, #document{
-        value = #share{
-            parent_space = ParentSpaceId
-        }}} = share:get(ShareId),
+        value = #od_share{
+            space = ParentSpaceId
+        }}} = od_share:get(ShareId),
     {ok, [{providers, Providers}]} =
         space_logic:get_providers(ParentSpaceId, provider),
     % Prefer online providers

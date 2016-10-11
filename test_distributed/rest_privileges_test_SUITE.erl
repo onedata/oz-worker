@@ -63,8 +63,8 @@ all() ->
 % and Privileges (use 'undefined' to skip privileges matching).
 check_view_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
     ReqPath = case SubjectType of
-        onedata_user -> [<<"/privileges/users/">>, SubjectId];
-        user_group -> [<<"/privileges/groups/">>, SubjectId]
+        od_user -> [<<"/privileges/users/">>, SubjectId];
+        od_group -> [<<"/privileges/groups/">>, SubjectId]
     end,
     ExpectedBody = case Privileges of
         undefined -> undefined;
@@ -87,8 +87,8 @@ check_view_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
 % and asserts if returned code matches expected Code.
 check_set_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
     ReqPath = case SubjectType of
-        onedata_user -> [<<"/privileges/users/">>, SubjectId];
-        user_group -> [<<"/privileges/groups/">>, SubjectId]
+        od_user -> [<<"/privileges/users/">>, SubjectId];
+        od_group -> [<<"/privileges/groups/">>, SubjectId]
     end,
     rest_test_utils:check_rest_call(#{
         request => #{
@@ -167,11 +167,11 @@ check_list_providers_of_space(Code, Issuer, SpaceId, Providers) ->
 % matches the expected.
 check_add_member_to_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
     {ReqPath, ReqBody} = case SubjectType of
-        onedata_user -> {
+        od_user -> {
             [<<"/spaces/">>, SpaceId, <<"/users">>],
             #{<<"userId">> => SubjectId}
         };
-        user_group -> {
+        od_group -> {
             [<<"/spaces/">>, SpaceId, <<"/groups">>],
             #{<<"groupId">> => SubjectId}
         }
@@ -193,9 +193,9 @@ check_add_member_to_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
 % matches the expected.
 check_remove_member_from_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
     ReqPath = case SubjectType of
-        onedata_user ->
+        od_user ->
             [<<"/spaces/">>, SpaceId, <<"/users/">>, SubjectId];
-        user_group ->
+        od_group ->
             [<<"/spaces/">>, SpaceId, <<"/groups/">>, SubjectId]
 
     end,
@@ -217,42 +217,42 @@ check_remove_member_from_space(Code, Issuer, SubjectId, SubjectType, SpaceId) ->
 
 view_privileges_test(Config) ->
     rest_test_utils:set_config(Config),
-    {ok, User1} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User1} = oz_test_utils:create_user(Config, #od_user{}),
     % Unauthenticated requests should be discarded (401)
-    ?assert(check_view_privileges(401, undefined, User1, onedata_user,
+    ?assert(check_view_privileges(401, undefined, User1, od_user,
         undefined)),
     % User without permissions cannot view the OZ API privileges (403)
-    ?assert(check_view_privileges(403, User1, User1, onedata_user, undefined)),
+    ?assert(check_view_privileges(403, User1, User1, od_user, undefined)),
     % Give the user view privileges and check again
-    set_privileges(Config, User1, onedata_user, [view_privileges]),
-    ?assert(check_view_privileges(200, User1, User1, onedata_user,
+    set_privileges(Config, User1, od_user, [view_privileges]),
+    ?assert(check_view_privileges(200, User1, User1, od_user,
         [<<"view_privileges">>])),
     % New users and groups should have no permissions by default
-    {ok, User2} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Group2} = oz_test_utils:create_group(Config, User2, <<"gr">>),
-    ?assert(check_view_privileges(200, User1, User2, onedata_user, [])),
-    ?assert(check_view_privileges(200, User1, Group2, user_group, [])),
+    ?assert(check_view_privileges(200, User1, User2, od_user, [])),
+    ?assert(check_view_privileges(200, User1, Group2, od_group, [])),
     % Checking the privileges of nonexistent user or group should return 404
-    ?assert(check_view_privileges(404, User1, <<"bad_user">>, onedata_user,
+    ?assert(check_view_privileges(404, User1, <<"bad_user">>, od_user,
         undefined)),
-    ?assert(check_view_privileges(404, User1, <<"bad_group">>, user_group,
+    ?assert(check_view_privileges(404, User1, <<"bad_group">>, od_group,
         undefined)).
 
 
 set_privileges_test(Config) ->
     rest_test_utils:set_config(Config),
-    {ok, User1} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User1} = oz_test_utils:create_user(Config, #od_user{}),
     % Give the user perms to view and set privileges
     set_privileges(
-        Config, User1, onedata_user, [view_privileges, set_privileges]
+        Config, User1, od_user, [view_privileges, set_privileges]
     ),
     % First try some wrong perms
-    ?assert(check_set_privileges(400, User1, User1, onedata_user,
+    ?assert(check_set_privileges(400, User1, User1, od_user,
         [inexistent, permissions])),
     % And now a nonexistent user
-    ?assert(check_set_privileges(404, User1, <<"bad_user">>, onedata_user, [])),
+    ?assert(check_set_privileges(404, User1, <<"bad_user">>, od_user, [])),
     % Create a user and a group for testing
-    {ok, User2} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Group2} = oz_test_utils:create_group(Config, User2, <<"gr">>),
     % Get all possible privileges
     [Node | _] = ?config(oz_worker_nodes, Config),
@@ -263,20 +263,20 @@ set_privileges_test(Config) ->
     lists:foreach(
         fun(Privileges) ->
             % Set the privileges
-            ?assert(check_set_privileges(204, User1, User2, onedata_user,
+            ?assert(check_set_privileges(204, User1, User2, od_user,
                 Privileges)),
             % View the privileges
-            ?assert(check_view_privileges(200, User1, User2, onedata_user,
+            ?assert(check_view_privileges(200, User1, User2, od_user,
                 Privileges))
         end, Combinations),
     % Now for Group2
     lists:foreach(
         fun(Privileges) ->
             % Set the privileges
-            ?assert(check_set_privileges(204, User1, Group2, user_group,
+            ?assert(check_set_privileges(204, User1, Group2, od_group,
                 Privileges)),
             % View the privileges
-            ?assert(check_view_privileges(200, User1, Group2, user_group,
+            ?assert(check_view_privileges(200, User1, Group2, od_group,
                 Privileges))
         end, Combinations).
 
@@ -285,9 +285,9 @@ set_privileges_test(Config) ->
 list_spaces_test(Config) ->
     rest_test_utils:set_config(Config),
     % Create some spaces belonging to some users
-    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #onedata_user{}),
-    {ok, UserWithSpaces2} = oz_test_utils:create_user(Config, #onedata_user{}),
-    {ok, UserWithSpaces3} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, UserWithSpaces1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserWithSpaces2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserWithSpaces3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(
         Config, {user, UserWithSpaces1}, <<"sp">>
     ),
@@ -307,10 +307,10 @@ list_spaces_test(Config) ->
         Space4
     ],
     % Admin will be used to grant or revoke privileges
-    {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
-    set_privileges(Config, Admin, onedata_user, [set_privileges]),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    set_privileges(Config, Admin, od_user, [set_privileges]),
     % User will be used to test the functionality
-    {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
     %% PRIVILEGES AS A USER
 
@@ -318,12 +318,12 @@ list_spaces_test(Config) ->
     % as he does not yet have privs
     ?assert(check_list_spaces(403, TestUser, undefined)),
     % Lets grant privileges to the user
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user,
         [<<"list_spaces">>])),
     % Now he should be able to list spaces
     ?assert(check_list_spaces(200, TestUser, ExpectedSpaces)),
     % Revoke the privileges again
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user, [])),
     % He should no longer be able to list spaces
     ?assert(check_list_spaces(403, TestUser, undefined)),
 
@@ -337,12 +337,12 @@ list_spaces_test(Config) ->
     ?assert(check_list_spaces(403, TestUser, undefined)),
     % But when we grant privileges to TestGroup, he should be able to
     % list spaces
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group,
         [<<"list_spaces">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_spaces(200, TestUser, ExpectedSpaces)),
     % Revoke the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_spaces(403, TestUser, undefined)),
 
@@ -356,12 +356,12 @@ list_spaces_test(Config) ->
     ?assert(check_list_spaces(403, TestUser, undefined)),
     % But when we grant privileges to ParentGroup, he should be able to
     % list spaces
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group,
         [<<"list_spaces">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_spaces(200, TestUser, ExpectedSpaces)),
     % Revoke the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_spaces(403, TestUser, undefined)).
 
@@ -377,10 +377,10 @@ list_providers_test(Config) ->
         Provider3
     ],
     % Admin will be used to grant or revoke privileges
-    {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
-    set_privileges(Config, Admin, onedata_user, [set_privileges]),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    set_privileges(Config, Admin, od_user, [set_privileges]),
     % User will be used to test the functionality
-    {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
     %% PRIVILEGES AS A USER
 
@@ -388,12 +388,12 @@ list_providers_test(Config) ->
     % as he does not yet have privs
     ?assert(check_list_providers(403, TestUser, undefined)),
     % Lets grant privileges to the user
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user,
         [<<"list_providers">>])),
     % Now he should be able to list providers
     ?assert(check_list_providers(200, TestUser, ExpectedProviders)),
     % Revoke the privileges again
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user, [])),
     % He should no longer be able to list providers
     ?assert(check_list_providers(403, TestUser, undefined)),
 
@@ -407,12 +407,12 @@ list_providers_test(Config) ->
     ?assert(check_list_providers(403, TestUser, undefined)),
     % But when we grant privileges to TestGroup, he should be able to
     % list providers
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group,
         [<<"list_providers">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_providers(200, TestUser, ExpectedProviders)),
     % Revoke the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_providers(403, TestUser, undefined)),
 
@@ -426,19 +426,19 @@ list_providers_test(Config) ->
     ?assert(check_list_providers(403, TestUser, undefined)),
     % But when we grant privileges to ParentGroup, he should be able to
     % list providers
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group,
         [<<"list_providers">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_providers(200, TestUser, ExpectedProviders)),
     % Revoke the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_providers(403, TestUser, undefined)).
 
 
 list_providers_of_space_test(Config) ->
     rest_test_utils:set_config(Config),
-    {ok, UserWithSpaces} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, UserWithSpaces} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Provider1, _} = oz_test_utils:create_provider(Config, <<"pr">>),
     {ok, Provider2, _} = oz_test_utils:create_provider(Config, <<"pr">>),
     {ok, Space1} = oz_test_utils:create_space(
@@ -451,10 +451,10 @@ list_providers_of_space_test(Config) ->
         Provider2
     ],
     % Admin will be used to grant or revoke privileges
-    {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
-    set_privileges(Config, Admin, onedata_user, [set_privileges]),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    set_privileges(Config, Admin, od_user, [set_privileges]),
     % User will be used to test the functionality
-    {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
     %% PRIVILEGES AS A USER
 
@@ -462,12 +462,12 @@ list_providers_of_space_test(Config) ->
     % as he does not yet have privs
     ?assert(check_list_providers_of_space(403, TestUser, Space1, undefined)),
     % Lets grant privileges to the user
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user,
         [<<"list_providers_of_space">>])),
     % Now he should be able to list providers of space
     ?assert(check_list_providers_of_space(200, TestUser, Space1, ExpProviders)),
     % Revoke the privileges again
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user, [])),
     % He should no longer be able to list providers of space
     ?assert(check_list_providers_of_space(403, TestUser, Space1, undefined)),
 
@@ -481,13 +481,13 @@ list_providers_of_space_test(Config) ->
     ?assert(check_list_providers_of_space(403, TestUser, Space1, undefined)),
     % But when we grant privileges to TestGroup, he should be able to
     % list providers of space
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group,
         [<<"list_providers_of_space">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_providers_of_space(200, TestUser, Space1,
         ExpProviders)),
     % Revoke the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_providers_of_space(403, TestUser, Space1,
         undefined)),
@@ -502,13 +502,13 @@ list_providers_of_space_test(Config) ->
     ?assert(check_list_providers_of_space(403, TestUser, Space1, undefined)),
     % But when we grant privileges to ParentGroup, he should be able to
     % list providers of space
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group,
         [<<"list_providers_of_space">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_providers_of_space(200, TestUser, Space1,
         ExpProviders)),
     % Revoke the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_providers_of_space(403, TestUser, Space1,
         undefined)).
@@ -517,19 +517,19 @@ list_providers_of_space_test(Config) ->
 modify_space_members_test(Config) ->
     rest_test_utils:set_config(Config),
     % Admin will be used to grant or revoke privileges
-    {ok, Admin} = oz_test_utils:create_user(Config, #onedata_user{}),
-    set_privileges(Config, Admin, onedata_user, [set_privileges]),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    set_privileges(Config, Admin, od_user, [set_privileges]),
     % TestUser will be used to test the privileges
-    {ok, TestUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
     % AddedUser will be added to spaces and removed by TestUser
-    {ok, AddedUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, AddedUser} = oz_test_utils:create_user(Config, #od_user{}),
     % AddedGroup will be added to spaces and removed by TestUser
-    {ok, GroupOwner} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, GroupOwner} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, AddedGroup} = oz_test_utils:create_group(
         Config, GroupOwner, <<"gr">>
     ),
     % Create a space
-    {ok, SpaceOwner} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, SpaceOwner} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, TestSpace} = oz_test_utils:create_space(
         Config, {user, SpaceOwner}, <<"sp">>
     ),
@@ -539,45 +539,45 @@ modify_space_members_test(Config) ->
     % TestUser should not be able to add or remove members from a space
     % as he does not yet have privs
     ?assert(check_add_member_to_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_add_member_to_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Give him the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user,
         [<<"add_member_to_space">>])),
     ?assert(check_add_member_to_space(204, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_add_member_to_space(204, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Make sure inexistent users and groups cannot be added
     ?assert(check_add_member_to_space(400, TestUser, <<"wrong_user_id">>,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_add_member_to_space(400, TestUser, <<"wrong_group_id">>,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user, [])),
     ?assert(check_add_member_to_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_add_member_to_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % The user should not be able to delete users/groups without privileges
     ?assert(check_remove_member_from_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_remove_member_from_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Give him the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user,
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user,
         [<<"remove_member_from_space">>])),
     ?assert(check_remove_member_from_space(202, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_remove_member_from_space(202, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
-    ?assert(check_set_privileges(204, Admin, TestUser, onedata_user, [])),
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user, [])),
     ?assert(check_remove_member_from_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_remove_member_from_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
 
     %% PRIVILEGES VIA GROUP
 
@@ -589,44 +589,44 @@ modify_space_members_test(Config) ->
     % TestUser should not be able to perform add operations
     % as he does not yet have privs
     ?assert(check_add_member_to_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_add_member_to_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Give the privileges to his group and check again
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group,
         [<<"add_member_to_space">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_add_member_to_space(204, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert_retry_10(check_add_member_to_space(204, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_add_member_to_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert_retry_10(check_add_member_to_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % The user should not be able to delete users/groups without privileges
     ?assert(check_remove_member_from_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_remove_member_from_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Give him the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group,
         [<<"remove_member_from_space">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_remove_member_from_space(202, TestUser,
-        AddedUser, onedata_user, TestSpace)),
+        AddedUser, od_user, TestSpace)),
     ?assert_retry_10(check_remove_member_from_space(202, TestUser,
-        AddedGroup, user_group, TestSpace)),
+        AddedGroup, od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
-    ?assert(check_set_privileges(204, Admin, TestGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_remove_member_from_space(403, TestUser,
-        AddedUser, onedata_user, TestSpace)),
+        AddedUser, od_user, TestSpace)),
     ?assert_retry_10(check_remove_member_from_space(403, TestUser,
-        AddedGroup, user_group, TestSpace)),
+        AddedGroup, od_group, TestSpace)),
 
     %% PRIVILEGES VIA NESTED GROUPS
 
@@ -637,44 +637,44 @@ modify_space_members_test(Config) ->
     % TestUser should not be able to perform add operations
     % as he does not yet have privs
     ?assert(check_add_member_to_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_add_member_to_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Give the privileges to his group and check again
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group,
         [<<"add_member_to_space">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_add_member_to_space(204, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert_retry_10(check_add_member_to_space(204, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_add_member_to_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert_retry_10(check_add_member_to_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % The user should not be able to delete users/groups without privileges
     ?assert(check_remove_member_from_space(403, TestUser, AddedUser,
-        onedata_user, TestSpace)),
+        od_user, TestSpace)),
     ?assert(check_remove_member_from_space(403, TestUser, AddedGroup,
-        user_group, TestSpace)),
+        od_group, TestSpace)),
     % Give him the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group,
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group,
         [<<"remove_member_from_space">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_remove_member_from_space(202, TestUser,
-        AddedUser, onedata_user, TestSpace)),
+        AddedUser, od_user, TestSpace)),
     ?assert_retry_10(check_remove_member_from_space(202, TestUser,
-        AddedGroup, user_group, TestSpace)),
+        AddedGroup, od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
-    ?assert(check_set_privileges(204, Admin, TopGroup, user_group, [])),
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group, [])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_remove_member_from_space(403, TestUser,
-        AddedUser, onedata_user, TestSpace)),
+        AddedUser, od_user, TestSpace)),
     ?assert_retry_10(check_remove_member_from_space(403, TestUser,
-        AddedGroup, user_group, TestSpace)).
+        AddedGroup, od_group, TestSpace)).
 
 
 %%%===================================================================
@@ -687,7 +687,7 @@ modify_space_members_test(Config) ->
 create_3_nested_groups(Config, TestUser) ->
     {ok, BottomGroup} = oz_test_utils:create_group(Config, TestUser, <<"gr">>),
     % Dummy user will be used only to create groups
-    {ok, DummyUser} = oz_test_utils:create_user(Config, #onedata_user{}),
+    {ok, DummyUser} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, MiddleGroup} = oz_test_utils:create_group(Config, DummyUser, <<"gr">>),
     {ok, TopGroup} = oz_test_utils:create_group(Config, DummyUser, <<"gr">>),
     {ok, MiddleGroup} = oz_test_utils:join_group(

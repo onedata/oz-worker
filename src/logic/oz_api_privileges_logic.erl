@@ -27,7 +27,8 @@
 %% If such record does not exist, an empty list of privileges is returned.
 %% @end
 %%--------------------------------------------------------------------
--spec get(EntityId :: binary(), EntityType :: onedata_user | user_group) ->
+-spec get(EntityId :: binary(),
+    EntityType :: oz_api_privileges:entity_type()) ->
     {ok, [oz_api_privileges:privilege()]}.
 get(EntityId, EntityType) ->
     Key = resolve_id(EntityId, EntityType),
@@ -85,8 +86,8 @@ modify(EntityId, EntityType, NewPrivileges) ->
 %% oz_api_privileges record (succeeds as well when the record is not present).
 %% @end
 %%--------------------------------------------------------------------
--spec remove(EntityId :: binary(), EntityType :: onedata_user | user_group) ->
-    boolean().
+-spec remove(EntityId :: binary(),
+    EntityType :: oz_api_privileges:entity_type()) -> boolean().
 remove(EntityId, EntityType) ->
     Key = resolve_id(EntityId, EntityType),
     ok = oz_api_privileges:delete(Key),
@@ -102,7 +103,7 @@ remove(EntityId, EntityType) ->
 -spec has_effective_privilege(UserId :: binary(),
     Privilege :: oz_api_privileges:privilege()) -> boolean().
 has_effective_privilege(UserId, Privilege) ->
-    {ok, UserPrivileges} = get(UserId, onedata_user),
+    {ok, UserPrivileges} = get(UserId, od_user),
     case lists:member(Privilege, UserPrivileges) of
         true ->
             % User has this privilege, return true
@@ -121,7 +122,7 @@ has_effective_privilege(UserId, Privilege) ->
                         true ->
                             true;
                         false ->
-                            {ok, GroupPrivileges} = get(GroupId, user_group),
+                            {ok, GroupPrivileges} = get(GroupId, od_group),
                             lists:member(Privilege, GroupPrivileges)
                     end
                 end, false, UserGroups)
@@ -129,16 +130,16 @@ has_effective_privilege(UserId, Privilege) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns record key based on entity ID and type (onedata_user/user_group).
+%% Returns record key based on entity ID and type (od_user/od_group).
 %% @end
 %%--------------------------------------------------------------------
 -spec resolve_id(EntityId :: binary(),
     EntityType :: oz_api_privileges:entity_type()) -> binary().
 resolve_id(EntityId, EntityType) ->
     case EntityType of
-        onedata_user ->
+        od_user ->
             <<"user:", EntityId/binary>>;
-        user_group ->
+        od_group ->
             <<"group:", EntityId/binary>>
     end.
 
@@ -154,9 +155,9 @@ resolve_id(EntityId, EntityType) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec entity_exists(EntityId :: binary(),
-    EntityType :: onedata_user | user_group) -> boolean().
-entity_exists(EntityId, onedata_user) ->
+    EntityType :: od_user | od_group) -> boolean().
+entity_exists(EntityId, od_user) ->
     user_logic:exists(EntityId);
-entity_exists(EntityId, user_group) ->
+entity_exists(EntityId, od_group) ->
     group_logic:exists(EntityId).
 

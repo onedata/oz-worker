@@ -81,7 +81,7 @@ call_oz(Config, Module, Function, Args) ->
 %% @doc Creates user in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user(Config :: term(), User :: #onedata_user{}) ->
+-spec create_user(Config :: term(), User :: #od_user{}) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_user(Config, User) ->
     call_oz(Config, user_logic, create, [User]).
@@ -94,7 +94,7 @@ create_user(Config, User) ->
 -spec get_user(Config :: term(), UserId :: binary()) ->
     {ok, #document{}} | {error, Reason :: term()}.
 get_user(Config, UserId) ->
-    call_oz(Config, onedata_user, get, [UserId]).
+    call_oz(Config, od_user, get, [UserId]).
 
 
 %%--------------------------------------------------------------------
@@ -132,7 +132,7 @@ create_group(Config, UserId, Name) ->
 -spec get_group(Config :: term(), GroupId :: binary()) ->
     {ok, #document{}} | {error, Reason :: term()}.
 get_group(Config, GroupId) ->
-    call_oz(Config, user_group, get, [GroupId]).
+    call_oz(Config, od_group, get, [GroupId]).
 
 
 %%--------------------------------------------------------------------
@@ -283,11 +283,11 @@ remove_share(Config, ShareId) ->
 %% @doc Creates a handle_service
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle_service(Config :: term(), UserId :: onedata_user:id(), 
-    Name :: handle_service:name(),
-    ProxyEndpoint :: handle_service:proxy_endpoint(), 
-    ServiceProperties :: handle_service:service_properties()) ->
-    {ok, HandleServiceId :: handle_service:id()}.
+-spec create_handle_service(Config :: term(), UserId :: od_user:id(),
+    Name :: od_handle_service:name(),
+    ProxyEndpoint :: od_handle_service:proxy_endpoint(),
+    ServiceProperties :: od_handle_service:service_properties()) ->
+    {ok, HandleServiceId :: od_handle_service:id()}.
 create_handle_service(Config, UserId, Name, ProxyEndpoint, ServiceProperties) ->
     call_oz(Config, handle_service_logic, create, 
         [UserId, Name, ProxyEndpoint, ServiceProperties]).
@@ -296,7 +296,7 @@ create_handle_service(Config, UserId, Name, ProxyEndpoint, ServiceProperties) ->
 %% @doc Removes handle_service
 %% @end
 %%--------------------------------------------------------------------
--spec remove_handle_service(Config :: term(), HandleServiceId :: handle_service:id()) -> boolean().
+-spec remove_handle_service(Config :: term(), HandleServiceId :: od_handle_service:id()) -> boolean().
 remove_handle_service(Config, HandleServiceId) ->
     call_oz(Config, handle_service_logic, remove, [HandleServiceId]).
 
@@ -305,9 +305,9 @@ remove_handle_service(Config, HandleServiceId) ->
 %% @doc Creates a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle(Config :: term(), onedata_user:id(), handle_service:id(), 
-    handle:resource_type(), handle:resource_id(), handle:metadata()) ->
-    {ok, handle:id()}.
+-spec create_handle(Config :: term(), od_user:id(), od_handle_service:id(),
+    od_handle:resource_type(), od_handle:resource_id(), od_handle:metadata()) ->
+    {ok, od_handle:id()}.
 create_handle(Config, UserId, HandleServiceId, ResourceType, ResourceId, Metadata) ->
     call_oz(Config, handle_logic, create,
         [UserId, HandleServiceId, ResourceType, ResourceId, Metadata]).
@@ -316,7 +316,7 @@ create_handle(Config, UserId, HandleServiceId, ResourceType, ResourceId, Metadat
 %% @doc Removes handle
 %% @end
 %%--------------------------------------------------------------------
--spec remove_handle(Config :: term(), HandleId :: handle:id()) -> boolean().
+-spec remove_handle(Config :: term(), HandleId :: od_handle:id()) -> boolean().
 remove_handle(Config, HandleId) ->
     call_oz(Config, handle_logic, remove, [HandleId]).
 
@@ -325,8 +325,8 @@ remove_handle(Config, HandleId) ->
 %% @doc Modifies handle
 %% @end
 %%--------------------------------------------------------------------
--spec modify_handle(Config :: term(), handle:id(), handle:resource_type(),
-    handle:resource_id(), handle:metadata()) -> ok.
+-spec modify_handle(Config :: term(), od_handle:id(), od_handle:resource_type(),
+    od_handle:resource_id(), od_handle:metadata()) -> ok.
 modify_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
     call_oz(Config, handle_logic, modify, 
         [HandleId, NewResourceType, NewResourceId, NewMetadata]).
@@ -373,20 +373,20 @@ remove_provider(Config, ProviderId) ->
 remove_all_entities(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     % Delete all providers
-    {ok, PrDocs} = call_oz(Config, provider, list, []),
+    {ok, PrDocs} = call_oz(Config, od_provider, list, []),
     [true = remove_provider(Config, PId) || #document{key = PId} <- PrDocs],
     % Delete all shares
-    {ok, ShareDocs} = call_oz(Config, share, list, []),
+    {ok, ShareDocs} = call_oz(Config, od_share, list, []),
     [true = remove_share(Config, SId) || #document{key = SId} <- ShareDocs],
     % Delete all spaces
-    {ok, SpaceDocs} = call_oz(Config, space, list, []),
+    {ok, SpaceDocs} = call_oz(Config, od_space, list, []),
     [true = remove_space(Config, SId) || #document{key = SId} <- SpaceDocs],
-    {ok, HandleDocs} = call_oz(Config, handle, list, []),
+    {ok, HandleDocs} = call_oz(Config, od_handle, list, []),
     [true = remove_handle(Config, HId) || #document{key = HId} <- HandleDocs],
-    {ok, HandleServiceDocs} = call_oz(Config, handle_service, list, []),
+    {ok, HandleServiceDocs} = call_oz(Config, od_handle_service, list, []),
     [true = remove_handle_service(Config, HSId) || #document{key = HSId} <- HandleServiceDocs],
     % Delete all groups, excluding predefined groups
-    {ok, GroupDocsAll} = call_oz(Config, user_group, list, []),
+    {ok, GroupDocsAll} = call_oz(Config, od_group, list, []),
     % Filter out predefined groups
     {ok, PredefinedGroupsMapping} = test_utils:get_env(
         Node, oz_worker, predefined_groups
@@ -398,6 +398,6 @@ remove_all_entities(Config) ->
         end, GroupDocsAll),
     [true = remove_group(Config, GId) || #document{key = GId} <- GroupDocs],
     % Delete all users
-    {ok, UserDocs} = call_oz(Config, onedata_user, list, []),
+    {ok, UserDocs} = call_oz(Config, od_user, list, []),
     [true = remove_user(Config, UId) || #document{key = UId} <- UserDocs],
     ok.

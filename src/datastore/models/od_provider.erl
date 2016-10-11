@@ -1,28 +1,27 @@
 %%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C) 2016 ACK CYFRONET AGH
+%%% @author Michal Zmuda
+%%% @copyright (C) 2015 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing service allowing for registration of file handles.
+%%% API for provider record - representing a provider in the system.
 %%% @end
 %%%-------------------------------------------------------------------
--module(handle_service).
--author("Tomasz Lichon").
+-module(od_provider).
+-author("Michal Zmuda").
 -behaviour(model_behaviour).
 
--include("registered_names.hrl").
+-include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
+-type doc() :: datastore:document().
+-type info() :: #od_provider{}.
 -type id() :: binary().
--type name() :: binary().
--type proxy_endpoint() :: binary().
--type service_properties() :: json_term().
+-export_type([doc/0, info/0, id/0]).
 
--export_type([id/0, name/0, proxy_endpoint/0, service_properties/0]).
 
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
@@ -103,8 +102,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    StoreLevel = ?DISK_ONLY_LEVEL,
-    ?MODEL_CONFIG(handle_service_bucket, [], StoreLevel).
+    ?MODEL_CONFIG(provider_bucket, [], ?GLOBALLY_CACHED_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc

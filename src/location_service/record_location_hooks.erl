@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -define(METHODS, [create, create_or_update, save]).
--define(MODELS, [space, user_group, onedata_user, provider]).
+-define(MODELS, [od_space, od_group, od_user, od_provider]).
 
 -export([get_hooks/0, handle_before/3, handle_after/4]).
 

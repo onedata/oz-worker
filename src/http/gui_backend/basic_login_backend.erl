@@ -42,7 +42,7 @@ page_init() ->
             {ok, UserDoc} ->
                 #document{
                     key = UserId,
-                    value = #onedata_user{
+                    value = #od_user{
                         default_provider = DefaultProvider
                     }} = UserDoc,
                 g_session:log_in(UserId),
