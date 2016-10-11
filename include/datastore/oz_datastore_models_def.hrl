@@ -31,8 +31,9 @@
 %%% DB records definitions
 %%%===================================================================
 
+%% This record must be defined here as od_user depends on it.
 %% This record defines user's account info
-%% received from an openid / oauth provider
+%% received from an openid / oauth provider.
 -record(oauth_account, {
     provider_id = undefined :: atom(),
     user_id = <<"">> :: binary(),
@@ -40,6 +41,10 @@
     name = <<"">> :: binary(),
     email_list = [] :: [binary()]
 }).
+
+%%%===================================================================
+%%% Records synchronized via subscriptions
+%%%===================================================================
 
 % Records starting with prefix od_ are special records that represent entities
 % in the system and are synchronized to providers via subscriptions.
@@ -82,7 +87,6 @@
 % After a new relation appears, the parent is marked bottom_up_dirty and the
 % child is marked top_down_dirty.
 
-
 %% This record defines a user and is handled as a database document
 -record(od_user, {
     name = <<"">> :: binary(),
@@ -123,7 +127,6 @@
     top_down_dirty = true :: boolean()
 }).
 
-
 %% This record defines a group of users, it has: name, list of users that
 %% belongs to it, list of spaces that are used by this group
 -record(od_group, {
@@ -159,7 +162,6 @@
     bottom_up_dirty = true :: boolean()
 }).
 
-
 %% This record defines a space that can be used by users to store their files
 -record(od_space, {
     name :: undefined | binary(),
@@ -181,7 +183,6 @@
     bottom_up_dirty = true :: boolean()
 }).
 
-
 %% This record defines a file/directory public share
 -record(od_share, {
     name = undefined :: undefined | binary(),
@@ -199,7 +200,6 @@
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
 }).
-
 
 %% This record defines a provider who support spaces and can be reached via url
 -record(od_provider, {
@@ -221,7 +221,6 @@
     bottom_up_dirty = true :: boolean()
 }).
 
-
 -record(od_handle_service, {
     name :: od_handle_service:name() | undefined,
     proxy_endpoint :: od_handle_service:proxy_endpoint() | undefined,
@@ -238,7 +237,6 @@
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
 }).
-
 
 -record(od_handle, {
     public_handle :: od_handle:public_handle() | undefined,
@@ -260,6 +258,9 @@
     bottom_up_dirty = true :: boolean()
 }).
 
+%%%===================================================================
+%%% Records specific for onezone
+%%%===================================================================
 
 %% This record contains a list of privileges possessed by certain entity
 %% (user / group) to use onezone API.
@@ -267,14 +268,12 @@
     privileges = [] :: [oz_api_privileges:privilege()]
 }).
 
-
 %% This record defines a GUI session
 -record(session, {
     user_id = undefined :: od_user:id() | undefined,
     memory = [] :: session:memory(),
     accessed = {0, 0, 0} :: erlang:timestamp()
 }).
-
 
 %% This record defines a token that can be used by user to do something
 -record(token, {
@@ -284,13 +283,11 @@
     issuer :: undefined | rest_handler:client()
 }).
 
-
 %% Records of this type store a macaroons secret
 -record(onedata_auth, {
     secret :: undefined | binary(),
     user_id :: undefined | binary()
 }).
-
 
 %% Stores CA dedicated node
 %% todo: implement distributed CA properly (connected with VFS-1499)
@@ -298,13 +295,11 @@
     dedicated_node :: undefined | {ok, node()} | {error, Reason :: term()}
 }).
 
-
 -record(groups_graph_caches_state, {
     changed_groups = [] :: [od_group:id()],
     changed_users = [] :: [od_user:id()],
     last_rebuild = 0 :: integer()
 }).
-
 
 % Describes state of batch.
 -record(outbox, {
@@ -313,12 +308,10 @@
     buffer :: undefined | [term()]
 }).
 
-
 % Stores data used to provide subscription updates
 -record(subscriptions_state, {
     cache :: undefined | gb_trees:tree()
 }).
-
 
 % Stores state of provider subscription
 -record(provider_subscription, {
@@ -328,7 +321,6 @@
     missing = [] :: [subscriptions:seq()],
     users = [] :: [binary()]
 }).
-
 
 % Info about identities, which are owned by this OZ
 -record(owned_identity, {
