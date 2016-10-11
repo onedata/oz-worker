@@ -220,7 +220,7 @@ fetch_from_db(Seqs) ->
         end, From, To),
 
         receive
-            {'EXIT', Pid, Reason} ->
+            {'EXIT', Pid, _Reason} ->
                 ignore_all(Seqs)
         after
             timer:seconds(Timeout) ->
