@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc9
+
+* Releasing new version 3.0.0-rc9
+
+
 ### 3.0.0-rc8
 
 * VFS-2625 Removing share's reference to handle is now not obligatory
