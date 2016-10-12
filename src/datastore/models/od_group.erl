@@ -27,9 +27,37 @@
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
+-export([record_struct/1]).
 
 -define(USER_MODULE, od_user).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns structure of the record in specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
+record_struct(1) ->
+{record, [
+        {name, binary},
+        {type, atom},
+        {parents, [binary]},
+        {children, [{binary, [atom]}]},
+        {eff_parents, [binary]},
+        {eff_children, [binary]},
+        {users, [{binary, [atom]}]},
+        {spaces, [binary]},
+        {handle_services, [binary]},
+        {handles, [binary]},
+        {eff_users, [{binary, [atom]}]},
+        {eff_spaces, [binary]},
+        {eff_shares, [binary]},
+        {eff_providers, [binary]},
+        {eff_handle_services, [binary]},
+        {eff_handles, [binary]},
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%%===================================================================
 %%% model_behaviour callbacks
