@@ -338,6 +338,6 @@ message_model(od_handle_service) -> od_handle_service.
 %% safely send in JSON.
 %% @end
 %%-------------------------------------------------------------------
--spec serialize_timestamp(calendar:datetime()) -> [integer()].
-serialize_timestamp({{A, B, C}, {D, E, F}}) ->
-    [A, B, C, D, E, F].
+-spec serialize_timestamp(calendar:datetime()) -> binary().
+serialize_timestamp(DateTime) ->
+    oai_utils:datetime_to_oai_datestamp(DateTime).
