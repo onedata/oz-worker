@@ -264,7 +264,7 @@ get_data(HandleId) ->
         {resourceType, ResourceType},
         {resourceId, ResourceId},
         {metadata, Metadata},
-        {timestamp, translator:serialize_timestamp(Timestamp)}
+        {timestamp, timestamp_utils:datetime_to_datestamp(Timestamp)}
     ]}.
 
 

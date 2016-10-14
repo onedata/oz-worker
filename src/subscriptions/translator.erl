@@ -16,7 +16,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([get_ignore_msg/1, as_msg/3, serialize_timestamp/1]).
+-export([get_ignore_msg/1, as_msg/3]).
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -242,7 +242,7 @@ get_msg(Seq, Doc, od_handle = Model) ->
         {resource_type, ResourceType},
         {resource_id, ResourceId},
         {metadata, Metadata},
-        {timestamp, serialize_timestamp(Timestamp)},
+        {timestamp, timestamp_utils:datetime_to_datestamp(Timestamp)},
 
         % Direct relations to other entities
         {handle_service, HandleService},
@@ -329,15 +329,3 @@ message_model(od_user) -> od_user;
 message_model(od_group) -> od_group;
 message_model(od_handle) -> od_handle;
 message_model(od_handle_service) -> od_handle_service.
-
-
-%%-------------------------------------------------------------------
-%% @doc
-%% @private
-%% Translates erlang datetime format into a list of integers, which can be
-%% safely send in JSON.
-%% @end
-%%-------------------------------------------------------------------
--spec serialize_timestamp(calendar:datetime()) -> [integer()].
-serialize_timestamp({{A, B, C}, {D, E, F}}) ->
-    [A, B, C, D, E, F].

@@ -324,7 +324,7 @@ handle_expectation(Id, HandleServiceId, PublicHandle, ResourceType, ResourceId,
         {<<"resource_type">>, ResourceType},
         {<<"resource_id">>, ResourceId},
         {<<"metadata">>, Metadata},
-        {<<"timestamp">>, serialize_timestamp(Timestamp)},
+        {<<"timestamp">>, timestamp_utils:datetime_to_datestamp(Timestamp)},
 
         {<<"handle_service">>, HandleServiceId},
         {<<"users">>, privileges_as_binaries(Users)},
@@ -452,6 +452,3 @@ undefined_to_binary(Value) ->
         undefined -> <<"undefined">>;
         Bin when is_binary(Bin) -> Bin
     end.
-
-serialize_timestamp({{A, B, C}, {D, E, F}}) ->
-    [A, B, C, D, E, F].
