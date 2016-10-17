@@ -131,7 +131,7 @@
 %% belongs to it, list of spaces that are used by this group
 -record(od_group, {
     name = undefined :: binary() | undefined,
-    type = undefined :: od_group:type() | undefined,
+    type = role :: od_group:type(),
 
     % Group graph related entities (direct and effective)
     parents = [] :: [od_group:id()],
