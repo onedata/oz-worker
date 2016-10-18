@@ -36,15 +36,15 @@
 -spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
 record_struct(1) ->
     {record, [
-        {client_name, binary},
-        {redirection_point, binary},
-        {urls, [binary]},
-        {serial, binary},
+        {client_name, string},
+        {redirection_point, string},
+        {urls, [string]},
+        {serial, string},
         {latitude, float},
         {longitude, float},
-        {spaces, [binary]},
-        {eff_users, [binary]},
-        {eff_groups, [binary]},
+        {spaces, [string]},
+        {eff_users, [string]},
+        {eff_groups, [string]},
         {bottom_up_dirty, boolean}
     ]}.
 

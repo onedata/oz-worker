@@ -38,7 +38,7 @@
 record_struct(1) ->
     {record, [
         {secret, binary},
-        {user_id, binary}
+        {user_id, string}
     ]}.
 
 %%%===================================================================
