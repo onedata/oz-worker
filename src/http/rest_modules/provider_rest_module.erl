@@ -71,9 +71,9 @@ is_authorized(ports, post, _, _) ->
 is_authorized(provider, post, _, #client{type = undefined}) ->
     true;
 is_authorized(providers, _, _EntityId, #client{type = user, id = UserId}) ->
-    oz_api_privileges_logic:has_effective_privilege(UserId, list_providers);
+    user_logic:has_eff_oz_privilege(UserId, list_providers);
 is_authorized(nprovider, _, _EntityId, #client{type = user, id = UserId}) ->
-    oz_api_privileges_logic:has_effective_privilege(UserId, list_providers);
+    user_logic:has_eff_oz_privilege(UserId, list_providers);
 is_authorized(provider_dev, _, _, _) ->
     {ok, true} =:= application:get_env(?APP_Name, dev_mode);
 is_authorized(_, _, _, #client{type = provider}) ->

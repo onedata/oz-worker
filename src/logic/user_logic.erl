@@ -31,6 +31,8 @@
 -export([set_space_name_mapping/4, clean_space_name_mapping/2]).
 -export([authenticate_by_basic_credentials/2, change_user_password/3]).
 -export([get_all_handle_services/1, get_all_handles/1]).
+-export([set_oz_privileges/2, get_oz_privileges/1, delete_oz_privileges/1,
+    has_eff_oz_privilege/2]).
 
 %%%===================================================================
 %%% API functions
@@ -132,7 +134,7 @@ get_user_doc(Key) ->
 %% subset of fields to change.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(UserId :: binary(), Proplist :: [{atom(), term()}]) ->
+-spec modify(UserId :: od_user:id(), Proplist :: [{atom(), term()}]) ->
     ok | {error, Reason} when
     Reason :: disallowed_alias_prefix | invalid_alias | alias_occupied | any().
 modify(UserId, Proplist) ->
@@ -272,7 +274,7 @@ is_email_occupied(UserId, Email) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(UserId :: binary(), Type :: provider | user) ->
+-spec get_data(UserId :: od_user:id(), Type :: provider | user) ->
     {ok, [proplists:property()]}.
 get_data(UserId, provider) ->
     {ok, #document{
@@ -310,7 +312,7 @@ get_data(UserId, user) ->
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(UserId :: binary()) ->
+-spec get_spaces(UserId :: od_user:id()) ->
     {ok, [proplists:property()]}.
 get_spaces(UserId) ->
     {ok, Doc} = od_user:get(UserId),
@@ -354,7 +356,7 @@ get_handles(UserId) ->
 %% or his groups don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_shares(UserId :: binary()) -> {ok, [proplists:property()]}.
+-spec get_shares(UserId :: od_user:id()) -> {ok, [proplists:property()]}.
 get_shares(UserId) ->
     {ok, Doc} = od_user:get(UserId),
     AllUserSpaces = get_all_spaces(Doc),
@@ -378,7 +380,7 @@ get_shares(UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_groups(UserId :: binary()) -> {ok, [proplists:property()]}.
+-spec get_effective_groups(UserId :: od_user:id()) -> {ok, [proplists:property()]}.
 get_effective_groups(UserId) ->
     {ok, #document{value = #od_user{eff_groups = Groups}}} = od_user:get(UserId),
     {ok, [{effective_groups, Groups}]}.
@@ -388,7 +390,7 @@ get_effective_groups(UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(UserId :: binary()) ->
+-spec get_groups(UserId :: od_user:id()) ->
     {ok, [proplists:property()]}.
 get_groups(UserId) ->
     {ok, #document{value = #od_user{groups = Groups}}} = od_user:get(UserId),
@@ -399,7 +401,7 @@ get_groups(UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_providers(UserId :: binary()) -> {ok, [proplists:property()]}.
+-spec get_providers(UserId :: od_user:id()) -> {ok, [proplists:property()]}.
 get_providers(UserId) ->
     {ok, Doc} = od_user:get(UserId),
     Spaces = get_all_spaces(Doc),
@@ -444,7 +446,7 @@ exists(Key) ->
 %% Throws exception when call to the datastore fails, or user is already deleted.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(UserId :: binary()) ->
+-spec remove(UserId :: od_user:id()) ->
     true.
 remove(UserId) ->
     {ok, #document{value = #od_user{groups = Groups, spaces = Spaces}}} = od_user:get(UserId),
@@ -471,7 +473,7 @@ remove(UserId) ->
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_default_space(UserId :: binary()) ->
+-spec get_default_space(UserId :: od_user:id()) ->
     {ok, SpaceId :: binary() | undefined}.
 get_default_space(UserId) ->
     {ok, Doc} = od_user:get(UserId),
@@ -484,7 +486,7 @@ get_default_space(UserId) ->
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_default_space(UserId :: binary(), SpaceId :: binary()) ->
+-spec set_default_space(UserId :: od_user:id(), SpaceId :: binary()) ->
     boolean().
 set_default_space(UserId, SpaceId) ->
     {ok, Doc} = od_user:get(UserId),
@@ -504,7 +506,7 @@ set_default_space(UserId, SpaceId) ->
 %% Retrieves user's default provider (or returns undefined).
 %% @end
 %%--------------------------------------------------------------------
--spec get_default_provider(UserId :: binary()) ->
+-spec get_default_provider(UserId :: od_user:id()) ->
     {ok, ProviderId :: binary() | undefined}.
 get_default_provider(UserId) ->
     {ok, #od_user{default_provider = DefProv}} = get_user(UserId),
@@ -515,7 +517,7 @@ get_default_provider(UserId) ->
 %% @doc Retrieves user's list of client tokens.
 %% @end
 %%--------------------------------------------------------------------
--spec get_client_tokens(UserId :: binary()) ->
+-spec get_client_tokens(UserId :: od_user:id()) ->
     {ok, Tokens :: [binary()]}.
 get_client_tokens(UserId) ->
     {ok, #od_user{client_tokens = ClientTokens}} = get_user(UserId),
@@ -527,7 +529,7 @@ get_client_tokens(UserId) ->
 %% Adds a token to the list of user's client tokens.
 %% @end
 %%--------------------------------------------------------------------
--spec add_client_token(UserId :: binary(), Token :: binary()) -> ok.
+-spec add_client_token(UserId :: od_user:id(), Token :: binary()) -> ok.
 add_client_token(UserId, Token) ->
     {ok, #od_user{client_tokens = ClientTokens}} = get_user(UserId),
     {ok, _} = od_user:update(UserId, fun(User) ->
@@ -541,7 +543,7 @@ add_client_token(UserId, Token) ->
 %% Deletes a token from the list of user's client tokens.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_client_token(UserId :: binary(), Token :: binary()) -> ok.
+-spec delete_client_token(UserId :: od_user:id(), Token :: binary()) -> ok.
 delete_client_token(UserId, Token) ->
     {ok, #od_user{client_tokens = ClientTokens}} = get_user(UserId),
     {ok, _} = od_user:update(UserId, fun(User) ->
@@ -556,7 +558,7 @@ delete_client_token(UserId, Token) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_provider_as_default(UserId :: binary(), ProviderId :: binary(),
+-spec set_provider_as_default(UserId :: od_user:id(), ProviderId :: binary(),
     Flag :: boolean()) -> boolean().
 set_provider_as_default(UserId, ProviderId, Flag) ->
     {ok, [{providers, AllUserProviders}]} = get_providers(UserId),
@@ -599,7 +601,7 @@ set_provider_as_default(UserId, ProviderId, Flag) ->
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_space_name_mapping(UserId :: binary(), SpaceId :: binary(),
+-spec set_space_name_mapping(UserId :: od_user:id(), SpaceId :: binary(),
     SpaceName :: binary(), Overwrite :: boolean()) -> ok.
 set_space_name_mapping(UserId, SpaceId, SpaceName, Overwrite) ->
     SpaceNameLen = size(SpaceName),
@@ -655,7 +657,7 @@ set_space_name_mapping(UserId, SpaceId, SpaceName, Overwrite) ->
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec clean_space_name_mapping(UserId :: binary(), SpaceId :: binary()) -> boolean().
+-spec clean_space_name_mapping(UserId :: od_user:id(), SpaceId :: binary()) -> boolean().
 clean_space_name_mapping(UserId, SpaceId) ->
     case space_logic:has_effective_user(SpaceId, UserId) of
         true ->
@@ -793,6 +795,73 @@ change_user_password(Login, OldPassword, NewPassword) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Sets OZ API privileges of user with UserId.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_oz_privileges(UserId :: od_user:id(),
+    Privileges :: [privileges:oz_privilege()]) -> ok.
+set_oz_privileges(UserId, Privileges) ->
+    {ok, _} = od_user:update(UserId, #{
+        oz_privileges => Privileges
+    }),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc Deletes OZ API privileges of user with UserId (sets them to empty list).
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_oz_privileges(UserId :: od_user:id()) -> ok.
+delete_oz_privileges(UserId) ->
+    set_oz_privileges(UserId, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns OZ privileges of user with UserId.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_oz_privileges(UserId :: od_user:id()) ->
+    Privileges :: [privileges:oz_privilege()].
+get_oz_privileges(UserId) ->
+    {ok, #document{
+        value = #od_user{
+            oz_privileges = OzPrivileges
+        }}} = od_user:get(UserId),
+    OzPrivileges.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the user identified by UserId has privilege
+%% in admin OZ API.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_oz_privilege(UserId :: od_user:id(),
+    Privilege :: privileges:oz_privilege()) ->
+    boolean().
+has_eff_oz_privilege(UserId, Privilege) ->
+    case od_user:get(UserId) of
+        {error, {not_found, od_user}} ->
+            false;
+        {ok, UserDoc} ->
+            % TODO Use eff_oz_privileges field when it is pre-computed
+            #document{
+                value = #od_user{
+                    oz_privileges = OzPrivileges,
+                    eff_groups = EffGroups
+                }} = UserDoc,
+            case lists:member(Privilege, OzPrivileges) of
+                true ->
+                    true;
+                false ->
+                    lists:any(fun(GroupId) ->
+                        group_logic:has_eff_oz_privilege(GroupId, Privilege)
+                    end, EffGroups)
+            end
+    end.
+
 
 %%%===================================================================
 %%% Internal functions

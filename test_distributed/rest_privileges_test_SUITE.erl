@@ -49,7 +49,7 @@ all() ->
         list_providers_test,          % list_providers
         list_providers_of_space_test, % list_providers_of_space
         modify_space_members_test     % add_member_to_space,
-                                      % remove_member_from_space
+        % remove_member_from_space
     ]).
 
 %%%===================================================================
@@ -63,8 +63,8 @@ all() ->
 % and Privileges (use 'undefined' to skip privileges matching).
 check_view_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
     ReqPath = case SubjectType of
-        od_user -> [<<"/privileges/users/">>, SubjectId];
-        od_group -> [<<"/privileges/groups/">>, SubjectId]
+        od_user -> [<<"/users/">>, SubjectId, <<"/privileges">>];
+        od_group -> [<<"/groups/">>, SubjectId, <<"/privileges">>]
     end,
     ExpectedBody = case Privileges of
         undefined -> undefined;
@@ -87,8 +87,8 @@ check_view_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
 % and asserts if returned code matches expected Code.
 check_set_privileges(Code, Issuer, SubjectId, SubjectType, Privileges) ->
     ReqPath = case SubjectType of
-        od_user -> [<<"/privileges/users/">>, SubjectId];
-        od_group -> [<<"/privileges/groups/">>, SubjectId]
+        od_user -> [<<"/users/">>, SubjectId, <<"/privileges">>];
+        od_group -> [<<"/groups/">>, SubjectId, <<"/privileges">>]
     end,
     rest_test_utils:check_rest_call(#{
         request => #{
@@ -224,7 +224,7 @@ view_privileges_test(Config) ->
     % User without permissions cannot view the OZ API privileges (403)
     ?assert(check_view_privileges(403, User1, User1, od_user, undefined)),
     % Give the user view privileges and check again
-    set_privileges(Config, User1, od_user, [view_privileges]),
+    oz_test_utils:set_user_oz_privileges(Config, User1, [view_privileges]),
     ?assert(check_view_privileges(200, User1, User1, od_user,
         [<<"view_privileges">>])),
     % New users and groups should have no permissions by default
@@ -243,8 +243,8 @@ set_privileges_test(Config) ->
     rest_test_utils:set_config(Config),
     {ok, User1} = oz_test_utils:create_user(Config, #od_user{}),
     % Give the user perms to view and set privileges
-    set_privileges(
-        Config, User1, od_user, [view_privileges, set_privileges]
+    oz_test_utils:set_user_oz_privileges(
+        Config, User1, [view_privileges, set_privileges]
     ),
     % First try some wrong perms
     ?assert(check_set_privileges(400, User1, User1, od_user,
@@ -256,7 +256,7 @@ set_privileges_test(Config) ->
     {ok, Group2} = oz_test_utils:create_group(Config, User2, <<"gr">>),
     % Get all possible privileges
     [Node | _] = ?config(oz_worker_nodes, Config),
-    AllPrivilegesAtoms = rpc:call(Node, oz_api_privileges, all_privileges, []),
+    AllPrivilegesAtoms = rpc:call(Node, privileges, oz_privileges, []),
     AllPrivileges = [atom_to_binary(P, utf8) || P <- AllPrivilegesAtoms],
     % Try to set all combinations of privileges, both for User2 and Group2.
     Combinations = all_combinations(AllPrivileges),
@@ -308,7 +308,7 @@ list_spaces_test(Config) ->
     ],
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    set_privileges(Config, Admin, od_user, [set_privileges]),
+    oz_test_utils:set_user_oz_privileges(Config, Admin, [set_privileges]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -378,7 +378,7 @@ list_providers_test(Config) ->
     ],
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    set_privileges(Config, Admin, od_user, [set_privileges]),
+    oz_test_utils:set_user_oz_privileges(Config, Admin, [set_privileges]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -452,7 +452,7 @@ list_providers_of_space_test(Config) ->
     ],
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    set_privileges(Config, Admin, od_user, [set_privileges]),
+    oz_test_utils:set_user_oz_privileges(Config, Admin, [set_privileges]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -518,7 +518,7 @@ modify_space_members_test(Config) ->
     rest_test_utils:set_config(Config),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    set_privileges(Config, Admin, od_user, [set_privileges]),
+    oz_test_utils:set_user_oz_privileges(Config, Admin, [set_privileges]),
     % TestUser will be used to test the privileges
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
     % AddedUser will be added to spaces and removed by TestUser
@@ -697,13 +697,6 @@ create_3_nested_groups(Config, TestUser) ->
         Config, {group, MiddleGroup}, TopGroup
     ),
     TopGroup.
-
-
-set_privileges(Config, EntityId, EntityType, Privs) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    rpc:call(
-        Node, oz_api_privileges_logic, modify, [EntityId, EntityType, Privs]
-    ).
 
 
 % Generates all possible combinations of given set (set = list),

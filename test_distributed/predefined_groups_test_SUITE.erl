@@ -47,17 +47,17 @@ predefined_groups_test(Config) ->
         #{
             id => <<"group1">>,
             name => <<"Group 1">>,
-            oz_api_privileges => {oz_api_privileges, all_privileges}
+            oz_privileges => {privileges, oz_privileges}
         },
         #{
             id => <<"group2">>,
             name => <<"Group 2">>,
-            oz_api_privileges => [view_privileges, set_privileges]
+            oz_privileges => [view_privileges, set_privileges]
         },
         #{
             id => <<"group3">>,
             name => <<"Group 3">>,
-            oz_api_privileges => []
+            oz_privileges => []
         }
     ],
     % Set the corresponding env variable on every node
@@ -75,16 +75,14 @@ predefined_groups_test(Config) ->
         {ok, #document{value = #od_group{name = ActualName}}} = GroupResult,
         ?assertEqual(ExpName, ActualName),
         % Check if OZ API privileges are correct
-        PrivsResult = rpc:call(Node, oz_api_privileges_logic, get, [
-            ExpId, od_group
-        ]),
+        PrivsResult = rpc:call(Node, group_logic, get_oz_privileges, [ExpId]),
         % Check if privileges were found by group ID
         ?assertMatch({ok, _}, PrivsResult),
         % Check if the privileges are correct
         {ok, ActualPrivileges} = PrivsResult,
         ?assertEqual(ExpPrivileges, ActualPrivileges)
     end,
-    AllPrivs = rpc:call(Node, oz_api_privileges, all_privileges, []),
+    AllPrivs = rpc:call(Node, privileges, oz_privileges, []),
     CheckGroup(<<"group1">>, <<"Group 1">>, AllPrivs),
     CheckGroup(<<"group2">>, <<"Group 2">>, [view_privileges, set_privileges]),
     CheckGroup(<<"group3">>, <<"Group 3">>, []),
@@ -101,17 +99,17 @@ global_groups_test(Config) ->
         #{
             id => <<"admins_group">>,
             name => <<"Admins group">>,
-            oz_api_privileges => {oz_api_privileges, all_privileges}
+            oz_privileges => {privileges, oz_privileges}
         },
         #{
             id => <<"all_users_group">>,
             name => <<"All users">>,
-            oz_api_privileges => []
+            oz_privileges => []
         },
         #{
             id => <<"access_to_public_data">>,
             name => <<"Access to public data">>,
-            oz_api_privileges => []
+            oz_privileges => []
         }
     ],
     test_utils:set_env(Node, oz_worker, predefined_groups, PredefinedGroups),
@@ -168,7 +166,7 @@ automatic_space_membership_via_global_group_test(Config) ->
         #{
             id => <<"all_users_group">>,
             name => <<"All users">>,
-            oz_api_privileges => []
+            oz_privileges => []
         }
     ],
     test_utils:set_env(Node, oz_worker, predefined_groups, PredefinedGroups),

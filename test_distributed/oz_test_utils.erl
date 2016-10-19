@@ -19,9 +19,11 @@
 -export([call_oz/4]).
 
 -export([create_user/2, get_user/2, get_client_token/2, remove_user/2]).
+-export([set_user_oz_privileges/3]).
 
 -export([create_group/3, get_group/2, remove_group/2]).
 -export([join_group/3, group_remove_user/3]).
+-export([set_group_oz_privileges/3]).
 
 -export([create_space/3, add_member_to_space/3, leave_space/3, remove_space/2]).
 -export([modify_space/4, support_space/4, set_space_privileges/4]).
@@ -49,7 +51,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec call_oz(Config :: term(), Module :: atom(), Function :: atom(),
-    Args :: [term()]) -> term() | {badrpc, term()}.
+    Args :: [term()]) -> term() | {error, term()}.
 call_oz(Config, Module, Function, Args) ->
     FunWrapper = fun() ->
         try
@@ -71,7 +73,7 @@ call_oz(Config, Module, Function, Args) ->
                 "Stacktrace: ~p",
                 [Module, Function, Args, Type, Reason, Stacktrace]
             ),
-            {badrpc, Reason};
+            {error, {badrpc, Reason}};
         Result ->
             Result
     end.
@@ -114,6 +116,16 @@ get_client_token(Config, UserId) ->
     boolean() | {error, Reason :: term()}.
 remove_user(Config, UserId) ->
     call_oz(Config, user_logic, remove, [UserId]).
+
+%%--------------------------------------------------------------------
+%% @doc Sets OZ privileges of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_user_oz_privileges(Config :: term(), UserId :: binary(),
+    Privileges :: [privileges:oz_privilege()]) ->
+    ok | {error, Reason :: term()}.
+set_user_oz_privileges(Config, UserId, Privileges) ->
+    call_oz(Config, user_logic, set_oz_privileges, [UserId, Privileges]).
 
 %%--------------------------------------------------------------------
 %% @doc Creates group in onezone.
@@ -163,10 +175,20 @@ group_remove_user(Config, GroupId, UserId) ->
 %% @doc Removes group from onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(Config :: term(), UserId :: binary()) ->
+-spec remove_group(Config :: term(), GroupId :: binary()) ->
     boolean() | {error, Reason :: term()}.
 remove_group(Config, GroupId) ->
     call_oz(Config, group_logic, remove, [GroupId]).
+
+%%--------------------------------------------------------------------
+%% @doc Sets OZ privileges of a group.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_group_oz_privileges(Config :: term(), GroupId :: binary(),
+    Privileges :: [privileges:oz_privilege()]) ->
+    ok | {error, Reason :: term()}.
+set_group_oz_privileges(Config, GroupId, Privileges) ->
+    call_oz(Config, group_logic, set_oz_privileges, [GroupId, Privileges]).
 
 
 %%--------------------------------------------------------------------
@@ -289,7 +311,7 @@ remove_share(Config, ShareId) ->
     ServiceProperties :: od_handle_service:service_properties()) ->
     {ok, HandleServiceId :: od_handle_service:id()}.
 create_handle_service(Config, UserId, Name, ProxyEndpoint, ServiceProperties) ->
-    call_oz(Config, handle_service_logic, create, 
+    call_oz(Config, handle_service_logic, create,
         [UserId, Name, ProxyEndpoint, ServiceProperties]).
 
 %%--------------------------------------------------------------------
@@ -328,7 +350,7 @@ remove_handle(Config, HandleId) ->
 -spec modify_handle(Config :: term(), od_handle:id(), od_handle:resource_type(),
     od_handle:resource_id(), od_handle:metadata()) -> ok.
 modify_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
-    call_oz(Config, handle_logic, modify, 
+    call_oz(Config, handle_logic, modify,
         [HandleId, NewResourceType, NewResourceId, NewMetadata]).
 
 

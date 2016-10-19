@@ -45,6 +45,7 @@ routes() ->
     S = #rstate{module = ?MODULE, root = user},
     M = rest_handler,
     [
+        {<<"/users/:id/privileges">>, M, S#rstate{resource = privileges, methods = [get, patch, delete]}},
         {<<"/user">>, M, S#rstate{resource = user, methods = [get, patch, delete]}},
         {<<"/user/authorize">>, M, S#rstate{resource = auth, methods = [post], noauth = [post]}},
         {<<"/user/client_token">>, M, S#rstate{resource = client_token, methods = [get]}},
@@ -68,6 +69,10 @@ routes() ->
 -spec is_authorized(Resource :: resource(), Method :: method(),
     UserId :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
+is_authorized(privileges, get, _Id, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, view_privileges);
+is_authorized(privileges, _, _Id, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, set_privileges);
 is_authorized(auth, post, _, _) ->
     true;
 is_authorized(_, _, _, #client{type = user}) ->
@@ -83,6 +88,9 @@ is_authorized(_, _, _, _) ->
 -spec resource_exists(Resource :: resource(), UserId :: binary() | undefined,
     Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
+resource_exists(privileges, UserId, Req) ->
+    Result = user_logic:exists(UserId),
+    {Result, Req};
 resource_exists(space, UserId, Req) ->
     {SID, Req2} = cowboy_req:binding(sid, Req),
     {space_logic:has_effective_user(SID, UserId), Req2};
@@ -102,6 +110,17 @@ resource_exists(_, _, Req) ->
     UserId :: binary() | undefined, Data :: data(),
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {boolean() | {true, URL :: binary()}, cowboy_req:req()} | no_return().
+accept_resource(privileges, patch, UserId, Data, _Client, Req) ->
+    BinPrivileges = rest_module_helper:assert_key_value(<<"privileges">>,
+        [atom_to_binary(P, latin1) || P <- privileges:oz_privileges()],
+        Data, list_of_bin, Req),
+    Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
+    case user_logic:set_oz_privileges(UserId, Privileges) of
+        ok ->
+            {true, Req};
+        _ ->
+            {false, Req}
+    end;
 accept_resource(user, patch, UserId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_type(<<"name">>, Data, binary, Req),
     Alias = rest_module_helper:assert_type(<<"alias">>, Data, binary, Req),
@@ -170,6 +189,9 @@ accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
 -spec provide_resource(Resource :: provided_resource(), UserId :: binary() | undefined,
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
+provide_resource(privileges, UserId, _Client, Req) ->
+    {ok, Privileges} = user_logic:get_oz_privileges(UserId),
+    {[{privileges, Privileges}], Req};
 provide_resource(user, UserId, #client{type = Type}, Req) ->
     {ok, User} = user_logic:get_data(UserId, Type),
     {User, Req};
@@ -209,6 +231,8 @@ provide_resource(client_token, UserId, _Client, Req) ->
 -spec delete_resource(Resource :: removable_resource(),
     UserId :: binary() | undefined, Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
+delete_resource(privileges, UserId, Req) ->
+    {user_logic:delete_oz_privileges(UserId), Req};
 delete_resource(user, UserId, Req) ->
     {user_logic:remove(UserId), Req};
 delete_resource(space, UserId, Req) ->
