@@ -79,7 +79,7 @@ predefined_groups_test(Config) ->
         % Check if privileges were found by group ID
         ?assertMatch({ok, _}, PrivsResult),
         % Check if the privileges are correct
-        {ok, ActualPrivileges} = PrivsResult,
+        {ok, [{privileges, ActualPrivileges}]} = PrivsResult,
         ?assertEqual(ExpPrivileges, ActualPrivileges)
     end,
     AllPrivs = rpc:call(Node, privileges, oz_privileges, []),

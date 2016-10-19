@@ -224,8 +224,8 @@ accept_resource(njoin, post, GroupId, Data, _Client, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(privileges, GroupId, _Client, Req) ->
-    {ok, Privileges} = group_logic:get_oz_privileges(GroupId),
-    {[{privileges, Privileges}], Req};
+    {ok, Data} = group_logic:get_oz_privileges(GroupId),
+    {Data, Req};
 provide_resource(group, GroupId, #client{type = user, id = UserId}, Req) ->
     HasViewPrivs = group_logic:has_effective_privilege(
         GroupId, UserId, group_view_data),

@@ -190,8 +190,8 @@ accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(privileges, UserId, _Client, Req) ->
-    {ok, Privileges} = user_logic:get_oz_privileges(UserId),
-    {[{privileges, Privileges}], Req};
+    {ok, Data} = user_logic:get_oz_privileges(UserId),
+    {Data, Req};
 provide_resource(user, UserId, #client{type = Type}, Req) ->
     {ok, User} = user_logic:get_data(UserId, Type),
     {User, Req};
