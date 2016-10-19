@@ -35,13 +35,13 @@
 -spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
 record_struct(1) ->
     {record, [
-        {name, binary},
-        {providers_supports, [{binary, integer}]},
-        {users, [{binary, [atom]}]},
-        {groups, [{binary, [atom]}]},
-        {shares, [binary]},
-        {eff_users, [{binary, [atom]}]},
-        {eff_groups, [{binary, [atom]}]},
+        {name, string},
+        {providers_supports, [{string, integer}]},
+        {users, [{string, [atom]}]},
+        {groups, [{string, [atom]}]},
+        {shares, [string]},
+        {eff_users, [{string, [atom]}]},
+        {eff_groups, [{string, [atom]}]},
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
     ]}.
