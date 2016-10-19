@@ -161,12 +161,8 @@ accept_resource(privileges, patch, GroupId, Data, _Client, Req) ->
         [atom_to_binary(P, latin1) || P <- privileges:oz_privileges()],
         Data, list_of_bin, Req),
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
-    case group_logic:set_oz_privileges(GroupId, Privileges) of
-        ok ->
-            {true, Req};
-        _ ->
-            {false, Req}
-    end;
+    ok = group_logic:set_oz_privileges(GroupId, Privileges),
+    {true, Req};
 accept_resource(groups, post, _GroupId, Data, #client{id = UserId}, Req) ->
     Name = rest_module_helper:assert_key(<<"name">>, Data, binary, Req),
     Type = rest_module_helper:assert_key(<<"type">>, Data, binary, Req),

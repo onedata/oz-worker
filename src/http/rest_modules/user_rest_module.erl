@@ -115,12 +115,8 @@ accept_resource(privileges, patch, UserId, Data, _Client, Req) ->
         [atom_to_binary(P, latin1) || P <- privileges:oz_privileges()],
         Data, list_of_bin, Req),
     Privileges = [binary_to_existing_atom(P, latin1) || P <- BinPrivileges],
-    case user_logic:set_oz_privileges(UserId, Privileges) of
-        ok ->
-            {true, Req};
-        _ ->
-            {false, Req}
-    end;
+    ok = user_logic:set_oz_privileges(UserId, Privileges),
+    {true, Req};
 accept_resource(user, patch, UserId, Data, _Client, Req) ->
     Name = rest_module_helper:assert_type(<<"name">>, Data, binary, Req),
     Alias = rest_module_helper:assert_type(<<"alias">>, Data, binary, Req),
