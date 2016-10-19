@@ -121,7 +121,13 @@ check_rest_call(ArgsMap) ->
                     Mac ->
                         Mac
                 end,
-                [{<<"macaroon">>, Macaroon} | ReqHeaders]
+                % Use "macaroon" and "X-Auth-Token" headers variably, as they
+                % both should be accepted.
+                HeaderName = case rand:uniform(2) of
+                    1 -> <<"macaroon">>;
+                    2 -> <<"X-Auth-Token">>
+                end,
+                [{HeaderName, Macaroon} | ReqHeaders]
         end,
         % Add insecure option - we do not want the GR server cert to be checked.
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
@@ -241,19 +247,21 @@ sort_map(OriginalMap) ->
         end, OriginalMap, maps:keys(OriginalMap)).
 
 compare_xml(_, []) -> true;
-compare_xml(#xmlText{value=V}, #xmlText{value=V}) -> true;
-compare_xml(#xmlText{value=_V1}, #xmlText{value=_V2}) -> false;
-compare_xml(#xmlAttribute{name=N, value=V}, #xmlAttribute{name=N, value=V}) -> true;
-compare_xml(#xmlAttribute{name=_N1, value=_V1}, #xmlAttribute{name=_N2, value=_V2}) -> false;
-compare_xml(#xmlElement{name=Name, attributes=_, content=_},
-            #xmlElement{name=Name, attributes=[], content=[]}) -> true;
-compare_xml(#xmlElement{name=Name, attributes=RespAttributes, content=RespContent},
-            #xmlElement{name=Name, attributes=ExpAttributes, content=ExpContent}) ->
+compare_xml(#xmlText{value = V}, #xmlText{value = V}) -> true;
+compare_xml(#xmlText{value = _V1}, #xmlText{value = _V2}) -> false;
+compare_xml(#xmlAttribute{name = N, value = V}, #xmlAttribute{name = N, value = V}) ->
+    true;
+compare_xml(#xmlAttribute{name = _N1, value = _V1}, #xmlAttribute{name = _N2, value = _V2}) ->
+    false;
+compare_xml(#xmlElement{name = Name, attributes = _, content = _},
+    #xmlElement{name = Name, attributes = [], content = []}) -> true;
+compare_xml(#xmlElement{name = Name, attributes = RespAttributes, content = RespContent},
+    #xmlElement{name = Name, attributes = ExpAttributes, content = ExpContent}) ->
     case compare_xml(RespAttributes, ExpAttributes) of
         false -> false;
         true -> compare_xml(RespContent, ExpContent)
     end;
-compare_xml(Resp, [Exp | ExpRest]) when is_list(Resp)->
+compare_xml(Resp, [Exp | ExpRest]) when is_list(Resp) ->
     compare_xml(Resp, Exp) and compare_xml(Resp, ExpRest);
 compare_xml(Resp, Exp) when is_list(Resp) ->
     lists:foldl(fun(R, Acc) ->

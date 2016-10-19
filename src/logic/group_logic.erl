@@ -675,7 +675,7 @@ set_oz_privileges(GroupId, Privileges) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_oz_privileges(GroupId :: od_group:id()) ->
-    Privileges :: {ok, {privileges, [privileges:oz_privilege()]}}.
+    Privileges :: {ok, [{privileges, [privileges:oz_privilege()]}]}.
 get_oz_privileges(GroupId) ->
     {ok, #document{
         value = #od_group{

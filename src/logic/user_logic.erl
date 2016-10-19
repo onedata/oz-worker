@@ -824,7 +824,7 @@ delete_oz_privileges(UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_oz_privileges(UserId :: od_user:id()) ->
-    Privileges :: {ok, {privileges, [privileges:oz_privilege()]}}.
+    Privileges :: {ok, [{privileges, [privileges:oz_privilege()]}]}.
 get_oz_privileges(UserId) ->
     {ok, #document{
         value = #od_user{

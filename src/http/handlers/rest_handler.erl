@@ -468,7 +468,7 @@ get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
     no_return().
 parse_macaroons_from_headers(Req) ->
     {MacaroonHeader, _} = cowboy_req:header(<<"macaroon">>, Req),
-    {XAuthTokenHeader, _} = cowboy_req:header(<<"X-Auth-Token">>, Req),
+    {XAuthTokenHeader, _} = cowboy_req:header(<<"x-auth-token">>, Req),
     % X-Auth-Token is an alias for macaroon header, check if any of them
     % is given.
     SerializedMacaroon = case MacaroonHeader of
@@ -480,7 +480,8 @@ parse_macaroons_from_headers(Req) ->
         _ -> undefined
     end,
 
-    {SerializedDischarges, _} = cowboy_req:header(<<"discharge-macaroons">>, _),
+    {SerializedDischarges, _} =
+        cowboy_req:header(<<"discharge-macaroons">>, Req),
     DischargeMacaroons = case SerializedDischarges of
         <<>> ->
             [];
