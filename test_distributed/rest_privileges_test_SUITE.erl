@@ -257,9 +257,10 @@ set_privileges_test(Config) ->
     % Get all possible privileges
     [Node | _] = ?config(oz_worker_nodes, Config),
     AllPrivilegesAtoms = rpc:call(Node, privileges, oz_privileges, []),
-    AllPrivileges = [atom_to_binary(P, utf8) || P <- AllPrivilegesAtoms],
-    % Try to set all combinations of privileges, both for User2 and Group2.
-    Combinations = all_combinations(AllPrivileges),
+    AllPrivs = [atom_to_binary(P, utf8) || P <- AllPrivilegesAtoms],
+    % Try to set all sublists of privileges, both for User2 and Group2.
+    Sublists =
+        [lists:sublist(AllPrivs, I) || I <- lists:seq(1, length(AllPrivs))],
     lists:foreach(
         fun(Privileges) ->
             % Set the privileges
@@ -268,7 +269,7 @@ set_privileges_test(Config) ->
             % View the privileges
             ?assert(check_view_privileges(200, User1, User2, od_user,
                 Privileges))
-        end, Combinations),
+        end, Sublists),
     % Now for Group2
     lists:foreach(
         fun(Privileges) ->
@@ -278,7 +279,7 @@ set_privileges_test(Config) ->
             % View the privileges
             ?assert(check_view_privileges(200, User1, Group2, od_group,
                 Privileges))
-        end, Combinations).
+        end, Sublists).
 
 
 
@@ -697,48 +698,6 @@ create_3_nested_groups(Config, TestUser) ->
         Config, {group, MiddleGroup}, TopGroup
     ),
     TopGroup.
-
-
-% Generates all possible combinations of given set (set = list),
-% starting from length 0 and finishing with length of the set.
-% Sequence of items does not matter. For example
-% all_combinations([1,2,3) = [
-%     [1,2,3],
-%     [2,3],
-%     [1,2],
-%     [1,3],
-%     [1],
-%     [2],
-%     [3]
-% ]
-all_combinations(Set) ->
-    % Accumulate combinations of every possible length
-    lists:foldl(
-        fun(Len, Acc) ->
-            combinations(Len, Set) ++ Acc
-        end, [], lists:seq(0, length(Set))).
-
-% Generates all possible combinations of given length of given set (set = list).
-% Sequence of items does not matter.
-combinations(0, _) ->
-    [];
-
-combinations(1, Set) ->
-    [[Elem] || Elem <- Set];
-
-combinations(Len, OriginalSet) ->
-    {Res, _} = lists:foldl(
-        fun(Elem, {Acc, Set}) ->
-            case length(Set) > 0 of
-                true ->
-                    SetsWithoutElem = combinations(Len - 1, Set -- [Elem]),
-                    NewSubsets = [[Elem | Subset] || Subset <- SetsWithoutElem],
-                    {NewSubsets ++ Acc, Set -- [Elem]};
-                false ->
-                    {Acc, Set}
-            end
-        end, {[], OriginalSet}, OriginalSet),
-    Res.
 
 %%%===================================================================
 %%% Setup/teardown functions

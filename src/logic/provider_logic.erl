@@ -138,7 +138,10 @@ get_data(ProviderId) ->
 -spec get_spaces(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_spaces(ProviderId) ->
-    {ok, #document{value = #od_provider{spaces = Spaces}}} = od_provider:get(ProviderId),
+    {ok, #document{
+        value = #od_provider{
+            spaces = Spaces
+        }}} = od_provider:get(ProviderId),
     {ok, [{spaces, Spaces}]}.
 
 
