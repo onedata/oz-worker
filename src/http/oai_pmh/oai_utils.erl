@@ -20,13 +20,6 @@
     dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4,
     oai_identifier_encode/1, oai_identifier_decode/1]).
 
-
-%% Macro with regex matching allowed datestamps
-%%  * YYYY-MM-DDThh:mm:ssZ
-%%  * YYYY-MM-DD
--define(DATESTAMP_REGEX,
-    "(\\d{4})-(\\d{2})-(\\d{2})(?:$|(?:T(\\d{2}):(\\d{2}):(\\d{2})Z){1})").
-
 %%%--------------------------------------------------------------------
 %%% @doc
 %%% Encode handle id to oai identifier supported by oz-worker.
@@ -56,42 +49,18 @@ oai_identifier_decode(OAIId) ->
     end.
 
 %%%--------------------------------------------------------------------
-%%% @doc
-%%% Converts DateTime to format accepted by OAI-PMH which is in form
-%%  YYYY-MM-DDThh:mm:ssZ
-%%% @end
+%%% @equiv timestamp_utils:datetime_to_datestamp(DateTime).
 %%%--------------------------------------------------------------------
 -spec datetime_to_oai_datestamp(DateTime :: erlang:datetime()) -> binary().
 datetime_to_oai_datestamp(DateTime) ->
-    {{Year, Month, Day}, {Hour, Minute, Second}} = DateTime,
-    str_utils:format_bin(
-        "~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ",
-        [Year, Month, Day, Hour, Minute, Second]).
+    timestamp_utils:datetime_to_datestamp(DateTime).
 
 %%%--------------------------------------------------------------------
-%%% @doc
-%%% Converts datestamp from format defined by OAI-PMH to
-%%% erlang:datetime() or erlang:date().
-%%% Converts:
-%%%     * YYYY-MM-DDT:hh:mm:ssZ to {{Year, Month, Day},{Hour, Minutes, Seconds}}
-%%%     * YYYY-MM-DD to {Year, Month, Day}
-%%% @end
+%%% @equiv timestamp_utils:datestamp_to_datetime(Datestamp).
 %%%--------------------------------------------------------------------
 -spec oai_datestamp_to_datetime(undefined | binary()) -> maybe_invalid_datestamp().
-oai_datestamp_to_datetime(undefined) -> undefined;
 oai_datestamp_to_datetime(Datestamp) ->
-    {ok, Regex} = re:compile(?DATESTAMP_REGEX),
-    case re:run(Datestamp, Regex, [{capture, all_but_first, list}]) of
-        {match, Matched} ->
-            case [list_to_integer(E) || E <- Matched] of
-                [Y, M, D, H, Min, S] ->
-                    {{Y, M, D}, {H, Min, S}};
-                [Y, M, D] ->
-                    {Y, M, D};
-                _ -> {error, invalid_date_format}
-            end;
-        nomatch -> {error, invalid_date_format}
-    end.
+    timestamp_utils:datestamp_to_datetime(Datestamp).
 
 %%%--------------------------------------------------------------------
 %%% @doc

@@ -25,9 +25,48 @@
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
+-export([record_struct/1]).
 
 %% API
 -export([get_all_ids/0, get_by_criterion/1]).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns structure of the record in specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
+record_struct(1) ->
+    {record, [
+        {name, string},
+        {login, string},
+        {basic_auth_enabled, boolean},
+        {alias, string},
+        {email_list, [string]},
+        {connected_accounts, [{record, 1, [
+            {provider_id, atom},
+            {user_id, string},
+            {login, string},
+            {name, string},
+            {email_list, [string]}
+        ]}]},
+        {default_space, string},
+        {default_provider, string},
+        {chosen_provider, string},
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {eff_groups, [string]},
+        {eff_spaces, [string]},
+        {eff_shares, [string]},
+        {eff_providers, [string]},
+        {eff_handle_services, [string]},
+        {eff_handles, [string]},
+        {top_down_dirty, boolean}
+    ]}.
 
 %%%===================================================================
 %%% model_behaviour callbacks
