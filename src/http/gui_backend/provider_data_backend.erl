@@ -105,7 +105,7 @@ find_all(<<"provider">>) ->
 -spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_query(<<"provider">>, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -116,7 +116,7 @@ find_query(<<"provider">>, _Data) ->
 -spec create_record(RsrcType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 create_record(<<"provider">>, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -142,7 +142,7 @@ update_record(<<"provider">>, ProviderId, Data) ->
 -spec delete_record(RsrcType :: binary(), Id :: binary()) ->
     ok | gui_error:error_result().
 delete_record(<<"provider">>, _Id) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%%===================================================================

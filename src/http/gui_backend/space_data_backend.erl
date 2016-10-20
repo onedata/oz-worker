@@ -115,7 +115,7 @@ find_all(<<"space">>) ->
 -spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_query(<<"space">>, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -175,7 +175,7 @@ update_record(<<"space">>, SpaceId, Data) ->
 -spec delete_record(RsrcType :: binary(), Id :: binary()) ->
     ok | gui_error:error_result().
 delete_record(<<"space">>, _Id) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%%===================================================================
