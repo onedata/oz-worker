@@ -190,11 +190,11 @@ check_rest_call(ArgsMap) ->
                 end;
             {contains, Map4} when is_map(Map4) ->
                 RespBodyMap = json_utils:decode_map(RespBody),
-                case contains_map(RespBodyMap, ExpBody) of
+                case contains_map(Map4, RespBodyMap) of
                     true ->
                         ok;
                     false ->
-                        throw({body_contains, RespBodyMap, ExpBody})
+                        throw({body_contains, RespBodyMap, Map4})
                 end;
             #xmlElement{} = ExpBodyXML ->
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
