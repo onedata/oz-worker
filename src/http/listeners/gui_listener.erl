@@ -61,10 +61,12 @@ start() ->
             application:get_env(?APP_Name, gui_https_acceptors),
         {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
         {ok, MaxKeepAlive} = application:get_env(?APP_Name, gui_max_keepalive),
-        % Get cert paths
-        {ok, CaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
-        {ok, CertFile} = application:get_env(?APP_Name, gui_cert_file),
-        {ok, KeyFile} = application:get_env(?APP_Name, gui_key_file),
+
+        % Get certs
+        {ok, KeyFile} = application:get_env(?APP_Name, web_key_file),
+        {ok, CertFile} = application:get_env(?APP_Name, web_cert_file),
+        {ok, CaCertsDir} = application:get_env(?APP_Name, cacerts_dir),
+        {ok, CaCerts} = file_utils:read_files({dir, CaCertsDir}),
 
         % Check if docs proxy is enabled
         {ok, DocsProxyEnabled} =
@@ -115,12 +117,11 @@ start() ->
         % Start the listener for web gui and nagios handler
         {ok, _} = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
             ranch_etls, [
-                {ip, {127, 0, 0, 1}},
                 {port, GuiPort},
-                {cacertfile, CaCertFile},
-                {certfile, CertFile},
                 {keyfile, KeyFile},
-                {ciphers, ssl:cipher_suites() -- weak_ciphers()},
+                {certfile, CertFile},
+                {cacerts, CaCerts},
+                {ciphers, ssl:cipher_suites() -- ssl_utils:weak_ciphers()},
                 {versions, ['tlsv1.2', 'tlsv1.1']}
             ], cowboy_protocol, [
                 {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
@@ -145,7 +146,7 @@ start() ->
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, Reason :: term()}.
 stop() ->
-    case catch cowboy:stop_listener(?gui_https_listener) of
+    case catch ranch:stop_listener(?gui_https_listener) of
         (ok) ->
             ok;
         (Error) ->
@@ -166,17 +167,3 @@ healthcheck() ->
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
     end.
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns list of weak ciphers.
-%% @end
--spec weak_ciphers() -> list().
-%%--------------------------------------------------------------------
-weak_ciphers() ->
-    [{dhe_rsa, des_cbc, sha}, {rsa, des_cbc, sha}].

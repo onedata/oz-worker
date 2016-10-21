@@ -69,7 +69,7 @@ validate(Token, TokenType) ->
     Resource :: {resource_type(), binary()}) ->
     {ok, Token :: binary()} | {error, Reason :: any()}.
 create(Issuer, TokenType, {ResourceType, ResourceId}) ->
-    Secret = crypto:rand_bytes(macaroon:suggested_secret_length()),
+    Secret = crypto:strong_rand_bytes(macaroon:suggested_secret_length()),
     TokenData = #token{secret = Secret, issuer = Issuer,
         resource = ResourceType, resource_id = ResourceId},
 

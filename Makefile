@@ -82,10 +82,9 @@ appmock_rel:
 	make -C appmock/ rel
 
 relclean:
-	rm -rf rel/test_cluster
-	rm -rf rel/oz_worker
-	rm -rf appmock/rel/appmock
-	rm -rf cluster_manager/rel/cluster_manager
+	rm -rf _build/rel/oz_worker
+	rm -rf appmock/_build/rel/appmock
+	rm -rf cluster_manager/_build/rel/cluster_manager
 
 ##
 ## Testing
