@@ -188,6 +188,14 @@ check_rest_call(ArgsMap) ->
                     false ->
                         throw({body, RespBodyMap, ExpBody})
                 end;
+            {contains, Map4} when is_map(Map4) ->
+                RespBodyMap = json_utils:decode_map(RespBody),
+                case contains_map(RespBodyMap, ExpBody) of
+                    true ->
+                        ok;
+                    false ->
+                        throw({body_contains, RespBodyMap, ExpBody})
+                end;
             #xmlElement{} = ExpBodyXML ->
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
                 case compare_xml(RespBodyXML, ExpBodyXML) of
@@ -230,6 +238,23 @@ normalize_headers(Headers) ->
 % Returns true if two maps have the same contents
 compare_maps(Map1, Map2) ->
     sort_map(Map1) =:= sort_map(Map2).
+
+% Returns true if second map has all the mappings of the first map with
+% same values.
+contains_map(Map1, Map2) ->
+    SortedMap1 = sort_map(Map1),
+    SortedMap2 = sort_map(Map2),
+    lists:all(
+        fun(Key) ->
+            Value1 = maps:get(Key, SortedMap1),
+            case maps:is_key(Key, SortedMap2) of
+                false ->
+                    false;
+                true ->
+                    Value2 = maps:get(Key, SortedMap2),
+                    Value1 =:= Value2
+            end
+        end, maps:keys(SortedMap1)).
 
 
 % Sorts all nested lists in a map and returns the result map

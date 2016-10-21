@@ -125,9 +125,14 @@ is_authorized(R, get, SpaceId, #client{type = user, id = UserId}) ->
     Result = space_logic:has_effective_privilege(
         SpaceId, UserId, space_view_data),
     case {R, Result} of
+        {provider, false} ->
+            % If the user is not authorized by perms in space to view a
+            % provider, check if he has oz_privileges to list providers of space
+            user_logic:has_eff_oz_privilege(
+                UserId, list_providers_of_space);
         {providers, false} ->
             % If the user is not authorized by perms in space to view providers,
-            % check if he has oz_privileges to list providers
+            % check if he has oz_privileges to list providers of space
             user_logic:has_eff_oz_privilege(
                 UserId, list_providers_of_space);
         _ ->
@@ -325,12 +330,12 @@ provide_resource(gpriv, SpaceId, _Client, Req) ->
     {GID, Req2} = cowboy_req:binding(gid, Req),
     {ok, Privileges} = space_logic:get_privileges(SpaceId, {group, GID}),
     {[{privileges, Privileges}], Req2};
-provide_resource(providers, SpaceId, #client{type = ClientType}, Req) ->
-    {ok, Providers} = space_logic:get_providers(SpaceId, ClientType),
-    {Providers, Req};
 provide_resource(pinvite, SpaceId, Client, Req) ->
     {ok, Token} = token_logic:create(Client, space_support_token, {space, SpaceId}),
     {[{token, Token}], Req};
+provide_resource(providers, SpaceId, #client{type = ClientType}, Req) ->
+    {ok, Providers} = space_logic:get_providers(SpaceId, ClientType),
+    {Providers, Req};
 provide_resource(provider, SpaceId, #client{type = ClientType}, Req) ->
     {PID, Req2} = cowboy_req:binding(pid, Req),
     {ok, Provider} = space_logic:get_provider(SpaceId, ClientType, PID),
