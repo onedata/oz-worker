@@ -20,6 +20,9 @@
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, healthcheck/0]).
 
+%% API
+-export([routes/0]).
+
 %%%===================================================================
 %%% listener_behaviour callbacks
 %%%===================================================================
@@ -46,8 +49,6 @@ start() ->
         % Get rest config
         RestPort = port(),
         {ok, RestHttpsAcceptors} = application:get_env(?APP_Name, rest_https_acceptors),
-        {ok, RESTAPIPrefixStr} = application:get_env(?APP_Name, rest_api_prefix),
-        RESTAPIPrefix = str_utils:to_binary(RESTAPIPrefixStr),
 
         % Get cert paths
         {ok, ZoneCADir} = application:get_env(?APP_Name, ozpca_dir),
@@ -64,31 +65,11 @@ start() ->
         ozpca:start(ZoneCADir, ZoneCertFile, ZoneKeyFile, ZoneCertDomain),
         auth_logic:start(),
 
-        GRHostname = dns_query_handler:get_canonical_hostname(),
-
-        RESTRoutes = lists:append([
-            identities_rest_module:routes(),
-            user_rest_module:routes(),
-            provider_rest_module:routes(),
-            spaces_rest_module:routes(),
-            shares_rest_module:routes(),
-            groups_rest_module:routes(),
-            privileges_rest_module:routes(),
-            handle_services_rest_module:routes(),
-            handles_rest_module:routes()
-        ]),
-        RESTRoutesWithPrefix = lists:map(
-            fun({Path, Module, InitialState}) ->
-                {<<RESTAPIPrefix/binary, Path/binary>>, Module, InitialState}
-            end, RESTRoutes),
-
+        Hostname = dns_query_handler:get_canonical_hostname(),
         Dispatch = cowboy_router:compile([
             % Redirect requests in form: alias.onedata.org
-            {":alias." ++ GRHostname, [{'_', client_redirect_handler, [RestPort]}]},
-            {'_', lists:append([
-                [{<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}}],
-                RESTRoutesWithPrefix
-            ])}
+            {":alias." ++ Hostname, [{'_', client_redirect_handler, [RestPort]}]},
+            {'_', routes()}
         ]),
 
         {ok, _} = ranch:start_listener(?rest_listener, RestHttpsAcceptors,
@@ -141,3 +122,34 @@ healthcheck() ->
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
     end.
+
+%%%===================================================================
+%%% API functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc Returns a Cowboy-understandable PathList of routes.
+%% @end
+%%--------------------------------------------------------------------
+-spec routes() -> [{Path :: binary(), Module :: module(), State :: term()}].
+routes() ->
+    {ok, PrefixStr} = application:get_env(?APP_Name, rest_api_prefix),
+    Prefix = str_utils:to_binary(PrefixStr),
+    Routes = lists:map(fun({Path, Module, InitialState}) ->
+        {<<Prefix/binary, Path/binary>>, Module, InitialState}
+    end, lists:append([
+        identities_rest_module:routes(),
+        user_rest_module:routes(),
+        provider_rest_module:routes(),
+        spaces_rest_module:routes(),
+        shares_rest_module:routes(),
+        groups_rest_module:routes(),
+        privileges_rest_module:routes(),
+        handle_services_rest_module:routes(),
+        handles_rest_module:routes()
+    ])),
+    {ok, ZoneCADir} = application:get_env(?APP_Name, ozpca_dir),
+    [
+        {<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}} |
+        Routes
+    ].

@@ -54,7 +54,7 @@ init(_Protocol, _Req, _Opts) ->
     Opts :: any(),
     State :: any(),
     Timeout :: timeout().
-websocket_init(ssl, Req, []) ->
+websocket_init(etls, Req, []) ->
     try
         Provider = get_provider(Req),
         worker_proxy:call(?SUBSCRIPTIONS_WORKER_NAME, {add_connection, Provider, self()}),
@@ -137,7 +137,7 @@ websocket_terminate(_Reason, _Req, _State) ->
 %%--------------------------------------------------------------------
 -spec get_provider(Req :: cowboy_req:req()) -> ProviderID :: binary().
 get_provider(Req) ->
-    {ok, PeerCert} = ssl:peercert(cowboy_req:get(socket, Req)),
+    {ok, PeerCert} = etls:peercert(cowboy_req:get(socket, Req)),
     {ok, Provider} = worker_proxy:call(ozpca_worker, {verify_provider, PeerCert}),
     Provider.
 

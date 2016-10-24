@@ -45,16 +45,6 @@ port() ->
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
     try
-        % Resolve static files root. First, check if there is a non-empty dir
-        % located in gui_custom_static_root. If not, use default.
-        {ok, CstmRoot} = application:get_env(?APP_Name, gui_custom_static_root),
-        {ok, DefRoot} = application:get_env(?APP_Name, gui_default_static_root),
-        DocRoot = case file:list_dir_all(CstmRoot) of
-            {error, enoent} -> DefRoot;
-            {ok, []} -> DefRoot;
-            {ok, _} -> CstmRoot
-        end,
-
         % Get gui config
         GuiPort = port(),
         {ok, GuiNbAcceptors} =
@@ -68,49 +58,29 @@ start() ->
         {ok, CaCertsDir} = application:get_env(?APP_Name, cacerts_dir),
         {ok, CaCerts} = file_utils:read_files({dir, CaCertsDir}),
 
-        % Check if docs proxy is enabled
-        {ok, DocsProxyEnabled} =
-            application:get_env(?APP_Name, gui_docs_proxy_enabled),
-        DocsRoute = case DocsProxyEnabled of
-            false ->
-                % Don't add route for docs
-                [];
-            true ->
-                % Get path to static docs files
-                {ok, DocsPath} =
-                    application:get_env(?APP_Name, gui_docs_static_root),
-                {DocsPath ++ "/[...]", static_docs_handler, []}
-        end,
+        % Initialize auth handler
+        auth_config:load_auth_config(),
 
-        OZHostname = dns_query_handler:get_canonical_hostname(),
-
-        % Setup GUI dispatch opts for cowboy
-        GUIDispatch = [
-            % Matching requests will be redirected
-            % to the same address without leading 'www.'
-            % Cowboy does not have a mechanism to match
-            % every hostname starting with 'www.'
-            % This will match hostnames with up to 6 segments
-            % e. g. www.seg2.seg3.seg4.seg5.com
+        Hostname = dns_query_handler:get_canonical_hostname(),
+        Dispatch = cowboy_router:compile([
+            % Matching requests will be redirected to the same address without
+            % leading 'www.'. Cowboy does not have a mechanism to match every
+            % hostname starting with 'www.' This will match hostnames with up
+            % to 6 segments e. g. www.seg2.seg3.seg4.seg5.com
             {"www.:_[.:_[.:_[.:_[.:_]]]]", [
                 % redirector_handler is defined in cluster_worker
                 {'_', redirector_handler, []}
             ]},
             % Redirect requests in form: alias.onedata.org
-            {":alias." ++ OZHostname, [{'_', client_redirect_handler, [GuiPort]}]},
-            % Proper requests are routed to handler modules
-            % Proper requests are routed to handler modules
+            {":alias." ++ Hostname, [{'_', client_redirect_handler, [GuiPort]}]},
             {'_', lists:flatten([
                 {"/nagios/[...]", nagios_handler, []},
                 {"/share/:share_id", public_share_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
-                DocsRoute,
-                {"/[...]", gui_static_handler, {dir, DocRoot}}
+                rest_listener:routes(),
+                docs_routes()
             ])}
-        ],
-
-        % Initialize auth handler
-        auth_config:load_auth_config(),
+        ]),
 
         % Call gui init, which will call init on all modules that might need state.
         gui:init(),
@@ -124,7 +94,7 @@ start() ->
                 {ciphers, ssl:cipher_suites() -- ssl_utils:weak_ciphers()},
                 {versions, ['tlsv1.2', 'tlsv1.1']}
             ], cowboy_protocol, [
-                {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
+                {env, [{dispatch, Dispatch}]},
                 {max_keepalive, MaxKeepAlive},
                 {timeout, Timeout},
                 % On every request, add headers that improve
@@ -166,4 +136,34 @@ healthcheck() ->
     case http_client:get(Endpoint, [], <<>>, [insecure]) of
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
+    end.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc Returns a Cowboy-understandable PathList of docs routes.
+%% @end
+%%--------------------------------------------------------------------
+-spec docs_routes() -> [{Path :: string(), Module :: module(), State :: term()}].
+docs_routes() ->
+    % Resolve static files root. First, check if there is a non-empty dir
+    % located in gui_custom_static_root. If not, use default.
+    {ok, CstmRoot} = application:get_env(?APP_Name, gui_custom_static_root),
+    {ok, DefRoot} = application:get_env(?APP_Name, gui_default_static_root),
+    DocRoot = case file:list_dir_all(CstmRoot) of
+        {error, enoent} -> DefRoot;
+        {ok, []} -> DefRoot;
+        {ok, _} -> CstmRoot
+    end,
+
+    Routes = [{"/[...]", gui_static_handler, {dir, DocRoot}}],
+
+    case application:get_env(?APP_Name, gui_docs_proxy_enabled) of
+        {ok, true} ->
+            {ok, DocsPath} = application:get_env(?APP_Name, gui_docs_static_root),
+            [{DocsPath ++ "/[...]", static_docs_handler, []} | Routes];
+        _ ->
+            Routes
     end.
