@@ -18,7 +18,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% data_backend_behaviour callbacks
--export([init/0]).
+-export([init/0, terminate/0]).
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
 %% API
@@ -36,6 +36,16 @@
 %%--------------------------------------------------------------------
 -spec init() -> ok.
 init() ->
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link data_backend_behaviour} callback terminate/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec terminate() -> ok.
+terminate() ->
     ok.
 
 
@@ -95,7 +105,7 @@ find_all(<<"provider">>) ->
 -spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_query(<<"provider">>, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -106,7 +116,7 @@ find_query(<<"provider">>, _Data) ->
 -spec create_record(RsrcType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 create_record(<<"provider">>, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -132,7 +142,7 @@ update_record(<<"provider">>, ProviderId, Data) ->
 -spec delete_record(RsrcType :: binary(), Id :: binary()) ->
     ok | gui_error:error_result().
 delete_record(<<"provider">>, _Id) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%%===================================================================
