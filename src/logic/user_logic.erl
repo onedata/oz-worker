@@ -279,12 +279,15 @@ is_email_occupied(UserId, Email) ->
 get_data(UserId, provider) ->
     {ok, #document{
         value = #od_user{
-            name = Name, login = Login
+            name = Name,
+            login = Login,
+            email_list = EmailList
         }}} = od_user:get(UserId),
     {ok, [
         {userId, UserId},
         {login, Login},
-        {name, Name}
+        {name, Name},
+        {emailList, EmailList}
     ]};
 get_data(UserId, user) ->
     {ok, #document{

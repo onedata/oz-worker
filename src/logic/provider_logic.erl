@@ -22,7 +22,7 @@
 
 %% API
 -export([create/4, create/5, modify/2, exists/1]).
--export([get_data/1, get_spaces/1, get_url/1]).
+-export([get_data/1, get_spaces/1, get_effective_users/1, get_url/1]).
 -export([remove/1]).
 -export([test_connection/1, check_provider_connectivity/1]).
 -export([choose_provider_for_user/1]).
@@ -143,6 +143,26 @@ get_spaces(ProviderId) ->
             spaces = Spaces
         }}} = od_provider:get(ProviderId),
     {ok, [{spaces, Spaces}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Get Users effectively supported by the provider (sum of all users of
+%% spaces that it supports).
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_users(ProviderId :: binary()) ->
+    {ok, Data :: [proplists:property()]}.
+get_effective_users(ProviderId) ->
+    {ok, #document{
+        value = #od_provider{
+            spaces = Spaces
+        }}} = od_provider:get(ProviderId),
+    Users = lists:flatmap(
+        fun(SpaceId) ->
+            {ok, [{users, SpUsers}]} = space_logic:get_effective_users(SpaceId),
+            SpUsers
+        end, Spaces),
+    {ok, [{users, Users}]}.
 
 
 %%--------------------------------------------------------------------

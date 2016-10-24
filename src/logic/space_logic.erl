@@ -402,10 +402,17 @@ get_users(SpaceId) ->
 -spec get_effective_users(SpaceId :: binary()) ->
     {ok, [proplists:property()]}.
 get_effective_users(SpaceId) ->
-    {ok, #document{value = #od_space{users = SpaceUserTuples, groups = GroupTuples}}} = od_space:get(SpaceId),
+    {ok, #document{
+        value = #od_space{
+            users = SpaceUserTuples,
+            groups = GroupTuples
+        }}} = od_space:get(SpaceId),
 
     GroupUsersSets = lists:map(fun({GroupId, _}) ->
-        {ok, #document{value = #od_group{users = GroupUserTuples}}} = od_group:get(GroupId),
+        {ok, #document{
+            value = #od_group{
+                eff_users = GroupUserTuples
+            }}} = od_group:get(GroupId),
         {GroupUsers, _} = lists:unzip(GroupUserTuples),
         ordsets:from_list(GroupUsers)
     end, GroupTuples),

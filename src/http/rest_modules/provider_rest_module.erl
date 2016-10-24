@@ -43,7 +43,12 @@ routes() ->
     M = rest_handler,
     [
         {<<"/providers">>, M, S#rstate{resource = providers, methods = [get]}},
-        {<<"/providers/:pid">>, M, S#rstate{resource = nprovider, methods = [get]}},
+        {<<"/providers/:id">>, M, S#rstate{resource = nprovider, methods = [get]}},
+        {<<"/providers/:id/spaces">>, M, S#rstate{resource = provider_spaces, methods = [get]}},
+        {<<"/providers/:id/spaces/:sid">>, M, S#rstate{resource = provider_space, methods = [get]}},
+        {<<"/providers/:id/users">>, M, S#rstate{resource = provider_users, methods = [get]}},
+        {<<"/providers/:id/users/:uid">>, M, S#rstate{resource = provider_user, methods = [get]}},
+
         {<<"/provider">>, M, S#rstate{resource = provider, methods = [get, post, patch, delete], noauth = [post]}},
         {<<"/provider_dev">>, M, S#rstate{resource = provider_dev, methods = [post], noauth = [post]}},
         {<<"/provider/spaces">>, M, S#rstate{resource = spaces, methods = [get, post]}},
@@ -74,6 +79,14 @@ is_authorized(providers, _, _EntityId, #client{type = user, id = UserId}) ->
     user_logic:has_eff_oz_privilege(UserId, list_providers);
 is_authorized(nprovider, _, _EntityId, #client{type = user, id = UserId}) ->
     user_logic:has_eff_oz_privilege(UserId, list_providers);
+is_authorized(provider_spaces, _, _EntityId, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
+is_authorized(provider_space, _, _EntityId, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
+is_authorized(provider_users, _, _EntityId, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
+is_authorized(provider_user, _, _EntityId, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
 is_authorized(provider_dev, _, _, _) ->
     {ok, true} =:= application:get_env(?APP_Name, dev_mode);
 is_authorized(_, _, _, #client{type = provider}) ->
@@ -90,11 +103,18 @@ is_authorized(_, _, _, _) ->
     Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
 resource_exists(space, ProviderId, Req) ->
-    {SID, Req2} = cowboy_req:binding(sid, Req),
-    {space_logic:has_provider(SID, ProviderId), Req2};
-resource_exists(nprovider, _, Req) ->
-    {PID, Req2} = cowboy_req:binding(pid, Req),
-    {provider_logic:exists(PID), Req2};
+    {SId, Req2} = cowboy_req:binding(sid, Req),
+    {space_logic:has_provider(SId, ProviderId), Req2};
+resource_exists(nprovider, ProviderId, Req) ->
+    {provider_logic:exists(ProviderId), Req};
+resource_exists(provider_spaces, ProviderId, Req) ->
+    {provider_logic:exists(ProviderId), Req};
+resource_exists(provider_space, ProviderId, Req) ->
+    {provider_logic:exists(ProviderId), Req};
+resource_exists(provider_users, ProviderId, Req) ->
+    {provider_logic:exists(ProviderId), Req};
+resource_exists(provider_user, ProviderId, Req) ->
+    {provider_logic:exists(ProviderId), Req};
 resource_exists(_, _, Req) ->
     {true, Req}.
 
@@ -183,19 +203,32 @@ accept_resource(ports, post, _ProviderId, Data, _Client, Req) ->
 provide_resource(providers, _EntityId, _Client, Req) ->
     {ok, ProviderIds} = provider_logic:list(),
     {[{providers, ProviderIds}], Req};
+provide_resource(nprovider, ProviderId, _Client, Req) ->
+    {ok, Data} = provider_logic:get_data(ProviderId),
+    {Data, Req};
+provide_resource(provider_spaces, ProviderId, _Client, Req) ->
+    {ok, Data} = provider_logic:get_spaces(ProviderId),
+    {Data, Req};
+provide_resource(provider_space, _ProviderId, _Client, Req) ->
+    {SId, Req2} = cowboy_req:binding(sid, Req),
+    {ok, Data} = space_logic:get_data(SId, provider),
+    {Data, Req2};
+provide_resource(provider_users, ProviderId, _Client, Req) ->
+    {ok, Data} = provider_logic:get_effective_users(ProviderId),
+    {Data, Req};
+provide_resource(provider_user, _ProviderId, _Client, Req) ->
+    {UId, Req2} = cowboy_req:binding(uid, Req),
+    {ok, Data} = user_logic:get_data(UId, provider),
+    {Data, Req2};
 provide_resource(provider, ProviderId, _Client, Req) ->
     {ok, Provider} = provider_logic:get_data(ProviderId),
     {Provider, Req};
-provide_resource(nprovider, _ProviderId, _Client, Req) ->
-    {PID, Req2} = cowboy_req:binding(pid, Req),
-    {ok, Provider} = provider_logic:get_data(PID),
-    {Provider, Req2};
 provide_resource(spaces, ProviderId, _Client, Req) ->
     {ok, Spaces} = provider_logic:get_spaces(ProviderId),
     {Spaces, Req};
 provide_resource(space, _ProviderId, _Client, Req) ->
-    {SID, Req2} = cowboy_req:binding(sid, Req),
-    {ok, Space} = space_logic:get_data(SID, provider),
+    {SId, Req2} = cowboy_req:binding(sid, Req),
+    {ok, Space} = space_logic:get_data(SId, provider),
     {Space, Req2};
 provide_resource(ip, _ProviderId, _Client, Req) ->
     {{Ip, _Port}, Req2} = cowboy_req:peer(Req),
@@ -212,5 +245,5 @@ provide_resource(ip, _ProviderId, _Client, Req) ->
 delete_resource(provider, ProviderId, Req) ->
     {provider_logic:remove(ProviderId), Req};
 delete_resource(space, ProviderId, Req) ->
-    {SID, Req2} = cowboy_req:binding(sid, Req),
-    {space_logic:remove_provider(SID, ProviderId), Req2}.
+    {SId, Req2} = cowboy_req:binding(sid, Req),
+    {space_logic:remove_provider(SId, ProviderId), Req2}.
