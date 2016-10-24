@@ -55,6 +55,8 @@ record_struct(1) ->
         {chosen_provider, string},
         {client_tokens, [string]},
         {space_aliases, #{string => string}},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
         {groups, [string]},
         {spaces, [string]},
         {handle_services, [string]},

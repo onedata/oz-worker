@@ -43,12 +43,12 @@ routes() ->
     M = rest_handler,
     [
         {<<"/providers">>, M, S#rstate{resource = providers, methods = [get]}},
+        {<<"/providers/:pid">>, M, S#rstate{resource = nprovider, methods = [get]}},
         {<<"/provider">>, M, S#rstate{resource = provider, methods = [get, post, patch, delete], noauth = [post]}},
         {<<"/provider_dev">>, M, S#rstate{resource = provider_dev, methods = [post], noauth = [post]}},
         {<<"/provider/spaces">>, M, S#rstate{resource = spaces, methods = [get, post]}},
         % This endpoint can be used to get public information about a provider or
         % by users with OZ API privileges to get full info about any provider.
-        {<<"/provider/:pid">>, M, S#rstate{resource = nprovider, methods = [get]}},
         {<<"/provider/spaces/support">>, M, S#rstate{resource = ssupport, methods = [post]}},
         {<<"/provider/spaces/:sid">>, M, S#rstate{resource = space, methods = [get, delete]}},
         {<<"/provider/test/check_my_ip">>, M, S#rstate{resource = ip, methods = [get], noauth = [get]}},
@@ -71,9 +71,9 @@ is_authorized(ports, post, _, _) ->
 is_authorized(provider, post, _, #client{type = undefined}) ->
     true;
 is_authorized(providers, _, _EntityId, #client{type = user, id = UserId}) ->
-    oz_api_privileges_logic:has_effective_privilege(UserId, list_providers);
+    user_logic:has_eff_oz_privilege(UserId, list_providers);
 is_authorized(nprovider, _, _EntityId, #client{type = user, id = UserId}) ->
-    oz_api_privileges_logic:has_effective_privilege(UserId, list_providers);
+    user_logic:has_eff_oz_privilege(UserId, list_providers);
 is_authorized(provider_dev, _, _, _) ->
     {ok, true} =:= application:get_env(?APP_Name, dev_mode);
 is_authorized(_, _, _, #client{type = provider}) ->

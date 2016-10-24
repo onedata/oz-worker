@@ -109,6 +109,10 @@
     % List of user's aliases for spaces
     space_aliases = #{} :: #{od_space:id() => binary()},
 
+    % Privileges of this user in admin's OZ API
+    oz_privileges = [] :: [privileges:oz_privilege()],
+    eff_oz_privileges = [] :: [privileges:oz_privilege()], % TODO currently always empty
+
     % Direct relations to other entities
     groups = [] :: [od_group:id()],
     spaces = [] :: [od_space:id()],
@@ -132,6 +136,10 @@
 -record(od_group, {
     name = undefined :: binary() | undefined,
     type = role :: od_group:type(),
+
+    % Privileges of this group in admin's OZ API
+    oz_privileges = [] :: [privileges:oz_privilege()],
+    eff_oz_privileges = [] :: [privileges:oz_privilege()], % TODO currently always empty
 
     % Group graph related entities (direct and effective)
     parents = [] :: [od_group:id()],
@@ -261,12 +269,6 @@
 %%%===================================================================
 %%% Records specific for onezone
 %%%===================================================================
-
-%% This record contains a list of privileges possessed by certain entity
-%% (user / group) to use onezone API.
--record(oz_api_privileges, {
-    privileges = [] :: [oz_api_privileges:privilege()]
-}).
 
 %% This record defines a GUI session
 -record(session, {

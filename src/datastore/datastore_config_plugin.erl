@@ -39,7 +39,6 @@ models() -> [
     subscriptions_state,
     ozpca_state,
     onedata_auth,
-    oz_api_privileges,
     session,
     token
 ].

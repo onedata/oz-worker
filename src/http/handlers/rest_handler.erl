@@ -467,30 +467,34 @@ get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
         DischargeMacaroons :: [macaroon:macaroon()], cowboy_req:req()} |
     no_return().
 parse_macaroons_from_headers(Req) ->
-    {SerializedMacaroon, Req2} = cowboy_req:header(<<"macaroon">>, Req),
-    {SerializedDischarges, Req3} =
-        cowboy_req:header(<<"discharge-macaroons">>, Req2),
+    {MacaroonHeader, _} = cowboy_req:header(<<"macaroon">>, Req),
+    {XAuthTokenHeader, _} = cowboy_req:header(<<"x-auth-token">>, Req),
+    % X-Auth-Token is an alias for macaroon header, check if any of them
+    % is given.
+    SerializedMacaroon = case MacaroonHeader of
+        <<_/binary>> -> MacaroonHeader;
+        _ -> XAuthTokenHeader
+    end,
+    Macaroon = case SerializedMacaroon of
+        <<_/binary>> -> deserialize_macaroon(SerializedMacaroon, Req);
+        _ -> undefined
+    end,
 
-    Macaroon =
-        case SerializedMacaroon of
-            <<_/binary>> -> deserialize_macaroon(SerializedMacaroon, Req3);
-            _ -> undefined
-        end,
+    {SerializedDischarges, _} =
+        cowboy_req:header(<<"discharge-macaroons">>, Req),
+    DischargeMacaroons = case SerializedDischarges of
+        <<>> ->
+            [];
 
-    DischargeMacaroons =
-        case SerializedDischarges of
-            <<>> ->
-                [];
+        <<_/binary>> ->
+            Split = binary:split(SerializedDischarges, <<" ">>, [global]),
+            [deserialize_macaroon(S, Req) || S <- Split];
 
-            <<_/binary>> ->
-                Split = binary:split(SerializedDischarges, <<" ">>, [global]),
-                [deserialize_macaroon(S, Req3) || S <- Split];
+        _ ->
+            []
+    end,
 
-            _ ->
-                []
-        end,
-
-    {Macaroon, DischargeMacaroons, Req3}.
+    {Macaroon, DischargeMacaroons, Req}.
 
 %%--------------------------------------------------------------------
 %% @doc Deserializes a macaroon and throws on error.
