@@ -2136,7 +2136,7 @@ get_provider_info_with_location({RestAddress, Headers, Options}) ->
 
 get_provider_info(ProviderId, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(ProviderId)),
-    Response = do_request(RestAddress ++ "/provider/" ++ EncodedPID, Headers, get, [], Options),
+    Response = do_request(RestAddress ++ "/providers/" ++ EncodedPID, Headers, get, [], Options),
     get_body_val([clientName, urls, redirectionPoint, providerId], Response).
 
 update_provider(URLS, RedirectionPoint, ClientName, {RestAddress, Headers, Options}) ->
