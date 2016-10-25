@@ -48,6 +48,8 @@ routes() ->
         {<<"/providers/:id/spaces/:sid">>, M, S#rstate{resource = provider_space, methods = [get]}},
         {<<"/providers/:id/users">>, M, S#rstate{resource = provider_users, methods = [get]}},
         {<<"/providers/:id/users/:uid">>, M, S#rstate{resource = provider_user, methods = [get]}},
+        {<<"/providers/:id/groups">>, M, S#rstate{resource = provider_groups, methods = [get]}},
+        {<<"/providers/:id/groups/:gid">>, M, S#rstate{resource = provider_groups, methods = [get]}},
 
         {<<"/provider">>, M, S#rstate{resource = provider, methods = [get, post, patch, delete], noauth = [post]}},
         {<<"/provider_dev">>, M, S#rstate{resource = provider_dev, methods = [post], noauth = [post]}},
@@ -87,6 +89,10 @@ is_authorized(provider_users, _, _EntityId, #client{type = user, id = UserId}) -
     user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
 is_authorized(provider_user, _, _EntityId, #client{type = user, id = UserId}) ->
     user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
+is_authorized(provider_groups, _, _EntityId, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
+is_authorized(provider_group, _, _EntityId, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
 is_authorized(provider_dev, _, _, _) ->
     {ok, true} =:= application:get_env(?APP_Name, dev_mode);
 is_authorized(_, _, _, #client{type = provider}) ->
@@ -117,6 +123,11 @@ resource_exists(provider_users, ProviderId, Req) ->
 resource_exists(provider_user, ProviderId, Req) ->
     {UId, _} = cowboy_req:binding(uid, Req),
     {provider_logic:has_user(ProviderId, UId), Req};
+resource_exists(provider_groups, ProviderId, Req) ->
+    {provider_logic:exists(ProviderId), Req};
+resource_exists(provider_group, ProviderId, Req) ->
+    {GId, _} = cowboy_req:binding(gid, Req),
+    {provider_logic:has_group(ProviderId, GId), Req};
 resource_exists(_, _, Req) ->
     {true, Req}.
 
@@ -221,6 +232,13 @@ provide_resource(provider_users, ProviderId, _Client, Req) ->
 provide_resource(provider_user, _ProviderId, _Client, Req) ->
     {UId, Req2} = cowboy_req:binding(uid, Req),
     {ok, Data} = user_logic:get_data(UId, provider),
+    {Data, Req2};
+provide_resource(provider_groups, ProviderId, _Client, Req) ->
+    {ok, Data} = provider_logic:get_effective_groups(ProviderId),
+    {Data, Req};
+provide_resource(provider_group, _ProviderId, _Client, Req) ->
+    {GId, Req2} = cowboy_req:binding(gid, Req),
+    {ok, Data} = group_logic:get_data(GId),
     {Data, Req2};
 provide_resource(provider, ProviderId, _Client, Req) ->
     {ok, Provider} = provider_logic:get_data(ProviderId),

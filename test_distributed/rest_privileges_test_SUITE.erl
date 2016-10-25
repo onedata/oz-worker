@@ -29,8 +29,9 @@
     list_providers_of_space_test/1,
 
     list_providers_test/1,
-    list_spaces_of_provider_test/1,
-    list_users_of_provider_test/1
+    list_users_of_provider_test/1,
+    list_groups_of_provider_test/1,
+    list_spaces_of_provider_test/1
 ]).
 
 
@@ -55,8 +56,9 @@ all() ->
         list_providers_of_space_test, % list_providers_of_space
 
         list_providers_test,          % list_providers
-        list_spaces_of_provider_test,  % list_spaces_of_provider
-        list_users_of_provider_test  % list_users_of_provider
+        list_users_of_provider_test,  % list_users_of_provider
+        list_groups_of_provider_test, % list_groups_of_provider
+        list_spaces_of_provider_test  % list_spaces_of_provider
     ]).
 
 %%%===================================================================
@@ -970,140 +972,6 @@ list_providers_test(Config) ->
     ].
 
 
-list_spaces_of_provider_test(Config) ->
-    rest_test_utils:set_config(Config),
-    {ok, UserWithSpaces} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Provider, _} = oz_test_utils:create_provider(Config, <<"pr">>),
-    {ok, Space1} = oz_test_utils:create_space(
-        Config, {user, UserWithSpaces}, <<"sp1">>
-    ),
-    {ok, Space2} = oz_test_utils:create_space(
-        Config, {user, UserWithSpaces}, <<"sp2">>
-    ),
-    {ok, Space3} = oz_test_utils:create_space(
-        Config, {user, UserWithSpaces}, <<"sp3">>
-    ),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 100),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space2, 100),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space3, 100),
-    ExpSpaces = [
-        {Space1, <<"sp1">>},
-        {Space2, <<"sp2">>},
-        {Space3, <<"sp3">>}
-    ],
-    {ExpSpaceIds, _} = lists:unzip(ExpSpaces),
-    % Admin will be used to grant or revoke privileges
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, [set_privileges]),
-    % User will be used to test the functionality
-    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
-
-    %% PRIVILEGES AS A USER
-
-    % TestUser should not be able to list spaces of provider
-    % as he does not yet have privs
-    ?assert(check_list_spaces_of_provider(403, TestUser, Provider, undefined)),
-    % As well as get data of those spaces
-    [
-        ?assert(check_get_space_of_provider_data(
-            403, TestUser, Provider, SpId, undefined)
-        ) || {SpId, _SpName} <- ExpSpaces
-    ],
-    % Lets grant privileges to the user
-    ?assert(check_set_privileges(204, Admin, TestUser, od_user,
-        [<<"list_spaces_of_provider">>])),
-    % Now he should be able to list spaces of provider
-    ?assert(check_list_spaces_of_provider(
-        200, TestUser, Provider, ExpSpaceIds
-    )),
-    [
-        ?assert(check_get_space_of_provider_data(
-            200, TestUser, Provider, SpId, SpName)
-        ) || {SpId, SpName} <- ExpSpaces
-    ],
-    % Revoke the privileges again
-    ?assert(check_set_privileges(204, Admin, TestUser, od_user, [])),
-    % He should no longer be able to list spaces of provider
-    ?assert(check_list_spaces_of_provider(403, TestUser, Provider, undefined)),
-    [
-        ?assert(check_get_space_of_provider_data(
-            403, TestUser, Provider, SpId, undefined)
-        ) || {SpId, _SpName} <- ExpSpaces
-    ],
-
-    %% PRIVILEGES VIA GROUP
-
-    % Add the user to a group and give it privileges, see if the user can
-    % list spaces of provider.
-    {ok, TestGroup} = oz_test_utils:create_group(Config, TestUser, <<"gr">>),
-    % The user should still not be able to list spaces of provider as the group
-    % does not have privileges.
-    ?assert(check_list_spaces_of_provider(403, TestUser, Provider, undefined)),
-    [
-        ?assert(check_get_space_of_provider_data(
-            403, TestUser, Provider, SpId, undefined)
-        ) || {SpId, _SpName} <- ExpSpaces
-    ],
-    % But when we grant privileges to TestGroup, he should be able to
-    % list spaces of provider
-    ?assert(check_set_privileges(204, Admin, TestGroup, od_group,
-        [<<"list_spaces_of_provider">>])),
-    % Try multiple times, because group graph takes a while to update
-    ?assert_retry_10(check_list_spaces_of_provider(200, TestUser, Provider,
-        ExpSpaceIds)),
-    [
-        ?assert(check_get_space_of_provider_data(
-            200, TestUser, Provider, SpId, SpName)
-        ) || {SpId, SpName} <- ExpSpaces
-    ],
-    % Revoke the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TestGroup, od_group, [])),
-    % Try multiple times, because group graph takes a while to update
-    ?assert_retry_10(check_list_spaces_of_provider(403, TestUser, Provider,
-        undefined)),
-    [
-        ?assert(check_get_space_of_provider_data(
-            403, TestUser, Provider, SpId, undefined)
-        ) || {SpId, _SpName} <- ExpSpaces
-    ],
-
-    %% PRIVILEGES VIA NESTED GROUPS
-
-    % Add him to a nested group, which belongs to a group, which belongs to a
-    % group that has the privileges and check if he can list spaces of provider.
-    TopGroup = create_3_nested_groups(Config, TestUser),
-    % The user should still not be able to list spaces of provider as the group
-    % does not have privileges.
-    ?assert(check_list_spaces_of_provider(403, TestUser, Provider, undefined)),
-    [
-        ?assert(check_get_space_of_provider_data(
-            403, TestUser, Provider, SpId, undefined)
-        ) || {SpId, _SpName} <- ExpSpaces
-    ],
-    % But when we grant privileges to ParentGroup, he should be able to
-    % list spaces of provider
-    ?assert(check_set_privileges(204, Admin, TopGroup, od_group,
-        [<<"list_spaces_of_provider">>])),
-    % Try multiple times, because group graph takes a while to update
-    ?assert_retry_10(check_list_spaces_of_provider(200, TestUser, Provider,
-        ExpSpaceIds)),
-    [
-        ?assert(check_get_space_of_provider_data(
-            200, TestUser, Provider, SpId, SpName)
-        ) || {SpId, SpName} <- ExpSpaces
-    ],
-    % Revoke the privileges and check again
-    ?assert(check_set_privileges(204, Admin, TopGroup, od_group, [])),
-    % Try multiple times, because group graph takes a while to update
-    ?assert_retry_10(check_list_spaces_of_provider(403, TestUser, Provider,
-        undefined)),
-    [
-        ?assert(check_get_space_of_provider_data(
-            403, TestUser, Provider, SpId, undefined)
-        ) || {SpId, _SpName} <- ExpSpaces
-    ].
-
-
 list_users_of_provider_test(Config) ->
     rest_test_utils:set_config(Config),
     {ok, User1} = oz_test_utils:create_user(Config, #od_user{name = <<"u1">>}),
@@ -1240,6 +1108,279 @@ list_users_of_provider_test(Config) ->
         ?assert(check_get_user_of_provider_data(
             403, TestUser, Provider, UId, undefined)
         ) || {UId, _UName} <- ExpUsers
+    ].
+
+
+list_groups_of_provider_test(Config) ->
+    rest_test_utils:set_config(Config),
+    {ok, User1} = oz_test_utils:create_user(Config, #od_user{name = <<"u1">>}),
+    {ok, User2} = oz_test_utils:create_user(Config, #od_user{name = <<"u2">>}),
+    {ok, User3} = oz_test_utils:create_user(Config, #od_user{name = <<"u3">>}),
+    {ok, Provider, _} = oz_test_utils:create_provider(Config, <<"pr">>),
+    % Users 1 and 2 belong to the spaces directly
+    {ok, Space1} = oz_test_utils:create_space(
+        Config, {user, User1}, <<"sp">>
+    ),
+    {ok, Space2} = oz_test_utils:create_space(
+        Config, {user, User2}, <<"sp">>
+    ),
+    {ok, Space3} = oz_test_utils:create_space(
+        Config, {user, User2}, <<"sp">>
+    ),
+    % User 3 belongs to space 3 by nested groups
+    ParentGroup = create_3_nested_groups(Config, User3),
+    {ok, Space3} = oz_test_utils:add_member_to_space(
+        Config, {group, ParentGroup}, Space3
+    ),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space2, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space3, 100),
+    ExpUsers = [
+        {User1, <<"u1">>},
+        {User2, <<"u2">>},
+        {User3, <<"u3">>}
+    ],
+    % Admin will be used to grant or revoke privileges
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, Admin, [set_privileges]),
+    % User will be used to test the functionality
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
+
+    %% PRIVILEGES AS A USER
+
+    % TestUser should not be able to list users of provider
+    % as he does not yet have privs
+    ?assert(check_list_users_of_provider(403, TestUser, Provider, undefined)),
+    % As well as get data of those users
+    [
+        ?assert(check_get_user_of_provider_data(
+            403, TestUser, Provider, UId, undefined)
+        ) || {UId, _UName} <- ExpUsers
+    ],
+    % Lets grant privileges to the user
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user,
+        [<<"list_users_of_provider">>])),
+    % Now he should be able to list users of provider
+    ?assert(check_list_users_of_provider(200, TestUser, Provider, ExpUsers)),
+    [
+        ?assert(check_get_user_of_provider_data(
+            200, TestUser, Provider, UId, UName)
+        ) || {UId, UName} <- ExpUsers
+    ],
+    % Revoke the privileges again
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user, [])),
+    % He should no longer be able to list users of provider
+    ?assert(check_list_users_of_provider(403, TestUser, Provider, undefined)),
+    [
+        ?assert(check_get_user_of_provider_data(
+            403, TestUser, Provider, UId, undefined)
+        ) || {UId, _UName} <- ExpUsers
+    ],
+
+    %% PRIVILEGES VIA GROUP
+
+    % Add the user to a group and give it privileges, see if the user can
+    % list users of provider.
+    {ok, TestGroup} = oz_test_utils:create_group(Config, TestUser, <<"gr">>),
+    % The user should still not be able to list users of provider as the group
+    % does not have privileges.
+    ?assert(check_list_users_of_provider(403, TestUser, Provider, undefined)),
+    [
+        ?assert(check_get_user_of_provider_data(
+            403, TestUser, Provider, UId, undefined)
+        ) || {UId, _UName} <- ExpUsers
+    ],
+    % But when we grant privileges to TestGroup, he should be able to
+    % list users of provider
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group,
+        [<<"list_users_of_provider">>])),
+    % Try multiple times, because group graph takes a while to update
+    ?assert_retry_10(check_list_users_of_provider(200, TestUser, Provider,
+        ExpUsers)),
+    [
+        ?assert(check_get_user_of_provider_data(
+            200, TestUser, Provider, UId, UName)
+        ) || {UId, UName} <- ExpUsers
+    ],
+    % Revoke the privileges and check again
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group, [])),
+    % Try multiple times, because group graph takes a while to update
+    ?assert_retry_10(check_list_users_of_provider(403, TestUser, Provider,
+        undefined)),
+    [
+        ?assert(check_get_user_of_provider_data(
+            403, TestUser, Provider, UId, undefined)
+        ) || {UId, _UName} <- ExpUsers
+    ],
+
+    %% PRIVILEGES VIA NESTED GROUPS
+
+    % Add him to a nested group, which belongs to a group, which belongs to a
+    % group that has the privileges and check if he can list users of provider.
+    TopGroup = create_3_nested_groups(Config, TestUser),
+    % The user should still not be able to list users of provider as the group
+    % does not have privileges.
+    ?assert(check_list_users_of_provider(403, TestUser, Provider, undefined)),
+    [
+        ?assert(check_get_user_of_provider_data(
+            403, TestUser, Provider, UId, undefined)
+        ) || {UId, _UName} <- ExpUsers
+    ],
+    % But when we grant privileges to ParentGroup, he should be able to
+    % list users of provider
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group,
+        [<<"list_users_of_provider">>])),
+    % Try multiple times, because group graph takes a while to update
+    ?assert_retry_10(check_list_users_of_provider(200, TestUser, Provider,
+        ExpUsers)),
+    [
+        ?assert(check_get_user_of_provider_data(
+            200, TestUser, Provider, UId, UName)
+        ) || {UId, UName} <- ExpUsers
+    ],
+    % Revoke the privileges and check again
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group, [])),
+    % Try multiple times, because group graph takes a while to update
+    ?assert_retry_10(check_list_users_of_provider(403, TestUser, Provider,
+        undefined)),
+    [
+        ?assert(check_get_user_of_provider_data(
+            403, TestUser, Provider, UId, undefined)
+        ) || {UId, _UName} <- ExpUsers
+    ].
+
+
+list_spaces_of_provider_test(Config) ->
+    rest_test_utils:set_config(Config),
+    {ok, UserWithSpaces} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Provider, _} = oz_test_utils:create_provider(Config, <<"pr">>),
+    {ok, Space1} = oz_test_utils:create_space(
+        Config, {user, UserWithSpaces}, <<"sp1">>
+    ),
+    {ok, Space2} = oz_test_utils:create_space(
+        Config, {user, UserWithSpaces}, <<"sp2">>
+    ),
+    {ok, Space3} = oz_test_utils:create_space(
+        Config, {user, UserWithSpaces}, <<"sp3">>
+    ),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space2, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space3, 100),
+    ExpSpaces = [
+        {Space1, <<"sp1">>},
+        {Space2, <<"sp2">>},
+        {Space3, <<"sp3">>}
+    ],
+    {ExpSpaceIds, _} = lists:unzip(ExpSpaces),
+    % Admin will be used to grant or revoke privileges
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, Admin, [set_privileges]),
+    % User will be used to test the functionality
+    {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
+
+    %% PRIVILEGES AS A USER
+
+    % TestUser should not be able to list spaces of provider
+    % as he does not yet have privs
+    ?assert(check_list_spaces_of_provider(403, TestUser, Provider, undefined)),
+    % As well as get data of those spaces
+    [
+        ?assert(check_get_space_of_provider_data(
+            403, TestUser, Provider, SpId, undefined)
+        ) || {SpId, _SpName} <- ExpSpaces
+    ],
+    % Lets grant privileges to the user
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user,
+        [<<"list_spaces_of_provider">>])),
+    % Now he should be able to list spaces of provider
+    ?assert(check_list_spaces_of_provider(
+        200, TestUser, Provider, ExpSpaceIds
+    )),
+    [
+        ?assert(check_get_space_of_provider_data(
+            200, TestUser, Provider, SpId, SpName)
+        ) || {SpId, SpName} <- ExpSpaces
+    ],
+    % Revoke the privileges again
+    ?assert(check_set_privileges(204, Admin, TestUser, od_user, [])),
+    % He should no longer be able to list spaces of provider
+    ?assert(check_list_spaces_of_provider(403, TestUser, Provider, undefined)),
+    [
+        ?assert(check_get_space_of_provider_data(
+            403, TestUser, Provider, SpId, undefined)
+        ) || {SpId, _SpName} <- ExpSpaces
+    ],
+
+    %% PRIVILEGES VIA GROUP
+
+    % Add the user to a group and give it privileges, see if the user can
+    % list spaces of provider.
+    {ok, TestGroup} = oz_test_utils:create_group(Config, TestUser, <<"gr">>),
+    % The user should still not be able to list spaces of provider as the group
+    % does not have privileges.
+    ?assert(check_list_spaces_of_provider(403, TestUser, Provider, undefined)),
+    [
+        ?assert(check_get_space_of_provider_data(
+            403, TestUser, Provider, SpId, undefined)
+        ) || {SpId, _SpName} <- ExpSpaces
+    ],
+    % But when we grant privileges to TestGroup, he should be able to
+    % list spaces of provider
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group,
+        [<<"list_spaces_of_provider">>])),
+    % Try multiple times, because group graph takes a while to update
+    ?assert_retry_10(check_list_spaces_of_provider(200, TestUser, Provider,
+        ExpSpaceIds)),
+    [
+        ?assert(check_get_space_of_provider_data(
+            200, TestUser, Provider, SpId, SpName)
+        ) || {SpId, SpName} <- ExpSpaces
+    ],
+    % Revoke the privileges and check again
+    ?assert(check_set_privileges(204, Admin, TestGroup, od_group, [])),
+    % Try multiple times, because group graph takes a while to update
+    ?assert_retry_10(check_list_spaces_of_provider(403, TestUser, Provider,
+        undefined)),
+    [
+        ?assert(check_get_space_of_provider_data(
+            403, TestUser, Provider, SpId, undefined)
+        ) || {SpId, _SpName} <- ExpSpaces
+    ],
+
+    %% PRIVILEGES VIA NESTED GROUPS
+
+    % Add him to a nested group, which belongs to a group, which belongs to a
+    % group that has the privileges and check if he can list spaces of provider.
+    TopGroup = create_3_nested_groups(Config, TestUser),
+    % The user should still not be able to list spaces of provider as the group
+    % does not have privileges.
+    ?assert(check_list_spaces_of_provider(403, TestUser, Provider, undefined)),
+    [
+        ?assert(check_get_space_of_provider_data(
+            403, TestUser, Provider, SpId, undefined)
+        ) || {SpId, _SpName} <- ExpSpaces
+    ],
+    % But when we grant privileges to ParentGroup, he should be able to
+    % list spaces of provider
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group,
+        [<<"list_spaces_of_provider">>])),
+    % Try multiple times, because group graph takes a while to update
+    ?assert_retry_10(check_list_spaces_of_provider(200, TestUser, Provider,
+        ExpSpaceIds)),
+    [
+        ?assert(check_get_space_of_provider_data(
+            200, TestUser, Provider, SpId, SpName)
+        ) || {SpId, SpName} <- ExpSpaces
+    ],
+    % Revoke the privileges and check again
+    ?assert(check_set_privileges(204, Admin, TopGroup, od_group, [])),
+    % Try multiple times, because group graph takes a while to update
+    ?assert_retry_10(check_list_spaces_of_provider(403, TestUser, Provider,
+        undefined)),
+    [
+        ?assert(check_get_space_of_provider_data(
+            403, TestUser, Provider, SpId, undefined)
+        ) || {SpId, _SpName} <- ExpSpaces
     ].
 
 %%%===================================================================

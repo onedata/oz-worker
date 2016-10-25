@@ -22,10 +22,12 @@
 
 %% API
 -export([create/4, create/5, modify/2, exists/1]).
--export([get_data/1, get_spaces/1, get_effective_users/1, get_url/1]).
+-export([has_user/2, has_group/2]).
+-export([get_effective_users/1, get_effective_groups/1]).
+-export([get_data/1, get_spaces/1, get_url/1]).
 -export([remove/1]).
 -export([test_connection/1, check_provider_connectivity/1]).
--export([has_user/2, choose_provider_for_user/1]).
+-export([choose_provider_for_user/1]).
 -export([list/0]).
 
 %%%===================================================================
@@ -164,6 +166,27 @@ get_effective_users(ProviderId) ->
         end, [], Spaces),
     {ok, [{users, Users}]}.
 
+%%--------------------------------------------------------------------
+%% @doc Get Users effectively supported by the provider (sum of all users of
+%% spaces that it supports).
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_groups(ProviderId :: binary()) ->
+    {ok, Data :: [proplists:property()]}.
+get_effective_groups(ProviderId) ->
+    {ok, #document{
+        value = #od_provider{
+            spaces = Spaces
+        }}} = od_provider:get(ProviderId),
+    Groups = lists:foldl(
+        fun(SpaceId, Acc) ->
+            {ok, [{groups, SpaceGroups}]} = space_logic:get_effective_groups(
+                SpaceId
+            ),
+            ordsets:union([Acc, ordsets:from_list(SpaceGroups)])
+        end, [], Spaces),
+    {ok, [{groups, Groups}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns full provider URL.
@@ -262,6 +285,27 @@ has_user(ProviderId, UserId) ->
             lists:any(
                 fun(SpaceId) ->
                     space_logic:has_effective_user(SpaceId, UserId)
+                end, Spaces)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the group identified by GroupId is supported by this
+%% provider, i.e. the provider supports a space where this group belongs.
+%% Shall return false in any other case (provider doesn't exist, etc).
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_group(ProviderId :: od_provider:id(), GroupId :: od_group:id()) ->
+    boolean().
+has_group(ProviderId, GroupId) ->
+    case od_provider:get(ProviderId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #od_provider{spaces = Spaces}}} ->
+            lists:any(
+                fun(SpaceId) ->
+                    space_logic:has_effective_group(SpaceId, GroupId)
                 end, Spaces)
     end.
 
