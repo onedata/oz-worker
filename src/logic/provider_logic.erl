@@ -25,7 +25,7 @@
 -export([get_data/1, get_spaces/1, get_effective_users/1, get_url/1]).
 -export([remove/1]).
 -export([test_connection/1, check_provider_connectivity/1]).
--export([choose_provider_for_user/1]).
+-export([has_user/2, choose_provider_for_user/1]).
 -export([list/0]).
 
 %%%===================================================================
@@ -157,11 +157,11 @@ get_effective_users(ProviderId) ->
         value = #od_provider{
             spaces = Spaces
         }}} = od_provider:get(ProviderId),
-    Users = lists:flatmap(
-        fun(SpaceId) ->
+    Users = lists:foldl(
+        fun(SpaceId, Acc) ->
             {ok, [{users, SpUsers}]} = space_logic:get_effective_users(SpaceId),
-            SpUsers
-        end, Spaces),
+            ordsets:union([Acc, ordsets:from_list(SpUsers)])
+        end, [], Spaces),
     {ok, [{users, Users}]}.
 
 
@@ -243,6 +243,27 @@ test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
     test_connection(Rest, [{Url, ConnStatus} | Acc]);
 test_connection(_, _) ->
     {error, bad_data}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the user identified by UserId is supported by this
+%% provider, i.e. the provider supports a space where this user belongs.
+%% Shall return false in any other case (provider doesn't exist, etc).
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_user(ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
+    boolean().
+has_user(ProviderId, UserId) ->
+    case od_provider:get(ProviderId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #od_provider{spaces = Spaces}}} ->
+            lists:any(
+                fun(SpaceId) ->
+                    space_logic:has_effective_user(SpaceId, UserId)
+                end, Spaces)
+    end.
 
 
 % Checks if given provider (by ID) is alive and responding.

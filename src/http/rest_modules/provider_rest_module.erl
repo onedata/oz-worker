@@ -110,11 +110,13 @@ resource_exists(nprovider, ProviderId, Req) ->
 resource_exists(provider_spaces, ProviderId, Req) ->
     {provider_logic:exists(ProviderId), Req};
 resource_exists(provider_space, ProviderId, Req) ->
-    {provider_logic:exists(ProviderId), Req};
+    {SId, _} = cowboy_req:binding(sid, Req),
+    {space_logic:has_provider(SId, ProviderId), Req};
 resource_exists(provider_users, ProviderId, Req) ->
     {provider_logic:exists(ProviderId), Req};
 resource_exists(provider_user, ProviderId, Req) ->
-    {provider_logic:exists(ProviderId), Req};
+    {UId, _} = cowboy_req:binding(uid, Req),
+    {provider_logic:has_user(ProviderId, UId), Req};
 resource_exists(_, _, Req) ->
     {true, Req}.
 
