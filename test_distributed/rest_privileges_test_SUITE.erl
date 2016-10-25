@@ -991,6 +991,7 @@ list_spaces_of_provider_test(Config) ->
         {Space2, <<"sp2">>},
         {Space3, <<"sp3">>}
     ],
+    {ExpSpaceIds, _} = lists:unzip(ExpSpaces),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, [set_privileges]),
@@ -1012,7 +1013,9 @@ list_spaces_of_provider_test(Config) ->
     ?assert(check_set_privileges(204, Admin, TestUser, od_user,
         [<<"list_spaces_of_provider">>])),
     % Now he should be able to list spaces of provider
-    ?assert(check_list_spaces_of_provider(200, TestUser, Provider, ExpSpaces)),
+    ?assert(check_list_spaces_of_provider(
+        200, TestUser, Provider, ExpSpaceIds
+    )),
     [
         ?assert(check_get_space_of_provider_data(
             200, TestUser, Provider, SpId, SpName)
@@ -1047,7 +1050,7 @@ list_spaces_of_provider_test(Config) ->
         [<<"list_spaces_of_provider">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_spaces_of_provider(200, TestUser, Provider,
-        ExpSpaces)),
+        ExpSpaceIds)),
     [
         ?assert(check_get_space_of_provider_data(
             200, TestUser, Provider, SpId, SpName)
@@ -1083,7 +1086,7 @@ list_spaces_of_provider_test(Config) ->
         [<<"list_spaces_of_provider">>])),
     % Try multiple times, because group graph takes a while to update
     ?assert_retry_10(check_list_spaces_of_provider(200, TestUser, Provider,
-        ExpSpaces)),
+        ExpSpaceIds)),
     [
         ?assert(check_get_space_of_provider_data(
             200, TestUser, Provider, SpId, SpName)
@@ -1118,7 +1121,7 @@ list_users_of_provider_test(Config) ->
         Config, {user, User2}, <<"sp">>
     ),
     % User 3 belongs to space 3 by nested groups
-    {ok, ParentGroup} = create_3_nested_groups(Config, User3),
+    ParentGroup = create_3_nested_groups(Config, User3),
     {ok, Space3} = oz_test_utils:add_member_to_space(
         Config, {group, ParentGroup}, Space3
     ),
