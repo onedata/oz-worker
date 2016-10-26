@@ -3013,7 +3013,7 @@ fetch_value_from_list(Val) ->
 
 mock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, od_share),
+    ok = test_utils:mock_new(Nodes, od_share, [passthrough]),
     ok = test_utils:mock_expect(Nodes, od_share, get,
         fun
             (?SHARE_ID_1) ->
@@ -3034,7 +3034,7 @@ mock_handle_proxy(Config) ->
                 meck:passthrough()
         end),
 
-    ok = test_utils:mock_new(Nodes, handle_proxy_client),
+    ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
         fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
             {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
