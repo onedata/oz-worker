@@ -37,7 +37,7 @@
 
 -export([create_handle/6, remove_handle/2, modify_handle/5]).
 
--export([remove_all_entities/1]).
+-export([remove_all_entities/1, remove_all_entities/2]).
 
 %%%===================================================================
 %%% API functions
@@ -388,11 +388,23 @@ remove_provider(Config, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc Removes all entities from onezone
 %% (users, groups, spaces, shares, providers).
-%% NOTE: Does not remove predefined groups!
+%% NOTE: Does not remove predefined groups! Use remove_all_entities/2 for that.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_all_entities(Config :: term()) -> ok | {error, Reason :: term()}.
 remove_all_entities(Config) ->
+    remove_all_entities(Config, false).
+
+
+%%--------------------------------------------------------------------
+%% @doc Removes all entities from onezone
+%% (users, groups, spaces, shares, providers).
+%% RemovePredefinedGroups decides if predefined groups should be removed too.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_all_entities(Config :: term(),
+    RemovePredefinedGroups :: boolean()) -> ok | {error, Reason :: term()}.
+remove_all_entities(Config, RemovePredefinedGroups) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     % Delete all providers
     {ok, PrDocs} = call_oz(Config, od_provider, list, []),
@@ -409,15 +421,21 @@ remove_all_entities(Config) ->
     [true = remove_handle_service(Config, HSId) || #document{key = HSId} <- HandleServiceDocs],
     % Delete all groups, excluding predefined groups
     {ok, GroupDocsAll} = call_oz(Config, od_group, list, []),
-    % Filter out predefined groups
-    {ok, PredefinedGroupsMapping} = test_utils:get_env(
-        Node, oz_worker, predefined_groups
-    ),
-    PredefinedGroups = [Id || #{id := Id} <- PredefinedGroupsMapping],
-    GroupDocs = lists:filter(
-        fun(#document{key = GroupId}) ->
-            not lists:member(GroupId, PredefinedGroups)
-        end, GroupDocsAll),
+    % Check if predefined groups should be removed too.
+    GroupDocs = case RemovePredefinedGroups of
+        true ->
+            GroupDocsAll;
+        false ->
+            % Filter out predefined groups
+            {ok, PredefinedGroupsMapping} = test_utils:get_env(
+                Node, oz_worker, predefined_groups
+            ),
+            PredefinedGroups = [Id || #{id := Id} <- PredefinedGroupsMapping],
+            lists:filter(
+                fun(#document{key = GroupId}) ->
+                    not lists:member(GroupId, PredefinedGroups)
+                end, GroupDocsAll)
+    end,
     [true = remove_group(Config, GId) || #document{key = GId} <- GroupDocs],
     % Delete all users
     {ok, UserDocs} = call_oz(Config, od_user, list, []),

@@ -90,18 +90,21 @@ has_effective_user(SpaceId, UserId) ->
     case od_space:get(SpaceId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #od_space{users = Users, groups = SpaceGroups}}} ->
+        {ok, #document{value = #od_space{users = Users, groups = SpGroups}}} ->
             case lists:keymember(UserId, 1, Users) of
                 true ->
                     true;
                 false ->
-                    case od_user:get(UserId) of
-                        {error, {not_found, _}} ->
+                    case od_user:exists(UserId) of
+                        false ->
                             false;
-                        {ok, #document{value = #od_user{groups = UserGroups}}} ->
-                            SpaceGroupsSet = ordsets:from_list([GroupId || {GroupId, _} <- SpaceGroups]),
-                            UserGroupsSet = ordsets:from_list(UserGroups),
-                            not ordsets:is_disjoint(SpaceGroupsSet, UserGroupsSet)
+                        true  ->
+                            lists:any(
+                                fun({GroupId, _}) ->
+                                    group_logic:has_effective_user(
+                                        GroupId, UserId
+                                    )
+                                end, SpGroups)
                     end
             end
     end.
@@ -135,7 +138,8 @@ has_effective_group(SpaceId, GroupId) ->
     case od_space:get(SpaceId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #od_space{groups = SpaceGroups}}} ->
+        {ok, #document{value = #od_space{groups = SpaceGroupsTuples}}} ->
+            {SpaceGroups, _} = lists:unzip(SpaceGroupsTuples),
             case lists:member(GroupId, SpaceGroups) of
                 true ->
                     true;
@@ -438,18 +442,16 @@ get_effective_users(SpaceId) ->
     SpaceUsersSet = ordsets:from_list(SpaceUsers),
 
     {ok, [{groups, Groups}]} = get_effective_groups(SpaceId),
-    GroupUsersSets = lists:map(
-        fun(GroupId) ->
-            {ok, #document{
-                value = #od_group{
-                    eff_users = GroupUserTuples
-                }}} = od_group:get(GroupId),
-            {GroupUsers, _} = lists:unzip(GroupUserTuples),
-            ordsets:from_list(GroupUsers)
-        end, Groups),
+    GroupsUsers = lists:foldl(
+        fun(GroupId, Acc) ->
+            {ok, [{users, GroupUsers}]} = group_logic:get_effective_users(
+                GroupId
+            ),
+            ordsets:union(Acc, ordsets:from_list(GroupUsers))
+        end, [], Groups),
 
 
-    AllUserIds = ordsets:union([SpaceUsersSet | GroupUsersSets]),
+    AllUserIds = ordsets:union(SpaceUsersSet, GroupsUsers),
     {ok, [{users, ordsets:to_list(AllUserIds)}]}.
 
 %%--------------------------------------------------------------------
@@ -796,12 +798,11 @@ set_privileges_aux(#od_space{groups = Groups} = Space, {group, GroupId}, Privile
     Space#od_space{groups = GroupsNew}.
 
 %%--------------------------------------------------------------------
-%% @doc Returns a list of all spaces (their ids).
+%% @doc
+%% Returns a list of all spaces in the system (their ids).
+%% @end
 %%--------------------------------------------------------------------
--spec list() -> {ok, [binary()]}.
+-spec list() -> {ok, [od_space:id()]}.
 list() ->
     {ok, SpaceDocs} = od_space:list(),
-    SpaceIds = lists:map(fun(#document{key = SpaceId}) ->
-        SpaceId
-    end, SpaceDocs),
-    {ok, SpaceIds}.
+    {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]}.

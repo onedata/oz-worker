@@ -73,10 +73,10 @@ nested_groups_in_dev_setup_test(Config) ->
     ?assertUnorderedMatch([<<"group2">>], P3),
     ?assertUnorderedMatch([<<"group2">>], P4),
 
-    ?assertUnorderedMatch([<<"group1">>], EG1),
-    ?assertUnorderedMatch([<<"group1">>, <<"group2">>], EG2),
-    ?assertUnorderedMatch([<<"group1">>, <<"group2">>, <<"group3">>], EG3),
-    ?assertUnorderedMatch([<<"group1">>, <<"group2">>, <<"group4">>], EG4),
+    ?assertUnorderedMatch([{<<"group1">>, []}], EG1),
+    ?assertUnorderedMatch([{<<"group1">>, []}, {<<"group2">>, []}], EG2),
+    ?assertUnorderedMatch([{<<"group1">>, []}, {<<"group2">>, []}, {<<"group3">>, []}], EG3),
+    ?assertUnorderedMatch([{<<"group1">>, []}, {<<"group2">>, []}, {<<"group4">>, []}], EG4),
     ok.
 
 concurrent_updates_test(Config) ->
@@ -177,7 +177,8 @@ concurrent_updates_test(Config) ->
             {od_group, G, #{users => lists:nthtail(NN, UIDsWithManagerPrivileges)}},
             {od_group, K, #{users => lists:nthtail(NN, UIDsWithManagerPrivileges)}},
             {od_group, N, #{users => lists:nthtail(NN, UIDsWithManagerPrivileges)}}
-        ] ++ lists:map(fun(UID) -> {od_user, UID, #{groups => [B, E, G, K, N]}} end, lists:nthtail(NN, UIDs))
+        ] ++ lists:map(fun(UID) ->
+            {od_user, UID, #{groups => [B, E, G, K, N]}} end, lists:nthtail(NN, UIDs))
 
     end, [], lists:reverse(lists:seq(0, 13))),
 
@@ -243,8 +244,10 @@ concurrent_updates_test(Config) ->
         UIDsWithManagerPrivileges
     ], EffectiveUsersOfGroups),
 
-    lists:foreach(fun({Expected, Actual}) -> ?assertUnorderedMatch(Expected, Actual) end, Zipped),
-    lists:foreach(fun(EGoU) -> ?assertUnorderedMatch(GIDs, EGoU) end, EffectiveGroupsOfUsers),
+    lists:foreach(fun({Expected, Actual}) ->
+        ?assertUnorderedMatch(Expected, Actual) end, Zipped),
+    lists:foreach(fun(EGoU) ->
+        ?assertUnorderedMatch(GIDs, EGoU) end, EffectiveGroupsOfUsers),
     ok.
 
 conditional_update_test(Config) ->
@@ -255,13 +258,13 @@ conditional_update_test(Config) ->
         children = [{<<"2">>, [group_change_data]}],
         parents = [],
         eff_users = [{<<"U1">>, [group_change_data]}],
-        eff_children = [<<"1">>]},
+        eff_children = [{<<"1">>, []}]},
     G2 = #od_group{
         users = [{<<"U2">>, [group_change_data]}],
         children = [],
         parents = [<<"1">>],
         eff_users = [{<<"U2">>, [group_change_data]}],
-        eff_children = [<<"2">>]},
+        eff_children = [{<<"2">>, []}]},
 
     save(Node, <<"1">>, G1),
     save(Node, <<"2">>, G2),
@@ -716,7 +719,8 @@ effective_users(#document{value = #od_group{eff_users = Users}}) ->
 effective_groups(#document{value = #od_user{eff_groups = Groups}}) ->
     Groups;
 effective_groups(#document{value = #od_group{eff_children = Groups}}) ->
-    Groups.
+    {GroupIds, _} = lists:unzip(Groups),
+    GroupIds.
 
 update(Node, Type, ID, Diff) ->
     ?assertMatch({ok, ID}, rpc:call(Node, Type, update, [ID, Diff])).

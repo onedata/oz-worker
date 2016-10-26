@@ -31,6 +31,7 @@
 -export([create_predefined_groups/0]).
 -export([set_oz_privileges/2, get_oz_privileges/1, delete_oz_privileges/1,
     has_eff_oz_privilege/2]).
+-export([list/0]).
 
 %%%===================================================================
 %%% API
@@ -127,11 +128,12 @@ can_view_public_data(GroupId, UserId) ->
 -spec has_effective_group(GroupId :: od_group:id(), EffectiveId :: binary()) ->
     boolean().
 has_effective_group(GroupId, EffectiveId) ->
-    case od_group:get(GroupId) of
-        {error, {not_found, _}} ->
+    case od_group:exists(GroupId) of
+        false ->
             false;
-        {ok, #document{value = #od_group{eff_children = Groups}}} ->
-            lists:member(EffectiveId, Groups)
+        true ->
+            {ok, [{groups, EffGroups}]} = get_effective_children(GroupId),
+            lists:member(EffectiveId, EffGroups)
     end.
 
 %%--------------------------------------------------------------------
@@ -168,16 +170,12 @@ has_effective_privilege(GroupId, UserId, Privilege) ->
 -spec has_effective_user(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     boolean().
 has_effective_user(GroupId, UserId) ->
-    case od_group:get(GroupId) of
-        {error, {not_found, _}} ->
+    case od_group:exists(GroupId) of
+        false ->
             false;
-        {ok, Doc} ->
-            #document{
-                value = #od_group{
-                    users = Users,
-                    eff_users = EffectiveUsers
-                }} = Doc,
-            lists:keymember(UserId, 1, Users ++ EffectiveUsers)
+        true ->
+            {ok, [{users, EffUsers}]} = get_effective_users(GroupId),
+            lists:member(UserId, EffUsers)
     end.
 
 %%--------------------------------------------------------------------
@@ -401,11 +399,17 @@ get_users(GroupId) ->
 get_effective_users(GroupId) ->
     {ok, #document{
         value = #od_group{
-            users = UserTuples,
-            eff_users = EffUserTuples
+            users = UserTuples
         }}} = od_group:get(GroupId),
+    {ok, [{groups, Children}]} = get_effective_children(GroupId),
+
+    EffUsers = lists:foldl(
+        fun(ChildId, Acc) ->
+            {ok, [{users, ChildUsers}]} = get_effective_users(ChildId),
+            ordsets:union(Acc, ordsets:from_list(ChildUsers))
+        end, [], Children),
+
     {Users, _} = lists:unzip(UserTuples),
-    {EffUsers, _} = lists:unzip(EffUserTuples),
     {ok, [{users, ordsets:union(Users, EffUsers)}]}.
 
 %%--------------------------------------------------------------------
@@ -738,6 +742,16 @@ has_eff_oz_privilege(GroupId, Privilege) ->
                 }} = GroupDoc,
             lists:member(Privilege, OzApiPrivileges)
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a list of all groups in the system (their ids).
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [od_group:id()]}.
+list() ->
+    {ok, GroupDocs} = od_group:list(),
+    {ok, [GroupId || #document{key = GroupId} <- GroupDocs]}.
 
 
 %%%===================================================================

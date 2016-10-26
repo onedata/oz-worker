@@ -384,12 +384,11 @@ choose_provider_for_user(UserID) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Returns a list of all providers (their ids).
+%% @doc
+%% Returns a list of all providers in the system (their ids).
+%% @end
 %%--------------------------------------------------------------------
--spec list() -> {ok, [binary()]}.
+-spec list() -> {ok, [od_provider:id()]}.
 list() ->
     {ok, ProviderDocs} = od_provider:list(),
-    ProviderIds = lists:map(fun(#document{key = ProviderId}) ->
-        ProviderId
-    end, ProviderDocs),
-    {ok, ProviderIds}.
+    {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]}.

@@ -87,9 +87,8 @@ is_authorized(group, get, GroupId, #client{id = UserId}) ->
     % privileges in any space that contains this group.
     % These conditions are checked in provide_resource/4.
     % Group data can also be viewed with list_groups privilege.
-    group_logic:can_view_public_data(
-        GroupId, UserId
-    ) orelse user_logic:has_eff_oz_privilege(UserId, list_groups);
+    group_logic:can_view_public_data(GroupId, UserId)
+        orelse user_logic:has_eff_oz_privilege(UserId, list_groups);
 is_authorized(groups, post, _GroupId, _Client) ->
     true;
 is_authorized(privileges, get, _Id, #client{type = user, id = UserId}) ->
@@ -226,15 +225,15 @@ accept_resource(njoin, post, GroupId, Data, _Client, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(groups, _UserId, _Client, Req) ->
-    {ok, GroupIds} = od_group:list(),
+    {ok, GroupIds} = group_logic:list(),
     {[{groups, GroupIds}], Req};
 provide_resource(privileges, GroupId, _Client, Req) ->
     {ok, Data} = group_logic:get_oz_privileges(GroupId),
     {Data, Req};
 provide_resource(group, GroupId, #client{type = user, id = UserId}, Req) ->
-    HasViewPrivs = group_logic:has_effective_privilege(
-        GroupId, UserId, group_view_data
-    ) orelse user_logic:has_eff_oz_privilege(UserId, list_groups),
+    HasViewPrivs =
+        group_logic:has_effective_privilege(GroupId, UserId, group_view_data)
+            orelse user_logic:has_eff_oz_privilege(UserId, list_groups),
     {ok, Data} = case HasViewPrivs of
         true ->
             % The user has view privileges, give him all the details.

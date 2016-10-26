@@ -211,7 +211,8 @@ get_effective_users(ID) ->
 -spec get_effective_groups(GroupId :: od_group:id()) -> effective_groups().
 get_effective_groups(ID) ->
     case od_group:get(ID) of
-        {ok, #document{value = #od_group{eff_children = Groups}}} ->
+        {ok, #document{value = #od_group{eff_children = GroupTuples}}} ->
+            {Groups, _} = lists:unzip(GroupTuples),
             Groups;
         _Err ->
             ?warning_stacktrace("Unable to access group ~p due to ~p", [ID, _Err]),
@@ -335,12 +336,19 @@ break_cycles(Groups, Ancestors) ->
 -spec update_effective_groups(GroupId :: od_group:id(), effective_groups()) -> ok.
 update_effective_groups(ID, Effective) ->
     od_group:update(ID, fun(Group) ->
-        Current = ordsets:from_list(Group#od_group.eff_children),
+        {EffChildren, _} = lists:unzip(Group#od_group.eff_children),
+        Current = ordsets:from_list(EffChildren),
         Removed = ordsets:subtract(Current, Effective),
         Added = ordsets:subtract(Effective, Current),
         case {Added, Removed} of
-            {[], []} -> {error, update_not_needed};
-            _ -> {ok, Group#od_group{eff_children = Effective}}
+            {[], []} ->
+                {error, update_not_needed};
+            _ ->
+                {ok, Group#od_group{
+                    % TODO currently we do not compute effective privileges
+                    % of groups, this will be fixed soon.
+                    eff_children = [{EGroup, []} || EGroup <- Effective]}
+                }
         end
     end), ok.
 
@@ -420,7 +428,8 @@ gather_effective_groups(GIDs) ->
         case maps:get(GID, GroupsMap, undefined) of
             undefined ->
                 case od_group:get(GID) of
-                    {ok, #document{value = #od_group{eff_children = Effective}}} ->
+                    {ok, #document{value = #od_group{eff_children = EffectiveTuples}}} ->
+                        {Effective, _} = lists:unzip(EffectiveTuples),
                         maps:put(GID, Effective, GroupsMap);
                     _Err ->
                         ?warning_stacktrace("Unable to access group ~p due to ~p", [GID, _Err]),

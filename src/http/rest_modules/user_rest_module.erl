@@ -197,7 +197,7 @@ accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
 provide_resource(users, _UserId, _Client, Req) ->
-    {ok, UserIds} = od_user:list(),
+    {ok, UserIds} = user_logic:list(),
     {[{users, UserIds}], Req};
 provide_resource(nuser, UserId, _Client, Req) ->
     {ok, User} = user_logic:get_data(UserId, provider),
