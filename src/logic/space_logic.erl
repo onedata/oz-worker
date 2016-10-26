@@ -142,10 +142,8 @@ has_effective_group(SpaceId, GroupId) ->
                 false ->
                     lists:any(
                         fun(ParentGroup) ->
-                            {ok, #document{
-                                value = #od_group{
-                                    eff_children = EffChildren
-                                }}} = od_group:get(ParentGroup),
+                            {ok, [{groups, EffChildren}]} =
+                                group_logic:get_effective_children(ParentGroup),
                             lists:member(GroupId, EffChildren)
                         end, SpaceGroups)
             end
@@ -468,16 +466,15 @@ get_effective_groups(SpaceId) ->
             groups = GroupTuples
         }}} = od_space:get(SpaceId),
 
+    {Groups, _} = lists:unzip(GroupTuples),
     EffGroups = lists:foldl(
-        fun({GroupId, _}, Acc) ->
-            {ok, #document{
-                value = #od_group{
-                    eff_children = EffChildren
-                }}} = od_group:get(GroupId),
+        fun(GroupId, Acc) ->
+            {ok, [{groups, EffChildren}]} =
+                group_logic:get_effective_children(GroupId),
             ordsets:union([Acc, ordsets:from_list(EffChildren)])
-        end, [], GroupTuples),
+        end, [], Groups),
 
-    {ok, [{groups, EffGroups}]}.
+    {ok, [{groups, ordsets:union(Groups, EffGroups)}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's groups.

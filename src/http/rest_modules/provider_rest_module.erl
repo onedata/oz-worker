@@ -16,7 +16,10 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: providers | provider | provider_dev | spaces | nprovider | space | ip | ports.
+-type provided_resource() :: providers | nprovider | provider_spaces |
+provider_space | provider_users | provider_user | provider_groups |
+provider_group | provider | provider_dev | spaces | nprovider | space | ip |
+ports.
 -type accepted_resource() :: provider | spaces | ssupport.
 -type removable_resource() :: provider | space.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
@@ -49,7 +52,7 @@ routes() ->
         {<<"/providers/:id/users">>, M, S#rstate{resource = provider_users, methods = [get]}},
         {<<"/providers/:id/users/:uid">>, M, S#rstate{resource = provider_user, methods = [get]}},
         {<<"/providers/:id/groups">>, M, S#rstate{resource = provider_groups, methods = [get]}},
-        {<<"/providers/:id/groups/:gid">>, M, S#rstate{resource = provider_groups, methods = [get]}},
+        {<<"/providers/:id/groups/:gid">>, M, S#rstate{resource = provider_group, methods = [get]}},
 
         {<<"/provider">>, M, S#rstate{resource = provider, methods = [get, post, patch, delete], noauth = [post]}},
         {<<"/provider_dev">>, M, S#rstate{resource = provider_dev, methods = [post], noauth = [post]}},
