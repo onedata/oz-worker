@@ -15,7 +15,7 @@
 -behaviour(datastore_config_behaviour).
 
 %% datastore_config_behaviour callbacks
--export([models/0]).
+-export([models/0, throttled_models/0]).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -42,3 +42,11 @@ models() -> [
     session,
     token
 ].
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link datastore_config_behaviour} callback throttled_models/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec throttled_models() -> Models :: [model_behaviour:model_type()].
+throttled_models() -> [].
