@@ -72,6 +72,8 @@ is_authorized(provider, post, _, #client{type = undefined}) ->
     true;
 is_authorized(providers, _, _EntityId, #client{type = user, id = UserId}) ->
     user_logic:has_eff_oz_privilege(UserId, list_providers);
+is_authorized(nprovider, _, _EntityId, #client{type = provider}) ->
+    true;
 is_authorized(nprovider, _, _EntityId, #client{type = user, id = UserId}) ->
     user_logic:has_eff_oz_privilege(UserId, list_providers);
 is_authorized(provider_dev, _, _, _) ->
