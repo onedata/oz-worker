@@ -38,13 +38,15 @@
 %%--------------------------------------------------------------------
 -spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
 record_struct(1) ->
-{record, [
+    {record, [
         {name, string},
         {type, atom},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
         {parents, [string]},
         {children, [{string, [atom]}]},
         {eff_parents, [string]},
-        {eff_children, [string]},
+        {eff_children, [{string, [atom]}]},
         {users, [{string, [atom]}]},
         {spaces, [string]},
         {handle_services, [string]},

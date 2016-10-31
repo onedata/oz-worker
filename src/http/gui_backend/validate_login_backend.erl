@@ -45,7 +45,7 @@ page_init() ->
                     {ok, ProvURL} = auth_logic:get_redirection_uri(
                         UserId, ProvId
                     ),
-                    {redirect_relative, ProvURL}
+                    {redirect_absolute, ProvURL}
             end;
         new_user ->
             UserId = g_session:get_user_id(),

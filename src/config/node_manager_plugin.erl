@@ -119,7 +119,12 @@ after_init([]) ->
         %% This cannot be started before all workers are up
         %% and critical section is running
         %% todo: once critical section works in worker init, move it there
-        identity_publisher_worker:start_refreshing(),
+        case application:get_env(?APP_Name, location_service_enabled) of
+            {ok, false} ->
+                ok;
+            {ok, true} ->
+                identity_publisher_worker:start_refreshing()
+        end,
 
         %% This code will be run on every node_manager, so we need a
         %% transaction here that will prevent duplicates.
