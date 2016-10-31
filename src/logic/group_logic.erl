@@ -18,7 +18,7 @@
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
-    has_nested_group/2, can_view_public_data/2]).
+    has_nested_group/2, has_effective_group/2, can_view_public_data/2]).
 -export([create/3, modify/2, add_user/2, add_group/2, join/2, join_group/2,
     set_privileges/3]).
 -export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1,
@@ -263,10 +263,14 @@ add_group(ParentGroupId, ChildGroupId) ->
         true ->
             {ok, ParentGroupId};
         false ->
-            case has_effective_group(ParentGroupId, ChildGroupId) of
-                true ->
+            {ok, #document{
+                value = #od_group{
+                    eff_children = EffChildrenTuples
+                }}} = od_group:get(ParentGroupId),
+            case lists:keyfind(ChildGroupId, 1, EffChildrenTuples) of
+                {ChildGroupId, _} ->
                     {error, cycle_averted};
-                false ->
+                _ ->
                     Privileges = privileges:group_user(),
                     {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
                         #od_group{children = Groups} = Group,
