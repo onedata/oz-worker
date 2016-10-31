@@ -53,7 +53,9 @@ providers(Doc, od_group) ->
         value = #od_group{
             users = UsersWithPrivileges,
             eff_users = EUsersWithPrivileges,
-            eff_children = EGroups}} = Doc,
+            eff_children = EGroupsWithPrivileges
+        }} = Doc,
+    {EGroups, _} = lists:unzip(EGroupsWithPrivileges),
     {Users, _} = lists:unzip(UsersWithPrivileges),
     {EUsers, _} = lists:unzip(EUsersWithPrivileges),
     AncestorsUsers = lists:foldl(
@@ -64,7 +66,7 @@ providers(Doc, od_group) ->
                     {AncestorUsers, _} = lists:unzip(AncUsersAndPerms),
                     Acc ++ AncestorUsers;
                 {error, Reason} ->
-                    ?warning("Refferenced group ~p not found due to ~p",
+                    ?warning("Referenced group ~p not found due to ~p",
                         [AncestorID, Reason]),
                     Acc
             end
