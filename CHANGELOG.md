@@ -6,6 +6,18 @@ CHANGELOG
 
 ### 3.0.0-rc10
 
+* VFS-2703 Update mocking
+* VFS-2703 Update datastore config
+* VFS-2720 Fix bug that did not allow providers to get provider data
+* VFS-2734 Add support for list_groups_of_provider OZ privilege
+* VFS-2734 Add tests for get users of provider privilege
+* VFS-2734 Add list spaces of provider privileges
+* VFS-2720 Add better test coverage for list_providers_of_space OZ privielges
+* VFS-2720 Add better test coverage for list_spaces and list_providers OZ privielges
+* VFS-2720 Update od_user and og_group record structures
+* VFS-2720 Do not generate all combinations of privileges in privileges tests as it takes too long
+* VFS-2720 Fix default provider redirection not working properly
+* VFS-2662 Fix a bug in change password, update gui ref and adjust the code to new API
 * VFS-2469 Use iso time format for serialization of timestamps, move serialization logic to ctool.
 * VFS-2667 Improve json encoder for DB operations
 * VFS-2593 - update ctool and cluster-worker,  use STRESS_TEST_BASE macro in stress test
