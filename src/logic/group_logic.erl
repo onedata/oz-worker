@@ -18,16 +18,20 @@
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
-    has_nested_group/2, can_view_public_data/2]).
--export([create/3, modify/2, add_user/2, add_group/2, join/2, join_group/2, set_privileges/3]).
--export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
-    get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
-    get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
-    get_parent_groups/1, get_parent_group/2, get_effective_user/2]).
+    has_nested_group/2, has_effective_group/2, can_view_public_data/2]).
+-export([create/3, modify/2, add_user/2, add_group/2, join/2, join_group/2,
+    set_privileges/3]).
+-export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1,
+    get_effective_children/1, get_spaces/1, get_providers/1,
+    get_user/2, get_privileges/2, get_effective_privileges/2,
+    get_nested_groups/1, get_nested_group/2, get_nested_group_privileges/2,
+    set_nested_group_privileges/3, get_parent_groups/1, get_parent_group/2,
+    get_effective_user/2]).
 -export([remove/1, remove_user/2, cleanup/1, remove_nested_group/2]).
 -export([create_predefined_groups/0]).
 -export([set_oz_privileges/2, get_oz_privileges/1, delete_oz_privileges/1,
     has_eff_oz_privilege/2]).
+-export([list/0]).
 
 %%%===================================================================
 %%% API
@@ -124,11 +128,12 @@ can_view_public_data(GroupId, UserId) ->
 -spec has_effective_group(GroupId :: od_group:id(), EffectiveId :: binary()) ->
     boolean().
 has_effective_group(GroupId, EffectiveId) ->
-    case od_group:get(GroupId) of
-        {error, {not_found, _}} ->
+    case od_group:exists(GroupId) of
+        false ->
             false;
-        {ok, #document{value = #od_group{eff_children = Groups}}} ->
-            lists:member(EffectiveId, Groups)
+        true ->
+            {ok, [{groups, EffGroups}]} = get_effective_children(GroupId),
+            lists:member(EffectiveId, EffGroups)
     end.
 
 %%--------------------------------------------------------------------
@@ -165,16 +170,12 @@ has_effective_privilege(GroupId, UserId, Privilege) ->
 -spec has_effective_user(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     boolean().
 has_effective_user(GroupId, UserId) ->
-    case od_group:get(GroupId) of
-        {error, {not_found, _}} ->
+    case od_group:exists(GroupId) of
+        false ->
             false;
-        {ok, Doc} ->
-            #document{
-                value = #od_group{
-                    users = Users,
-                    eff_users = EffectiveUsers
-                }} = Doc,
-            lists:keymember(UserId, 1, Users ++ EffectiveUsers)
+        true ->
+            {ok, [{users, EffUsers}]} = get_effective_users(GroupId),
+            lists:member(UserId, EffUsers)
     end.
 
 %%--------------------------------------------------------------------
@@ -262,10 +263,14 @@ add_group(ParentGroupId, ChildGroupId) ->
         true ->
             {ok, ParentGroupId};
         false ->
-            case has_effective_group(ParentGroupId, ChildGroupId) of
-                true ->
+            {ok, #document{
+                value = #od_group{
+                    eff_children = EffChildrenTuples
+                }}} = od_group:get(ParentGroupId),
+            case lists:keyfind(ChildGroupId, 1, EffChildrenTuples) of
+                {ChildGroupId, _} ->
                     {error, cycle_averted};
-                false ->
+                _ ->
                     Privileges = privileges:group_user(),
                     {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
                         #od_group{children = Groups} = Group,
@@ -398,12 +403,40 @@ get_users(GroupId) ->
 get_effective_users(GroupId) ->
     {ok, #document{
         value = #od_group{
-            users = UserTuples,
-            eff_users = EffUserTuples
+            users = UserTuples
         }}} = od_group:get(GroupId),
+    {ok, [{groups, Children}]} = get_effective_children(GroupId),
+
+    EffUsers = lists:foldl(
+        fun(ChildId, Acc) ->
+            {ok, [{users, ChildUsers}]} = get_effective_users(ChildId),
+            ordsets:union(Acc, ordsets:from_list(ChildUsers))
+        end, [], Children),
+
     {Users, _} = lists:unzip(UserTuples),
-    {EffUsers, _} = lists:unzip(EffUserTuples),
     {ok, [{users, ordsets:union(Users, EffUsers)}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns a list of group's effective children.
+%% Warning - recursive and slow.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_children(GroupId :: od_group:id()) ->
+    {ok, [proplists:property()]}.
+get_effective_children(GroupId) ->
+    {ok, #document{
+        value = #od_group{
+            children = ChildrenTuples
+        }}} = od_group:get(GroupId),
+    {Children, _} = lists:unzip(ChildrenTuples),
+    EffChildren = lists:foldl(
+        fun(ChGroup, Acc) ->
+            {ok, [{groups, ChildChildren}]} = get_effective_children(ChGroup),
+            ordsets:union(Acc, ordsets:from_list(ChildChildren))
+        end, [], Children),
+    {ok, [{groups, ordsets:union(Children, EffChildren)}]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about group's nested groups members.
@@ -713,6 +746,16 @@ has_eff_oz_privilege(GroupId, Privilege) ->
                 }} = GroupDoc,
             lists:member(Privilege, OzApiPrivileges)
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a list of all groups in the system (their ids).
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [od_group:id()]}.
+list() ->
+    {ok, GroupDocs} = od_group:list(),
+    {ok, [GroupId || #document{key = GroupId} <- GroupDocs]}.
 
 
 %%%===================================================================

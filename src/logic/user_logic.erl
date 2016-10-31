@@ -33,6 +33,7 @@
 -export([get_all_handle_services/1, get_all_handles/1]).
 -export([set_oz_privileges/2, get_oz_privileges/1, delete_oz_privileges/1,
     has_eff_oz_privilege/2]).
+-export([list/0]).
 
 %%%===================================================================
 %%% API functions
@@ -279,12 +280,15 @@ is_email_occupied(UserId, Email) ->
 get_data(UserId, provider) ->
     {ok, #document{
         value = #od_user{
-            name = Name, login = Login
+            name = Name,
+            login = Login,
+            email_list = EmailList
         }}} = od_user:get(UserId),
     {ok, [
         {userId, UserId},
         {login, Login},
-        {name, Name}
+        {name, Name},
+        {emailList, EmailList}
     ]};
 get_data(UserId, user) ->
     {ok, #document{
@@ -861,6 +865,16 @@ has_eff_oz_privilege(UserId, Privilege) ->
                     end, EffGroups)
             end
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a list of all users in the system (their ids).
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [od_user:id()]}.
+list() ->
+    {ok, UserDocs} = od_user:list(),
+    {ok, [UserId || #document{key = UserId} <- UserDocs]}.
 
 
 %%%===================================================================

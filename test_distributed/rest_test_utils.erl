@@ -129,7 +129,7 @@ check_rest_call(ArgsMap) ->
                 end,
                 [{HeaderName, Macaroon} | ReqHeaders]
         end,
-        % Add insecure option - we do not want the GR server cert to be checked.
+        % Add insecure option - we do not want the OZ server cert to be checked.
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
             ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOpts]
         ),

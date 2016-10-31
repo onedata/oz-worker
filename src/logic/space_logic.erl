@@ -18,13 +18,13 @@
 
 %% API
 -export([exists/1, has_provider/2, has_user/2, has_effective_user/2,
-    has_group/2, has_effective_privilege/3]).
+    has_group/2, has_effective_group/2, has_effective_privilege/3]).
+-export([get_effective_users/1, get_effective_groups/1]).
 -export([get_shares/1, has_share/2]).
 -export([create/2, create/4, get_data/2, get_public_data/2, modify/3]).
--export([join/2, add_user/2, get_user/3, get_users/1, get_effective_users/1,
-    remove_user/2]).
+-export([join/2, add_user/2, get_user/3, get_users/1, remove_user/2]).
 -export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
--export([support/3, add_provider/3, get_providers/2, get_provider/3, 
+-export([support/3, add_provider/3, get_providers/2, get_provider/3,
     remove_provider/2]).
 -export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
 -export([remove/1, cleanup/1]).
@@ -39,7 +39,7 @@
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(SpaceId :: binary()) ->
+-spec exists(SpaceId :: od_space:id()) ->
     boolean().
 exists(SpaceId) ->
     od_space:exists(SpaceId).
@@ -50,7 +50,7 @@ exists(SpaceId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_provider(SpaceId :: binary(), ProviderId :: binary()) ->
+-spec has_provider(SpaceId :: od_space:id(), ProviderId :: binary()) ->
     boolean().
 has_provider(SpaceId, ProviderId) ->
     case od_space:get(SpaceId) of
@@ -67,7 +67,7 @@ has_provider(SpaceId, ProviderId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_user(SpaceId :: binary(), UserId :: binary()) ->
+-spec has_user(SpaceId :: od_space:id(), UserId :: binary()) ->
     boolean().
 has_user(SpaceId, UserId) ->
     case od_space:get(SpaceId) of
@@ -84,24 +84,27 @@ has_user(SpaceId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_user(SpaceId :: binary(), UserId :: binary()) ->
+-spec has_effective_user(SpaceId :: od_space:id(), UserId :: binary()) ->
     boolean().
 has_effective_user(SpaceId, UserId) ->
     case od_space:get(SpaceId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #od_space{users = Users, groups = SpaceGroups}}} ->
+        {ok, #document{value = #od_space{users = Users, groups = SpGroups}}} ->
             case lists:keymember(UserId, 1, Users) of
                 true ->
                     true;
                 false ->
-                    case od_user:get(UserId) of
-                        {error, {not_found, _}} ->
+                    case od_user:exists(UserId) of
+                        false ->
                             false;
-                        {ok, #document{value = #od_user{groups = UserGroups}}} ->
-                            SpaceGroupsSet = ordsets:from_list([GroupId || {GroupId, _} <- SpaceGroups]),
-                            UserGroupsSet = ordsets:from_list(UserGroups),
-                            not ordsets:is_disjoint(SpaceGroupsSet, UserGroupsSet)
+                        true  ->
+                            lists:any(
+                                fun({GroupId, _}) ->
+                                    group_logic:has_effective_user(
+                                        GroupId, UserId
+                                    )
+                                end, SpGroups)
                     end
             end
     end.
@@ -112,7 +115,7 @@ has_effective_user(SpaceId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_group(SpaceId :: binary(), GroupId :: binary()) ->
+-spec has_group(SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
     boolean().
 has_group(SpaceId, GroupId) ->
     case od_space:get(SpaceId) of
@@ -123,13 +126,42 @@ has_group(SpaceId, GroupId) ->
     end.
 
 %%--------------------------------------------------------------------
+%% @doc Returns whether the group identified by GroupId is a member of
+%% given Space, either directly or through a nested group.
+%% Shall return false in any other case (Space doesn't exist, etc).
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_effective_group(SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
+    boolean().
+has_effective_group(SpaceId, GroupId) ->
+    case od_space:get(SpaceId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #od_space{groups = SpaceGroupsTuples}}} ->
+            {SpaceGroups, _} = lists:unzip(SpaceGroupsTuples),
+            case lists:member(GroupId, SpaceGroups) of
+                true ->
+                    true;
+                false ->
+                    lists:any(
+                        fun(ParentGroup) ->
+                            {ok, [{groups, EffChildren}]} =
+                                group_logic:get_effective_children(ParentGroup),
+                            lists:member(GroupId, EffChildren)
+                        end, SpaceGroups)
+            end
+    end.
+
+
+%%--------------------------------------------------------------------
 %% @doc Returns whether the Space's user identified by UserId has privilege
 %% in the Space. Shall return false in any other case (Space doesn't exist,
 %% user is not Space's member, etc).
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_privilege(SpaceId :: binary(), UserId :: binary(),
+-spec has_effective_privilege(SpaceId :: od_space:id(), UserId :: binary(),
     Privilege :: privileges:space_privilege()) ->
     boolean().
 has_effective_privilege(SpaceId, UserId, Privilege) ->
@@ -146,7 +178,7 @@ has_effective_privilege(SpaceId, UserId, Privilege) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec has_share(SpaceId :: binary(), ShareId :: binary()) ->
+-spec has_share(SpaceId :: od_space:id(), ShareId :: binary()) ->
     boolean().
 has_share(SpaceId, ShareId) ->
     case exists(SpaceId) of
@@ -165,7 +197,7 @@ has_share(SpaceId, ShareId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create({user | group, Id :: binary()}, Name :: binary()) ->
-    {ok, SpaceId :: binary()} | no_return().
+    {ok, SpaceId :: od_space:id()} | no_return().
 create(Member, Name) ->
     create_with_provider(Member, Name, []).
 
@@ -176,7 +208,7 @@ create(Member, Name) ->
 %%--------------------------------------------------------------------
 -spec create({provider, ProviderId :: binary()}, Name :: binary(),
     Macaroon :: macaroon:macaroon(), Size :: pos_integer()) ->
-    {ok, SpaceId :: binary()}.
+    {ok, SpaceId :: od_space:id()}.
 create({provider, ProviderId}, Name, Macaroon, Size) ->
     {ok, Member} = token_logic:consume(Macaroon),
     create_with_provider(Member, Name, [{ProviderId, Size}]).
@@ -186,7 +218,7 @@ create({provider, ProviderId}, Name, Macaroon, Size) ->
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider,
+-spec modify(SpaceId :: od_space:id(), Client :: {user, UserId :: binary()} | provider,
     Name :: binary()) -> ok.
 modify(SpaceId, {user, UserId}, Name) ->
     user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
@@ -202,7 +234,7 @@ modify(SpaceId, provider, Name) ->
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_privileges(SpaceId :: binary(), {user | group, Id :: binary()},
+-spec set_privileges(SpaceId :: od_space:id(), {user | group, Id :: binary()},
     Privileges :: [privileges:space_privilege()]) ->
     ok.
 set_privileges(SpaceId, Member, Privileges) ->
@@ -220,7 +252,7 @@ set_privileges(SpaceId, Member, Privileges) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join({group | user, Id :: binary()}, Macaroon :: macaroon:macaroon()) ->
-    {ok, SpaceId :: binary()}.
+    {ok, SpaceId :: od_space:id()}.
 join({user, UserId}, Macaroon) ->
     {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
     add_user(SpaceId, UserId);
@@ -234,8 +266,8 @@ join({group, GroupId}, Macaroon) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(SpaceId :: binary(), UserId :: binary()) ->
-    {ok, SpaceId :: binary()}.
+-spec add_user(SpaceId :: od_space:id(), UserId :: binary()) ->
+    {ok, SpaceId :: od_space:id()}.
 add_user(SpaceId, UserId) ->
     case has_user(SpaceId, UserId) of
         true ->
@@ -261,8 +293,8 @@ add_user(SpaceId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(SpaceId :: binary(), GroupId :: binary()) ->
-    {ok, SpaceId :: binary()}.
+-spec add_group(SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
+    {ok, SpaceId :: od_space:id()}.
 add_group(SpaceId, GroupId) ->
     case has_group(SpaceId, GroupId) of
         true ->
@@ -297,7 +329,7 @@ add_group(SpaceId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec support(ProviderId :: binary(), Macaroon :: macaroon:macaroon(),
     SupportedSize :: pos_integer()) ->
-    {ok, SpaceId :: binary()}.
+    {ok, SpaceId :: od_space:id()}.
 support(ProviderId, Macaroon, SupportedSize) ->
     {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
     add_provider(SpaceId, ProviderId, SupportedSize).
@@ -309,7 +341,7 @@ support(ProviderId, Macaroon, SupportedSize) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec add_provider(SpaceId :: binary(), ProviderId :: binary(),
+-spec add_provider(SpaceId :: od_space:id(), ProviderId :: binary(),
     SupportedSize :: integer()) -> {ok, SpaceId :: od_space:id()}.
 add_provider(SpaceId, ProviderId, SupportedSize) ->
     case has_provider(SpaceId, ProviderId) of
@@ -332,7 +364,7 @@ add_provider(SpaceId, ProviderId, SupportedSize) ->
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(SpaceId :: binary(), Client :: {user, UserId :: binary()} | provider) ->
+-spec get_data(SpaceId :: od_space:id(), Client :: {user, UserId :: binary()} | provider) ->
     {ok, [proplists:property()]}.
 get_data(SpaceId, {user, UserId}) ->
     {ok, #document{
@@ -365,7 +397,7 @@ get_data(SpaceId, provider) ->
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_public_data(SpaceId :: binary(), Client :: {user, UserId :: binary()}) ->
+-spec get_public_data(SpaceId :: od_space:id(), Client :: {user, UserId :: binary()}) ->
     {ok, [proplists:property()]}.
 get_public_data(SpaceId, {user, UserId}) ->
     {ok, #document{
@@ -386,7 +418,7 @@ get_public_data(SpaceId, {user, UserId}) ->
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(SpaceId :: binary()) ->
+-spec get_users(SpaceId :: od_space:id()) ->
     {ok, [proplists:property()]}.
 get_users(SpaceId) ->
     {ok, #document{value = #od_space{users = Users}}} = od_space:get(SpaceId),
@@ -394,34 +426,64 @@ get_users(SpaceId) ->
     {ok, [{users, UserIds}]}.
 
 %%--------------------------------------------------------------------
-%% @doc Returns details about Space's users. The users may belong to the Space
-%% directly or indirectly through their groups.
+%% @doc Returns the list of Space's effective users. The users may belong to
+%% the Space directly or indirectly through their groups.
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_users(SpaceId :: binary()) ->
+-spec get_effective_users(SpaceId :: od_space:id()) ->
     {ok, [proplists:property()]}.
 get_effective_users(SpaceId) ->
-    {ok, #document{value = #od_space{users = SpaceUserTuples, groups = GroupTuples}}} = od_space:get(SpaceId),
-
-    GroupUsersSets = lists:map(fun({GroupId, _}) ->
-        {ok, #document{value = #od_group{users = GroupUserTuples}}} = od_group:get(GroupId),
-        {GroupUsers, _} = lists:unzip(GroupUserTuples),
-        ordsets:from_list(GroupUsers)
-    end, GroupTuples),
-
+    {ok, #document{
+        value = #od_space{
+            users = SpaceUserTuples
+        }}} = od_space:get(SpaceId),
     {SpaceUsers, _} = lists:unzip(SpaceUserTuples),
     SpaceUsersSet = ordsets:from_list(SpaceUsers),
 
-    AllUserIds = ordsets:union([SpaceUsersSet | GroupUsersSets]),
+    {ok, [{groups, Groups}]} = get_effective_groups(SpaceId),
+    GroupsUsers = lists:foldl(
+        fun(GroupId, Acc) ->
+            {ok, [{users, GroupUsers}]} = group_logic:get_effective_users(
+                GroupId
+            ),
+            ordsets:union(Acc, ordsets:from_list(GroupUsers))
+        end, [], Groups),
+
+
+    AllUserIds = ordsets:union(SpaceUsersSet, GroupsUsers),
     {ok, [{users, ordsets:to_list(AllUserIds)}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns the list of Space's effective users. The groups may belong to
+%% the Space directly or indirectly through nested groups.
+%% Throws exception when call to the datastore fails, or space doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_groups(SpaceId :: od_space:id()) ->
+    {ok, [proplists:property()]}.
+get_effective_groups(SpaceId) ->
+    {ok, #document{
+        value = #od_space{
+            groups = GroupTuples
+        }}} = od_space:get(SpaceId),
+
+    {Groups, _} = lists:unzip(GroupTuples),
+    EffGroups = lists:foldl(
+        fun(GroupId, Acc) ->
+            {ok, [{groups, EffChildren}]} =
+                group_logic:get_effective_children(GroupId),
+            ordsets:union([Acc, ordsets:from_list(EffChildren)])
+        end, [], Groups),
+
+    {ok, [{groups, ordsets:union(Groups, EffGroups)}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about Space's groups.
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(SpaceId :: binary()) ->
+-spec get_groups(SpaceId :: od_space:id()) ->
     {ok, [proplists:property()]}.
 get_groups(SpaceId) ->
     {ok, #document{value = #od_space{groups = GroupTuples}}} = od_space:get(SpaceId),
@@ -433,7 +495,7 @@ get_groups(SpaceId) ->
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_providers(SpaceId :: binary(), Client :: user | provider) ->
+-spec get_providers(SpaceId :: od_space:id(), Client :: user | provider) ->
     {ok, [proplists:property()]}.
 get_providers(SpaceId, _Client) ->
     {ok, #document{value = #od_space{providers_supports = ProvidersSupports}}}
@@ -446,7 +508,7 @@ get_providers(SpaceId, _Client) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user(SpaceId :: binary(), Client :: user | provider,
+-spec get_user(SpaceId :: od_space:id(), Client :: user | provider,
     UserId :: binary()) ->
     {ok, [proplists:property()]}.
 get_user(_SpaceId, _Client, UserId) ->
@@ -457,7 +519,7 @@ get_user(_SpaceId, _Client, UserId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group(SpaceId :: binary(), GroupId :: binary()) ->
+-spec get_group(SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_group(_SpaceId, GroupId) ->
     %% @todo: we don't want to give out every bit of data once groups have more data stored
@@ -468,7 +530,7 @@ get_group(_SpaceId, GroupId) ->
 %% Throws exception when call to the datastore fails, or provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_provider(SpaceId :: binary(), Client :: user | provider,
+-spec get_provider(SpaceId :: od_space:id(), Client :: user | provider,
     UserId :: binary()) ->
     {ok, [proplists:property()]}.
 get_provider(_SpaceId, _Client, ProviderId) ->
@@ -480,7 +542,7 @@ get_provider(_SpaceId, _Client, ProviderId) ->
 %% Throws exception when call to the datastore fails, or space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_privileges(SpaceId :: binary(), {user | group, Id :: binary()}) ->
+-spec get_privileges(SpaceId :: od_space:id(), {user | group, Id :: binary()}) ->
     {ok, [privileges:space_privilege()]}.
 get_privileges(SpaceId, {user, UserId}) ->
     {ok, #document{value = #od_space{users = Users}}} = od_space:get(SpaceId),
@@ -496,7 +558,7 @@ get_privileges(SpaceId, {group, GroupId}) ->
 %% Throws exception when call to the datastore fails, or space is already removed.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(SpaceId :: binary()) ->
+-spec remove(SpaceId :: od_space:id()) ->
     true.
 remove(SpaceId) ->
     {ok, #document{
@@ -545,7 +607,7 @@ remove(SpaceId) ->
 %% Throws exception when call to the datastore fails, or space/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(SpaceId :: binary(), UserId :: binary()) ->
+-spec remove_user(SpaceId :: od_space:id(), UserId :: binary()) ->
     true.
 remove_user(SpaceId, UserId) ->
     {ok, _} = od_user:update(UserId, fun(User) ->
@@ -565,7 +627,7 @@ remove_user(SpaceId, UserId) ->
 %% Throws exception when call to the datastore fails, or space/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(SpaceId :: binary(), GroupId :: binary()) ->
+-spec remove_group(SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
     true.
 remove_group(SpaceId, GroupId) ->
     {ok, #document{value = #od_group{users = Users}}} = od_group:get(GroupId),
@@ -588,7 +650,7 @@ remove_group(SpaceId, GroupId) ->
 %% Throws exception when call to the datastore fails, or space/provider doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_provider(SpaceId :: binary(), ProviderId :: binary()) ->
+-spec remove_provider(SpaceId :: od_space:id(), ProviderId :: binary()) ->
     true.
 remove_provider(SpaceId, ProviderId) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
@@ -610,7 +672,7 @@ remove_provider(SpaceId, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec create_with_provider({user | group, Id :: binary()}, Name :: binary(),
     Size :: [{Provider :: binary(), ProvidedSize :: pos_integer()}]) ->
-    {ok, SpaceId :: binary()}.
+    {ok, SpaceId :: od_space:id()}.
 create_with_provider({user, UserId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
     Space = #od_space{name = Name, providers_supports = Supports, users = [{UserId, Privileges}]},
@@ -650,7 +712,7 @@ create_with_provider({group, GroupId}, Name, Supports) ->
 %% @doc Adds a space to providers' support list.
 %% @end
 %%--------------------------------------------------------------------
--spec add_space_to_providers(SpaceId :: binary(), ProviderIds :: [binary()])
+-spec add_space_to_providers(SpaceId :: od_space:id(), ProviderIds :: [binary()])
         -> ok.
 add_space_to_providers(_SpaceId, []) -> ok;
 add_space_to_providers(SpaceId, [ProviderId | RestProviders]) ->
@@ -666,7 +728,7 @@ add_space_to_providers(SpaceId, [ProviderId | RestProviders]) ->
 %% Throws exception when call to the datastore fails, or space is already removed.
 %% @end
 %%--------------------------------------------------------------------
--spec cleanup(SpaceId :: binary()) -> boolean() | no_return().
+-spec cleanup(SpaceId :: od_space:id()) -> boolean() | no_return().
 cleanup(_SpaceId) ->
     false.
 %% Currently, spaces with no users and groups are not deleted so it is
@@ -683,7 +745,7 @@ cleanup(_SpaceId) ->
 %% Throws exception when call to the datastore fails, or space/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_privileges(SpaceId :: binary(), UserId :: binary()) ->
+-spec get_effective_privileges(SpaceId :: od_space:id(), UserId :: binary()) ->
     {ok, ordsets:ordset(privileges:space_privilege())}.
 get_effective_privileges(SpaceId, UserId) ->
     {ok, #document{value = #od_user{groups = UGroups}}} = od_user:get(UserId),
@@ -713,7 +775,7 @@ get_effective_privileges(SpaceId, UserId) ->
 %% or given space doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_shares(SpaceId :: binary()) -> {ok, [{shares, [binary()]}]} | no_return().
+-spec get_shares(SpaceId :: od_space:id()) -> {ok, [{shares, [binary()]}]} | no_return().
 get_shares(SpaceId) ->
     {ok, #document{
         value = #od_space{
@@ -736,12 +798,11 @@ set_privileges_aux(#od_space{groups = Groups} = Space, {group, GroupId}, Privile
     Space#od_space{groups = GroupsNew}.
 
 %%--------------------------------------------------------------------
-%% @doc Returns a list of all spaces (their ids).
+%% @doc
+%% Returns a list of all spaces in the system (their ids).
+%% @end
 %%--------------------------------------------------------------------
--spec list() -> {ok, [binary()]}.
+-spec list() -> {ok, [od_space:id()]}.
 list() ->
     {ok, SpaceDocs} = od_space:list(),
-    SpaceIds = lists:map(fun(#document{key = SpaceId}) ->
-        SpaceId
-    end, SpaceDocs),
-    {ok, SpaceIds}.
+    {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]}.

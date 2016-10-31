@@ -145,10 +145,7 @@
     parents = [] :: [od_group:id()],
     children = [] :: [{od_group:id(), [privileges:group_privilege()]}],
     eff_parents = [] :: [od_group:id()], % TODO currently always empty
-    eff_children = [] :: [od_group:id()],
-    % TODO  when entities graph is reworked, this field should hold pairs
-    % TODO  of {GroupId, Privileges}
-%%    eff_children = [] :: [{od_group:id(), [privileges:group_privilege()]}],
+    eff_children = [] :: [{od_group:id(), [privileges:group_privilege()]}], % TODO privileges list currently always empty
 
     % Direct relations to other entities
     users = [] :: [{od_user:id(), [privileges:group_privilege()]}],

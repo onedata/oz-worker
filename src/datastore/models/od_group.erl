@@ -46,7 +46,7 @@ record_struct(1) ->
         {parents, [string]},
         {children, [{string, [atom]}]},
         {eff_parents, [string]},
-        {eff_children, [string]},
+        {eff_children, [{string, [atom]}]},
         {users, [{string, [atom]}]},
         {spaces, [string]},
         {handle_services, [string]},

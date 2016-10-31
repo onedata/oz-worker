@@ -21,6 +21,6 @@
 TARGET_DIR='_build/default/lib/gui_static'
 # Image which will be used by default to get the static files. If it cannot
 # be resolved, the script will fall back to secondary.
-PRIMARY_IMAGE='docker.onedata.org/oz-gui-default:VFS-2638'
+PRIMARY_IMAGE='docker.onedata.org/oz-gui-default:VFS-2660'
 # Image which will be used if primary image is not resolved.
-SECONDARY_IMAGE='onedata/oz-gui-default:VFS-2638'
+SECONDARY_IMAGE='onedata/oz-gui-default:VFS-2660'

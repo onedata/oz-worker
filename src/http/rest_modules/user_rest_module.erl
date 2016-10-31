@@ -18,8 +18,10 @@
 -behavior(rest_module_behavior).
 
 
--type provided_resource() :: user | client_token | spaces | defspace | screate | space | groups | group | effective_groups.
--type accepted_resource() :: user | auth | spaces | defspace | sjoin | groups | gjoin.
+-type provided_resource() :: users | nuser | user | client_token | spaces | defspace |
+screate | space | groups | group | effective_groups.
+-type accepted_resource() :: user | auth | spaces | defspace | sjoin | groups |
+gjoin.
 -type removable_resource() :: user | space | group.
 -type resource() :: provided_resource() | accepted_resource() | removable_resource().
 
@@ -45,6 +47,8 @@ routes() ->
     S = #rstate{module = ?MODULE, root = user},
     M = rest_handler,
     [
+        {<<"/users/">>, M, S#rstate{resource = users, methods = [get]}},
+        {<<"/users/:id">>, M, S#rstate{resource = nuser, methods = [get]}},
         {<<"/users/:id/privileges">>, M, S#rstate{resource = privileges, methods = [get, patch, delete]}},
         {<<"/user">>, M, S#rstate{resource = user, methods = [get, patch, delete]}},
         {<<"/user/authorize">>, M, S#rstate{resource = auth, methods = [post], noauth = [post]}},
@@ -69,6 +73,10 @@ routes() ->
 -spec is_authorized(Resource :: resource(), Method :: method(),
     UserId :: binary() | undefined, Client :: rest_handler:client()) ->
     boolean().
+is_authorized(users, get, _Id, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, list_users);
+is_authorized(nuser, get, _Id, #client{type = user, id = UserId}) ->
+    user_logic:has_eff_oz_privilege(UserId, list_users);
 is_authorized(privileges, get, _Id, #client{type = user, id = UserId}) ->
     user_logic:has_eff_oz_privilege(UserId, view_privileges);
 is_authorized(privileges, _, _Id, #client{type = user, id = UserId}) ->
@@ -88,6 +96,9 @@ is_authorized(_, _, _, _) ->
 -spec resource_exists(Resource :: resource(), UserId :: binary() | undefined,
     Req :: cowboy_req:req()) ->
     {boolean(), cowboy_req:req()}.
+resource_exists(nuser, UserId, Req) ->
+    Result = user_logic:exists(UserId),
+    {Result, Req};
 resource_exists(privileges, UserId, Req) ->
     Result = user_logic:exists(UserId),
     {Result, Req};
@@ -185,6 +196,12 @@ accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
 -spec provide_resource(Resource :: provided_resource(), UserId :: binary() | undefined,
     Client :: rest_handler:client(), Req :: cowboy_req:req()) ->
     {Data :: json_object(), cowboy_req:req()}.
+provide_resource(users, _UserId, _Client, Req) ->
+    {ok, UserIds} = user_logic:list(),
+    {[{users, UserIds}], Req};
+provide_resource(nuser, UserId, _Client, Req) ->
+    {ok, User} = user_logic:get_data(UserId, provider),
+    {User, Req};
 provide_resource(privileges, UserId, _Client, Req) ->
     {ok, Data} = user_logic:get_oz_privileges(UserId),
     {Data, Req};
