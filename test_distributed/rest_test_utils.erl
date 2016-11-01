@@ -121,9 +121,15 @@ check_rest_call(ArgsMap) ->
                     Mac ->
                         Mac
                 end,
-                [{<<"macaroon">>, Macaroon} | ReqHeaders]
+                % Use "macaroon" and "X-Auth-Token" headers variably, as they
+                % both should be accepted.
+                HeaderName = case rand:uniform(2) of
+                    1 -> <<"macaroon">>;
+                    2 -> <<"X-Auth-Token">>
+                end,
+                [{HeaderName, Macaroon} | ReqHeaders]
         end,
-        % Add insecure option - we do not want the GR server cert to be checked.
+        % Add insecure option - we do not want the OZ server cert to be checked.
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
             ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOpts]
         ),
@@ -182,6 +188,14 @@ check_rest_call(ArgsMap) ->
                     false ->
                         throw({body, RespBodyMap, ExpBody})
                 end;
+            {contains, Map4} when is_map(Map4) ->
+                RespBodyMap = json_utils:decode_map(RespBody),
+                case contains_map(Map4, RespBodyMap) of
+                    true ->
+                        ok;
+                    false ->
+                        throw({body_contains, RespBodyMap, Map4})
+                end;
             #xmlElement{} = ExpBodyXML ->
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
                 case compare_xml(RespBodyXML, ExpBodyXML) of
@@ -225,6 +239,23 @@ normalize_headers(Headers) ->
 compare_maps(Map1, Map2) ->
     sort_map(Map1) =:= sort_map(Map2).
 
+% Returns true if second map has all the mappings of the first map with
+% same values.
+contains_map(Map1, Map2) ->
+    SortedMap1 = sort_map(Map1),
+    SortedMap2 = sort_map(Map2),
+    lists:all(
+        fun(Key) ->
+            Value1 = maps:get(Key, SortedMap1),
+            case maps:is_key(Key, SortedMap2) of
+                false ->
+                    false;
+                true ->
+                    Value2 = maps:get(Key, SortedMap2),
+                    Value1 =:= Value2
+            end
+        end, maps:keys(SortedMap1)).
+
 
 % Sorts all nested lists in a map and returns the result map
 sort_map(OriginalMap) ->
@@ -241,19 +272,21 @@ sort_map(OriginalMap) ->
         end, OriginalMap, maps:keys(OriginalMap)).
 
 compare_xml(_, []) -> true;
-compare_xml(#xmlText{value=V}, #xmlText{value=V}) -> true;
-compare_xml(#xmlText{value=_V1}, #xmlText{value=_V2}) -> false;
-compare_xml(#xmlAttribute{name=N, value=V}, #xmlAttribute{name=N, value=V}) -> true;
-compare_xml(#xmlAttribute{name=_N1, value=_V1}, #xmlAttribute{name=_N2, value=_V2}) -> false;
-compare_xml(#xmlElement{name=Name, attributes=_, content=_},
-            #xmlElement{name=Name, attributes=[], content=[]}) -> true;
-compare_xml(#xmlElement{name=Name, attributes=RespAttributes, content=RespContent},
-            #xmlElement{name=Name, attributes=ExpAttributes, content=ExpContent}) ->
+compare_xml(#xmlText{value = V}, #xmlText{value = V}) -> true;
+compare_xml(#xmlText{value = _V1}, #xmlText{value = _V2}) -> false;
+compare_xml(#xmlAttribute{name = N, value = V}, #xmlAttribute{name = N, value = V}) ->
+    true;
+compare_xml(#xmlAttribute{name = _N1, value = _V1}, #xmlAttribute{name = _N2, value = _V2}) ->
+    false;
+compare_xml(#xmlElement{name = Name, attributes = _, content = _},
+    #xmlElement{name = Name, attributes = [], content = []}) -> true;
+compare_xml(#xmlElement{name = Name, attributes = RespAttributes, content = RespContent},
+    #xmlElement{name = Name, attributes = ExpAttributes, content = ExpContent}) ->
     case compare_xml(RespAttributes, ExpAttributes) of
         false -> false;
         true -> compare_xml(RespContent, ExpContent)
     end;
-compare_xml(Resp, [Exp | ExpRest]) when is_list(Resp)->
+compare_xml(Resp, [Exp | ExpRest]) when is_list(Resp) ->
     compare_xml(Resp, Exp) and compare_xml(Resp, ExpRest);
 compare_xml(Resp, Exp) when is_list(Resp) ->
     lists:foldl(fun(R, Acc) ->

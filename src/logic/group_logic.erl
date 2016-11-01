@@ -18,14 +18,20 @@
 
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
-    has_nested_group/2, can_view_public_data/2]).
--export([create/3, modify/2, add_user/2, add_group/2, join/2, join_group/2, set_privileges/3]).
--export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1, get_spaces/1, get_providers/1,
-    get_user/2, get_privileges/2, get_effective_privileges/2, get_nested_groups/1,
-    get_nested_group/2, get_nested_group_privileges/2, set_nested_group_privileges/3,
-    get_parent_groups/1, get_parent_group/2, get_effective_user/2]).
+    has_nested_group/2, has_effective_group/2, can_view_public_data/2]).
+-export([create/3, modify/2, add_user/2, add_group/2, join/2, join_group/2,
+    set_privileges/3]).
+-export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1,
+    get_effective_children/1, get_spaces/1, get_providers/1,
+    get_user/2, get_privileges/2, get_effective_privileges/2,
+    get_nested_groups/1, get_nested_group/2, get_nested_group_privileges/2,
+    set_nested_group_privileges/3, get_parent_groups/1, get_parent_group/2,
+    get_effective_user/2]).
 -export([remove/1, remove_user/2, cleanup/1, remove_nested_group/2]).
 -export([create_predefined_groups/0]).
+-export([set_oz_privileges/2, get_oz_privileges/1, delete_oz_privileges/1,
+    has_eff_oz_privilege/2]).
+-export([list/0]).
 
 %%%===================================================================
 %%% API
@@ -36,7 +42,7 @@
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(GroupId :: binary()) -> boolean().
+-spec exists(GroupId :: od_group:id()) -> boolean().
 exists(GroupId) ->
     od_group:exists(GroupId).
 
@@ -46,7 +52,7 @@ exists(GroupId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec has_user(GroupId :: binary(), UserId :: binary()) ->
+-spec has_user(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     boolean().
 has_user(GroupId, UserId) ->
     case od_group:get(GroupId) of
@@ -62,7 +68,7 @@ has_user(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec has_nested_group(ParentGroupId :: binary(), GroupId :: binary()) ->
+-spec has_nested_group(ParentGroupId :: od_group:id(), GroupId :: od_group:id()) ->
     boolean().
 has_nested_group(ParentGroupId, GroupId) ->
     case od_group:get(ParentGroupId) of
@@ -119,14 +125,15 @@ can_view_public_data(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_group(GroupId :: binary(), EffectiveId :: binary()) ->
+-spec has_effective_group(GroupId :: od_group:id(), EffectiveId :: binary()) ->
     boolean().
 has_effective_group(GroupId, EffectiveId) ->
-    case od_group:get(GroupId) of
-        {error, {not_found, _}} ->
+    case od_group:exists(GroupId) of
+        false ->
             false;
-        {ok, #document{value = #od_group{eff_children = Groups}}} ->
-            lists:member(EffectiveId, Groups)
+        true ->
+            {ok, [{groups, EffGroups}]} = get_effective_children(GroupId),
+            lists:member(EffectiveId, EffGroups)
     end.
 
 %%--------------------------------------------------------------------
@@ -136,7 +143,7 @@ has_effective_group(GroupId, EffectiveId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_privilege(GroupId :: binary(), UserId :: binary(),
+-spec has_effective_privilege(GroupId :: od_group:id(), UserId :: od_user:id(),
     Privilege :: privileges:group_privilege()) -> boolean().
 has_effective_privilege(GroupId, UserId, Privilege) ->
     case has_user(GroupId, UserId) of
@@ -160,19 +167,15 @@ has_effective_privilege(GroupId, UserId, Privilege) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec has_effective_user(GroupId :: binary(), UserId :: binary()) ->
+-spec has_effective_user(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     boolean().
 has_effective_user(GroupId, UserId) ->
-    case od_group:get(GroupId) of
-        {error, {not_found, _}} ->
+    case od_group:exists(GroupId) of
+        false ->
             false;
-        {ok, Doc} ->
-            #document{
-                value = #od_group{
-                    users = Users,
-                    eff_users = EffectiveUsers
-                }} = Doc,
-            lists:keymember(UserId, 1, Users ++ EffectiveUsers)
+        true ->
+            {ok, [{users, EffUsers}]} = get_effective_users(GroupId),
+            lists:member(UserId, EffUsers)
     end.
 
 %%--------------------------------------------------------------------
@@ -180,8 +183,8 @@ has_effective_user(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create(UserId :: binary(), Name :: binary(), Type :: od_group:type()) ->
-    {ok, GroupId :: binary()}.
+-spec create(UserId :: od_user:id(), Name :: binary(), Type :: od_group:type()) ->
+    {ok, GroupId :: od_group:id()}.
 create(UserId, Name, Type) ->
     {ok, UserDoc} = od_user:get(UserId),
     #document{value = #od_user{groups = Groups} = User} = UserDoc,
@@ -200,7 +203,7 @@ create(UserId, Name, Type) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(GroupId :: binary(), Data :: maps:map()) ->
+-spec modify(GroupId :: od_group:id(), Data :: maps:map()) ->
     ok.
 modify(GroupId, Data) ->
     {ok, _} = od_group:update(GroupId, Data),
@@ -212,7 +215,7 @@ modify(GroupId, Data) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(GroupId :: binary(), UserId :: binary()) ->
+-spec add_user(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     {ok, GroupId :: onedata_group:id()}.
 add_user(GroupId, UserId) ->
     case has_user(GroupId, UserId) of
@@ -253,17 +256,21 @@ add_user(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(ParentGroupId :: binary(), ChildGroupId :: binary()) ->
+-spec add_group(ParentGroupId :: od_group:id(), ChildGroupId :: od_group:id()) ->
     {ok, GroupId :: onedata_group:id()} | {error, cycle_averted}.
 add_group(ParentGroupId, ChildGroupId) ->
     case has_nested_group(ParentGroupId, ChildGroupId) of
         true ->
             {ok, ParentGroupId};
         false ->
-            case has_effective_group(ParentGroupId, ChildGroupId) of
-                true ->
+            {ok, #document{
+                value = #od_group{
+                    eff_children = EffChildrenTuples
+                }}} = od_group:get(ParentGroupId),
+            case lists:keyfind(ChildGroupId, 1, EffChildrenTuples) of
+                {ChildGroupId, _} ->
                     {error, cycle_averted};
-                false ->
+                _ ->
                     Privileges = privileges:group_user(),
                     {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
                         #od_group{children = Groups} = Group,
@@ -288,7 +295,7 @@ add_group(ParentGroupId, ChildGroupId) ->
 %% token/user/group_from_token doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
--spec join(UserId :: binary(), Macaroon :: macaroon:macaroon()) ->
+-spec join(UserId :: od_user:id(), Macaroon :: macaroon:macaroon()) ->
     {ok, GroupId :: onedata_group:id()}.
 join(UserId, Macaroon) ->
     {ok, {group, GroupId}} = token_logic:consume(Macaroon),
@@ -301,7 +308,7 @@ join(UserId, Macaroon) ->
 %% doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
--spec join_group(GroupId :: binary(), Macaroon :: macaroon:macaroon()) ->
+-spec join_group(GroupId :: od_group:id(), Macaroon :: macaroon:macaroon()) ->
     {ok, GroupId :: onedata_group:id()} | {error, cycle_averted}.
 join_group(GroupId, Macaroon) ->
     {ok, {group, ParentGroupId}} = token_logic:consume(Macaroon),
@@ -313,7 +320,7 @@ join_group(GroupId, Macaroon) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_privileges(GroupId :: binary(), UserId :: binary(),
+-spec set_privileges(GroupId :: od_group:id(), UserId :: od_user:id(),
     Privileges :: [privileges:group_privilege()]) ->
     ok.
 set_privileges(GroupId, UserId, Privileges) ->
@@ -329,7 +336,7 @@ set_privileges(GroupId, UserId, Privileges) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_nested_group_privileges(ParentGroupId :: binary(), GroupId :: binary(),
+-spec set_nested_group_privileges(ParentGroupId :: od_group:id(), GroupId :: od_group:id(),
     Privileges :: [privileges:group_privilege()]) ->
     ok.
 set_nested_group_privileges(ParentGroupId, GroupId, Privileges) ->
@@ -345,7 +352,7 @@ set_nested_group_privileges(ParentGroupId, GroupId, Privileges) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(GroupId :: binary()) ->
+-spec get_data(GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_data(GroupId) ->
     {ok, #document{value = #od_group{name = Name, type = Type}}} =
@@ -362,7 +369,7 @@ get_data(GroupId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_public_data(GroupId :: binary()) ->
+-spec get_public_data(GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_public_data(GroupId) ->
     {ok, #document{value = #od_group{name = Name}}} =
@@ -379,7 +386,7 @@ get_public_data(GroupId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(GroupId :: binary()) ->
+-spec get_users(GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_users(GroupId) ->
     {ok, #document{value = #od_group{users = UserTuples}}} = od_group:get(GroupId),
@@ -391,24 +398,52 @@ get_users(GroupId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_users(GroupId :: binary()) ->
+-spec get_effective_users(GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_effective_users(GroupId) ->
     {ok, #document{
         value = #od_group{
-            users = UserTuples,
-            eff_users = EffUserTuples
+            users = UserTuples
         }}} = od_group:get(GroupId),
+    {ok, [{groups, Children}]} = get_effective_children(GroupId),
+
+    EffUsers = lists:foldl(
+        fun(ChildId, Acc) ->
+            {ok, [{users, ChildUsers}]} = get_effective_users(ChildId),
+            ordsets:union(Acc, ordsets:from_list(ChildUsers))
+        end, [], Children),
+
     {Users, _} = lists:unzip(UserTuples),
-    {EffUsers, _} = lists:unzip(EffUserTuples),
     {ok, [{users, ordsets:union(Users, EffUsers)}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns a list of group's effective children.
+%% Warning - recursive and slow.
+%% Throws exception when call to the datastore fails, or group doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_children(GroupId :: od_group:id()) ->
+    {ok, [proplists:property()]}.
+get_effective_children(GroupId) ->
+    {ok, #document{
+        value = #od_group{
+            children = ChildrenTuples
+        }}} = od_group:get(GroupId),
+    {Children, _} = lists:unzip(ChildrenTuples),
+    EffChildren = lists:foldl(
+        fun(ChGroup, Acc) ->
+            {ok, [{groups, ChildChildren}]} = get_effective_children(ChGroup),
+            ordsets:union(Acc, ordsets:from_list(ChildChildren))
+        end, [], Children),
+    {ok, [{groups, ordsets:union(Children, EffChildren)}]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns details about group's nested groups members.
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_nested_groups(GroupId :: binary()) ->
+-spec get_nested_groups(GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_nested_groups(GroupId) ->
     {ok, #document{value = #od_group{children = GroupTuples}}}
@@ -421,7 +456,7 @@ get_nested_groups(GroupId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_parent_groups(GroupId :: binary()) ->
+-spec get_parent_groups(GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_parent_groups(GroupId) ->
     {ok, #document{value = #od_group{parents = GroupIds}}}
@@ -435,7 +470,7 @@ get_parent_groups(GroupId) ->
 %% Throws exception when call to the datastore fails, or group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(GroupId :: binary()) ->
+-spec get_spaces(GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_spaces(GroupId) ->
     {ok, #document{value = #od_group{spaces = Spaces}}} = od_group:get(GroupId),
@@ -446,7 +481,7 @@ get_spaces(GroupId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_providers(GroupId :: binary()) ->
+-spec get_providers(GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_providers(GroupId) ->
     {ok, #document{value = #od_group{spaces = Spaces}}} = od_group:get(GroupId),
@@ -463,7 +498,7 @@ get_providers(GroupId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user(GroupId :: binary(), UserId :: binary()) ->
+-spec get_user(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     {ok, [proplists:property()]}.
 get_user(_GroupId, UserId) ->
     user_logic:get_data(UserId, provider).
@@ -473,7 +508,7 @@ get_user(_GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_user(GroupId :: binary(), UserId :: binary()) ->
+-spec get_effective_user(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     {ok, [proplists:property()]}.
 get_effective_user(_GroupId, UserId) ->
     user_logic:get_data(UserId, provider).
@@ -483,7 +518,7 @@ get_effective_user(_GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_nested_group(ParentGroupId :: binary(), GroupId :: binary()) ->
+-spec get_nested_group(ParentGroupId :: od_group:id(), GroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_nested_group(_ParentGroupId, GroupId) ->
     get_data(GroupId).
@@ -493,7 +528,7 @@ get_nested_group(_ParentGroupId, GroupId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_parent_group(GroupId :: binary(), ParentGroupId :: binary()) ->
+-spec get_parent_group(GroupId :: od_group:id(), ParentGroupId :: od_group:id()) ->
     {ok, [proplists:property()]}.
 get_parent_group(_GroupId, ParentGroupId) ->
     get_data(ParentGroupId).
@@ -503,7 +538,7 @@ get_parent_group(_GroupId, ParentGroupId) ->
 %% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_privileges(GroupId :: binary(), UserId :: binary()) ->
+-spec get_privileges(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     {ok, [privileges:group_privilege()]}.
 get_privileges(GroupId, UserId) ->
     {ok, #document{value = #od_group{users = UserTuples}}} = od_group:get(GroupId),
@@ -515,7 +550,7 @@ get_privileges(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_nested_group_privileges(ParentGroupId :: binary(), GroupId :: binary()) ->
+-spec get_nested_group_privileges(ParentGroupId :: od_group:id(), GroupId :: od_group:id()) ->
     {ok, [privileges:group_privilege()]}.
 get_nested_group_privileges(ParentGroupId, GroupId) ->
     {ok, #document{value = #od_group{children = GroupTuples}}} = od_group:get(ParentGroupId),
@@ -527,7 +562,7 @@ get_nested_group_privileges(ParentGroupId, GroupId) ->
 %% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_privileges(GroupId :: binary(), UserId :: binary()) ->
+-spec get_effective_privileges(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     {ok, [privileges:group_privilege()]}.
 get_effective_privileges(GroupId, UserId) ->
     {ok, #document{value = #od_group{
@@ -548,7 +583,7 @@ get_effective_privileges(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(GroupId :: binary()) ->
+-spec remove(GroupId :: od_group:id()) ->
     true.
 remove(GroupId) ->
     {ok, #document{value = #od_group{users = Users, spaces = Spaces}}} = od_group:get(GroupId),
@@ -572,7 +607,7 @@ remove(GroupId) ->
 %% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(GroupId :: binary(), UserId :: binary()) ->
+-spec remove_user(GroupId :: od_group:id(), UserId :: od_user:id()) ->
     true.
 remove_user(GroupId, UserId) ->
     {ok, _} = od_group:update(GroupId, fun(Group) ->
@@ -600,7 +635,7 @@ remove_user(GroupId, UserId) ->
 %% Throws exception when call to the datastore fails, or group/user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_nested_group(ParentGroupId :: binary(), GroupId :: binary()) ->
+-spec remove_nested_group(ParentGroupId :: od_group:id(), GroupId :: od_group:id()) ->
     true.
 remove_nested_group(ParentGroupId, GroupId) ->
     {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
@@ -619,7 +654,7 @@ remove_nested_group(ParentGroupId, GroupId) ->
 %% Throws exception when call to the datastore fails, or group is already removed.
 %% @end
 %%--------------------------------------------------------------------
--spec cleanup(GroupId :: binary()) -> boolean().
+-spec cleanup(GroupId :: od_group:id()) -> boolean().
 cleanup(_GroupId) ->
     false.
 %% Currently, groups with no users and groups are not deleted so it is
@@ -645,7 +680,7 @@ create_predefined_groups() ->
             Name = maps:get(name, GroupMap),
             % Privileges can be either a list of privileges or a module and
             % function to call that will return such list.
-            Privs = case maps:get(oz_api_privileges, GroupMap) of
+            Privs = case maps:get(oz_privileges, GroupMap) of
                 List when is_list(List) ->
                     List;
                 {Module, Function} ->
@@ -653,6 +688,74 @@ create_predefined_groups() ->
             end,
             create_predefined_group(Id, Name, Privs)
         end, PredefinedGroups).
+
+
+%%--------------------------------------------------------------------
+%% @doc Sets OZ API privileges of group with GroupId.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_oz_privileges(GroupId :: od_group:id(),
+    Privileges :: [privileges:oz_privilege()]) -> ok.
+set_oz_privileges(GroupId, Privileges) ->
+    {ok, _} = od_group:update(GroupId, #{
+        oz_privileges => Privileges
+    }),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns OZ privileges of group with GroupId.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_oz_privileges(GroupId :: od_group:id()) ->
+    Privileges :: {ok, [{privileges, [privileges:oz_privilege()]}]}.
+get_oz_privileges(GroupId) ->
+    {ok, #document{
+        value = #od_group{
+            oz_privileges = OzPrivileges
+        }}} = od_group:get(GroupId),
+    {ok, [{privileges, OzPrivileges}]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Deletes OZ API privileges of group with GroupId
+%% (sets them to empty list).
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_oz_privileges(GroupId :: od_group:id()) -> ok.
+delete_oz_privileges(GroupId) ->
+    set_oz_privileges(GroupId, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the group identified by GroupId has privilege
+%% in admin OZ API.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_oz_privilege(GroupId :: od_group:id(),
+    Privilege :: privileges:oz_privilege()) -> boolean().
+has_eff_oz_privilege(GroupId, Privilege) ->
+    case od_group:get(GroupId) of
+        {error, {not_found, od_group}} ->
+            false;
+        {ok, GroupDoc} ->
+            % TODO Use eff_oz_privileges field when it is pre-computed
+            #document{
+                value = #od_group{
+                    oz_privileges = OzApiPrivileges
+                }} = GroupDoc,
+            lists:member(Privilege, OzApiPrivileges)
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a list of all groups in the system (their ids).
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [od_group:id()]}.
+list() ->
+    {ok, GroupDocs} = od_group:list(),
+    {ok, [GroupId || #document{key = GroupId} <- GroupDocs]}.
 
 
 %%%===================================================================
@@ -667,29 +770,29 @@ create_predefined_groups() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_predefined_group(Id :: binary(), Name :: binary(),
-    Privileges :: [oz_api_privileges:privilege()]) -> ok | error.
-create_predefined_group(Id, Name, Privileges) ->
-    case od_group:exists(Id) of
+    Privileges :: [privileges:oz_privilege()]) -> ok | error.
+create_predefined_group(GroupId, Name, Privileges) ->
+    case od_group:exists(GroupId) of
         true ->
             ?info("Predefined group '~s' already exists, "
             "skipping.", [Name]),
             ok;
         false ->
             NewGroup = #document{
-                key = Id,
+                key = GroupId,
                 value = #od_group{
                     name = Name,
                     type = role
                 }},
             case od_group:create(NewGroup) of
-                {ok, Id} ->
-                    ok = oz_api_privileges_logic:modify(
-                        Id, od_group, Privileges),
+                {ok, GroupId} ->
+                    ok = set_oz_privileges(
+                        GroupId, Privileges),
                     ?info("Created predefined group '~s'", [Name]),
                     ok;
                 Other ->
                     ?error("Cannot create predefined group '~s' - ~p",
-                        [Id, Other]),
+                        [GroupId, Other]),
                     error
             end
     end.

@@ -40,11 +40,11 @@
 %% users & groups refresh.
 %% @end
 %%--------------------------------------------------------------------
--spec mark_group_changed(GroupID :: binary()) -> ok.
-mark_group_changed(GroupID) ->
+-spec mark_group_changed(GroupId :: od_group:id()) -> ok.
+mark_group_changed(GroupId) ->
     ensure_state_initialised(),
     {ok, _} = groups_graph_caches_state:update(?KEY, fun(Context) ->
-        NewGroups = [GroupID | Context#groups_graph_caches_state.changed_groups],
+        NewGroups = [GroupId | Context#groups_graph_caches_state.changed_groups],
         {ok, Context#groups_graph_caches_state{changed_groups = NewGroups}}
     end), ok.
 
@@ -101,16 +101,16 @@ refresh_effective_caches() ->
 %% processed during current iteration.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_from_changed(UserIDs :: [binary()], GroupIDs :: [binary()],
+-spec remove_from_changed(UserIDs :: [binary()], GroupIds :: [binary()],
     ModificationTime :: integer()) -> ok.
-remove_from_changed(UserIDs, GroupIDs, ModificationTime) ->
+remove_from_changed(UserIDs, GroupIds, ModificationTime) ->
     {ok, _} = groups_graph_caches_state:update(?KEY, fun(Val) ->
         #groups_graph_caches_state{changed_groups = ChangedGroups,
             changed_users = ChangedUsers} = Val,
 
         {ok, Val#groups_graph_caches_state{
             last_rebuild = ModificationTime,
-            changed_groups = ordsets:from_list(ChangedGroups) -- GroupIDs,
+            changed_groups = ordsets:from_list(ChangedGroups) -- GroupIds,
             changed_users = ordsets:from_list(ChangedUsers) -- UserIDs
         }}
     end),
@@ -121,9 +121,9 @@ remove_from_changed(UserIDs, GroupIDs, ModificationTime) ->
 %% (both in groups and users)
 %% @end
 %%--------------------------------------------------------------------
--spec effective_groups_update_traverse(UserIDs :: [binary()], GroupIDs :: [binary()]) -> ok.
-effective_groups_update_traverse(Users, GroupIDs) ->
-    ToVisit = topsort(GroupIDs, fun children/1),
+-spec effective_groups_update_traverse(UserIDs :: [binary()], GroupIds :: [binary()]) -> ok.
+effective_groups_update_traverse(Users, GroupIds) ->
+    ToVisit = topsort(GroupIds, fun children/1),
     traverse(ToVisit, fun update_effective_groups_visitor/2, #{}),
     update_effective_groups_in_users(Users, ToVisit).
 
@@ -131,9 +131,9 @@ effective_groups_update_traverse(Users, GroupIDs) ->
 %% @doc @private performs group graph traverse & update effective users
 %% @end
 %%--------------------------------------------------------------------
--spec effective_users_update_traverse(GroupIDs :: [binary()]) -> ok.
-effective_users_update_traverse(GroupIDs) ->
-    ToVisit = topsort(GroupIDs, fun parents/1),
+-spec effective_users_update_traverse(GroupIds :: [binary()]) -> ok.
+effective_users_update_traverse(GroupIds) ->
+    ToVisit = topsort(GroupIds, fun parents/1),
     traverse(ToVisit, fun update_effective_users_visitor/2, #{}).
 
 %%--------------------------------------------------------------------
@@ -198,7 +198,7 @@ merge_effective_users(CurrentPrivileges, PrivilegesToAdd, PrivilegesMask) ->
     end, CurrentPrivileges, PrivilegesToAdd).
 
 
--spec get_effective_users(GroupID :: binary()) -> effective_users().
+-spec get_effective_users(GroupId :: od_group:id()) -> effective_users().
 get_effective_users(ID) ->
     case od_group:get(ID) of
         {ok, #document{value = #od_group{eff_users = Users}}} ->
@@ -208,10 +208,11 @@ get_effective_users(ID) ->
             []
     end.
 
--spec get_effective_groups(GroupID :: binary()) -> effective_groups().
+-spec get_effective_groups(GroupId :: od_group:id()) -> effective_groups().
 get_effective_groups(ID) ->
     case od_group:get(ID) of
-        {ok, #document{value = #od_group{eff_children = Groups}}} ->
+        {ok, #document{value = #od_group{eff_children = GroupTuples}}} ->
+            {Groups, _} = lists:unzip(GroupTuples),
             Groups;
         _Err ->
             ?warning_stacktrace("Unable to access group ~p due to ~p", [ID, _Err]),
@@ -254,7 +255,7 @@ ensure_state_initialised() ->
     when
     InContext :: #{GID :: binary() => effective_users()},
     OutContext :: #{GID :: binary() => effective_users()},
-    InitialContext :: #{GroupID :: binary() => term()}.
+    InitialContext :: #{GroupId :: od_group:id() => term()}.
 traverse([], _, _) -> ok;
 traverse([ID | NextIDsToVisit], Visitor, Context) ->
     NewContext = case od_group:get(ID) of
@@ -320,8 +321,8 @@ break_cycles(Groups, Ancestors) ->
                 group_logic:remove_nested_group(Parent, ID);
             false -> case od_group:get(ID) of
                 {ok, #document{value = #od_group{children = GroupsTuples}}} ->
-                    {GroupIDs, _} = lists:unzip(GroupsTuples),
-                    break_cycles(GroupIDs, [ID | Ancestors]);
+                    {GroupIds, _} = lists:unzip(GroupsTuples),
+                    break_cycles(GroupIds, [ID | Ancestors]);
                 _Err ->
                     ?warning("Unable to access group ~p due to ~p", [ID, _Err])
             end
@@ -332,19 +333,26 @@ break_cycles(Groups, Ancestors) ->
 %%% Internal: Conditional updates
 %%%===================================================================
 
--spec update_effective_groups(GroupID :: binary(), effective_groups()) -> ok.
+-spec update_effective_groups(GroupId :: od_group:id(), effective_groups()) -> ok.
 update_effective_groups(ID, Effective) ->
     od_group:update(ID, fun(Group) ->
-        Current = ordsets:from_list(Group#od_group.eff_children),
+        {EffChildren, _} = lists:unzip(Group#od_group.eff_children),
+        Current = ordsets:from_list(EffChildren),
         Removed = ordsets:subtract(Current, Effective),
         Added = ordsets:subtract(Effective, Current),
         case {Added, Removed} of
-            {[], []} -> {error, update_not_needed};
-            _ -> {ok, Group#od_group{eff_children = Effective}}
+            {[], []} ->
+                {error, update_not_needed};
+            _ ->
+                {ok, Group#od_group{
+                    % TODO currently we do not compute effective privileges
+                    % of groups, this will be fixed soon.
+                    eff_children = [{EGroup, []} || EGroup <- Effective]}
+                }
         end
     end), ok.
 
--spec update_effective_users(GroupID :: binary(), effective_users()) -> ok.
+-spec update_effective_users(GroupId :: od_group:id(), effective_users()) -> ok.
 update_effective_users(ID, Effective) ->
     od_group:update(ID, fun(Group) ->
         EffectiveOrdset = ordsets:from_list(Effective),
@@ -358,10 +366,10 @@ update_effective_users(ID, Effective) ->
     end), ok.
 
 -spec update_effective_groups_in_users(UserIDs :: [binary()],
-    ChangedGroupIDs :: [binary()]) -> ok.
-update_effective_groups_in_users(UserIDs, ChangedGroupIDs) ->
+    ChangedGroupIds :: [binary()]) -> ok.
+update_effective_groups_in_users(UserIDs, ChangedGroupIds) ->
     {AffectedUsers, EffectiveGroupsMap} =
-        gather_user_effective_groups_context(ChangedGroupIDs, UserIDs),
+        gather_user_effective_groups_context(ChangedGroupIds, UserIDs),
 
     lists:foreach(fun(UID) ->
         od_user:update(UID, fun(User) ->
@@ -420,7 +428,8 @@ gather_effective_groups(GIDs) ->
         case maps:get(GID, GroupsMap, undefined) of
             undefined ->
                 case od_group:get(GID) of
-                    {ok, #document{value = #od_group{eff_children = Effective}}} ->
+                    {ok, #document{value = #od_group{eff_children = EffectiveTuples}}} ->
+                        {Effective, _} = lists:unzip(EffectiveTuples),
                         maps:put(GID, Effective, GroupsMap);
                     _Err ->
                         ?warning_stacktrace("Unable to access group ~p due to ~p", [GID, _Err]),

@@ -178,12 +178,12 @@ automatic_group_membership_test(Config) ->
         #{
             id => <<"group1">>,
             name => <<"Group 1">>,
-            oz_api_privileges => {oz_api_privileges, all_privileges}
+            oz_privileges => {privileges, oz_privileges}
         },
         #{
             id => <<"group2">>,
             name => <<"Group 2">>,
-            oz_api_privileges => [view_privileges, set_privileges]
+            oz_privileges => [view_privileges, set_privileges]
         }
     ],
     % Set the corresponding env variable on one of the nodes

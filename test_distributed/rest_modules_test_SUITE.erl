@@ -2136,7 +2136,7 @@ get_provider_info_with_location({RestAddress, Headers, Options}) ->
 
 get_provider_info(ProviderId, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(ProviderId)),
-    Response = do_request(RestAddress ++ "/provider/" ++ EncodedPID, Headers, get, [], Options),
+    Response = do_request(RestAddress ++ "/providers/" ++ EncodedPID, Headers, get, [], Options),
     get_body_val([clientName, urls, redirectionPoint, providerId], Response).
 
 update_provider(URLS, RedirectionPoint, ClientName, {RestAddress, Headers, Options}) ->
@@ -3013,7 +3013,7 @@ fetch_value_from_list(Val) ->
 
 mock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, od_share),
+    ok = test_utils:mock_new(Nodes, od_share, [passthrough]),
     ok = test_utils:mock_expect(Nodes, od_share, get,
         fun
             (?SHARE_ID_1) ->
@@ -3034,7 +3034,7 @@ mock_handle_proxy(Config) ->
                 meck:passthrough()
         end),
 
-    ok = test_utils:mock_new(Nodes, handle_proxy_client),
+    ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
         fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
             {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}

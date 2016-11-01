@@ -22,6 +22,8 @@
 
 %% API
 -export([create/4, create/5, modify/2, exists/1]).
+-export([has_user/2, has_group/2]).
+-export([get_effective_users/1, get_effective_groups/1]).
 -export([get_data/1, get_spaces/1, get_url/1]).
 -export([remove/1]).
 -export([test_connection/1, check_provider_connectivity/1]).
@@ -138,9 +140,53 @@ get_data(ProviderId) ->
 -spec get_spaces(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_spaces(ProviderId) ->
-    {ok, #document{value = #od_provider{spaces = Spaces}}} = od_provider:get(ProviderId),
+    {ok, #document{
+        value = #od_provider{
+            spaces = Spaces
+        }}} = od_provider:get(ProviderId),
     {ok, [{spaces, Spaces}]}.
 
+%%--------------------------------------------------------------------
+%% @doc Get Users effectively supported by the provider (sum of all users of
+%% spaces that it supports).
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_users(ProviderId :: binary()) ->
+    {ok, Data :: [proplists:property()]}.
+get_effective_users(ProviderId) ->
+    {ok, #document{
+        value = #od_provider{
+            spaces = Spaces
+        }}} = od_provider:get(ProviderId),
+    Users = lists:foldl(
+        fun(SpaceId, Acc) ->
+            {ok, [{users, SpUsers}]} = space_logic:get_effective_users(SpaceId),
+            ordsets:union([Acc, ordsets:from_list(SpUsers)])
+        end, [], Spaces),
+    {ok, [{users, Users}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Get Users effectively supported by the provider (sum of all users of
+%% spaces that it supports).
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_groups(ProviderId :: binary()) ->
+    {ok, Data :: [proplists:property()]}.
+get_effective_groups(ProviderId) ->
+    {ok, #document{
+        value = #od_provider{
+            spaces = Spaces
+        }}} = od_provider:get(ProviderId),
+    Groups = lists:foldl(
+        fun(SpaceId, Acc) ->
+            {ok, [{groups, SpaceGroups}]} = space_logic:get_effective_groups(
+                SpaceId
+            ),
+            ordsets:union([Acc, ordsets:from_list(SpaceGroups)])
+        end, [], Spaces),
+    {ok, [{groups, Groups}]}.
 
 %%--------------------------------------------------------------------
 %% @doc Returns full provider URL.
@@ -222,6 +268,48 @@ test_connection(_, _) ->
     {error, bad_data}.
 
 
+%%--------------------------------------------------------------------
+%% @doc Returns whether the user identified by UserId is supported by this
+%% provider, i.e. the provider supports a space where this user belongs.
+%% Shall return false in any other case (provider doesn't exist, etc).
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_user(ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
+    boolean().
+has_user(ProviderId, UserId) ->
+    case od_provider:get(ProviderId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #od_provider{spaces = Spaces}}} ->
+            lists:any(
+                fun(SpaceId) ->
+                    space_logic:has_effective_user(SpaceId, UserId)
+                end, Spaces)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the group identified by GroupId is supported by this
+%% provider, i.e. the provider supports a space where this group belongs.
+%% Shall return false in any other case (provider doesn't exist, etc).
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_group(ProviderId :: od_provider:id(), GroupId :: od_group:id()) ->
+    boolean().
+has_group(ProviderId, GroupId) ->
+    case od_provider:get(ProviderId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #od_provider{spaces = Spaces}}} ->
+            lists:any(
+                fun(SpaceId) ->
+                    space_logic:has_effective_group(SpaceId, GroupId)
+                end, Spaces)
+    end.
+
+
 % Checks if given provider (by ID) is alive and responding.
 -spec check_provider_connectivity(ProviderId :: binary()) -> boolean().
 check_provider_connectivity(ProviderId) ->
@@ -296,12 +384,11 @@ choose_provider_for_user(UserID) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Returns a list of all providers (their ids).
+%% @doc
+%% Returns a list of all providers in the system (their ids).
+%% @end
 %%--------------------------------------------------------------------
--spec list() -> {ok, [binary()]}.
+-spec list() -> {ok, [od_provider:id()]}.
 list() ->
     {ok, ProviderDocs} = od_provider:list(),
-    ProviderIds = lists:map(fun(#document{key = ProviderId}) ->
-        ProviderId
-    end, ProviderDocs),
-    {ok, ProviderIds}.
+    {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]}.
