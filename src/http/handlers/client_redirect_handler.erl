@@ -50,7 +50,7 @@ handle(Req, RequestedPort = State) ->
         end,
         {ok, #document{
             key = UserId,
-            value = #onedata_user{
+            value = #od_user{
                 chosen_provider = ChosenProvider
             }}} = GetUserResult,
         % If default provider is not known, set it.
@@ -61,7 +61,9 @@ handle(Req, RequestedPort = State) ->
             catch _:_ ->
                 {ok, NewChosenProv} =
                     provider_logic:choose_provider_for_user(UserId),
-                ok = user_logic:modify(UserId, [{chosen_provider, NewChosenProv}]),
+                {ok, _} = od_user:update(UserId, #{
+                    chosen_provider => NewChosenProv
+                }),
                 {ok, Data2} = provider_logic:get_data(NewChosenProv),
                 Data2
             end,

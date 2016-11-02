@@ -6,6 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% API for onedata_auth record - used to store macaroon's secrets.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(onedata_auth).
@@ -15,12 +16,30 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
 
+-type doc() :: datastore:document().
+-type info() :: #onedata_auth{}.
+-type id() :: binary().
+-export_type([doc/0, info/0, id/0]).
+
 %% model_behaviour callbacks
 -export([save/1, get/1, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
+-export([record_struct/1]).
 
 %% API
 -export([get_auth_by_user_id/1]).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns structure of the record in specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
+record_struct(1) ->
+    {record, [
+        {secret, binary},
+        {user_id, string}
+    ]}.
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -88,7 +107,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(onedata_auth_bucket, [], ?GLOBAL_ONLY_LEVEL).
+    ?MODEL_CONFIG(onedata_auth_bucket, [], ?GLOBALLY_CACHED_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc

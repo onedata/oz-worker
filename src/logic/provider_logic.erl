@@ -22,7 +22,9 @@
 
 %% API
 -export([create/4, create/5, modify/2, exists/1]).
--export([get_data/1, get_spaces/1]).
+-export([has_user/2, has_group/2]).
+-export([get_effective_users/1, get_effective_groups/1]).
+-export([get_data/1, get_spaces/1, get_url/1]).
 -export([remove/1]).
 -export([test_connection/1, check_provider_connectivity/1]).
 -export([choose_provider_for_user/1]).
@@ -63,10 +65,10 @@ create(ClientName, URLs, RedirectionPoint, CSRBin, OptionalArgs) ->
     Latitude = maps:get(latitude, OptionalArgs, undefined),
     Longitude = maps:get(longitude, OptionalArgs, undefined),
 
-    Provider = #provider{client_name = ClientName, urls = URLs,
+    Provider = #od_provider{client_name = ClientName, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
         latitude = Latitude, longitude = Longitude},
-    provider:save(#document{key = ProviderId, value = Provider}),
+    od_provider:save(#document{key = ProviderId, value = Provider}),
 
     {ok, ProviderId, ProviderCertPem}.
 
@@ -78,14 +80,14 @@ create(ClientName, URLs, RedirectionPoint, CSRBin, OptionalArgs) ->
 -spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
     ok.
 modify(ProviderId, Data) ->
-    {ok, _} = provider:update(ProviderId, fun(Provider) ->
-        URLs = proplists:get_value(<<"urls">>, Data, Provider#provider.urls),
-        RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#provider.redirection_point),
-        ClientName = proplists:get_value(<<"clientName">>, Data, Provider#provider.client_name),
-        Latitude = proplists:get_value(<<"latitude">>, Data, Provider#provider.latitude),
-        Longitude = proplists:get_value(<<"longitude">>, Data, Provider#provider.longitude),
+    {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
+        URLs = proplists:get_value(<<"urls">>, Data, Provider#od_provider.urls),
+        RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#od_provider.redirection_point),
+        ClientName = proplists:get_value(<<"clientName">>, Data, Provider#od_provider.client_name),
+        Latitude = proplists:get_value(<<"latitude">>, Data, Provider#od_provider.latitude),
+        Longitude = proplists:get_value(<<"longitude">>, Data, Provider#od_provider.longitude),
 
-        {ok, Provider#provider{
+        {ok, Provider#od_provider{
             urls = URLs,
             redirection_point = RedirectionPoint,
             client_name = ClientName,
@@ -103,7 +105,7 @@ modify(ProviderId, Data) ->
 -spec exists(ProviderId :: binary()) ->
     boolean().
 exists(ProviderId) ->
-    provider:exists(ProviderId).
+    od_provider:exists(ProviderId).
 
 %%--------------------------------------------------------------------
 %% @doc Get provider's details.
@@ -113,13 +115,13 @@ exists(ProviderId) ->
 -spec get_data(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_data(ProviderId) ->
-    {ok, #document{value = #provider{
+    {ok, #document{value = #od_provider{
         client_name = ClientName,
         urls = URLs,
         redirection_point = RedirectionPoint,
         latitude = Latitude,
         longitude = Longitude
-    }}} = provider:get(ProviderId),
+    }}} = od_provider:get(ProviderId),
 
     {ok, [
         {clientName, ClientName},
@@ -138,8 +140,68 @@ get_data(ProviderId) ->
 -spec get_spaces(ProviderId :: binary()) ->
     {ok, Data :: [proplists:property()]}.
 get_spaces(ProviderId) ->
-    {ok, #document{value = #provider{spaces = Spaces}}} = provider:get(ProviderId),
+    {ok, #document{
+        value = #od_provider{
+            spaces = Spaces
+        }}} = od_provider:get(ProviderId),
     {ok, [{spaces, Spaces}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Get Users effectively supported by the provider (sum of all users of
+%% spaces that it supports).
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_users(ProviderId :: binary()) ->
+    {ok, Data :: [proplists:property()]}.
+get_effective_users(ProviderId) ->
+    {ok, #document{
+        value = #od_provider{
+            spaces = Spaces
+        }}} = od_provider:get(ProviderId),
+    Users = lists:foldl(
+        fun(SpaceId, Acc) ->
+            {ok, [{users, SpUsers}]} = space_logic:get_effective_users(SpaceId),
+            ordsets:union([Acc, ordsets:from_list(SpUsers)])
+        end, [], Spaces),
+    {ok, [{users, Users}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Get Users effectively supported by the provider (sum of all users of
+%% spaces that it supports).
+%% Throws exception when call to the datastore fails, or provider doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_effective_groups(ProviderId :: binary()) ->
+    {ok, Data :: [proplists:property()]}.
+get_effective_groups(ProviderId) ->
+    {ok, #document{
+        value = #od_provider{
+            spaces = Spaces
+        }}} = od_provider:get(ProviderId),
+    Groups = lists:foldl(
+        fun(SpaceId, Acc) ->
+            {ok, [{groups, SpaceGroups}]} = space_logic:get_effective_groups(
+                SpaceId
+            ),
+            ordsets:union([Acc, ordsets:from_list(SpaceGroups)])
+        end, [], Spaces),
+    {ok, [{groups, Groups}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns full provider URL.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_url(ProviderId :: binary()) ->
+    {ok, ProviderURL :: binary()}.
+get_url(ProviderId) ->
+    {ok, PData} = provider_logic:get_data(ProviderId),
+    RedirectionPoint = proplists:get_value(redirectionPoint, PData),
+    #hackney_url{host = Host, port = Port} =
+        hackney_url:parse_url(RedirectionPoint),
+    URL = str_utils:format_bin("https://~s:~B", [Host, Port]),
+    {ok, URL}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Remove provider's account.
@@ -149,19 +211,19 @@ get_spaces(ProviderId) ->
 -spec remove(ProviderId :: binary()) ->
     true.
 remove(ProviderId) ->
-    {ok, #document{value = #provider{spaces = Spaces, serial = Serial}}} = provider:get(ProviderId),
+    {ok, #document{value = #od_provider{spaces = Spaces, serial = Serial}}} = od_provider:get(ProviderId),
 
     lists:foreach(fun(SpaceId) ->
-        {ok, _} = space:update(SpaceId, fun(Space) ->
-            #space{providers_supports = Supports} = Space,
-            {ok, Space#space{
+        {ok, _} = od_space:update(SpaceId, fun(Space) ->
+            #od_space{providers_supports = Supports} = Space,
+            {ok, Space#od_space{
                 providers_supports = proplists:delete(ProviderId, Supports)
             }}
         end)
     end, Spaces),
 
     worker_proxy:call(ozpca_worker, {revoke, Serial}),
-    case (provider:delete(ProviderId)) of
+    case (od_provider:delete(ProviderId)) of
         ok -> true;
         _ -> false
     end.
@@ -204,6 +266,48 @@ test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
     test_connection(Rest, [{Url, ConnStatus} | Acc]);
 test_connection(_, _) ->
     {error, bad_data}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the user identified by UserId is supported by this
+%% provider, i.e. the provider supports a space where this user belongs.
+%% Shall return false in any other case (provider doesn't exist, etc).
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_user(ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
+    boolean().
+has_user(ProviderId, UserId) ->
+    case od_provider:get(ProviderId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #od_provider{spaces = Spaces}}} ->
+            lists:any(
+                fun(SpaceId) ->
+                    space_logic:has_effective_user(SpaceId, UserId)
+                end, Spaces)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the group identified by GroupId is supported by this
+%% provider, i.e. the provider supports a space where this group belongs.
+%% Shall return false in any other case (provider doesn't exist, etc).
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_group(ProviderId :: od_provider:id(), GroupId :: od_group:id()) ->
+    boolean().
+has_group(ProviderId, GroupId) ->
+    case od_provider:get(ProviderId) of
+        {error, {not_found, _}} ->
+            false;
+        {ok, #document{value = #od_provider{spaces = Spaces}}} ->
+            lists:any(
+                fun(SpaceId) ->
+                    space_logic:has_effective_group(SpaceId, GroupId)
+                end, Spaces)
+    end.
 
 
 % Checks if given provider (by ID) is alive and responding.
@@ -280,12 +384,11 @@ choose_provider_for_user(UserID) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Returns a list of all providers (their ids).
+%% @doc
+%% Returns a list of all providers in the system (their ids).
+%% @end
 %%--------------------------------------------------------------------
--spec list() -> {ok, [binary()]}.
+-spec list() -> {ok, [od_provider:id()]}.
 list() ->
-    {ok, ProviderDocs} = provider:list(),
-    ProviderIds = lists:map(fun(#document{key = ProviderId}) ->
-        ProviderId
-    end, ProviderDocs),
-    {ok, ProviderIds}.
+    {ok, ProviderDocs} = od_provider:list(),
+    {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]}.

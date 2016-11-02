@@ -19,8 +19,9 @@
 -export([add_connection/2, remove_connection/2, get_doc/1, update_users/2,
     update_missing_seq/3, seen/2, all/0, any_connection_active/1]).
 
--type(seq() :: non_neg_integer() | -1).
--type(model() :: onedata_user | user_group | space | provider).
+-type seq() :: non_neg_integer() | -1.
+-type model() :: od_user | od_group | od_space | od_share | od_provider |
+od_handle | od_handle_service.
 -export_type([seq/0, model/0]).
 
 %%--------------------------------------------------------------------

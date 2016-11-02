@@ -33,7 +33,17 @@ updates(ProviderID, NewUserIDs) ->
     GroupChanges = get_groups(ProviderID, UserChanges),
     SpaceChanges = get_spaces(ProviderID, UserChanges)
         ++ get_group_spaces(ProviderID, GroupChanges),
-    UserChanges ++ SpaceChanges ++ GroupChanges.
+    ShareChanges = get_shares(ProviderID, SpaceChanges),
+    HandleServiceChanges = get_handle_services(ProviderID, UserChanges),
+    HandleChanges = get_handles(ProviderID, UserChanges),
+    lists:flatten([
+        UserChanges,
+        SpaceChanges,
+        GroupChanges,
+        ShareChanges,
+        HandleServiceChanges,
+        HandleChanges
+    ]).
 
 
 %%%===================================================================
@@ -50,8 +60,8 @@ updates(ProviderID, NewUserIDs) ->
     [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}].
 get_users(ProviderID, NewUserIDs) ->
     lists:filtermap(fun(UserID) ->
-        case get_with_revs(onedata_user, UserID) of
-            {ok, Doc} -> {true, {-1, Doc, onedata_user}};
+        case get_with_revs(od_user, UserID) of
+            {ok, Doc} -> {true, {-1, Doc, od_user}};
             {error, _} ->
                 ?warning("Missing user ~p; provider ~p", [UserID, ProviderID]),
                 false
@@ -68,10 +78,10 @@ get_users(ProviderID, NewUserIDs) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_spaces(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        #document{value = #onedata_user{spaces = Spaces}} = UserDoc,
+        #document{value = #od_user{spaces = Spaces}} = UserDoc,
         lists:filtermap(fun(SpaceID) ->
-            case get_with_revs(space, SpaceID) of
-                {ok, Doc} -> {true, {-1, Doc, space}};
+            case get_with_revs(od_space, SpaceID) of
+                {ok, Doc} -> {true, {-1, Doc, od_space}};
                 {error, _} ->
                     ?warning("Missing space ~p; provider ~p", [SpaceID, ProviderID]),
                     false
@@ -90,11 +100,11 @@ get_spaces(ProviderID, UserChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_groups(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        #document{value = #onedata_user{effective_groups = Groups}} = UserDoc,
+        #document{value = #od_user{eff_groups = Groups}} = UserDoc,
 
         AllGroups = lists:usort(lists:flatmap(fun(GroupID) ->
-            case user_group:get(GroupID) of
-                {ok, #document{value = #user_group{nested_groups = Tuples}}} ->
+            case od_group:get(GroupID) of
+                {ok, #document{value = #od_group{children = Tuples}}} ->
                     {NestedIDs, _} = lists:unzip(Tuples),
                     [GroupID | NestedIDs];
                 {error, _} ->
@@ -104,8 +114,8 @@ get_groups(ProviderID, UserChanges) ->
         end, Groups)),
 
         lists:filtermap(fun(GroupID) ->
-            case get_with_revs(user_group, GroupID) of
-                {ok, Doc} -> {true, {-1, Doc, user_group}};
+            case get_with_revs(od_group, GroupID) of
+                {ok, Doc} -> {true, {-1, Doc, od_group}};
                 {error, _} ->
                     ?warning("Missing group ~p; provider ~p", [GroupID, ProviderID]),
                     false
@@ -123,16 +133,81 @@ get_groups(ProviderID, UserChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_group_spaces(ProviderID, GroupChanges) ->
     lists:flatmap(fun({_, GroupDoc, _}) ->
-        #document{value = #user_group{spaces = Spaces}} = GroupDoc,
+        #document{value = #od_group{spaces = Spaces}} = GroupDoc,
         lists:filtermap(fun(SpaceID) ->
-            case get_with_revs(space, SpaceID) of
-                {ok, Doc} -> {true, {-1, Doc, space}};
+            case get_with_revs(od_space, SpaceID) of
+                {ok, Doc} -> {true, {-1, Doc, od_space}};
                 {error, _} ->
                     ?warning("Missing space ~p; provider ~p", [SpaceID, ProviderID]),
                     false
             end
         end, Spaces)
     end, GroupChanges).
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches all shares in given list of spaces.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_shares(ProviderID :: binary(),
+    SpaceChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+get_shares(ProviderID, SpaceChanges) ->
+    lists:flatmap(fun({_, SpaceDoc, _}) ->
+        #document{value = #od_space{shares = Shares}} = SpaceDoc,
+        lists:filtermap(fun(ShareId) ->
+            case get_with_revs(od_share, ShareId) of
+                {ok, Doc} -> {true, {-1, Doc, od_share}};
+                {error, _} ->
+                    ?warning("Missing share ~p; provider ~p", [ShareId, ProviderID]),
+                    false
+            end
+        end, Shares)
+    end, SpaceChanges).
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches all handle_services of given users.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_services(ProviderID :: binary(),
+    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+get_handle_services(ProviderID, UserChanges) ->
+    lists:flatmap(fun({_, UserDoc, _}) ->
+        HandleServices = user_logic:get_all_handle_services(UserDoc),
+        lists:filtermap(fun(HandleServiceId) ->
+            case get_with_revs(od_handle_service, HandleServiceId) of
+                {ok, Doc} -> {true, {-1, Doc, od_handle_service}};
+                {error, _} ->
+                    ?warning("Missing handle_service ~p; provider ~p",
+                        [HandleServiceId, ProviderID]),
+                    false
+            end
+        end, HandleServices)
+    end, UserChanges).
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Fetches all handles of given users.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handles(ProviderID :: binary(),
+    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+get_handles(ProviderID, UserChanges) ->
+    lists:flatmap(fun({_, UserDoc, _}) ->
+        Handles = user_logic:get_all_handles(UserDoc),
+        lists:filtermap(fun(HandleId) ->
+            case get_with_revs(od_handle, HandleId) of
+                {ok, Doc} -> {true, {-1, Doc, od_handle}};
+                {error, _} ->
+                    ?warning("Missing handle ~p; provider ~p",
+                        [HandleId, ProviderID]),
+                    false
+            end
+        end, Handles)
+    end, UserChanges).
 
 %%--------------------------------------------------------------------
 %% @doc @private

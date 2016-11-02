@@ -67,7 +67,7 @@ allowed_methods(Req, #rstate{methods = Methods} = State) ->
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
-%% Return whether POST is allowed when the resource doesn't exist.
+%% Return the list of content-types the resource accepts.
 %% @end
 %%--------------------------------------------------------------------
 -spec content_types_accepted(Req :: cowboy_req:req(), State :: rstate()) ->
@@ -190,8 +190,10 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
             {{false, <<"">>}, ReqX, State};
 
         {Error, Description1, ReqX} when is_atom(Error) ->
-            Body = json_utils:encode([{error, Error},
-                {error_description, str_utils:to_binary(Description1)}]),
+            Body = json_utils:encode([
+                {error, Error},
+                {error_description, str_utils:to_binary(Description1)}
+            ]),
 
             WWWAuthenticate =
                 <<"error=", (atom_to_binary(Error, latin1))/binary>>,
@@ -201,8 +203,8 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
 
         {Error, StatusCode, Description1, ReqX} when is_atom(Error) ->
             Body = json_utils:encode([
-                {<<"error">>, Error},
-                {<<"error_description">>, str_utils:to_binary(Description1)}
+                {error, Error},
+                {error_description, str_utils:to_binary(Description1)}
             ]),
 
             {ok, ReqY} = cowboy_req:reply(StatusCode, [], Body, ReqX),
@@ -257,10 +259,8 @@ authorize_by_macaroons(Req, BinMethod, Root) ->
                 {ok, UserId} ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};
-                {error, Reason1} ->
-                    ?info("Bad auth: ~p", [Reason1]),
-                    throw({invalid_token, <<"access denied">>,
-                        Req})
+                {error, Reason} ->
+                    rest_module_helper:report_token_validation_error(Reason, Req)
             end
     end.
 
@@ -467,30 +467,34 @@ get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
         DischargeMacaroons :: [macaroon:macaroon()], cowboy_req:req()} |
     no_return().
 parse_macaroons_from_headers(Req) ->
-    {SerializedMacaroon, Req2} = cowboy_req:header(<<"macaroon">>, Req),
-    {SerializedDischarges, Req3} =
-        cowboy_req:header(<<"discharge-macaroons">>, Req2),
+    {MacaroonHeader, _} = cowboy_req:header(<<"macaroon">>, Req),
+    {XAuthTokenHeader, _} = cowboy_req:header(<<"x-auth-token">>, Req),
+    % X-Auth-Token is an alias for macaroon header, check if any of them
+    % is given.
+    SerializedMacaroon = case MacaroonHeader of
+        <<_/binary>> -> MacaroonHeader;
+        _ -> XAuthTokenHeader
+    end,
+    Macaroon = case SerializedMacaroon of
+        <<_/binary>> -> deserialize_macaroon(SerializedMacaroon, Req);
+        _ -> undefined
+    end,
 
-    Macaroon =
-        case SerializedMacaroon of
-            <<_/binary>> -> deserialize_macaroon(SerializedMacaroon, Req3);
-            _ -> undefined
-        end,
+    {SerializedDischarges, _} =
+        cowboy_req:header(<<"discharge-macaroons">>, Req),
+    DischargeMacaroons = case SerializedDischarges of
+        <<>> ->
+            [];
 
-    DischargeMacaroons =
-        case SerializedDischarges of
-            <<>> ->
-                [];
+        <<_/binary>> ->
+            Split = binary:split(SerializedDischarges, <<" ">>, [global]),
+            [deserialize_macaroon(S, Req) || S <- Split];
 
-            <<_/binary>> ->
-                Split = binary:split(SerializedDischarges, <<" ">>, [global]),
-                [deserialize_macaroon(S, Req3) || S <- Split];
+        _ ->
+            []
+    end,
 
-            _ ->
-                []
-        end,
-
-    {Macaroon, DischargeMacaroons, Req3}.
+    {Macaroon, DischargeMacaroons, Req}.
 
 %%--------------------------------------------------------------------
 %% @doc Deserializes a macaroon and throws on error.
@@ -499,7 +503,7 @@ parse_macaroons_from_headers(Req) ->
 -spec deserialize_macaroon(Data :: binary(), Req :: cowboy_req:req()) ->
     macaroon:macaroon() | no_return().
 deserialize_macaroon(Data, Req) ->
-    case macaroon:deserialize(Data) of
+    case token_utils:deserialize(Data) of
         {ok, M} -> M;
         {error, Reason} ->
             throw({invalid_token, atom_to_binary(Reason, latin1), Req})

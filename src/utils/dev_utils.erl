@@ -77,7 +77,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
         lists:foreach(
             fun({UserID, Props}) ->
                 DefaultSpace = proplists:get_value(<<"default_space">>, Props),
-                UserInfo = #onedata_user{
+                UserInfo = #od_user{
                     name = UserID,
                     alias = UserID,
                     email_list = [<<UserID/binary, "@gmail.com">>],
@@ -92,7 +92,6 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     spaces = [],
                     default_space = DefaultSpace,
                     groups = [],
-                    first_space_support_token = <<"">>,
                     default_provider = undefined,
                     chosen_provider = undefined
                 },
@@ -109,7 +108,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 lists:foreach(
                     fun(UserID) ->
                         {ok, SerializedGroupToken} = token_logic:create(#client{type = user, id = UserID}, group_invite_token, {group, GroupID}),
-                        {ok, GroupToken} = macaroon:deserialize(SerializedGroupToken),
+                        {ok, GroupToken} = token_utils:deserialize(SerializedGroupToken),
                         group_logic:join(UserID, GroupToken)
                     end, UsersToAdd),
                 maps:put(GroupID, GroupCreator, Acc)
@@ -120,7 +119,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
             GroupCreator = maps:get(GroupID, GroupCreators),
             lists:foreach(fun(NestedGroupID) ->
                 {ok, SerializedToken} = token_logic:create(#client{type = user, id = GroupCreator}, group_invite_group_token, {group, GroupID}),
-                {ok, GroupToken} = macaroon:deserialize(SerializedToken),
+                {ok, GroupToken} = token_utils:deserialize(SerializedToken),
                 group_logic:join_group(NestedGroupID, GroupToken)
             end, NestedGroups),
             % Mark group changed as normally it is done asynchronously
@@ -153,21 +152,21 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     fun({ProviderID, ProviderProps}) ->
                         SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
                         {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = MemberId}, space_support_token, {space, SpaceID}),
-                        {ok, SpaceToken} = macaroon:deserialize(SerializedSpaceToken),
+                        {ok, SpaceToken} = token_utils:deserialize(SerializedSpaceToken),
                         space_logic:support(ProviderID, SpaceToken, SupportedSize)
                     end, ProviderList),
                 % Add all users to space
                 lists:foreach(
                     fun(UserID) ->
                         {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = MemberId}, space_invite_user_token, {space, SpaceID}),
-                        {ok, SpaceToken} = macaroon:deserialize(SerializedSpaceToken),
+                        {ok, SpaceToken} = token_utils:deserialize(SerializedSpaceToken),
                         space_logic:join({user, UserID}, SpaceToken)
                     end, UsersToAdd),
                 % Add all groups to space
                 lists:foreach(
                     fun(GroupID) ->
                         {ok, SerializedSpaceToken} = token_logic:create(#client{type = user, id = MemberId}, space_invite_group_token, {space, SpaceID}),
-                        {ok, SpaceToken} = macaroon:deserialize(SerializedSpaceToken),
+                        {ok, SpaceToken} = token_utils:deserialize(SerializedSpaceToken),
                         space_logic:join({group, GroupID}, SpaceToken)
                     end, GroupsToAdd)
             end, Spaces),
@@ -235,11 +234,11 @@ create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID, Opti
     Latitude = maps:get(latitude, OptionalArgs, undefined),
     Longitude = maps:get(longitude, OptionalArgs, undefined),
 
-    Provider = #provider{client_name = ClientName, urls = URLs,
+    Provider = #od_provider{client_name = ClientName, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
         latitude = Latitude, longitude = Longitude},
 
-    provider:save(#document{key = UUID, value = Provider}),
+    od_provider:save(#document{key = UUID, value = Provider}),
     {ok, UUID, ProviderCertPem}.
 
 
@@ -248,9 +247,9 @@ create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID, Opti
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user_with_uuid(User :: #onedata_user{}, UUID :: binary()) -> {ok, UserId :: binary()}.
+-spec create_user_with_uuid(User :: #od_user{}, UUID :: binary()) -> {ok, UserId :: binary()}.
 create_user_with_uuid(User, UUID) ->
-    {ok, _} = onedata_user:save(#document{key = UUID, value = User}).
+    {ok, _} = od_user:save(#document{key = UUID, value = User}).
 
 
 %%--------------------------------------------------------------------
@@ -261,14 +260,14 @@ create_user_with_uuid(User, UUID) ->
 -spec create_group_with_uuid(UserId :: binary(), Name :: binary(), UUID :: binary()) ->
     {ok, GroupId :: binary()}.
 create_group_with_uuid(UserId, Name, UUID) ->
-    {ok, UserDoc} = onedata_user:get(UserId),
-    #document{value = #onedata_user{groups = Groups} = User} = UserDoc,
+    {ok, UserDoc} = od_user:get(UserId),
+    #document{value = #od_user{groups = Groups} = User} = UserDoc,
 
     Privileges = privileges:group_admin(),
-    Group = #user_group{name = Name, users = [{UserId, Privileges}]},
-    {ok, GroupId} = user_group:save(#document{key = UUID, value = Group}),
-    UserNew = User#onedata_user{groups = [GroupId | Groups]},
-    onedata_user:save(UserDoc#document{value = UserNew}),
+    Group = #od_group{name = Name, users = [{UserId, Privileges}]},
+    {ok, GroupId} = od_group:save(#document{key = UUID, value = Group}),
+    UserNew = User#od_user{groups = [GroupId | Groups]},
+    od_user:save(UserDoc#document{value = UserNew}),
 
     {ok, GroupId}.
 
@@ -293,7 +292,7 @@ create_space_with_uuid(Member, Name, UUID) ->
     Token :: binary(), Support :: pos_integer(), UUID :: binary()) ->
     {ok, SpaceId :: binary()}.
 create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUID) ->
-    {ok, Macaroon} = macaroon:deserialize(Token),
+    {ok, Macaroon} = token_utils:deserialize(Token),
     {ok, Member} = token_logic:consume(Macaroon),
     create_space_with_provider(Member, Name, [{ProviderId, Support}], UUID).
 
@@ -307,30 +306,30 @@ create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUID) ->
     Support :: [{Provider :: binary(), ProvidedSize :: pos_integer()}], UUID :: binary()) ->
     {ok, SpaceId :: binary()}.
 create_space_with_provider({user, UserId}, Name, Support, UUID) ->
-    {ok, UserDoc} = onedata_user:get(UserId),
-    #document{value = #onedata_user{spaces = Spaces} = User} = UserDoc,
+    {ok, UserDoc} = od_user:get(UserId),
+    #document{value = #od_user{spaces = Spaces} = User} = UserDoc,
 
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, providers_supports = Support, users = [{UserId, Privileges}]},
-    {ok, SpaceId} = space:save(#document{key = UUID, value = Space}),
-    UserNew = User#onedata_user{spaces = [SpaceId | Spaces]},
-    onedata_user:save(UserDoc#document{value = UserNew}),
-    user_logic:set_space_name_mapping(UserId, SpaceId, Name),
+    Space = #od_space{name = Name, providers_supports = Support, users = [{UserId, Privileges}]},
+    {ok, SpaceId} = od_space:save(#document{key = UUID, value = Space}),
+    UserNew = User#od_user{spaces = [SpaceId | Spaces]},
+    od_user:save(UserDoc#document{value = UserNew}),
+    user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
 
     {ok, SpaceId};
 create_space_with_provider({group, GroupId}, Name, Support, UUID) ->
-    {ok, GroupDoc} = user_group:get(GroupId),
-    #document{value = #user_group{users = Users, spaces = Spaces} = Group} = GroupDoc,
+    {ok, GroupDoc} = od_group:get(GroupId),
+    #document{value = #od_group{users = Users, spaces = Spaces} = Group} = GroupDoc,
 
     Privileges = privileges:space_admin(),
-    Space = #space{name = Name, providers_supports = Support,
+    Space = #od_space{name = Name, providers_supports = Support,
         groups = [{GroupId, Privileges}]},
-    {ok, SpaceId} = space:save(#document{key = UUID, value = Space}),
-    GroupNew = Group#user_group{spaces = [SpaceId | Spaces]},
-    user_group:save(GroupDoc#document{value = GroupNew}),
+    {ok, SpaceId} = od_space:save(#document{key = UUID, value = Space}),
+    GroupNew = Group#od_group{spaces = [SpaceId | Spaces]},
+    od_group:save(GroupDoc#document{value = GroupNew}),
 
     lists:foreach(fun({UserId, _}) ->
-        user_logic:set_space_name_mapping(UserId, SpaceId, Name)
+        user_logic:set_space_name_mapping(UserId, SpaceId, Name, true)
     end, Users),
 
     {ok, SpaceId}.

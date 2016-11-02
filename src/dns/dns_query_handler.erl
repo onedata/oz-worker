@@ -505,7 +505,7 @@ get_provider_data_by_alias(Alias) ->
             end
     end,
     case GetUserResult of
-        {ok, #document{key = UserID, value = #onedata_user{chosen_provider = ChosenProvider}}} ->
+        {ok, #document{key = UserId, value = #od_user{chosen_provider = ChosenProvider}}} ->
             % If default provider is not known, set it.
             DataProplist =
                 try
@@ -513,8 +513,10 @@ get_provider_data_by_alias(Alias) ->
                     Data
                 catch _:_ ->
                     {ok, NewChosenProv} =
-                        provider_logic:choose_provider_for_user(UserID),
-                    ok = user_logic:modify(UserID, [{chosen_provider, NewChosenProv}]),
+                        provider_logic:choose_provider_for_user(UserId),
+                    {ok, _} = od_user:update(UserId, #{
+                        chosen_provider => NewChosenProv
+                    }),
                     {ok, Data2} = provider_logic:get_data(NewChosenProv),
                     Data2
                 end,

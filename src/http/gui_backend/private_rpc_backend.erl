@@ -34,7 +34,7 @@
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
 handle(<<"getUserAlias">>, _) ->
     UserId = g_session:get_user_id(),
-    {ok, #onedata_user{
+    {ok, #od_user{
         alias = Alias
     }} = user_logic:get_user(UserId),
     UserAlias = case str_utils:to_binary(Alias) of
@@ -47,7 +47,7 @@ handle(<<"getUserAlias">>, _) ->
 
 handle(<<"changePassword">>, Props) ->
     UserId = g_session:get_user_id(),
-    {ok, #onedata_user{
+    {ok, #od_user{
         login = Login
     }} = user_logic:get_user(UserId),
     OldPassword = proplists:get_value(<<"oldPassword">>, Props),
@@ -64,12 +64,12 @@ handle(<<"changePassword">>, Props) ->
 
 handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
     UserId = g_session:get_user_id(),
-    case user_logic:modify(UserId, [{alias, NewAlias}]) of
+    case user_logic:set_alias(UserId, NewAlias) of
         ok ->
             {ok, [
                 {<<"userAlias">>, NewAlias}
             ]};
-        {error, disallowed_prefix} ->
+        {error, disallowed_alias_prefix} ->
             gui_error:report_warning(
                 <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
         {error, invalid_alias} ->
@@ -79,14 +79,7 @@ handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
         {error, alias_occupied} ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
-                "Please choose other alias.">>);
-        {error, alias_conflict} ->
-            gui_error:report_warning(
-                <<"This alias is occupied by someone else. "
-                "Please choose other alias.">>);
-        _ ->
-            gui_error:report_warning(
-                <<"Cannot change alias due to unknown error.">>)
+                "Please choose other alias.">>)
     end;
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
@@ -111,4 +104,70 @@ handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     {ok, URL} = auth_logic:get_redirection_uri(UserId, ProviderId),
     {ok, [
         {<<"url">>, URL}
-    ]}.
+    ]};
+
+handle(<<"unsupportSpace">>, Props) ->
+    SpaceId = proplists:get_value(<<"spaceId">>, Props),
+    ProviderId = proplists:get_value(<<"providerId">>, Props),
+    UserId = g_session:get_user_id(),
+    Authorized = space_logic:has_effective_privilege(
+        SpaceId, UserId, space_remove_provider
+    ),
+    case Authorized of
+        true ->
+            true = space_logic:remove_provider(SpaceId, ProviderId),
+            {ok, [{providers, UserProviders}]} =
+                user_logic:get_providers(UserId),
+            {ok, #document{
+                value = #od_user{
+                    space_aliases = SpaceNamesMap,
+                    default_space = DefaultSpaceId,
+                    default_provider = DefaultProvider
+                }}} = od_user:get(UserId),
+            {ok, UserSpaces} = user_logic:get_spaces(UserId),
+            SpaceIds = proplists:get_value(spaces, UserSpaces),
+            SpaceRecord = space_data_backend:space_record(
+                SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders
+            ),
+            gui_async:push_updated(<<"space">>, SpaceRecord),
+            ProviderRecord = provider_data_backend:provider_record(
+                ProviderId, DefaultProvider, SpaceIds
+            ),
+            % If the provider no longer supports any of user's spaces, delete
+            % the record in ember cache.
+            case proplists:get_value(<<"spaces">>, ProviderRecord) of
+                [] ->
+                    gui_async:push_deleted(<<"provider">>, ProviderId);
+                _ ->
+                    gui_async:push_updated(<<"provider">>, ProviderRecord)
+            end,
+            ok;
+        false ->
+            gui_error:report_warning(
+                <<"You do not have permissions to unsupport this space. "
+                "Those persmissions can be modified in file browser, "
+                "'Spaces' tab.">>
+            )
+    end;
+
+
+handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
+    UserId = g_session:get_user_id(),
+    case token_logic:validate(Token, space_invite_user_token) of
+        false ->
+            gui_error:report_warning(<<"Invalid token value.">>);
+        {true, Macaroon} ->
+            {ok, SpaceId} = space_logic:join({user, UserId}, Macaroon),
+            % Push the newly joined space to the client's model
+            {ok, #document{
+                value = #od_user{
+                    space_aliases = SpaceNamesMap
+                }}} = od_user:get(UserId),
+            SpaceRecord = space_data_backend:space_record(
+                % DefaultSpaceId and UserProviders do not matter because this is
+                % a new space - it's not default and has no providers
+                SpaceId, SpaceNamesMap, <<"">>, []
+            ),
+            gui_async:push_created(<<"space">>, SpaceRecord),
+            {ok, [{<<"spaceId">>, SpaceId}]}
+    end.

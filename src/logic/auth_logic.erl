@@ -26,8 +26,9 @@
 -define(MACAROONS_LOCATION, <<"onezone">>).
 
 %% API
--export([start/0, stop/0, get_redirection_uri/2, gen_token/1, gen_token/2,
-    validate_token/5, authenticate_user/1, invalidate_token/1]).
+-export([start/0, stop/0, get_redirection_uri/2,
+    gen_token/1, gen_token/2, validate_token/5, invalidate_token/1,
+    authenticate_user/1]).
 
 %% Handling state tokens
 -export([generate_state_token/2, lookup_state_token/1,
@@ -74,7 +75,7 @@ authenticate_user(Identifier) ->
             M2 = macaroon:add_first_party_caveat(M,
                 ["time < ", integer_to_binary(erlang:system_time(seconds) + ExpirationSecs)]),
 
-            case macaroon:serialize(M2) of
+            case token_utils:serialize62(M2) of
                 {ok, _} = Serialized -> Serialized;
                 {error, _} = Error -> Error
             end;
@@ -96,8 +97,8 @@ authenticate_user(Identifier) ->
 get_redirection_uri(UserId, ProviderId) ->
     Token = gen_token(UserId, ProviderId),
     _Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
-    {ok, #onedata_user{alias = Alias}} = user_logic:get_user(UserId),
-    ok = user_logic:modify(UserId, [{chosen_provider, ProviderId}]),
+    {ok, #od_user{alias = Alias}} = user_logic:get_user(UserId),
+    {ok, _} = od_user:update(UserId, #{chosen_provider => ProviderId}),
     _Prefix = case Alias of
         ?EMPTY_ALIAS ->
             <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
@@ -110,12 +111,9 @@ get_redirection_uri(UserId, ProviderId) ->
     % (so their web browsers can connect).
     % To do this, we need a recursive DNS server in docker environment,
     % whose address must be fed to system's resolv.conf.
-    {ok, PData} = provider_logic:get_data(ProviderId),
-    RedirectionPoint = proplists:get_value(redirectionPoint, PData),
-    #hackney_url{host = Host, port = Port} =
-        hackney_url:parse_url(RedirectionPoint),
-    URL = str_utils:format_bin("https://~s:~B~s?code=~s", [
-        Host, Port, ?provider_auth_endpoint, Token
+    {ok, ProviderURL} = provider_logic:get_url(ProviderId),
+    URL = str_utils:format_bin("~s~s?code=~s", [
+        ProviderURL, ?provider_auth_endpoint, Token
     ]),
     {ok, URL}.
 
@@ -131,7 +129,7 @@ gen_token(UserId) ->
         secret = Secret, user_id = UserId}}),
     Identifier = binary_to_list(IdentifierBinary),
     M = create_macaroon(Secret, str_utils:to_binary(Identifier), Caveats),
-    {ok, Token} = macaroon:serialize(M),
+    {ok, Token} = token_utils:serialize62(M),
     Token.
 
 %%--------------------------------------------------------------------
@@ -153,7 +151,7 @@ gen_token(UserId, ProviderId) ->
         secret = CaveatKey, user_id = UserId}}),
     CaveatId = binary_to_list(CaveatIdBinary),
     M2 = macaroon:add_third_party_caveat(M, Location, CaveatKey, CaveatId),
-    {ok, Token} = macaroon:serialize(M2),
+    {ok, Token} = token_utils:serialize62(M2),
     Token.
 
 %%--------------------------------------------------------------------

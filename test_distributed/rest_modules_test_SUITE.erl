@@ -32,6 +32,10 @@
 -define(USER_NAME1, <<"user1">>).
 -define(USER_NAME2, <<"user2">>).
 -define(USER_NAME3, <<"user3">>).
+% Default alias (= no alias set) is an empty string
+-define(DEFAULT_USER_ALIAS, <<"">>).
+-define(USER_ALIAS1, <<"alias1">>).
+-define(USER_ALIAS2, <<"alias2">>).
 -define(SPACE_NAME1, <<"space1">>).
 -define(SPACE_NAME2, <<"space2">>).
 -define(GROUP_NAME1, <<"group1">>).
@@ -60,38 +64,211 @@
 ).
 -define(SPACE_PRIVILEGES,
     [
-        space_view_data, space_change_data, space_invite_user,
-        space_remove_user, space_invite_group, space_remove_group,
-        space_set_privileges, space_remove, space_add_provider,
-        space_remove_provider
+        space_view_data, space_change_data,
+        %space_write_files, space_manage_shares - they are checked in rest_shares_test_SUITE
+        space_invite_user, space_remove_user,
+        space_invite_group, space_remove_group,
+        space_set_privileges, space_remove,
+        space_add_provider, space_remove_provider
     ]
+).
+
+-define(PROXY_ENDPOINT, <<"172.17.0.9:8080/api/v1">>).
+-define(DOI_SERVICE,
+    #{
+        <<"name">> => <<"LifeWatch DataCite">>,
+        <<"proxyEndpoint">> => ?PROXY_ENDPOINT,
+        <<"serviceProperties">> => #{
+            <<"type">> => <<"DOI">>,
+            <<"host">> => <<"https://mds.test.datacite.org">>,
+            <<"doiEndpoint">> => <<"/doi">>,
+            <<"metadataEndpoint">> => <<"/metadata">>,
+            <<"mediaEndpoint">> => <<"/media">>,
+            <<"prefix">> => <<"10.5072">>,
+            <<"username">> => <<"alice">>,
+            <<"password">> => <<"*******">>,
+            <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
+            <<"allowTemplateOverride">> => false
+        }
+    }
+).
+
+-define(PID_SERVICE,
+    #{
+        <<"name">> => <<"iMarine EPIC">>,
+        <<"proxyEndpoint">> => ?PROXY_ENDPOINT,
+        <<"serviceProperties">> => #{
+            <<"type">> => <<"PID">>,
+            <<"endpoint">> => <<"https://epic.grnet.gr/api/v2/handles">>,
+            <<"prefix">> => <<"11789">>,
+            <<"suffixGeneration">> => <<"auto">>,
+            <<"suffixPrefix">> => <<"{{space.name}}">>,
+            <<"suffixSuffix">> => <<"{{user.name}}">>,
+            <<"username">> => <<"alice">>,
+            <<"password">> => <<"*******">>,
+            <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
+            <<"allowTemplateOverride">> => false
+        }
+    }
+).
+
+-define(DC_METADATA, <<"<?xml version=\"1.0\"?>",
+    "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
+    "<dc:title>Test dataset<\/dc:title>",
+    "<dc:creator>John Johnson<\/dc:creator>",
+    "<dc:creator>Jane Doe<\/dc:creator>",
+    "<dc:subject>Test of datacite<\/dc:subject>",
+    "<dc:description>Lorem ipsum lorem ipusm<\/dc:description>",
+    "<dc:publisher>Onedata<\/dc:publisher>",
+    "<dc:publisher>EGI<\/dc:publisher>",
+    "<dc:date>2016<\/dc:date>",
+    "<dc:format>application\/pdf<\/dc:format>",
+    "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
+    "<dc:language>eng<\/dc:language>",
+    "<dc:rights>CC-0<\/dc:rights>",
+    "<\/metadata>">>).
+
+-define(SHARE_ID_1, <<"shareId1">>).
+-define(SHARE_ID_2, <<"shareId2">>).
+-define(SHARE_1_PUBLIC_URL, <<"https://onedata.org/shares/shareId1">>).
+-define(SHARE_2_PUBLIC_URL, <<"https://onedata.org/shares/shareId2">>).
+
+-define(HANDLE(ServiceId, ResourceId),
+    #{
+        <<"handleServiceId">> => ServiceId,
+        <<"resourceType">> => <<"Share">>,
+        <<"resourceId">> => ResourceId,
+        <<"metadata">> => ?DC_METADATA
+    }
 ).
 
 %% API
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
--export([create_provider_test/1, update_provider_test/1, get_provider_info_test/1,
-    delete_provider_test/1, create_and_support_space_by_provider/1, get_supported_space_info_test/1,
-    unsupport_space_test/1, provider_check_port_test/1, provider_check_ip_test/1,
-    support_space_test/1, user_authorize_test/1, update_user_test/1, delete_user_test/1,
-    create_space_for_user_test/1, set_user_default_space_test/1,
-    last_user_leaves_space_test/1, user_gets_space_info_test/1, invite_user_to_space_test/1,
-    get_group_info_by_user_test/1, get_ancestor_group_info_by_user_test/1, last_user_leaves_group_test/1,
-    non_last_user_leaves_group_test/1, group_invitation_test/1, create_group_test/1, update_group_test/1,
-    delete_group_test/1, create_group_for_user_test/1, effective_group_for_user_test/1, invite_user_to_group_test/1,
-    get_user_info_by_group_test/1, delete_user_from_group_test/1, get_group_privileges_test/1,
-    set_group_privileges_test/1, group_creates_space_test/1, get_space_info_by_group_test/1,
-    last_group_leaves_space_test/1, create_space_by_user_test/1,
-    create_and_support_space_test/1, update_space_test/1, delete_space_test/1,
-    get_users_from_space_test/1, get_user_info_from_space_test/1,
-    delete_user_from_space_test/1, get_groups_from_space_test/1, get_group_info_from_space_test/1,
-    delete_group_from_space_test/1, get_providers_supporting_space_test/1,
-    get_info_of_provider_supporting_space_test/1, delete_provider_supporting_space_test/1,
-    get_space_privileges_test/1, invite_group_to_space_test/1, not_last_group_leaves_space_test/1,
-    not_last_user_leaves_space_test/1, bad_request_test/1, get_unsupported_space_info_test/1,
-    set_space_privileges_test/1, set_non_existing_space_as_user_default_space_test/1,
-    set_user_default_space_without_permission_test/1, create_provider_with_location_test/1,
-    add_group_to_group_test/1, get_group_info_by_group_relation_test/1, delete_group_from_group_test/1,
-    get_nested_group_privileges_test/1, set_nested_group_privileges_test/1, group_cycle_prevented_test/1]).
+
+% provider_rest_module_test_group
+-export([
+    create_provider_test/1,
+    create_provider_with_location_test/1,
+    update_provider_test/1,
+    get_provider_info_test/1,
+    delete_provider_test/1,
+    create_and_support_space_by_provider_test/1,
+    get_supported_space_info_test/1,
+    unsupport_space_test/1,
+    provider_check_ip_test/1,
+    provider_check_port_test/1,
+    support_space_test/1,
+    get_unsupported_space_info_test/1
+]).
+
+% user_rest_module_test_group
+-export([
+    user_authorize_test/1,
+    update_user_test/1,
+    delete_user_test/1,
+    create_space_for_user_test/1,
+    set_user_default_space_test/1,
+    set_user_default_space_without_permission_test/1,
+    set_non_existing_space_as_user_default_space_test/1,
+    last_user_leaves_space_test/1,
+    not_last_user_leaves_space_test/1,
+    user_gets_space_info_test/1,
+    invite_user_to_space_test/1,
+    get_group_info_by_user_test/1,
+    get_ancestor_group_info_by_user_test/1,
+    last_user_leaves_group_test/1,
+    non_last_user_leaves_group_test/1
+]).
+
+% group_rest_module_test_group
+-export([
+    create_group_test/1,
+    update_group_test/1,
+    delete_group_test/1,
+    create_group_for_user_test/1,
+    effective_group_for_user_test/1,
+    invite_user_to_group_test/1,
+    get_user_info_by_group_test/1,
+    delete_user_from_group_test/1,
+    get_group_privileges_test/1,
+    set_group_privileges_test/1,
+    group_creates_space_test/1,
+    get_space_info_by_group_test/1,
+    last_group_leaves_space_test/1,
+    not_last_group_leaves_space_test/1,
+    invite_group_to_space_test/1,
+    add_group_to_group_test/1,
+    get_group_info_by_group_relation_test/1,
+    delete_group_from_group_test/1,
+    get_nested_group_privileges_test/1,
+    set_nested_group_privileges_test/1,
+    group_cycle_prevented_test/1,
+    group_invitation_test/1
+]).
+
+% spaces_rest_module_test_group
+-export([
+    create_space_by_user_test/1,
+    create_and_support_space_test/1,
+    update_space_test/1,
+    delete_space_test/1,
+    get_users_from_space_test/1,
+    get_user_info_from_space_test/1,
+    delete_user_from_space_test/1,
+    get_groups_from_space_test/1,
+    get_group_info_from_space_test/1,
+    delete_group_from_space_test/1,
+    get_providers_supporting_space_test/1,
+    get_info_of_provider_supporting_space_test/1,
+    delete_provider_supporting_space_test/1,
+    get_space_privileges_test/1,
+    set_space_privileges_test/1
+]).
+
+% handle_services_rest_module_test_group
+-export([
+    create_doi_service_test/1,
+    create_pid_service_test/1,
+    list_services_test/1,
+    get_service_test/1,
+    modify_service_test/1,
+    delete_service_test/1,
+    add_user_to_service_test/1,
+    list_service_users_test/1,
+    delete_user_from_service_test/1,
+    add_group_to_service_test/1,
+    list_service_groups_test/1,
+    delete_group_from_service_test/1,
+    get_user_privileges_for_service_test/1,
+    set_user_privileges_for_service_test/1,
+    get_group_privileges_for_service_test/1,
+    set_group_privileges_for_service_test/1
+]).
+
+% handles_rest_module_test_group
+-export([
+    create_doi_handle_test/1,
+    create_pid_handle_test/1,
+    list_handles_test/1,
+    get_handle_test/1,
+    modify_handle_test/1,
+    delete_handle_test/1,
+    add_user_to_handle_test/1,
+    list_handle_users_test/1,
+    delete_user_from_handle_test/1,
+    add_group_to_handle_test/1,
+    list_handle_groups_test/1,
+    delete_group_from_handle_test/1,
+    get_user_privileges_for_handle_test/1,
+    set_user_privileges_for_handle_test/1,
+    get_group_privileges_for_handle_test/1,
+    set_group_privileges_for_handle_test/1
+]).
+
+% other tests
+-export([
+    bad_request_test/1
+]).
 
 %%%===================================================================
 %%% API functions
@@ -103,6 +280,8 @@ all() ->
         {group, user_rest_module_test_group},
         {group, group_rest_module_test_group},
         {group, spaces_rest_module_test_group},
+        {group, handle_services_rest_module_test_group},
+        {group, handles_rest_module_test_group},
         bad_request_test
     ]).
 
@@ -117,13 +296,14 @@ groups() ->
                 update_provider_test,
                 get_provider_info_test,
                 delete_provider_test,
-                create_and_support_space_by_provider,
+                create_and_support_space_by_provider_test,
                 get_supported_space_info_test,
                 unsupport_space_test,
                 provider_check_ip_test,
                 provider_check_port_test,
                 support_space_test,
-                get_unsupported_space_info_test
+                get_unsupported_space_info_test,
+                group_invitation_test
             ]
         },
         {
@@ -137,15 +317,18 @@ groups() ->
                 set_user_default_space_test,
                 set_user_default_space_without_permission_test,
                 set_non_existing_space_as_user_default_space_test,
-                last_user_leaves_space_test,
+                % This test is disabled as currently we do not
+                % remove a space when last member leaves.
+                % last_user_leaves_space_test,
                 not_last_user_leaves_space_test,
                 user_gets_space_info_test,
                 invite_user_to_space_test,
                 get_group_info_by_user_test,
                 get_ancestor_group_info_by_user_test,
-                last_user_leaves_group_test,
-                non_last_user_leaves_group_test,
-                invite_user_to_group_test
+                % This test is disabled as currently we do not
+                % remove a group when last member leaves.
+                % last_user_leaves_group_test,
+                non_last_user_leaves_group_test
             ]
         },
         {
@@ -192,8 +375,52 @@ groups() ->
                 get_providers_supporting_space_test,
                 get_info_of_provider_supporting_space_test,
                 delete_provider_supporting_space_test,
-                get_group_privileges_test,
-                set_group_privileges_test
+                set_space_privileges_test
+            ]
+        },
+        {
+            handle_services_rest_module_test_group,
+            [],
+            [
+                create_doi_service_test,
+                create_pid_service_test,
+                list_services_test,
+                get_service_test,
+                modify_service_test,
+                delete_service_test,
+                add_user_to_service_test,
+                list_service_users_test,
+                delete_user_from_service_test,
+                add_group_to_service_test,
+                list_service_groups_test,
+                delete_group_from_service_test,
+                get_user_privileges_for_service_test,
+                set_user_privileges_for_service_test,
+                get_group_privileges_for_service_test,
+                set_group_privileges_for_service_test
+            ]
+        },
+        {
+            handles_rest_module_test_group,
+            [],
+            [
+                create_doi_handle_test,
+                create_pid_handle_test,
+                list_handles_test,
+                get_handle_test,
+                modify_handle_test,
+                delete_handle_test,
+                delete_handle_test,
+                add_user_to_handle_test,
+                list_handle_users_test,
+                delete_user_from_handle_test,
+                add_group_to_handle_test,
+                list_handle_groups_test,
+                delete_group_from_handle_test,
+                get_user_privileges_for_handle_test,
+                set_user_privileges_for_handle_test,
+                get_group_privileges_for_handle_test,
+                set_group_privileges_for_handle_test
             ]
         }
     ].
@@ -280,7 +507,7 @@ delete_provider_test(Config) ->
     ?assertMatch({request_error, ?UNAUTHORIZED}, get_provider_info(ParamsWithOtherAddress)),
     ?assertMatch({request_error, ?UNAUTHORIZED}, get_provider_info(ProviderReqParams)).
 
-create_and_support_space_by_provider(Config) ->
+create_and_support_space_by_provider_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
@@ -372,18 +599,35 @@ user_authorize_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     ParamsWithOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
-    ?assertMatch([UserId, ?USER_NAME1], get_user_info(UserReqParams)),
-    ?assertMatch([UserId, ?USER_NAME1], get_user_info(ParamsWithOtherAddress)).
+    ?assertMatch([UserId, ?USER_NAME1, ?DEFAULT_USER_ALIAS], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME1, ?DEFAULT_USER_ALIAS], get_user_info(ParamsWithOtherAddress)).
 
 update_user_test(Config) ->
     UserId = ?config(userId, Config),
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
     ParamsWithOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
 
-    ?assertMatch(ok, check_status(update_user(?USER_NAME2, UserReqParams))),
-    ?assertMatch([UserId, ?USER_NAME2], get_user_info(UserReqParams)),
-    ?assertMatch([UserId, ?USER_NAME2], get_user_info(ParamsWithOtherAddress)).
+    ?assertMatch(ok, check_status(update_user([{<<"name">>, ?USER_NAME2}], UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2, ?DEFAULT_USER_ALIAS], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME2, ?DEFAULT_USER_ALIAS], get_user_info(ParamsWithOtherAddress)),
+    ?assertMatch(ok, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(ParamsWithOtherAddress)),
+    % Make sure alias cannot be duplicated
+    {_UserId2, User2ReqParams} = register_user(?USER_NAME2, ProviderId, Config, ProviderReqParams),
+    ?assertMatch({bad_response_code, 400}, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], User2ReqParams))),
+    % But setting the same alias does not report an error
+    ?assertMatch(ok, check_status(update_user([{<<"alias">>, ?USER_ALIAS1}], UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS1], get_user_info(ParamsWithOtherAddress)),
+    % Change the name and alias together
+    ?assertMatch(ok, check_status(update_user([{<<"name">>, ?USER_NAME2}, {<<"alias">>, ?USER_ALIAS2}], UserReqParams))),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS2], get_user_info(UserReqParams)),
+    ?assertMatch([UserId, ?USER_NAME2, ?USER_ALIAS2], get_user_info(ParamsWithOtherAddress)).
+
 
 delete_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -464,6 +708,7 @@ user_gets_space_info_test(Config) ->
     ?assertMatch([SID, ?SPACE_NAME1], get_space_info_by_user(SID, UserReqParams)),
     ?assertMatch([SID, ?SPACE_NAME1], get_space_info_by_user(SID, ParamsWithOtherAddress)).
 
+% This test is disabled as currently we do not remove a space when last member leaves.
 last_user_leaves_space_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
     UserReqParams = ?config(userReqParams, Config),
@@ -584,6 +829,7 @@ get_ancestor_group_info_by_user_test(Config) ->
     ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_user(GID2, User1ReqParams)),
     ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_user(GID2, User1ParamsOtherAddress)).
 
+% This test is disabled as currently we do not remove a group when last member leaves.
 last_user_leaves_group_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     OtherRestAddress = ?config(otherRestAddress, Config),
@@ -636,6 +882,7 @@ group_invitation_test(Config) ->
 
     %% check if GID returned for user2 is the same as GID1
     ?assertMatch(GID1, join_user_to_group(InvitationToken, User2ParamsOtherAddress)),
+    ensure_effective_users_and_groups_updated(Config),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ReqParams)),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ParamsOtherAddress)),
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID1, User1ReqParams))),
@@ -1162,6 +1409,416 @@ set_space_privileges_test(Config) ->
     PrvlgsToCheck = ?SPACE_PRIVILEGES -- [space_remove] ++ [space_remove],
     space_privileges_check(PrvlgsToCheck, Users, GID, SID).
 
+
+%% handle_services_rest_module_test_group ============================
+
+create_doi_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+
+    ?assertMatch(<<_/binary>>, Id).
+
+create_pid_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+
+    ?assertMatch(<<_/binary>>, Id).
+
+list_services_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    DoiId = add_handle_service(?DOI_SERVICE, UserReqParams),
+    PidId = add_handle_service(?PID_SERVICE, UserReqParams),
+
+    Services = list_handle_service(UserReqParams),
+
+    #{<<"handle_services">> := ServiceList} =
+        ?assertMatch(#{<<"handle_services">> := [_ | _]}, Services),
+    ?assertEqual(lists:sort([DoiId, PidId]), lists:sort(ServiceList)).
+
+get_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+
+    Result = get_handle_service(Id, UserReqParams),
+
+    ?assertEqual(?DOI_SERVICE#{<<"handleServiceId">> => Id}, Result).
+
+modify_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    NewName = <<"New name">>,
+    NewDescription = #{<<"type">> => <<"DOI">>, <<"list">> => [null, <<"a">>, 2],
+        <<"object">> => #{<<"a">> => <<"b">>}},
+    Modifications = #{
+        <<"name">> => NewName,
+        <<"serviceProperties">> => NewDescription
+    },
+
+    Result = modify_handle_service(Modifications, Id, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertMatch(#{<<"name">> := NewName, <<"serviceProperties">> := NewDescription},
+        get_handle_service(Id, UserReqParams)).
+
+delete_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+
+    Result = delete_handle_service(Id, UserReqParams),
+
+    ?assertEqual(202, Result),
+    ?assertEqual({request_error, 403}, get_handle_service(Id, UserReqParams)). %todo change to 404
+
+add_user_to_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    UserId2 = ?config(userId2, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+
+    Result = add_user_to_handle_service(Id, UserId, UserReqParams),
+    Result2 = add_user_to_handle_service(Id, UserId2, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual(204, Result2).
+
+list_service_users_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    UserId2 = ?config(userId2, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId2, UserReqParams),
+
+    Users = list_users_of_handle_service(Id, UserReqParams),
+
+    #{<<"users">> := UserList} =
+        ?assertMatch(#{<<"users">> := [_ | _]}, Users),
+    ?assertEqual(lists:sort([UserId, UserId2]), lists:sort(UserList)).
+
+delete_user_from_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserReqParams2 = ?config(userReqParams2, Config),
+    UserId = ?config(userId, Config),
+    UserId2 = ?config(userId2, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId2, UserReqParams),
+
+    Result = delete_user_from_handle_service(Id, UserId, UserReqParams),
+
+    ?assertEqual(202, Result),
+    ?assertEqual({request_error, 403}, list_users_of_handle_service(Id, UserReqParams)),
+    ?assertEqual(#{<<"users">> => [UserId2]}, list_users_of_handle_service(Id, UserReqParams2)).
+
+add_group_to_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+
+    Result = add_group_to_handle_service(Id, GroupId, UserReqParams),
+
+    ?assertEqual(204, Result).
+
+list_service_groups_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    GroupId1 = create_group(<<"test_group1">>, <<"organization">>, UserReqParams),
+    GroupId2 = create_group(<<"test_group2">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId1, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId2, UserReqParams),
+
+    Groups = list_groups_of_handle_service(Id, UserReqParams),
+
+    #{<<"groups">> := GroupList} =
+        ?assertMatch(#{<<"groups">> := [_ | _]}, Groups),
+    ?assertEqual(lists:sort([GroupId1, GroupId2]), lists:sort(GroupList)).
+
+delete_group_from_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+
+    Result = delete_group_from_handle_service(Id, GroupId, UserReqParams),
+
+    ?assertEqual(202, Result),
+    ?assertEqual(#{<<"groups">> => []}, list_groups_of_handle_service(Id, UserReqParams)).
+
+get_user_privileges_for_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    204 = add_user_to_handle_service(Id, UserId, UserReqParams),
+
+    Privileges = get_user_privileges_for_handle_service(Id, UserId, UserReqParams),
+
+    #{<<"privileges">> := PrivilegeList} =
+        ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
+    ?assertEqual(lists:sort([<<"delete_handle_service">>,
+        <<"modify_handle_service">>, <<"view_handle_service">>, <<"register_handle">>]),
+        lists:sort(PrivilegeList)
+    ).
+
+set_user_privileges_for_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    UserId = ?config(userId, Config),
+    Privileges = #{<<"privileges">> => [<<"view_handle_service">>]},
+
+    Result = set_user_privileges_for_handle_service(Id, UserId, Privileges, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual(Privileges, get_user_privileges_for_handle_service(Id, UserId, UserReqParams)).
+
+get_group_privileges_for_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+
+    Privileges = get_group_privileges_for_handle_service(Id, GroupId, UserReqParams),
+
+    #{<<"privileges">> := PrivilegeList} =
+        ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
+    ?assertEqual(lists:sort([<<"register_handle">>, <<"view_handle_service">>]),
+        lists:sort(PrivilegeList)
+    ).
+
+set_group_privileges_for_service_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+    Privileges = #{<<"privileges">> => [<<"delete_handle_service">>, <<"view_handle_service">>]},
+
+    Result = set_group_privileges_for_handle_service(Id, GroupId, Privileges, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual(Privileges, get_group_privileges_for_handle_service(Id, GroupId, UserReqParams)).
+
+%% handles_rest_module_test_group ====================================
+
+create_doi_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    [Node1 | _] = ?config(oz_worker_nodes, Config),
+
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+
+    ?assertMatch(<<_/binary>>, HId),
+    test_utils:mock_assert_num_calls(Node1, handle_proxy_client, put, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
+
+create_pid_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?PID_SERVICE, UserReqParams),
+    [Node1 | _] = ?config(oz_worker_nodes, Config),
+
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+
+    ?assertMatch(<<_/binary>>, HId),
+    test_utils:mock_assert_num_calls(Node1, handle_proxy_client, put, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
+
+
+list_handles_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    Id1 = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    Id2 = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+
+    Handles = list_handle(UserReqParams),
+
+    #{<<"handles">> := HandlesList} =
+        ?assertMatch(#{<<"handles">> := [_ | _]}, Handles),
+    ?assertEqual(lists:sort([Id1, Id2]), lists:sort(HandlesList)).
+
+get_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+
+    Result = get_handle(HId, UserReqParams),
+
+    ?assertMatch(#{
+        <<"handle">> := <<_/binary>>,
+        <<"handleId">> := HId,
+        <<"handleServiceId">> := Id,
+        <<"resourceId">> := ?SHARE_ID_1,
+        <<"metadata">> := ?DC_METADATA
+    }, Result).
+
+modify_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    Modifications = #{
+        <<"resourceId">> => ?SHARE_ID_2
+    },
+    [Node1 | _] = ?config(oz_worker_nodes, Config),
+
+    Result = modify_handle(Modifications, HId, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertMatch(#{
+        <<"handle">> := <<"10.5072/", _/binary>>,
+        <<"handleId">> := HId,
+        <<"handleServiceId">> := Id,
+        <<"resourceId">> := ?SHARE_ID_2,
+        <<"resourceType">> := <<"Share">>,
+        <<"metadata">> := ?DC_METADATA},
+        get_handle(HId, UserReqParams)),
+    test_utils:mock_assert_num_calls(Node1, handle_proxy_client, patch, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
+
+delete_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    [Node1 | _] = ?config(oz_worker_nodes, Config),
+
+    Result = delete_handle(HId, UserReqParams),
+
+    ?assertEqual(202, Result),
+    ?assertEqual({request_error, 403}, get_handle(HId, UserReqParams)), %todo change to 404
+    test_utils:mock_assert_num_calls(Node1, handle_proxy_client, put, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
+
+add_user_to_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+
+    Result = add_user_to_handle(HId, UserId, UserReqParams),
+
+    ?assertEqual(204, Result).
+
+list_handle_users_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    UserId2 = ?config(userId2, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+
+    204 = add_user_to_handle(HId, UserId, UserReqParams),
+    204 = add_user_to_handle(HId, UserId2, UserReqParams),
+
+    Users = list_users_of_handle(HId, UserReqParams),
+
+    #{<<"users">> := UsersList} =
+        ?assertMatch(#{<<"users">> := [_ | _]}, Users),
+    ?assertEqual(lists:sort([UserId, UserId2]), lists:sort(UsersList)).
+
+delete_user_from_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserReqParams2 = ?config(userReqParams2, Config),
+    UserId = ?config(userId, Config),
+    UserId2 = ?config(userId2, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    204 = add_user_to_handle(HId, UserId, UserReqParams),
+    204 = add_user_to_handle(HId, UserId2, UserReqParams),
+
+    Result = delete_user_from_handle(HId, UserId, UserReqParams),
+
+    ?assertEqual(202, Result),
+    ?assertEqual({request_error, 403}, list_users_of_handle(HId, UserReqParams)),
+    ?assertEqual(#{<<"users">> => [UserId2]}, list_users_of_handle(HId, UserReqParams2)).
+
+add_group_to_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+
+    Result = add_group_to_handle(HId, GroupId, UserReqParams),
+
+    ?assertEqual(204, Result).
+
+list_handle_groups_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    GroupId1 = create_group(<<"test_group1">>, <<"organization">>, UserReqParams),
+    GroupId2 = create_group(<<"test_group2">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle(HId, GroupId1, UserReqParams),
+    204 = add_group_to_handle(HId, GroupId2, UserReqParams),
+
+    Groups = list_groups_of_handle(HId, UserReqParams),
+
+    #{<<"groups">> := GroupsList} =
+        ?assertMatch(#{<<"groups">> := [_ | _]}, Groups),
+    ?assertEqual(lists:sort([GroupId1, GroupId2]), lists:sort(GroupsList)).
+
+delete_group_from_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle(HId, GroupId, UserReqParams),
+
+    Result = delete_group_from_handle(HId, GroupId, UserReqParams),
+
+    ?assertEqual(202, Result),
+    ?assertEqual(#{<<"groups">> => []}, list_groups_of_handle(HId, UserReqParams)).
+
+get_user_privileges_for_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    204 = add_user_to_handle(HId, UserId, UserReqParams),
+
+    Privileges = get_user_privileges_for_handle(HId, UserId, UserReqParams),
+
+    #{<<"privileges">> := PrivilegeList} =
+        ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
+    ?assertEqual(lists:sort([<<"list_handles">>, <<"delete_handle">>,
+        <<"modify_handle">>, <<"view_handle">>]),
+        lists:sort(PrivilegeList)
+    ).
+
+set_user_privileges_for_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    UserId = ?config(userId, Config),
+    Privileges = #{<<"privileges">> => [<<"view_handle">>]},
+
+    Result = set_user_privileges_for_handle(HId, UserId, Privileges, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual(Privileges, get_user_privileges_for_handle(HId, UserId, UserReqParams)).
+
+get_group_privileges_for_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle(HId, GroupId, UserReqParams),
+
+    Privileges = get_group_privileges_for_handle(HId, GroupId, UserReqParams),
+
+    #{<<"privileges">> := PrivilegeList} =
+        ?assertMatch(#{<<"privileges">> := [_ | _]}, Privileges),
+    ?assertEqual(lists:sort([<<"view_handle">>]),
+        lists:sort(PrivilegeList)
+    ).
+
+set_group_privileges_for_handle_test(Config) ->
+    UserReqParams = ?config(userReqParams, Config),
+    Id = add_handle_service(?DOI_SERVICE, UserReqParams),
+    HId = add_handle(?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    GroupId = create_group(<<"test_group">>, <<"organization">>, UserReqParams),
+    204 = add_group_to_handle(HId, GroupId, UserReqParams),
+    Privileges = #{<<"privileges">> => [<<"view_handle">>]},
+
+    Result = set_group_privileges_for_handle(HId, GroupId, Privileges, UserReqParams),
+
+    ?assertEqual(204, Result),
+    ?assertEqual(Privileges, get_group_privileges_for_handle(HId, GroupId, UserReqParams)).
+
+%% other tests =======================================================
+
 bad_request_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     ProviderReqParams = ?config(providerReqParams, Config),
@@ -1221,14 +1878,14 @@ bad_request_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(ssl2),
+    application:start(etls),
     hackney:start(),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
     [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
     ok = rpc:call(Node1, application, set_env, [?APP_Name, group_graph_refresh_interval, -1]),
     ok = rpc:call(Node2, application, set_env, [?APP_Name, group_graph_refresh_interval, -1]),
-    OZ_IP_1 = get_node_ip(Node1),
-    OZ_IP_2 = get_node_ip(Node2),
+    OZ_IP_1 = test_utils:get_docker_ip(Node1),
+    OZ_IP_2 = test_utils:get_docker_ip(Node2),
     RestPort = get_rest_port(Node1),
     RestAPIPrefix = get_rest_api_prefix(Node1),
     RestAddress = str_utils:format("https://~s:~B~s", [OZ_IP_1, RestPort, RestAPIPrefix]),
@@ -1247,12 +1904,23 @@ init_per_testcase(provider_check_ip_test, Config) ->
     init_per_testcase(register_only_provider, Config);
 init_per_testcase(provider_check_port_test, Config) ->
     init_per_testcase(register_only_provider, Config);
+init_per_testcase(add_user_to_service_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
+init_per_testcase(list_service_users_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
+init_per_testcase(delete_user_from_service_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
+init_per_testcase(list_handle_users_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
+init_per_testcase(delete_user_from_handle_test, Config) ->
+    init_per_testcase(register_provider_and_two_users, Config);
 init_per_testcase(non_register, Config) ->
     RestAddress = RestAddress = ?config(restAddress, Config),
+    mock_handle_proxy(Config),
     [{cert_files, generate_cert_files()} | Config];
 init_per_testcase(register_only_provider, Config) ->
     %% this init function is for tests
-    %% than need registered provider
+    %% that need registered provider
     NewConfig = init_per_testcase(non_register, Config),
     RestAddress = ?config(restAddress, NewConfig),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
@@ -1262,6 +1930,17 @@ init_per_testcase(register_only_provider, Config) ->
         {providerId, ProviderId},
         {providerReqParams, ProviderReqParams}
         | NewConfig
+    ];
+init_per_testcase(register_provider_and_two_users, Config) ->
+    DefaultConfig = init_per_testcase(default, Config),
+    ProviderId = ?config(providerId, DefaultConfig),
+    ProviderReqParams = ?config(providerReqParams, DefaultConfig),
+    {UserId2, UserReqParams2} =
+        register_user(?USER_NAME1, ProviderId, DefaultConfig, ProviderReqParams),
+    [
+        {userId2, UserId2},
+        {userReqParams2, UserReqParams2}
+        | DefaultConfig
     ];
 init_per_testcase(_Default, Config) ->
     %% this default init function is for tests
@@ -1279,13 +1958,14 @@ init_per_testcase(_Default, Config) ->
 
 end_per_testcase(_, Config) ->
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
+    unmock_handle_proxy(Config),
     file:delete(KeyFile),
     file:delete(CSRFile),
     file:delete(CertFile).
 
 end_per_suite(Config) ->
     hackney:stop(),
-    application:stop(ssl2),
+    application:stop(etls),
     test_node_starter:clean_environment(Config).
 
 %%%===================================================================
@@ -1312,11 +1992,6 @@ get_rest_port(Node) ->
 get_rest_api_prefix(Node) ->
     {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_Name, rest_api_prefix]),
     RestAPIPrefix.
-
-%% returns ip (as a string) of given node
-get_node_ip(Node) ->
-    CMD = "docker inspect --format '{{ .NetworkSettings.IPAddress }}'" ++ " " ++ utils:get_host(Node),
-    re:replace(os:cmd(CMD), "\\s+", "", [global, {return, list}]).
 
 generate_cert_files() ->
     Prefix = "provider" ++ integer_to_list(erlang:system_time(micro_seconds)),
@@ -1349,6 +2024,14 @@ get_body_val(KeyList, Response) ->
             [proplists:get_value(atom_to_binary(Key, latin1), JSONOutput) || Key <- KeyList]
     end.
 
+%% returns map of values from Response's body,
+get_body_map(Response) ->
+    case check_status(Response) of
+        {bad_response_code, Code} -> {request_error, Code};
+        _ ->
+            json_utils:decode_map(get_response_body(Response))
+    end.
+
 get_header_val(Parameter, Response) ->
     case check_status(Response) of
         {bad_response_code, Code} -> {request_error, Code};
@@ -1371,7 +2054,7 @@ check_status(Response) ->
         _ -> {bad_response_code, Status}
     end.
 
-%% returns list of values from responsebody
+%% returns list of values from response body
 do_request(Endpoint, Headers, Method) ->
     do_request(Endpoint, Headers, Method, <<>>, []).
 do_request(Endpoint, Headers, Method, Body) ->
@@ -1381,17 +2064,17 @@ do_request(Endpoint, Headers, Method, Body, Options) ->
     http_client:request(Method, Endpoint, Headers, Body, [insecure | Options]).
 
 get_macaroon_id(Token) ->
-    {ok, Macaroon} = macaroon:deserialize(Token),
+    {ok, Macaroon} = token_utils:deserialize(Token),
     [{_, Identifier}] = macaroon:third_party_caveats(Macaroon),
     Identifier.
 
 prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
-    {ok, Macaroon} = macaroon:deserialize(SerializedMacaroon),
+    {ok, Macaroon} = token_utils:deserialize(SerializedMacaroon),
     BoundMacaroons = lists:map(
         fun(SrlzdDischMacaroon) ->
-            {ok, DM} = macaroon:deserialize(SrlzdDischMacaroon),
+            {ok, DM} = token_utils:deserialize(SrlzdDischMacaroon),
             BDM = macaroon:prepare_for_request(Macaroon, DM),
-            {ok, SBDM} = macaroon:serialize(BDM),
+            {ok, SBDM} = token_utils:serialize62(BDM),
             SBDM
         end, [str_utils:to_binary(SerializedDischarges)]),
     % Bound discharge macaroons are sent in one header,
@@ -1402,14 +2085,11 @@ prepare_macaroons_headers(SerializedMacaroon, SerializedDischarges) ->
         {<<"discharge-macaroons">>, BoundMacaroonsValue}
     ].
 
-update_req_params(ReqParams, NewParam, headers) ->
-    {RestAddress, Headers, Options} = ReqParams,
+update_req_params({RestAddress, Headers, Options}, NewParam, headers) ->
     {RestAddress, Headers ++ NewParam, Options};
-update_req_params(ReqParams, NewParam, options) ->
-    {RestAddress, Headers, Options} = ReqParams,
+update_req_params({RestAddress, Headers, Options}, NewParam, options) ->
     {RestAddress, Headers, Options ++ NewParam};
-update_req_params(ReqParams, NewParam, address) ->
-    {_, Headers, Options} = ReqParams,
+update_req_params({_, Headers, Options}, NewParam, address) ->
     {NewParam, Headers, Options}.
 
 %% Provider functions =====================================================
@@ -1417,8 +2097,7 @@ update_req_params(ReqParams, NewParam, address) ->
 register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
     register_provider(undefined, undefined, URLS, RedirectionPoint, ClientName, Config, ReqParams).
 
-register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
-    {RestAddress, Headers, _Options} = ReqParams,
+register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Config, ReqParams = {RestAddress, Headers, _Options}) ->
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     {ok, CSR} = file:read_file(CSRFile),
     Params = [
@@ -1443,41 +2122,35 @@ register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Confi
     file:write_file(CertFile, Cert),
     %% set request options for provider
     Options = [{ssl_options, [{keyfile, KeyFile}, {certfile, CertFile}]}],
-    %% set request parametres for provider
+    %% set request parameters for provider
     ProviderReqParams = update_req_params(ReqParams, Options, options),
     {ProviderId, ProviderReqParams}.
 
-get_provider_info(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_provider_info({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/provider", Headers, get, [], Options),
     get_body_val([clientName, urls, redirectionPoint, providerId], Response).
 
-get_provider_info_with_location(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_provider_info_with_location({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/provider", Headers, get, [], Options),
     get_body_val([latitude, longitude, clientName, urls, redirectionPoint, providerId], Response).
 
-get_provider_info(ProviderId, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_provider_info(ProviderId, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(ProviderId)),
-    Response = do_request(RestAddress ++ "/provider/" ++ EncodedPID, Headers, get, [], Options),
+    Response = do_request(RestAddress ++ "/providers/" ++ EncodedPID, Headers, get, [], Options),
     get_body_val([clientName, urls, redirectionPoint, providerId], Response).
 
-update_provider(URLS, RedirectionPoint, ClientName, ReqParams) ->
+update_provider(URLS, RedirectionPoint, ClientName, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"urls">>, URLS},
         {<<"redirectionPoint">>, RedirectionPoint},
         {<<"clientName">>, ClientName}
     ]),
-    {RestAddress, Headers, Options} = ReqParams,
     do_request(RestAddress ++ "/provider", Headers, patch, Body, Options).
 
-delete_provider(ReqParams) ->
-    {RestAddress, _Headers, Options} = ReqParams,
+delete_provider({RestAddress, _Headers, Options}) ->
     do_request(RestAddress ++ "/provider", [], delete, [], Options).
 
-create_and_support_space(Token, SpaceName, Size, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_and_support_space(Token, SpaceName, Size, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, SpaceName},
         {<<"token">>, Token},
@@ -1486,32 +2159,26 @@ create_and_support_space(Token, SpaceName, Size, ReqParams) ->
     Response = do_request(RestAddress ++ "/provider/spaces", Headers, post, Body, Options),
     get_header_val(<<"spaces">>, Response).
 
-get_supported_spaces(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_supported_spaces({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/provider/spaces", Headers, get, [], Options),
     Val = get_body_val([spaces], Response),
     fetch_value_from_list(Val).
 
-get_space_info_by_provider(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_info_by_provider(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/provider/spaces/" ++ EncodedSID, Headers, get, [], Options),
     get_body_val([spaceId, name, providersSupports], Response).
 
-unsupport_space(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+unsupport_space(SID, {RestAddress, Headers, Options}) ->
     do_request(RestAddress ++ "/provider/spaces/" ++ binary_to_list(http_utils:url_encode(SID)), Headers, delete, [], Options).
 
-check_provider_ip(ReqParams) ->
-    {RestAddress, _, _} = ReqParams,
+check_provider_ip({RestAddress, _, _}) ->
     do_request(RestAddress ++ "/provider/test/check_my_ip", [], get).
 
-check_provider_ports(ReqParams) ->
-    {RestAddress, _, _} = ReqParams,
+check_provider_ports({RestAddress, _, _}) ->
     do_request(RestAddress ++ "/provider/test/check_my_ports", [], post).
 
-support_space(Token, Size, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+support_space(Token, Size, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token},
         {<<"size">>, Size}
@@ -1521,7 +2188,7 @@ support_space(Token, Size, ReqParams) ->
 %% User functions =========================================================
 
 create_user(UserName, Node) ->
-    {ok, UserId} = rpc:call(Node, user_logic, create, [#onedata_user{name = UserName}]),
+    {ok, UserId} = rpc:call(Node, user_logic, create, [#od_user{name = UserName}]),
     UserId.
 
 %% this function authorizes users
@@ -1529,9 +2196,8 @@ create_user(UserName, Node) ->
 %% then it parses macaroons from response
 %% and returns headers updated with these macaroons
 %% headers are needed to confirm that user is authorized
-authorize_user(UserId, ProviderId, ReqParams, Node) ->
+authorize_user(UserId, ProviderId, {RestAddress, Headers, _Options}, Node) ->
     SerializedMacaroon = rpc:call(Node, auth_logic, gen_token, [UserId, ProviderId]),
-    {RestAddress, Headers, _Options} = ReqParams,
     Identifier = get_macaroon_id(SerializedMacaroon),
     Body = json_utils:encode([{<<"identifier">>, Identifier}]),
     Resp = do_request(RestAddress ++ "/user/authorize", Headers, post, Body),
@@ -1545,69 +2211,56 @@ register_user(UserName, ProviderId, Config, ProviderReqParams) ->
     UserReqParams = update_req_params(ProviderReqParams, NewHeaders, headers),
     {UserId, UserReqParams}.
 
-get_user_info(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_info({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user", Headers, get, [], Options),
-    get_body_val([userId, name], Response).
+    get_body_val([userId, name, alias], Response).
 
-update_user(NewUserName, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
-    Body = json_utils:encode([
-        {<<"name">>, NewUserName}
-    ]),
+update_user(Attributes, {RestAddress, Headers, Options}) ->
+    Body = json_utils:encode(Attributes),
     do_request(RestAddress ++ "/user", Headers, patch, Body, Options).
 
-delete_user(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_user({RestAddress, Headers, Options}) ->
     do_request(RestAddress ++ "/user", Headers, delete, [], Options).
 
-get_user_spaces(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_spaces({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/spaces", Headers, get, [], Options),
     get_body_val([spaces, default], Response).
 
-get_space_info_by_user(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_info_by_user(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/user/spaces/" ++ EncodedSID, Headers, get, [], Options),
     get_body_val([spaceId, name], Response).
 
-get_user_default_space(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_default_space({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/spaces/default", Headers, get, [], Options),
     Val = get_body_val([spaceId], Response),
     fetch_value_from_list(Val).
 
-create_space_for_user(SpaceName, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_space_for_user(SpaceName, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, SpaceName}
     ]),
     Response = do_request(RestAddress ++ "/user/spaces", Headers, post, Body, Options),
     get_header_val(<<"spaces">>, Response).
 
-set_default_space_for_user(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+set_default_space_for_user(SID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"spaceId">>, SID}
     ]),
     do_request(RestAddress ++ "/user/spaces/default", Headers, put, Body, Options).
 
-user_leaves_space(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+user_leaves_space(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     do_request(RestAddress ++ "/user/spaces/" ++ EncodedSID, Headers, delete, [], Options).
 
-join_user_to_space(Token, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+join_user_to_space(Token, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token}
     ]),
     Response = do_request(RestAddress ++ "/user/spaces/join", Headers, post, Body, Options),
     get_header_val(<<"user/spaces">>, Response).
 
-create_group_for_user(GroupName, GroupType, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_group_for_user(GroupName, GroupType, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, GroupName},
         {<<"type">>, GroupType}
@@ -1615,31 +2268,26 @@ create_group_for_user(GroupName, GroupType, ReqParams) ->
     Response = do_request(RestAddress ++ "/user/groups", Headers, post, Body, Options),
     get_header_val(<<"groups">>, Response).
 
-get_user_groups(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_groups({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/groups", Headers, get, [], Options),
     Val = get_body_val([groups], Response),
     fetch_value_from_list(Val).
 
-get_user_effective_groups(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_effective_groups({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/effective_groups", Headers, get, [], Options),
     Val = get_body_val([effective_groups], Response),
     fetch_value_from_list(Val).
 
-get_group_info_by_user(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_info_by_user(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/user/groups/" ++ Encoded, Headers, get, [], Options),
     get_body_val([groupId, name, type], Response).
 
-user_leaves_group(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+user_leaves_group(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     do_request(RestAddress ++ "/user/groups/" ++ Encoded, Headers, delete, [], Options).
 
-join_user_to_group(Token, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+join_user_to_group(Token, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token}
     ]),
@@ -1648,8 +2296,7 @@ join_user_to_group(Token, ReqParams) ->
 
 %% Group functions ==============================================================
 
-create_group(GroupName, GroupType, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_group(GroupName, GroupType, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, GroupName},
         {<<"type">>, GroupType}
@@ -1657,14 +2304,12 @@ create_group(GroupName, GroupType, ReqParams) ->
     Response = do_request(RestAddress ++ "/groups", Headers, post, Body, Options),
     get_header_val(<<"groups">>, Response).
 
-get_group_info(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_info(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded, Headers, get, [], Options),
     get_body_val([groupId, name, type], Response).
 
-update_group(GID, NewGroupName, NewGroupType, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+update_group(GID, NewGroupName, NewGroupType, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, NewGroupName},
         {<<"type">>, NewGroupType}
@@ -1672,86 +2317,74 @@ update_group(GID, NewGroupName, NewGroupType, ReqParams) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     do_request(RestAddress ++ "/groups/" ++ Encoded, Headers, patch, Body, Options).
 
-delete_group(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_group(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     do_request(RestAddress ++ "/groups/" ++ Encoded, Headers, delete, [], Options).
 
-get_group_invitation_token(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_invitation_token(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/users/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_group_invitation_group_token(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_invitation_group_token(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/nested/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_group_users(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_users(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/users", Headers, get, [], Options),
     Val = get_body_val([users], Response),
     fetch_value_from_list(Val).
 
-get_group_nested_groups(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_nested_groups(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/nested", Headers, get, [], Options),
     Val = get_body_val([nested_groups], Response),
     fetch_value_from_list(Val).
 
-get_group_parent_groups(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_parent_groups(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ Encoded ++ "/parent", Headers, get, [], Options),
     Val = get_body_val([parent_groups], Response),
     fetch_value_from_list(Val).
 
-get_user_info_by_group(GID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_info_by_group(GID, UID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/users/" ++ EncodedUID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([userId, name], Response).
 
-get_group_info_by_parent_group(ParentGID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_info_by_parent_group(ParentGID, GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([groupId, name, type], Response).
 
-get_group_info_by_nested_group(GID, ParentGID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_info_by_nested_group(GID, ParentGID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/parent/" ++ EncodedPGID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([groupId, name, type], Response).
 
-delete_user_from_group(GID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_user_from_group(GID, UID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/users/" ++ EncodedUID,
     do_request(Address, Headers, delete, [], Options).
 
-delete_group_from_group(ParentGID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_group_from_group(ParentGID, GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID,
     do_request(Address, Headers, delete, [], Options).
 
-get_group_privileges_of_user(GID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_privileges_of_user(GID, UID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/users/" ++ EncodedUID ++ "/privileges",
@@ -1759,8 +2392,7 @@ get_group_privileges_of_user(GID, UID, ReqParams) ->
     Val = get_body_val([privileges], Response),
     fetch_value_from_list(Val).
 
-get_group_privileges_of_group(ParentGID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_privileges_of_group(ParentGID, GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedPGID = binary_to_list(http_utils:url_encode(ParentGID)),
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID ++ "/privileges",
@@ -1768,8 +2400,7 @@ get_group_privileges_of_group(ParentGID, GID, ReqParams) ->
     Val = get_body_val([privileges], Response),
     fetch_value_from_list(Val).
 
-set_group_privileges_of_user(GID, UID, Privileges, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+set_group_privileges_of_user(GID, UID, Privileges, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"privileges">>, Privileges}
     ]),
@@ -1778,8 +2409,7 @@ set_group_privileges_of_user(GID, UID, Privileges, ReqParams) ->
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/users/" ++ EncodedUID ++ "/privileges",
     do_request(Address, Headers, put, Body, Options).
 
-set_group_privileges_of_group(ParentGID, GID, Privileges, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+set_group_privileges_of_group(ParentGID, GID, Privileges, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"privileges">>, Privileges}
     ]),
@@ -1788,23 +2418,20 @@ set_group_privileges_of_group(ParentGID, GID, Privileges, ReqParams) ->
     Address = RestAddress ++ "/groups/" ++ EncodedPGID ++ "/nested/" ++ EncodedGID ++ "/privileges",
     do_request(Address, Headers, put, Body, Options).
 
-get_group_spaces(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_spaces(GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces", Headers, get, [], Options),
     Val = get_body_val([spaces], Response),
     fetch_value_from_list(Val).
 
-get_space_info_by_group(GID, SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_info_by_group(GID, SID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces/" ++ EncodedSID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([spaceId, name], Response).
 
-create_space_for_group(Name, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_space_for_group(Name, GID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name}
     ]),
@@ -1812,14 +2439,12 @@ create_space_for_group(Name, GID, ReqParams) ->
     Response = do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces", Headers, post, Body, Options),
     get_header_val(<<"spaces">>, Response).
 
-group_leaves_space(GID, SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+group_leaves_space(GID, SID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces/" ++ EncodedSID, Headers, delete, [], Options).
 
-join_group_to_space(Token, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+join_group_to_space(Token, GID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token}
     ]),
@@ -1827,8 +2452,7 @@ join_group_to_space(Token, GID, ReqParams) ->
     Response = do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces/join", Headers, post, Body, Options),
     get_header_val(<<"groups/", GID/binary, "/spaces">>, Response).
 
-join_group_to_group(Token, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+join_group_to_group(Token, GID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token}
     ]),
@@ -1973,8 +2597,7 @@ clean_group_privileges(GID, UserId, ReqParams) ->
 %% Spaces functions ===========================================================
 
 %% create space for user
-create_space(Name, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_space(Name, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name}
     ]),
@@ -1982,8 +2605,7 @@ create_space(Name, ReqParams) ->
     get_header_val(<<"spaces">>, Response).
 
 %% create space for user/group who delivers token
-create_space(Token, Name, Size, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+create_space(Token, Name, Size, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name},
         {<<"token">>, Token},
@@ -1992,49 +2614,42 @@ create_space(Token, Name, Size, ReqParams) ->
     Response = do_request(RestAddress ++ "/spaces", Headers, post, Body, Options),
     get_header_val(<<"spaces">>, Response).
 
-get_space_info(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_info(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/spaces/" ++ EncodedSID, Headers, get, [], Options),
     get_body_val([spaceId, name], Response).
 
-update_space(Name, SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+update_space(Name, SID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name}
     ]),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     do_request(RestAddress ++ "/spaces/" ++ EncodedSID, Headers, patch, Body, Options).
 
-delete_space(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_space(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     do_request(RestAddress ++ "/spaces/" ++ EncodedSID, Headers, delete, [], Options).
 
-get_space_users(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_users(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users", Headers, get, [], Options),
     Val = get_body_val([users], Response),
     fetch_value_from_list(Val).
 
-get_user_info_from_space(SID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_user_info_from_space(SID, UID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users/" ++ EncodedUID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([userId, name], Response).
 
-delete_user_from_space(SID, UID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_user_from_space(SID, UID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/users/" ++ EncodedUID,
     do_request(Address, Headers, delete, [], Options).
 
-get_space_privileges(UserType, SID, ID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_privileges(UserType, SID, ID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/" ++ atom_to_list(UserType) ++ "/" ++ EncodedID ++ "/privileges",
@@ -2042,8 +2657,7 @@ get_space_privileges(UserType, SID, ID, ReqParams) ->
     Val = get_body_val([privileges], Response),
     fetch_value_from_list(Val).
 
-set_space_privileges(UserType, SID, ID, Privileges, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+set_space_privileges(UserType, SID, ID, Privileges, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"privileges">>, Privileges}
     ]),
@@ -2052,15 +2666,13 @@ set_space_privileges(UserType, SID, ID, Privileges, ReqParams) ->
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/" ++ atom_to_list(UserType) ++ "/" ++ EncodedID ++ "/privileges",
     do_request(Address, Headers, put, Body, Options).
 
-get_space_groups(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_groups(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/spaces/" ++ EncodedSID ++ "/groups", Headers, get, [], Options),
     Val = get_body_val([groups], Response),
     fetch_value_from_list(Val).
 
-get_group_from_space(SID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_group_from_space(SID, GID, {RestAddress, Headers, Options}) ->
     Response =
         do_request(
             RestAddress ++ "/spaces/" ++ binary_to_list(http_utils:url_encode(SID)) ++ "/groups/" ++ binary_to_list(http_utils:url_encode(GID)),
@@ -2068,15 +2680,13 @@ get_group_from_space(SID, GID, ReqParams) ->
         ),
     get_body_val([groupId, name, type], Response).
 
-delete_group_from_space(SID, GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_group_from_space(SID, GID, {RestAddress, Headers, Options}) ->
     do_request(
         RestAddress ++ "/spaces/" ++ binary_to_list(http_utils:url_encode(SID)) ++ "/groups/" ++ binary_to_list(http_utils:url_encode(GID)),
         Headers, delete, [], Options
     ).
 
-get_supporting_providers(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_supporting_providers(SID, {RestAddress, Headers, Options}) ->
     Response =
         do_request(
             RestAddress ++ "/spaces/" ++ binary_to_list(http_utils:url_encode(SID)) ++ "/providers",
@@ -2085,44 +2695,38 @@ get_supporting_providers(SID, ReqParams) ->
     [Providers] = get_body_val([providers], Response),
     Providers.
 
-get_supporting_provider_info(SID, PID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_supporting_provider_info(SID, PID, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(PID)),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/providers/" ++ EncodedPID,
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([clientName, providerId, urls, redirectionPoint], Response).
 
-delete_supporting_provider(SID, PID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+delete_supporting_provider(SID, PID, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(PID)),
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/providers/" ++ EncodedPID,
     do_request(Address, Headers, delete, [], Options).
 
-get_space_creation_token_for_user(ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_creation_token_for_user({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/spaces/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_space_creation_token_for_group(GID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_creation_token_for_group(GID, {RestAddress, Headers, Options}) ->
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_space_invitation_token(UserType, ID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_invitation_token(UserType, ID, {RestAddress, Headers, Options}) ->
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedID ++ "/" ++ atom_to_list(UserType) ++ "/token",
     Response = do_request(Address, Headers, get, [], Options),
     Val = get_body_val([token], Response),
     fetch_value_from_list(Val).
 
-get_space_support_token(SID, ReqParams) ->
-    {RestAddress, Headers, Options} = ReqParams,
+get_space_support_token(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/spaces/" ++ EncodedSID ++ "/providers/token", Headers, get, [], Options),
     Val = get_body_val([token], Response),
@@ -2223,6 +2827,169 @@ space_privilege_check(space_remove, Users, _GID, SID) ->
 clean_space_privileges(SID, UserId, ReqParams) ->
     set_space_privileges(users, SID, UserId, [space_view_data], ReqParams).
 
+%% Handle services functions =========================================================
+
+add_handle_service(Service, {RestAddress, Headers, Options}) ->
+    ServiceJson = json_utils:encode_map(Service),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/">>,
+    Response = do_request(Address, Headers, post, ServiceJson, Options),
+    get_header_val(<<"handle_services">>, Response).
+
+list_handle_service({RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+get_handle_service(HSID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary>>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+modify_handle_service(Modifications, HSID, {RestAddress, Headers, Options}) ->
+    ModificationsJson = json_utils:encode_map(Modifications),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary>>,
+    Response = do_request(Address, Headers, patch, ModificationsJson, Options),
+    get_response_status(Response).
+
+delete_handle_service(HSID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_response_status(Response).
+
+add_user_to_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary>>,
+    Response = do_request(Address, Headers, put, <<>>, Options),
+    get_response_status(Response).
+
+list_users_of_handle_service(HSID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+delete_user_from_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_response_status(Response).
+
+add_group_to_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary>>,
+    Response = do_request(Address, Headers, put, <<>>, Options),
+    get_response_status(Response).
+
+list_groups_of_handle_service(HSID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+delete_group_from_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_response_status(Response).
+
+get_user_privileges_for_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+set_user_privileges_for_handle_service(HSID, UID, Privileges, {RestAddress, Headers, Options}) ->
+    PrivilegesJson = json_utils:encode_map(Privileges),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/users/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, put, PrivilegesJson, Options),
+    get_response_status(Response).
+
+get_group_privileges_for_handle_service(HSID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+set_group_privileges_for_handle_service(HSID, UID, Privileges, {RestAddress, Headers, Options}) ->
+    PrivilegesJson = json_utils:encode_map(Privileges),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/", HSID/binary, "/groups/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, put, PrivilegesJson, Options),
+    get_response_status(Response).
+
+%% Handles functions =======================================================
+
+add_handle(Handle, {RestAddress, Headers, Options}) ->
+    HandleJson = json_utils:encode_map(Handle),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/">>,
+    Response = do_request(Address, Headers, post, HandleJson, Options),
+    get_header_val(<<"handles">>, Response).
+
+list_handle({RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+get_handle(HID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary>>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+modify_handle(Modifications, HID, {RestAddress, Headers, Options}) ->
+    ModificationsJson = json_utils:encode_map(Modifications),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary>>,
+    Response = do_request(Address, Headers, patch, ModificationsJson, Options),
+    get_response_status(Response).
+
+delete_handle(HID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_response_status(Response).
+
+add_user_to_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/", UID/binary>>,
+    Response = do_request(Address, Headers, put, <<>>, Options),
+    get_response_status(Response).
+
+list_users_of_handle(HID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+delete_user_from_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/", UID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_response_status(Response).
+
+add_group_to_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/", UID/binary>>,
+    Response = do_request(Address, Headers, put, <<>>, Options),
+    get_response_status(Response).
+
+list_groups_of_handle(HID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+delete_group_from_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/", UID/binary>>,
+    Response = do_request(Address, Headers, delete, <<>>, Options),
+    get_response_status(Response).
+
+get_user_privileges_for_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+set_user_privileges_for_handle(HID, UID, Privileges, {RestAddress, Headers, Options}) ->
+    PrivilegesJson = json_utils:encode_map(Privileges),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/users/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, put, PrivilegesJson, Options),
+    get_response_status(Response).
+
+get_group_privileges_for_handle(HID, UID, {RestAddress, Headers, Options}) ->
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, get, <<>>, Options),
+    get_body_map(Response).
+
+set_group_privileges_for_handle(HID, UID, Privileges, {RestAddress, Headers, Options}) ->
+    PrivilegesJson = json_utils:encode_map(Privileges),
+    Address = <<(list_to_binary(RestAddress))/binary, "/handles/", HID/binary, "/groups/", UID/binary, "/privileges">>,
+    Response = do_request(Address, Headers, put, PrivilegesJson, Options),
+    get_response_status(Response).
+
+%% Other functions =========================================================
 
 check_bad_requests([Endpoint], Method, Body, ReqParams) ->
     {RestAddress, Headers, Options} = ReqParams,
@@ -2243,3 +3010,45 @@ fetch_value_from_list(Val) ->
             Content;
         _ -> Val
     end.
+
+mock_handle_proxy(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, od_share, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, od_share, get,
+        fun
+            (?SHARE_ID_1) ->
+                {ok, #document{value = #od_share{public_url = ?SHARE_1_PUBLIC_URL}}};
+            (?SHARE_ID_2) ->
+                {ok, #document{value = #od_share{public_url = ?SHARE_2_PUBLIC_URL}}};
+            (_) ->
+                meck:passthrough()
+        end),
+
+    ok = test_utils:mock_expect(Nodes, od_share, update,
+        fun
+            (?SHARE_ID_1, _UpdateFun) ->
+                {ok, whatever};
+            (?SHARE_ID_2, _UpdateFun) ->
+                {ok, whatever};
+            (_, _) ->
+                meck:passthrough()
+        end),
+
+    ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
+        fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
+            {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
+        end),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
+        fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
+            {ok, 204, [], <<"">>}
+        end),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
+        fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
+            {ok, 200, [], <<"">>}
+        end).
+
+unmock_handle_proxy(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, od_share),
+    test_utils:mock_unload(Nodes, handle_proxy_client).

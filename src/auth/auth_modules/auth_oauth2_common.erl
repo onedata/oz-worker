@@ -99,7 +99,7 @@ validate_login(ProviderName, SecretSendMethod) ->
         Headers = SecretHeaders ++ [
             {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}
         ],
-        % Send request to Google endpoint
+        % Send request to access token endpoint
         XRDS = get_xrds(ProviderName),
         {ok, 200, _, ResponseBinary} = http_client:post(
             access_token_endpoint(XRDS),
@@ -113,7 +113,7 @@ validate_login(ProviderName, SecretSendMethod) ->
         UserInfoEndpoint = user_info_endpoint(XRDS),
         URL = <<UserInfoEndpoint/binary, "?access_token=", AccessToken/binary>>,
 
-        % Send request to Google endpoint
+        % Send request to user info endpoint
         {ok, 200, _, Response2} = http_client:get(URL,
             [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}]),
 

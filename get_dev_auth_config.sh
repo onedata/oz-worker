@@ -19,8 +19,8 @@ RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
 cd ${RUNNER_SCRIPT_DIR}
 
 echo -n "Trying to clone/update onedev repository..."
-mkdir -p deps
-cd deps
+mkdir -p _build/default/lib
+cd _build/default/lib
 
 # Check if repo exists
 if [ ! -d "onedev/.git" ]; then
@@ -43,5 +43,5 @@ git pull origin develop
 # Replace auth.config
 cd ${RUNNER_SCRIPT_DIR}
 echo "Replacing auth.config."
-cp deps/onedev/auth.config rel/oz_worker/data/auth.config
+cp _build/default/lib/onedev/auth.config _build/default/rel/oz_worker/data/auth.config
 exit 0

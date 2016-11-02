@@ -17,14 +17,16 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-%% API
--export([init/0]).
+%% data_backend_behaviour callbacks
+-export([init/0, terminate/0]).
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
+%% API
+-export([space_record/4, space_record/5]).
 
 
 %%%===================================================================
-%%% API functions
+%%% data_backend_behaviour callbacks
 %%%===================================================================
 
 %%--------------------------------------------------------------------
@@ -39,6 +41,16 @@ init() ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% {@link data_backend_behaviour} callback terminate/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec terminate() -> ok.
+terminate() ->
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
@@ -46,14 +58,24 @@ init() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"space">>, SpaceId) ->
     UserId = g_session:get_user_id(),
-    {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
-    {ok, #document{
-        value = #onedata_user{
-            space_names = SpaceNamesMap,
-            default_space = DefaultSpaceId
-        }}} = onedata_user:get(UserId),
-    Res = space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders),
-    {ok, Res}.
+    % Check if the user belongs to this space
+    case space_logic:has_effective_user(SpaceId, UserId) of
+        false ->
+            gui_error:unauthorized();
+        true ->
+            {ok, [{providers, UserProviders}]} = user_logic:get_providers(
+                UserId
+            ),
+            {ok, #document{
+                value = #od_user{
+                    space_aliases = SpaceNamesMap,
+                    default_space = DefaultSpaceId
+                }}} = od_user:get(UserId),
+            Res = space_record(
+                SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders
+            ),
+            {ok, Res}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -65,16 +87,22 @@ find(<<"space">>, SpaceId) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"space">>) ->
     UserId = g_session:get_user_id(),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, UserSpaces),
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
     {ok, #document{
-        value = #onedata_user{
-            spaces = SpaceIds,
-            space_names = SpaceNamesMap,
+        value = #od_user{
+            space_aliases = SpaceNamesMap,
             default_space = DefaultSpaceId
-        }}} = onedata_user:get(UserId),
+        }}} = od_user:get(UserId),
     Res = lists:map(
         fun(SpaceId) ->
-            space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders)
+            space_record(
+                SpaceId,
+                SpaceNamesMap,
+                DefaultSpaceId,
+                UserProviders
+            )
         end, SpaceIds),
     {ok, Res}.
 
@@ -87,7 +115,7 @@ find_all(<<"space">>) ->
 -spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_query(<<"space">>, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -99,14 +127,24 @@ find_query(<<"space">>, _Data) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 create_record(<<"space">>, Data) ->
     Name = proplists:get_value(<<"name">>, Data),
-    {ok, SpaceId} = space_logic:create({user, g_session:get_user_id()}, Name),
-    NewSpaceData = [
-        {<<"id">>, SpaceId},
-        {<<"name">>, Name},
-        {<<"isDefault">>, false},
-        {<<"providers">>, []}
-    ],
-    {ok, NewSpaceData}.
+    case Name of
+        <<"">> ->
+            gui_error:report_error(<<"Empty space names are not allowed">>);
+        Bin when is_binary(Bin) ->
+            {ok, SpaceId} = space_logic:create(
+                {user, g_session:get_user_id()}, Name
+            ),
+            NewSpaceData = [
+                {<<"id">>, SpaceId},
+                {<<"name">>, Name},
+                {<<"isDefault">>, false},
+                {<<"hasViewPrivilege">>, true},
+                {<<"providers">>, []}
+            ],
+            {ok, NewSpaceData};
+        _ ->
+            gui_error:report_error(<<"Invalid space name">>)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -137,33 +175,73 @@ update_record(<<"space">>, SpaceId, Data) ->
 -spec delete_record(RsrcType :: binary(), Id :: binary()) ->
     ok | gui_error:error_result().
 delete_record(<<"space">>, _Id) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%%===================================================================
-%%% Internal functions
+%%% API functions
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
-%% Returns a client-compliant space record.
+%% Returns a client-compliant space record based on space id. Automatically
+%% check if the user has view privileges in that space and returns proper data.
 %% @end
 %%--------------------------------------------------------------------
 -spec space_record(SpaceId :: binary(), SpaceNamesMap :: #{},
     DefaultSpaceId :: binary(), UserProviders :: [binary()]) ->
     proplists:proplist().
 space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
-    Name = maps:get(SpaceId, SpaceNamesMap),
-    {ok, [{providers, Providers}]} =
-        space_logic:get_providers(SpaceId, provider),
+    % Check if that user has view privileges in that space
+    HasViewPrivs = space_logic:has_effective_privilege(
+        SpaceId, g_session:get_user_id(), space_view_data
+    ),
+    space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
+        HasViewPrivs).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a client-compliant space record based on space id. Allows to
+%% override HasViewPrivileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_record(SpaceId :: binary(), SpaceNamesMap :: #{},
+    DefaultSpaceId :: binary(), UserProviders :: [binary()],
+    HasViewPrivileges :: boolean()) -> proplists:proplist().
+space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
+    HasViewPrivileges) ->
+    {ok, #document{value = #od_space{
+        name = DefaultName,
+        providers_supports = ProvidersSupports
+    }}} = od_space:get(SpaceId),
+    % Try to get space name from personal user's mapping, if not use its
+    % default name.
+    Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),
+    {Providers, _} = lists:unzip(ProvidersSupports),
     ProvidersToDisplay = lists:filter(
         fun(Provider) ->
             lists:member(Provider, UserProviders)
         end, Providers),
-    [
-        {<<"id">>, SpaceId},
-        {<<"name">>, Name},
-        {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
-        {<<"providers">>, ProvidersToDisplay}
-    ].
+    case HasViewPrivileges of
+        false ->
+            [
+                {<<"id">>, SpaceId},
+                {<<"name">>, Name},
+                {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
+                {<<"hasViewPrivilege">>, false},
+                % TODO For now, return all providers so that user can see
+                % spaces of provider in go to your files tab.
+                % Must be solved better!
+%%                {<<"providers">>, []}
+                {<<"providers">>, ProvidersToDisplay}
+            ];
+        true ->
+            [
+                {<<"id">>, SpaceId},
+                {<<"name">>, Name},
+                {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
+                {<<"hasViewPrivilege">>, true},
+                {<<"providers">>, ProvidersToDisplay}
+            ]
+    end.

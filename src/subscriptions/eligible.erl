@@ -25,14 +25,14 @@
 %%--------------------------------------------------------------------
 -spec providers(Doc :: datastore:document(), Model :: subscriptions:model())
         -> [ProviderID :: binary()].
-providers(Doc, space) ->
-    #document{value = #space{users = SpaceUserTuples, groups = GroupTuples,
+providers(Doc, od_space) ->
+    #document{value = #od_space{users = SpaceUserTuples, groups = GroupTuples,
         providers_supports = ProvidersSupports}} = Doc,
     {SpaceProviders, _} = lists:unzip(ProvidersSupports),
 
     GroupUsersSets = lists:flatmap(fun({GroupId, _}) ->
-        {ok, #document{value = #user_group{users = GroupUserTuples}}} =
-            user_group:get(GroupId),
+        {ok, #document{value = #od_group{users = GroupUserTuples}}} =
+            od_group:get(GroupId),
         {GroupUsers, _} = lists:unzip(GroupUserTuples),
         GroupUsers
     end, GroupTuples),
@@ -42,34 +42,52 @@ providers(Doc, space) ->
 
     SpaceProviders ++ through_users(SpaceUsersSet ++ GroupUsersSets);
 
-providers(Doc, user_group) ->
+% For share, the eligible providers are the same as for its parent space.
+providers(Doc, od_share) ->
+    #document{value = #od_share{space = ParentId}} = Doc,
+    {ok, ParentDoc} = od_space:get(ParentId),
+    providers(ParentDoc, od_space);
+
+providers(Doc, od_group) ->
     #document{
-        value = #user_group{
+        value = #od_group{
             users = UsersWithPrivileges,
-            effective_users = EUsersWithPrivileges,
-            effective_groups = EGroups}} = Doc,
+            eff_users = EUsersWithPrivileges,
+            eff_children = EGroupsWithPrivileges
+        }} = Doc,
+    {EGroups, _} = lists:unzip(EGroupsWithPrivileges),
     {Users, _} = lists:unzip(UsersWithPrivileges),
     {EUsers, _} = lists:unzip(EUsersWithPrivileges),
     AncestorsUsers = lists:foldl(
         fun(AncestorID, Acc) ->
-            case user_group:get(AncestorID) of
+            case od_group:get(AncestorID) of
                 {ok, #document{
-                    value = #user_group{effective_users = AncUsersAndPerms}}} ->
+                    value = #od_group{eff_users = AncUsersAndPerms}}} ->
                     {AncestorUsers, _} = lists:unzip(AncUsersAndPerms),
                     Acc ++ AncestorUsers;
                 {error, Reason} ->
-                    ?warning("Refferenced group ~p not found due to ~p",
+                    ?warning("Referenced group ~p not found due to ~p",
                         [AncestorID, Reason]),
                     Acc
             end
         end, [], EGroups -- [Doc#document.key]),
     through_users(Users ++ EUsers ++ AncestorsUsers);
 
-providers(Doc, onedata_user) ->
+providers(Doc, od_user) ->
     through_users([Doc#document.key]);
 
-providers(Doc, provider) ->
+providers(Doc, od_provider) ->
     [Doc#document.key];
+
+providers(Doc, od_handle) ->
+    {ok, [{users, Users}]} = handle_logic:get_effective_users(Doc#document.key),
+    through_users(Users);
+
+providers(Doc, od_handle_service) ->
+    {ok, [{users, Users}]} = handle_service_logic:get_effective_users(
+        Doc#document.key
+    ),
+    through_users(Users);
 
 providers(_Doc, _Type) ->
     [].

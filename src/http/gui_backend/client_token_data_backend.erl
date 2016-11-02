@@ -18,7 +18,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([init/0]).
+-export([init/0, terminate/0]).
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
 
@@ -39,13 +39,23 @@ init() ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% {@link data_backend_behaviour} callback terminate/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec terminate() -> ok.
+terminate() ->
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
 -spec find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"clienttoken">>, _Id) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -73,7 +83,7 @@ find_all(<<"clienttoken">>) ->
 -spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_query(<<"clienttoken">>, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -101,7 +111,7 @@ create_record(<<"clienttoken">>, _Data) ->
     Data :: proplists:proplist()) ->
     ok | gui_error:error_result().
 update_record(<<"clienttoken">>, _TokenId, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -113,7 +123,7 @@ update_record(<<"clienttoken">>, _TokenId, _Data) ->
     ok | gui_error:error_result().
 delete_record(<<"clienttoken">>, Token) ->
     UserId = g_session:get_user_id(),
-    {ok, Macaroon} = macaroon:deserialize(Token),
+    {ok, Macaroon} = token_utils:deserialize(Token),
     Identifier = macaroon:identifier(Macaroon),
     onedata_auth:delete(Identifier),
     user_logic:delete_client_token(UserId, Token).

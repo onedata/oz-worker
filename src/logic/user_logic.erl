@@ -20,14 +20,20 @@
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %% API
--export([create/1, get_user/1, get_user_doc/1, modify/2]).
--export([get_data/2, get_spaces/1, get_groups/1, get_effective_groups/1, get_providers/1]).
--export([get_default_space/1, set_default_space/2]).
+-export([create/1, create/2, get_user/1, get_user_doc/1, get_data/2]).
+-export([modify/2, set_alias/2, add_oauth_account/2, is_email_occupied/2]).
+-export([get_groups/1, get_effective_groups/1, get_providers/1, has_provider/2]).
+-export([get_spaces/1, get_handle_services/1, get_handles/1, get_shares/1,
+    get_default_space/1, set_default_space/2]).
 -export([get_default_provider/1, set_provider_as_default/3]).
 -export([get_client_tokens/1, add_client_token/2, delete_client_token/2]).
 -export([exists/1, remove/1]).
--export([set_space_name_mapping/3, clean_space_name_mapping/2]).
+-export([set_space_name_mapping/4, clean_space_name_mapping/2]).
 -export([authenticate_by_basic_credentials/2, change_user_password/3]).
+-export([get_all_handle_services/1, get_all_handles/1]).
+-export([set_oz_privileges/2, get_oz_privileges/1, delete_oz_privileges/1,
+    has_eff_oz_privilege/2]).
+-export([list/0]).
 
 %%%===================================================================
 %%% API functions
@@ -38,20 +44,67 @@
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create(User :: #onedata_user{}) ->
-    {ok, UserId :: binary()}.
-create(User) ->
-    onedata_user:save(#document{value = User}).
+-spec create(UserInfo :: #od_user{}) ->
+    {ok, UserId :: od_user:id()}.
+create(UserInfo) ->
+    create(UserInfo, undefined).
+
+
+%%--------------------------------------------------------------------
+%% @doc Creates a user account with given Id.
+%% Throws exception when call to the datastore fails.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(UserInfo :: #od_user{},
+    ProposedUserId :: od_user:id() | undefined) ->
+    {ok, UserId :: od_user:id()}.
+create(UserInfo, ProposedUserId) ->
+    {ok, UserId} = od_user:create(
+        #document{key = ProposedUserId, value = UserInfo}
+    ),
+
+    % Check if automatic first space is enabled, if so create a space
+    % for the user.
+    case application:get_env(?APP_Name, enable_automatic_first_space) of
+        {ok, true} ->
+            SpaceName = case UserInfo#od_user.name of
+                <<"">> ->
+                    <<"Your First Space">>;
+                Name ->
+                    <<Name/binary, "'s space">>
+            end,
+            {ok, SpaceId} = space_logic:create({user, UserId}, SpaceName),
+            {ok, _} = od_user:update(UserId, #{
+                default_space => SpaceId
+            });
+        _ ->
+            ok
+    end,
+
+    % Check if global groups are enabled, if so add the new user to the groups.
+    case application:get_env(?APP_Name, enable_global_groups) of
+        {ok, true} ->
+            {ok, GlobalGroups} = application:get_env(?APP_Name, global_groups),
+            lists:foreach(
+                fun({GroupId, Privileges}) ->
+                    {ok, GroupId} = group_logic:add_user(GroupId, UserId),
+                    ok = group_logic:set_privileges(GroupId, UserId, Privileges)
+                end, GlobalGroups);
+        _ ->
+            ok
+    end,
+    {ok, UserId}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Retrieves user from the database.
 %%--------------------------------------------------------------------
 -spec get_user(Key :: binary() | {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
-    {ok, #onedata_user{}} | {error, any()}.
+    {ok, #od_user{}} | {error, any()}.
 get_user(Key) ->
     try
-        {ok, #document{value = #onedata_user{} = User}} = get_user_doc(Key),
+        {ok, #document{value = #od_user{} = User}} = get_user_doc(Key),
         {ok, User}
     catch
         T:M ->
@@ -67,13 +120,14 @@ get_user(Key) ->
 get_user_doc(Key) ->
     try
         case is_binary(Key) of
-            true -> onedata_user:get(Key);
-            false -> onedata_user:get_by_criterion(Key)
+            true -> od_user:get(Key);
+            false -> od_user:get_by_criterion(Key)
         end
     catch
         T:M ->
             {error, {T, M}}
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Modifies user details. Second argument is proplist with keys
@@ -81,154 +135,170 @@ get_user_doc(Key) ->
 %% subset of fields to change.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(UserId :: binary(), Proplist :: [{atom(), term()}]) ->
-    ok | {error, disallowed_prefix | invalid_alias | alias_occupied | alias_conflict | any()}.
+-spec modify(UserId :: od_user:id(), Proplist :: [{atom(), term()}]) ->
+    ok | {error, Reason} when
+    Reason :: disallowed_alias_prefix | invalid_alias | alias_occupied | any().
 modify(UserId, Proplist) ->
-    try
-        {ok, #document{value = User} = Doc} = onedata_user:get(UserId),
-        #onedata_user{
-            name = Name,
-            alias = Alias,
-            email_list = Emails,
-            connected_accounts = ConnectedAccounts,
-            spaces = Spaces,
-            groups = Groups,
-            default_space = DefaultSpace,
-            % TODO mock
-            first_space_support_token = FSST,
-            default_provider = DefaultProvider,
-            chosen_provider = ChosenProvider,
-            client_tokens = ClientTokens
-        } = User,
+    % Name update should always succeed, start with it
+    case proplists:get_value(name, Proplist) of
+        undefined ->
+            % Name did not change
+            ok;
+        NewName ->
+            % New name requested, set it
+            {ok, _} = od_user:update(UserId, #{name => NewName})
+    end,
+    % Update alias if needed
+    case proplists:get_value(alias, Proplist) of
+        undefined ->
+            % Alias did not change
+            ok;
+        NewAlias ->
+            % New alias requested, try to set it
+            set_alias(UserId, NewAlias)
+    end.
 
-        % Check if alias was requested to be modified and if it is allowed
-        DisallowedPrefix = fun(A) ->
-            case A of
-                <<?NO_ALIAS_UUID_PREFIX, _/binary>> -> true;
-                _ -> false
-            end
-        end,
 
-        InvalidAlias = fun(A) ->
-            case re:run(A, ?ALIAS_VALIDATION_REGEXP) of
-                {match, _} ->
-                    false;
-                _ ->
-                    case A of
-                        ?EMPTY_ALIAS -> false;
-                        _ -> true
-                    end
-            end
-        end,
-
-        AliasOccupied = fun(A) ->
-            case get_user_doc({alias, A}) of
-                {ok, #document{key = UserId}} ->
-                    % DB returned the same user, so the
-                    % alias was modified but is identical, don't report errors
-                    false;
-                {ok, #document{}} ->
-                    % Alias is occupied by another user
-                    true;
-                _ ->
-                    % Alias is not occupied, ok
-                    false
-            end
-        end,
-
-        SetAlias = case proplists:get_value(alias, Proplist) of
-            undefined ->
-                Alias;
-            NewAlias ->
-                case DisallowedPrefix(NewAlias) of
-                    true ->
-                        {error, disallowed_prefix};
-                    false ->
-                        case InvalidAlias(NewAlias) of
-                            true ->
-                                {error, invalid_alias};
-                            false ->
-                                case AliasOccupied(NewAlias) of
-                                    true ->
-                                        {error, alias_occupied};
-                                    _ -> NewAlias
-                                end
-                        end
-                end
-        end,
-
-        case SetAlias of
-            {error, Reason} ->
-                % Alias not allowed, return error
-                {error, Reason};
+%%--------------------------------------------------------------------
+%% @doc
+%% Modifies user alias, and makes sure that alias cannot be duplicated.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_alias(UserId :: od_user:id(), Alias :: binary()) ->
+    ok | {error, disallowed_alias_prefix | invalid_alias | alias_occupied}.
+set_alias(UserId, Alias) ->
+    % Fun used to check if alias has a disallowed prefix
+    DisallowedPrefix = fun() ->
+        case Alias of
+            <<?NO_ALIAS_UUID_PREFIX, _/binary>> -> true;
+            _ -> false
+        end
+    end,
+    % Fun used to check if alias is valid
+    InvalidAlias = fun() ->
+        case Alias of
+            ?EMPTY_ALIAS ->
+                false;
             _ ->
-                NewUser = User#onedata_user{
-                    name = proplists:get_value(name, Proplist, Name),
-                    alias = SetAlias,
-                    email_list = proplists:get_value(email_list, Proplist, Emails),
-                    connected_accounts = proplists:get_value(connected_accounts, Proplist, ConnectedAccounts),
-                    spaces = proplists:get_value(spaces, Proplist, Spaces),
-                    groups = proplists:get_value(groups, Proplist, Groups),
-                    default_space = proplists:get_value(default_space, Proplist, DefaultSpace),
-                    % TODO mock
-                    first_space_support_token = proplists:get_value(first_space_support_token, Proplist, FSST),
-                    default_provider = proplists:get_value(default_provider, Proplist, DefaultProvider),
-                    chosen_provider = proplists:get_value(chosen_provider, Proplist, ChosenProvider),
-                    client_tokens = proplists:get_value(client_tokens, Proplist, ClientTokens)},
-                DocNew = Doc#document{value = NewUser},
-                {ok, _} = onedata_user:save(DocNew),
-                case SetAlias of
-                    Alias ->
-                        % Alias wasn't changed
-                        ok;
-                    ?EMPTY_ALIAS ->
-                        % Alias was changed to blank
-                        ok;
-                    _ ->
-                        % Alias was changed, check for possible conflicts
-                        try
-                            {ok, NewUser} = get_user({alias, SetAlias}),
-                            ok
-                        catch
-                            _:user_duplicated ->
-                                % Alias is duplicated, revert user to initial state and leave the alias blank
-                                remove(UserId),
-                                onedata_user:save(Doc#document{value = #onedata_user{alias = ?EMPTY_ALIAS}}),
-                                {error, alias_conflict}
-                        end
+                case re:run(Alias, ?ALIAS_VALIDATION_REGEXP) of
+                    {match, _} -> false;
+                    _ -> true
                 end
         end
-    catch
-        T:M ->
-            {error, {T, M}}
+    end,
+    % Fun used to perform alias update
+    UpdateAlias = fun() ->
+        critical_section:run({alias, Alias}, fun() ->
+            % Check if this alias is occupied
+            case get_user_doc({alias, Alias}) of
+                {ok, #document{key = UserId}} ->
+                    % DB returned the same user, so the
+                    % alias was modified but is identical, don't report errors.
+                    ok;
+                {ok, #document{}} ->
+                    % Alias is occupied by another user
+                    {error, alias_occupied};
+                _ ->
+                    % Alias is not occupied, update user doc
+                    {ok, _} = od_user:update(UserId, #{alias => Alias}),
+                    ok
+            end
+        end)
+    end,
+    % Throw everything together
+    case DisallowedPrefix() of
+        true ->
+            {error, disallowed_alias_prefix};
+        false ->
+            case InvalidAlias() of
+                true ->
+                    {error, invalid_alias};
+                false ->
+                    UpdateAlias()
+            end
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds an oauth account to user's accounts.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_oauth_account(UserId :: od_user:id(),
+    OAuthAccount :: #oauth_account{}) -> ok.
+add_oauth_account(UserId, OAuthAccount) ->
+    {ok, #document{
+        value = #od_user{
+            name = Name,
+            email_list = Emails,
+            connected_accounts = ConnectedAccounts
+        }}} = od_user:get(UserId),
+    #oauth_account{
+        name = OAuthName,
+        email_list = OAuthEmails
+    } = OAuthAccount,
+    % If no name is specified, take the one provided with new info
+    NewName = case Name of
+        <<"">> -> OAuthName;
+        _ -> Name
+    end,
+    {ok, _} = od_user:update(UserId, #{
+        name => NewName,
+        % Add emails from provider that are not yet added to account
+        email_list => lists:usort(Emails ++ OAuthEmails),
+        connected_accounts => ConnectedAccounts ++ [OAuthAccount]
+    }),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate telling if given email is occupied from the point of view of
+%% given user. It is not recognized as occupied if the same user already has it.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_email_occupied(UserId :: od_user:id(), Email :: binary()) ->
+    boolean().
+is_email_occupied(UserId, Email) ->
+    case get_user_doc({email, Email}) of
+        {ok, #document{key = UserId}} ->
+            false;
+        {ok, #document{}} ->
+            true;
+        _ ->
+            false
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns user details.
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(UserId :: binary(), Type :: provider | user) ->
+-spec get_data(UserId :: od_user:id(), Type :: provider | user) ->
     {ok, [proplists:property()]}.
 get_data(UserId, provider) ->
     {ok, #document{
-        value = #onedata_user{
-            name = Name, login = Login
-        }}} = onedata_user:get(UserId),
+        value = #od_user{
+            name = Name,
+            login = Login,
+            email_list = EmailList
+        }}} = od_user:get(UserId),
     {ok, [
         {userId, UserId},
         {login, Login},
-        {name, Name}
+        {name, Name},
+        {emailList, EmailList}
     ]};
 get_data(UserId, user) ->
     {ok, #document{
-        value = #onedata_user{
+        value = #od_user{
             name = Name,
             login = Login,
             connected_accounts = ConnectedAccounts,
             alias = Alias,
             email_list = EmailList
-        }}} = onedata_user:get(UserId),
+        }}} = od_user:get(UserId),
     ConnectedAccountsMaps = lists:map(fun(Account) ->
         ?record_to_list(oauth_account, Account) end, ConnectedAccounts),
     {ok, [
@@ -246,10 +316,10 @@ get_data(UserId, user) ->
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(UserId :: binary()) ->
+-spec get_spaces(UserId :: od_user:id()) ->
     {ok, [proplists:property()]}.
 get_spaces(UserId) ->
-    {ok, Doc} = onedata_user:get(UserId),
+    {ok, Doc} = od_user:get(UserId),
     AllUserSpaces = get_all_spaces(Doc),
     EffectiveDefaultSpace = effective_default_space(AllUserSpaces, Doc),
     {ok, [
@@ -257,15 +327,66 @@ get_spaces(UserId) ->
         {default, EffectiveDefaultSpace}
     ]}.
 
+
+%%--------------------------------------------------------------------
+%% @doc Returns user's handle_services.
+%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
+%% don't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_services(UserId :: od_user:id()) -> {ok, [proplists:property()]}.
+get_handle_services(UserId) ->
+    {ok, Doc} = od_user:get(UserId),
+    AllUserHandleServices = get_all_handle_services(Doc),
+    {ok, [{handle_services, AllUserHandleServices}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns user's handles.
+%% Throws exception when call to the datastore fails, or user doesn't exist, or his groups
+%% don't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handles(UserId :: od_user:id()) ->
+    {ok, [proplists:property()]}.
+get_handles(UserId) ->
+    {ok, Doc} = od_user:get(UserId),
+    AllUserHandles = get_all_handles(Doc),
+    {ok, [{handles, AllUserHandles}]}.
+
+%%--------------------------------------------------------------------
+%% @doc Returns user's shares, i.e. all shares of all spaces in which user has
+%% the privilege to manage shares.
+%% Throws exception when call to the datastore fails, or user doesn't exist,
+%% or his groups don't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_shares(UserId :: od_user:id()) -> {ok, [proplists:property()]}.
+get_shares(UserId) ->
+    {ok, Doc} = od_user:get(UserId),
+    AllUserSpaces = get_all_spaces(Doc),
+    % Resolve user shares - he can only view the shares in spaces where
+    % he has proper privileges.
+    UserShares = lists:foldl(
+        fun(SpaceId, Acc) ->
+            case space_logic:has_effective_privilege(
+                SpaceId, UserId, space_manage_shares) of
+                true ->
+                    {ok, SharesInSpace} = space_logic:get_shares(SpaceId),
+                    SharesInSpace ++ Acc;
+                false ->
+                    Acc
+            end
+        end, [], AllUserSpaces),
+    {ok, UserShares}.
+
 %%--------------------------------------------------------------------
 %% @doc Returns user's groups.
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_groups(UserId :: binary()) ->
-    {ok, [proplists:property()]}.
+-spec get_effective_groups(UserId :: od_user:id()) -> {ok, [proplists:property()]}.
 get_effective_groups(UserId) ->
-    {ok, #document{value = #onedata_user{effective_groups = Groups}}} = onedata_user:get(UserId),
+    {ok, #document{value = #od_user{eff_groups = Groups}}} = od_user:get(UserId),
     {ok, [{effective_groups, Groups}]}.
 
 %%--------------------------------------------------------------------
@@ -273,10 +394,10 @@ get_effective_groups(UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(UserId :: binary()) ->
+-spec get_groups(UserId :: od_user:id()) ->
     {ok, [proplists:property()]}.
 get_groups(UserId) ->
-    {ok, #document{value = #onedata_user{groups = Groups}}} = onedata_user:get(UserId),
+    {ok, #document{value = #od_user{groups = Groups}}} = od_user:get(UserId),
     {ok, [{groups, Groups}]}.
 
 %%--------------------------------------------------------------------
@@ -284,18 +405,33 @@ get_groups(UserId) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_providers(UserId :: binary()) ->
-    {ok, [proplists:property()]}.
+-spec get_providers(UserId :: od_user:id()) -> {ok, [proplists:property()]}.
 get_providers(UserId) ->
-    {ok, Doc} = onedata_user:get(UserId),
+    {ok, Doc} = od_user:get(UserId),
     Spaces = get_all_spaces(Doc),
     UserProviders = lists:foldl(fun(Space, Providers) ->
-        {ok, #document{value = #space{providers_supports = Supports}}}
-            = space:get(Space),
+        {ok, #document{
+            value = #od_space{
+                providers_supports = Supports
+            }}} = od_space:get(Space),
         {SpaceProviders, _} = lists:unzip(Supports),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)
     end, ordsets:new(), Spaces),
     {ok, [{providers, UserProviders}]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate telling if given user is effectively supported by given provider.
+%% Throws exception when call to the datastore fails, or user doesn't exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_provider(UserId :: od_user:id(), ProviderId :: od_provider:id()) ->
+    boolean().
+has_provider(UserId, ProviderId) ->
+    {ok, [{providers, UserProviders}]} = get_providers(UserId),
+    lists:member(ProviderId, UserProviders).
+
 
 %%--------------------------------------------------------------------
 %% @doc Returns true if user was found by a given key.
@@ -314,25 +450,25 @@ exists(Key) ->
 %% Throws exception when call to the datastore fails, or user is already deleted.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(UserId :: binary()) ->
+-spec remove(UserId :: od_user:id()) ->
     true.
 remove(UserId) ->
-    {ok, #document{value = #onedata_user{groups = Groups, spaces = Spaces}}} = onedata_user:get(UserId),
+    {ok, #document{value = #od_user{groups = Groups, spaces = Spaces}}} = od_user:get(UserId),
     lists:foreach(fun(GroupId) ->
-        {ok, _} = user_group:update(GroupId, fun(Group) ->
-            #user_group{users = Users} = Group,
-            {ok, Group#user_group{users = lists:keydelete(UserId, 1, Users)}}
+        {ok, _} = od_group:update(GroupId, fun(Group) ->
+            #od_group{users = Users} = Group,
+            {ok, Group#od_group{users = lists:keydelete(UserId, 1, Users)}}
         end),
         group_logic:cleanup(GroupId)
     end, Groups),
     lists:foreach(fun(SpaceId) ->
-        {ok, _} = space:update(SpaceId, fun(Space) ->
-            #space{users = Users} = Space,
-            {ok, Space#space{users = lists:keydelete(UserId, 1, Users)}}
+        {ok, _} = od_space:update(SpaceId, fun(Space) ->
+            #od_space{users = Users} = Space,
+            {ok, Space#od_space{users = lists:keydelete(UserId, 1, Users)}}
         end)
     end, Spaces),
     auth_logic:invalidate_token({user_id, UserId}),
-    onedata_user:delete(UserId),
+    od_user:delete(UserId),
     true.
 
 %%--------------------------------------------------------------------
@@ -341,10 +477,10 @@ remove(UserId) ->
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_default_space(UserId :: binary()) ->
+-spec get_default_space(UserId :: od_user:id()) ->
     {ok, SpaceId :: binary() | undefined}.
 get_default_space(UserId) ->
-    {ok, Doc} = onedata_user:get(UserId),
+    {ok, Doc} = od_user:get(UserId),
     AllUserSpaces = get_all_spaces(Doc),
     {ok, effective_default_space(AllUserSpaces, Doc)}.
 
@@ -354,17 +490,17 @@ get_default_space(UserId) ->
 %% don't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_default_space(UserId :: binary(), SpaceId :: binary()) ->
+-spec set_default_space(UserId :: od_user:id(), SpaceId :: binary()) ->
     boolean().
 set_default_space(UserId, SpaceId) ->
-    {ok, Doc} = onedata_user:get(UserId),
+    {ok, Doc} = od_user:get(UserId),
     AllUserSpaces = get_all_spaces(Doc),
     case ordsets:is_element(SpaceId, AllUserSpaces) of
         false ->
             false;
         true ->
-            {ok, _} = onedata_user:update(UserId, fun(User) ->
-                {ok, User#onedata_user{default_space = SpaceId}}
+            {ok, _} = od_user:update(UserId, fun(User) ->
+                {ok, User#od_user{default_space = SpaceId}}
             end),
             true
     end.
@@ -374,10 +510,10 @@ set_default_space(UserId, SpaceId) ->
 %% Retrieves user's default provider (or returns undefined).
 %% @end
 %%--------------------------------------------------------------------
--spec get_default_provider(UserId :: binary()) ->
+-spec get_default_provider(UserId :: od_user:id()) ->
     {ok, ProviderId :: binary() | undefined}.
 get_default_provider(UserId) ->
-    {ok, #onedata_user{default_provider = DefProv}} = get_user(UserId),
+    {ok, #od_user{default_provider = DefProv}} = get_user(UserId),
     {ok, DefProv}.
 
 
@@ -385,10 +521,10 @@ get_default_provider(UserId) ->
 %% @doc Retrieves user's list of client tokens.
 %% @end
 %%--------------------------------------------------------------------
--spec get_client_tokens(UserId :: binary()) ->
+-spec get_client_tokens(UserId :: od_user:id()) ->
     {ok, Tokens :: [binary()]}.
 get_client_tokens(UserId) ->
-    {ok, #onedata_user{client_tokens = ClientTokens}} = get_user(UserId),
+    {ok, #od_user{client_tokens = ClientTokens}} = get_user(UserId),
     {ok, ClientTokens}.
 
 
@@ -397,11 +533,11 @@ get_client_tokens(UserId) ->
 %% Adds a token to the list of user's client tokens.
 %% @end
 %%--------------------------------------------------------------------
--spec add_client_token(UserId :: binary(), Token :: binary()) -> ok.
+-spec add_client_token(UserId :: od_user:id(), Token :: binary()) -> ok.
 add_client_token(UserId, Token) ->
-    {ok, #onedata_user{client_tokens = ClientTokens}} = get_user(UserId),
-    {ok, _} = onedata_user:update(UserId, fun(User) ->
-        {ok, User#onedata_user{client_tokens = ClientTokens ++ [Token]}}
+    {ok, #od_user{client_tokens = ClientTokens}} = get_user(UserId),
+    {ok, _} = od_user:update(UserId, fun(User) ->
+        {ok, User#od_user{client_tokens = ClientTokens ++ [Token]}}
     end),
     ok.
 
@@ -411,11 +547,11 @@ add_client_token(UserId, Token) ->
 %% Deletes a token from the list of user's client tokens.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_client_token(UserId :: binary(), Token :: binary()) -> ok.
+-spec delete_client_token(UserId :: od_user:id(), Token :: binary()) -> ok.
 delete_client_token(UserId, Token) ->
-    {ok, #onedata_user{client_tokens = ClientTokens}} = get_user(UserId),
-    {ok, _} = onedata_user:update(UserId, fun(User) ->
-        {ok, User#onedata_user{client_tokens = ClientTokens -- [Token]}}
+    {ok, #od_user{client_tokens = ClientTokens}} = get_user(UserId),
+    {ok, _} = od_user:update(UserId, fun(User) ->
+        {ok, User#od_user{client_tokens = ClientTokens -- [Token]}}
     end),
     ok.
 
@@ -426,7 +562,7 @@ delete_client_token(UserId, Token) ->
 %% Throws exception when call to the datastore fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_provider_as_default(UserId :: binary(), ProviderId :: binary(),
+-spec set_provider_as_default(UserId :: od_user:id(), ProviderId :: binary(),
     Flag :: boolean()) -> boolean().
 set_provider_as_default(UserId, ProviderId, Flag) ->
     {ok, [{providers, AllUserProviders}]} = get_providers(UserId),
@@ -434,7 +570,7 @@ set_provider_as_default(UserId, ProviderId, Flag) ->
         false ->
             false;
         true ->
-            Diff = fun(#onedata_user{default_provider = CrrntDefProv} = User) ->
+            Diff = fun(#od_user{default_provider = CrrntDefProv} = User) ->
                 NewDefProv = case Flag of
                     true ->
                         % Setting ProviderId to default
@@ -451,10 +587,10 @@ set_provider_as_default(UserId, ProviderId, Flag) ->
                                 CrrntDefProv
                         end
                 end,
-                {ok, User#onedata_user{
+                {ok, User#od_user{
                     default_provider = NewDefProv}}
             end,
-            {ok, _} = onedata_user:update(UserId, Diff),
+            {ok, _} = od_user:update(UserId, Diff),
             true
     end.
 
@@ -463,41 +599,59 @@ set_provider_as_default(UserId, ProviderId, Flag) ->
 %% is a member of another space with provided name, a '#' character and prefix
 %% of space ID it prepended to the name, so that the new name is unique and the
 %% prefix of a space ID satisfies minimal length.
+%% The Overwrite argument decides if SpaceName should overwrite the existing
+%% name mapping for given SpaceId, if such exists. If there is no mapping, it is
+%% added no matter the Overwrite arg.
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_space_name_mapping(UserId :: binary(), SpaceId :: binary(),
-    SpaceName :: binary()) -> ok.
-set_space_name_mapping(UserId, SpaceId, SpaceName) ->
+-spec set_space_name_mapping(UserId :: od_user:id(), SpaceId :: binary(),
+    SpaceName :: binary(), Overwrite :: boolean()) -> ok.
+set_space_name_mapping(UserId, SpaceId, SpaceName, Overwrite) ->
     SpaceNameLen = size(SpaceName),
     UniqueSpaceName = <<SpaceName/binary, "#", SpaceId/binary>>,
 
-    {ok, _} = onedata_user:update(UserId, fun(User) ->
-        #onedata_user{space_names = SpaceNames} = User,
-
-        {ShortestUniquePrefLen, FilteredSpaces} = maps:fold(fun
-            (Id, _, {UniquePrefLen, SpacesAcc}) when Id == SpaceId ->
-                {UniquePrefLen, SpacesAcc};
-            (Id, Name, {UniquePrefLen, SpacesAcc}) ->
-                PrefLen = binary:longest_common_prefix([UniqueSpaceName, Name]),
-                {max(PrefLen + 1, UniquePrefLen), maps:put(Id, Name, SpacesAcc)}
-        end, {SpaceNameLen, #{}}, SpaceNames),
-
-        ValidUniquePrefLen = case ShortestUniquePrefLen > SpaceNameLen of
+    {ok, _} = od_user:update(UserId, fun(User) ->
+        #od_user{space_aliases = SpaceNames} = User,
+        case (not Overwrite) andalso maps:is_key(SpaceId, SpaceNames) of
             true ->
-                min(max(ShortestUniquePrefLen,
-                    SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
-                    size(UniqueSpaceName));
-            false ->
-                ShortestUniquePrefLen
-        end,
+                % If the map already contains the key and Overwrite is false,
+                % nothing needs to be done.
+                {ok, User};
+            _ ->
+                % Else, we have to update or add the name mapping and check for
+                % duplicated names.
+                {ShortestUniquePfxLen, FilteredSpaces} = maps:fold(fun
+                    (Id, _, {UniquePrefLen, SpacesAcc}) when Id == SpaceId ->
+                        {UniquePrefLen, SpacesAcc};
+                    (Id, Name, {UniquePrefLen, SpacesAcc}) ->
+                        PrefLen = binary:longest_common_prefix(
+                            [UniqueSpaceName, Name]),
+                        {
+                            max(PrefLen + 1, UniquePrefLen),
+                            maps:put(Id, Name, SpacesAcc)
+                        }
+                end, {SpaceNameLen, #{}}, SpaceNames),
 
-        ShortestUniqueSpaceName = <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
-        NewUser = User#onedata_user{
-            space_names = maps:put(SpaceId, ShortestUniqueSpaceName, FilteredSpaces)
-        },
+                ValidUniquePrefLen = case ShortestUniquePfxLen > SpaceNameLen of
+                    true ->
+                        min(max(ShortestUniquePfxLen,
+                            SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
+                            size(UniqueSpaceName));
+                    false ->
+                        ShortestUniquePfxLen
+                end,
 
-        {ok, NewUser}
+                ShortestUniqueSpaceName =
+                    <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
+                NewMapping = maps:put(
+                    SpaceId, ShortestUniqueSpaceName, FilteredSpaces),
+                NewUser = User#od_user{
+                    space_aliases = NewMapping
+                },
+
+                {ok, NewUser}
+        end
     end),
     ok.
 
@@ -507,15 +661,15 @@ set_space_name_mapping(UserId, SpaceId, SpaceName) ->
 %% Throws exception when call to dao fails, or user doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec clean_space_name_mapping(UserId :: binary(), SpaceId :: binary()) -> boolean().
+-spec clean_space_name_mapping(UserId :: od_user:id(), SpaceId :: binary()) -> boolean().
 clean_space_name_mapping(UserId, SpaceId) ->
     case space_logic:has_effective_user(SpaceId, UserId) of
         true ->
             false;
         false ->
-            {ok, _} = onedata_user:update(UserId, fun(User) ->
-                #onedata_user{space_names = SpaceNames} = User,
-                NewUser = User#onedata_user{space_names = maps:remove(SpaceId, SpaceNames)},
+            {ok, _} = od_user:update(UserId, fun(User) ->
+                #od_user{space_aliases = SpaceNames} = User,
+                NewUser = User#od_user{space_aliases = maps:remove(SpaceId, SpaceNames)},
                 {ok, NewUser}
             end),
             true
@@ -538,11 +692,7 @@ clean_space_name_mapping(UserId, SpaceId) ->
     Password :: binary()) -> {ok, UserDoc :: #document{}} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
     Headers = [basic_auth_header(Login, Password)],
-    {ok, OnepanelRESTURL} =
-        application:get_env(?APP_Name, onepanel_rest_url),
-    {ok, OnepanelGetUserEndpoint} =
-        application:get_env(?APP_Name, onepanel_user_endpoint),
-    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    URL = get_onepanel_rest_user_url(Login),
     RestCallResult = case http_client:get(URL, Headers, <<"">>, [insecure]) of
         {ok, 200, _, JSON} ->
             json_utils:decode(JSON);
@@ -568,35 +718,34 @@ authenticate_by_basic_credentials(Login, Password) ->
         Props ->
             UserId = proplists:get_value(<<"userId">>, Props),
             UserRole = proplists:get_value(<<"userRole">>, Props),
-            UserDocument = case onedata_user:get(UserId) of
-                {error, {not_found, onedata_user}} ->
-                    UserDoc = #document{
-                        key = UserId,
-                        value = #onedata_user{
-                            name = Login,
-                            login = Login,
-                            basic_auth_enabled = true
-                        }},
-                    {ok, UserId} = onedata_user:save(UserDoc),
+            UserDocument = case od_user:get(UserId) of
+                {error, {not_found, od_user}} ->
+                    UserRecord = #od_user{
+                        name = Login,
+                        login = Login,
+                        basic_auth_enabled = true
+                    },
+                    {ok, UserId} = create(UserRecord, UserId),
                     ?info("Created new account for user '~s' from onepanel "
                     "(role: '~s')", [Login, UserRole]),
+                    {ok, UserDoc} = od_user:get(UserId),
                     UserDoc;
-                {ok, #document{value = #onedata_user{} = UserInfo} = UserDoc} ->
+                {ok, #document{value = #od_user{} = UserInfo} = UserDoc} ->
                     % Make sure user login is up to date (it might have changed
                     % in onepanel since last login). Also enable basic auth for
                     % him.
                     NewDoc = UserDoc#document{
-                        value = UserInfo#onedata_user{
+                        value = UserInfo#od_user{
                             login = Login,
                             basic_auth_enabled = true
                         }},
-                    {ok, UserId} = onedata_user:save(NewDoc),
+                    {ok, UserId} = od_user:save(NewDoc),
                     NewDoc
             end,
             % Check if user's role entitles him to belong to any groups
             {ok, GroupMapping} = application:get_env(
                 ?APP_Name, onepanel_role_to_group_mapping),
-            Groups = proplists:get_value(UserRole, GroupMapping, []),
+            Groups = maps:get(UserRole, GroupMapping, []),
             lists:foreach(
                 fun(GroupId) ->
                     case group_logic:has_user(GroupId, UserId) of
@@ -605,7 +754,7 @@ authenticate_by_basic_credentials(Login, Password) ->
                         false ->
                             {ok, GroupData} = group_logic:get_data(GroupId),
                             GroupName = proplists:get_value(name, GroupData),
-                            ok = group_logic:add_user(GroupId, UserId),
+                            {ok, _} = group_logic:add_user(GroupId, UserId),
                             ?info("Added user '~s' to group '~s' based on "
                             "role '~s'", [Login, GroupName, UserRole])
                     end
@@ -629,13 +778,9 @@ change_user_password(Login, OldPassword, NewPassword) ->
         {<<"content-type">>, <<"application/json">>},
         basic_auth_header(Login, OldPassword)
     ],
-    {ok, OnepanelRESTURL} =
-        application:get_env(?APP_Name, onepanel_rest_url),
-    {ok, OnepanelGetUserEndpoint} =
-        application:get_env(?APP_Name, onepanel_user_endpoint),
-    URL = OnepanelRESTURL ++ OnepanelGetUserEndpoint,
+    URL = get_onepanel_rest_user_url(Login),
     Body = json_utils:encode([{<<"password">>, NewPassword}]),
-    case http_client:put(URL, Headers, Body, [insecure]) of
+    case http_client:request(patch, URL, Headers, Body, [insecure]) of
         {ok, 204, _, _} ->
             ok;
         {ok, 401, _, _} ->
@@ -655,6 +800,83 @@ change_user_password(Login, OldPassword, NewPassword) ->
             {error, Error}
     end.
 
+
+%%--------------------------------------------------------------------
+%% @doc Sets OZ API privileges of user with UserId.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_oz_privileges(UserId :: od_user:id(),
+    Privileges :: [privileges:oz_privilege()]) -> ok.
+set_oz_privileges(UserId, Privileges) ->
+    {ok, _} = od_user:update(UserId, #{
+        oz_privileges => Privileges
+    }),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc Deletes OZ API privileges of user with UserId (sets them to empty list).
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_oz_privileges(UserId :: od_user:id()) -> ok.
+delete_oz_privileges(UserId) ->
+    set_oz_privileges(UserId, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns OZ privileges of user with UserId.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_oz_privileges(UserId :: od_user:id()) ->
+    Privileges :: {ok, [{privileges, [privileges:oz_privilege()]}]}.
+get_oz_privileges(UserId) ->
+    {ok, #document{
+        value = #od_user{
+            oz_privileges = OzPrivileges
+        }}} = od_user:get(UserId),
+    {ok, [{privileges, OzPrivileges}]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns whether the user identified by UserId has privilege
+%% in admin OZ API.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_oz_privilege(UserId :: od_user:id(),
+    Privilege :: privileges:oz_privilege()) ->
+    boolean().
+has_eff_oz_privilege(UserId, Privilege) ->
+    case od_user:get(UserId) of
+        {error, {not_found, od_user}} ->
+            false;
+        {ok, UserDoc} ->
+            % TODO Use eff_oz_privileges field when it is pre-computed
+            #document{
+                value = #od_user{
+                    oz_privileges = OzPrivileges,
+                    eff_groups = EffGroups
+                }} = UserDoc,
+            case lists:member(Privilege, OzPrivileges) of
+                true ->
+                    true;
+                false ->
+                    lists:any(fun(GroupId) ->
+                        group_logic:has_eff_oz_privilege(GroupId, Privilege)
+                    end, EffGroups)
+            end
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a list of all users in the system (their ids).
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [od_user:id()]}.
+list() ->
+    {ok, UserDocs} = od_user:list(),
+    {ok, [UserId || #document{key = UserId} <- UserDocs]}.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -671,6 +893,20 @@ basic_auth_header(Login, Password) ->
     UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
     {<<"Authorization">>, <<"Basic ", UserAndPassword/binary>>}.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns onepanel REST endpoint for user management.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_onepanel_rest_user_url(Login :: binary()) -> URL :: binary().
+get_onepanel_rest_user_url(Login) ->
+    {ok, OnepanelRESTURL} =
+        application:get_env(?APP_Name, onepanel_rest_url),
+    {ok, OnepanelGetUsersEndpoint} =
+        application:get_env(?APP_Name, onepanel_users_endpoint),
+    <<(str_utils:to_binary(OnepanelRESTURL))/binary,
+        (str_utils:to_binary(OnepanelGetUsersEndpoint))/binary, Login/binary>>.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -682,18 +918,64 @@ basic_auth_header(Login, Password) ->
 %%--------------------------------------------------------------------
 -spec get_all_spaces(Doc :: datastore:document()) ->
     ordsets:ordset(SpaceId :: binary()).
-get_all_spaces(#document{value = #onedata_user{} = User}) ->
-    #onedata_user{spaces = UserSpaces, groups = Groups} = User,
+get_all_spaces(#document{value = #od_user{} = User}) ->
+    #od_user{spaces = UserSpaces, groups = Groups} = User,
 
     UserSpacesSet = ordsets:from_list(UserSpaces),
     GroupSpacesSets = lists:map(
         fun(GroupId) ->
-            {ok, GroupDoc} = user_group:get(GroupId),
-            #document{value = #user_group{spaces = GroupSpaces}} = GroupDoc,
+            {ok, GroupDoc} = od_group:get(GroupId),
+            #document{value = #od_group{spaces = GroupSpaces}} = GroupDoc,
             ordsets:from_list(GroupSpaces)
         end, Groups),
 
     ordsets:union([UserSpacesSet | GroupSpacesSets]).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Returns a list of all handle_services that a user belongs to, directly or through
+%% a group.
+%% Throws exception when call to the datastore fails, or user's groups don't
+%% exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_handle_services(Doc :: datastore:document()) ->
+    ordsets:ordset(HandleServiceId :: od_handle_service:id()).
+get_all_handle_services(#document{value = #od_user{
+    handle_services = UserHandleServices, groups = Groups}}) ->
+
+    UserHandleServicesSet = ordsets:from_list(UserHandleServices),
+    GroupHandleServicesSets = lists:map(
+        fun(GroupId) ->
+            {ok, GroupDoc} = od_group:get(GroupId),
+            #document{value = #od_group{handle_services = GroupHandleServices}} = GroupDoc,
+            ordsets:from_list(GroupHandleServices)
+        end, Groups),
+
+    ordsets:union([UserHandleServicesSet | GroupHandleServicesSets]).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Returns a list of all handles that a user belongs to, directly or through
+%% a group.
+%% Throws exception when call to the datastore fails, or user's groups don't
+%% exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_handles(Doc :: od_user:doc()) ->
+    ordsets:ordset(HandleId :: od_handle:id()).
+get_all_handles(#document{value = #od_user{
+    handles = UserHandles, groups = Groups}}) ->
+
+    UserHandlesSet = ordsets:from_list(UserHandles),
+    GroupHandlesSets = lists:map(
+        fun(GroupId) ->
+            {ok, GroupDoc} = od_group:get(GroupId),
+            #document{value = #od_group{handles = GroupHandles}} = GroupDoc,
+            ordsets:from_list(GroupHandles)
+        end, Groups),
+
+    ordsets:union([UserHandlesSet | GroupHandlesSets]).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -706,14 +988,14 @@ get_all_spaces(#document{value = #onedata_user{} = User}) ->
 -spec effective_default_space(AllUserSpaces :: ordsets:ordset(binary()),
     UserDoc :: datastore:document()) ->
     EffectiveDefaultSpaceId :: binary() | undefined.
-effective_default_space(_, #document{value = #onedata_user{default_space = undefined}}) ->
+effective_default_space(_, #document{value = #od_user{default_space = undefined}}) ->
     undefined;
 effective_default_space(AllUserSpaces, #document{} = UserDoc) ->
-    #document{value = #onedata_user{default_space = DefaultSpaceId} = User} = UserDoc,
+    #document{value = #od_user{default_space = DefaultSpaceId} = User} = UserDoc,
     case ordsets:is_element(DefaultSpaceId, AllUserSpaces) of
         true -> DefaultSpaceId;
         false ->
-            UserNew = User#onedata_user{default_space = undefined},
-            onedata_user:save(UserDoc#document{value = UserNew}),
+            UserNew = User#od_user{default_space = undefined},
+            od_user:save(UserDoc#document{value = UserNew}),
             undefined
     end.

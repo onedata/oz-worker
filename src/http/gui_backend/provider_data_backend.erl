@@ -17,14 +17,16 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-%% API
--export([init/0]).
+%% data_backend_behaviour callbacks
+-export([init/0, terminate/0]).
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
+%% API
+-export([provider_record/3]).
 
 
 %%%===================================================================
-%%% API functions
+%%% data_backend_behaviour callbacks
 %%%===================================================================
 
 %%--------------------------------------------------------------------
@@ -39,6 +41,16 @@ init() ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% {@link data_backend_behaviour} callback terminate/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec terminate() -> ok.
+terminate() ->
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% {@link data_backend_behaviour} callback find/2.
 %% @end
 %%--------------------------------------------------------------------
@@ -46,12 +58,22 @@ init() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"provider">>, ProviderId) ->
     UserId = g_session:get_user_id(),
-    {ok, #document{
-        value = #onedata_user{
-            default_provider = DefaultProvider,
-            spaces = UserSpaces
-        }}} = user_logic:get_user_doc(UserId),
-    Res = provider_record(ProviderId, DefaultProvider, UserSpaces),
+    %% TODO Currently, perms to view provider are not checked
+%%    % Check if the user is supported by this provider
+%%    case user_logic:has_provider(UserId, ProviderId) of
+%%        false ->
+%%            gui_error:unauthorized();
+%%        true ->
+%%            {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
+%%            {ok, UserSpaces} = user_logic:get_spaces(UserId),
+%%            SpaceIds = proplists:get_value(spaces, UserSpaces),
+%%            Res = provider_record(ProviderId, DefaultProvider, SpaceIds),
+%%            {ok, Res}
+%%    end,
+    {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, UserSpaces),
+    Res = provider_record(ProviderId, DefaultProvider, SpaceIds),
     {ok, Res}.
 
 
@@ -65,14 +87,12 @@ find(<<"provider">>, ProviderId) ->
 find_all(<<"provider">>) ->
     UserId = g_session:get_user_id(),
     {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
-    {ok, #document{
-        value = #onedata_user{
-            default_provider = DefaultProvider,
-            spaces = UserSpaces
-        }}} = user_logic:get_user_doc(UserId),
+    {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    SpaceIds = proplists:get_value(spaces, UserSpaces),
     Res = lists:map(
         fun(ProviderId) ->
-            provider_record(ProviderId, DefaultProvider, UserSpaces)
+            provider_record(ProviderId, DefaultProvider, SpaceIds)
         end, ProviderIds),
     {ok, Res}.
 
@@ -85,7 +105,7 @@ find_all(<<"provider">>) ->
 -spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_query(<<"provider">>, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -96,7 +116,7 @@ find_query(<<"provider">>, _Data) ->
 -spec create_record(RsrcType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 create_record(<<"provider">>, _Data) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -122,15 +142,14 @@ update_record(<<"provider">>, ProviderId, Data) ->
 -spec delete_record(RsrcType :: binary(), Id :: binary()) ->
     ok | gui_error:error_result().
 delete_record(<<"provider">>, _Id) ->
-    gui_error:report_error(<<"Not iplemented">>).
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%%===================================================================
-%%% Internal functions
+%%% API functions
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Returns a client-compliant space record.
 %% @end

@@ -11,7 +11,6 @@
 -module(gui_listener).
 -author("Michal Zmuda").
 
--include("gui_config.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("gui/include/gui.hrl").
@@ -20,6 +19,8 @@
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, healthcheck/0]).
+
+-define(gui_https_listener, https).
 
 %%%===================================================================
 %%% listener_behaviour callbacks
@@ -44,11 +45,6 @@ port() ->
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
     try
-        %% TODO for development
-        %% This is needed for the redirection to provider to work, as
-        %% we don't use legit server certificates on providers.
-        application:set_env(ctool, verify_server_cert, false),
-
         % Resolve static files root. First, check if there is a non-empty dir
         % located in gui_custom_static_root. If not, use default.
         {ok, CstmRoot} = application:get_env(?APP_Name, gui_custom_static_root),
@@ -61,7 +57,8 @@ start() ->
 
         % Get gui config
         GuiPort = port(),
-        {ok, GuiNbAcceptors} = application:get_env(?APP_Name, gui_https_acceptors),
+        {ok, GuiNbAcceptors} =
+            application:get_env(?APP_Name, gui_https_acceptors),
         {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
         {ok, MaxKeepAlive} = application:get_env(?APP_Name, gui_max_keepalive),
         % Get cert paths
@@ -69,7 +66,21 @@ start() ->
         {ok, CertFile} = application:get_env(?APP_Name, gui_cert_file),
         {ok, KeyFile} = application:get_env(?APP_Name, gui_key_file),
 
-        GRHostname = dns_query_handler:get_canonical_hostname(),
+        % Check if docs proxy is enabled
+        {ok, DocsProxyEnabled} =
+            application:get_env(?APP_Name, gui_docs_proxy_enabled),
+        DocsRoute = case DocsProxyEnabled of
+            false ->
+                % Don't add route for docs
+                [];
+            true ->
+                % Get path to static docs files
+                {ok, DocsPath} =
+                    application:get_env(?APP_Name, gui_docs_static_root),
+                {DocsPath ++ "/[...]", static_docs_handler, []}
+        end,
+
+        OZHostname = dns_query_handler:get_canonical_hostname(),
 
         % Setup GUI dispatch opts for cowboy
         GUIDispatch = [
@@ -84,16 +95,16 @@ start() ->
                 {'_', redirector_handler, []}
             ]},
             % Redirect requests in form: alias.onedata.org
-            {":alias." ++ GRHostname, [{'_', client_redirect_handler, [GuiPort]}]},
+            {":alias." ++ OZHostname, [{'_', client_redirect_handler, [GuiPort]}]},
             % Proper requests are routed to handler modules
             % Proper requests are routed to handler modules
-            {'_', [
-                {<<"/google97a2428c78c25c27.html">>, cowboy_static,
-                    {file, <<"resources/gui_static/google_analytics/google97a2428c78c25c27.html">>}},
+            {'_', lists:flatten([
                 {"/nagios/[...]", nagios_handler, []},
+                {"/share/:share_id", public_share_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
+                DocsRoute,
                 {"/[...]", gui_static_handler, {dir, DocRoot}}
-            ]}
+            ])}
         ],
 
         % Initialize auth handler
@@ -103,7 +114,7 @@ start() ->
         gui:init(),
         % Start the listener for web gui and nagios handler
         {ok, _} = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
-            ranch_ssl2, [
+            ranch_etls, [
                 {ip, {127, 0, 0, 1}},
                 {port, GuiPort},
                 {cacertfile, CaCertFile},
@@ -115,8 +126,9 @@ start() ->
                 {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
                 {max_keepalive, MaxKeepAlive},
                 {timeout, Timeout},
-                % On every request, add headers that improve security to the response
-                {onrequest, fun gui_utils:onrequest_adjust_headers/1}
+                % On every request, add headers that improve
+                % security to the response
+                {onrequest, fun gui:response_headers/1}
             ]),
         ok
     catch

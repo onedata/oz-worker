@@ -15,91 +15,6 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
 -include("http/handlers/rest_handler.hrl").
 
-% Describes state of batch.
--record(outbox, {
-    timer_expires :: pos_integer(),
-    timer :: timer:tref(),
-    buffer :: [term()]
-}).
-
-% Stores data used to provide subscription updates
--record(subscriptions_state, {
-    cache :: gb_trees:tree()
-}).
-
-% Stores state of provider subscription
--record(provider_subscription, {
-    connections = [] :: [pid()],
-    provider :: binary(),
-    resume_at = 1 :: subscriptions:seq(),
-    missing = [] :: [subscriptions:seq()],
-    users = [] :: [binary()]
-}).
-
-%% Stores CA dedicated node
-%% todo: implement distributed CA properly (connected with VFS-1499)
--record(ozpca_state, {
-    dedicated_node :: {ok, node()} | {error, Reason :: term()}
-}).
-
-%% Records of this type store a macaroons secret
--record(onedata_auth, {
-    secret :: binary(),
-    user_id :: binary()
-}).
-
-%% This record defines a group of users, it has: name, list of users that belongs to it, list of spaces that are used by this group
--record(user_group, {
-    name :: binary(),
-    type :: user_group:type(),
-    users = [] :: [{UserID :: binary(), [privileges:group_privilege()]}],
-    effective_users = [] :: group_graph:effective_users(),
-    effective_groups = [] :: group_graph:effective_groups(),
-    nested_groups = [] :: [{GroupID :: binary(), [privileges:group_privilege()]}],
-    parent_groups = [] :: [GroupID :: binary()],
-    spaces = [] :: [SpaceId :: binary()]
-}).
-
--record(groups_graph_caches_state, {
-    changed_groups = [] :: [GroupID :: binary()],
-    changed_users = [] :: [UserID :: binary()],
-    last_rebuild = 0 :: integer()
-}).
-
-%% This record defines a provider who support spaces and can be reached via url
--record(provider, {
-    client_name :: binary(),
-    redirection_point :: binary(),
-    urls :: [binary()],
-    spaces = [] :: [SpaceId :: binary()],
-    serial :: binary(),
-    latitude :: float(),
-    longitude :: float()
-}).
-
-%% This record defines a space that can be used by users to store their files
--record(space, {
-    name :: binary(),
-    providers_supports = [] :: [{ProviderId :: binary(), Size :: pos_integer()}],
-    users = [] :: [{UserId :: binary(), [privileges:space_privilege()]}],
-    groups = [] :: [{GroupId :: binary(), [privileges:space_privilege()]}]
-}).
-
-%% This record defines a token that can be used by user to do something
--record(token, {
-    secret :: binary(),
-    resource :: atom(),
-    resource_id :: binary(),
-    issuer :: rest_handler:client()
-}).
-
-%% This record defines a GUI session
--record(session, {
-    user_id = undefined :: onedata_user:id() | undefined,
-    memory = [] :: session:memory(),
-    accessed = {0, 0, 0} :: erlang:timestamp()
-}).
-
 % Value in DB meaning that alias is not set.
 % Empty list, must be used as a list not binary so JS view will work correctly
 -define(EMPTY_ALIAS, <<"">>).
@@ -107,12 +22,18 @@
 % Regexp to validate aliases - at least 5 alphanumeric chars
 -define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9]{5,}$">>).
 
-% String that will be put in front of uuid when a user does not have an alias set.
-% Aliases are not allowed to start with this string.
+% String that will be put in front of uuid when a user does not have
+% an alias set. Aliases are not allowed to start with this string.
 -define(NO_ALIAS_UUID_PREFIX, "uuid_").
 
+
+%%%===================================================================
+%%% DB records definitions
+%%%===================================================================
+
+%% This record must be defined here as od_user depends on it.
 %% This record defines user's account info
-%% received from an openid / oauth provider
+%% received from an openid / oauth provider.
 -record(oauth_account, {
     provider_id = undefined :: atom(),
     user_id = <<"">> :: binary(),
@@ -121,8 +42,53 @@
     email_list = [] :: [binary()]
 }).
 
+%%%===================================================================
+%%% Records synchronized via subscriptions
+%%%===================================================================
+
+% Records starting with prefix od_ are special records that represent entities
+% in the system and are synchronized to providers via subscriptions.
+% The entities can have various relations between them, especially effective
+% membership is possible via groups and nested groups.
+% The effective relations are calculated top-down,
+% to obtain effective memberships to other entities for every user,
+% and bottom-up to obtain effective members for every entity. The records
+% contain the fields top_down_dirty and bottom_up_dirty that mark records
+% that have not yet been calculated in given direction.
+%
+% The below ASCII visual shows possible relations in entities graph.
+%
+%  provider    share
+%      ^         ^
+%       \       /
+%        \     /
+%         space    handle_service     handle
+%         ^  ^        ^        ^       ^   ^
+%         |   \      /         |      /    |
+%         |    \    /          |     /     |
+%        user    group          user      group
+%                  ^                        ^
+%                  |                        |
+%                  |                        |
+%                group                     user
+%                ^   ^
+%               /     \
+%              /       \
+%            user     user
+%
+% Members of providers, shares, handle_services and handles are
+% calculated bottom-up.
+%
+% Memberships of users are calculated top-down.
+%
+% Groups and spaces must be processed top-down and bottom-up, as they hold the
+% information about users' memberships and members of entities.
+%
+% After a new relation appears, the parent is marked bottom_up_dirty and the
+% child is marked top_down_dirty.
+
 %% This record defines a user and is handled as a database document
--record(onedata_user, {
+-record(od_user, {
     name = <<"">> :: binary(),
     login = <<"">> :: binary(),
     % Decides if this user can login via login:password, only users created in
@@ -131,34 +97,234 @@
     alias = ?EMPTY_ALIAS :: binary(),
     email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],
-    spaces = [] :: [SpaceId :: binary()],
-    space_names = #{} :: #{SpaceId :: binary() => SpaceName :: binary()},
-    default_space :: binary() | undefined,
-    groups = [] :: [GroupId :: binary()],
-    effective_groups = [] :: group_graph:effective_groups(),
-    % TODO this is a mock
-    first_space_support_token = <<"">> :: binary(),
-    % This allows to remember the provider which was selected for user, so DNS knows where to redirect
+    default_space = undefined :: binary() | undefined,
+    % This allows to remember the provider which was selected for user,
+    % so DNS knows where to redirect
     default_provider = undefined :: binary() | undefined,
     % This allows to remember to which provider user is being redirected.
     % It is needed in DNS so it knows where to redirect.
     chosen_provider = undefined :: binary() | undefined,
     % List of user's client tokens
-    client_tokens = [] :: [binary()]
+    client_tokens = [] :: [binary()],
+    % List of user's aliases for spaces
+    space_aliases = #{} :: #{od_space:id() => binary()},
+
+    % Privileges of this user in admin's OZ API
+    oz_privileges = [] :: [privileges:oz_privilege()],
+    eff_oz_privileges = [] :: [privileges:oz_privilege()], % TODO currently always empty
+
+    % Direct relations to other entities
+    groups = [] :: [od_group:id()],
+    spaces = [] :: [od_space:id()],
+    handle_services = [] :: [od_handle_service:id()],
+    handles = [] :: [od_handle:id()],
+
+    % Effective relations to other entities
+    eff_groups = [] :: [od_group:id()],
+    eff_spaces = [] :: [od_space:id()], % TODO currently always empty
+    eff_shares = [] :: [od_share:id()], % TODO currently always empty
+    eff_providers = [] :: [od_provider:id()], % TODO currently always empty
+    eff_handle_services = [] :: [od_handle_service:id()], % TODO currently always empty
+    eff_handles = [] :: [od_handle:id()], % TODO currently always empty
+
+    % Marks that the record's effective relations are not up to date.
+    top_down_dirty = true :: boolean()
 }).
 
-%% This record contains a list of privileges possessed by certain entity
-%% (user / group) to use onezone API.
--record(oz_api_privileges, {
-    type = user :: user | group,
-    privileges = [] :: [oz_api_privileges:privilege()]
+%% This record defines a group of users, it has: name, list of users that
+%% belongs to it, list of spaces that are used by this group
+-record(od_group, {
+    name = undefined :: binary() | undefined,
+    type = role :: od_group:type(),
+
+    % Privileges of this group in admin's OZ API
+    oz_privileges = [] :: [privileges:oz_privilege()],
+    eff_oz_privileges = [] :: [privileges:oz_privilege()], % TODO currently always empty
+
+    % Group graph related entities (direct and effective)
+    parents = [] :: [od_group:id()],
+    children = [] :: [{od_group:id(), [privileges:group_privilege()]}],
+    eff_parents = [] :: [od_group:id()], % TODO currently always empty
+    eff_children = [] :: [{od_group:id(), [privileges:group_privilege()]}], % TODO privileges list currently always empty
+
+    % Direct relations to other entities
+    users = [] :: [{od_user:id(), [privileges:group_privilege()]}],
+    spaces = [] :: [od_space:id()],
+    handle_services = [] :: [od_handle_service:id()],
+    handles = [] :: [od_handle:id()],
+
+    % Effective relations to other entities
+    eff_users = [] :: [{od_user:id(), [privileges:group_privilege()]}],
+    eff_spaces = [] :: [od_space:id()], % TODO currently always empty
+    eff_shares = [] :: [od_share:id()], % TODO currently always empty
+    eff_providers = [] :: [od_provider:id()], % TODO currently always empty
+    eff_handle_services = [] :: [od_handle_service:id()], % TODO currently always empty
+    eff_handles = [] :: [od_handle:id()], % TODO currently always empty
+
+    % Marks that the record's effective relations are not up to date.
+    % Groups' effective relations must be calculated top-down and bottom-up.
+    top_down_dirty = true :: boolean(),
+    bottom_up_dirty = true :: boolean()
 }).
 
--type user_info() :: #onedata_user{}.
--type provider_info() :: #provider{}.
--type group_info() :: #user_group{}.
--type space_info() :: #space{}.
--type token_info() :: #token{}.
--type auth_info() :: #onedata_auth{}.
+%% This record defines a space that can be used by users to store their files
+-record(od_space, {
+    name :: undefined | binary(),
+
+    % Direct relations to other entities
+    providers_supports = [] :: [{od_provider:id(), Size :: pos_integer()}],
+    users = [] :: [{od_user:id(), [privileges:space_privilege()]}],
+    groups = [] :: [{od_group:id(), [privileges:space_privilege()]}],
+    % All shares that belong to this space.
+    shares = [] :: [od_share:id()],
+
+    % Effective relations to other entities
+    eff_users = [] :: [{od_user:id(), [privileges:space_privilege()]}], % TODO currently always empty
+    eff_groups = [] :: [{od_group:id(), [privileges:space_privilege()]}], % TODO currently always empty
+
+    % Marks that the record's effective relations are not up to date.
+    % Groups' effective relations must be calculated top-down and bottom-up.
+    top_down_dirty = true :: boolean(),
+    bottom_up_dirty = true :: boolean()
+}).
+
+%% This record defines a file/directory public share
+-record(od_share, {
+    name = undefined :: undefined | binary(),
+    public_url = undefined :: undefined | binary(),
+
+    % Direct relations to other entities
+    space = undefined :: undefined | od_space:id(),
+    handle = undefined :: undefined | od_handle:id(),
+    root_file = undefined :: undefined | binary(),
+
+    % Effective relations to other entities
+    eff_users = [] :: [od_user:id()], % TODO currently always empty
+    eff_groups = [] :: [od_group:id()], % TODO currently always empty
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
+}).
+
+%% This record defines a provider who support spaces and can be reached via url
+-record(od_provider, {
+    client_name :: undefined | binary(),
+    redirection_point :: undefined | binary(),
+    urls :: undefined | [binary()],
+    serial :: undefined | binary(),
+    latitude :: undefined | float(),
+    longitude :: undefined | float(),
+
+    % Direct relations to other entities
+    spaces = [] :: [od_space:id()],
+
+    % Effective relations to other entities
+    eff_users = [] :: [od_user:id()], % TODO currently always empty
+    eff_groups = [] :: [od_group:id()], % TODO currently always empty
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
+}).
+
+-record(od_handle_service, {
+    name :: od_handle_service:name() | undefined,
+    proxy_endpoint :: od_handle_service:proxy_endpoint() | undefined,
+    service_properties = [] :: od_handle_service:service_properties(),
+
+    % Direct relations to other entities
+    users = [] :: [{od_user:id(), [privileges:handle_service_privilege()]}],
+    groups = [] :: [{od_group:id(), [privileges:handle_service_privilege()]}],
+
+    % Effective relations to other entities
+    eff_users = [] :: [{od_user:id(), [privileges:handle_service_privilege()]}], % TODO currently always empty
+    eff_groups = [] :: [{od_group:id(), [privileges:handle_service_privilege()]}], % TODO currently always empty
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
+}).
+
+-record(od_handle, {
+    public_handle :: od_handle:public_handle() | undefined,
+    resource_type :: od_handle:resource_type() | undefined,
+    resource_id :: od_handle:resource_id() | undefined,
+    metadata :: od_handle:metadata() | undefined,
+    timestamp = od_handle:actual_timestamp() :: od_handle:timestamp(),
+
+    % Direct relations to other entities
+    handle_service :: od_handle_service:id() | undefined,
+    users = [] :: [{od_user:id(), [privileges:handle_privilege()]}],
+    groups = [] :: [{od_group:id(), [privileges:handle_privilege()]}],
+
+    % Effective relations to other entities
+    eff_users = [] :: [{od_user:id(), [privileges:handle_privilege()]}], % TODO currently always empty
+    eff_groups = [] :: [{od_group:id(), [privileges:handle_privilege()]}], % TODO currently always empty
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
+}).
+
+%%%===================================================================
+%%% Records specific for onezone
+%%%===================================================================
+
+%% This record defines a GUI session
+-record(session, {
+    user_id = undefined :: od_user:id() | undefined,
+    memory = [] :: session:memory(),
+    accessed = {0, 0, 0} :: erlang:timestamp()
+}).
+
+%% This record defines a token that can be used by user to do something
+-record(token, {
+    secret :: undefined | binary(),
+    resource :: undefined | atom(),
+    resource_id :: undefined | binary(),
+    issuer :: undefined | rest_handler:client()
+}).
+
+%% Records of this type store a macaroons secret
+-record(onedata_auth, {
+    secret :: undefined | binary(),
+    user_id :: undefined | binary()
+}).
+
+%% Stores CA dedicated node
+%% todo: implement distributed CA properly (connected with VFS-1499)
+-record(ozpca_state, {
+    dedicated_node :: undefined | {ok, node()} | {error, Reason :: term()}
+}).
+
+-record(groups_graph_caches_state, {
+    changed_groups = [] :: [od_group:id()],
+    changed_users = [] :: [od_user:id()],
+    last_rebuild = 0 :: integer()
+}).
+
+% Describes state of batch.
+-record(outbox, {
+    timer_expires :: undefined | pos_integer(),
+    timer :: undefined | timer:tref(),
+    buffer :: undefined | [term()]
+}).
+
+% Stores data used to provide subscription updates
+-record(subscriptions_state, {
+    cache :: undefined | gb_trees:tree()
+}).
+
+% Stores state of provider subscription
+-record(provider_subscription, {
+    connections = [] :: [pid()],
+    provider :: undefined | binary(),
+    resume_at = 1 :: subscriptions:seq(),
+    missing = [] :: [subscriptions:seq()],
+    users = [] :: [binary()]
+}).
+
+% Info about identities, which are owned by this OZ
+-record(owned_identity, {
+    id :: undefined | identity:id(),
+    encoded_public_key :: undefined | identity:encoded_public_key()
+}).
 
 -endif.

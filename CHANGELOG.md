@@ -4,6 +4,150 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc10
+
+* VFS-2703 Update mocking
+* VFS-2703 Update datastore config
+* VFS-2720 Fix bug that did not allow providers to get provider data
+* VFS-2734 Add support for list_groups_of_provider OZ privilege
+* VFS-2734 Add tests for get users of provider privilege
+* VFS-2734 Add list spaces of provider privileges
+* VFS-2720 Add better test coverage for list_providers_of_space OZ privielges
+* VFS-2720 Add better test coverage for list_spaces and list_providers OZ privielges
+* VFS-2720 Update od_user and og_group record structures
+* VFS-2720 Do not generate all combinations of privileges in privileges tests as it takes too long
+* VFS-2720 Fix default provider redirection not working properly
+* VFS-2662 Fix a bug in change password, update gui ref and adjust the code to new API
+* VFS-2469 Use iso time format for serialization of timestamps, move serialization logic to ctool.
+* VFS-2667 Improve json encoder for DB operations
+* VFS-2593 - update ctool and cluster-worker,  use STRESS_TEST_BASE macro in stress test
+* VFS-2659 Disallow creation of spaces with empty names
+* VFS-2659 Make effective children in groups a list of Ids rather than pairs with privileges
+* VFS-2659 Fix public user record translator in subscriptions
+* VFS-2659 Adjust subscriptions tests to refactored models
+* VFS-2659 Rename some of the key records in db
+* VFS-2640 - move all error handling to oai_errors module
+* VFS-2659 Rename some records and record fields for consistency, add a lot of effective relations
+
+
+### 3.0.0-rc9
+
+* Releasing new version 3.0.0-rc9
+
+
+### 3.0.0-rc8
+
+* VFS-2625 Removing share's reference to handle is now not obligatory
+* VFS-2625 Fix handles not being properly retrieved via REST
+* VFS-2625 Use unencoded shalsh character in public handle field oh handle
+* VFS-2625 Add handle services and handles to user and group subscriptions
+* VFS-2625 Set default value of service properties in handle services to empty list
+* VFS-2625 Add tests for handle_services subscriptions
+* VFS-2625 Fix handle subscription tests
+* VFS-2625 Add tests for handles and handle_services subscriptions
+* VFS-2625 Add handle_services and handles to subscriptions
+
+
+### 3.0.0-rc7
+
+* VFS-2567 Rework space_record API in space data backend
+* VFS-2607 Fix a bug in group_logic can_view_public_data
+* VFS-2607 Fix a bug in group_logic has effective user
+* VFS-2607 Add public group type for groups that users do not have view data privs
+* VFS-2607 Allow viewing group details for users that have view privs in any space that contains the group
+* VFS-2607 Allow access to public data of groups and spaces for users without view privileges
+* VFS-2567 Check view permissions during space find in GUI backend
+* VFS-2607 Introduce env variable deciding about automatic first space creation
+* VFS-2567 Add verification of view perms in provider GUI backend
+* VFS-2607 Add better error reporting in REST user PATCH
+* VFS-2607 Add OIDC integration with EGI
+* VFS-2607 Fix onepanel users not being added to global groups
+* VFS-2548 Disable global groups by default
+* VFS-2548 Fix bugs in space name mapping mechanism, add CT tests verifying automatic space membership by global grups
+* VFS-2548 Add overwrite argument to set_space_name_mapping function
+* VFS-2548 Add mechanism for automatic groups in OZ
+* VFS-2469 Add modifying handles via proxy.
+* VFS-2469 Add registering and unregistering of handles via proxy.
+* VFS-2469 Update cluster_worker and cluster_manager, add loading of gen_server2 to relx.
+* VFS-2405 Treat share as different record than space, create corresponding modules
+* VFS-2405 Update share redirection path to provider
+* VFS-2407 Use separate record for shares rather then space
+* VFS-2469 Reorganize rest_modules_test_SUITE and add empty test mocks for handles management.
+* VFS-2397 Implement oai_handler
+
+
+### 3.0.0-rc6
+
+* VFS-2582 Using GUI fix for blank notifications
+* VFS-2390 Upgrade rebar to version 3
+
+
+### 3.0.0-rc5
+
+* VFS-2491 Add RPC call to join a space
+* VFS-2468 Add log level opt to location service script
+* VFS-2468 Add nodejs to packages requirements
+* VFS-2500 described location service config options
+* VFS-2309 no more bootstrap on testmaster
+* VFS-2309 adjusted location service to use node 4
+* VFS-2176 all 'A' DNS entries used as bootstrap nodes
+* VFS-2309 boostrap location service client on testmaster
+* VFS-2309 rest auth skeleton
+* VFS-2309 public keys retrieved from directly publishers
+* VFS-2309 refactoring: encoded key pased & utitlities separated
+* VFS-2309 identity verification in oz
+* VFS-2309 location service added
+
+
+### 3.0.0-rc4
+
+* VFS-2156 Change onepanel config env variables types
+* Disable openid providers in auth.config by default, leaving basicAuth only
+
+
+### 3.0.0-RC3
+
+* VFS-2156 Remove GUI files
+* VFS-2436 Allow modifying user alias via REST
+* VFS-2436 Disallow adding inexistent users or groups to spaces via REST admin endpoint
+* VFS-2154 Fix a mixup between privileges expressed in atoms and binaries in rest privileges tests
+* VFS-2154 Update privileges rest handler to accept patch rather than put
+* VFS-2154 Use all possible combinations of privs rather than random subset
+* VFS-2154 Major refactor of rest privileges test suite and some improvements to the tested code
+* VFS-2154 Further refinement of OZ API privileges tests, update oz-gui-default reference
+* VFS-2358 HOTFIX: Fix a badmatch in provider data backend
+* VFS-2358 Update comments concerning module APIs in space and provider data backends
+* Releasing new version 3.0.0-RC2
+* VFS-2154 Rework tests for OZ API, fix some bugs that were revealed by tests
+* VFS-2273 Handle macaroon verification errors
+* VFS-2358 Implement unsupport space functionality in GUI
+* VFS-2357 Add checks if taking away privileges works in OZ API REST
+* VFS-2269 Enable Symmetric Multiprocessing
+* VFS-2357 Add admin endpoints to add/remove users and groups from spaces, fix a couple of bugs
+* VFS-2359 Turn off HSTS by default, allow configuration via app.config, improve docs integration
+* VFS-2359 Add handler for serving static docs files located on another server
+* Releasing new version 3.0.0-RC1
+* VFS-2250 Use wrappers for macaroon serialization
+
+
+### 3.0.0-RC2
+
+* VFS-2357 Add checks if taking away privileges works in OZ API REST
+* VFS-2269 Enable Symmetric Multiprocessing
+* VFS-2357 Add integration tests for OZ API REST functionalities
+* VFS-2357 Add admin endpoints to add/remove users and groups from spaces, fix a couple of bugs
+* VFS-2351 onedata_auth is persistent
+* VFS-2359 Turn off HSTS by default, allow configuration via app.config, improve docs integration
+* VFS-2359 Add handler for serving static docs files located on another server
+
+
+### 3.0.0-RC1
+
+* VFS-2316 Update etls.
+* VFS-2250 Use wrappers for macaroon serialization
+* VFS-2121 Tests refactoring
+
+
 ### 3.0.0-beta8
 
 * minor changes and improvements

@@ -18,6 +18,7 @@
 -author("Lukasz Opiola").
 -behaviour(gui_route_plugin_behaviour).
 
+-include("registered_names.hrl").
 -include("gui/common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("gui/include/gui.hrl").
@@ -27,6 +28,7 @@
 -export([session_details/0]).
 -export([login_page_path/0, default_page_path/0]).
 -export([error_404_html_file/0, error_500_html_file/0]).
+-export([response_headers/0]).
 
 %% Convenience macros for defining routes.
 
@@ -138,10 +140,10 @@ public_rpc_backend() -> public_rpc_backend.
     {ok, proplists:proplist()} | gui_error:error_result().
 session_details() ->
     {ok, #document{
-        value = #onedata_user{
+        value = #od_user{
             name = Name,
             basic_auth_enabled = BasicAuthEnabled
-        }}} = onedata_user:get(g_session:get_user_id()),
+        }}} = od_user:get(g_session:get_user_id()),
     FirstLogin = g_session:get_value(firstLogin, false),
     Res = [
         {<<"userName">>, Name},
@@ -189,3 +191,14 @@ error_404_html_file() ->
 -spec error_500_html_file() -> FileName :: binary().
 error_500_html_file() ->
     <<"page500.html">>.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gui_route_plugin_behaviour} callback response_headers/0
+%% @end
+%%--------------------------------------------------------------------
+-spec response_headers() -> [{Key :: binary(), Value :: binary()}].
+response_headers() ->
+    {ok, Headers} = application:get_env(?APP_Name, gui_response_headers),
+    Headers.

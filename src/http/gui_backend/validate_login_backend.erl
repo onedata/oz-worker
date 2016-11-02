@@ -42,8 +42,10 @@ page_init() ->
                 {ok, ProvId} ->
                     ?debug("Automatically redirecting user `~s` "
                     "to default provider `~s`", [UserId, ProvId]),
-                    {ok, ProvURL} = auth_logic:get_redirection_uri(UserId, ProvId),
-                    {redirect_relative, ProvURL}
+                    {ok, ProvURL} = auth_logic:get_redirection_uri(
+                        UserId, ProvId
+                    ),
+                    {redirect_absolute, ProvURL}
             end;
         new_user ->
             UserId = g_session:get_user_id(),
