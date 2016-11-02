@@ -39,13 +39,14 @@ page_init() ->
             cowboy_req:header(<<"authorization">>, Req),
         [User, Passwd] = binary:split(base64:decode(UserAndPassword), <<":">>),
         case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-            {ok, UserDoc} ->
+            {ok, UserDoc, FirstLogin} ->
                 #document{
                     key = UserId,
                     value = #od_user{
                         default_provider = DefaultProvider
                     }} = UserDoc,
                 g_session:log_in(UserId),
+                g_session:put_value(firstLogin, FirstLogin),
                 % If user has a default provider, redirect him straight there
                 URL = case DefaultProvider of
                     undefined ->

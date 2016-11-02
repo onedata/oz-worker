@@ -689,7 +689,8 @@ clean_space_name_mapping(UserId, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate_by_basic_credentials(Login :: binary(),
-    Password :: binary()) -> {ok, UserDoc :: #document{}} | {error, term()}.
+    Password :: binary()) ->
+    {ok, UserDoc :: #document{}, FirstLogin :: boolean()} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
     Headers = [basic_auth_header(Login, Password)],
     URL = get_onepanel_rest_user_url(Login),
@@ -718,7 +719,7 @@ authenticate_by_basic_credentials(Login, Password) ->
         Props ->
             UserId = proplists:get_value(<<"userId">>, Props),
             UserRole = proplists:get_value(<<"userRole">>, Props),
-            UserDocument = case od_user:get(UserId) of
+            {UserDocument, FirstLogin} = case od_user:get(UserId) of
                 {error, {not_found, od_user}} ->
                     UserRecord = #od_user{
                         name = Login,
@@ -729,7 +730,7 @@ authenticate_by_basic_credentials(Login, Password) ->
                     ?info("Created new account for user '~s' from onepanel "
                     "(role: '~s')", [Login, UserRole]),
                     {ok, UserDoc} = od_user:get(UserId),
-                    UserDoc;
+                    {UserDoc, true};
                 {ok, #document{value = #od_user{} = UserInfo} = UserDoc} ->
                     % Make sure user login is up to date (it might have changed
                     % in onepanel since last login). Also enable basic auth for
@@ -740,7 +741,7 @@ authenticate_by_basic_credentials(Login, Password) ->
                             basic_auth_enabled = true
                         }},
                     {ok, UserId} = od_user:save(NewDoc),
-                    NewDoc
+                    {NewDoc, false}
             end,
             % Check if user's role entitles him to belong to any groups
             {ok, GroupMapping} = application:get_env(
@@ -759,7 +760,7 @@ authenticate_by_basic_credentials(Login, Password) ->
                             "role '~s'", [Login, GroupName, UserRole])
                     end
                 end, Groups),
-            {ok, UserDocument}
+            {ok, UserDocument, FirstLogin}
     end.
 
 %%--------------------------------------------------------------------
