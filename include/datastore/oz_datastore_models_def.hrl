@@ -270,7 +270,7 @@
 %% This record defines a GUI session
 -record(session, {
     user_id = undefined :: od_user:id() | undefined,
-    memory = [] :: session:memory(),
+    memory = #{} :: session:memory(),
     accessed = {0, 0, 0} :: erlang:timestamp()
 }).
 

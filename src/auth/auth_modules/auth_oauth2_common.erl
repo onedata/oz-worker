@@ -64,7 +64,7 @@ get_redirect_url(ConnectAccount, ProviderName, HandlerModule) ->
 validate_login(ProviderName, SecretSendMethod) ->
     try
         % Retrieve URL params
-        ParamsProplist = g_ctx:get_url_params(),
+        ParamsProplist = gui_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         ClientId = auth_config:get_provider_app_id(ProviderName),

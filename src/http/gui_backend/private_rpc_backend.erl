@@ -33,7 +33,7 @@
 -spec handle(FunctionId :: binary(), RequestData :: term()) ->
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
 handle(<<"getUserAlias">>, _) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     {ok, #od_user{
         alias = Alias
     }} = user_logic:get_user(UserId),
@@ -46,7 +46,7 @@ handle(<<"getUserAlias">>, _) ->
     ]};
 
 handle(<<"changePassword">>, Props) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     {ok, #od_user{
         login = Login
     }} = user_logic:get_user(UserId),
@@ -63,7 +63,7 @@ handle(<<"changePassword">>, Props) ->
     end;
 
 handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     case user_logic:set_alias(UserId, NewAlias) of
         ok ->
             {ok, [
@@ -91,7 +91,7 @@ handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     ]};
 
 handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
-    Client = #client{type = user, id = g_session:get_user_id()},
+    Client = #client{type = user, id = gui_session:get_user_id()},
     {ok, Token} = token_logic:create(
         Client, space_support_token, {space, SpaceId}),
     {ok, [
@@ -99,7 +99,7 @@ handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     ]};
 
 handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     % @todo check if provider is online, if not push update of model
     {ok, URL} = auth_logic:get_redirection_uri(UserId, ProviderId),
     {ok, [
@@ -109,7 +109,7 @@ handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
 handle(<<"unsupportSpace">>, Props) ->
     SpaceId = proplists:get_value(<<"spaceId">>, Props),
     ProviderId = proplists:get_value(<<"providerId">>, Props),
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     Authorized = space_logic:has_effective_privilege(
         SpaceId, UserId, space_remove_provider
     ),
@@ -152,7 +152,7 @@ handle(<<"unsupportSpace">>, Props) ->
 
 
 handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     case token_logic:validate(Token, space_invite_user_token) of
         false ->
             gui_error:report_warning(<<"Invalid token value.">>);

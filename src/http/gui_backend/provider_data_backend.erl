@@ -57,7 +57,7 @@ terminate() ->
 -spec find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"provider">>, ProviderId) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     %% TODO Currently, perms to view provider are not checked
 %%    % Check if the user is supported by this provider
 %%    case user_logic:has_provider(UserId, ProviderId) of
@@ -85,7 +85,7 @@ find(<<"provider">>, ProviderId) ->
 -spec find_all(ResourceType :: binary()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"provider">>) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
     {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
     {ok, UserSpaces} = user_logic:get_spaces(UserId),
@@ -128,7 +128,7 @@ create_record(<<"provider">>, _Data) ->
     Data :: proplists:proplist()) ->
     ok | gui_error:error_result().
 update_record(<<"provider">>, ProviderId, Data) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     IsDefault = proplists:get_value(<<"isDefault">>, Data),
     user_logic:set_provider_as_default(UserId, ProviderId, IsDefault),
     ok.

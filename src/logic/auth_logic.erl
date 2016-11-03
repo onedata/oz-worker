@@ -96,16 +96,16 @@ authenticate_user(Identifier) ->
     {ok, RedirectionUri :: binary()}.
 get_redirection_uri(UserId, ProviderId) ->
     Token = gen_token(UserId, ProviderId),
-    _Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
-    {ok, #od_user{alias = Alias}} = user_logic:get_user(UserId),
     {ok, _} = od_user:update(UserId, #{chosen_provider => ProviderId}),
-    _Prefix = case Alias of
-        ?EMPTY_ALIAS ->
-            <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
-        _ ->
-            Alias
-    end,
     % TODO return IP address rather than alias.onedata.org
+%%    Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
+%%    {ok, #od_user{alias = Alias}} = user_logic:get_user(UserId),
+%%    Prefix = case Alias of
+%%        ?EMPTY_ALIAS ->
+%%            <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
+%%        _ ->
+%%            Alias
+%%    end,
     % It shall be used normally when we have a possibility to
     % resolve domains on developer's host systems
     % (so their web browsers can connect).
@@ -137,7 +137,7 @@ gen_token(UserId) ->
 %%--------------------------------------------------------------------
 -spec gen_token(UserId :: binary(), ProviderId :: binary() | undefined) ->
     Token :: binary().
-gen_token(UserId, ProviderId) ->
+gen_token(UserId, _ProviderId) ->
     Secret = generate_secret(),
     Location = ?MACAROONS_LOCATION,
     {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{
@@ -216,7 +216,7 @@ invalidate_token(Identifier) when is_binary(Identifier) ->
 -spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> binary().
 generate_state_token(HandlerModule, ConnectAccount) ->
     clear_expired_state_tokens(),
-    Token = list_to_binary(hex_utils:to_hex(crypto:rand_bytes(32))),
+    Token = list_to_binary(hex_utils:to_hex(crypto:strong_rand_bytes(32))),
 
     StateInfo = [
         {module, HandlerModule},
@@ -293,5 +293,5 @@ create_macaroon(Secret, Identifier, Caveats) ->
 %%--------------------------------------------------------------------
 -spec generate_secret() -> binary().
 generate_secret() ->
-    BinSecret = crypto:rand_bytes(macaroon:suggested_secret_length()),
+    BinSecret = crypto:strong_rand_bytes(macaroon:suggested_secret_length()),
     <<<<Y>> || <<X:4>> <= BinSecret, Y <- integer_to_list(X, 16)>>.

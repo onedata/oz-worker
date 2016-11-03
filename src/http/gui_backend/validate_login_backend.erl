@@ -34,7 +34,7 @@
 page_init() ->
     case auth_utils:validate_login() of
         {redirect, URL} ->
-            UserId = g_session:get_user_id(),
+            UserId = gui_session:get_user_id(),
             ?info("User ~p logged in", [UserId]),
             case user_logic:get_default_provider(UserId) of
                 {ok, undefined} ->
@@ -48,7 +48,7 @@ page_init() ->
                     {redirect_absolute, ProvURL}
             end;
         new_user ->
-            UserId = g_session:get_user_id(),
+            UserId = gui_session:get_user_id(),
             ?info("User ~p logged in for the first time", [UserId]),
             {redirect_relative, <<?page_after_login>>};
         {error, ErrorId} ->

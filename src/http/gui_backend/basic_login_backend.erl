@@ -33,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
-    Req = g_ctx:get_cowboy_req(),
+    Req = gui_ctx:get_cowboy_req(),
     try
         {<<"Basic ", UserAndPassword/binary>>, _} =
             cowboy_req:header(<<"authorization">>, Req),
@@ -45,8 +45,8 @@ page_init() ->
                     value = #od_user{
                         default_provider = DefaultProvider
                     }} = UserDoc,
-                g_session:log_in(UserId),
-                g_session:put_value(firstLogin, FirstLogin),
+                gui_session:log_in(UserId),
+                gui_session:put_value(firstLogin, FirstLogin),
                 % If user has a default provider, redirect him straight there
                 URL = case DefaultProvider of
                     undefined ->
