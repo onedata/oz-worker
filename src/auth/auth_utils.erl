@@ -67,7 +67,6 @@ get_value_binary(Key, Proplist) ->
 extract_emails(JSONProplist) ->
     case get_value_binary(<<"email">>, JSONProplist) of
         <<"">> -> [];
-        List when is_list(List) -> List;
         Email -> [Email]
     end.
 
