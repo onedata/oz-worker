@@ -89,10 +89,9 @@ validate_login() ->
         JSONProplist = json_utils:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = str_utils:to_binary(
-                proplists:get_value(<<"id">>, JSONProplist, <<"">>)),
-            email_list = extract_emails(JSONProplist),
-            name = proplists:get_value(<<"name">>, JSONProplist, <<"">>)
+            user_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
+            email_list = auth_utils:extract_emails(JSONProplist),
+            name = auth_utils:get_value_binary(<<"name">>, JSONProplist)
         },
         {ok, ProvUserInfo}
     catch
@@ -131,15 +130,3 @@ access_token_endpoint() ->
 -spec user_info_endpoint() -> binary().
 user_info_endpoint() ->
     proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Extracts email list from JSON in erlang format (after decoding).
-%% @end
-%%--------------------------------------------------------------------
--spec extract_emails([{term(), term()}]) -> [binary()].
-extract_emails(JSONProplist) ->
-    case proplists:get_value(<<"email">>, JSONProplist, <<"">>) of
-        <<"">> -> [];
-        Email -> [Email]
-    end.

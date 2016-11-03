@@ -14,6 +14,8 @@
 # The script is run on test_rel make target.
 # ===================================================================
 
+BRANCH="develop"
+
 # Enter the script directory
 RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
 cd ${RUNNER_SCRIPT_DIR}
@@ -37,8 +39,8 @@ fi
 echo -e "\t[  OK  ]"
 cd onedev
 git fetch
-git checkout develop
-git pull origin develop
+git checkout ${BRANCH}
+git pull origin ${BRANCH}
 
 # Replace auth.config
 cd ${RUNNER_SCRIPT_DIR}

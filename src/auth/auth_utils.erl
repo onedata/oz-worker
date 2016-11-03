@@ -19,7 +19,7 @@
 
 %% API
 % Convenience functions
--export([local_auth_endpoint/0]).
+-export([local_auth_endpoint/0, get_value_binary/2, extract_emails/1]).
 
 % Authentication flow handling
 -export([validate_login/0]).
@@ -29,7 +29,8 @@
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Returns the URL that will be used to redirect back authentication flow.
+%% @doc
+%% Returns the URL that will be used to redirect back authentication flow.
 %% @end
 %%--------------------------------------------------------------------
 -spec local_auth_endpoint() -> binary().
@@ -38,11 +39,45 @@ local_auth_endpoint() ->
         ?local_auth_endpoint>>.
 
 %%--------------------------------------------------------------------
+%% @doc
+%% Gets value from a proplist and converts it to binary, if needed.
+%% Useful in auth_xxx modules which are required to return binaries in the
+%% #oauth_account{} record.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_value_binary(Key :: term(), Proplist :: proplists:proplist()) ->
+    binary().
+get_value_binary(Key, Proplist) ->
+    case proplists:get_value(Key, Proplist, <<"">>) of
+        Bin when is_binary(Bin) ->
+            Bin;
+        null ->
+            <<"">>;
+        Other ->
+            str_utils:to_binary(Other)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Extracts email list from a JSON proplist (standard for OpenId).
+%% @end
+%%--------------------------------------------------------------------
+-spec extract_emails(proplists:proplist()) -> [binary()].
+extract_emails(JSONProplist) ->
+    case get_value_binary(<<"email">>, JSONProplist) of
+        <<"">> -> [];
+        List when is_list(List) -> List;
+        Email -> [Email]
+    end.
+
+
+%%--------------------------------------------------------------------
 %% @doc Function used to validate login by processing a redirect that came from
 %% an OAuth provider. Must be called from gui context to work. Returns one of the following:
 %% 1. atom 'new_user' if the login has been verified and a new user has been created
 %% 2. {redirect, URL} if the account already exists, to state where the user should be redirected now
-%% 3. {error, Desription} if the validation failed or any other error occurred.
+%% 3. {error, Description} if the validation failed or any other error occurred.
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_login() -> new_user | {redirect, URL :: binary()} | {error, term()}.
