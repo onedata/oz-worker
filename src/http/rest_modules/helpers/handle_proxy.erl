@@ -47,7 +47,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
     case Type of
         <<"DOI">> ->
             Prefix = proplists:get_value(<<"prefix">>, ServiceProperties),
-            DoiId = base64url:encode(crypto:rand_bytes(5)),
+            DoiId = base64url:encode(crypto:strong_rand_bytes(5)),
             DoiHandle = <<Prefix/binary, "/", DoiId/binary>>,
             DoiHandleEncoded =  http_utils:url_encode(DoiHandle),
             {ok, 201, _, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, json_utils:encode(Body)),
