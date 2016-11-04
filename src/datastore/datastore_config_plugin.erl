@@ -34,6 +34,7 @@ models() -> [
     od_handle,
     owned_identity,
     groups_graph_caches_state,
+    eff_graph_state,
     outbox,
     provider_subscription,
     subscriptions_state,

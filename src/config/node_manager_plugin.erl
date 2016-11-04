@@ -79,6 +79,7 @@ listeners() ->  [
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() ->
     Base = node_manager:cluster_worker_modules() ++ [
+        {eff_graph_worker, []},
         {groups_graph_caches_worker, []},
         {changes_worker, []},
         {ozpca_worker, []},
