@@ -32,19 +32,19 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
-    ParamsProps = g_ctx:get_url_params(),
+    ParamsProps = gui_ctx:get_url_params(),
     UserId = proplists:get_value(<<"user">>, ParamsProps),
-    case g_session:is_logged_in() of
+    case gui_session:is_logged_in() of
         true ->
-            case g_session:get_user_id() of
+            case gui_session:get_user_id() of
                 UserId ->
                     ok;
                 _ ->
-                    g_session:log_out(),
-                    g_session:log_in(UserId)
+                    gui_session:log_out(),
+                    gui_session:log_in(UserId)
             end;
         _ ->
-            g_session:log_in(UserId)
+            gui_session:log_in(UserId)
     end,
     ?info("[DEV MODE] User ~p logged in", [UserId]),
     case user_logic:get_default_provider(UserId) of

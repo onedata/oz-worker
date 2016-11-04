@@ -143,8 +143,8 @@ session_details() ->
         value = #od_user{
             name = Name,
             basic_auth_enabled = BasicAuthEnabled
-        }}} = od_user:get(g_session:get_user_id()),
-    FirstLogin = g_session:get_value(firstLogin, false),
+        }}} = od_user:get(gui_session:get_user_id()),
+    FirstLogin = gui_session:get_value(firstLogin, false),
     Res = [
         {<<"userName">>, Name},
         {<<"firstLogin">>, FirstLogin},

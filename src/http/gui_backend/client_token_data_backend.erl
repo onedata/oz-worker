@@ -66,7 +66,7 @@ find(<<"clienttoken">>, _Id) ->
 -spec find_all(ResourceType :: binary()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"clienttoken">>) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     {ok, ClientTokens} = user_logic:get_client_tokens(UserId),
     Res = lists:map(
         fun(Id) ->
@@ -94,7 +94,7 @@ find_query(<<"clienttoken">>, _Data) ->
 -spec create_record(RsrcType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 create_record(<<"clienttoken">>, _Data) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     Token = auth_logic:gen_token(UserId),
     user_logic:add_client_token(UserId, Token),
     {ok, [
@@ -122,7 +122,7 @@ update_record(<<"clienttoken">>, _TokenId, _Data) ->
 -spec delete_record(RsrcType :: binary(), Id :: binary()) ->
     ok | gui_error:error_result().
 delete_record(<<"clienttoken">>, Token) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     {ok, Macaroon} = token_utils:deserialize(Token),
     Identifier = macaroon:identifier(Macaroon),
     onedata_auth:delete(Identifier),
