@@ -121,13 +121,10 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 {ok, SerializedToken} = token_logic:create(#client{type = user, id = GroupCreator}, group_invite_group_token, {group, GroupID}),
                 {ok, GroupToken} = token_utils:deserialize(SerializedToken),
                 group_logic:join_group(NestedGroupID, GroupToken)
-            end, NestedGroups),
+            end, NestedGroups)
             % Mark group changed as normally it is done asynchronously
             % and it could occur after refreshing
-            group_graph:mark_group_changed(GroupID)
         end, Groups),
-
-        group_graph:refresh_effective_caches(),
 
         % Create spaces
         lists:foreach(

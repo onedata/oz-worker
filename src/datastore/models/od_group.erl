@@ -151,10 +151,6 @@ model_init() ->
 -spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term(),
     ReturnValue :: term()) -> ok.
-'after'(?MODULE, _Method, _Level, _Context, {ok, ID}) ->
-    group_graph:mark_group_changed(ID);
-'after'(?USER_MODULE, _Method, _Level, _Context, {ok, ID}) ->
-    group_graph:mark_user_changed(ID);
 'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
     ok.
 

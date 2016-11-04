@@ -10,7 +10,7 @@
 %%% effective users and groups across all the group graph and related users.
 %%% @end
 %%%-------------------------------------------------------------------
--module(eff_graph_worker).
+-module(entity_graph_worker).
 -author("Michal Zmuda").
 
 -behaviour(worker_plugin_behaviour).
@@ -34,7 +34,7 @@
 -spec init(Args :: term()) ->
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
 init(_Args) ->
-    eff_graph:init_state(),
+    entity_graph:init_state(),
     {ok, #{}}.
 
 %%--------------------------------------------------------------------
@@ -44,8 +44,8 @@ init(_Args) ->
 %%--------------------------------------------------------------------
 -spec handle(Request :: term()) -> ok | {error, Reason :: term()} | no_return().
 handle(healthcheck) ->
-    case eff_graph:get_state() of
-        #eff_graph_state{} ->
+    case entity_graph:get_state() of
+        #entity_graph_state{} ->
             ok;
         _ ->
             {error, not_initialized}
@@ -53,7 +53,7 @@ handle(healthcheck) ->
 
 handle(refresh) ->
     ?emergency("Refresh scheduled!"),
-    eff_graph:refresh();
+    entity_graph:refresh();
 
 handle(_Request) ->
     ?log_bad_request(_Request).

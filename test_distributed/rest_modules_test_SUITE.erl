@@ -1882,8 +1882,6 @@ init_per_suite(Config) ->
     hackney:start(),
     NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
     [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
-    ok = rpc:call(Node1, application, set_env, [?APP_Name, group_graph_refresh_interval, -1]),
-    ok = rpc:call(Node2, application, set_env, [?APP_Name, group_graph_refresh_interval, -1]),
     OZ_IP_1 = test_utils:get_docker_ip(Node1),
     OZ_IP_2 = test_utils:get_docker_ip(Node2),
     RestPort = get_rest_port(Node1),
@@ -1972,10 +1970,8 @@ end_per_suite(Config) ->
 %%% Internal functions
 %%%===================================================================
 
-ensure_effective_users_and_groups_updated(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    timer:sleep(300), %% wait for async hooks
-    ?assertMatch(ok, rpc:call(Node, group_graph, refresh_effective_caches, [])).
+ensure_effective_users_and_groups_updated(_Config) ->
+    throw(not_implemented).
 
 is_included(_, []) -> false;
 is_included([], _MainList) -> true;

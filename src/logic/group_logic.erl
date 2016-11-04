@@ -266,25 +266,19 @@ add_group(ParentGroupId, ChildGroupId) ->
             {ok, #document{
                 value = #od_group{
                     eff_children = EffChildrenTuples
-                }}} = od_group:get(ParentGroupId),
-            case lists:keyfind(ChildGroupId, 1, EffChildrenTuples) of
-                {ChildGroupId, _} ->
-                    {error, cycle_averted};
-                _ ->
+                }}} = od_group:get(ChildGroupId),
+            % TODO has eff group?
+            case proplists:get_value(ParentGroupId, EffChildrenTuples) of
+                undefined ->
                     Privileges = privileges:group_user(),
-                    {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
-                        #od_group{children = Groups} = Group,
-                        {ok, Group#od_group{children = [
-                            {ChildGroupId, Privileges} | Groups
-                        ]}}
-                    end),
-                    {ok, _} = od_group:update(ChildGroupId, fun(Group) ->
-                        #od_group{parents = Groups} = Group,
-                        {ok, Group#od_group{parents = [
-                            ParentGroupId | Groups
-                        ]}}
-                    end),
+                    entity_graph:add_relation(
+                        od_group, ChildGroupId,
+                        od_group, ParentGroupId,
+                        Privileges
+                    ),
                     {ok, ParentGroupId}
+                _ ->
+                    {error, cycle_disallowed}
             end
     end.
 

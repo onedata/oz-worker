@@ -1,18 +1,17 @@
 %%%-------------------------------------------------------------------
-%%% @author Michal Zmuda
+%%% @author Lukasz Opiola
 %%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This document contains info needed to perform periodical
-%%% effective users and groups updates.
-%%% Should not be used directly (see group_graph module).
+%%% This document contains info needed to calculate effective graph of entities.
+%%% Should not be used directly (see eff_graph module).
 %%% @end
 %%%-------------------------------------------------------------------
--module(groups_graph_caches_state).
--author("Michal Zmuda").
+-module(entity_graph_state).
+-author("Lukasz Opiola").
 -behaviour(model_behaviour).
 
 -include("registered_names.hrl").
@@ -24,7 +23,7 @@
     model_init/0, 'after'/5, before/4]).
 
 -type doc() :: datastore:document().
--type info() :: #groups_graph_caches_state{}.
+-type info() :: #entity_graph_state{}.
 -type id() :: binary().
 -export_type([doc/0, info/0, id/0]).
 
@@ -94,7 +93,7 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(groups_graph_caches_state_bucket, [], ?GLOBAL_ONLY_LEVEL).
+    ?MODEL_CONFIG(entity_graph_state_bucket, [], ?GLOBAL_ONLY_LEVEL).
 
 %%--------------------------------------------------------------------
 %% @doc

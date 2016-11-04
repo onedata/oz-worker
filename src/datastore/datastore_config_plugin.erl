@@ -33,15 +33,14 @@ models() -> [
     od_handle_service,
     od_handle,
     owned_identity,
-    groups_graph_caches_state,
-    eff_graph_state,
+    onedata_auth,
+    session,
+    token,
+    entity_graph_state,
     outbox,
     provider_subscription,
     subscriptions_state,
-    ozpca_state,
-    onedata_auth,
-    session,
-    token
+    ozpca_state
 ].
 
 %%--------------------------------------------------------------------

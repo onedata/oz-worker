@@ -6,8 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module implements logic that guards the consistency of effective graph.
-%%% Effective graph concerns all entities in the system that are related to each
+%%% This module implements logic that guards the consistency of entity graph.
+%%% Entity graph concerns all entities in the system that are related to each
 %%% other and decide of user's privileges in the system. These models are:
 %%%     - od_user
 %%%     - od_group
@@ -16,6 +16,9 @@
 %%%     - od_provider
 %%%     - od_handle_service
 %%%     - od_handle
+%%% There are two main jobs of the entity graph:
+%%%     - encapsulate all logic concerning relations between entities
+%%%     - ensure that effective relations are always up to date
 %%% The graph can be in two states:
 %%%   - up-to-date: all entities have their effective relations up-to-date,
 %%%   - dirty: some documents require recalculation.
@@ -38,17 +41,20 @@
 %%% refresh does nothing.
 %%% @end
 %%%-------------------------------------------------------------------
--module(eff_graph).
+-module(entity_graph).
 -author("Lukasz Opiola").
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 
--define(STATE_KEY, <<"eff_graph_state">>).
+-define(STATE_KEY, <<"entity_graph_state">>).
 -define(EFF_GRAPH_LOCK, eff_graph_lock).
 
 %% API
--export([init_state/0, get_state/0, refresh/0, modify_group_relations/1]).
+-export([init_state/0, get_state/0]).
+-export([schedule_refresh/0, refresh/0]).
+-export([add_relation/5]).
+-export([remove_relation/4]).
 
 %%%===================================================================
 %%% API
@@ -64,12 +70,12 @@
 -spec init_state() -> ok.
 init_state() ->
     critical_section:run(?EFF_GRAPH_LOCK, fun() ->
-        case eff_graph_state:get(?STATE_KEY) of
-            {ok, #document{value = #eff_graph_state{}}} ->
+        case entity_graph_state:get(?STATE_KEY) of
+            {ok, #document{value = #entity_graph_state{}}} ->
                 ok;
-            {error, {not_found, eff_graph_state}} ->
-                eff_graph_state:create(
-                    #document{key = ?STATE_KEY, value = #eff_graph_state{}}
+            {error, {not_found, entity_graph_state}} ->
+                entity_graph_state:create(
+                    #document{key = ?STATE_KEY, value = #entity_graph_state{}}
                 )
         end
     end).
@@ -80,9 +86,9 @@ init_state() ->
 %% Retrieves effective graph state, which is a globally shared singleton.
 %% @end
 %%--------------------------------------------------------------------
--spec get_state() -> #eff_graph_state{} | {error, term()}.
+-spec get_state() -> #entity_graph_state{} | {error, term()}.
 get_state() ->
-    case eff_graph_state:get(?STATE_KEY) of
+    case entity_graph_state:get(?STATE_KEY) of
         {ok, #document{value = State}} ->
             State;
         Error ->
@@ -91,8 +97,12 @@ get_state() ->
 
 
 update_state(UpdateFun) ->
-    {ok, _} = eff_graph_state:update(?STATE_KEY, UpdateFun),
+    {ok, _} = entity_graph_state:update(?STATE_KEY, UpdateFun),
     ok.
+
+
+schedule_refresh() ->
+    worker_proxy:cast(eff_graph_worker, refresh).
 
 
 %%--------------------------------------------------------------------
@@ -106,14 +116,15 @@ update_state(UpdateFun) ->
 -spec refresh() -> ok.
 refresh() ->
     critical_section:run(?EFF_GRAPH_LOCK, fun() ->
-        #eff_graph_state{dirty = Dirty} = get_state(),
+        #entity_graph_state{dirty = Dirty} = get_state(),
         case Dirty of
             true ->
                 ?emergency("Refresh needed, performing..."),
                 timer:sleep(5000),
                 update_state(fun(EffGraphState) ->
-                    {ok, EffGraphState#eff_graph_state{dirty = false}}
-                end);
+                    {ok, EffGraphState#entity_graph_state{dirty = false}}
+                end),
+                ?emergency("Refresh done");
             false ->
                 ?emergency("Refresh skipped."),
                 ok
@@ -124,7 +135,7 @@ refresh() ->
 
 modify_group_relations(UpdateFunction) ->
     Success = critical_section:run(?EFF_GRAPH_LOCK, fun() ->
-        #eff_graph_state{dirty = Dirty} = get_state(),
+        #entity_graph_state{dirty = Dirty} = get_state(),
         case Dirty of
             true ->
                 ?emergency("Cannot modify relations, waiting"),
@@ -135,13 +146,20 @@ modify_group_relations(UpdateFunction) ->
                 UpdateFunction(),
                 timer:sleep(1000),
                 update_state(fun(EffGraphState) ->
-                    {ok, EffGraphState#eff_graph_state{dirty = true}}
+                    {ok, EffGraphState#entity_graph_state{dirty = true}}
                 end),
                 true
         end
     end),
     % Schedule a refresh no matter if the operation succeeded
-    worker_proxy:cast(eff_graph_worker, refresh),
+    schedule_refresh(),
+    case rand:uniform(2) of
+        1 ->
+            spawn(fun() -> entity_graph:modify_group_relations(fun() -> ok end),
+                io:format("Done: ~p~n", [self()]) end);
+        _ ->
+            ok
+    end,
     case Success of
         false ->
             % Try again in some time to acquire the lock and make modifications
@@ -150,3 +168,22 @@ modify_group_relations(UpdateFunction) ->
         true ->
             ok
     end.
+
+
+add_relation(od_group, ChildGroupId, od_group, ParentGroupId, Privileges) ->
+    entity_graph:modify_group_relations(fun() ->
+        {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
+            #od_group{children = Groups} = Group,
+            {ok, Group#od_group{
+                children = [{ChildGroupId, Privileges} | Groups],
+                bottom_up_dirty = true
+            }}
+        end),
+        {ok, _} = od_group:update(ChildGroupId, fun(Group) ->
+            #od_group{parents = Groups} = Group,
+            {ok, Group#od_group{
+                parents = [ParentGroupId | Groups],
+                top_down_dirty = true
+            }}
+        end)
+    end).

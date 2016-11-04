@@ -294,14 +294,8 @@
     dedicated_node :: undefined | {ok, node()} | {error, Reason :: term()}
 }).
 
--record(eff_graph_state, {
+-record(entity_graph_state, {
     dirty = true :: boolean()
-}).
-
--record(groups_graph_caches_state, {
-    changed_groups = [] :: [od_group:id()],
-    changed_users = [] :: [od_user:id()],
-    last_rebuild = 0 :: integer()
 }).
 
 % Describes state of batch.
