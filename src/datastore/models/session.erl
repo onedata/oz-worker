@@ -27,7 +27,7 @@
     model_init/0, 'after'/5, before/4]).
 
 
--type memory() :: proplists:proplist().
+-type memory() :: maps:map().
 -export_type([memory/0]).
 
 

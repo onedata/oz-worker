@@ -57,12 +57,12 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist = g_ctx:get_url_params(),
+        ParamsProplist = gui_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Prepare basic auth code
         AuthEncoded = base64:encode(<<(auth_config:get_provider_app_id(?PROVIDER_NAME))/binary, ":",
-        (auth_config:get_provider_app_secret(?PROVIDER_NAME))/binary>>),
+            (auth_config:get_provider_app_secret(?PROVIDER_NAME))/binary>>),
         % Form access token request
         NewParamsProplist = [
             {<<"code">>, <<Code/binary>>},
@@ -80,7 +80,6 @@ validate_login() ->
 
         JSONProplist = json_utils:decode(Response),
         AccessToken = proplists:get_value(<<"access_token">>, JSONProplist),
-        UserID = proplists:get_value(<<"uid">>, JSONProplist),
 
         % Send request to Dropbox endpoint
         {ok, 200, _, JSON} = http_client:get(user_info_endpoint(),
@@ -90,10 +89,10 @@ validate_login() ->
         UserInfoProplist = json_utils:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = str_utils:to_binary(UserID),
-            email_list = lists:flatten([proplists:get_value(<<"email">>, UserInfoProplist, [])]),
-            name = proplists:get_value(<<"display_name">>, UserInfoProplist, <<"">>),
-            login = proplists:get_value(<<"login">>, UserInfoProplist, <<"">>)
+            user_id = auth_utils:get_value_binary(<<"uid">>, JSONProplist),
+            email_list = auth_utils:extract_emails(JSONProplist),
+            name = auth_utils:get_value_binary(<<"display_name">>, UserInfoProplist),
+            login = auth_utils:get_value_binary(<<"login">>, UserInfoProplist)
         },
         {ok, ProvUserInfo}
     catch

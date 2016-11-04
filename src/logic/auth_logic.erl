@@ -96,16 +96,16 @@ authenticate_user(Identifier) ->
     {ok, RedirectionUri :: binary()}.
 get_redirection_uri(UserId, ProviderId) ->
     Token = gen_token(UserId, ProviderId),
-    _Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
-    {ok, #od_user{alias = Alias}} = user_logic:get_user(UserId),
     {ok, _} = od_user:update(UserId, #{chosen_provider => ProviderId}),
-    _Prefix = case Alias of
-        ?EMPTY_ALIAS ->
-            <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
-        _ ->
-            Alias
-    end,
     % TODO return IP address rather than alias.onedata.org
+%%    Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
+%%    {ok, #od_user{alias = Alias}} = user_logic:get_user(UserId),
+%%    Prefix = case Alias of
+%%        ?EMPTY_ALIAS ->
+%%            <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
+%%        _ ->
+%%            Alias
+%%    end,
     % It shall be used normally when we have a possibility to
     % resolve domains on developer's host systems
     % (so their web browsers can connect).

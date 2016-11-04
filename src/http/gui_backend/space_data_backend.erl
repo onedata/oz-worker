@@ -57,7 +57,7 @@ terminate() ->
 -spec find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"space">>, SpaceId) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     % Check if the user belongs to this space
     case space_logic:has_effective_user(SpaceId, UserId) of
         false ->
@@ -86,7 +86,7 @@ find(<<"space">>, SpaceId) ->
 -spec find_all(ResourceType :: binary()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"space">>) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     {ok, UserSpaces} = user_logic:get_spaces(UserId),
     SpaceIds = proplists:get_value(spaces, UserSpaces),
     {ok, [{providers, UserProviders}]} = user_logic:get_providers(UserId),
@@ -132,7 +132,7 @@ create_record(<<"space">>, Data) ->
             gui_error:report_error(<<"Empty space names are not allowed">>);
         Bin when is_binary(Bin) ->
             {ok, SpaceId} = space_logic:create(
-                {user, g_session:get_user_id()}, Name
+                {user, gui_session:get_user_id()}, Name
             ),
             NewSpaceData = [
                 {<<"id">>, SpaceId},
@@ -156,7 +156,7 @@ create_record(<<"space">>, Data) ->
     Data :: proplists:proplist()) ->
     ok | gui_error:error_result().
 update_record(<<"space">>, SpaceId, Data) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     IsDefault = proplists:get_value(<<"isDefault">>, Data),
     case IsDefault of
         true ->
@@ -194,7 +194,7 @@ delete_record(<<"space">>, _Id) ->
 space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders) ->
     % Check if that user has view privileges in that space
     HasViewPrivs = space_logic:has_effective_privilege(
-        SpaceId, g_session:get_user_id(), space_view_data
+        SpaceId, gui_session:get_user_id(), space_view_data
     ),
     space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
         HasViewPrivs).

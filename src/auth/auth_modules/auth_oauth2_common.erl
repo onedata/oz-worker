@@ -64,7 +64,7 @@ get_redirect_url(ConnectAccount, ProviderName, HandlerModule) ->
 validate_login(ProviderName, SecretSendMethod) ->
     try
         % Retrieve URL params
-        ParamsProplist = g_ctx:get_url_params(),
+        ParamsProplist = gui_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         ClientId = auth_config:get_provider_app_id(ProviderName),
@@ -121,10 +121,9 @@ validate_login(ProviderName, SecretSendMethod) ->
         JSONProplist = json_utils:decode(Response2),
         ProvUserInfo = #oauth_account{
             provider_id = ProviderName,
-            user_id = str_utils:to_binary(
-                proplists:get_value(<<"sub">>, JSONProplist, <<"">>)),
-            email_list = extract_emails(JSONProplist),
-            name = proplists:get_value(<<"name">>, JSONProplist, <<"">>)
+            user_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
+            email_list = auth_utils:extract_emails(JSONProplist),
+            name = auth_utils:get_value_binary(<<"name">>, JSONProplist)
         },
         {ok, ProvUserInfo}
     catch
@@ -182,16 +181,3 @@ access_token_endpoint(XRDS) ->
 -spec user_info_endpoint(XRDS :: proplists:proplist()) -> binary().
 user_info_endpoint(XRDS) ->
     proplists:get_value(<<"userinfo_endpoint">>, XRDS).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Extracts email list from JSON in erlang format (after decoding).
-%% @end
-%%--------------------------------------------------------------------
--spec extract_emails([{term(), term()}]) -> [binary()].
-extract_emails(JSONProplist) ->
-    case proplists:get_value(<<"email">>, JSONProplist, <<"">>) of
-        <<"">> -> [];
-        Email -> [Email]
-    end.

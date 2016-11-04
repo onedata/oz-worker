@@ -75,10 +75,14 @@ create_session(UserId, _CustomArgs) ->
 %% {@link gui_session_plugin_behaviour} callback update_session/2.
 %% @end
 %%--------------------------------------------------------------------
--spec update_session(SessId :: binary(), Memory :: proplists:proplist()) ->
+-spec update_session(SessId :: binary(),
+    MemoryUpdateFun :: fun((maps:map()) -> maps:map())) ->
     ok | {error, term()}.
-update_session(SessionId, Memory) ->
-    case session:update(SessionId, #{memory => Memory}) of
+update_session(SessionId, MemoryUpdateFun) ->
+    SessionUpdateFun = fun(#session{memory = OldMemory} = Session) ->
+        {ok, Session#session{memory = MemoryUpdateFun(OldMemory)}}
+    end,
+    case session:update(SessionId, SessionUpdateFun) of
         {ok, _} ->
             ok;
         {error, Error} ->

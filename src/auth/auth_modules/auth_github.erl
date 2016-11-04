@@ -60,7 +60,7 @@ get_redirect_url(ConnectAccount) ->
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist = g_ctx:get_url_params(),
+        ParamsProplist = gui_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request
@@ -94,16 +94,20 @@ validate_login() ->
             {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>},
             {<<"User-Agent">>, <<?user_agent_name>>}
         ]),
+        % Parse received emails
+        EmailList = lists:map(
+            fun(Email) ->
+                auth_utils:get_value_binary(<<"email">>, Email)
+            end, json_utils:decode(JSONEmails)),
 
         % Parse received JSON
         JSONProplist = json_utils:decode(JSON),
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
-            user_id = str_utils:to_binary(
-                proplists:get_value(<<"id">>, JSONProplist, <<"">>)),
-            email_list = extract_emails(JSONEmails),
-            name = proplists:get_value(<<"name">>, JSONProplist, <<"">>),
-            login = proplists:get_value(<<"login">>, JSONProplist, <<"">>)
+            user_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
+            email_list = EmailList,
+            name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
+            login = auth_utils:get_value_binary(<<"login">>, JSONProplist)
         },
         {ok, ProvUserInfo}
     catch
@@ -151,15 +155,3 @@ user_info_endpoint() ->
 -spec user_emails_endpoint() -> binary().
 user_emails_endpoint() ->
     proplists:get_value(user_emails_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Extracts email list from JSON.
-%% @end
-%%--------------------------------------------------------------------
--spec extract_emails(binary()) -> [binary()].
-extract_emails(JSON) ->
-    lists:map(
-        fun(Email) ->
-            proplists:get_value(<<"email">>, Email)
-        end, json_utils:decode(JSON)).
