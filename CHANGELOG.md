@@ -4,6 +4,16 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc11
+
+* VFS-2765 Add some error resistance when obtaining unexpected data from openid providers
+* VFS-2765 Update gui reference and adjust code to the new API
+* VFS-2765 Update cluster_worker reference
+* VFS-2765 Display first login info to users logging in via credentials
+* VFS-2733 Add REST routes to GUI listener
+* VFS-2733 Standarize app listeners
+
+
 ### 3.0.0-rc10
 
 * VFS-2703 Update mocking
