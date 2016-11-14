@@ -257,7 +257,7 @@ add_user(GroupId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec add_group(ParentGroupId :: od_group:id(), ChildGroupId :: od_group:id()) ->
-    {ok, GroupId :: onedata_group:id()} | {error, cycle_averted}.
+    {ok, GroupId :: onedata_group:id()} | {error, cycle_disallowed}.
 add_group(ParentGroupId, ChildGroupId) ->
     case has_nested_group(ParentGroupId, ChildGroupId) of
         true ->
@@ -276,7 +276,7 @@ add_group(ParentGroupId, ChildGroupId) ->
                         od_group, ParentGroupId,
                         Privileges
                     ),
-                    {ok, ParentGroupId}
+                    {ok, ParentGroupId};
                 _ ->
                     {error, cycle_disallowed}
             end

@@ -7,7 +7,7 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This document contains info needed to calculate effective graph of entities.
-%%% Should not be used directly (see eff_graph module).
+%%% Should not be used directly (see entity_graph module).
 %%% @end
 %%%-------------------------------------------------------------------
 -module(entity_graph_state).

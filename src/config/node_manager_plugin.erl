@@ -63,12 +63,12 @@ db_nodes() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
-listeners() ->  [
+listeners() -> [
     oz_redirector_listener,
     subscriptions_wss_listener,
     rest_listener,
     gui_listener |
-    node_manager:cluster_worker_listeners() -- [redirector_listener]
+        node_manager:cluster_worker_listeners() -- [redirector_listener]
 ].
 
 %%--------------------------------------------------------------------
@@ -79,7 +79,6 @@ listeners() ->  [
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() ->
     Base = node_manager:cluster_worker_modules() ++ [
-        {eff_graph_worker, []},
         {changes_worker, []},
         {ozpca_worker, []},
         {subscriptions_worker, []}
@@ -125,6 +124,8 @@ after_init([]) ->
             {ok, true} ->
                 identity_publisher_worker:start_refreshing()
         end,
+
+        entity_graph:init_state(),
 
         %% This code will be run on every node_manager, so we need a
         %% transaction here that will prevent duplicates.

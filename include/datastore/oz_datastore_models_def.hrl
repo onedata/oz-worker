@@ -295,7 +295,9 @@
 }).
 
 -record(entity_graph_state, {
-    dirty = true :: boolean()
+    dirty = true :: boolean(),
+    bottom_up_dirty = [] :: [{Priority :: integer(), Model :: atom(), Id :: binary()}],
+    top_down_dirty = [] :: [{Priority :: integer(), Model :: atom(), Id :: binary()}]
 }).
 
 % Describes state of batch.
