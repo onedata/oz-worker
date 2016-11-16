@@ -13,7 +13,6 @@
 -author("Konrad Zemek").
 
 -include("datastore/oz_datastore_models_def.hrl").
--include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API

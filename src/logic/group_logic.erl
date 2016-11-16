@@ -270,11 +270,10 @@ add_group(ParentGroupId, ChildGroupId) ->
             % TODO has eff group?
             case proplists:get_value(ParentGroupId, EffChildrenTuples) of
                 undefined ->
-                    Privileges = privileges:group_user(),
                     entity_graph:add_relation(
                         od_group, ChildGroupId,
                         od_group, ParentGroupId,
-                        Privileges
+                        privileges:group_user()
                     ),
                     {ok, ParentGroupId};
                 _ ->

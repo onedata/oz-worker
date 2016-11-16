@@ -41,13 +41,13 @@
 %%% refresh does nothing.
 %%% The refreshing of effective relations goes as follows:
 %%% 1) bottom-up traversing:
-%%%     - groups with least children to most children
-%%%     - spaces, handles, handle_services
-%%%     - providers and shares
+%%%     1.1) groups with least children to most children
+%%%     1.2) spaces, handles, handle_services
+%%%     1.3) providers and shares
 %%% 2) top-down traversing:
-%%%     - spaces
-%%%     - groups with least parents to most parents
-%%%     - users
+%%%     2.1) spaces
+%%%     2.2) groups with least parents to most parents
+%%%     2.3) users
 %%% When a record is marked dirty, it is given a priority and the list is
 %%% sorted by priorities, so later they can be taken one by one and processed.
 %%% @end
@@ -222,7 +222,19 @@ add_relation(od_group, ChildGroupId, od_group, ParentGroupId, Privileges) ->
                 top_down_dirty = true
             }}
         end)
-    end).
+    end);
+
+
+add_relation(od_user, UserId, od_space, SpaceId, Privileges) ->
+    {ok, _} = od_space:update(SpaceId, fun(Space) ->
+        #od_space{users = Users} = Space,
+        {ok, Space#od_space{users = [{UserId, Privileges} | Users]}}
+    end),
+    {ok, _} = od_user:update(UserId, fun(User) ->
+        #od_user{spaces = USpaces} = User,
+        {ok, User#od_user{spaces = [SpaceId | USpaces]}}
+    end),
+    ok.
 
 
 mark_bottom_up_dirty(Priority, Model, Id) ->
@@ -451,14 +463,14 @@ refresh_entity_top_down(od_group, GroupId) ->
         false ->
             ok;
         true ->
-            % Mark parent groups as bottom-up dirty.
+            % Mark child groups as top-down dirty.
             lists:foreach(
                 fun(ParentId) ->
                     {ok, _} = od_group:update(ParentId, fun(Group) ->
                         #od_group{children = Groups} = Group,
-                        mark_bottom_up_dirty(?PRIORITY_GROUP_BU(length(Groups)),
+                        mark_top_down_dirty(?PRIORITY_GROUP_TD(length(Groups)),
                             od_group, ParentId),
-                        {ok, Group#od_group{bottom_up_dirty = true}}
+                        {ok, Group#od_group{top_down_dirty = true}}
                     end)
                 end, Parents)
     end.
