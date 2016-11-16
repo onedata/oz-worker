@@ -20,7 +20,7 @@
 -type doc() :: datastore:document().
 -type info() :: #od_group{}.
 -type id() :: binary().
--type type() :: 'organization' | 'unit' | 'team' | 'role'.
+-type type() :: organization | unit | team | role.
 -export_type([doc/0, info/0, id/0]).
 -export_type([type/0]).
 

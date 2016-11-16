@@ -134,7 +134,7 @@
 %% This record defines a group of users, it has: name, list of users that
 %% belongs to it, list of spaces that are used by this group
 -record(od_group, {
-    name = undefined :: binary() | undefined,
+    name = <<"New Group">> :: binary(),
     type = role :: od_group:type(),
 
     % Privileges of this group in admin's OZ API
@@ -169,7 +169,7 @@
 
 %% This record defines a space that can be used by users to store their files
 -record(od_space, {
-    name :: undefined | binary(),
+    name = <<"New Space">> :: binary(),
 
     % Direct relations to other entities
     providers_supports = [] :: [{od_provider:id(), Size :: pos_integer()}],

@@ -226,6 +226,8 @@ add_relation(od_group, ChildGroupId, od_group, ParentGroupId, Privileges) ->
 
 
 add_relation(od_user, UserId, od_space, SpaceId, Privileges) ->
+    % TODO co jak juz jest relacja?
+    % TODO co jak sie pierwsze uda a drugie nie?
     {ok, _} = od_space:update(SpaceId, fun(Space) ->
         #od_space{users = Users} = Space,
         {ok, Space#od_space{users = [{UserId, Privileges} | Users]}}
@@ -233,6 +235,18 @@ add_relation(od_user, UserId, od_space, SpaceId, Privileges) ->
     {ok, _} = od_user:update(UserId, fun(User) ->
         #od_user{spaces = USpaces} = User,
         {ok, User#od_user{spaces = [SpaceId | USpaces]}}
+    end),
+    ok;
+
+
+add_relation(od_user, UserId, od_group, GroupId, Privileges) ->
+    {ok, _} = od_group:update(GroupId, fun(Group) ->
+        #od_group{users = Users} = Group,
+        {ok, Group#od_group{users = [{UserId, Privileges} | Users]}}
+    end),
+    {ok, _} = od_user:update(UserId, fun(User) ->
+        #od_user{groups = UGroups} = User,
+        {ok, User#od_user{groups = [GroupId | UGroups]}}
     end),
     ok.
 
