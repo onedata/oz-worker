@@ -16,14 +16,34 @@
 -include("entity_logic_errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([create/4, get/3, add_relation/5, update/4, delete/3]).
+-export([create/5, get/4, update/5, delete/4, add_relation/5, consume_token/4]).
 
-create(Issuer, ELPlugin, Resource, Data) ->
+
+-record(request, {
+    issuer = undefined :: term(), % TODO
+    el_plugin = undefined :: undefined | atom(),
+    entity_id = undefined :: undefined | binary(),
+    entity = undefined :: undefined | term(),
+    operation = create :: atom(), % TODO
+    resource = undefined :: undefined | term(),
+    data = #{} :: maps:map()
+}).
+
+
+create(Issuer, ELPlugin, EntityId, Resource, Data) ->
     try
-        check_authorization(Issuer, ELPlugin, create, Resource),
-        {ok, ValidatedData} = check_validity(ELPlugin, create, Resource, Data),
-        ?dump(ValidatedData),
-        call_create(Issuer, ELPlugin, Resource, ValidatedData)
+        Request = #request{
+            issuer = Issuer,
+            el_plugin = ELPlugin,
+            entity_id = EntityId,
+            operation = create,
+            data = Data,
+            resource = Resource
+        },
+        call_create(
+            check_validity(
+                check_authorization(
+                    check_existence(Request))))
     catch
         throw:ElError ->
             ElError;
@@ -34,28 +54,19 @@ create(Issuer, ELPlugin, Resource, Data) ->
             ?EL_INTERNAL_SERVER_ERROR
     end.
 
-get(Issuer, ELPlugin, Resource) ->
+
+get(Issuer, ELPlugin, EntityId, Resource) ->
     try
-        {ok, PrefetchedEntity} = check_existence(ELPlugin, Resource),
-        {ok, PrefetchedEntity2} = check_authorization(
-            Issuer, ELPlugin, get, Resource, PrefetchedEntity
-        ),
-        % Entity might be already fetched after the auth procedures.
-        % If so and the resource is connected to the entity, reuse it.
-        case {Resource, PrefetchedEntity2} of
-            {Atom, _} when is_atom(Atom) ->
-                call_get(ELPlugin, Atom);
-            {Id, undefined} when is_binary(Id) ->
-                Ent = call_get(ELPlugin, Id),
-                {ok, Ent};
-            {Id, Ent} when is_binary(Id) ->
-                {ok, Ent};
-            {{Id, SubResource}, undefined} ->
-                Ent = call_get(ELPlugin, Id),
-                call_get(ELPlugin, {Ent, SubResource});
-            {{Id, SubResource}, Ent} ->
-                call_get(ELPlugin, {Ent, SubResource})
-        end
+        Request = #request{
+            issuer = Issuer,
+            el_plugin = ELPlugin,
+            entity_id = EntityId,
+            operation = get,
+            resource = Resource
+        },
+        call_get_resource(
+            check_authorization(
+                check_existence(Request)))
     catch
         throw:ElError ->
             ElError;
@@ -66,10 +77,60 @@ get(Issuer, ELPlugin, Resource) ->
             ?EL_INTERNAL_SERVER_ERROR
     end.
 
+
+update(Issuer, ELPlugin, EntityId, Resource, Data) ->
+    try
+        Request = #request{
+            issuer = Issuer,
+            el_plugin = ELPlugin,
+            entity_id = EntityId,
+            operation = update,
+            resource = Resource,
+            data = Data
+        },
+        call_update(
+            check_validity(
+                check_authorization(
+                    check_existence(Request))))
+    catch
+        throw:ElError ->
+            ElError;
+        Error:Message ->
+            ?error_stacktrace("Error in data_logic:update - ~p:~p", [
+                Error, Message
+            ]),
+            ?EL_INTERNAL_SERVER_ERROR
+    end.
+
+
+delete(Issuer, ELPlugin, EntityId, Resource) ->
+    try
+        Request = #request{
+            issuer = Issuer,
+            el_plugin = ELPlugin,
+            entity_id = EntityId,
+            operation = delete,
+            resource = Resource
+        },
+        call_delete(
+            check_authorization(
+                check_existence(Request)))
+    catch
+        throw:ElError ->
+            ElError;
+        Error:Message ->
+            ?error_stacktrace("Error in data_logic:update - ~p:~p", [
+                Error, Message
+            ]),
+            ?EL_INTERNAL_SERVER_ERROR
+    end.
+
+
 add_relation(Issuer, ELPlugin, Resource, ChildModel, ChildId) ->
     try
-        check_authorization(Issuer, ELPlugin, add_relation, Resource),
-        call_add_relation(ELPlugin, Resource, ChildModel, ChildId)
+%%        check_authorization(Issuer, ELPlugin, add_relation, Resource),
+%%        call_add_relation(ELPlugin, Resource, ChildModel, ChildId)
+        ok
     catch
         throw:ElError ->
             ElError;
@@ -80,120 +141,209 @@ add_relation(Issuer, ELPlugin, Resource, ChildModel, ChildId) ->
             ?EL_INTERNAL_SERVER_ERROR
     end.
 
-update(Issuer, ELPlugin, Resource, Data) ->
-    try
-        check_authorization(Issuer, ELPlugin, update, Resource),
-        {ok, ValidatedData} = check_validity(ELPlugin, update, Resource, Data),
-        ?dump(ValidatedData),
-        call_update(ELPlugin, Resource, ValidatedData)
-    catch
-        throw:ElError ->
-            ElError;
-        Error:Message ->
-            ?error_stacktrace("Error in data_logic:update - ~p:~p", [
-                Error, Message
-            ]),
-            ?EL_INTERNAL_SERVER_ERROR
-    end.
 
-delete(Issuer, ELPlugin, Resource) ->
+consume_token(Issuer, ELPlugin, Resource, Token) ->
     try
-        check_authorization(Issuer, ELPlugin, delete, Resource),
-        call_delete(ELPlugin, Resource)
+%%        check_authorization(Issuer, ELPlugin, consume_token, Resource),
+%%        call_add_relation(ELPlugin, Resource, ChildModel, ChildId)
+        ok
     catch
         throw:ElError ->
             ElError;
         Error:Message ->
-            ?error_stacktrace("Error in data_logic:update - ~p:~p", [
+            ?error_stacktrace("Error in data_logic:consume_token - ~p:~p", [
                 Error, Message
             ]),
             ?EL_INTERNAL_SERVER_ERROR
     end.
 
 
-call_get(EntityLogicPlugin, Resource) ->
-    case EntityLogicPlugin:get_impl(Resource) of
-        {ok, E} ->
-            E;
+call_get_entity(Request) ->
+    #request{el_plugin = ELPlugin, entity_id = EntityId} = Request,
+    io:format("> call_get_entity: ~p~n", [EntityId]),
+    case ELPlugin:get_entity(EntityId) of
+        {ok, Entity} ->
+            Entity;
         ?EL_NOT_FOUND ->
             throw(?EL_NOT_FOUND)
     end.
 
 
-call_create(Issuer, ELPlugin, Resource, Data) ->
-    ELPlugin:create_impl(Issuer, Resource, Data).
-
-
-call_add_relation(ELPlugin, Resource, ChildModel, ChildId) ->
-    ELPlugin:add_relation_impl(Resource, ChildModel, ChildId).
-
-
-call_update(ELPlugin, Resource, Data) ->
-    ELPlugin:update_impl(Resource, Data).
-
-
-call_delete(ELPlugin, Resource) ->
-    ELPlugin:delete_impl(Resource).
-
-
-check_existence(ELPlugin, Resource) ->
-    case ELPlugin:exists_impl(Resource) of
-        true ->
-            {true, undefined};
-        {true, PrefetchedEntity} ->
-            {true, PrefetchedEntity};
-        false ->
+call_get_resource(Request) ->
+    #request{
+        issuer = Issuer,
+        el_plugin = ELPlugin,
+        entity_id = EntityId,
+        entity = Entity,
+        resource = Resource
+    } = Request,
+    % Entity might be already prefetched, reuse it if possible.
+    Result = case {EntityId, Entity, Resource} of
+        {undefined, _, _} ->
+            % EntityId is not defined -> external resource
+            io:format("> get_external: ~p~n", [{Issuer, Resource}]),
+            ELPlugin:get_external(Issuer, Resource);
+        {_EntityId, undefined, entity} ->
+            % EntityId is defined and asking for entity -> entity resource.
+            % The Entity was not fetched yet, fetch and return it.
+            {ok, call_get_entity(Request)};
+        {_EntityId, Entity, entity} ->
+            % EntityId is defined and asking for entity -> entity resource.
+            % The Entity is already fetched, return it.
+            {ok, Entity};
+        {_EntityId, undefined, _} ->
+            % EntityId is defined and some resource -> internal resource.
+            % The Entity is already fetched, reuse it.
+            FetchedEntity = call_get_entity(Request),
+            io:format("> get_internal: ~p~n", [{Issuer, EntityId, freshly_fetched_entity, Resource}]),
+            ELPlugin:get_internal(Issuer, EntityId, FetchedEntity, Resource);
+        {_EntityId, Entity, _} ->
+            % EntityId is defined and some resource -> internal resource.
+            % The Entity was not fetched yet, fetch and use it.
+            io:format("> get_internal: ~p~n", [{Issuer, EntityId, prefetched_entity, Resource}]),
+            ELPlugin:get_internal(Issuer, EntityId, Entity, Resource)
+    end,
+    case Result of
+        {ok, _} ->
+            Result;
+        ?EL_NOT_FOUND ->
             throw(?EL_NOT_FOUND)
     end.
 
 
-check_authorization(Issuer, ELPlugin, Operation, Resource) ->
-    check_authorization(Issuer, ELPlugin, Operation, Resource, undefined).
-check_authorization(Issuer, ELPlugin, Operation, Resource, PrefetchedEntity) ->
+call_create(Request) ->
+    #request{
+        issuer = Issuer,
+        el_plugin = ELPlugin,
+        entity_id = EntityId,
+        resource = Resource,
+        data = Data
+    } = Request,
+    ELPlugin:create_impl(Issuer, EntityId, Resource, Data).
+
+% TODO
+call_add_relation(ELPlugin, Resource, ChildModel, ChildId) ->
+    ELPlugin:add_relation_impl(Resource, ChildModel, ChildId).
+
+
+call_update(Request) ->
+    #request{
+        el_plugin = ELPlugin,
+        resource = Resource,
+        data = Data
+    } = Request,
+    ELPlugin:update_impl(Resource, Data).
+
+
+call_delete(Request) ->
+    #request{
+        el_plugin = ELPlugin,
+        resource = Resource
+    } = Request,
+    ELPlugin:delete_impl(Resource).
+
+
+call_exists(Request) ->
+    #request{
+        entity_id = EntityId,
+        % TODO potrzeba operation??
+        resource = Resource,
+        el_plugin = ELPlugin
+    } = Request,
     % Call the plugin to obtain auth verification procedures
-    Verificators = case ELPlugin:authorize_impl(Issuer, Operation, Resource) of
+    case ELPlugin:exists_impl(EntityId, Resource) of
         List when is_list(List) ->
             List;
         Item ->
             [Item]
-    end,
-    Entity = case PrefetchedEntity of
-        undefined ->
-            Resource;
-        _ ->
-            PrefetchedEntity
-    end,
-    check_authorization(Verificators, ELPlugin, Entity).
-check_authorization([], _, _) ->
-    throw(?EL_UNAUTHORIZED);
-check_authorization([true | _], _, Entity) ->
-    {ok, Entity};
-check_authorization([false | _], _, _) ->
-    throw(?EL_UNAUTHORIZED);
-check_authorization([{external, Fun} | Tail], ELPlugin, Entity) ->
-    case Fun() of
-        true ->
-            {ok, Entity};
-        false ->
-            check_authorization(Tail, ELPlugin, Entity)
-    end;
-check_authorization(List, ELPlugin, EntityId) when is_binary(EntityId) ->
-    Entity = call_get(ELPlugin, EntityId),
-    check_authorization(List, ELPlugin, Entity);
-check_authorization(List, ELPlugin, {EntityId, _}) when is_binary(EntityId) ->
-    Entity = call_get(ELPlugin, EntityId),
-    check_authorization(List, ELPlugin, Entity);
-check_authorization([{internal, Fun} | Tail], ELPlugin, Entity) ->
-    case Fun(Entity) of
-        true ->
-            {ok, Entity};
-        false ->
-            check_authorization(Tail, ELPlugin, Entity)
     end.
 
 
-check_validity(ELPlugin, Operation, Resource, Data) ->
-    ValidatorsMap = ELPlugin:validate_impl(Operation, Resource),
+call_authorize(Request) ->
+    #request{
+        issuer = Issuer,
+        entity_id = EntityId,
+        operation = Operation,
+        resource = Resource,
+        el_plugin = ELPlugin
+    } = Request,
+    % Call the plugin to obtain auth verification procedures
+    case ELPlugin:authorize_impl(Issuer, Operation, EntityId, Resource) of
+        List when is_list(List) ->
+            List;
+        Item ->
+            [Item]
+    end.
+
+
+call_validate(Request) ->
+    #request{
+        operation = Operation,
+        resource = Resource,
+        el_plugin = ELPlugin
+    } = Request,
+    ELPlugin:validate_impl(Operation, Resource).
+
+
+check_existence(Request) ->
+    Verificators = call_exists(Request),
+    check_authorization(Verificators, Request).
+check_existence([], _) ->
+    throw(?EL_NOT_FOUND);
+check_existence([true | _], Request) ->
+    Request;
+check_existence([false | _], _) ->
+    throw(?EL_UNAUTHORIZED);
+check_existence([{external, Fun} | Tail], Request) ->
+    case Fun() of
+        true ->
+            Request;
+        false ->
+            check_existence(Tail, Request)
+    end;
+check_existence([{internal, _} | _] = List, #request{entity = undefined} = Req) ->
+    Entity = call_get_entity(Req),
+    check_existence(List, Req#request{entity = Entity});
+check_existence([{internal, Fun} | Tail], #request{entity = Entity} = Req) ->
+    case Fun(Entity) of
+        true ->
+            Req;
+        false ->
+            check_existence(Tail, Req)
+    end.
+
+
+check_authorization(Request) ->
+    Verificators = call_authorize(Request),
+    check_authorization(Verificators, Request).
+check_authorization([], _) ->
+    throw(?EL_UNAUTHORIZED);
+check_authorization([true | _], Request) ->
+    Request;
+check_authorization([false | _], _) ->
+    throw(?EL_UNAUTHORIZED);
+check_authorization([{external, Fun} | Tail], Request) ->
+    case Fun() of
+        true ->
+            Request;
+        false ->
+            check_authorization(Tail, Request)
+    end;
+check_authorization([{internal, _} | _] = List, #request{entity = undefined} = Req) ->
+    Entity = call_get_entity(Req),
+    check_existence(List, Req#request{entity = Entity});
+check_authorization([{internal, Fun} | Tail], #request{entity = Entity} = Req) ->
+    case Fun(Entity) of
+        true ->
+            Req;
+        false ->
+            check_authorization(Tail, Req)
+    end.
+
+
+% TODO jesli juz jest atom to ne trzeba konwersji
+check_validity(#request{data = Data} = Request) ->
+    ValidatorsMap = call_validate(Request),
     % Get all types of validators validators
     Required = maps:get(required, ValidatorsMap, #{}),
     Optional = maps:get(optional, ValidatorsMap, #{}),
@@ -240,7 +390,7 @@ check_validity(ELPlugin, Operation, Resource, Data) ->
         {_, false} ->
             throw(?EL_MISSING_ANY_DATA)
     end,
-    {ok, Data4}.
+    Request#request{data = Data4}.
 
 
 transform_and_check_value(Key, Data, Validator) ->
@@ -262,32 +412,39 @@ transform_and_check_value(Key, Data, Validator) ->
     end.
 
 
-check_value(binary, <<"">>) ->
+check_value(_, <<"">>) ->
+    empty;
+check_value(_, "") ->
+    empty;
+check_value(_, '') ->
     empty;
 check_value(binary, Bin) when is_binary(Bin) ->
     true;
-check_value(atom, <<"">>) ->
-    empty;
+check_value({binary, AllowedValues}, Bin) when is_binary(Bin) ->
+    lists:member(Bin, AllowedValues);
 check_value(atom, Bin) when is_binary(Bin) ->
     try binary_to_existing_atom(Bin, utf8) of
         Atom ->
-            {true, Atom}
+            check_value(atom, Atom)
     catch _:_ ->
         false
     end;
-check_value({atom, _}, <<"">>) ->
-    empty;
+check_value(atom, Atom) when is_atom(Atom) ->
+    true;
 check_value({atom, AllowedValues}, Bin) when is_binary(Bin) ->
     try binary_to_existing_atom(Bin, utf8) of
         Atom ->
-            case lists:member(Atom, AllowedValues) of
-                false ->
-                    false;
-                true ->
-                    {true, Atom}
-            end
+            check_value({atom, AllowedValues}, Atom)
     catch _:_ ->
         false
     end;
-check_value(_, _) ->
-    false.
+check_value({atom, AllowedValues}, Atom) when is_atom(Atom) ->
+    case lists:member(Atom, AllowedValues) of
+        false ->
+            false;
+        true ->
+            {true, Atom}
+    end;
+check_value(Rule, _) ->
+    ?error("Unknown validate rule: ~p", [Rule]),
+    throw(?EL_INTERNAL_SERVER_ERROR).

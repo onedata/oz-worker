@@ -16,18 +16,72 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([exists/1, has_provider/2, has_user/2, has_effective_user/2,
-    has_group/2, has_effective_group/2, has_effective_privilege/3]).
--export([get_effective_users/1, get_effective_groups/1]).
--export([get_shares/1, has_share/2]).
--export([create/2, create/4, get_data/2, get_public_data/2, modify/3]).
--export([join/2, add_user/2, get_user/3, get_users/1, remove_user/2]).
--export([add_group/2, get_groups/1, get_group/2, remove_group/2]).
--export([support/3, add_provider/3, get_providers/2, get_provider/3,
-    remove_provider/2]).
--export([set_privileges/3, get_privileges/2, get_effective_privileges/2]).
--export([remove/1, cleanup/1]).
--export([list/0]).
+-export([
+    exists/1, % NOT_NEEDED
+    has_provider/2, % NOT_NEEDED
+    has_user/2, % NOT_NEEDED
+    has_effective_user/2, % NOT_NEEDED
+    has_group/2, % NOT_NEEDED
+    has_effective_group/2, % NOT_NEEDED
+    has_effective_privilege/3, % NOT_NEEDED
+    has_share/2 % NOT_NEEDED
+]).
+
+-export([
+    get_effective_users/1, % THIS-TYPE-IS-COVERED
+    get_effective_groups/1 % THIS-TYPE-IS-COVERED
+]).
+
+-export([
+    get_shares/1 % THIS-TYPE-IS-COVERED
+]).
+
+-export([
+    create/2, % THIS-TYPE-IS-COVERED
+    create/4, % THIS-TYPE-IS-COVERED
+    get_data/2, % THIS-TYPE-IS-COVERED
+    get_public_data/2, % THIS-TYPE-IS-COVERED
+    modify/3 % THIS-TYPE-IS-COVERED
+]).
+
+-export([
+    join/2,
+    add_user/2,
+    get_user/3,
+    get_users/1,
+    remove_user/2
+]).
+
+-export([
+    add_group/2,
+    get_groups/1,
+    get_group/2,
+    remove_group/2
+]).
+
+-export([
+    support/3,
+    add_provider/3,
+    get_providers/2,
+    get_provider/3,
+    remove_provider/2
+]).
+
+-export([
+    set_privileges/3,
+    get_privileges/2,
+    get_effective_privileges/2
+]).
+
+-export([
+    remove/1,
+    cleanup/1
+]).
+
+-export([
+    list/0
+]).
+
 
 %%%===================================================================
 %%% API
@@ -97,7 +151,7 @@ has_effective_user(SpaceId, UserId) ->
                     case od_user:exists(UserId) of
                         false ->
                             false;
-                        true  ->
+                        true ->
                             lists:any(
                                 fun({GroupId, _}) ->
                                     group_logic:has_effective_user(

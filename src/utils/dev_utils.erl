@@ -107,7 +107,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 % Add all users to group
                 lists:foreach(
                     fun(UserID) ->
-                        {ok, SerializedGroupToken} = token_logic:create(#client{type = user, id = UserID}, group_invite_token, {group, GroupID}),
+                        {ok, SerializedGroupToken} = token_logic:create(#client{type = user, id = UserID}, group_invite_user_token, {group, GroupID}),
                         {ok, GroupToken} = token_utils:deserialize(SerializedGroupToken),
                         group_logic:join(UserID, GroupToken)
                     end, UsersToAdd),

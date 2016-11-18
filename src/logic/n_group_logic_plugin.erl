@@ -18,9 +18,10 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create_impl/3, get_impl/1, add_relation_impl/3, update_impl/2,
+-export([create_impl/3, get_impl/2, add_relation_impl/3, update_impl/2,
     delete_impl/1]).
 -export([exists_impl/1, authorize_impl/3, validate_impl/2]).
+-export([has_eff_privilege/3]).
 
 
 create_impl({user, UserId}, od_group, Data) ->
@@ -37,9 +38,9 @@ create_impl({user, UserId}, od_group, Data) ->
     {ok, GroupId}.
 
 
-get_impl({#od_group{users = UsersPrivileges}, users}) ->
+get_impl({user, _UserId}, {_GroupId, #od_group{users = UsersPrivileges}, users}) ->
     {ok, UsersPrivileges};
-get_impl(GroupId) when is_binary(GroupId) ->
+get_impl({user, _UserId}, GroupId) when is_binary(GroupId) ->
     case od_group:get(GroupId) of
         {ok, #document{value = Group}} ->
             {ok, Group};
@@ -77,7 +78,9 @@ exists_impl(GroupId) when is_binary(GroupId) ->
             {true, Group};
         _ ->
             false
-    end.
+    end;
+exists_impl(_) ->
+    true.
 
 
 authorize_impl({user, _UserId}, create, od_group) ->
@@ -117,6 +120,9 @@ auth_by_privilege(UserId, Privilege) ->
     end}.
 
 
+has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
+    {ok, #document{value = Group}} = od_group:get(GroupId),
+    has_eff_privilege(Group, UserId, Privilege);
 has_eff_privilege(#od_group{users = UsersPrivileges}, UserId, Privilege) ->
     % TODO eff_users
     UserPrivileges = proplists:get_value(UserId, UsersPrivileges, []),

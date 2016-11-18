@@ -269,7 +269,7 @@ provide_resource(parent_group, GroupId, _Client, Req) ->
     {ok, Group} = group_logic:get_parent_group(GroupId, PID),
     {Group, Req2};
 provide_resource(uinvite, GroupId, Client, Req) ->
-    {ok, Token} = token_logic:create(Client, group_invite_token, {group, GroupId}),
+    {ok, Token} = token_logic:create(Client, group_invite_user_token, {group, GroupId}),
     {[{token, Token}], Req};
 provide_resource(user, GroupId, _Client, Req) ->
     {UID, Req2} = cowboy_req:binding(uid, Req),

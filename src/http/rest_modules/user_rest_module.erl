@@ -180,7 +180,7 @@ accept_resource(groups, post, _UserId, Data, Client, Req) ->
     groups_rest_module:accept_resource(groups, post, undefined, Data, Client, Req);
 accept_resource(gjoin, post, UserId, Data, _Client, Req) ->
     Token = rest_module_helper:assert_key(<<"token">>, Data, binary, Req),
-    case token_logic:validate(Token, group_invite_token) of
+    case token_logic:validate(Token, group_invite_user_token) of
         false ->
             rest_module_helper:report_invalid_value(<<"token">>, Token, Req);
         {true, Macaroon} ->
