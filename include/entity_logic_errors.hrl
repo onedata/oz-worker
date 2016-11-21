@@ -26,6 +26,6 @@
 -define(EL_EMPTY_DATA_MATCHER, {error, empty_data, _}).
 
 
--define(EL_ALREADY_EXISTS, {error, already_exists}).
+-define(EL_RELATION_EXISTS, {error, relation_exists}).
 
 -endif.

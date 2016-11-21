@@ -57,35 +57,15 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include("entity_logic_errors.hrl").
 
 -define(STATE_KEY, <<"entity_graph_state">>).
 -define(ENTITY_GRAPH_LOCK, entity_graph_lock).
 
-
-% Priorities for records during effective graph recomputation
-
-% For bottom-up: groups (sorted by children num) -> spaces, handles and
-%    handle_services -> providers and shares
--define(PRIORITY_GROUP_BU(_NumChildren),
-    _NumChildren
-).
--define(PRIORITY_SPACE_BU, 1000000000).
--define(PRIORITY_HANDLE_SERVICE_BU, 1000000000).
--define(PRIORITY_HANDLE_BU, 1000000000).
--define(PRIORITY_PROVIDER_BU, 1000000001).
--define(PRIORITY_SHARE_BU, 1000000001).
-
-% For top-down: spaces -> groups (sorted by parents num) -> users
--define(PRIORITY_SPACE_TD, -1000000000).
--define(PRIORITY_GROUP_TD(_NumParents),
-    _NumParents
-).
--define(PRIORITY_USER_TD, 1000000000).
-
 %% API
 -export([init_state/0, get_state/0]).
 -export([schedule_refresh/0]).
--export([add_relation/5]).
+-export([add_relation/4, add_relation/5, add_relation/6]).
 %%-export([remove_relation/4]).
 
 %%%===================================================================
@@ -138,6 +118,36 @@ schedule_refresh() ->
     spawn(fun refresh_if_needed/0).
 
 
+modify_group_relations(UpdateFunction) ->
+    Success = critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
+        #entity_graph_state{dirty = Dirty} = get_state(),
+        case Dirty of
+            true ->
+                ?emergency("Cannot modify relations, waiting"),
+                false;
+            false ->
+                ?emergency("Modifying relations..."),
+                % TODO try catch
+                UpdateFunction(),
+                timer:sleep(1000),
+                update_state(fun(EffGraphState) ->
+                    {ok, EffGraphState#entity_graph_state{dirty = true}}
+                end),
+                true
+        end
+    end),
+    % Schedule a refresh no matter if the operation succeeded
+    schedule_refresh(),
+    case Success of
+        false ->
+            % Try again in some time to acquire the lock and make modifications
+            timer:sleep(100),
+            modify_group_relations(UpdateFunction);
+        true ->
+            ok
+    end.
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Performs refreshing of effective graph. If the graph is already up to date
@@ -172,126 +182,6 @@ refresh_if_needed() ->
     ok.
 
 
-modify_group_relations(UpdateFunction) ->
-    Success = critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
-        #entity_graph_state{dirty = Dirty} = get_state(),
-        case Dirty of
-            true ->
-                ?emergency("Cannot modify relations, waiting"),
-                false;
-            false ->
-                ?emergency("Modifying relations..."),
-                % TODO try catch
-                UpdateFunction(),
-                timer:sleep(1000),
-                update_state(fun(EffGraphState) ->
-                    {ok, EffGraphState#entity_graph_state{dirty = true}}
-                end),
-                true
-        end
-    end),
-    % Schedule a refresh no matter if the operation succeeded
-    schedule_refresh(),
-    case Success of
-        false ->
-            % Try again in some time to acquire the lock and make modifications
-            timer:sleep(100),
-            modify_group_relations(UpdateFunction);
-        true ->
-            ok
-    end.
-
-
-add_relation(od_group, ChildGroupId, od_group, ParentGroupId, Privileges) ->
-    modify_group_relations(fun() ->
-        {ok, _} = od_group:update(ParentGroupId, fun(Group) ->
-            #od_group{children = Groups} = Group,
-            mark_bottom_up_dirty(
-                ?PRIORITY_GROUP_BU(length(Groups) + 1), od_group, ParentGroupId
-            ),
-            {ok, Group#od_group{
-                children = [{ChildGroupId, Privileges} | Groups],
-                bottom_up_dirty = true
-            }}
-        end),
-        {ok, _} = od_group:update(ChildGroupId, fun(Group) ->
-            #od_group{parents = Groups} = Group,
-            mark_top_down_dirty(length(Groups) + 1, od_group, ChildGroupId),
-            {ok, Group#od_group{
-                parents = [ParentGroupId | Groups],
-                top_down_dirty = true
-            }}
-        end)
-    end);
-
-
-add_relation(od_user, UserId, od_space, SpaceId, Privileges) ->
-    % TODO co jak juz jest relacja?
-    % TODO co jak sie pierwsze uda a drugie nie?
-    {ok, _} = od_space:update(SpaceId, fun(Space) ->
-        #od_space{users = Users} = Space,
-        {ok, Space#od_space{users = [{UserId, Privileges} | Users]}}
-    end),
-    {ok, _} = od_user:update(UserId, fun(User) ->
-        #od_user{spaces = USpaces} = User,
-        {ok, User#od_user{spaces = [SpaceId | USpaces]}}
-    end),
-    ok;
-
-
-add_relation(od_user, UserId, od_group, GroupId, Privileges) ->
-    {ok, _} = od_group:update(GroupId, fun(Group) ->
-        #od_group{users = Users} = Group,
-        {ok, Group#od_group{users = [{UserId, Privileges} | Users]}}
-    end),
-    {ok, _} = od_user:update(UserId, fun(User) ->
-        #od_user{groups = UGroups} = User,
-        {ok, User#od_user{groups = [GroupId | UGroups]}}
-    end),
-    ok.
-
-
-mark_bottom_up_dirty(Priority, Model, Id) ->
-    ?emergency("bottom-up dirty: ~p#~s", [Model, Id]),
-    update_state(
-        fun(#entity_graph_state{bottom_up_dirty = List} = EffGraphState) ->
-            {ok, EffGraphState#entity_graph_state{
-                bottom_up_dirty = lists:sort([{Priority, Model, Id} | List])
-            }}
-        end).
-
-
-mark_bottom_up_clean(Id) ->
-    ?emergency("bottom-up clean: ~s", [Id]),
-    update_state(
-        fun(#entity_graph_state{bottom_up_dirty = List} = EffGraphState) ->
-            {ok, EffGraphState#entity_graph_state{
-                bottom_up_dirty = lists:keydelete(Id, 3, List)
-            }}
-        end).
-
-
-
-mark_top_down_dirty(Priority, Model, Id) ->
-    ?emergency("top-down dirty: ~p#~s", [Model, Id]),
-    update_state(
-        fun(#entity_graph_state{top_down_dirty = List} = EffGraphState) ->
-            {ok, EffGraphState#entity_graph_state{
-                top_down_dirty = lists:sort([{Priority, Model, Id} | List])
-            }}
-        end).
-
-
-mark_top_down_clean(Id) ->
-    ?emergency("top-down clean: ~s", [Id]),
-    update_state(
-        fun(#entity_graph_state{top_down_dirty = List} = EffGraphState) ->
-            {ok, EffGraphState#entity_graph_state{
-                top_down_dirty = lists:keydelete(Id, 3, List)
-            }}
-        end).
-
-
 refresh_entity_graph() ->
     #entity_graph_state{
         bottom_up_dirty = BottomUp,
@@ -304,19 +194,344 @@ refresh_entity_graph() ->
         [{_, ModelBU, IdBU} | _] ->
             ?emergency("Refreshing (BU) ~p#~s", [ModelBU, IdBU]),
             refresh_entity_bottom_up(ModelBU, IdBU),
-            mark_bottom_up_clean(IdBU),
             refresh_entity_graph();
         [] ->
             case TopDown of
                 [{_, ModelTD, IdTD} | _] ->
                     ?emergency("Refreshing (TD) ~p#~s", [ModelTD, IdTD]),
                     refresh_entity_top_down(ModelTD, IdTD),
-                    mark_top_down_clean(IdTD),
                     refresh_entity_graph();
                 [] ->
                     ok
             end
     end.
+
+
+add_relation(od_space, GroupId, od_share, ShareId) ->
+    add_relation(od_space, GroupId, undefined, od_share, ShareId, undefined).
+
+
+add_relation(od_user, UserId, od_group, GroupId, Privileges) ->
+    add_relation(od_user, UserId, Privileges, od_group, GroupId, undefined);
+add_relation(od_user, UserId, od_space, SpaceId, Privileges) ->
+    add_relation(od_user, UserId, Privileges, od_space, SpaceId, undefined);
+add_relation(od_user, UserId, od_handle, HandleId, Privileges) ->
+    add_relation(od_user, UserId, Privileges, od_handle, HandleId, undefined);
+add_relation(od_user, UserId, od_handle_service, HServiceId, Privileges) ->
+    add_relation(od_user, UserId, Privileges, od_handle_service, HServiceId, undefined);
+
+add_relation(od_group, ChildId, od_group, ParentId, Privs) ->
+    modify_group_relations(fun() ->
+        add_relation(od_group, ChildId, Privs, od_group, ParentId, undefined)
+    end);
+add_relation(od_group, GroupId, od_space, SpaceId, Privileges) ->
+    add_relation(od_group, GroupId, Privileges, od_space, SpaceId, undefined);
+add_relation(od_group, GroupId, od_handle, HandleId, Privileges) ->
+    add_relation(od_group, GroupId, Privileges, od_handle, HandleId, undefined);
+add_relation(od_group, GroupId, od_handle_service, HServiceId, Privileges) ->
+    add_relation(od_group, GroupId, Privileges, od_handle_service, HServiceId, undefined);
+
+add_relation(od_space, GroupId, od_provider, ProviderId, SupportSize) ->
+    add_relation(od_space, GroupId, undefined, od_provider, ProviderId, SupportSize).
+
+
+add_relation(ChildModel, ChildId, ChildAttributes, ParentModel, ParentId, ParentAttributes) ->
+    ParentUpdateFun = fun(Parent) ->
+        case has_child(Parent, ChildModel, ChildId) of
+            true ->
+                ?EL_RELATION_EXISTS;
+            false ->
+                {ok, mark_dirty(bottom_up, true, ParentModel, ParentId, add_child(
+                    Parent, ChildModel, ChildId, ChildAttributes
+                ))}
+        end
+    end,
+    ChildUpdateFun = fun(Child) ->
+        case has_parent(Child, ParentModel, ParentId) of
+            true ->
+                ?EL_RELATION_EXISTS;
+            false ->
+                {ok, mark_dirty(top_down, true, ChildModel, ChildId, add_parent(
+                    Child, ParentModel, ParentId, ParentAttributes
+                ))}
+        end
+    end,
+    ParentRevertFun = fun(Parent) ->
+        {ok, mark_dirty(bottom_up, true, ParentModel, ParentId, remove_child(
+            Parent, ChildModel, ChildId
+        ))}
+    end,
+    case ParentModel:update(ParentId, ParentUpdateFun) of
+        {ok, _} ->
+            case ChildModel:update(ChildId, ChildUpdateFun) of
+                {ok, _} ->
+                    ok;
+                ?EL_RELATION_EXISTS ->
+                    % Relation exists, but apparently it did not exist in
+                    % the parent, so we just fixed the relation -> ok.
+                    ok;
+                Err1 ->
+                    % Some other error, we have to attempt reverting the
+                    % relation in parent.
+                    ParentModel:update(ParentId, ParentRevertFun),
+                    Err1
+            end;
+        Err2 ->
+            Err2
+    end.
+
+
+mark_dirty(WhichWay, Flag, Model, Id, Entity) ->
+    Priority = get_priority(WhichWay, Entity),
+    update_state(
+        fun(EffGraphState) ->
+            #entity_graph_state{
+                bottom_up_dirty = BottomUpDirty,
+                top_down_dirty = TopDownDirty
+            } = EffGraphState,
+            NewState = case {WhichWay, Flag} of
+                {bottom_up, true} ->
+                    ?emergency("bottom-up dirty: ~p#~s", [Model, Id]),
+                    #entity_graph_state{
+                        bottom_up_dirty = lists:sort([{Priority, Model, Id} | BottomUpDirty])
+                    };
+                {bottom_up, false} ->
+                    ?emergency("bottom-up clean: ~s", [Id]),
+                    #entity_graph_state{
+                        bottom_up_dirty = lists:keydelete(Id, 3, BottomUpDirty)
+                    };
+                {top_down, true} ->
+                    ?emergency("top-down dirty: ~p#~s", [Model, Id]),
+                    #entity_graph_state{
+                        top_down_dirty = lists:sort([{Priority, Model, Id} | TopDownDirty])
+                    };
+                {top_down, false} ->
+                    ?emergency("top-down clean: ~s", [Id]),
+                    #entity_graph_state{
+                        top_down_dirty = lists:keydelete(Id, 3, TopDownDirty)
+                    }
+            end,
+            {ok, NewState}
+        end),
+    set_dirty_flag(WhichWay, Flag, Entity).
+
+
+% Priorities for records during effective graph recomputation
+
+% For bottom-up:
+%   1) groups (sorted by children num)
+%   2) spaces, handles and handle_services
+%   3) providers and shares
+get_priority(bottom_up, #od_group{children = Children}) ->
+    length(Children) + 1;
+get_priority(bottom_up, #od_space{}) ->
+    1000000000;
+get_priority(bottom_up, #od_handle_service{}) ->
+    1000000000;
+get_priority(bottom_up, #od_handle{}) ->
+    1000000000;
+get_priority(bottom_up, #od_provider{}) ->
+    1000000001;
+get_priority(bottom_up, #od_share{}) ->
+    1000000001;
+% For top-down:
+%   1) spaces
+%   1) groups (sorted by parents num)
+%   3) users
+get_priority(top_down, #od_space{}) ->
+    -1000000000;
+get_priority(top_down, #od_group{parents = Parents}) ->
+    length(Parents) + 1;
+get_priority(top_down, #od_user{}) ->
+    1000000000.
+
+
+set_dirty_flag(bottom_up, Flag, #od_group{} = Group) ->
+    Group#od_group{bottom_up_dirty = Flag};
+set_dirty_flag(bottom_up, Flag, #od_space{} = Space) ->
+    Space#od_space{bottom_up_dirty = Flag};
+set_dirty_flag(bottom_up, Flag, #od_share{} = Share) ->
+    Share#od_share{bottom_up_dirty = Flag};
+set_dirty_flag(bottom_up, Flag, #od_provider{} = Provider) ->
+    Provider#od_provider{bottom_up_dirty = Flag};
+set_dirty_flag(bottom_up, Flag, #od_handle_service{} = HandleService) ->
+    HandleService#od_handle_service{bottom_up_dirty = Flag};
+set_dirty_flag(bottom_up, Flag, #od_handle{} = Handle) ->
+    Handle#od_handle{bottom_up_dirty = Flag};
+set_dirty_flag(top_down, Flag, #od_user{} = User) ->
+    User#od_user{top_down_dirty = Flag};
+set_dirty_flag(top_down, Flag, #od_group{} = Group) ->
+    Group#od_group{top_down_dirty = Flag};
+set_dirty_flag(top_down, Flag, #od_space{} = Space) ->
+    Space#od_space{top_down_dirty = Flag}.
+
+
+has_child(#od_provider{spaces = Spaces}, od_space, SpaceId) ->
+    lists:member(SpaceId, Spaces);
+
+has_child(#od_share{space = Space}, od_space, SpaceId) ->
+    SpaceId =:= Space;
+
+has_child(#od_space{users = Users}, od_user, UserId) ->
+    proplists:is_defined(UserId, Users);
+has_child(#od_space{groups = Groups}, od_group, GroupId) ->
+    proplists:is_defined(GroupId, Groups);
+
+has_child(#od_handle_service{users = Users}, od_user, UserId) ->
+    proplists:is_defined(UserId, Users);
+has_child(#od_handle_service{groups = Groups}, od_group, GroupId) ->
+    proplists:is_defined(GroupId, Groups);
+
+has_child(#od_handle{users = Users}, od_user, UserId) ->
+    proplists:is_defined(UserId, Users);
+has_child(#od_handle{groups = Groups}, od_group, GroupId) ->
+    proplists:is_defined(GroupId, Groups);
+
+has_child(#od_group{users = Users}, od_user, UserId) ->
+    proplists:is_defined(UserId, Users);
+has_child(#od_group{children = Children}, od_group, GroupId) ->
+    proplists:is_defined(GroupId, Children).
+
+
+add_child(#od_provider{spaces = Spaces} = Provider, od_space, SpaceId, _) ->
+    Provider#od_provider{spaces = [SpaceId | Spaces]};
+
+add_child(#od_share{} = Share, od_space, SpaceId, _) ->
+    Share#od_share{space = SpaceId};
+
+add_child(#od_space{users = Users} = Space, od_user, UserId, Privs) ->
+    Space#od_space{users = [{UserId, Privs} | Users]};
+add_child(#od_space{groups = Groups} = Space, od_group, GroupId, Privs) ->
+    Space#od_space{groups = [{GroupId, Privs} | Groups]};
+
+add_child(#od_handle_service{users = Users} = HS, od_user, UserId, Privs) ->
+    HS#od_handle_service{users = [{UserId, Privs} | Users]};
+add_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId, Privs) ->
+    HS#od_handle_service{groups = [{GroupId, Privs} | Groups]};
+
+add_child(#od_handle{users = Users} = Handle, od_user, UserId, Privs) ->
+    Handle#od_handle{users = [{UserId, Privs} | Users]};
+add_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, Privs) ->
+    Handle#od_handle{groups = [{GroupId, Privs} | Groups]};
+
+add_child(#od_group{users = Users} = Group, od_user, UserId, Privs) ->
+    Group#od_group{users = [{UserId, Privs} | Users]};
+add_child(#od_group{children = Children} = Group, od_group, GroupId, Privs) ->
+    Group#od_group{children = [{GroupId, Privs} | Children]}.
+
+
+remove_child(#od_provider{spaces = Spaces} = Provider, od_space, SpaceId) ->
+    Provider#od_provider{spaces = lists:delete(SpaceId, Spaces)};
+
+remove_child(#od_share{} = Share, od_space, _SpaceId) ->
+    Share#od_share{space = undefined};
+
+remove_child(#od_space{users = Users} = Space, od_user, UserId) ->
+    Space#od_space{users = lists:keydelete(UserId, 1, Users)};
+remove_child(#od_space{groups = Groups} = Space, od_group, GroupId) ->
+    Space#od_space{groups = lists:keydelete(GroupId, 1, Groups)};
+
+remove_child(#od_handle_service{users = Users} = HS, od_user, UserId) ->
+    HS#od_handle_service{users = lists:keydelete(UserId, 1, Users)};
+remove_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId) ->
+    HS#od_handle_service{groups = lists:keydelete(GroupId, 1, Groups)};
+
+remove_child(#od_handle{users = Users} = Handle, od_user, UserId) ->
+    Handle#od_handle{users = lists:keydelete(UserId, 1, Users)};
+remove_child(#od_handle{groups = Groups} = Handle, od_group, GroupId) ->
+    Handle#od_handle{groups = lists:keydelete(GroupId, 1, Groups)};
+
+remove_child(#od_group{users = Users} = Group, od_user, UserId) ->
+    Group#od_group{users = lists:keydelete(UserId, 1, Users)};
+remove_child(#od_group{children = Children} = Group, od_group, GroupId) ->
+    Group#od_group{children = lists:keydelete(GroupId, 1, Children)}.
+
+
+has_parent(#od_user{groups = Groups}, od_group, GroupId) ->
+    lists:member(GroupId, Groups);
+has_parent(#od_user{spaces = Spaces}, od_space, SpaceId) ->
+    lists:member(SpaceId, Spaces);
+has_parent(#od_user{handle_services = HandleServices}, od_handle_service, HSId) ->
+    lists:member(HSId, HandleServices);
+has_parent(#od_user{handles = Handles}, od_handle, HandleId) ->
+    lists:member(HandleId, Handles);
+
+has_parent(#od_group{parents = Parents}, od_group, GroupId) ->
+    lists:member(GroupId, Parents);
+has_parent(#od_group{spaces = Spaces}, od_space, SpaceId) ->
+    lists:member(SpaceId, Spaces);
+has_parent(#od_group{handle_services = HandleServices}, od_handle_service, HSId) ->
+    lists:member(HSId, HandleServices);
+has_parent(#od_group{handles = Handles}, od_handle, HandleId) ->
+    lists:member(HandleId, Handles);
+
+has_parent(#od_space{shares = Shares}, od_share, ShareId) ->
+    lists:member(ShareId, Shares);
+has_parent(#od_space{providers_supports = Providers}, od_provider, ProviderId) ->
+    proplists:is_defined(ProviderId, Providers).
+
+
+add_parent(#od_user{groups = Groups} = User, od_group, GroupId, _) ->
+    User#od_user{groups = [GroupId | Groups]};
+add_parent(#od_user{spaces = Spaces} = User, od_space, SpaceId, _) ->
+    User#od_user{spaces = [SpaceId | Spaces]};
+add_parent(#od_user{handle_services = HServices} = User, od_handle_service, HSId, _) ->
+    User#od_user{handle_services = [HSId | HServices]};
+add_parent(#od_user{handles = Handles} = User, od_handle, HandleId, _) ->
+    User#od_user{handles = [HandleId | Handles]};
+
+add_parent(#od_group{parents = Parents} = Group, od_group, GroupId, _) ->
+    Group#od_group{parents = [GroupId | Parents]};
+add_parent(#od_group{spaces = Spaces} = Group, od_space, SpaceId, _) ->
+    Group#od_group{spaces = [SpaceId | Spaces]};
+add_parent(#od_group{handle_services = HandleServices} = Group, od_handle_service, HSId, _) ->
+    Group#od_group{handle_services = [HSId | HandleServices]};
+add_parent(#od_group{handles = Handles} = Group, od_handle, HandleId, _) ->
+    Group#od_group{handles = [HandleId | Handles]};
+
+add_parent(#od_space{shares = Shares} = Space, od_share, ShareId, _) ->
+    Space#od_space{shares = [ShareId | Shares]};
+add_parent(#od_space{providers_supports = Providers} = Space, od_provider, ProviderId, SupportSize) ->
+    Space#od_space{providers_supports = [{ProviderId, SupportSize} | Providers]}.
+
+
+remove_parent(#od_user{groups = Groups} = User, od_group, GroupId) ->
+    User#od_user{groups = lists:delete(GroupId, Groups)};
+remove_parent(#od_user{spaces = Spaces} = User, od_space, SpaceId) ->
+    User#od_user{spaces = lists:delete(SpaceId, Spaces)};
+remove_parent(#od_user{handle_services = HServices} = User, od_handle_service, HSId) ->
+    User#od_user{handle_services = lists:delete(HSId, HServices)};
+remove_parent(#od_user{handles = Handles} = User, od_handle, HandleId) ->
+    User#od_user{handles = lists:delete(HandleId, Handles)};
+
+remove_parent(#od_group{parents = Parents} = Group, od_group, GroupId) ->
+    Group#od_group{parents = lists:delete(GroupId, Parents)};
+remove_parent(#od_group{spaces = Spaces} = Group, od_space, SpaceId) ->
+    Group#od_group{spaces = lists:delete(SpaceId, Spaces)};
+remove_parent(#od_group{handle_services = HandleServices} = Group, od_handle_service, HSId) ->
+    Group#od_group{handle_services = lists:delete(HSId, HandleServices)};
+remove_parent(#od_group{handles = Handles} = Group, od_handle, HandleId) ->
+    Group#od_group{handles = lists:delete(HandleId, Handles)};
+
+remove_parent(#od_space{shares = Shares} = Space, od_share, ShareId) ->
+    Space#od_space{shares = lists:delete(ShareId, Shares)};
+remove_parent(#od_space{providers_supports = Providers} = Space, od_provider, ProviderId) ->
+    Space#od_space{providers_supports = lists:keydelete(ProviderId, 1, Providers)}.
+
+
+
+refresh_entity_bottom_up(ModelType, EntityId) ->
+    {ok, #document{value = Entity}} = ModelType:get(EntityId),
+    ChildrenRelations = extract_children(Entity),
+    %% #{1 => Children, 2 => Users}
+
+
+
+    ok.
+
+
+
+
 
 
 refresh_entity_bottom_up(od_group, GroupId) ->
@@ -357,6 +572,7 @@ refresh_entity_bottom_up(od_group, GroupId) ->
             eff_users = NewEffUsers
         }}
     end),
+    % TODO mark_bottom_up_clean(IdBU),
     % Check if related entities should be marked dirty
     EffChildrenChanged = did_relations_change(OldEffChildren, NewEffChildren),
     EffUsersChanged = did_relations_change(OldEffUsers, NewEffUsers),
@@ -466,6 +682,7 @@ refresh_entity_top_down(od_group, GroupId) ->
             top_down_dirty = false
         }}
     end),
+    % TODO     mark_top_down_clean(IdTD),
     % Check if related entities should be marked dirty
     DidRelationsChange = OldEffParents =/= NewEffParents
         orelse OldEffSpaces =/= NewEffSpaces

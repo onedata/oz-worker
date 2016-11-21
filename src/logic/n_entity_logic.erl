@@ -16,7 +16,7 @@
 -include("entity_logic_errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([create/5, get/4, update/5, delete/4, add_relation/5, consume_token/4]).
+-export([create/5, get/4, update/5, delete/4, consume_token/4]).
 
 
 -record(request, {
@@ -126,20 +126,20 @@ delete(Issuer, ELPlugin, EntityId, Resource) ->
     end.
 
 
-add_relation(Issuer, ELPlugin, Resource, ChildModel, ChildId) ->
-    try
-%%        check_authorization(Issuer, ELPlugin, add_relation, Resource),
-%%        call_add_relation(ELPlugin, Resource, ChildModel, ChildId)
-        ok
-    catch
-        throw:ElError ->
-            ElError;
-        Error:Message ->
-            ?error_stacktrace("Error in data_logic:add_relation - ~p:~p", [
-                Error, Message
-            ]),
-            ?EL_INTERNAL_SERVER_ERROR
-    end.
+%%add_relation(Issuer, ELPlugin, Resource, ChildModel, ChildId) ->
+%%    try
+%%%%        check_authorization(Issuer, ELPlugin, add_relation, Resource),
+%%%%        call_add_relation(ELPlugin, Resource, ChildModel, ChildId)
+%%        ok
+%%    catch
+%%        throw:ElError ->
+%%            ElError;
+%%        Error:Message ->
+%%            ?error_stacktrace("Error in data_logic:add_relation - ~p:~p", [
+%%                Error, Message
+%%            ]),
+%%            ?EL_INTERNAL_SERVER_ERROR
+%%    end.
 
 
 consume_token(Issuer, ELPlugin, Resource, Token) ->
@@ -221,9 +221,9 @@ call_create(Request) ->
     } = Request,
     ELPlugin:create_impl(Issuer, EntityId, Resource, Data).
 
-% TODO
-call_add_relation(ELPlugin, Resource, ChildModel, ChildId) ->
-    ELPlugin:add_relation_impl(Resource, ChildModel, ChildId).
+%%% TODO
+%%call_add_relation(ELPlugin, Resource, ChildModel, ChildId) ->
+%%    ELPlugin:add_relation_impl(Resource, ChildModel, ChildId).
 
 
 call_update(Request) ->

@@ -23,7 +23,7 @@
 -export([exists_impl/2, authorize_impl/4, validate_impl/2]).
 -export([has_eff_privilege/3]).
 
-create_impl({user, UserId}, _, entity, #{<<"name">> => Name}) ->
+create_impl({user, UserId}, _, entity, #{<<"name">> := Name}) ->
     {ok, SpaceId} = od_space:create(#document{value = #od_space{name = Name}}),
     entity_graph:add_relation(
         od_user, UserId,
@@ -32,7 +32,7 @@ create_impl({user, UserId}, _, entity, #{<<"name">> => Name}) ->
     ),
 %%  user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     {ok, SpaceId};
-create_impl({user, _UserId}, SpaceId, users, #{<<"name">> => UserId}) ->
+create_impl({user, _UserId}, SpaceId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_space, SpaceId,
