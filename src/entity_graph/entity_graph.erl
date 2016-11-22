@@ -519,192 +519,316 @@ remove_parent(#od_space{providers_supports = Providers} = Space, od_provider, Pr
     Space#od_space{providers_supports = lists:keydelete(ProviderId, 1, Providers)}.
 
 
-
-refresh_entity_bottom_up(ModelType, EntityId) ->
+refresh_entity(WhichWay, ModelType, EntityId) ->
+    OtherWay = case WhichWay of
+        top_down -> bottom_up;
+        bottom_up -> top_down
+    end,
     {ok, #document{value = Entity}} = ModelType:get(EntityId),
-    ChildrenRelations = extract_children(Entity),
-    %% #{1 => Children, 2 => Users}
+    Neighbours = extract_neighbours(WhichWay, Entity),
 
 
 
+refresh_entity_top_down(ModelType, EntityId) ->
+    {ok, #document{value = Entity}} = ModelType:get(EntityId),
+    ParentRelations = extract_parents(Entity),
+    ToAggregate = parents_to_aggregate_from(ModelType),
+    EffRelations = lists:flatmap(
+        fun(ParentType) ->
+            Parents = maps:get(ParentType, ParentRelations),
+            lists:map(
+                fun(ParentId) ->
+                    aggregate_from_parent(ModelType, ParentType, ParentId)
+                end, Parents)
+        end, ToAggregate),
+    AggregatedParentRelations = lists:foldl(
+        fun(RelationsMap, AccMapOuter) ->
+            lists:foldl(
+                fun({ModelType, Entities}, AccMapInner) ->
+                    NewEntities = ordsets:union(
+                        ordsets:from_list(Entities),
+                        maps:get(ModelType, RelationsMap, [])
+                    ),
+                    AccMapInner#{ModelType => NewEntities}
+                end, AccMapOuter, maps:to_list(RelationsMap))
+        end, #{}, [ParentRelations | EffRelations]),
+    % Check if parents should be marked dirty
+    case AggregatedParentRelations =:= eff_relations(Entity) of
+        true ->
+            % Nothing changed, no action is needed
+            ok;
+        false ->
+            % Mark all children as dirty
+            ChildrenRelations = extract_children(Entity),
+            lists:foreach(
+                fun({ModelType, Entities}) ->
+                    lists:foreach(
+                        fun(EntityId) ->
+                            ModelType:update(EntityId, fun(E) ->
+                                {ok, mark_dirty(top_down, true, ModelType, EntityId, E)}
+                            end)
+                        end, Entities)
+                end, maps:to_list(ChildrenRelations))
+    end,
+    % Update the record marking it not dirty and setting newly calculated
+    % effective relations.
+    {ok, _} = ModelType:update(EntityId, fun(Ent) ->
+        {ok, mark_dirty(top_down, false, ModelType, EntityId, update_eff_relations(
+            Ent, AggregatedParentRelations
+        ))}
+    end),
     ok.
 
+% TODO should return lists without privs
+extract_parents(#od_user{} = User) ->
+    #od_user{
+        groups = Groups, spaces = Spaces,
+        handle_services = HServices, handles = Handles
+    } = User,
+    #{
+        od_group => Groups, od_space => Spaces,
+        od_handle_service => HServices, od_handle => Handles
+    }.
+
+extract_neighbours(top_down, #od_user{} = User) ->
+    #od_user{
+        groups = Groups, spaces = Spaces,
+        handle_services = HServices, handles = Handles
+    } = User,
+    #{
+        od_group => Groups, od_space => Spaces,
+        od_handle_service => HServices, od_handle => Handles
+    }.
+
+parents_to_aggregate_from(od_user) ->
+    [od_space, od_group].
 
 
-
-
-
-refresh_entity_bottom_up(od_group, GroupId) ->
+aggregate_from_parent(od_user, od_space, SpaceId) ->
+    {ok, #document{value = #od_space{
+        providers_supports = Providers,
+        shares = Shares
+    }}} = od_space:get(SpaceId),
+    #{od_provider => element(1, Providers), od_share => Shares};
+aggregate_from_parent(od_user, od_group, GroupId) ->
     {ok, #document{value = #od_group{
-        parents = Parents,
-        children = Children,
-        users = Users,
-
-        eff_children = OldEffChildren,
-        eff_users = OldEffUsers
+        eff_parents = EffGroups,
+        eff_spaces = EffSpaces,
+        eff_shares = EffShares,
+        eff_providers = EffProviders,
+        eff_handle_services = EffHServices,
+        eff_handles = EffHandles
     }}} = od_group:get(GroupId),
-    EffRelationsOfChildren = lists:foldl(
-        fun({ChId, PrivsInGroup}, AccMap) ->
-            {ok, #document{
-                value = #od_group{
-                    eff_children = EC,
-                    eff_users = EU
-                }}} = od_group:get(ChId),
-            AccMap#{
-                eff_children => ordsets:union(
-                    ordsets:from_list(override_privileges(EC, PrivsInGroup)),
-                    maps:get(eff_children, AccMap, [])),
-                eff_users => ordsets:union(
-                    ordsets:from_list(override_privileges(EU, PrivsInGroup)),
-                    maps:get(eff_users, AccMap, []))
-            }
-        end, #{}, Children),
-    NewEffChildren = privileges:proplists_union(
-        Children ++ maps:get(eff_children, EffRelationsOfChildren, [])
-    ),
-    NewEffUsers = privileges:proplists_union(
-        Users ++ maps:get(eff_users, EffRelationsOfChildren, [])
-    ),
-    % Update the record TODO MOZE TYLKO WTEDY JAK SIE ZMIENIL?
-    {ok, _} = od_group:update(GroupId, fun(Group) ->
-        {ok, Group#od_group{
-            eff_children = NewEffChildren,
-            eff_users = NewEffUsers
-        }}
-    end),
-    % TODO mark_bottom_up_clean(IdBU),
-    % Check if related entities should be marked dirty
-    EffChildrenChanged = did_relations_change(OldEffChildren, NewEffChildren),
-    EffUsersChanged = did_relations_change(OldEffUsers, NewEffUsers),
-    case EffChildrenChanged orelse EffUsersChanged of
-        false ->
-            ok;
-        true ->
-            % Mark parent groups as bottom-up dirty.
-            lists:foreach(
-                fun(ParentId) ->
-                    {ok, _} = od_group:update(ParentId, fun(Group) ->
-                        #od_group{children = Groups} = Group,
-                        mark_bottom_up_dirty(?PRIORITY_GROUP_BU(length(Groups)),
-                            od_group, ParentId),
-                        {ok, Group#od_group{bottom_up_dirty = true}}
-                    end)
-                end, Parents)
-    end.
+    #{
+        od_group => EffGroups, od_space => EffSpaces,
+        od_share => EffShares, od_provider => EffProviders,
+        od_handle_service => EffHServices, od_handle => EffHandles
+    }.
 
 
-refresh_entity_top_down(od_group, GroupId) ->
-    {ok, #document{value = #od_group{
-        parents = Parents,
-        spaces = Spaces,
-        handle_services = HandleServices,
-        handles = Handles,
+eff_relations(#od_user{} = User) ->
+    #od_user{
+        eff_groups = EffGroups, eff_spaces = EffSpaces,
+        eff_shares = EffShares, eff_providers = EffProviders,
+        eff_handle_services = EffHServices, eff_handles = EffHandles
+    } = User,
+    #{
+        od_group => EffGroups, od_space => EffSpaces,
+        od_share => EffShares, od_provider => EffProviders,
+        od_handle_service => EffHServices, od_handle => EffHandles
+    }.
 
-        eff_parents = OldEffParents,
-        eff_spaces = OldEffSpaces,
-        eff_shares = OldEffShares,
-        eff_providers = OldEffProviders,
-        eff_handle_services = OldEffHandleServices,
-        eff_handles = OldEffHandles
-    }}} = od_group:get(GroupId),
-    EffRelationsOfParents = lists:foldl(
-        fun(ParentId, AccMap) ->
-            {ok, #document{
-                value = #od_group{
-                    eff_parents = EPa,
-                    eff_spaces = ESp,
-                    eff_shares = ESh,
-                    eff_providers = EPr,
-                    eff_handle_services = EHS,
-                    eff_handles = EH
-                }}} = od_group:get(ParentId),
-            AccMap#{
-                eff_parents => ordsets:union(ordsets:from_list(EPa),
-                    maps:get(eff_parents, AccMap, [])),
-                eff_spaces => ordsets:union(ordsets:from_list(ESp),
-                    maps:get(eff_spaces, AccMap, [])),
-                eff_shares => ordsets:union(ordsets:from_list(ESh),
-                    maps:get(eff_shares, AccMap, [])),
-                eff_providers => ordsets:union(ordsets:from_list(EPr),
-                    maps:get(eff_providers, AccMap, [])),
-                eff_h_services => ordsets:union(ordsets:from_list(EHS),
-                    maps:get(eff_h_services, AccMap, [])),
-                eff_handles => ordsets:union(ordsets:from_list(EH),
-                    maps:get(eff_handles, AccMap, []))
-            }
-        end, #{}, Parents),
-    RelationsOfSpaces = lists:foldl(
-        fun(SpaceId, AccMap) ->
-            {ok, #document{
-                value = #od_space{
-                    shares = Sh,
-                    providers_supports = PrSup
-                }}} = od_space:get(SpaceId),
-            {Pr, _} = lists:unzip(PrSup),
-            AccMap#{
-                shares => ordsets:union(
-                    ordsets:from_list(Sh),
-                    maps:get(shares, AccMap, [])),
-                providers => ordsets:union(
-                    ordsets:from_list(Pr),
-                    maps:get(providers, AccMap, []))
-            }
-        end, #{}, Spaces),
-    Shares = maps:get(shares, RelationsOfSpaces, []),
-    Providers = maps:get(providers, RelationsOfSpaces, []),
-    NewEffParents = ordsets:union(
-        Parents, maps:get(eff_parents, EffRelationsOfParents, [])
-    ),
-    NewEffSpaces = ordsets:union(
-        Spaces, maps:get(eff_spaces, EffRelationsOfParents, [])
-    ),
-    NewEffShares = ordsets:union(
-        Shares, maps:get(eff_shares, EffRelationsOfParents, [])
-    ),
-    NewEffProviders = ordsets:union(
-        Providers, maps:get(eff_providers, EffRelationsOfParents, [])
-    ),
-    NewEffHandleServices = ordsets:union(
-        HandleServices, maps:get(eff_h_services, EffRelationsOfParents, [])
-    ),
-    NewEffHandles = ordsets:union(
-        Handles, maps:get(eff_handles, EffRelationsOfParents, [])
-    ),
-    % Update the record TODO MOZE TYLKO WTEDY JAK SIE ZMIENIL?
-    {ok, _} = od_group:update(GroupId, fun(Group) ->
-        {ok, Group#od_group{
-            eff_parents = NewEffParents,
-            eff_spaces = NewEffSpaces,
-            eff_shares = NewEffShares,
-            eff_providers = NewEffProviders,
-            eff_handle_services = NewEffHandleServices,
-            eff_handles = NewEffHandles,
-            top_down_dirty = false
-        }}
-    end),
-    % TODO     mark_top_down_clean(IdTD),
-    % Check if related entities should be marked dirty
-    DidRelationsChange = OldEffParents =/= NewEffParents
-        orelse OldEffSpaces =/= NewEffSpaces
-        orelse OldEffShares =/= NewEffShares
-        orelse OldEffProviders =/= NewEffProviders
-        orelse OldEffHandleServices =/= NewEffHandleServices
-        orelse OldEffHandles =/= NewEffHandles,
-    case DidRelationsChange of
-        false ->
-            ok;
-        true ->
-            % Mark child groups as top-down dirty.
-            lists:foreach(
-                fun(ParentId) ->
-                    {ok, _} = od_group:update(ParentId, fun(Group) ->
-                        #od_group{children = Groups} = Group,
-                        mark_top_down_dirty(?PRIORITY_GROUP_TD(length(Groups)),
-                            od_group, ParentId),
-                        {ok, Group#od_group{top_down_dirty = true}}
-                    end)
-                end, Parents)
-    end.
+
+update_eff_relations(#od_user{} = User, AggregatedParentRelations) ->
+    #{
+        od_group => EffGroups, od_space => EffSpaces,
+        od_share => EffShares, od_provider => EffProviders,
+        od_handle_service => EffHServices, od_handle => EffHandles
+    } = AggregatedParentRelations,
+    User#od_user{
+        eff_groups = EffGroups, eff_spaces = EffSpaces,
+        eff_shares = EffShares, eff_providers = EffProviders,
+        eff_handle_services = EffHServices, eff_handles = EffHandles
+    }.
+
+
+extract_children(#od_space{users = Users, groups = Groups}) ->
+    #{users => Users, groups => Groups}.
+
+
+
+
+%%refresh_entity_bottom_up(od_group, GroupId) ->
+%%    {ok, #document{value = #od_group{
+%%        parents = Parents,
+%%        children = Children,
+%%        users = Users,
+%%
+%%        eff_children = OldEffChildren,
+%%        eff_users = OldEffUsers
+%%    }}} = od_group:get(GroupId),
+%%    EffRelationsOfChildren = lists:foldl(
+%%        fun({ChId, PrivsInGroup}, AccMap) ->
+%%            {ok, #document{
+%%                value = #od_group{
+%%                    eff_children = EC,
+%%                    eff_users = EU
+%%                }}} = od_group:get(ChId),
+%%            AccMap#{
+%%                eff_children => ordsets:union(
+%%                    ordsets:from_list(override_privileges(EC, PrivsInGroup)),
+%%                    maps:get(eff_children, AccMap, [])),
+%%                eff_users => ordsets:union(
+%%                    ordsets:from_list(override_privileges(EU, PrivsInGroup)),
+%%                    maps:get(eff_users, AccMap, []))
+%%            }
+%%        end, #{}, Children),
+%%    NewEffChildren = privileges:proplists_union(
+%%        Children ++ maps:get(eff_children, EffRelationsOfChildren, [])
+%%    ),
+%%    NewEffUsers = privileges:proplists_union(
+%%        Users ++ maps:get(eff_users, EffRelationsOfChildren, [])
+%%    ),
+%%    % Update the record TODO MOZE TYLKO WTEDY JAK SIE ZMIENIL?
+%%    {ok, _} = od_group:update(GroupId, fun(Group) ->
+%%        {ok, Group#od_group{
+%%            eff_children = NewEffChildren,
+%%            eff_users = NewEffUsers
+%%        }}
+%%    end),
+%%    % TODO mark_bottom_up_clean(IdBU),
+%%    % Check if related entities should be marked dirty
+%%    EffChildrenChanged = did_relations_change(OldEffChildren, NewEffChildren),
+%%    EffUsersChanged = did_relations_change(OldEffUsers, NewEffUsers),
+%%    case EffChildrenChanged orelse EffUsersChanged of
+%%        false ->
+%%            ok;
+%%        true ->
+%%            % Mark parent groups as bottom-up dirty.
+%%            lists:foreach(
+%%                fun(ParentId) ->
+%%                    {ok, _} = od_group:update(ParentId, fun(Group) ->
+%%                        #od_group{children = Groups} = Group,
+%%                        mark_bottom_up_dirty(?PRIORITY_GROUP_BU(length(Groups)),
+%%                            od_group, ParentId),
+%%                        {ok, Group#od_group{bottom_up_dirty = true}}
+%%                    end)
+%%                end, Parents)
+%%    end.
+%%
+%%
+%%refresh_entity_top_down(od_group, GroupId) ->
+%%    {ok, #document{value = #od_group{
+%%        parents = Parents,
+%%        spaces = Spaces,
+%%        handle_services = HandleServices,
+%%        handles = Handles,
+%%
+%%        eff_parents = OldEffParents,
+%%        eff_spaces = OldEffSpaces,
+%%        eff_shares = OldEffShares,
+%%        eff_providers = OldEffProviders,
+%%        eff_handle_services = OldEffHandleServices,
+%%        eff_handles = OldEffHandles
+%%    }}} = od_group:get(GroupId),
+%%    EffRelationsOfParents = lists:foldl(
+%%        fun(ParentId, AccMap) ->
+%%            {ok, #document{
+%%                value = #od_group{
+%%                    eff_parents = EPa,
+%%                    eff_spaces = ESp,
+%%                    eff_shares = ESh,
+%%                    eff_providers = EPr,
+%%                    eff_handle_services = EHS,
+%%                    eff_handles = EH
+%%                }}} = od_group:get(ParentId),
+%%            AccMap#{
+%%                eff_parents => ordsets:union(ordsets:from_list(EPa),
+%%                    maps:get(eff_parents, AccMap, [])),
+%%                eff_spaces => ordsets:union(ordsets:from_list(ESp),
+%%                    maps:get(eff_spaces, AccMap, [])),
+%%                eff_shares => ordsets:union(ordsets:from_list(ESh),
+%%                    maps:get(eff_shares, AccMap, [])),
+%%                eff_providers => ordsets:union(ordsets:from_list(EPr),
+%%                    maps:get(eff_providers, AccMap, [])),
+%%                eff_h_services => ordsets:union(ordsets:from_list(EHS),
+%%                    maps:get(eff_h_services, AccMap, [])),
+%%                eff_handles => ordsets:union(ordsets:from_list(EH),
+%%                    maps:get(eff_handles, AccMap, []))
+%%            }
+%%        end, #{}, Parents),
+%%    RelationsOfSpaces = lists:foldl(
+%%        fun(SpaceId, AccMap) ->
+%%            {ok, #document{
+%%                value = #od_space{
+%%                    shares = Sh,
+%%                    providers_supports = PrSup
+%%                }}} = od_space:get(SpaceId),
+%%            {Pr, _} = lists:unzip(PrSup),
+%%            AccMap#{
+%%                shares => ordsets:union(
+%%                    ordsets:from_list(Sh),
+%%                    maps:get(shares, AccMap, [])),
+%%                providers => ordsets:union(
+%%                    ordsets:from_list(Pr),
+%%                    maps:get(providers, AccMap, []))
+%%            }
+%%        end, #{}, Spaces),
+%%    Shares = maps:get(shares, RelationsOfSpaces, []),
+%%    Providers = maps:get(providers, RelationsOfSpaces, []),
+%%    NewEffParents = ordsets:union(
+%%        Parents, maps:get(eff_parents, EffRelationsOfParents, [])
+%%    ),
+%%    NewEffSpaces = ordsets:union(
+%%        Spaces, maps:get(eff_spaces, EffRelationsOfParents, [])
+%%    ),
+%%    NewEffShares = ordsets:union(
+%%        Shares, maps:get(eff_shares, EffRelationsOfParents, [])
+%%    ),
+%%    NewEffProviders = ordsets:union(
+%%        Providers, maps:get(eff_providers, EffRelationsOfParents, [])
+%%    ),
+%%    NewEffHandleServices = ordsets:union(
+%%        HandleServices, maps:get(eff_h_services, EffRelationsOfParents, [])
+%%    ),
+%%    NewEffHandles = ordsets:union(
+%%        Handles, maps:get(eff_handles, EffRelationsOfParents, [])
+%%    ),
+%%    % Update the record TODO MOZE TYLKO WTEDY JAK SIE ZMIENIL?
+%%    {ok, _} = od_group:update(GroupId, fun(Group) ->
+%%        {ok, Group#od_group{
+%%            eff_parents = NewEffParents,
+%%            eff_spaces = NewEffSpaces,
+%%            eff_shares = NewEffShares,
+%%            eff_providers = NewEffProviders,
+%%            eff_handle_services = NewEffHandleServices,
+%%            eff_handles = NewEffHandles,
+%%            top_down_dirty = false
+%%        }}
+%%    end),
+%%    % TODO     mark_top_down_clean(IdTD),
+%%    % Check if related entities should be marked dirty
+%%    DidRelationsChange = OldEffParents =/= NewEffParents
+%%        orelse OldEffSpaces =/= NewEffSpaces
+%%        orelse OldEffShares =/= NewEffShares
+%%        orelse OldEffProviders =/= NewEffProviders
+%%        orelse OldEffHandleServices =/= NewEffHandleServices
+%%        orelse OldEffHandles =/= NewEffHandles,
+%%    case DidRelationsChange of
+%%        false ->
+%%            ok;
+%%        true ->
+%%            % Mark child groups as top-down dirty.
+%%            lists:foreach(
+%%                fun(ParentId) ->
+%%                    {ok, _} = od_group:update(ParentId, fun(Group) ->
+%%                        #od_group{children = Groups} = Group,
+%%                        mark_top_down_dirty(?PRIORITY_GROUP_TD(length(Groups)),
+%%                            od_group, ParentId),
+%%                        {ok, Group#od_group{top_down_dirty = true}}
+%%                    end)
+%%                end, Parents)
+%%    end.
 
 
 did_relations_change(ProplistA, ProplistB) ->
