@@ -193,18 +193,86 @@ refresh_entity_graph() ->
     case BottomUp of
         [{_, ModelBU, IdBU} | _] ->
             ?emergency("Refreshing (BU) ~p#~s", [ModelBU, IdBU]),
-            refresh_entity_bottom_up(ModelBU, IdBU),
+            refresh_entity(bottom_up, ModelBU, IdBU),
             refresh_entity_graph();
         [] ->
             case TopDown of
                 [{_, ModelTD, IdTD} | _] ->
                     ?emergency("Refreshing (TD) ~p#~s", [ModelTD, IdTD]),
-                    refresh_entity_top_down(ModelTD, IdTD),
+                    refresh_entity(top_down, ModelTD, IdTD),
                     refresh_entity_graph();
                 [] ->
                     ok
             end
     end.
+
+
+refresh_entity(WhichWay, ModelType, EntityId) ->
+    OtherWay = case WhichWay of
+        top_down -> bottom_up;
+        bottom_up -> top_down
+    end,
+    {ok, #document{value = Entity}} = ModelType:get(EntityId),
+    % Get neighbours of the entity in given direction
+    NeighboursMap = extract_neighbours(WhichWay, Entity),
+    % Check which neighbours have effective relations to aggregate
+    ToAggregate = neighbours_with_eff_relations(WhichWay, ModelType),
+    % Get significant effective relations from all neighbours
+    EffRelationsOfNeighbours = lists:flatmap(
+        fun(NbrType) ->
+            Neighbours = maps:get(NbrType, NeighboursMap),
+            lists:map(
+                fun(Neighbour) ->
+                    {NbrId, RelationAttrs} = case Neighbour of
+                        {NId, NRA} ->
+                            {NId, NRA};
+                        NId ->
+                            {NId, undefined}
+                    end,
+                    {ok, #document{value = NbrEntity}} = NbrType:get(NbrId),
+                    eff_relations_of_neighbour(
+                        WhichWay, ModelType, NbrEntity, RelationAttrs
+                    )
+                end, Neighbours)
+        end, ToAggregate),
+    % Aggregate all effective relations - from neighbours and the entity itself
+    AggregatedEffRelations = lists:foldl(
+        fun(RelationsMap, AccMapOuter) ->
+            lists:foldl(
+                fun({NType, NList}, AccMapInner) ->
+                    NewNeighbours = aggregate_eff_neighbours(
+                        NList, maps:get(NType, AccMapInner, [])
+                    ),
+                    AccMapInner#{NType => NewNeighbours}
+                end, AccMapOuter, maps:to_list(RelationsMap))
+        end, #{}, [NeighboursMap | EffRelationsOfNeighbours]),
+    % Check if neighbours should be marked dirty (depending on direction)
+    case AggregatedEffRelations =:= eff_relations(WhichWay, Entity) of
+        true ->
+            % Nothing changed, no action is needed
+            ok;
+        false ->
+            % Mark all neighbours as dirty
+            % (these that are in the direction of update)
+            Successors = extract_neighbours(OtherWay, Entity),
+            lists:foreach(
+                fun({NType, NList}) ->
+                    lists:foreach(
+                        fun(NId) ->
+                            NType:update(NId, fun(Ent) ->
+                                {ok, mark_dirty(WhichWay, true, NType, NId, Ent)}
+                            end)
+                        end, NList)
+                end, maps:to_list(Successors))
+    end,
+    % Update the record marking it not dirty and setting newly calculated
+    % effective relations.
+    {ok, _} = ModelType:update(EntityId, fun(Ent) ->
+        {ok, mark_dirty(WhichWay, false, ModelType, EntityId, update_eff_relations(
+            WhichWay, Ent, AggregatedEffRelations
+        ))}
+    end),
+    ok.
 
 
 add_relation(od_space, GroupId, od_share, ShareId) ->
@@ -278,7 +346,9 @@ add_relation(ChildModel, ChildId, ChildAttributes, ParentModel, ParentId, Parent
             end;
         Err2 ->
             Err2
-    end.
+    end,
+    schedule_refresh(),
+    ok.
 
 
 mark_dirty(WhichWay, Flag, Model, Id, Entity) ->
@@ -292,26 +362,26 @@ mark_dirty(WhichWay, Flag, Model, Id, Entity) ->
             NewState = case {WhichWay, Flag} of
                 {bottom_up, true} ->
                     ?emergency("bottom-up dirty: ~p#~s", [Model, Id]),
-                    #entity_graph_state{
+                    EffGraphState#entity_graph_state{
                         bottom_up_dirty = lists:sort([{Priority, Model, Id} | BottomUpDirty])
                     };
                 {bottom_up, false} ->
                     ?emergency("bottom-up clean: ~s", [Id]),
-                    #entity_graph_state{
+                    EffGraphState#entity_graph_state{
                         bottom_up_dirty = lists:keydelete(Id, 3, BottomUpDirty)
                     };
                 {top_down, true} ->
                     ?emergency("top-down dirty: ~p#~s", [Model, Id]),
-                    #entity_graph_state{
+                    EffGraphState#entity_graph_state{
                         top_down_dirty = lists:sort([{Priority, Model, Id} | TopDownDirty])
                     };
                 {top_down, false} ->
                     ?emergency("top-down clean: ~s", [Id]),
-                    #entity_graph_state{
+                    EffGraphState#entity_graph_state{
                         top_down_dirty = lists:keydelete(Id, 3, TopDownDirty)
                     }
             end,
-            {ok, NewState}
+            {ok, NewState#entity_graph_state{dirty = true}}
         end),
     set_dirty_flag(WhichWay, Flag, Entity).
 
@@ -519,77 +589,24 @@ remove_parent(#od_space{providers_supports = Providers} = Space, od_provider, Pr
     Space#od_space{providers_supports = lists:keydelete(ProviderId, 1, Providers)}.
 
 
-refresh_entity(WhichWay, ModelType, EntityId) ->
-    OtherWay = case WhichWay of
-        top_down -> bottom_up;
-        bottom_up -> top_down
-    end,
-    {ok, #document{value = Entity}} = ModelType:get(EntityId),
-    Neighbours = extract_neighbours(WhichWay, Entity),
-
-
-
-refresh_entity_top_down(ModelType, EntityId) ->
-    {ok, #document{value = Entity}} = ModelType:get(EntityId),
-    ParentRelations = extract_parents(Entity),
-    ToAggregate = parents_to_aggregate_from(ModelType),
-    EffRelations = lists:flatmap(
-        fun(ParentType) ->
-            Parents = maps:get(ParentType, ParentRelations),
-            lists:map(
-                fun(ParentId) ->
-                    aggregate_from_parent(ModelType, ParentType, ParentId)
-                end, Parents)
-        end, ToAggregate),
-    AggregatedParentRelations = lists:foldl(
-        fun(RelationsMap, AccMapOuter) ->
-            lists:foldl(
-                fun({ModelType, Entities}, AccMapInner) ->
-                    NewEntities = ordsets:union(
-                        ordsets:from_list(Entities),
-                        maps:get(ModelType, RelationsMap, [])
-                    ),
-                    AccMapInner#{ModelType => NewEntities}
-                end, AccMapOuter, maps:to_list(RelationsMap))
-        end, #{}, [ParentRelations | EffRelations]),
-    % Check if parents should be marked dirty
-    case AggregatedParentRelations =:= eff_relations(Entity) of
-        true ->
-            % Nothing changed, no action is needed
-            ok;
-        false ->
-            % Mark all children as dirty
-            ChildrenRelations = extract_children(Entity),
-            lists:foreach(
-                fun({ModelType, Entities}) ->
-                    lists:foreach(
-                        fun(EntityId) ->
-                            ModelType:update(EntityId, fun(E) ->
-                                {ok, mark_dirty(top_down, true, ModelType, EntityId, E)}
-                            end)
-                        end, Entities)
-                end, maps:to_list(ChildrenRelations))
-    end,
-    % Update the record marking it not dirty and setting newly calculated
-    % effective relations.
-    {ok, _} = ModelType:update(EntityId, fun(Ent) ->
-        {ok, mark_dirty(top_down, false, ModelType, EntityId, update_eff_relations(
-            Ent, AggregatedParentRelations
-        ))}
-    end),
-    ok.
-
-% TODO should return lists without privs
-extract_parents(#od_user{} = User) ->
-    #od_user{
-        groups = Groups, spaces = Spaces,
-        handle_services = HServices, handles = Handles
-    } = User,
-    #{
-        od_group => Groups, od_space => Spaces,
-        od_handle_service => HServices, od_handle => Handles
-    }.
-
+extract_neighbours(bottom_up, #od_group{} = Group) ->
+    #od_group{users = Users, children = Groups} = Group,
+    #{od_user => Users, od_group => Groups};
+extract_neighbours(bottom_up, #od_space{} = Space) ->
+    #od_space{users = Users, groups = Groups} = Space,
+    #{od_user => Users, od_group => Groups};
+extract_neighbours(bottom_up, #od_share{} = Share) ->
+    #od_share{space = Space} = Share,
+    #{od_space => [Space]};
+extract_neighbours(bottom_up, #od_provider{} = Provider) ->
+    #od_provider{spaces = Spaces} = Provider,
+    #{od_space => Spaces};
+extract_neighbours(bottom_up, #od_handle_service{} = HService) ->
+    #od_handle_service{users = Users, groups = Groups} = HService,
+    #{od_user => Users, od_group => Groups};
+extract_neighbours(bottom_up, #od_handle{} = Handle) ->
+    #od_handle{users = Users, groups = Groups} = Handle,
+    #{od_user => Users, od_group => Groups};
 extract_neighbours(top_down, #od_user{} = User) ->
     #od_user{
         groups = Groups, spaces = Spaces,
@@ -598,35 +615,129 @@ extract_neighbours(top_down, #od_user{} = User) ->
     #{
         od_group => Groups, od_space => Spaces,
         od_handle_service => HServices, od_handle => Handles
-    }.
+    };
+extract_neighbours(top_down, #od_group{} = Group) ->
+    #od_group{
+        parents = Groups, spaces = Spaces,
+        handle_services = HServices, handles = Handles
+    } = Group,
+    #{
+        od_group => Groups, od_space => Spaces,
+        od_handle_service => HServices, od_handle => Handles
+    };
+extract_neighbours(top_down, #od_space{}) ->
+    #{}.
 
-parents_to_aggregate_from(od_user) ->
-    [od_space, od_group].
+
+neighbours_with_eff_relations(bottom_up, od_group) ->
+    [od_group];
+neighbours_with_eff_relations(bottom_up, od_space) ->
+    [od_group];
+neighbours_with_eff_relations(bottom_up, od_share) ->
+    [od_space];
+neighbours_with_eff_relations(bottom_up, od_provider) ->
+    [od_space];
+neighbours_with_eff_relations(bottom_up, od_handle_service) ->
+    [od_group];
+neighbours_with_eff_relations(bottom_up, od_handle) ->
+    [od_group];
+
+neighbours_with_eff_relations(top_down, od_user) ->
+    [od_group, od_space];
+neighbours_with_eff_relations(top_down, od_group) ->
+    [od_group, od_space];
+neighbours_with_eff_relations(top_down, od_space) ->
+    [].
 
 
-aggregate_from_parent(od_user, od_space, SpaceId) ->
-    {ok, #document{value = #od_space{
-        providers_supports = Providers,
-        shares = Shares
-    }}} = od_space:get(SpaceId),
-    #{od_provider => element(1, Providers), od_share => Shares};
-aggregate_from_parent(od_user, od_group, GroupId) ->
-    {ok, #document{value = #od_group{
+
+eff_relations_of_neighbour(bottom_up, od_group, #od_group{} = Group, Privs) ->
+    #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
+    #{
+        od_user => override_privileges(EffUsers, Privs),
+        od_group => override_privileges(EffGroups, Privs)
+    };
+eff_relations_of_neighbour(bottom_up, od_space, #od_group{} = Group, Privs) ->
+    #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
+    #{
+        od_user => override_privileges(EffUsers, Privs),
+        od_group => override_privileges(EffGroups, Privs)
+    };
+eff_relations_of_neighbour(bottom_up, od_share, #od_space{} = Space, _) ->
+    #od_space{eff_users = EffUsers, eff_groups = EffGroups} = Space,
+    #{od_user => EffUsers, od_group => EffGroups};
+eff_relations_of_neighbour(bottom_up, od_provider, #od_space{} = Space, _) ->
+    #od_space{eff_users = EffUsers, eff_groups = EffGroups} = Space,
+    #{od_user => EffUsers, od_group => EffGroups};
+eff_relations_of_neighbour(bottom_up, od_handle_service, #od_group{} = Group, Privs) ->
+    #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
+    #{
+        od_user => override_privileges(EffUsers, Privs),
+        od_group => override_privileges(EffGroups, Privs)
+    };
+eff_relations_of_neighbour(bottom_up, od_handle, #od_group{} = Group, Privs) ->
+    #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
+    #{
+        od_user => override_privileges(EffUsers, Privs),
+        od_group => override_privileges(EffGroups, Privs)
+    };
+
+eff_relations_of_neighbour(top_down, od_user, #od_group{} = Group, _) ->
+    #od_group{
         eff_parents = EffGroups,
         eff_spaces = EffSpaces,
         eff_shares = EffShares,
         eff_providers = EffProviders,
         eff_handle_services = EffHServices,
         eff_handles = EffHandles
-    }}} = od_group:get(GroupId),
+    } = Group,
     #{
         od_group => EffGroups, od_space => EffSpaces,
         od_share => EffShares, od_provider => EffProviders,
         od_handle_service => EffHServices, od_handle => EffHandles
-    }.
+    };
+eff_relations_of_neighbour(top_down, od_user, #od_space{} = Space, _) ->
+    #od_space{providers_supports = Providers, shares = Shares} = Space,
+    #{od_provider => element(1, Providers), od_share => Shares};
+eff_relations_of_neighbour(top_down, od_group, #od_group{} = Group, _) ->
+    #od_group{
+        eff_parents = EffGroups,
+        eff_spaces = EffSpaces,
+        eff_shares = EffShares,
+        eff_providers = EffProviders,
+        eff_handle_services = EffHServices,
+        eff_handles = EffHandles
+    } = Group,
+    #{
+        od_group => EffGroups, od_space => EffSpaces,
+        od_share => EffShares, od_provider => EffProviders,
+        od_handle_service => EffHServices, od_handle => EffHandles
+    };
+eff_relations_of_neighbour(top_down, od_group, #od_space{} = Space, _) ->
+    #od_space{providers_supports = Providers, shares = Shares} = Space,
+    #{od_provider => element(1, lists:unzip(Providers)), od_share => Shares}.
 
 
-eff_relations(#od_user{} = User) ->
+eff_relations(bottom_up, #od_group{} = Group) ->
+    #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
+    #{od_user => EffUsers, od_group => EffGroups};
+eff_relations(bottom_up, #od_space{} = Space) ->
+    #od_space{eff_users = EffUsers, eff_groups = EffGroups} = Space,
+    #{od_user => EffUsers, od_group => EffGroups};
+eff_relations(bottom_up, #od_share{} = Share) ->
+    #od_share{eff_users = EffUsers, eff_groups = EffGroups} = Share,
+    #{od_user => EffUsers, od_group => EffGroups};
+eff_relations(bottom_up, #od_provider{} = Provider) ->
+    #od_provider{eff_users = EffUsers, eff_groups = EffGroups} = Provider,
+    #{od_user => EffUsers, od_group => EffGroups};
+eff_relations(bottom_up, #od_handle_service{} = HService) ->
+    #od_handle_service{eff_users = EffUsers, eff_groups = EffGroups} = HService,
+    #{od_user => EffUsers, od_group => EffGroups};
+eff_relations(bottom_up, #od_handle{} = Handle) ->
+    #od_handle{eff_users = EffUsers, eff_groups = EffGroups} = Handle,
+    #{od_user => EffUsers, od_group => EffGroups};
+
+eff_relations(top_down, #od_user{} = User) ->
     #od_user{
         eff_groups = EffGroups, eff_spaces = EffSpaces,
         eff_shares = EffShares, eff_providers = EffProviders,
@@ -636,26 +747,182 @@ eff_relations(#od_user{} = User) ->
         od_group => EffGroups, od_space => EffSpaces,
         od_share => EffShares, od_provider => EffProviders,
         od_handle_service => EffHServices, od_handle => EffHandles
-    }.
-
-
-update_eff_relations(#od_user{} = User, AggregatedParentRelations) ->
+    };
+eff_relations(top_down, #od_group{} = Group) ->
+    #od_group{
+        eff_parents = EffGroups, eff_spaces = EffSpaces,
+        eff_shares = EffShares, eff_providers = EffProviders,
+        eff_handle_services = EffHServices, eff_handles = EffHandles
+    } = Group,
     #{
         od_group => EffGroups, od_space => EffSpaces,
         od_share => EffShares, od_provider => EffProviders,
         od_handle_service => EffHServices, od_handle => EffHandles
-    } = AggregatedParentRelations,
+    };
+eff_relations(top_down, #od_space{}) ->
+    #{}.
+
+
+update_eff_relations(bottom_up, #od_group{} = Group, EffNeighbours) ->
+    #{od_user := EffUsers, od_group := EffGroups} = EffNeighbours,
+    Group#od_group{eff_users = EffUsers, eff_children = EffGroups};
+update_eff_relations(bottom_up, #od_space{} = Space, EffNeighbours) ->
+    #{od_user := EffUsers, od_group := EffGroups} = EffNeighbours,
+    Space#od_space{eff_users = EffUsers, eff_groups = EffGroups};
+update_eff_relations(bottom_up, #od_share{} = Share, EffNeighbours) ->
+    #{od_user := EffUsers, od_group := EffGroups} = EffNeighbours,
+    Share#od_share{eff_users = EffUsers, eff_groups = EffGroups};
+update_eff_relations(bottom_up, #od_provider{} = Provider, EffNeighbours) ->
+    #{od_user := EffUsers, od_group := EffGroups} = EffNeighbours,
+    Provider#od_provider{eff_users = EffUsers, eff_groups = EffGroups};
+update_eff_relations(bottom_up, #od_handle_service{} = HService, EffNeighbours) ->
+    #{od_user := EffUsers, od_group := EffGroups} = EffNeighbours,
+    HService#od_handle_service{eff_users = EffUsers, eff_groups = EffGroups};
+update_eff_relations(bottom_up, #od_handle{} = Handle, EffNeighbours) ->
+    #{od_user := EffUsers, od_group := EffGroups} = EffNeighbours,
+    Handle#od_handle{eff_users = EffUsers, eff_groups = EffGroups};
+
+update_eff_relations(top_down, #od_user{} = User, EffNeighbours) ->
+    #{
+        od_group := EffGroups, od_space := EffSpaces,
+        od_share := EffShares, od_provider := EffProviders,
+        od_handle_service := EffHServices, od_handle := EffHandles
+    } = EffNeighbours,
     User#od_user{
         eff_groups = EffGroups, eff_spaces = EffSpaces,
         eff_shares = EffShares, eff_providers = EffProviders,
         eff_handle_services = EffHServices, eff_handles = EffHandles
-    }.
+    };
+update_eff_relations(top_down, #od_group{} = Group, EffNeighbours) ->
+    #{
+        od_group := EffGroups, od_space := EffSpaces,
+        od_share := EffShares, od_provider := EffProviders,
+        od_handle_service := EffHServices, od_handle := EffHandles
+    } = EffNeighbours,
+    Group#od_group{
+        eff_parents = EffGroups, eff_spaces = EffSpaces,
+        eff_shares = EffShares, eff_providers = EffProviders,
+        eff_handle_services = EffHServices, eff_handles = EffHandles
+    };
+update_eff_relations(top_down, #od_space{} = Space, _) ->
+    Space.
 
 
-extract_children(#od_space{users = Users, groups = Groups}) ->
-    #{users => Users, groups => Groups}.
+%%refresh_entity_top_down(ModelType, EntityId) ->
+%%    {ok, #document{value = Entity}} = ModelType:get(EntityId),
+%%    ParentRelations = extract_parents(Entity),
+%%    ToAggregate = parents_to_aggregate_from(ModelType),
+%%    EffRelations = lists:flatmap(
+%%        fun(ParentType) ->
+%%            Parents = maps:get(ParentType, ParentRelations),
+%%            lists:map(
+%%                fun(ParentId) ->
+%%                    aggregate_from_parent(ModelType, ParentType, ParentId)
+%%                end, Parents)
+%%        end, ToAggregate),
+%%    AggregatedParentRelations = lists:foldl(
+%%        fun(RelationsMap, AccMapOuter) ->
+%%            lists:foldl(
+%%                fun({ModelType, Entities}, AccMapInner) ->
+%%                    NewEntities = ordsets:union(
+%%                        ordsets:from_list(Entities),
+%%                        maps:get(ModelType, RelationsMap, [])
+%%                    ),
+%%                    AccMapInner#{ModelType => NewEntities}
+%%                end, AccMapOuter, maps:to_list(RelationsMap))
+%%        end, #{}, [ParentRelations | EffRelations]),
+%%    % Check if parents should be marked dirty
+%%    case AggregatedParentRelations =:= eff_relations(Entity) of
+%%        true ->
+%%            % Nothing changed, no action is needed
+%%            ok;
+%%        false ->
+%%            % Mark all children as dirty
+%%            ChildrenRelations = extract_children(Entity),
+%%            lists:foreach(
+%%                fun({ModelType, Entities}) ->
+%%                    lists:foreach(
+%%                        fun(EntityId) ->
+%%                            ModelType:update(EntityId, fun(E) ->
+%%                                {ok, mark_dirty(top_down, true, ModelType, EntityId, E)}
+%%                            end)
+%%                        end, Entities)
+%%                end, maps:to_list(ChildrenRelations))
+%%    end,
+%%    % Update the record marking it not dirty and setting newly calculated
+%%    % effective relations.
+%%    {ok, _} = ModelType:update(EntityId, fun(Ent) ->
+%%        {ok, mark_dirty(top_down, false, ModelType, EntityId, update_eff_relations(
+%%            Ent, AggregatedParentRelations
+%%        ))}
+%%    end),
+%%    ok.
 
-
+%%% TODO should return lists without privs
+%%extract_parents(#od_user{} = User) ->
+%%    #od_user{
+%%        groups = Groups, spaces = Spaces,
+%%        handle_services = HServices, handles = Handles
+%%    } = User,
+%%    #{
+%%        od_group => Groups, od_space => Spaces,
+%%        od_handle_service => HServices, od_handle => Handles
+%%    }.
+%%
+%%
+%%parents_to_aggregate_from(od_user) ->
+%%    [od_space, od_group].
+%%
+%%aggregate_from_parent(od_user, od_space, SpaceId) ->
+%%    {ok, #document{value = #od_space{
+%%        providers_supports = Providers,
+%%        shares = Shares
+%%    }}} = od_space:get(SpaceId),
+%%    #{od_provider => element(1, Providers), od_share => Shares};
+%%aggregate_from_parent(od_user, od_group, GroupId) ->
+%%    {ok, #document{value = #od_group{
+%%        eff_parents = EffGroups,
+%%        eff_spaces = EffSpaces,
+%%        eff_shares = EffShares,
+%%        eff_providers = EffProviders,
+%%        eff_handle_services = EffHServices,
+%%        eff_handles = EffHandles
+%%    }}} = od_group:get(GroupId),
+%%    #{
+%%        od_group => EffGroups, od_space => EffSpaces,
+%%        od_share => EffShares, od_provider => EffProviders,
+%%        od_handle_service => EffHServices, od_handle => EffHandles
+%%    }.
+%%
+%%
+%%eff_relations(#od_user{} = User) ->
+%%    #od_user{
+%%        eff_groups = EffGroups, eff_spaces = EffSpaces,
+%%        eff_shares = EffShares, eff_providers = EffProviders,
+%%        eff_handle_services = EffHServices, eff_handles = EffHandles
+%%    } = User,
+%%    #{
+%%        od_group => EffGroups, od_space => EffSpaces,
+%%        od_share => EffShares, od_provider => EffProviders,
+%%        od_handle_service => EffHServices, od_handle => EffHandles
+%%    }.
+%%
+%%
+%%update_eff_relations(#od_user{} = User, AggregatedParentRelations) ->
+%%    #{
+%%        od_group => EffGroups, od_space => EffSpaces,
+%%        od_share => EffShares, od_provider => EffProviders,
+%%        od_handle_service => EffHServices, od_handle => EffHandles
+%%    } = AggregatedParentRelations,
+%%    User#od_user{
+%%        eff_groups = EffGroups, eff_spaces = EffSpaces,
+%%        eff_shares = EffShares, eff_providers = EffProviders,
+%%        eff_handle_services = EffHServices, eff_handles = EffHandles
+%%    }.
+%%
+%%
+%%extract_children(#od_space{users = Users, groups = Groups}) ->
+%%    #{users => Users, groups => Groups}.
 
 
 %%refresh_entity_bottom_up(od_group, GroupId) ->
@@ -831,9 +1098,33 @@ extract_children(#od_space{users = Users, groups = Groups}) ->
 %%    end.
 
 
-did_relations_change(ProplistA, ProplistB) ->
-    % to sa ordsets wiec dziala
-    proplists:get_keys(ProplistA) =/= proplists:get_keys(ProplistB).
+
+aggregate_eff_neighbours([{_, _} | _] = ProplistA, [{_, _} | _] = ProplistB) ->
+    privileges_proplists_union(ProplistA ++ ProplistB);
+aggregate_eff_neighbours(PrivilegesA, PrivilegesB) ->
+    privileges_union(PrivilegesA, PrivilegesB).
+
+
+
+privileges_union(PrivilegesA, PrivilegesB) ->
+    ordsets:union(
+        ordsets:from_list(PrivilegesA),
+        ordsets:from_list(PrivilegesB)
+    ).
+
+
+privileges_proplists_union(PrivilegesProplist) ->
+    PrivilegesMap = lists:foldl(
+        fun({Id, Privs}, AccMap) ->
+            NewPrivs = case maps:get(Id, AccMap, undefined) of
+                undefined ->
+                    ordsets:from_list(Privs);
+                OtherPrivs ->
+                    privileges_union(Privs, OtherPrivs)
+            end,
+            maps:put(Id, NewPrivs, AccMap)
+        end, #{}, PrivilegesProplist),
+    ordsets:from_list(maps:to_list(PrivilegesMap)).
 
 
 override_privileges(PrivilegesProplist, NewPrivileges) ->
