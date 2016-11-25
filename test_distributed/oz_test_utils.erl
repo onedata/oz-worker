@@ -22,16 +22,16 @@
 -export([set_user_oz_privileges/3]).
 
 -export([create_group/3, get_group/2, remove_group/2]).
--export([join_group/3, group_remove_user/3]).
+-export([add_member_to_group/3, group_remove_user/3]).
 -export([set_group_oz_privileges/3]).
 
 -export([create_space/3, add_member_to_space/3, leave_space/3, remove_space/2]).
 -export([modify_space/4, support_space/4, set_space_privileges/4]).
 -export([space_has_effective_user/3]).
 
--export([create_provider/2, remove_provider/2]).
-
 -export([create_share/5, remove_share/2]).
+
+-export([create_provider/2, remove_provider/2]).
 
 -export([create_handle_service/5, remove_handle_service/2]).
 
@@ -60,7 +60,8 @@ call_oz(Config, Module, Function, Args) ->
             {crash, Type, Reason, erlang:get_stacktrace()}
         end
     end,
-    [Node | _] = ?config(oz_worker_nodes, Config),
+    Nodes = ?config(oz_worker_nodes, Config),
+    Node = lists:nth(rand:uniform(length(Nodes)), Nodes),
     case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
         {crash, Type, Reason, Stacktrace} ->
             % Log a bad rpc - very useful when debugging tests.
@@ -151,13 +152,13 @@ get_group(Config, GroupId) ->
 %% @doc Adds a user or group to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec join_group(Config :: term(), Member :: {user | group, Id :: binary()},
+-spec add_member_to_group(Config :: term(), Member :: {user | group, Id :: binary()},
     GroupId :: binary()) ->
     {ok, GroupId :: binary()} | {error, Reason :: term()}.
-join_group(Config, {user, UserId}, GroupId) ->
+add_member_to_group(Config, {user, UserId}, GroupId) ->
     call_oz(Config, group_logic, add_user, [GroupId, UserId]);
 
-join_group(Config, {group, ChildGroupId}, ParentGroupId) ->
+add_member_to_group(Config, {group, ChildGroupId}, ParentGroupId) ->
     call_oz(Config, group_logic, add_group, [ParentGroupId, ChildGroupId]).
 
 
@@ -302,6 +303,38 @@ remove_share(Config, ShareId) ->
 
 
 %%--------------------------------------------------------------------
+%% @doc Creates a provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider(Config :: term(), Name :: binary()) ->
+    {ok, ProviderId :: binary(), ProviderCertPem :: binary()} |
+    {error, Reason :: term()}.
+create_provider(Config, Name) ->
+    Prefix = "provider" ++ integer_to_list(rand:uniform(123345123)),
+    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
+    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
+    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
+    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
+    {ok, CSR} = file:read_file(CSRFile),
+    call_oz(Config, provider_logic, create, [
+        Name,
+        [<<"127.0.0.1">>],
+        <<"127.0.0.1">>,
+        CSR
+    ]).
+
+
+%%--------------------------------------------------------------------
+%% @doc Removes a provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_provider(Config :: term(), ProviderId :: binary()) ->
+    boolean() | {error, Reason :: term()}.
+remove_provider(Config, ProviderId) ->
+    call_oz(Config, provider_logic, remove, [ProviderId]).
+
+
+%%--------------------------------------------------------------------
 %% @doc Creates a handle_service
 %% @end
 %%--------------------------------------------------------------------
@@ -352,37 +385,6 @@ remove_handle(Config, HandleId) ->
 modify_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
     call_oz(Config, handle_logic, modify,
         [HandleId, NewResourceType, NewResourceId, NewMetadata]).
-
-
-%%--------------------------------------------------------------------
-%% @doc Creates a provider.
-%% @end
-%%--------------------------------------------------------------------
--spec create_provider(Config :: term(), Name :: binary()) ->
-    {ok, ProviderId :: binary(), ProviderCertPem :: binary()} |
-    {error, Reason :: term()}.
-create_provider(Config, Name) ->
-    Prefix = "provider" ++ integer_to_list(rand:uniform(123345123)),
-    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
-    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
-    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
-    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
-    {ok, CSR} = file:read_file(CSRFile),
-    call_oz(Config, provider_logic, create, [
-        Name,
-        [<<"127.0.0.1">>],
-        <<"127.0.0.1">>,
-        CSR
-    ]).
-
-%%--------------------------------------------------------------------
-%% @doc Removes a provider.
-%% @end
-%%--------------------------------------------------------------------
--spec remove_provider(Config :: term(), ProviderId :: binary()) ->
-    boolean() | {error, Reason :: term()}.
-remove_provider(Config, ProviderId) ->
-    call_oz(Config, provider_logic, remove, [ProviderId]).
 
 
 %%--------------------------------------------------------------------

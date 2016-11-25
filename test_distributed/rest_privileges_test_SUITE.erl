@@ -1582,7 +1582,7 @@ list_groups_of_provider_test(Config) ->
     %   BottomGroup2,
     %   MiddleGroup2,
     %   TopGroup2
-    {ok, MiddleGroup1} = oz_test_utils:join_group(
+    {ok, MiddleGroup1} = oz_test_utils:add_member_to_group(
         Config, {group, TopGroup2}, MiddleGroup1
     ),
     % Add the groups to spaces
@@ -1868,10 +1868,10 @@ create_3_nested_groups(Config, TestUser, BotGrName, MidGrName, TopGrName) ->
     {ok, TopGroup} = oz_test_utils:create_group(
         Config, DummyUser, TopGrName
     ),
-    {ok, MiddleGroup} = oz_test_utils:join_group(
+    {ok, MiddleGroup} = oz_test_utils:add_member_to_group(
         Config, {group, BottomGroup}, MiddleGroup
     ),
-    {ok, TopGroup} = oz_test_utils:join_group(
+    {ok, TopGroup} = oz_test_utils:add_member_to_group(
         Config, {group, MiddleGroup}, TopGroup
     ),
     % Remove the dummy user, he is not needed anymore

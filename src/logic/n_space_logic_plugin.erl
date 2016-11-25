@@ -18,7 +18,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create_impl/4, get_entity/1, get_internal/4, get_external/2, add_relation_impl/3, update_impl/2,
+-export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
     delete_impl/1]).
 -export([exists_impl/2, authorize_impl/4, validate_impl/2]).
 -export([has_eff_privilege/3]).
@@ -35,6 +35,13 @@ create_impl({user, UserId}, _, entity, #{<<"name">> := Name}) ->
 create_impl({user, _UserId}, SpaceId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
+        od_space, SpaceId,
+        privileges:space_user()
+    ),
+    {ok, SpaceId};
+create_impl({user, _UserId}, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
+    entity_graph:add_relation(
+        od_group, GroupId,
         od_space, SpaceId,
         privileges:space_user()
     ),
@@ -66,13 +73,13 @@ get_external({user, _UserId}, _) ->
     ok.
 
 
-add_relation_impl({SpaceId, users}, od_user, UserId) ->
-    entity_graph:add_relation(
-        od_user, UserId,
-        od_space, SpaceId,
-        privileges:space_user()
-    ),
-    {ok, SpaceId}.
+%%add_relation_impl({SpaceId, users}, od_user, UserId) ->
+%%    entity_graph:add_relation(
+%%        od_user, UserId,
+%%        od_space, SpaceId,
+%%        privileges:space_user()
+%%    ),
+%%    {ok, SpaceId}.
 
 
 update_impl(SpaceId, Data) when is_binary(SpaceId) ->
@@ -99,11 +106,21 @@ exists_impl(SpaceId, users) when is_binary(SpaceId) ->
         % If the space with SpaceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
+    end};
+exists_impl(SpaceId, groups) when is_binary(SpaceId) ->
+    {internal, fun(#od_space{}) ->
+        % If the space with SpaceId can be found, it exists. If not, the
+        % verification will fail before this function is called.
+        true
     end}.
 
 
 authorize_impl({user, _UserId}, create, undefined, entity) ->
     true;
+authorize_impl({user, UserId}, create, SpaceId, users) when is_binary(SpaceId) ->
+    auth_by_privilege(UserId, space_invite_user); %TODO admin privs
+authorize_impl({user, UserId}, create, SpaceId, groups) when is_binary(SpaceId) ->
+    auth_by_privilege(UserId, space_invite_group); %TODO admin privs
 
 authorize_impl({user, UserId}, get, SpaceId, users) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_view_data);
@@ -118,9 +135,6 @@ authorize_impl({user, UserId}, update, SpaceId, entity) when is_binary(SpaceId) 
 authorize_impl({user, UserId}, delete, SpaceId, entity) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_remove);
 
-authorize_impl({user, UserId}, create, SpaceId, users) when is_binary(SpaceId) ->
-    auth_by_privilege(UserId, space_invite_user); %TODO admin privs
-
 authorize_impl({user, _UserId}, consume_token, join_as_user, todo) ->
     true;
 authorize_impl({user, _UserId}, consume_token, join_as_group, todo) ->
@@ -129,12 +143,17 @@ authorize_impl({user, _UserId}, consume_token, join_as_group, todo) ->
 
 validate_impl(create, entity) -> #{
     required => #{
+        <<"name">> => binary
+    }
+};
+validate_impl(create, users) -> #{
+    required => #{
         <<"userId">> => {binary, fun(Value) -> user_logic:exists(Value) end}
     }
 };
-validate_impl(create, entity) -> #{
+validate_impl(create, groups) -> #{
     required => #{
-        <<"name">> => binary
+        <<"groupId">> => {binary, fun(Value) -> group_logic:exists(Value) end}
     }
 };
 validate_impl(update, entity) -> #{

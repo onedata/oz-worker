@@ -129,7 +129,7 @@ modify_group_relations(UpdateFunction) ->
                 ?emergency("Modifying relations..."),
                 % TODO try catch
                 UpdateFunction(),
-                timer:sleep(1000),
+                timer:sleep(1000), % TODO Zeby nie za czesto
                 update_state(fun(EffGraphState) ->
                     {ok, EffGraphState#entity_graph_state{dirty = true}}
                 end),
@@ -192,13 +192,11 @@ refresh_entity_graph() ->
     ]),
     case BottomUp of
         [{_, ModelBU, IdBU} | _] ->
-            ?emergency("Refreshing (BU) ~p#~s", [ModelBU, IdBU]),
             refresh_entity(bottom_up, ModelBU, IdBU),
             refresh_entity_graph();
         [] ->
             case TopDown of
                 [{_, ModelTD, IdTD} | _] ->
-                    ?emergency("Refreshing (TD) ~p#~s", [ModelTD, IdTD]),
                     refresh_entity(top_down, ModelTD, IdTD),
                     refresh_entity_graph();
                 [] ->
@@ -213,10 +211,13 @@ refresh_entity(WhichWay, ModelType, EntityId) ->
         bottom_up -> top_down
     end,
     {ok, #document{value = Entity}} = ModelType:get(EntityId),
+    ?emergency("Refreshing (~p) ~s", [WhichWay, readable(EntityId, Entity)]),
     % Get neighbours of the entity in given direction
     NeighboursMap = extract_neighbours(WhichWay, Entity),
+    ?emergency("NeighboursMap: ~p", [NeighboursMap]),
     % Check which neighbours have effective relations to aggregate
     ToAggregate = neighbours_with_eff_relations(WhichWay, ModelType),
+    ?emergency("ToAggregate: ~p", [ToAggregate]),
     % Get significant effective relations from all neighbours
     EffRelationsOfNeighbours = lists:flatmap(
         fun(NbrType) ->
@@ -235,6 +236,7 @@ refresh_entity(WhichWay, ModelType, EntityId) ->
                     )
                 end, Neighbours)
         end, ToAggregate),
+    ?emergency("EffRelationsOfNeighbours: ~p", [EffRelationsOfNeighbours]),
     % Aggregate all effective relations - from neighbours and the entity itself
     AggregatedEffRelations = lists:foldl(
         fun(RelationsMap, AccMapOuter) ->
@@ -246,15 +248,18 @@ refresh_entity(WhichWay, ModelType, EntityId) ->
                     AccMapInner#{NType => NewNeighbours}
                 end, AccMapOuter, maps:to_list(RelationsMap))
         end, #{}, [NeighboursMap | EffRelationsOfNeighbours]),
+    ?emergency("AggregatedEffRelations: ~p", [AggregatedEffRelations]),
     % Check if neighbours should be marked dirty (depending on direction)
     case AggregatedEffRelations =:= eff_relations(WhichWay, Entity) of
         true ->
             % Nothing changed, no action is needed
+            ?emergency("Nothing changed"),
             ok;
         false ->
             % Mark all neighbours as dirty
             % (these that are in the direction of update)
             Successors = extract_neighbours(OtherWay, Entity),
+            ?emergency("Successors: ~p", [Successors]),
             lists:foreach(
                 fun({NType, NList}) ->
                     lists:foreach(
@@ -361,22 +366,22 @@ mark_dirty(WhichWay, Flag, Model, Id, Entity) ->
             } = EffGraphState,
             NewState = case {WhichWay, Flag} of
                 {bottom_up, true} ->
-                    ?emergency("bottom-up dirty: ~p#~s", [Model, Id]),
+                    ?emergency("bottom-up dirty: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
                         bottom_up_dirty = lists:sort([{Priority, Model, Id} | BottomUpDirty])
                     };
                 {bottom_up, false} ->
-                    ?emergency("bottom-up clean: ~s", [Id]),
+                    ?emergency("bottom-up clean: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
                         bottom_up_dirty = lists:keydelete(Id, 3, BottomUpDirty)
                     };
                 {top_down, true} ->
-                    ?emergency("top-down dirty: ~p#~s", [Model, Id]),
+                    ?emergency("top-down dirty: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
                         top_down_dirty = lists:sort([{Priority, Model, Id} | TopDownDirty])
                     };
                 {top_down, false} ->
-                    ?emergency("top-down clean: ~s", [Id]),
+                    ?emergency("top-down clean: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
                         top_down_dirty = lists:keydelete(Id, 3, TopDownDirty)
                     }
@@ -625,7 +630,11 @@ extract_neighbours(top_down, #od_group{} = Group) ->
         od_group => Groups, od_space => Spaces,
         od_handle_service => HServices, od_handle => Handles
     };
-extract_neighbours(top_down, #od_space{}) ->
+extract_neighbours(top_down, #od_space{} = Space) ->
+    #od_space{providers_supports = Providers, shares = Shares} = Space,
+    #{od_provider => element(1, lists:unzip(Providers)), od_share => Shares};
+% Above clauses cover all the relations, so return an empty list in other cases.
+extract_neighbours(_, _) ->
     #{}.
 
 
@@ -1132,3 +1141,23 @@ override_privileges(PrivilegesProplist, NewPrivileges) ->
         fun({Id, _}) ->
             {Id, NewPrivileges}
         end, PrivilegesProplist).
+
+
+readable(Id, #od_user{name = Name}) ->
+    readable(Name, <<"usr">>, Id);
+readable(Id, #od_group{name = Name}) ->
+    readable(Name, <<"grp">>, Id);
+readable(Id, #od_space{name = Name}) ->
+    readable(Name, <<"spc">>, Id);
+readable(Id, #od_share{name = Name}) ->
+    readable(Name, <<"shr">>, Id);
+readable(Id, #od_provider{client_name = Name}) ->
+    readable(Name, <<"prv">>, Id);
+readable(Id, #od_handle_service{name = Name}) ->
+    readable(Name, <<"hsr">>, Id);
+readable(Id, #od_handle{resource_id = ResId}) ->
+    readable(ResId, <<"hnd">>, Id).
+
+
+readable(Name, Type, Id) ->
+    str_utils:format_bin("~s-~s#~s", [Name, Type, binary:part(Id, {0, 4})]).

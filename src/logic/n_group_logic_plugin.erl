@@ -18,13 +18,13 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create_impl/3, get_impl/2, add_relation_impl/3, update_impl/2,
+-export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
     delete_impl/1]).
--export([exists_impl/1, authorize_impl/3, validate_impl/2]).
+-export([exists_impl/2, authorize_impl/4, validate_impl/2]).
 -export([has_eff_privilege/3]).
 
 
-create_impl({user, UserId}, od_group, Data) ->
+create_impl({user, UserId}, _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
     Type = maps:get(<<"type">>, Data, role),
     {ok, GroupId} = od_group:create(
@@ -38,9 +38,7 @@ create_impl({user, UserId}, od_group, Data) ->
     {ok, GroupId}.
 
 
-get_impl({user, _UserId}, {_GroupId, #od_group{users = UsersPrivileges}, users}) ->
-    {ok, UsersPrivileges};
-get_impl({user, _UserId}, GroupId) when is_binary(GroupId) ->
+get_entity(GroupId) ->
     case od_group:get(GroupId) of
         {ok, #document{value = Group}} ->
             {ok, Group};
@@ -49,13 +47,21 @@ get_impl({user, _UserId}, GroupId) when is_binary(GroupId) ->
     end.
 
 
-add_relation_impl({GroupId, users}, od_user, UserId) ->
-    entity_graph:add_relation(
-        od_user, UserId,
-        od_group, GroupId,
-        privileges:group_user()
-    ),
-    {ok, GroupId}.
+get_internal({user, _UserId}, _GroupId, #od_group{users = Users}, users) ->
+    {ok, Users}.
+
+
+get_external({user, _UserId}, _) ->
+    ok.
+
+
+%%add_relation_impl({GroupId, users}, od_user, UserId) ->
+%%    entity_graph:add_relation(
+%%        od_user, UserId,
+%%        od_group, GroupId,
+%%        privileges:group_user()
+%%    ),
+%%    {ok, GroupId}.
 
 
 update_impl(GroupId, Data) when is_binary(GroupId) ->
@@ -72,32 +78,50 @@ delete_impl(GroupId) when is_binary(GroupId) ->
     ok = od_group:delete(GroupId).
 
 
-exists_impl(GroupId) when is_binary(GroupId) ->
+exists_impl(GroupId, entity) when is_binary(GroupId) ->
     case od_group:get(GroupId) of
         {ok, #document{value = Group}} ->
             {true, Group};
         _ ->
             false
     end;
-exists_impl(_) ->
+exists_impl(GroupId, users) when is_binary(GroupId) ->
+    {internal, fun(#od_group{}) ->
+        % If the space with SpaceId can be found, it exists. If not, the
+        % verification will fail before this function is called.
+        true
+    end};
+exists_impl(GroupId, groups) when is_binary(GroupId) ->
+    {internal, fun(#od_group{}) ->
+        % If the space with SpaceId can be found, it exists. If not, the
+        % verification will fail before this function is called.
+        true
+    end};
+exists_impl(_, _) ->
     true.
 
 
-authorize_impl({user, _UserId}, create, od_group) ->
+authorize_impl({user, _UserId}, create, undefined, entity) ->
     true;
-authorize_impl({user, UserId}, get, {GroupId, users}) when is_binary(GroupId) ->
+authorize_impl({user, UserId}, create, GroupId, users) when is_binary(GroupId) ->
+    auth_by_privilege(UserId, group_invite_user); %TODO admin privs
+authorize_impl({user, UserId}, create, GroupId, groups) when is_binary(GroupId) ->
+    auth_by_privilege(UserId, group_invite_group); %TODO admin privs
+
+authorize_impl({user, UserId}, get, GroupId, users) when is_binary(GroupId) ->
     auth_by_privilege(UserId, group_view_data);
-authorize_impl({user, UserId}, get, GroupId) when is_binary(GroupId) ->
+authorize_impl({user, UserId}, get, GroupId, entity) when is_binary(GroupId) ->
     auth_by_privilege(UserId, group_view_data);
-authorize_impl({user, UserId}, add_relation, {GroupId, users}) when is_binary(GroupId) ->
-    auth_by_privilege(UserId, group_invite_user);
-authorize_impl({user, UserId}, update, GroupId) when is_binary(GroupId) ->
+authorize_impl({user, UserId}, update, GroupId, entity) when is_binary(GroupId) ->
     auth_by_privilege(UserId, group_change_data);
-authorize_impl({user, UserId}, delete, GroupId) when is_binary(GroupId) ->
-    auth_by_privilege(UserId, group_remove).
+authorize_impl({user, UserId}, delete, GroupId, entity) when is_binary(GroupId) ->
+    auth_by_privilege(UserId, group_remove);
+
+authorize_impl({user, UserId}, add_relation, todo, users)  ->
+    auth_by_privilege(UserId, group_invite_user).
 
 
-validate_impl(create, od_group) -> #{
+validate_impl(create, entity) -> #{
     required => #{
         <<"name">> => binary
     },
@@ -105,7 +129,17 @@ validate_impl(create, od_group) -> #{
         <<"type">> => {atom, [organization, unit, team, role]}
     }
 };
-validate_impl(update, GroupId) when is_binary(GroupId) -> #{
+validate_impl(create, users) -> #{
+    required => #{
+        <<"userId">> => {binary, fun(Value) -> user_logic:exists(Value) end}
+    }
+};
+validate_impl(create, groups) -> #{
+    required => #{
+        <<"groupId">> => {binary, fun(Value) -> group_logic:exists(Value) end}
+    }
+};
+validate_impl(update, entity) -> #{
     at_least_one => #{
         <<"name">> => binary,
         <<"type">> => {atom, [organization, unit, team, role]}

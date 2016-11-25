@@ -14,10 +14,11 @@
 -behaviour(data_logic_behaviour).
 
 -include("entity_logic_errors.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([create/5, get/4, update/5, delete/4, consume_token/4]).
-
+-export([ahaha/0]).
 
 -record(request, {
     issuer = undefined :: term(), % TODO
@@ -28,6 +29,26 @@
     resource = undefined :: undefined | term(),
     data = #{} :: maps:map()
 }).
+
+ahaha() ->
+    {ok, U1} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U1">>}]),
+    {ok, U2} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U2">>}]),
+    {ok, U3} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U3">>}]),
+    {ok, G1} = rpc:call(node(), n_group_logic, create, [{user, U1}, <<"G1">>]),
+%%    rpc:call(node(), {user, U2}, G1),
+%%    rpc:call(node(), {user, U3}, G1),
+%%
+%%    {ok, U4} = rpc:call(node(), [#od_user{name = <<"U4">>}]),
+%%    {ok, G2} = rpc:call(node(), U4, <<"G2">>),
+%%    rpc:call(node(), {group, G1}, G2),
+%%
+%%    {ok, U5} = rpc:call(node(), [#od_user{name = <<"U5">>}]),
+%%    {ok, S1} = rpc:call(node(), {user, U5}, <<"S1">>),
+%%    rpc:call(node(), {group, G2}, S1),
+%%
+%%    {ok, P1} = rpc:call(node(), <<"P1">>),
+%%    rpc:call(node(), P1, S1, 1000),
+    ok.
 
 
 create(Issuer, ELPlugin, EntityId, Resource, Data) ->
@@ -399,10 +420,14 @@ transform_and_check_value(Key, Data, Validator) ->
             false;
         Value ->
             Rule = maps:get(Key, Validator),
-            case check_value(Rule, Value) of
+            NewValue = case convert_value(Rule, Value) of
+                error ->
+                    throw(?EL_BAD_DATA(Key));
+                Val ->
+                    Val
+            end,
+            case check_value(Rule, NewValue) of
                 true ->
-                    {true, Data};
-                {true, NewValue} ->
                     {true, Data#{Key => NewValue}};
                 false ->
                     throw(?EL_BAD_DATA(Key));
@@ -410,6 +435,19 @@ transform_and_check_value(Key, Data, Validator) ->
                     throw(?EL_EMPTY_DATA(Key))
             end
     end.
+
+
+convert_value({Type, _Verificator}, Value) ->
+    convert_value(Type, Value);
+convert_value(atom, Binary) when is_binary(Binary) ->
+    try binary_to_existing_atom(Binary, utf8) of
+        Atom ->
+            Atom
+    catch _:_ ->
+        error
+    end;
+convert_value(_, Value) ->
+    Value.
 
 
 check_value(_, <<"">>) ->
@@ -422,29 +460,14 @@ check_value(binary, Bin) when is_binary(Bin) ->
     true;
 check_value({binary, AllowedValues}, Bin) when is_binary(Bin) ->
     lists:member(Bin, AllowedValues);
-check_value(atom, Bin) when is_binary(Bin) ->
-    try binary_to_existing_atom(Bin, utf8) of
-        Atom ->
-            check_value(atom, Atom)
-    catch _:_ ->
-        false
-    end;
+check_value({binary, VerificationFun}, Bin) when is_binary(Bin) ->
+    VerificationFun(Bin); %TODO fun -> boolean() | empty
 check_value(atom, Atom) when is_atom(Atom) ->
     true;
-check_value({atom, AllowedValues}, Bin) when is_binary(Bin) ->
-    try binary_to_existing_atom(Bin, utf8) of
-        Atom ->
-            check_value({atom, AllowedValues}, Atom)
-    catch _:_ ->
-        false
-    end;
 check_value({atom, AllowedValues}, Atom) when is_atom(Atom) ->
-    case lists:member(Atom, AllowedValues) of
-        false ->
-            false;
-        true ->
-            {true, Atom}
-    end;
+    lists:member(Atom, AllowedValues);
+check_value({atom, VerificationFun}, Atom) when is_atom(Atom) ->
+    VerificationFun(Atom);
 check_value(Rule, _) ->
     ?error("Unknown validate rule: ~p", [Rule]),
     throw(?EL_INTERNAL_SERVER_ERROR).

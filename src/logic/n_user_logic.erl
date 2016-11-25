@@ -9,7 +9,7 @@
 
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_space_logic).
+-module(n_user_logic).
 -author("Lukasz Opiola").
 -behaviour(data_logic_behaviour).
 
@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([
-    create/2
+    create/1
 ]).
 -export([
     get/2,
@@ -38,8 +38,8 @@
 ]).
 
 
-create(Issuer, Data) ->
-    n_entity_logic:create(Issuer, n_space_logic_plugin, undefined, entity, Data).
+create(UserInfo) ->
+    od_user:create(#document{value = UserInfo}).
 
 
 get(Issuer, SpaceId) ->
