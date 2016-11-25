@@ -1160,4 +1160,4 @@ readable(Id, #od_handle{resource_id = ResId}) ->
 
 
 readable(Name, Type, Id) ->
-    str_utils:format_bin("~s-~s#~s", [Name, Type, binary:part(Id, {0, 4})]).
+    str_utils:format_bin("~s-~s#~s", [Name, Type, binary:part(Id, {0, 8})]).

@@ -30,17 +30,47 @@
     data = #{} :: maps:map()
 }).
 
+
+% TODO do typu
+type_rule() -> [
+    atom,
+    list_of_atoms,
+    binary,
+    list_of_binaries,
+    integer,
+    positive_integer,
+    float,
+    json
+].
+
+value_rule() -> [
+    any,
+    non_empty,
+    [possible_values],
+    fun() -> ok end
+].
+
+
 ahaha() ->
     {ok, U1} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U1">>}]),
     {ok, U2} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U2">>}]),
     {ok, U3} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U3">>}]),
     {ok, G1} = rpc:call(node(), n_group_logic, create, [{user, U1}, <<"G1">>]),
-%%    rpc:call(node(), {user, U2}, G1),
-%%    rpc:call(node(), {user, U3}, G1),
-%%
-%%    {ok, U4} = rpc:call(node(), [#od_user{name = <<"U4">>}]),
-%%    {ok, G2} = rpc:call(node(), U4, <<"G2">>),
-%%    rpc:call(node(), {group, G1}, G2),
+    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [{user, U1}, G1, U2]),
+    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [{user, U1}, G1, U3]),
+
+    {ok, U4} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U4">>}]),
+    {ok, G2} = rpc:call(node(), n_group_logic, create, [{user, U4}, <<"G2">>]),
+    {ok, G2} = rpc:call(node(), n_group_logic, add_group, [{user, U4}, G2, G1]),
+
+    timer:sleep(8000),
+    print(od_user, U4),
+    print(od_user, U3),
+    print(od_user, U2),
+    print(od_user, U1),
+    print(od_group, G1),
+    print(od_group, G2),
+
 %%
 %%    {ok, U5} = rpc:call(node(), [#od_user{name = <<"U5">>}]),
 %%    {ok, S1} = rpc:call(node(), {user, U5}, <<"S1">>),
@@ -49,6 +79,35 @@ ahaha() ->
 %%    {ok, P1} = rpc:call(node(), <<"P1">>),
 %%    rpc:call(node(), P1, S1, 1000),
     ok.
+
+
+
+
+print(ModelType, Id) when is_atom(ModelType) ->
+    {ok, #document{value = Entity}} = ModelType:get(Id),
+    print(Entity, Id);
+print(#od_user{} = User, Id) ->
+    #od_user{name = Name, groups = Groups, eff_groups = EffGroups} = User,
+    print(od_user, Id, [{name, Name}, {groups, Groups}, {eff_groups, EffGroups}]);
+print(#od_group{} = Group, Id) ->
+    #od_group{
+        name = Name,
+        children = Children, eff_children = EffChildren,
+        parents = Parents, eff_parents = EffParents
+    } = Group,
+    print(od_group, Id, [
+        {name, Name},
+        {children, Children}, {eff_children, EffChildren},
+        {parents, Parents}, {eff_parents, EffParents}
+    ]).
+
+print(ModelType, Id, Attrs) ->
+    io:format("~p#~s~n", [ModelType, Id]),
+    lists:foreach(
+        fun({K, V}) ->
+            io:format("   ~p: ~p~n", [K, V])
+        end, Attrs),
+    io:format("~n").
 
 
 create(Issuer, ELPlugin, EntityId, Resource, Data) ->
@@ -419,55 +478,82 @@ transform_and_check_value(Key, Data, Validator) ->
         undefined ->
             false;
         Value ->
-            Rule = maps:get(Key, Validator),
-            NewValue = case convert_value(Rule, Value) of
-                error ->
-                    throw(?EL_BAD_DATA(Key));
-                Val ->
-                    Val
-            end,
-            case check_value(Rule, NewValue) of
-                true ->
-                    {true, Data#{Key => NewValue}};
-                false ->
-                    throw(?EL_BAD_DATA(Key));
-                empty ->
-                    throw(?EL_EMPTY_DATA(Key))
+            {TypeRule, ValueRule} = maps:get(Key, Validator),
+            try
+                % Pozwalamy crashowac obu checkom
+                NewValue = check_type(TypeRule, Value),
+                case check_value(TypeRule, ValueRule, NewValue) of
+                    true ->
+                        {true, Data#{Key => NewValue}};
+                    false ->
+                        throw(?EL_BAD_DATA(Key));
+                    empty ->
+                        throw(?EL_EMPTY_DATA(Key))
+                end
+            catch
+                throw:Throw ->
+                    throw(Throw);
+                _:_ ->
+                    throw(?EL_BAD_DATA(Key))
             end
     end.
 
 
-convert_value({Type, _Verificator}, Value) ->
-    convert_value(Type, Value);
-convert_value(atom, Binary) when is_binary(Binary) ->
-    try binary_to_existing_atom(Binary, utf8) of
-        Atom ->
-            Atom
-    catch _:_ ->
-        error
-    end;
-convert_value(_, Value) ->
-    Value.
+check_type(atom, Atom) when is_atom(Atom) ->
+    Atom;
+check_type(atom, Binary) when is_binary(Binary) ->
+    binary_to_existing_atom(Binary, utf8);
+check_type(list_of_atoms, []) ->
+    [];
+check_type(list_of_atoms, [Atom | _] = Atoms) when is_atom(Atom) ->
+    Atoms;
+check_type(list_of_atoms, [Binary | _] = Binaries) when is_binary(Binary) ->
+    [binary_to_existing_atom(Bin, utf8) || Bin <- Binaries];
+check_type(binary, Binary) when is_binary(Binary) ->
+    Binary;
+check_type(binary, Atom) when is_atom(Atom) ->
+    atom_to_binary(Atom, utf8);
+check_type(list_of_binaries, []) ->
+    [];
+check_type(list_of_binaries, [Binary | _] = Binaries) when is_binary(Binary) ->
+    Binaries;
+check_type(list_of_binaries, [Atom | _] = Atoms) when is_atom(Atom) ->
+    [atom_to_binary(A, utf8) || A <- Atoms];
+check_type(integer, Int) when is_integer(Int) ->
+    Int;
+check_type(positive_integer, Int) when is_integer(Int) andalso Int > 0 ->
+    Int;
+check_type(float, Float) when is_float(Float) ->
+    Float;
+check_type(json, JSON) when is_map(JSON) ->
+    JSON.
 
 
-check_value(_, <<"">>) ->
-    empty;
-check_value(_, "") ->
-    empty;
-check_value(_, '') ->
-    empty;
-check_value(binary, Bin) when is_binary(Bin) ->
+check_value(_, any, _) ->
     true;
-check_value({binary, AllowedValues}, Bin) when is_binary(Bin) ->
-    lists:member(Bin, AllowedValues);
-check_value({binary, VerificationFun}, Bin) when is_binary(Bin) ->
-    VerificationFun(Bin); %TODO fun -> boolean() | empty
-check_value(atom, Atom) when is_atom(Atom) ->
+check_value(atom, non_empty, '') ->
+    empty;
+check_value(list_of_atoms, non_empty, []) ->
+    empty;
+check_value(binary, non_empty, <<"">>) ->
+    empty;
+check_value(list_of_binaries, non_empty, []) ->
+    empty;
+check_value(json, non_empty, #{}) ->
+    empty;
+check_value(_, non_empty, _) ->
     true;
-check_value({atom, AllowedValues}, Atom) when is_atom(Atom) ->
-    lists:member(Atom, AllowedValues);
-check_value({atom, VerificationFun}, Atom) when is_atom(Atom) ->
-    VerificationFun(Atom);
-check_value(Rule, _) ->
-    ?error("Unknown validate rule: ~p", [Rule]),
+check_value(_, AllowedVals, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
+    [] =:= ordsets:subtract(
+        ordsets:from_list(Vals),
+        ordsets:from_list(AllowedVals)
+    );
+check_value(_, AllowedVals, Val) when is_list(AllowedVals) ->
+    lists:member(Val, AllowedVals);
+check_value(_, VerifyFun, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
+    lists:all(VerifyFun, Vals); %TODO fun -> boolean() | empty
+check_value(_, VerifyFun, Val) when is_function(VerifyFun, 1) ->
+    VerifyFun(Val); %TODO fun -> boolean() | empty
+check_value(_, Rule, _) ->
+    ?error("Unknown value rule: ~p", [Rule]),
     throw(?EL_INTERNAL_SERVER_ERROR).

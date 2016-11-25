@@ -15,23 +15,52 @@
 
 -include_lib("ctool/include/logging.hrl").
 
--export([create/2, get/2, update/3, delete/2]).
+-define(PLUGIN, n_group_logic_plugin).
+
+-export([create/2]).
+
+-export([
+    add_user/3,
+    add_group/3
+]).
+
+-export([get/2]).
+
+-export([update/3]).
+
+-export([delete/2]).
 
 create(Issuer, Name) when is_binary(Name) ->
     create(Issuer, #{<<"name">> => Name});
 create(Issuer, Data) ->
-    n_entity_logic:create(Issuer, n_group_logic_plugin, undefined, entity, Data).
+    n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
+
+
+add_user(Issuer, GroupId, UserId) when is_binary(UserId) ->
+    add_user(Issuer, GroupId, #{<<"userId">> => UserId});
+add_user(Issuer, GroupId, Data) ->
+    n_entity_logic:create(Issuer, ?PLUGIN, GroupId, users, Data).
+
+
+add_group(Issuer, GroupId, ChildGroupId) when is_binary(ChildGroupId) ->
+    add_group(Issuer, GroupId, #{<<"groupId">> => ChildGroupId});
+add_group(Issuer, GroupId, Data) ->
+    n_entity_logic:create(Issuer, ?PLUGIN, GroupId, groups, Data).
+
 
 get(Issuer, GroupId) ->
-    n_entity_logic:get(Issuer, n_group_logic_plugin, entity, GroupId).
+    n_entity_logic:get(Issuer, ?PLUGIN, entity, GroupId).
 
 %%add_relation(Issuer, {GroupId, users}, od_user, UserId) ->
 %%    n_entity_logic:add_relation(
-%%        Issuer, n_group_logic_plugin, {GroupId, users}, od_user, UserId
+%%        Issuer, ?PLUGIN, {GroupId, users}, od_user, UserId
 %%    ).
 
+
+
+
 update(Issuer, GroupId, Data) ->
-    n_entity_logic:update(Issuer, n_group_logic_plugin, GroupId, entity, Data).
+    n_entity_logic:update(Issuer, ?PLUGIN, GroupId, entity, Data).
 
 delete(Issuer, GroupId) ->
-    n_entity_logic:delete(Issuer, n_group_logic_plugin, GroupId, entity).
+    n_entity_logic:delete(Issuer, ?PLUGIN, GroupId, entity).

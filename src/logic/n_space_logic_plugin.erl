@@ -143,7 +143,7 @@ authorize_impl({user, _UserId}, consume_token, join_as_group, todo) ->
 
 validate_impl(create, entity) -> #{
     required => #{
-        <<"name">> => binary
+        <<"name">> => {binary, non_empty}
     }
 };
 validate_impl(create, users) -> #{
@@ -158,7 +158,7 @@ validate_impl(create, groups) -> #{
 };
 validate_impl(update, entity) -> #{
     required => #{
-        <<"name">> => binary
+        <<"name">> => {binary, non_empty}
     }
 }.
 

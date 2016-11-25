@@ -35,6 +35,20 @@ create_impl({user, UserId}, _, entity, Data) ->
         od_group, GroupId,
         privileges:group_admin()
     ),
+    {ok, GroupId};
+create_impl({user, _UserId}, GroupId, users, #{<<"userId">> := UserId}) ->
+    entity_graph:add_relation(
+        od_user, UserId,
+        od_group, GroupId,
+        privileges:group_user()
+    ),
+    {ok, GroupId};
+create_impl({user, _UserId}, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
+    entity_graph:add_relation(
+        od_group, ChildGroupId,
+        od_group, GroupId,
+        privileges:group_user()
+    ),
     {ok, GroupId}.
 
 
@@ -123,7 +137,7 @@ authorize_impl({user, UserId}, add_relation, todo, users)  ->
 
 validate_impl(create, entity) -> #{
     required => #{
-        <<"name">> => binary
+        <<"name">> => {binary, non_empty}
     },
     optional => #{
         <<"type">> => {atom, [organization, unit, team, role]}
@@ -141,7 +155,7 @@ validate_impl(create, groups) -> #{
 };
 validate_impl(update, entity) -> #{
     at_least_one => #{
-        <<"name">> => binary,
+        <<"name">> => {binary, non_empty},
         <<"type">> => {atom, [organization, unit, team, role]}
     }
 }.
