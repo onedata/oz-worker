@@ -27,7 +27,7 @@
         -> [ProviderID :: binary()].
 providers(Doc, od_space) ->
     #document{value = #od_space{users = SpaceUserTuples, groups = GroupTuples,
-        providers_supports = ProvidersSupports}} = Doc,
+        providers = ProvidersSupports}} = Doc,
     {SpaceProviders, _} = lists:unzip(ProvidersSupports),
 
     GroupUsersSets = lists:flatmap(fun({GroupId, _}) ->

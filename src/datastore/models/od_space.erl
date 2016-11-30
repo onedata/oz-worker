@@ -36,7 +36,7 @@
 record_struct(1) ->
     {record, [
         {name, string},
-        {providers_supports, [{string, integer}]},
+        {providers, [{string, integer}]},
         {users, [{string, [atom]}]},
         {groups, [{string, [atom]}]},
         {shares, [string]},

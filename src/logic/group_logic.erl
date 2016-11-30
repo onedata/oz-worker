@@ -479,7 +479,7 @@ get_spaces(GroupId) ->
 get_providers(GroupId) ->
     {ok, #document{value = #od_group{spaces = Spaces}}} = od_group:get(GroupId),
     GroupProviders = lists:foldl(fun(Space, Providers) ->
-        {ok, #document{value = #od_space{providers_supports = ProvidersSupports}}}
+        {ok, #document{value = #od_space{providers = ProvidersSupports}}}
             = od_space:get(Space),
         {SpaceProviders, _} = lists:unzip(ProvidersSupports),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)

@@ -215,9 +215,9 @@ remove(ProviderId) ->
 
     lists:foreach(fun(SpaceId) ->
         {ok, _} = od_space:update(SpaceId, fun(Space) ->
-            #od_space{providers_supports = Supports} = Space,
+            #od_space{providers = Supports} = Space,
             {ok, Space#od_space{
-                providers_supports = proplists:delete(ProviderId, Supports)
+                providers = proplists:delete(ProviderId, Supports)
             }}
         end)
     end, Spaces),

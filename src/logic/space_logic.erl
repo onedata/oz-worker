@@ -109,7 +109,7 @@ has_provider(SpaceId, ProviderId) ->
     case od_space:get(SpaceId) of
         {error, {not_found, _}} ->
             false;
-        {ok, #document{value = #od_space{providers_supports = ProvidersSupports}}} ->
+        {ok, #document{value = #od_space{providers = ProvidersSupports}}} ->
             {Providers, _} = lists:unzip(ProvidersSupports),
             lists:member(ProviderId, Providers)
     end.
@@ -402,8 +402,8 @@ add_provider(SpaceId, ProviderId, SupportedSize) ->
             {ok, SpaceId};
         false ->
             {ok, _} = od_space:update(SpaceId, fun(Space) ->
-                #od_space{providers_supports = Supports} = Space,
-                {ok, Space#od_space{providers_supports = [
+                #od_space{providers = Supports} = Space,
+                {ok, Space#od_space{providers = [
                     {ProviderId, SupportedSize} | Supports
                 ]}}
             end),
@@ -423,7 +423,7 @@ get_data(SpaceId, {user, UserId}) ->
     {ok, #document{
         value = #od_space{
             name = CanonicalName,
-            providers_supports = Supports,
+            providers = Supports,
             shares = Shares
         }}} = od_space:get(SpaceId),
     {ok, #document{value = #od_user{space_aliases = SpaceNames}}} = od_user:get(UserId),
@@ -436,7 +436,7 @@ get_data(SpaceId, {user, UserId}) ->
         {shares, Shares}
     ]};
 get_data(SpaceId, provider) ->
-    {ok, #document{value = #od_space{name = CanonicalName, providers_supports = Supports}}} = od_space:get(SpaceId),
+    {ok, #document{value = #od_space{name = CanonicalName, providers = Supports}}} = od_space:get(SpaceId),
     {ok, [
         {spaceId, SpaceId},
         {name, CanonicalName},
@@ -551,7 +551,7 @@ get_groups(SpaceId) ->
 -spec get_providers(SpaceId :: od_space:id(), Client :: user | provider) ->
     {ok, [proplists:property()]}.
 get_providers(SpaceId, _Client) ->
-    {ok, #document{value = #od_space{providers_supports = ProvidersSupports}}}
+    {ok, #document{value = #od_space{providers = ProvidersSupports}}}
         = od_space:get(SpaceId),
     {Providers, _} = lists:unzip(ProvidersSupports),
     {ok, [{providers, Providers}]}.
@@ -618,7 +618,7 @@ remove(SpaceId) ->
         value = #od_space{
             users = Users,
             groups = Groups,
-            providers_supports = Supports,
+            providers = Supports,
             shares = Shares
         }}} = od_space:get(SpaceId),
 
@@ -711,9 +711,9 @@ remove_provider(SpaceId, ProviderId) ->
         {ok, Provider#od_provider{spaces = lists:delete(SpaceId, Spaces)}}
     end),
     {ok, _} = od_space:update(SpaceId, fun(Space) ->
-        #od_space{providers_supports = Supports} = Space,
+        #od_space{providers = Supports} = Space,
         {ok, Space#od_space{
-            providers_supports = proplists:delete(ProviderId, Supports)
+            providers = proplists:delete(ProviderId, Supports)
         }}
     end),
     true.
@@ -728,7 +728,7 @@ remove_provider(SpaceId, ProviderId) ->
     {ok, SpaceId :: od_space:id()}.
 create_with_provider({user, UserId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
-    Space = #od_space{name = Name, providers_supports = Supports, users = [{UserId, Privileges}]},
+    Space = #od_space{name = Name, providers = Supports, users = [{UserId, Privileges}]},
     {Providers, _} = lists:unzip(Supports),
 
     {ok, SpaceId} = od_space:save(#document{value = Space}),
@@ -743,7 +743,7 @@ create_with_provider({user, UserId}, Name, Supports) ->
 
 create_with_provider({group, GroupId}, Name, Supports) ->
     Privileges = privileges:space_admin(),
-    Space = #od_space{name = Name, providers_supports = Supports, groups = [{GroupId, Privileges}]},
+    Space = #od_space{name = Name, providers = Supports, groups = [{GroupId, Privileges}]},
     {ok, SpaceId} = od_space:save(#document{value = Space}),
     {Providers, _} = lists:unzip(Supports),
 

@@ -412,7 +412,7 @@ get_providers(UserId) ->
     UserProviders = lists:foldl(fun(Space, Providers) ->
         {ok, #document{
             value = #od_space{
-                providers_supports = Supports
+                providers = Supports
             }}} = od_space:get(Space),
         {SpaceProviders, _} = lists:unzip(Supports),
         ordsets:union(ordsets:from_list(SpaceProviders), Providers)

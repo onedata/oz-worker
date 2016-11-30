@@ -80,7 +80,7 @@ generate_spaces_test_base(Config) ->
 
         %% when
         PID = subscriptions_test_utils:create_provider(Node, PName, SIDs),
-        Space = #od_space{name = <<"name">>, providers_supports = [{PID, 0}]},
+        Space = #od_space{name = <<"name">>, providers = [{PID, 0}]},
         Context = subscriptions_test_utils:init_messages(Node, PID, []),
 
         lists:map(fun(SID) ->

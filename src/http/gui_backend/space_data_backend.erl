@@ -213,7 +213,7 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
     HasViewPrivileges) ->
     {ok, #document{value = #od_space{
         name = DefaultName,
-        providers_supports = ProvidersSupports
+        providers = ProvidersSupports
     }}} = od_space:get(SpaceId),
     % Try to get space name from personal user's mapping, if not use its
     % default name.

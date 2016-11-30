@@ -145,7 +145,7 @@ get_msg(Seq, Doc, od_space = Model) ->
     #od_space{
         name = Name,
 
-        providers_supports = Supports,
+        providers = Supports,
         users = Users,
         groups = Groups,
         shares = Shares
@@ -155,7 +155,7 @@ get_msg(Seq, Doc, od_space = Model) ->
         {name, Name},
 
         % Direct relations to other entities
-        {providers_supports, Supports},
+        {providers, Supports},
         {users, Users},
         {groups, Groups},
         {shares, Shares},

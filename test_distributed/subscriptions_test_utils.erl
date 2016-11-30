@@ -139,7 +139,7 @@ get_last_sequence_number(Node) ->
 %%% Message expectations
 %%%===================================================================
 
-expectation(Id, #od_space{name = Name, providers_supports = Supports,
+expectation(Id, #od_space{name = Name, providers = Supports,
     groups = Groups, users = Users, shares = Shares}) ->
     space_expectation(Id, Name, Users, Groups, Supports, Shares);
 expectation(Id, #od_share{name = Name, space = Space,
@@ -259,7 +259,7 @@ space_expectation(Id, Name, Users, Groups, Supports, Shares) ->
         {<<"id">>, Id},
         {<<"name">>, Name},
 
-        {<<"providers_supports">>, Supports},
+        {<<"providers">>, Supports},
         {<<"users">>, privileges_as_binaries(Users)},
         {<<"groups">>, privileges_as_binaries(Groups)},
         {<<"shares">>, Shares},

@@ -144,7 +144,7 @@ no_space_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    S1 = #od_space{name = <<"initial">>, providers_supports = []},
+    S1 = #od_space{name = <<"initial">>, providers = []},
     subscriptions_test_utils:save(Node, ?ID(s1), S1),
 
     % when
@@ -163,7 +163,7 @@ space_update_through_support_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1)]),
-    S1 = #od_space{name = <<"initial">>, providers_supports = [{PID, 0}]},
+    S1 = #od_space{name = <<"initial">>, providers = [{PID, 0}]},
     subscriptions_test_utils:save(Node, ?ID(s1), S1),
 
     % when
@@ -234,7 +234,7 @@ no_share_update_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), []),
-    Sp1 = #od_space{name = <<"whatever">>, providers_supports = [], shares = [?ID(sh1)]},
+    Sp1 = #od_space{name = <<"whatever">>, providers = [], shares = [?ID(sh1)]},
     Sh1 = #od_share{name = <<"initial">>, space = ?ID(sp1)},
     subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
     subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
@@ -361,7 +361,7 @@ share_update_through_support_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(sp1)]),
-    Sp1 = #od_space{name = <<"whatever">>, providers_supports = [{PID, 0}], shares = [?ID(sh1)]},
+    Sp1 = #od_space{name = <<"whatever">>, providers = [{PID, 0}], shares = [?ID(sh1)]},
     Sh1 = #od_share{name = <<"initial">>, space = ?ID(sp1)},
     subscriptions_test_utils:save(Node, ?ID(sp1), Sp1),
     subscriptions_test_utils:save(Node, ?ID(sh1), Sh1),
@@ -397,7 +397,7 @@ all_data_in_space_update_test(Config) ->
         name = <<"space">>,
         users = [{?ID(u1), privileges:space_manager()}, {?ID(u2), []}],
         groups = [{?ID(g1), privileges:space_admin()}, {?ID(g2), []}],
-        providers_supports = [{PID, 0}, {PID2, 100}, {PID3, 1000}]
+        providers = [{PID, 0}, {PID2, 100}, {PID3, 1000}]
     },
     Context = subscriptions_test_utils:init_messages(Node, PID, []),
     subscriptions_test_utils:save(Node, ?ID(s1), Space),
@@ -539,7 +539,7 @@ simple_delete_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1)]),
     U1 = #od_user{name = <<"u1">>, groups = [?ID(g1)]},
-    S1 = #od_space{name = <<"s1">>, providers_supports = [{PID, 0}],
+    S1 = #od_space{name = <<"s1">>, providers = [{PID, 0}],
         users = [{?ID(u1), []}]},
     G1 = #od_group{name = <<"g1">>, users = [{?ID(u1), []}]},
 
@@ -713,8 +713,8 @@ updates_for_added_user_test(Config) ->
     G3 = #od_group{name = <<"g1">>, users = [],
         spaces = [], eff_children = [{?ID(g3), []}, {?ID(g2), []}],
         parents = [?ID(g2)]},
-    S1 = #od_space{name = <<"s1">>, providers_supports = [{PID, 0}], groups = [{?ID(g1), []}]},
-    S2 = #od_space{name = <<"s2">>, providers_supports = [{PID, 0}], users = [{?ID(u1), []}]},
+    S1 = #od_space{name = <<"s1">>, providers = [{PID, 0}], groups = [{?ID(g1), []}]},
+    S2 = #od_space{name = <<"s2">>, providers = [{PID, 0}], users = [{?ID(u1), []}]},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(g1), G1),
     subscriptions_test_utils:save(Node, ?ID(g2), G2),
@@ -851,7 +851,7 @@ fetches_changes_from_both_cache_and_db(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [
         ?ID(s1), ?ID(s2), ?ID(s3), ?ID(s4), ?ID(s5), ?ID(s6), ?ID(s7), ?ID(s8), ?ID(s9)
     ]),
-    Space = #od_space{name = <<"initial">>, providers_supports = [{PID, 0}]},
+    Space = #od_space{name = <<"initial">>, providers = [{PID, 0}]},
     subscriptions_test_utils:save(Node, ?ID(s1), Space),
     subscriptions_test_utils:save(Node, ?ID(s3), Space),
     subscriptions_test_utils:save(Node, ?ID(s2), Space),
@@ -887,7 +887,7 @@ fetches_changes_when_cache_has_gaps(Config) ->
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [
         ?ID(s1), ?ID(s2), ?ID(s3), ?ID(s4), ?ID(s5), ?ID(s6), ?ID(s7), ?ID(s8), ?ID(s9)
     ]),
-    Space = #od_space{name = <<"initial">>, providers_supports = [{PID, 0}]},
+    Space = #od_space{name = <<"initial">>, providers = [{PID, 0}]},
     subscriptions_test_utils:save(Node, ?ID(s1), Space),
     subscriptions_test_utils:save(Node, ?ID(s2), Space),
     subscriptions_test_utils:save(Node, ?ID(s3), Space),

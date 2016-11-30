@@ -307,7 +307,7 @@ create_space_with_provider({user, UserId}, Name, Support, UUID) ->
     #document{value = #od_user{spaces = Spaces} = User} = UserDoc,
 
     Privileges = privileges:space_admin(),
-    Space = #od_space{name = Name, providers_supports = Support, users = [{UserId, Privileges}]},
+    Space = #od_space{name = Name, providers = Support, users = [{UserId, Privileges}]},
     {ok, SpaceId} = od_space:save(#document{key = UUID, value = Space}),
     UserNew = User#od_user{spaces = [SpaceId | Spaces]},
     od_user:save(UserDoc#document{value = UserNew}),
@@ -319,7 +319,7 @@ create_space_with_provider({group, GroupId}, Name, Support, UUID) ->
     #document{value = #od_group{users = Users, spaces = Spaces} = Group} = GroupDoc,
 
     Privileges = privileges:space_admin(),
-    Space = #od_space{name = Name, providers_supports = Support,
+    Space = #od_space{name = Name, providers = Support,
         groups = [{GroupId, Privileges}]},
     {ok, SpaceId} = od_space:save(#document{key = UUID, value = Space}),
     GroupNew = Group#od_group{spaces = [SpaceId | Spaces]},
