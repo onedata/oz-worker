@@ -53,7 +53,6 @@ record_struct(1) ->
         {handles, [string]},
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_spaces, #{string => [{atom, string}]}},
-        {eff_shares, #{string => [{atom, string}]}},
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},

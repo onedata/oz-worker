@@ -212,7 +212,7 @@
     root_file = undefined :: undefined | binary()
 }).
 
-%% This record defines a provider who support spaces and can be reached via url
+%% This record defines a provider who supports spaces and can be reached via url
 -record(od_provider, {
     name :: undefined | binary(),
     redirection_point :: undefined | binary(),
@@ -222,7 +222,7 @@
     longitude :: undefined | float(),
 
     % Direct relations to other entities
-    spaces = [] :: [od_space:id()],
+    spaces = [] :: relation(od_space:id()),
 
     % Effective relations to other entities
     eff_users = #{} :: eff_relation(od_user:id()), % TODO currently always empty
@@ -235,11 +235,11 @@
 -record(od_handle_service, {
     name :: od_handle_service:name() | undefined,
     proxy_endpoint :: od_handle_service:proxy_endpoint() | undefined,
-    service_properties = [] :: od_handle_service:service_properties(),
+    service_properties = #{} :: od_handle_service:service_properties(),
 
     % Direct relations to other entities
-    users = [] :: relation_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
-    groups = [] :: relation_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
+    users = #{} :: relation_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
+    groups = #{} :: relation_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
 
     % Effective relations to other entities
     eff_users = #{} :: eff_relation_with_attrs(od_user:id(), [privileges:handle_service_privilege()]), % TODO currently always empty
@@ -258,8 +258,8 @@
 
     % Direct relations to other entities
     handle_service :: od_handle_service:id() | undefined,
-    users = [] :: relation_with_attrs(od_user:id(), [privileges:handle_privilege()]),
-    groups = [] :: relation_with_attrs(od_group:id(), [privileges:handle_privilege()]),
+    users = #{} :: relation_with_attrs(od_user:id(), [privileges:handle_privilege()]),
+    groups = #{} :: relation_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
     % Effective relations to other entities
     eff_users = #{} :: eff_relation_with_attrs(od_user:id(), [privileges:handle_privilege()]), % TODO currently always empty

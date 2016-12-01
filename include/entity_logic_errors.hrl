@@ -24,6 +24,8 @@
 -define(EL_BAD_DATA_MATCHER, {error, bad_data, _}).
 -define(EL_EMPTY_DATA(__Key), {error, empty_data, __Key}).
 -define(EL_EMPTY_DATA_MATCHER, {error, empty_data, _}).
+-define(EL_ID_NOT_FOUND(__Key), {error, id_not_found, __Key}).
+-define(EL_ID_OCCUPIED(__Key), {error, id_occupied, __Key}).
 
 
 -define(EL_RELATION_EXISTS, {error, relation_exists}).

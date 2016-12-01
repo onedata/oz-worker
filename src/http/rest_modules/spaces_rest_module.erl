@@ -47,7 +47,7 @@ routes() ->
         {<<"/spaces">>, M, S#rstate{resource = spaces, methods = [post, get]}},
         {<<"/spaces/:id">>, M, S#rstate{resource = space, methods = [get, patch, delete]}},
         {<<"/spaces/:id/shares">>, M, S#rstate{resource = shares, methods = [get]}},
-        {<<"/spaces/:id/shares/:sid">>, M, S#rstate{resource = share, methods = [put]}},
+        {<<"/spaces/:id/shares/:sid">>, M, S#rstate{resource = share, methods = [put]}}, %TODO POST
         {<<"/spaces/:id/users">>, M, S#rstate{resource = users, methods = [get, post]}},
         {<<"/spaces/:id/users/token">>, M, S#rstate{resource = uinvite, methods = [get]}},
         {<<"/spaces/:id/users/:uid">>, M, S#rstate{resource = user, methods = [get, delete]}},

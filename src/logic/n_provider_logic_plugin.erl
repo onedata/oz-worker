@@ -11,7 +11,7 @@
 %%%-------------------------------------------------------------------
 -module(n_provider_logic_plugin).
 -author("Lukasz Opiola").
--behaviour(data_logic_plugin_behaviour).
+-behaviour(entity_logic_plugin_behaviour).
 
 -include("entity_logic_errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
@@ -20,7 +20,7 @@
 
 -export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
     delete_impl/1]).
--export([exists_impl/2, authorize_impl/4, validate_impl/2]).
+-export([exists_impl/2, authorize_impl/5, validate_impl/2]).
 
 
 create_impl(nobody, _, entity, Data) ->
@@ -90,9 +90,9 @@ exists_impl(ProviderId, spaces) when is_binary(ProviderId) ->
     end}.
 
 
-authorize_impl(nobody, create, undefined, entity) ->
+authorize_impl(nobody, create, undefined, entity, _) ->
     true;
-authorize_impl({provider, ProviderId}, create, ProviderId, spaces) ->
+authorize_impl({provider, ProviderId}, create, ProviderId, spaces, _) ->
     true.
 
 

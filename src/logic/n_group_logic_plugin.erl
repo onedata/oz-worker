@@ -20,7 +20,7 @@
 
 -export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
     delete_impl/1]).
--export([exists_impl/2, authorize_impl/4, validate_impl/2]).
+-export([exists_impl/2, authorize_impl/5, validate_impl/2]).
 -export([has_eff_privilege/3]).
 
 
@@ -114,23 +114,23 @@ exists_impl(GroupId, groups) when is_binary(GroupId) ->
     end}.
 
 
-authorize_impl({user, _UserId}, create, undefined, entity) ->
+authorize_impl({user, _UserId}, create, undefined, entity, _) ->
     true;
-authorize_impl({user, UserId}, create, GroupId, users) when is_binary(GroupId) ->
+authorize_impl({user, UserId}, create, GroupId, users, _) when is_binary(GroupId) ->
     auth_by_privilege(UserId, group_invite_user); %TODO admin privs
-authorize_impl({user, UserId}, create, GroupId, groups) when is_binary(GroupId) ->
+authorize_impl({user, UserId}, create, GroupId, groups, _) when is_binary(GroupId) ->
     auth_by_privilege(UserId, group_invite_group); %TODO admin privs
 
-authorize_impl({user, UserId}, get, GroupId, users) when is_binary(GroupId) ->
+authorize_impl({user, UserId}, get, GroupId, users, _) when is_binary(GroupId) ->
     auth_by_privilege(UserId, group_view_data);
-authorize_impl({user, UserId}, get, GroupId, entity) when is_binary(GroupId) ->
+authorize_impl({user, UserId}, get, GroupId, entity, _) when is_binary(GroupId) ->
     auth_by_privilege(UserId, group_view_data);
-authorize_impl({user, UserId}, update, GroupId, entity) when is_binary(GroupId) ->
+authorize_impl({user, UserId}, update, GroupId, entity, _) when is_binary(GroupId) ->
     auth_by_privilege(UserId, group_change_data);
-authorize_impl({user, UserId}, delete, GroupId, entity) when is_binary(GroupId) ->
+authorize_impl({user, UserId}, delete, GroupId, entity, _) when is_binary(GroupId) ->
     auth_by_privilege(UserId, group_remove);
 
-authorize_impl({user, UserId}, add_relation, todo, users)  ->
+authorize_impl({user, UserId}, add_relation, todo, users, _) ->
     auth_by_privilege(UserId, group_invite_user).
 
 
@@ -144,12 +144,16 @@ validate_impl(create, entity) -> #{
 };
 validate_impl(create, users) -> #{
     required => #{
-        <<"userId">> => {binary, fun(Value) -> user_logic:exists(Value) end}
+        <<"userId">> => {binary, {exists, fun(Value) ->
+            user_logic:exists(Value) end}
+        }
     }
 };
 validate_impl(create, groups) -> #{
     required => #{
-        <<"groupId">> => {binary, fun(Value) -> group_logic:exists(Value) end}
+        <<"groupId">> => {binary, {exists, fun(Value) ->
+            group_logic:exists(Value) end}
+        }
     }
 };
 validate_impl(update, entity) -> #{

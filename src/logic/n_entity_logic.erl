@@ -47,8 +47,39 @@ value_rule() -> [
     any,
     non_empty,
     [possible_values],
-    fun() -> ok end
+    fun() -> true end,
+    {exists, fun(Id) -> true end},
+    {not_exists, fun(Id) -> true end}
 ].
+
+-define(PROXY_URL, <<"172.17.0.9:8080/api/v1">>).
+-define(METADATA, <<"<?xml version=\"1.0\"?>",
+    "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
+    "<dc:title>Test dataset<\/dc:title>",
+    "<dc:creator>John Johnson<\/dc:creator>",
+    "<dc:creator>Jane Doe<\/dc:creator>",
+    "<dc:subject>Test of datacite<\/dc:subject>",
+    "<dc:description>Lorem ipsum lorem ipusm<\/dc:description>",
+    "<dc:publisher>Onedata<\/dc:publisher>",
+    "<dc:publisher>EGI<\/dc:publisher>",
+    "<dc:date>2016<\/dc:date>",
+    "<dc:format>application\/pdf<\/dc:format>",
+    "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
+    "<dc:language>eng<\/dc:language>",
+    "<dc:rights>CC-0<\/dc:rights>",
+    "<\/metadata>">>).
+
+-define(SERVICE_PROPERTIES, #{
+    <<"allowTemplateOverride">> => false,
+    <<"doiEndpoint">> => <<"/doi">>,
+    <<"host">> => <<"https://mds.test.datacite.org">>,
+    <<"mediaEndpoint">> => <<"/media">>,
+    <<"metadataEndpoint">> => <<"/metadata">>,
+    <<"password">> => <<"eg1Test40DP">>,
+    <<"prefix">> => <<"10.5072">>,
+    <<"type">> => <<"DOI">>,
+    <<"username">> => <<"DATACITE.EGI">>
+}).
 
 
 ahaha() ->
@@ -63,7 +94,6 @@ ahaha() ->
     {ok, G2} = rpc:call(node(), n_group_logic, create, [{user, U4}, <<"G2">>]),
     {ok, G2} = rpc:call(node(), n_group_logic, add_group, [{user, U4}, G2, G1]),
 
-
     {ok, U5} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U5">>}]),
     {ok, S1} = rpc:call(node(), n_space_logic, create, [{user, U5}, <<"S1">>]),
     {ok, S1} = rpc:call(node(), n_space_logic, add_group, [{user, U5}, S1, G2]),
@@ -72,16 +102,42 @@ ahaha() ->
     {ok, Token} = rpc:call(node(), n_space_logic, create_invite_provider_token, [{user, U5}, S1]),
     {ok, P1} = rpc:call(node(), n_provider_logic, support_space, [{provider, P1}, P1, Token, 1000]),
 
+    {ok, P2} = rpc:call(node(), n_provider_logic, create, [<<"P2">>]),
+    {ok, Token2} = rpc:call(node(), n_space_logic, create_invite_provider_token, [{user, U5}, S1]),
+    {ok, P2} = rpc:call(node(), n_provider_logic, support_space, [{provider, P2}, P2, Token2, 1000]),
+
+    {ok, G3} = rpc:call(node(), n_group_logic, create, [{user, U1}, <<"G3">>]),
+    {ok, G3} = rpc:call(node(), n_group_logic, add_user, [{user, U1}, G3, U3]),
+    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [{user, U5}, S1, G3]),
+
+    {ok, U6} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U6">>}]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, create, [
+        {user, U6}, <<"HS1">>, ?PROXY_URL, ?SERVICE_PROPERTIES, <<"tajp">>
+    ]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [{user, U6}, HS1, G2]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [{user, U6}, HS1, G3]),
+
+
+%%    {ok, H1} = rpc:call(node(), n_handle_logic, create, [
+%%        {user, U1}, HS1, <<"Share">>, Sh1, ?METADATA
+%%    ]),
+%%    {ok, H1} = rpc:call(node(), n_handle_logic, add_group, [{user, U1}, H1, G1]),
+
+
     timer:sleep(2000),
-    print(od_user, U5),
-    print(od_user, U4),
-    print(od_user, U3),
-    print(od_user, U2),
     print(od_user, U1),
+    print(od_user, U2),
+    print(od_user, U3),
+    print(od_user, U4),
+    print(od_user, U5),
+    print(od_user, U6),
     print(od_group, G1),
     print(od_group, G2),
+    print(od_group, G3),
     print(od_space, S1),
     print(od_provider, P1),
+    print(od_provider, P2),
+    print(od_handle_service, HS1),
     ok.
 
 
@@ -159,6 +215,34 @@ print(#od_provider{} = Provider, Id) ->
         {eff_users, prepare_relation_to_print(EffUsers, true, false, [])},
         {eff_groups, prepare_relation_to_print(EffGroups, true, false, [])},
         {spaces, prepare_relation_to_print(Spaces, false, false, [])}
+    ]);
+print(#od_handle_service{} = HandleService, Id) ->
+    AllPrivs = privileges:handle_service_privileges(),
+    #od_handle_service{
+        name = Name,
+        users = Users, eff_users = EffUsers,
+        groups = Groups, eff_groups = EffGroups
+    } = HandleService,
+    print(od_handle_service, Id, [
+        {name, Name},
+        {users, prepare_relation_to_print(Users, false, true, AllPrivs)},
+        {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
+        {groups, prepare_relation_to_print(Groups, false, true, AllPrivs)},
+        {eff_groups, prepare_relation_to_print(EffGroups, true, true, AllPrivs)}
+    ]);
+print(#od_handle{} = Handle, Id) ->
+    AllPrivs = privileges:handle_privileges(),
+    #od_handle{
+        handle_service = HandleServiceId,
+        users = Users, eff_users = EffUsers,
+        groups = Groups, eff_groups = EffGroups
+    } = Handle,
+    print(od_handle, Id, [
+        {name, id_to_str(HandleServiceId)},
+        {users, prepare_relation_to_print(Users, false, true, AllPrivs)},
+        {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
+        {groups, prepare_relation_to_print(Groups, false, true, AllPrivs)},
+        {eff_groups, prepare_relation_to_print(EffGroups, true, true, AllPrivs)}
     ]).
 
 print(ModelType, Id, Attrs) ->
@@ -248,7 +332,7 @@ create(Issuer, ELPlugin, EntityId, Resource, Data) ->
         throw:ElError ->
             ElError;
         Error:Message ->
-            ?error_stacktrace("Error in data_logic:create - ~p:~p", [
+            ?error_stacktrace("Error in entity_logic:create - ~p:~p", [
                 Error, Message
             ]),
             ?EL_INTERNAL_SERVER_ERROR
@@ -271,7 +355,7 @@ get(Issuer, ELPlugin, EntityId, Resource) ->
         throw:ElError ->
             ElError;
         Error:Message ->
-            ?error_stacktrace("Error in data_logic:get - ~p:~p", [
+            ?error_stacktrace("Error in entity_logic:get - ~p:~p", [
                 Error, Message
             ]),
             ?EL_INTERNAL_SERVER_ERROR
@@ -296,7 +380,7 @@ update(Issuer, ELPlugin, EntityId, Resource, Data) ->
         throw:ElError ->
             ElError;
         Error:Message ->
-            ?error_stacktrace("Error in data_logic:update - ~p:~p", [
+            ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
                 Error, Message
             ]),
             ?EL_INTERNAL_SERVER_ERROR
@@ -319,7 +403,7 @@ delete(Issuer, ELPlugin, EntityId, Resource) ->
         throw:ElError ->
             ElError;
         Error:Message ->
-            ?error_stacktrace("Error in data_logic:update - ~p:~p", [
+            ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
                 Error, Message
             ]),
             ?EL_INTERNAL_SERVER_ERROR
@@ -335,7 +419,7 @@ delete(Issuer, ELPlugin, EntityId, Resource) ->
 %%        throw:ElError ->
 %%            ElError;
 %%        Error:Message ->
-%%            ?error_stacktrace("Error in data_logic:add_relation - ~p:~p", [
+%%            ?error_stacktrace("Error in entity_logic:add_relation - ~p:~p", [
 %%                Error, Message
 %%            ]),
 %%            ?EL_INTERNAL_SERVER_ERROR
@@ -351,7 +435,7 @@ consume_token(Issuer, ELPlugin, Resource, Token) ->
         throw:ElError ->
             ElError;
         Error:Message ->
-            ?error_stacktrace("Error in data_logic:consume_token - ~p:~p", [
+            ?error_stacktrace("Error in entity_logic:consume_token - ~p:~p", [
                 Error, Message
             ]),
             ?EL_INTERNAL_SERVER_ERROR
@@ -465,10 +549,11 @@ call_authorize(Request) ->
         entity_id = EntityId,
         operation = Operation,
         resource = Resource,
-        el_plugin = ELPlugin
+        el_plugin = ELPlugin,
+        data = Data
     } = Request,
     % Call the plugin to obtain auth verification procedures
-    case ELPlugin:authorize_impl(Issuer, Operation, EntityId, Resource) of
+    case ELPlugin:authorize_impl(Issuer, Operation, EntityId, Resource, Data) of
         List when is_list(List) ->
             List;
         Item ->
@@ -608,7 +693,11 @@ transform_and_check_value(Key, Data, Validator) ->
                     false ->
                         throw(?EL_BAD_DATA(Key));
                     empty ->
-                        throw(?EL_EMPTY_DATA(Key))
+                        throw(?EL_EMPTY_DATA(Key));
+                    id_not_found ->
+                        throw(?EL_ID_NOT_FOUND(Key));
+                    id_occupied ->
+                        throw(?EL_ID_OCCUPIED(Key))
                 end
             catch
                 throw:Throw ->
@@ -659,7 +748,7 @@ check_value(binary, non_empty, <<"">>) ->
     empty;
 check_value(list_of_binaries, non_empty, []) ->
     empty;
-check_value(json, non_empty, #{}) ->
+check_value(json, non_empty, Map) when map_size(Map) == 0 ->
     empty;
 check_value(_, non_empty, _) ->
     true;
@@ -674,6 +763,20 @@ check_value(_, VerifyFun, Vals) when is_function(VerifyFun, 1) andalso is_list(V
     lists:all(VerifyFun, Vals); %TODO fun -> boolean() | empty
 check_value(_, VerifyFun, Val) when is_function(VerifyFun, 1) ->
     VerifyFun(Val); %TODO fun -> boolean() | empty
+check_value(_, {exists, VerifyFun}, Val) when is_function(VerifyFun, 1) ->
+    case VerifyFun(Val) of
+        true ->
+            true;
+        false ->
+            id_not_found
+    end;
+check_value(_, {not_exists, VerifyFun}, Val) when is_function(VerifyFun, 1) ->
+    case VerifyFun(Val) of
+        true ->
+            true;
+        false ->
+            id_occupied
+    end;
 check_value(_, Rule, _) ->
     ?error("Unknown value rule: ~p", [Rule]),
     throw(?EL_INTERNAL_SERVER_ERROR).

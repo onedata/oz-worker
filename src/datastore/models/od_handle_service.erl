@@ -22,7 +22,7 @@
 -type id() :: binary().
 -type name() :: binary().
 -type proxy_endpoint() :: binary().
--type service_properties() :: json_term().
+-type service_properties() :: #{}.
 
 -export_type([doc/0, info/0, id/0]).
 -export_type([name/0, proxy_endpoint/0, service_properties/0]).
@@ -42,7 +42,7 @@ record_struct(1) ->
     {record, [
         {name, string},
         {proxy_endpoint, string},
-        {service_properties, [term]},
+        {service_properties, #{term => term}},
         {users, #{string => [atom]}},
         {groups, #{string => [atom]}},
         {eff_users, #{string => {[atom], [{atom, string}]}}},

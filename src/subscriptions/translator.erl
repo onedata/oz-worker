@@ -93,7 +93,6 @@ get_msg(Seq, Doc, od_user = Model) ->
         % Effective relations to other entities
         {eff_groups, EffGroups},
         {eff_spaces, []}, % TODO currently always empty
-        {eff_shares, []}, % TODO currently always empty
         {eff_providers, []}, % TODO currently always empty
         {eff_handle_services, []}, % TODO currently always empty
         {eff_handles, []}, % TODO currently always empty
@@ -135,7 +134,6 @@ get_msg(Seq, Doc, od_group = Model) ->
         % Effective relations to other entities
         {eff_users, EUsers},
         {eff_spaces, []}, % TODO currently always empty
-        {eff_shares, []}, % TODO currently always empty
         {eff_providers, []}, % TODO currently always empty
         {eff_handle_services, []}, % TODO currently always empty
         {eff_handles, []} % TODO currently always empty
@@ -182,11 +180,7 @@ get_msg(Seq, Doc, od_share = Model) ->
         % Direct relations to other entities
         {space, Space},
         {handle, Handle},
-        {root_file, RootFile},
-
-        % Effective relations to other entities
-        {eff_users, []}, % TODO currently always empty
-        {eff_groups, []} % TODO currently always empty
+        {root_file, RootFile}
     ]}];
 get_msg(Seq, Doc, od_provider = Model) ->
     #document{value = Value, key = Id} = Doc,
@@ -288,7 +282,6 @@ get_public_msg(Seq, Doc, od_user = Model) ->
         % Effective relations to other entities
         {eff_groups, []},
         {eff_spaces, []},
-        {eff_shares, []},
         {eff_providers, []},
         {eff_handle_services, []},
         {eff_handles, []},

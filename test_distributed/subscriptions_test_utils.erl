@@ -199,7 +199,6 @@ user_expectation(Id, Name, Spaces, Groups, EffGroups, DefaultSpace, HandleServic
 
         {<<"eff_groups">>, EffGroups},
         {<<"eff_spaces">>, []}, % TODO currently always empty
-        {<<"eff_shares">>, []}, % TODO currently always empty
         {<<"eff_providers">>, []}, % TODO currently always empty
         {<<"eff_handle_services">>, []}, % TODO currently always empty
         {<<"eff_handles">>, []}, % TODO currently always empty
@@ -223,7 +222,6 @@ public_only_user_expectation(Id, Name) ->
 
         {<<"eff_groups">>, []},
         {<<"eff_spaces">>, []},
-        {<<"eff_shares">>, []},
         {<<"eff_providers">>, []},
         {<<"eff_handle_services">>, []},
         {<<"eff_handles">>, []},
@@ -248,7 +246,6 @@ group_expectation(Id, Name, Type, Users, EUsers, Spaces, Children, Parents, Hand
 
         {<<"eff_users">>, privileges_as_binaries(EUsers)},
         {<<"eff_spaces">>, []}, % TODO currently always empty
-        {<<"eff_shares">>, []}, % TODO currently always empty
         {<<"eff_providers">>, []}, % TODO currently always empty
         {<<"eff_handle_services">>, []}, % TODO currently always empty
         {<<"eff_handles">>, []} % TODO currently always empty

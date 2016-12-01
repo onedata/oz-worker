@@ -11,7 +11,7 @@
 %%%-------------------------------------------------------------------
 -module(n_space_logic_plugin).
 -author("Lukasz Opiola").
--behaviour(data_logic_plugin_behaviour).
+-behaviour(entity_logic_plugin_behaviour).
 
 -include("entity_logic_errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
@@ -20,8 +20,8 @@
 
 -export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
     delete_impl/1]).
--export([exists_impl/2, authorize_impl/4, validate_impl/2]).
--export([has_eff_privilege/3]).
+-export([exists_impl/2, authorize_impl/5, validate_impl/2]).
+-export([has_eff_privilege/3, has_eff_user/2]).
 
 create_impl({user, UserId}, _, entity, #{<<"name">> := Name}) ->
     {ok, SpaceId} = od_space:create(#document{value = #od_space{name = Name}}),
@@ -126,32 +126,27 @@ exists_impl(SpaceId, provider_token) when is_binary(SpaceId) ->
     end}.
 
 
-authorize_impl({user, _UserId}, create, undefined, entity) ->
+authorize_impl({user, _UserId}, create, undefined, entity, _) ->
     true;
-authorize_impl({user, UserId}, create, SpaceId, users) when is_binary(SpaceId) ->
+authorize_impl({user, UserId}, create, SpaceId, users, _) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_invite_user); %TODO admin privs
-authorize_impl({user, UserId}, create, SpaceId, groups) when is_binary(SpaceId) ->
+authorize_impl({user, UserId}, create, SpaceId, groups, _) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_invite_group); %TODO admin privs
-authorize_impl({user, UserId}, create, SpaceId, provider_token) when is_binary(SpaceId) ->
+authorize_impl({user, UserId}, create, SpaceId, provider_token, _) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_add_provider); %TODO admin privs
 
-authorize_impl({user, UserId}, get, SpaceId, users) when is_binary(SpaceId) ->
+authorize_impl({user, UserId}, get, SpaceId, users, _) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_view_data);
-authorize_impl({user, UserId}, get, SpaceId, entity) when is_binary(SpaceId) ->
+authorize_impl({user, UserId}, get, SpaceId, entity, _) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_view_data);
-authorize_impl({user, UserId}, get, SpaceId, space_invite_user_token) when is_binary(SpaceId) ->
+authorize_impl({user, UserId}, get, SpaceId, space_invite_user_token, _) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_invite_user);
 
-authorize_impl({user, UserId}, update, SpaceId, entity) when is_binary(SpaceId) ->
+authorize_impl({user, UserId}, update, SpaceId, entity, _) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_change_data);
 
-authorize_impl({user, UserId}, delete, SpaceId, entity) when is_binary(SpaceId) ->
-    auth_by_privilege(UserId, space_remove);
-
-authorize_impl({user, _UserId}, consume_token, join_as_user, todo) ->
-    true;
-authorize_impl({user, _UserId}, consume_token, join_as_group, todo) ->
-    true.
+authorize_impl({user, UserId}, delete, SpaceId, entity, _) when is_binary(SpaceId) ->
+    auth_by_privilege(UserId, space_remove).
 
 
 validate_impl(create, entity) -> #{
@@ -161,12 +156,16 @@ validate_impl(create, entity) -> #{
 };
 validate_impl(create, users) -> #{
     required => #{
-        <<"userId">> => {binary, fun(Value) -> user_logic:exists(Value) end}
+        <<"userId">> => {binary, {exists, fun(Value) ->
+            user_logic:exists(Value) end}
+        }
     }
 };
 validate_impl(create, groups) -> #{
     required => #{
-        <<"groupId">> => {binary, fun(Value) -> group_logic:exists(Value) end}
+        <<"groupId">> => {binary, {exists, fun(Value) ->
+            group_logic:exists(Value) end}
+        }
     }
 };
 validate_impl(create, provider_token) -> #{
@@ -193,3 +192,9 @@ has_eff_privilege(#od_space{users = UsersPrivileges}, UserId, Privilege) ->
     UserPrivileges = maps:get(UserId, UsersPrivileges, []),
     lists:member(Privilege, UserPrivileges).
 
+
+has_eff_user(SpaceId, UserId) when is_binary(SpaceId) ->
+    {ok, #document{value = Space}} = od_space:get(SpaceId),
+    has_eff_user(Space, UserId);
+has_eff_user(#od_space{eff_users = EffUsers}, UserId) ->
+    maps:is_key(UserId, EffUsers).
