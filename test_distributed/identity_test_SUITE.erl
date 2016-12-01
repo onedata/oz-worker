@@ -19,7 +19,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([all/0]).
 -export([init_per_testcase/2, end_per_testcase/2]).
 -export([
     oz_certs_published_after_refresh/1,
@@ -119,9 +119,6 @@ provider_certs_are_updated_via_rest(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-init_per_suite(Config) ->
-    ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
-
 init_per_testcase(_, Config) ->
     application:start(etls),
     hackney:start(),
@@ -144,10 +141,6 @@ end_per_testcase(_, Config) ->
     hackney:stop(),
     application:stop(etls),
     ok.
-
-end_per_suite(Config) ->
-    test_node_starter:clean_environment(Config).
-
 
 %%%===================================================================
 %%% Internal functions

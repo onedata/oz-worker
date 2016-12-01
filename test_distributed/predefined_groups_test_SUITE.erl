@@ -19,7 +19,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([all/0, init_per_suite/1]).
 -export([predefined_groups_test/1, global_groups_test/1]).
 -export([automatic_space_membership_via_global_group_test/1]).
 
@@ -235,10 +235,4 @@ automatic_space_membership_via_global_group_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    NewConfig = ?TEST_INIT(
-        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
-    ),
-    NewConfig.
-
-end_per_suite(Config) ->
-    test_node_starter:clean_environment(Config).
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
