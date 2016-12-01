@@ -190,9 +190,9 @@ get_msg(Seq, Doc, od_share = Model) ->
     ]}];
 get_msg(Seq, Doc, od_provider = Model) ->
     #document{value = Value, key = Id} = Doc,
-    #od_provider{client_name = Name, urls = URLs, spaces = SpaceIds} = Value,
+    #od_provider{name = Name, urls = URLs, spaces = SpaceIds} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
-        {client_name, Name},
+        {name, Name},
         {urls, URLs},
 
         % Direct relations to other entities
@@ -297,9 +297,9 @@ get_public_msg(Seq, Doc, od_user = Model) ->
     ]}];
 
 get_public_msg(Seq, Doc, od_provider = Model) ->
-    #document{key = Id, value = #od_provider{client_name = Name, urls = URLs}} = Doc,
+    #document{key = Id, value = #od_provider{name = Name, urls = URLs}} = Doc,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
-        {client_name, Name},
+        {name, Name},
         {urls, URLs},
 
         {spaces, []},

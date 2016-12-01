@@ -40,10 +40,7 @@ record_struct(1) ->
         {public_url, string},
         {space, string},
         {handle, string},
-        {root_file, string},
-        {eff_users, [string]},
-        {eff_groups, [string]},
-        {bottom_up_dirty, boolean}
+        {root_file, string}
     ]}.
 
 %%%===================================================================

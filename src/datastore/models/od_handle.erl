@@ -52,10 +52,10 @@ record_struct(1) ->
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {handle_service, string},
-        {users, [{string, [atom]}]},
-        {groups, [{string, [atom]}]},
-        {eff_users, [{string, [atom]}]},
-        {eff_groups, [{string, [atom]}]},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {bottom_up_dirty, boolean}
     ]}.
 

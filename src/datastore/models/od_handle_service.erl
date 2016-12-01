@@ -43,10 +43,10 @@ record_struct(1) ->
         {name, string},
         {proxy_endpoint, string},
         {service_properties, [term]},
-        {users, [{string, [atom]}]},
-        {groups, [{string, [atom]}]},
-        {eff_users, [{string, [atom]}]},
-        {eff_groups, [{string, [atom]}]},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {bottom_up_dirty, boolean}
     ]}.
 

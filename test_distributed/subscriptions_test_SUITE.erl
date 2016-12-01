@@ -468,19 +468,19 @@ all_data_in_provider_update_test(Config) ->
 
     % when
     Context = subscriptions_test_utils:init_messages(Node, PID, []),
-    subscriptions_test_utils:update_document(Node, od_provider, PID, #{client_name => Name}),
+    subscriptions_test_utils:update_document(Node, od_provider, PID, #{name => Name}),
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(PID, #od_provider{spaces = Spaces, urls = Urls, client_name = Name})
+        subscriptions_test_utils:expectation(PID, #od_provider{spaces = Spaces, urls = Urls, name = Name})
     ]).
 
 updates_for_with_providers_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Node, ?ID(p1), [?ID(s1), ?ID(s2)], [<<"p1-url1">>]),
-    P2 = #od_provider{spaces = [?ID(s2)], urls = [<<"p2-url1">>, <<"p2-url2">>], client_name = <<"p2">>},
-    P3 = #od_provider{spaces = [?ID(s1)], urls = [<<"p3-url1">>], client_name = <<"p3">>},
+    P2 = #od_provider{spaces = [?ID(s2)], urls = [<<"p2-url1">>, <<"p2-url2">>], name = <<"p2">>},
+    P3 = #od_provider{spaces = [?ID(s1)], urls = [<<"p3-url1">>], name = <<"p3">>},
 
 
     % when
@@ -490,9 +490,9 @@ updates_for_with_providers_test(Config) ->
 
     % then
     subscriptions_test_utils:verify_messages_present(Context, [
-        subscriptions_test_utils:expectation(PID, #od_provider{spaces = [?ID(s1), ?ID(s2)], urls = [<<"p1-url1">>], client_name = ?ID(p1)}),
-        subscriptions_test_utils:public_only_provider_expectation(?ID(p2), P2#od_provider.client_name, P2#od_provider.urls),
-        subscriptions_test_utils:public_only_provider_expectation(?ID(p3), P3#od_provider.client_name, P3#od_provider.urls)
+        subscriptions_test_utils:expectation(PID, #od_provider{spaces = [?ID(s1), ?ID(s2)], urls = [<<"p1-url1">>], name = ?ID(p1)}),
+        subscriptions_test_utils:public_only_provider_expectation(?ID(p2), P2#od_provider.name, P2#od_provider.urls),
+        subscriptions_test_utils:public_only_provider_expectation(?ID(p3), P3#od_provider.name, P3#od_provider.urls)
     ]),
     ok.
 

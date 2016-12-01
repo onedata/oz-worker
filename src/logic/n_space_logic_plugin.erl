@@ -45,7 +45,10 @@ create_impl({user, _UserId}, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
         od_space, SpaceId,
         privileges:space_user()
     ),
-    {ok, SpaceId}.
+    {ok, SpaceId};
+create_impl({user, UserId}, SpaceId, provider_token, _) ->
+    {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_support_token, {space, SpaceId}),
+    {ok, Token}.
 
 
 get_entity(SpaceId) ->
@@ -95,6 +98,8 @@ delete_impl(SpaceId) when is_binary(SpaceId) ->
     ok = od_space:delete(SpaceId).
 
 
+exists_impl(undefined, entity) ->
+    true;
 exists_impl(SpaceId, entity) when is_binary(SpaceId) ->
     {internal, fun(#od_space{}) ->
         % If the space with SpaceId can be found, it exists. If not, the
@@ -112,6 +117,12 @@ exists_impl(SpaceId, groups) when is_binary(SpaceId) ->
         % If the space with SpaceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
+    end};
+exists_impl(SpaceId, provider_token) when is_binary(SpaceId) ->
+    {internal, fun(#od_space{}) ->
+        % If the space with SpaceId can be found, it exists. If not, the
+        % verification will fail before this function is called.
+        true
     end}.
 
 
@@ -121,6 +132,8 @@ authorize_impl({user, UserId}, create, SpaceId, users) when is_binary(SpaceId) -
     auth_by_privilege(UserId, space_invite_user); %TODO admin privs
 authorize_impl({user, UserId}, create, SpaceId, groups) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_invite_group); %TODO admin privs
+authorize_impl({user, UserId}, create, SpaceId, provider_token) when is_binary(SpaceId) ->
+    auth_by_privilege(UserId, space_add_provider); %TODO admin privs
 
 authorize_impl({user, UserId}, get, SpaceId, users) when is_binary(SpaceId) ->
     auth_by_privilege(UserId, space_view_data);
@@ -156,6 +169,8 @@ validate_impl(create, groups) -> #{
         <<"groupId">> => {binary, fun(Value) -> group_logic:exists(Value) end}
     }
 };
+validate_impl(create, provider_token) -> #{
+};
 validate_impl(update, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
@@ -175,6 +190,6 @@ has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
     has_eff_privilege(Space, UserId, Privilege);
 has_eff_privilege(#od_space{users = UsersPrivileges}, UserId, Privilege) ->
     % TODO eff_users
-    UserPrivileges = proplists:get_value(UserId, UsersPrivileges, []),
+    UserPrivileges = maps:get(UserId, UsersPrivileges, []),
     lists:member(Privilege, UserPrivileges).
 

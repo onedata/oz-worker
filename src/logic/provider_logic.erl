@@ -65,7 +65,7 @@ create(ClientName, URLs, RedirectionPoint, CSRBin, OptionalArgs) ->
     Latitude = maps:get(latitude, OptionalArgs, undefined),
     Longitude = maps:get(longitude, OptionalArgs, undefined),
 
-    Provider = #od_provider{client_name = ClientName, urls = URLs,
+    Provider = #od_provider{name = ClientName, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
         latitude = Latitude, longitude = Longitude},
     od_provider:save(#document{key = ProviderId, value = Provider}),
@@ -83,14 +83,14 @@ modify(ProviderId, Data) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
         URLs = proplists:get_value(<<"urls">>, Data, Provider#od_provider.urls),
         RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#od_provider.redirection_point),
-        ClientName = proplists:get_value(<<"clientName">>, Data, Provider#od_provider.client_name),
+        ClientName = proplists:get_value(<<"clientName">>, Data, Provider#od_provider.name),
         Latitude = proplists:get_value(<<"latitude">>, Data, Provider#od_provider.latitude),
         Longitude = proplists:get_value(<<"longitude">>, Data, Provider#od_provider.longitude),
 
         {ok, Provider#od_provider{
             urls = URLs,
             redirection_point = RedirectionPoint,
-            client_name = ClientName,
+            name = ClientName,
             latitude = Latitude,
             longitude = Longitude
         }}
@@ -116,7 +116,7 @@ exists(ProviderId) ->
     {ok, Data :: [proplists:property()]}.
 get_data(ProviderId) ->
     {ok, #document{value = #od_provider{
-        client_name = ClientName,
+        name = ClientName,
         urls = URLs,
         redirection_point = RedirectionPoint,
         latitude = Latitude,

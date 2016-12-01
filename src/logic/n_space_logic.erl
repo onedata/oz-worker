@@ -19,7 +19,8 @@
 -define(PLUGIN, n_space_logic_plugin).
 
 -export([
-    create/2
+    create/2,
+    create_invite_provider_token/2
 ]).
 -export([
     get/2,
@@ -40,8 +41,13 @@
 ]).
 
 
+create(Issuer, Name) when is_binary(Name) ->
+    create(Issuer, #{<<"name">> => Name});
 create(Issuer, Data) ->
     n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
+
+create_invite_provider_token(Issuer, SpaceId) ->
+    n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, provider_token, #{}).
 
 
 get(Issuer, SpaceId) ->

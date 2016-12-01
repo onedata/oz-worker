@@ -63,21 +63,25 @@ ahaha() ->
     {ok, G2} = rpc:call(node(), n_group_logic, create, [{user, U4}, <<"G2">>]),
     {ok, G2} = rpc:call(node(), n_group_logic, add_group, [{user, U4}, G2, G1]),
 
-    timer:sleep(8000),
+
+    {ok, U5} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U5">>}]),
+    {ok, S1} = rpc:call(node(), n_space_logic, create, [{user, U5}, <<"S1">>]),
+    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [{user, U5}, S1, G2]),
+
+    {ok, P1} = rpc:call(node(), n_provider_logic, create, [<<"P1">>]),
+    {ok, Token} = rpc:call(node(), n_space_logic, create_invite_provider_token, [{user, U5}, S1]),
+    {ok, P1} = rpc:call(node(), n_provider_logic, support_space, [{provider, P1}, P1, Token, 1000]),
+
+    timer:sleep(2000),
+    print(od_user, U5),
     print(od_user, U4),
     print(od_user, U3),
     print(od_user, U2),
     print(od_user, U1),
     print(od_group, G1),
     print(od_group, G2),
-
-%%
-%%    {ok, U5} = rpc:call(node(), [#od_user{name = <<"U5">>}]),
-%%    {ok, S1} = rpc:call(node(), {user, U5}, <<"S1">>),
-%%    rpc:call(node(), {group, G2}, S1),
-%%
-%%    {ok, P1} = rpc:call(node(), <<"P1">>),
-%%    rpc:call(node(), P1, S1, 1000),
+    print(od_space, S1),
+    print(od_provider, P1),
     ok.
 
 
@@ -87,27 +91,143 @@ print(ModelType, Id) when is_atom(ModelType) ->
     {ok, #document{value = Entity}} = ModelType:get(Id),
     print(Entity, Id);
 print(#od_user{} = User, Id) ->
-    #od_user{name = Name, groups = Groups, eff_groups = EffGroups} = User,
-    print(od_user, Id, [{name, Name}, {groups, Groups}, {eff_groups, EffGroups}]);
+    #od_user{
+        name = Name,
+        groups = Groups, eff_groups = EffGroups,
+        spaces = Spaces, eff_spaces = EffSpaces,
+        eff_providers = EffProviders
+    } = User,
+    print(od_user, Id, [
+        {name, Name},
+        {groups, prepare_relation_to_print(Groups, false, false, [])},
+        {eff_groups, prepare_relation_to_print(EffGroups, true, false, [])},
+        {spaces, prepare_relation_to_print(Spaces, false, false, [])},
+        {eff_spaces, prepare_relation_to_print(EffSpaces, true, false, [])},
+        {eff_providers, prepare_relation_to_print(EffProviders, true, false, [])}
+    ]);
 print(#od_group{} = Group, Id) ->
+    AllPrivs = privileges:group_privileges(),
     #od_group{
         name = Name,
-        children = Children, eff_children = EffChildren,
-        parents = Parents, eff_parents = EffParents
+        children = Children,
+        eff_children = EffChildren,
+        parents = Parents, eff_parents = EffParents,
+        users = Users, eff_users = EffUsers,
+        spaces = Spaces, eff_spaces = EffSpaces,
+        eff_providers = EffProviders
     } = Group,
     print(od_group, Id, [
         {name, Name},
-        {children, Children}, {eff_children, EffChildren},
-        {parents, Parents}, {eff_parents, EffParents}
+        {children, prepare_relation_to_print(Children, false, true, AllPrivs)},
+        {eff_children, prepare_relation_to_print(EffChildren, true, true, AllPrivs)},
+        {parents, prepare_relation_to_print(Parents, false, false, AllPrivs)},
+        {eff_parents, prepare_relation_to_print(EffParents, true, false, AllPrivs)},
+        {users, prepare_relation_to_print(Users, false, true, AllPrivs)},
+        {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
+        {spaces, prepare_relation_to_print(Spaces, false, false, AllPrivs)},
+        {eff_spaces, prepare_relation_to_print(EffSpaces, true, false, AllPrivs)},
+        {eff_providers, prepare_relation_to_print(EffProviders, true, false, [])}
+    ]);
+print(#od_space{} = Space, Id) ->
+    AllPrivs = privileges:space_privileges(),
+    #od_space{
+        name = Name,
+        users = Users, eff_users = EffUsers,
+        groups = Groups, eff_groups = EffGroups,
+        providers = Providers
+    } = Space,
+    print(od_space, Id, [
+        {name, Name},
+        {users, prepare_relation_to_print(Users, false, true, AllPrivs)},
+        {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
+        {groups, prepare_relation_to_print(Groups, false, true, AllPrivs)},
+        {eff_groups, prepare_relation_to_print(EffGroups, true, true, AllPrivs)},
+        {providers, maps:fold(
+            fun(Id, SupportSize, AccMap) ->
+                AccMap#{id_to_str(Id) => SupportSize}
+            end, #{}, Providers)}
+    ]);
+print(#od_provider{} = Provider, Id) ->
+    #od_provider{
+        name = Name,
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+        spaces = Spaces
+    } = Provider,
+    print(od_provider, Id, [
+        {name, Name},
+        {eff_users, prepare_relation_to_print(EffUsers, true, false, [])},
+        {eff_groups, prepare_relation_to_print(EffGroups, true, false, [])},
+        {spaces, prepare_relation_to_print(Spaces, false, false, [])}
     ]).
 
 print(ModelType, Id, Attrs) ->
-    io:format("~p#~s~n", [ModelType, Id]),
+    io:format("~s#~s~n", [model_to_str(ModelType), id_to_str(Id)]),
     lists:foreach(
         fun({K, V}) ->
-            io:format("   ~p: ~p~n", [K, V])
+            case V of
+                B when is_binary(B) ->
+                    io:format("   ~p: ~s~n", [K, V]);
+                _ ->
+                    io:format("   ~p: ~p~n", [K, V])
+            end
         end, Attrs),
     io:format("~n").
+
+
+prepare_relation_to_print(Map, false = _IsEff, true = _HasPrivs, AllPrivs) ->
+    maps:fold(
+        fun(Id, Privs, AccMap) ->
+            AccMap#{id_to_str(Id) => privs_to_str(Privs, AllPrivs)}
+        end, #{}, Map);
+prepare_relation_to_print(Map, true = _IsEff, true = _HasPrivs, AllPrivs) ->
+    maps:fold(
+        fun(Id, {Privs, Intermediaries}, AccMap) ->
+            AccMap#{id_to_str(Id) => privs_to_str(Privs, AllPrivs) ++ "  " ++ intermediaries_to_str(Intermediaries)}
+        end, #{}, Map);
+prepare_relation_to_print(List, false = _IsEff, false = _HasPrivs, _) ->
+    lists:map(
+        fun(Id) ->
+            id_to_str(Id)
+        end, List);
+prepare_relation_to_print(Map, true = _IsEff, false = _HasPrivs, _) ->
+    maps:fold(
+        fun(Id, Intermediaries, AccMap) ->
+            AccMap#{id_to_str(Id) => intermediaries_to_str(Intermediaries)}
+        end, #{}, Map).
+
+
+privs_to_str(Privs, AllPrivs) ->
+    lists:map(
+        fun(Priv) ->
+            case lists:member(Priv, Privs) of
+                true -> $x;
+                false -> $-
+            end
+        end, AllPrivs).
+
+
+intermediaries_to_str(Intermediaries) ->
+    Str = intermediaries_to_str(Intermediaries, "["),
+    string:sub_string(Str, 1, length(Str) - 3) ++ "]".
+intermediaries_to_str([], Acc) ->
+    Acc;
+intermediaries_to_str([{Model, Id} | Tail], Acc) ->
+    intermediaries_to_str(Tail,
+        Acc ++ str_utils:format("~s#~s,  ", [model_to_str(Model), id_to_str(Id)])).
+
+model_to_str(od_user) -> "usr";
+model_to_str(od_group) -> "grp";
+model_to_str(od_space) -> "spc";
+model_to_str(od_share) -> "shr";
+model_to_str(od_provider) -> "prv";
+model_to_str(od_handle_service) -> "hsr";
+model_to_str(od_handle) -> "hnl".
+
+
+id_to_str(Id) ->
+    str_utils:to_list(binary:part(Id, {0, 7})).
+
 
 
 create(Issuer, ELPlugin, EntityId, Resource, Data) ->
@@ -373,7 +493,7 @@ check_existence([], _) ->
 check_existence([true | _], Request) ->
     Request;
 check_existence([false | _], _) ->
-    throw(?EL_UNAUTHORIZED);
+    throw(?EL_NOT_FOUND);
 check_existence([{external, Fun} | Tail], Request) ->
     case Fun() of
         true ->

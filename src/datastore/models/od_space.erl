@@ -36,12 +36,12 @@
 record_struct(1) ->
     {record, [
         {name, string},
-        {providers, [{string, integer}]},
-        {users, [{string, [atom]}]},
-        {groups, [{string, [atom]}]},
+        {providers, #{string => integer}},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
         {shares, [string]},
-        {eff_users, [{string, [atom]}]},
-        {eff_groups, [{string, [atom]}]},
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
     ]}.

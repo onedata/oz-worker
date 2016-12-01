@@ -70,10 +70,10 @@
 %
 % The below ASCII visual shows possible relations in entities graph.
 %
-%  provider    share
-%      ^         ^
-%       \       /
-%        \     /
+%        provider
+%           ^
+%           |
+%           |
 %         space    handle_service     handle
 %         ^  ^        ^        ^       ^   ^
 %         |   \      /         |      /    |
@@ -134,7 +134,6 @@
     % Effective relations to other entities
     eff_groups = #{} :: eff_relation(od_group:id()),
     eff_spaces = #{} :: eff_relation(od_space:id()), % TODO currently always empty
-    eff_shares = #{} :: eff_relation(od_share:id()), % TODO currently always empty
     eff_providers = #{} :: eff_relation(od_provider:id()), % TODO currently always empty
     eff_handle_services = #{} :: eff_relation(od_handle_service:id()), % TODO currently always empty
     eff_handles = #{} :: eff_relation(od_handle:id()), % TODO currently always empty
@@ -168,7 +167,6 @@
     % Effective relations to other entities
     eff_users = #{} :: eff_relation_with_attrs(od_user:id(), [privileges:group_privilege()]),
     eff_spaces = #{} :: eff_relation(od_space:id()), % TODO currently always empty
-    eff_shares = #{} :: eff_relation(od_share:id()), % TODO currently always empty
     eff_providers = #{} :: eff_relation(od_provider:id()), % TODO currently always empty
     eff_handle_services = #{} :: eff_relation(od_handle_service:id()), % TODO currently always empty
     eff_handles = #{} :: eff_relation(od_handle:id()), % TODO currently always empty
@@ -201,6 +199,9 @@
 }).
 
 %% This record defines a file/directory public share
+%% Shares do not take part in effective relations computation
+%% (every share belongs to one space, so its effective relations are the same
+%% as of the parent space).
 -record(od_share, {
     name = undefined :: undefined | binary(),
     public_url = undefined :: undefined | binary(),
@@ -208,19 +209,12 @@
     % Direct relations to other entities
     space = undefined :: undefined | od_space:id(),
     handle = undefined :: undefined | od_handle:id(),
-    root_file = undefined :: undefined | binary(),
-
-    % Effective relations to other entities
-    eff_users = #{} :: eff_relation(od_user:id()), % TODO currently always empty
-    eff_groups = #{} :: eff_relation(od_group:id()), % TODO currently always empty
-
-    % Marks that the record's effective relations are not up to date.
-    bottom_up_dirty = true :: boolean()
+    root_file = undefined :: undefined | binary()
 }).
 
 %% This record defines a provider who support spaces and can be reached via url
 -record(od_provider, {
-    client_name :: undefined | binary(),
+    name :: undefined | binary(),
     redirection_point :: undefined | binary(),
     urls :: undefined | [binary()],
     serial :: undefined | binary(),

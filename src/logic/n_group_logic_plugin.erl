@@ -92,27 +92,26 @@ delete_impl(GroupId) when is_binary(GroupId) ->
     ok = od_group:delete(GroupId).
 
 
+exists_impl(undefined, entity) ->
+    true;
 exists_impl(GroupId, entity) when is_binary(GroupId) ->
-    case od_group:get(GroupId) of
-        {ok, #document{value = Group}} ->
-            {true, Group};
-        _ ->
-            false
-    end;
+    {internal, fun(#od_group{}) ->
+        % If the group with GroupId can be found, it exists. If not, the
+        % verification will fail before this function is called.
+        true
+    end};
 exists_impl(GroupId, users) when is_binary(GroupId) ->
     {internal, fun(#od_group{}) ->
-        % If the space with SpaceId can be found, it exists. If not, the
+        % If the group with GroupId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
 exists_impl(GroupId, groups) when is_binary(GroupId) ->
     {internal, fun(#od_group{}) ->
-        % If the space with SpaceId can be found, it exists. If not, the
+        % If the group with GroupId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
-    end};
-exists_impl(_, _) ->
-    true.
+    end}.
 
 
 authorize_impl({user, _UserId}, create, undefined, entity) ->
@@ -173,6 +172,6 @@ has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
     has_eff_privilege(Group, UserId, Privilege);
 has_eff_privilege(#od_group{users = UsersPrivileges}, UserId, Privilege) ->
     % TODO eff_users
-    UserPrivileges = proplists:get_value(UserId, UsersPrivileges, []),
+    UserPrivileges = maps:get(UserId, UsersPrivileges, []),
     lists:member(Privilege, UserPrivileges).
 

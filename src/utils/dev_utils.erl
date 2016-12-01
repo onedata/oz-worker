@@ -231,7 +231,7 @@ create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUID, Opti
     Latitude = maps:get(latitude, OptionalArgs, undefined),
     Longitude = maps:get(longitude, OptionalArgs, undefined),
 
-    Provider = #od_provider{client_name = ClientName, urls = URLs,
+    Provider = #od_provider{name = ClientName, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
         latitude = Latitude, longitude = Longitude},
 

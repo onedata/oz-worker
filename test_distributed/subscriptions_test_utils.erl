@@ -159,7 +159,7 @@ expectation(Id, #od_group{name = Name, type = Type, users = Users, spaces = Spac
     group_expectation(Id, Name, Type, Users, EUsers, Spaces, Children, Parents,
         HandleServices, Handles);
 
-expectation(Id, #od_provider{client_name = Name, urls = URLs, spaces = Spaces}) ->
+expectation(Id, #od_provider{name = Name, urls = URLs, spaces = Spaces}) ->
     provider_expectation(Id, Name, URLs, Spaces);
 
 expectation(Id, #od_handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
@@ -284,7 +284,7 @@ share_expectation(Id, Name, Space, RootFile, PublicUrl, Handle) ->
 
 provider_expectation(Id, Name, URLs, Spaces) ->
     [{<<"id">>, Id}, {<<"od_provider">>, [
-        {<<"client_name">>, Name},
+        {<<"name">>, Name},
         {<<"urls">>, URLs},
 
         {<<"spaces">>, Spaces},
@@ -294,7 +294,7 @@ provider_expectation(Id, Name, URLs, Spaces) ->
 
 public_only_provider_expectation(Id, Name, URLs) ->
     [{<<"id">>, Id}, {<<"od_provider">>, [
-        {<<"client_name">>, Name},
+        {<<"name">>, Name},
         {<<"urls">>, URLs},
 
         {<<"spaces">>, []},
