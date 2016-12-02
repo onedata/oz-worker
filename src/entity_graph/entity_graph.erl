@@ -118,19 +118,24 @@ schedule_refresh() ->
 
 
 ensure_up_to_date() ->
+    ensure_up_to_date(5).
+ensure_up_to_date(0) ->
+    error(cannot_ensure_up_to_date);
+ensure_up_to_date(Retries) ->
     Res = critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
         case get_state() of
             #entity_graph_state{bottom_up_dirty = [], top_down_dirty = []} ->
                 true;
             _ ->
                 false
-                end
+        end
     end),
     case Res of
         true ->
             ok;
         false ->
-            ensure_up_to_date()
+            timer:sleep(1000),
+            ensure_up_to_date(Retries - 1)
     end.
 
 
@@ -582,20 +587,24 @@ neighbours(bottom_up, #od_handle{} = Handle) ->
 neighbours(top_down, #od_user{} = User) ->
     #od_user{
         groups = Groups, spaces = Spaces,
-        handle_services = HServices, handles = Handles
+        handle_services = HServices, handles = Handles,
+        oz_privileges = OzPrivileges
     } = User,
     #{
         od_group => Groups, od_space => Spaces,
-        od_handle_service => HServices, od_handle => Handles
+        od_handle_service => HServices, od_handle => Handles,
+        oz_privileges => OzPrivileges
     };
 neighbours(top_down, #od_group{} = Group) ->
     #od_group{
         parents = Groups, spaces = Spaces,
-        handle_services = HServices, handles = Handles
+        handle_services = HServices, handles = Handles,
+        oz_privileges = OzPrivileges
     } = Group,
     #{
         od_group => Groups, od_space => Spaces,
-        od_handle_service => HServices, od_handle => Handles
+        od_handle_service => HServices, od_handle => Handles,
+        oz_privileges => OzPrivileges
     };
 neighbours(top_down, #od_space{} = Space) ->
     #od_space{providers = Providers} = Space,
@@ -608,13 +617,15 @@ neighbours(_, _) ->
 neighbours_to_ids(WhichWay, Entity) ->
     Neighbours = neighbours(WhichWay, Entity),
     maps:map(
-        fun(_ModelType, Relations) ->
-            case Relations of
-                List when is_list(List) ->
-                    List;
-                Map when is_map(Map) ->
-                    maps:keys(Map)
-            end
+        fun(oz_privileges, _Relations) ->
+            [];
+            (_ModelType, Relations) ->
+                case Relations of
+                    List when is_list(List) ->
+                        List;
+                    Map when is_map(Map) ->
+                        maps:keys(Map)
+                end
         end, Neighbours).
 
 
@@ -631,10 +642,10 @@ neighbours_to_eff_relations(bottom_up, EntityType, EntityId, #od_handle{} = Enti
 
 neighbours_to_eff_relations(top_down, EntityType, EntityId, #od_user{} = Entity) ->
     neighbours_to_eff_relations(top_down, EntityType, EntityId, Entity, [
-        od_group, od_space, od_handle_service, od_handle]);
+        od_group, od_space, od_handle_service, od_handle, oz_privileges]);
 neighbours_to_eff_relations(top_down, EntityType, EntityId, #od_group{} = Entity) ->
     neighbours_to_eff_relations(top_down, EntityType, EntityId, Entity, [
-        od_group, od_space, od_handle_service, od_handle]);
+        od_group, od_space, od_handle_service, od_handle, oz_privileges]);
 neighbours_to_eff_relations(_, _, _, _) ->
     #{}.
 
@@ -741,12 +752,14 @@ eff_relations_of_neighbour(top_down, od_user, _NeighbourId, #od_group{} = Group,
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHServices,
-        eff_handles = EffHandles
+        eff_handles = EffHandles,
+        eff_oz_privileges = EffOzPrivileges
     } = Group,
     #{
         od_group => EffGroups, od_space => EffSpaces,
         od_provider => EffProviders,
-        od_handle_service => EffHServices, od_handle => EffHandles
+        od_handle_service => EffHServices, od_handle => EffHandles,
+        oz_privileges => EffOzPrivileges
     };
 eff_relations_of_neighbour(top_down, od_user, NeighbourId, #od_space{} = Space, _) ->
     #od_space{providers = Providers} = Space,
@@ -757,12 +770,14 @@ eff_relations_of_neighbour(top_down, od_group, _NeighbourId, #od_group{} = Group
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHServices,
-        eff_handles = EffHandles
+        eff_handles = EffHandles,
+        eff_oz_privileges = EffOzPrivileges
     } = Group,
     #{
         od_group => EffGroups, od_space => EffSpaces,
         od_provider => EffProviders,
-        od_handle_service => EffHServices, od_handle => EffHandles
+        od_handle_service => EffHServices, od_handle => EffHandles,
+        oz_privileges => EffOzPrivileges
     };
 eff_relations_of_neighbour(top_down, od_group, NeighbourId, #od_space{} = Space, _) ->
     #od_space{providers = Providers} = Space,
@@ -792,23 +807,27 @@ eff_relations(top_down, #od_user{} = User) ->
     #od_user{
         eff_groups = EffGroups, eff_spaces = EffSpaces,
         eff_providers = EffProviders,
-        eff_handle_services = EffHServices, eff_handles = EffHandles
+        eff_handle_services = EffHServices, eff_handles = EffHandles,
+        eff_oz_privileges = EffOzPrivileges
     } = User,
     #{
         od_group => EffGroups, od_space => EffSpaces,
         od_provider => EffProviders,
-        od_handle_service => EffHServices, od_handle => EffHandles
+        od_handle_service => EffHServices, od_handle => EffHandles,
+        oz_privileges => EffOzPrivileges
     };
 eff_relations(top_down, #od_group{} = Group) ->
     #od_group{
         eff_parents = EffGroups, eff_spaces = EffSpaces,
         eff_providers = EffProviders,
-        eff_handle_services = EffHServices, eff_handles = EffHandles
+        eff_handle_services = EffHServices, eff_handles = EffHandles,
+        eff_oz_privileges = EffOzPrivileges
     } = Group,
     #{
         od_group => EffGroups, od_space => EffSpaces,
         od_provider => EffProviders,
-        od_handle_service => EffHServices, od_handle => EffHandles
+        od_handle_service => EffHServices, od_handle => EffHandles,
+        oz_privileges => EffOzPrivileges
     };
 eff_relations(top_down, #od_space{}) ->
     #{}.
@@ -902,10 +921,14 @@ merge_eff_relations(bottom_up, od_handle, od_user, {Privs1, Intermediaries1}, {P
 merge_eff_relations(bottom_up, od_handle, od_group, {Privs1, Intermediaries1}, {Privs2, Intermediaries2}) ->
     {ordsets_union(Privs1, Privs2), ordsets_union(Intermediaries1, Intermediaries2)};
 
+merge_eff_relations(top_down, _, oz_privileges, Privs1, Privs2) ->
+    ordsets_union(Privs1, Privs2);
+
 merge_eff_relations(top_down, _, _, Intermediaries1, Intermediaries2) ->
     ordsets_union(Intermediaries1, Intermediaries2).
 
-
+relation_to_eff(_, _, oz_privileges, List) when is_list(List) ->
+    List;
 relation_to_eff(EntityType, EntityId, ModelType, List) when is_list(List) ->
     lists:foldl(
         fun(NeighbourId, AccMap) ->

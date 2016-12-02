@@ -93,6 +93,7 @@ ahaha() ->
 
     {ok, U4} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U4">>}]),
     {ok, G2} = rpc:call(node(), n_group_logic, create, [{user, U4}, <<"G2">>]),
+    group_logic:set_oz_privileges(G2, privileges:oz_viewer()),
     entity_graph:ensure_up_to_date(),
     {ok, G2} = rpc:call(node(), n_group_logic, add_group, [{user, U4}, G2, G1]),
 
@@ -169,7 +170,8 @@ print(#od_user{} = User, Id) ->
         spaces = Spaces, eff_spaces = EffSpaces,
         handle_services = HServices, eff_handle_services = EffHServices,
         handles = Handles, eff_handles = EffHandles,
-        eff_providers = EffProviders
+        eff_providers = EffProviders,
+        oz_privileges = OzPrivileges, eff_oz_privileges = EffOzPrivileges
     } = User,
     print(od_user, Id, [
         {name, Name},
@@ -181,7 +183,9 @@ print(#od_user{} = User, Id) ->
         {handle_services, prepare_relation_to_print(HServices, false, false, [])},
         {eff_handle_services, prepare_relation_to_print(EffHServices, true, false, [])},
         {handles, prepare_relation_to_print(Handles, false, false, [])},
-        {eff_handles, prepare_relation_to_print(EffHandles, true, false, [])}
+        {eff_handles, prepare_relation_to_print(EffHandles, true, false, [])},
+        {oz_privileges, privs_to_str(OzPrivileges, privileges:oz_privileges())},
+        {eff_oz_privileges, privs_to_str(EffOzPrivileges, privileges:oz_privileges())}
     ]);
 print(#od_group{} = Group, Id) ->
     AllPrivs = privileges:group_privileges(),
@@ -194,7 +198,8 @@ print(#od_group{} = Group, Id) ->
         spaces = Spaces, eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         handle_services = HServices, eff_handle_services = EffHServices,
-        handles = Handles, eff_handles = EffHandles
+        handles = Handles, eff_handles = EffHandles,
+        oz_privileges = OzPrivileges, eff_oz_privileges = EffOzPrivileges
     } = Group,
     print(od_group, Id, [
         {name, Name},
@@ -210,7 +215,9 @@ print(#od_group{} = Group, Id) ->
         {handle_services, prepare_relation_to_print(HServices, false, false, [])},
         {eff_handle_services, prepare_relation_to_print(EffHServices, true, false, [])},
         {handles, prepare_relation_to_print(Handles, false, false, [])},
-        {eff_handles, prepare_relation_to_print(EffHandles, true, false, [])}
+        {eff_handles, prepare_relation_to_print(EffHandles, true, false, [])},
+        {oz_privileges, privs_to_str(OzPrivileges, privileges:oz_privileges())},
+        {eff_oz_privileges, privs_to_str(EffOzPrivileges, privileges:oz_privileges())}
     ]);
 print(#od_space{} = Space, Id) ->
     AllPrivs = privileges:space_privileges(),

@@ -43,7 +43,7 @@ create_impl({user, UserId}, _, entity, Data) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_handle, HandleId,
-        privileges:handle_user()
+        privileges:handle_admin()
     ),
     % TODO add relation?
     case ResourceType of
@@ -59,14 +59,14 @@ create_impl({user, _UserId}, HandleId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_handle, HandleId,
-        privileges:handle_admin()
+        privileges:handle_user()
     ),
     {ok, HandleId};
 create_impl({user, _UserId}, HandleId, groups, #{<<"groupId">> := GroupId}) ->
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle, HandleId,
-        privileges:handle_admin()
+        privileges:handle_user()
     ),
     {ok, HandleId}.
 
