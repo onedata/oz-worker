@@ -43,7 +43,7 @@ create_impl({user, UserId}, _, entity, Data) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_handle, HandleId,
-        privileges:handle_admin()
+        privileges:handle_user()
     ),
     % TODO add relation?
     case ResourceType of
@@ -189,8 +189,8 @@ has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
     % TODO a co jak nie ma tego handle?
     {ok, #document{value = Handle}} = od_handle:get(HandleId),
     has_eff_privilege(Handle, UserId, Privilege);
-has_eff_privilege(#od_handle{users = UsersPrivileges}, UserId, Privilege) ->
+has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
     % TODO eff_users
-    UserPrivileges = maps:get(UserId, UsersPrivileges, []),
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
     lists:member(Privilege, UserPrivileges).
 

@@ -37,24 +37,24 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
         service_properties = ServiceProperties}}
     } = od_handle_service:get(HandleServiceId),
     Url = get_redirect_url(ResourceType, ResourceId),
-    Body = [
-        {<<"url">>, Url},
-        {<<"serviceProperties">>, ServiceProperties},
-        {<<"metadata">>, [{<<"onedata_dc">>, Metadata}]}
-    ],
+    Body = #{
+        <<"url">> => Url,
+        <<"serviceProperties">> => ServiceProperties,
+        <<"metadata">> => #{<<"onedata_dc">> => Metadata}
+    },
     Headers = [{<<"content-type">>, <<"application/json">>}, {<<"accept">>, <<"application/json">>}],
-    Type = proplists:get_value(<<"type">>, ServiceProperties),
+    Type = maps:get(<<"type">>, ServiceProperties),
     case Type of
         <<"DOI">> ->
-            Prefix = proplists:get_value(<<"prefix">>, ServiceProperties),
+            Prefix = maps:get(<<"prefix">>, ServiceProperties),
             DoiId = base64url:encode(crypto:strong_rand_bytes(5)),
             DoiHandle = <<Prefix/binary, "/", DoiId/binary>>,
-            DoiHandleEncoded =  http_utils:url_encode(DoiHandle),
-            {ok, 201, _, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, json_utils:encode(Body)),
+            DoiHandleEncoded = http_utils:url_encode(DoiHandle),
+            {ok, 201, _, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, json_utils:encode_map(Body)),
             {ok, DoiHandle};
         _ ->
-            {ok, 201, ResponseHeaders, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body)),
-            {ok, proplists:get_value(<<"location">>, ResponseHeaders)}
+            {ok, 201, ResponseHeaders, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode_map(Body)),
+            {ok, maps:get(<<"location">>, ResponseHeaders)}
     end.
 
 %%--------------------------------------------------------------------
@@ -63,7 +63,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec unregister_handle(od_handle:id()) -> ok.
-unregister_handle(HandleId)  ->
+unregister_handle(HandleId) ->
     {ok, #document{value = #od_handle{handle_service = HandleServiceId, public_handle = PublicHandle}}} =
         od_handle:get(HandleId),
     {ok, #document{value = #od_handle_service{
@@ -75,14 +75,14 @@ unregister_handle(HandleId)  ->
 %%    ],
     Body = ServiceProperties, %todo use above Body after fixing proxy
     Headers = [{<<"content-type">>, <<"application/json">>}, {<<"accept">>, <<"application/json">>}],
-    Type = proplists:get_value(<<"type">>, ServiceProperties),
+    Type = maps:get(<<"type">>, ServiceProperties),
     {ok, 200, _, _} =
         case Type of
             <<"DOI">> ->
-                PublicHandleEncoded =  http_utils:url_encode(PublicHandle),
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers,  json_utils:encode(Body));
+                PublicHandleEncoded = http_utils:url_encode(PublicHandle),
+                handle_proxy_client:delete(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode_map(Body));
             _ ->
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
+                handle_proxy_client:delete(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode_map(Body))
         end,
     ok.
 
@@ -93,9 +93,9 @@ unregister_handle(HandleId)  ->
 %%--------------------------------------------------------------------
 -spec modify_handle(od_handle:id(), od_handle:resource_type(), od_handle:resource_id(), od_handle:metadata()) ->
     ok.
-modify_handle(_HandleId, undefined, undefined, undefined)  ->
+modify_handle(_HandleId, undefined, undefined, undefined) ->
     ok;
-modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata)  ->
+modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata) ->
     {ok, #document{value = #od_handle{handle_service = HandleServiceId,
         resource_type = ResourceType, resource_id = ResourceId, public_handle = PublicHandle,
         metadata = Metadata}}} =
@@ -115,20 +115,20 @@ modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata)  ->
             FinalResourceId = utils:ensure_defined(NewResourceId, undefined, ResourceId),
             FinalMetadata = utils:ensure_defined(NewMetadata, undefined, Metadata),
             FinalUrl = get_redirect_url(FinalResourceType, FinalResourceId),
-            Body = [
-                {<<"url">>, FinalUrl},
-                {<<"serviceProperties">>, ServiceProperties},
-                {<<"metadata">>, [{<<"onedata_dc">>, FinalMetadata}]}
-            ],
+            Body = #{
+                <<"url">> => FinalUrl,
+                <<"serviceProperties">> => ServiceProperties,
+                <<"metadata">> => #{<<"onedata_dc">> => FinalMetadata}
+            },
             Headers = [{<<"content-type">>, <<"application/json">>}, {<<"accept">>, <<"application/json">>}],
-            Type = proplists:get_value(<<"type">>, ServiceProperties),
+            Type = maps:get(<<"type">>, ServiceProperties),
             {ok, 204, _, _} =
                 case Type of
                     <<"DOI">> ->
-                        PublicHandleEncoded =  http_utils:url_encode(PublicHandle),
-                        handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
+                        PublicHandleEncoded = http_utils:url_encode(PublicHandle),
+                        handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode_map(Body));
                     _ ->
-                        handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
+                        handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode_map(Body))
                 end,
             ok
     end.

@@ -63,7 +63,7 @@
 
 %% API
 -export([init_state/0, get_state/0]).
--export([schedule_refresh/0]).
+-export([schedule_refresh/0, ensure_up_to_date/0]).
 -export([add_relation/4, add_relation/5, add_relation/6]).
 %%-export([remove_relation/4]).
 
@@ -115,6 +115,23 @@ update_state(UpdateFun) ->
 schedule_refresh() ->
     ?emergency("Refresh scheduled"),
     spawn(fun refresh_if_needed/0).
+
+
+ensure_up_to_date() ->
+    Res = critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
+        case get_state() of
+            #entity_graph_state{bottom_up_dirty = [], top_down_dirty = []} ->
+                true;
+            _ ->
+                false
+                end
+    end),
+    case Res of
+        true ->
+            ok;
+        false ->
+            ensure_up_to_date()
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -309,6 +326,9 @@ add_relation(ChildModel, ChildId, ChildAttributes, ParentModel, ParentId, Parent
     Result.
 
 
+% Shares do not take part in eff graph recomputation
+mark_dirty(_, _, _, _, #od_share{} = Entity) ->
+    Entity;
 mark_dirty(WhichWay, Flag, Model, Id, Entity) ->
     % TODO jak juz jest dirty to ne dodawac!
     Priority = get_priority(WhichWay, Entity),
@@ -650,7 +670,6 @@ eff_relations_of_neighbours(top_down, EntityId, #od_group{} = Entity) ->
 eff_relations_of_neighbours(_, _, _) ->
     [].
 
-% TODO COS TUTEJ TERAZ ZNALEXC CZEMU SIE PROVIDERZY PRZEZ SPACE DO GRUPY NIE TEGO
 
 eff_relations_of_neighbours(WhichWay, EntityType, EntityId, Entity, ModelsToAccount) ->
     AllNeighbours = neighbours(WhichWay, Entity),
@@ -658,7 +677,7 @@ eff_relations_of_neighbours(WhichWay, EntityType, EntityId, Entity, ModelsToAcco
         fun(ModelType, _) ->
             lists:member(ModelType, ModelsToAccount)
         end, AllNeighbours),
-%%    ?emergency("RelevantNeighbours: ~p", [RelevantNeighbours]),
+    ?emergency("RelevantNeighbours: ~p", [RelevantNeighbours]),
     lists:flatmap(
         fun({NeighbourType, NeighboursOfType}) ->
             % Convert all neighbour relations so they have attrs
@@ -668,7 +687,7 @@ eff_relations_of_neighbours(WhichWay, EntityType, EntityId, Entity, ModelsToAcco
                 Map when is_map(Map) ->
                     maps:to_list(Map)
             end,
-%%            ?emergency("NeighboursWithAttrs: ~p", [NeighboursWithAttrs]),
+            ?emergency("NeighboursWithAttrs: ~p", [NeighboursWithAttrs]),
             lists:map(
                 fun({NeighbourId, Attrs}) ->
                     {ok, #document{value = Neighbour}} = NeighbourType:get(NeighbourId),
@@ -678,45 +697,45 @@ eff_relations_of_neighbours(WhichWay, EntityType, EntityId, Entity, ModelsToAcco
 
 
 eff_relations_of_neighbour(WhichWay, EntityType, EntityId, NeighbourType, NeighbourId, Neighbour, Privs) ->
-    eff_relations_of_neighbour(WhichWay, EntityType, EntityId, Neighbour, Privs).
+    eff_relations_of_neighbour(WhichWay, EntityType, NeighbourId, Neighbour, Privs).
 %%    maps:map(
 %%        fun(_ModelType, EffRelations) ->
 %%            override_intermediaries(EffRelations, [{NeighbourType, NeighbourId}])
 %%        end, Map).
 
 % TODO PO CO TO JEST, SKORO NA NIC NIE WPLYWA? TYLKO WCHICH WAY I ENTITY COS ZMIENIA LOL!
-eff_relations_of_neighbour(bottom_up, od_group, _EntityId, #od_group{} = Group, Privs) ->
+eff_relations_of_neighbour(bottom_up, od_group, _NeighbourId, #od_group{} = Group, Privs) ->
     #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
     #{
         od_user => override_eff_privileges(EffUsers, Privs),
         od_group => override_eff_privileges(EffGroups, Privs)
     };
-eff_relations_of_neighbour(bottom_up, od_space, _EntityId, #od_group{} = Group, Privs) ->
+eff_relations_of_neighbour(bottom_up, od_space, _NeighbourId, #od_group{} = Group, Privs) ->
     #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
     #{
         od_user => override_eff_privileges(EffUsers, Privs),
         od_group => override_eff_privileges(EffGroups, Privs)
     };
-eff_relations_of_neighbour(bottom_up, od_provider, _EntityId, #od_space{} = Space, _) ->
+eff_relations_of_neighbour(bottom_up, od_provider, _NeighbourId, #od_space{} = Space, _) ->
     #od_space{eff_users = EffUsers, eff_groups = EffGroups} = Space,
     #{
         od_user => remove_eff_privileges(EffUsers),
         od_group => remove_eff_privileges(EffGroups)
     };
-eff_relations_of_neighbour(bottom_up, od_handle_service, _EntityId, #od_group{} = Group, Privs) ->
+eff_relations_of_neighbour(bottom_up, od_handle_service, _NeighbourId, #od_group{} = Group, Privs) ->
     #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
     #{
         od_user => override_eff_privileges(EffUsers, Privs),
         od_group => override_eff_privileges(EffGroups, Privs)
     };
-eff_relations_of_neighbour(bottom_up, od_handle, _EntityId, #od_group{} = Group, Privs) ->
+eff_relations_of_neighbour(bottom_up, od_handle, _NeighbourId, #od_group{} = Group, Privs) ->
     #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
     #{
         od_user => override_eff_privileges(EffUsers, Privs),
         od_group => override_eff_privileges(EffGroups, Privs)
     };
 
-eff_relations_of_neighbour(top_down, od_user, _EntityId, #od_group{} = Group, _) ->
+eff_relations_of_neighbour(top_down, od_user, _NeighbourId, #od_group{} = Group, _) ->
     #od_group{
         eff_parents = EffGroups,
         eff_spaces = EffSpaces,
@@ -729,10 +748,10 @@ eff_relations_of_neighbour(top_down, od_user, _EntityId, #od_group{} = Group, _)
         od_provider => EffProviders,
         od_handle_service => EffHServices, od_handle => EffHandles
     };
-eff_relations_of_neighbour(top_down, od_user, EntityId, #od_space{} = Space, _) ->
+eff_relations_of_neighbour(top_down, od_user, NeighbourId, #od_space{} = Space, _) ->
     #od_space{providers = Providers} = Space,
-    #{od_provider => relation_to_eff(od_space, EntityId, od_provider, maps:keys(Providers))};
-eff_relations_of_neighbour(top_down, od_group, _EntityId, #od_group{} = Group, _) ->
+    #{od_provider => relation_to_eff(od_space, NeighbourId, od_provider, maps:keys(Providers))};
+eff_relations_of_neighbour(top_down, od_group, _NeighbourId, #od_group{} = Group, _) ->
     #od_group{
         eff_parents = EffGroups,
         eff_spaces = EffSpaces,
@@ -745,9 +764,9 @@ eff_relations_of_neighbour(top_down, od_group, _EntityId, #od_group{} = Group, _
         od_provider => EffProviders,
         od_handle_service => EffHServices, od_handle => EffHandles
     };
-eff_relations_of_neighbour(top_down, od_group, EntityId, #od_space{} = Space, _) ->
+eff_relations_of_neighbour(top_down, od_group, NeighbourId, #od_space{} = Space, _) ->
     #od_space{providers = Providers} = Space,
-    #{od_provider => relation_to_eff(od_space, EntityId, od_provider, maps:keys(Providers))}.
+    #{od_provider => relation_to_eff(od_space, NeighbourId, od_provider, maps:keys(Providers))}.
 % All other relations should return an empty map. TODO CZY ABY NA PEWNO? NIE WIDAC BUGOW
 %%eff_relations_of_neighbour(_, _, _, _) ->
 %%    #{}.

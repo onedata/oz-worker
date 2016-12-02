@@ -187,9 +187,9 @@ auth_by_privilege(UserId, Privilege) ->
 has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
     {ok, #document{value = Space}} = od_space:get(SpaceId),
     has_eff_privilege(Space, UserId, Privilege);
-has_eff_privilege(#od_space{users = UsersPrivileges}, UserId, Privilege) ->
+has_eff_privilege(#od_space{eff_users = UsersPrivileges}, UserId, Privilege) ->
     % TODO eff_users
-    UserPrivileges = maps:get(UserId, UsersPrivileges, []),
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
     lists:member(Privilege, UserPrivileges).
 
 

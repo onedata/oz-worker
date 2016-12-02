@@ -38,8 +38,7 @@ create_impl({user, _UserId}, _, entity, Data) ->
     % TODO error handling a nie badmatch
     ok = entity_graph:add_relation(
         od_space, SpaceId,
-        od_share, ShareId,
-        privileges:handle_admin()
+        od_share, ShareId
     ),
     {ok, ShareId}.
 
@@ -62,9 +61,9 @@ get_external({user, _UserId}, _) ->
 
 
 update_impl(ShareId, Data) when is_binary(ShareId) ->
-    {ok, _} = od_share:update(ShareId, fun(Handle) ->
+    {ok, _} = od_share:update(ShareId, fun(Share) ->
         % TODO czy cos sie da update?
-        {ok, Handle#od_share{}}
+        {ok, Share#od_share{}}
     end),
     ok.
 
@@ -77,7 +76,7 @@ exists_impl(undefined, entity) ->
     true;
 exists_impl(ShareId, entity) when is_binary(ShareId) ->
     {internal, fun(#od_share{}) ->
-        % If the handle with ShareId can be found, it exists. If not, the
+        % If the share with ShareId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end}.
@@ -110,9 +109,9 @@ authorize_impl({user, UserId}, delete, _ShareId, entity, _) ->
 validate_impl(create, entity) -> #{
     required => #{
         <<"shareId">> => {binary, {not_exists, fun(Value) ->
-            share_logic:exists(Value) end}
+            not share_logic:exists(Value) end}
         },
-        <<"name">> => {binary, [<<"Share">>]},
+        <<"name">> => {binary, non_empty},
         <<"rootFileId">> => {binary, non_empty},
         <<"spaceId">> => {binary, {exists, fun(Value) ->
             space_logic:exists(Value) end}

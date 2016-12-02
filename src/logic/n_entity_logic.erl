@@ -87,15 +87,18 @@ ahaha() ->
     {ok, U2} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U2">>}]),
     {ok, U3} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U3">>}]),
     {ok, G1} = rpc:call(node(), n_group_logic, create, [{user, U1}, <<"G1">>]),
+    entity_graph:ensure_up_to_date(),
     {ok, G1} = rpc:call(node(), n_group_logic, add_user, [{user, U1}, G1, U2]),
     {ok, G1} = rpc:call(node(), n_group_logic, add_user, [{user, U1}, G1, U3]),
 
     {ok, U4} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U4">>}]),
     {ok, G2} = rpc:call(node(), n_group_logic, create, [{user, U4}, <<"G2">>]),
+    entity_graph:ensure_up_to_date(),
     {ok, G2} = rpc:call(node(), n_group_logic, add_group, [{user, U4}, G2, G1]),
 
     {ok, U5} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U5">>}]),
     {ok, S1} = rpc:call(node(), n_space_logic, create, [{user, U5}, <<"S1">>]),
+    entity_graph:ensure_up_to_date(),
     {ok, S1} = rpc:call(node(), n_space_logic, add_group, [{user, U5}, S1, G2]),
 
     {ok, P1} = rpc:call(node(), n_provider_logic, create, [<<"P1">>]),
@@ -107,6 +110,7 @@ ahaha() ->
     {ok, P2} = rpc:call(node(), n_provider_logic, support_space, [{provider, P2}, P2, Token2, 1000]),
 
     {ok, G3} = rpc:call(node(), n_group_logic, create, [{user, U1}, <<"G3">>]),
+    entity_graph:ensure_up_to_date(),
     {ok, G3} = rpc:call(node(), n_group_logic, add_user, [{user, U1}, G3, U3]),
     {ok, S1} = rpc:call(node(), n_space_logic, add_group, [{user, U5}, S1, G3]),
 
@@ -114,17 +118,27 @@ ahaha() ->
     {ok, HS1} = rpc:call(node(), n_handle_service_logic, create, [
         {user, U6}, <<"HS1">>, ?PROXY_URL, ?SERVICE_PROPERTIES, <<"tajp">>
     ]),
+    entity_graph:ensure_up_to_date(),
     {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [{user, U6}, HS1, G2]),
     {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [{user, U6}, HS1, G3]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_user, [{user, U6}, HS1, U5]),
+    entity_graph:ensure_up_to_date(),
 
+        catch share_logic:remove(<<"Sh1ID">>),
+    {ok, Sh1} = rpc:call(node(), n_share_logic, create, [
+        {user, U5}, <<"Sh1ID">>, <<"Sh1">>, <<"fileId">>, S1]),
 
-%%    {ok, H1} = rpc:call(node(), n_handle_logic, create, [
-%%        {user, U1}, HS1, <<"Share">>, Sh1, ?METADATA
-%%    ]),
-%%    {ok, H1} = rpc:call(node(), n_handle_logic, add_group, [{user, U1}, H1, G1]),
+    % TODO TRICK
+    {ok, _} = od_share:update(Sh1, #{public_url => <<"https://onedata.org/share/Sh1ID">>}),
 
+    {ok, H1} = rpc:call(node(), n_handle_logic, create, [
+        {user, U1}, HS1, <<"Share">>, Sh1, ?METADATA
+    ]),
+    entity_graph:ensure_up_to_date(),
+    {ok, H1} = rpc:call(node(), n_handle_logic, add_group, [{user, U1}, H1, G1]),
+    entity_graph:ensure_up_to_date(),
+    timer:sleep(1500),
 
-    timer:sleep(2000),
     print(od_user, U1),
     print(od_user, U2),
     print(od_user, U3),
@@ -135,9 +149,11 @@ ahaha() ->
     print(od_group, G2),
     print(od_group, G3),
     print(od_space, S1),
+    print(od_share, Sh1),
     print(od_provider, P1),
     print(od_provider, P2),
     print(od_handle_service, HS1),
+    print(od_handle, H1),
     ok.
 
 
@@ -151,6 +167,8 @@ print(#od_user{} = User, Id) ->
         name = Name,
         groups = Groups, eff_groups = EffGroups,
         spaces = Spaces, eff_spaces = EffSpaces,
+        handle_services = HServices, eff_handle_services = EffHServices,
+        handles = Handles, eff_handles = EffHandles,
         eff_providers = EffProviders
     } = User,
     print(od_user, Id, [
@@ -159,7 +177,11 @@ print(#od_user{} = User, Id) ->
         {eff_groups, prepare_relation_to_print(EffGroups, true, false, [])},
         {spaces, prepare_relation_to_print(Spaces, false, false, [])},
         {eff_spaces, prepare_relation_to_print(EffSpaces, true, false, [])},
-        {eff_providers, prepare_relation_to_print(EffProviders, true, false, [])}
+        {eff_providers, prepare_relation_to_print(EffProviders, true, false, [])},
+        {handle_services, prepare_relation_to_print(HServices, false, false, [])},
+        {eff_handle_services, prepare_relation_to_print(EffHServices, true, false, [])},
+        {handles, prepare_relation_to_print(Handles, false, false, [])},
+        {eff_handles, prepare_relation_to_print(EffHandles, true, false, [])}
     ]);
 print(#od_group{} = Group, Id) ->
     AllPrivs = privileges:group_privileges(),
@@ -170,7 +192,9 @@ print(#od_group{} = Group, Id) ->
         parents = Parents, eff_parents = EffParents,
         users = Users, eff_users = EffUsers,
         spaces = Spaces, eff_spaces = EffSpaces,
-        eff_providers = EffProviders
+        eff_providers = EffProviders,
+        handle_services = HServices, eff_handle_services = EffHServices,
+        handles = Handles, eff_handles = EffHandles
     } = Group,
     print(od_group, Id, [
         {name, Name},
@@ -182,7 +206,11 @@ print(#od_group{} = Group, Id) ->
         {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
         {spaces, prepare_relation_to_print(Spaces, false, false, AllPrivs)},
         {eff_spaces, prepare_relation_to_print(EffSpaces, true, false, AllPrivs)},
-        {eff_providers, prepare_relation_to_print(EffProviders, true, false, [])}
+        {eff_providers, prepare_relation_to_print(EffProviders, true, false, [])},
+        {handle_services, prepare_relation_to_print(HServices, false, false, [])},
+        {eff_handle_services, prepare_relation_to_print(EffHServices, true, false, [])},
+        {handles, prepare_relation_to_print(Handles, false, false, [])},
+        {eff_handles, prepare_relation_to_print(EffHandles, true, false, [])}
     ]);
 print(#od_space{} = Space, Id) ->
     AllPrivs = privileges:space_privileges(),
@@ -190,6 +218,7 @@ print(#od_space{} = Space, Id) ->
         name = Name,
         users = Users, eff_users = EffUsers,
         groups = Groups, eff_groups = EffGroups,
+        shares = Shares,
         providers = Providers
     } = Space,
     print(od_space, Id, [
@@ -198,10 +227,24 @@ print(#od_space{} = Space, Id) ->
         {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
         {groups, prepare_relation_to_print(Groups, false, true, AllPrivs)},
         {eff_groups, prepare_relation_to_print(EffGroups, true, true, AllPrivs)},
+        {shares, prepare_relation_to_print(Shares, false, false, [])},
         {providers, maps:fold(
             fun(Id, SupportSize, AccMap) ->
                 AccMap#{id_to_str(Id) => SupportSize}
             end, #{}, Providers)}
+    ]);
+print(#od_share{} = Share, Id) ->
+    #od_share{
+        name = Name,
+        space = Space,
+        handle = Handle,
+        public_url = PublicUrl
+    } = Share,
+    print(od_share, Id, [
+        {name, Name},
+        {public_url, PublicUrl},
+        {space, str_utils:format_bin("~s#~s", [model_to_str(od_space), id_to_str(Space)])},
+        {handle, str_utils:format_bin("~s#~s", [model_to_str(od_handle), id_to_str(Handle)])}
     ]);
 print(#od_provider{} = Provider, Id) ->
     #od_provider{
@@ -234,11 +277,15 @@ print(#od_handle{} = Handle, Id) ->
     AllPrivs = privileges:handle_privileges(),
     #od_handle{
         handle_service = HandleServiceId,
+        resource_id = ShareId,
+        public_handle = PublicHandle,
         users = Users, eff_users = EffUsers,
         groups = Groups, eff_groups = EffGroups
     } = Handle,
     print(od_handle, Id, [
         {name, id_to_str(HandleServiceId)},
+        {public_handle, PublicHandle},
+        {share, str_utils:format_bin("~s#~s", [model_to_str(od_share), id_to_str(ShareId)])},
         {users, prepare_relation_to_print(Users, false, true, AllPrivs)},
         {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
         {groups, prepare_relation_to_print(Groups, false, true, AllPrivs)},
@@ -310,7 +357,7 @@ model_to_str(od_handle) -> "hnl".
 
 
 id_to_str(Id) ->
-    str_utils:to_list(binary:part(Id, {0, 7})).
+    str_utils:to_list(binary:part(Id, {0, min(7, byte_size(Id))})).
 
 
 

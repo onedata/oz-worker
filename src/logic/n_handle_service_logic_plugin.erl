@@ -169,8 +169,7 @@ auth_by_privilege(UserId, Privilege) ->
 has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->
     {ok, #document{value = HService}} = od_handle_service:get(HServiceId),
     has_eff_privilege(HService, UserId, Privilege);
-has_eff_privilege(#od_handle_service{users = UsersPrivileges}, UserId, Privilege) ->
-    % TODO eff_users
-    UserPrivileges = maps:get(UserId, UsersPrivileges, []),
+has_eff_privilege(#od_handle_service{eff_users = UsersPrivileges}, UserId, Privilege) ->
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
     lists:member(Privilege, UserPrivileges).
 

@@ -174,8 +174,8 @@ auth_by_privilege(UserId, Privilege) ->
 has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
     {ok, #document{value = Group}} = od_group:get(GroupId),
     has_eff_privilege(Group, UserId, Privilege);
-has_eff_privilege(#od_group{users = UsersPrivileges}, UserId, Privilege) ->
+has_eff_privilege(#od_group{eff_users = UsersPrivileges}, UserId, Privilege) ->
     % TODO eff_users
-    UserPrivileges = maps:get(UserId, UsersPrivileges, []),
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
     lists:member(Privilege, UserPrivileges).
 
