@@ -81,7 +81,7 @@ get_response(<<"repositoryName">>, _Args) ->
     {ok, RepositoryName} = application:get_env(?APP_Name, oz_name),
     list_to_binary(RepositoryName);
 get_response(<<"baseURL">>, _Args) ->
-    Hostname = dns_query_handler:get_canonical_hostname(),
+    {ok, Hostname} = application:get_env(oz_worker, http_domain),
     {ok, OAI_PREFIX} = application:get_env(?APP_Name, oai_pmh_api_prefix),
     list_to_binary(Hostname ++ OAI_PREFIX);
 get_response(<<"protocolVersion">>, _Args) ->

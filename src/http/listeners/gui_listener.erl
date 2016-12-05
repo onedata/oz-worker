@@ -61,7 +61,7 @@ start() ->
         % Initialize auth handler
         auth_config:load_auth_config(),
 
-        Hostname = dns_query_handler:get_canonical_hostname(),
+        {ok, Hostname} = application:get_env(oz_worker, http_domain),
         Dispatch = cowboy_router:compile([
             % Matching requests will be redirected to the same address without
             % leading 'www.'. Cowboy does not have a mechanism to match every

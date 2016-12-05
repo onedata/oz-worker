@@ -155,7 +155,7 @@ list() ->
 %%--------------------------------------------------------------------
 -spec share_id_to_public_url(ShareId :: binary()) -> binary().
 share_id_to_public_url(ShareId) ->
-    OZHostname = dns_query_handler:get_canonical_hostname(),
+    {ok, OZHostname} = application:get_env(oz_worker, http_domain),
     str_utils:format_bin("https://~s/share/~s", [OZHostname, ShareId]).
 
 

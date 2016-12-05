@@ -98,7 +98,7 @@ get_redirection_uri(UserId, ProviderId) ->
     Token = gen_token(UserId, ProviderId),
     {ok, _} = od_user:update(UserId, #{chosen_provider => ProviderId}),
     % TODO return IP address rather than alias.onedata.org
-%%    Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
+%%    {ok, Hostname} = application:get_env(oz_worker, http_domain),
 %%    {ok, #od_user{alias = Alias}} = user_logic:get_user(UserId),
 %%    Prefix = case Alias of
 %%        ?EMPTY_ALIAS ->

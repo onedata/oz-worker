@@ -65,7 +65,7 @@ start() ->
         ozpca:start(ZoneCADir, ZoneCertFile, ZoneKeyFile, ZoneCertDomain),
         auth_logic:start(),
 
-        Hostname = dns_query_handler:get_canonical_hostname(),
+        {ok, Hostname} = application:get_env(oz_worker, http_domain),
         Dispatch = cowboy_router:compile([
             % Redirect requests in form: alias.onedata.org
             {":alias." ++ Hostname, [{'_', client_redirect_handler, [RestPort]}]},
