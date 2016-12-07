@@ -95,6 +95,6 @@ has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
     has_eff_privilege(Handle, UserId, Privilege);
 has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
     % TODO eff_users
-    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
 

@@ -130,7 +130,7 @@ schedule_refresh() ->
 
 
 ensure_up_to_date() ->
-    ensure_up_to_date(5).
+    ensure_up_to_date(10).
 ensure_up_to_date(0) ->
     error(cannot_ensure_up_to_date);
 ensure_up_to_date(Retries) ->
@@ -146,7 +146,8 @@ ensure_up_to_date(Retries) ->
         true ->
             ok;
         false ->
-            timer:sleep(1000),
+            schedule_refresh(),
+            timer:sleep(3000),
             ensure_up_to_date(Retries - 1)
     end.
 
@@ -428,6 +429,7 @@ update_oz_privileges(EntityModel, EntityId, Operation, Privileges) ->
         {ok, mark_dirty(top_down, true, EntityModel, EntityId, update_oz_privileges(
             Entity, NewOzPrivileges))}
     end),
+    schedule_refresh(),
     ok.
 
 
@@ -447,7 +449,9 @@ mark_dirty(WhichWay, Flag, Model, Id, Entity) ->
                 {bottom_up, true} ->
                     ?emergency("bottom-up dirty: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
-                        bottom_up_dirty = lists:sort([{Priority, Model, Id} | BottomUpDirty])
+                        bottom_up_dirty = lists:sort(lists:keystore(
+                            Id, 3, BottomUpDirty, {Priority, Model, Id}
+                        ))
                     };
                 {bottom_up, false} ->
                     ?emergency("bottom-up clean: ~s", [readable(Id, Entity)]),
@@ -457,7 +461,9 @@ mark_dirty(WhichWay, Flag, Model, Id, Entity) ->
                 {top_down, true} ->
                     ?emergency("top-down dirty: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
-                        top_down_dirty = lists:sort([{Priority, Model, Id} | TopDownDirty])
+                        top_down_dirty = lists:sort(lists:keystore(
+                            Id, 3, TopDownDirty, {Priority, Model, Id}
+                        ))
                     };
                 {top_down, false} ->
                     ?emergency("top-down clean: ~s", [readable(Id, Entity)]),

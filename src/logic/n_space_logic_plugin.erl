@@ -34,30 +34,30 @@ create(?USER(UserId), _, entity, #{<<"name">> := Name}) ->
     ),
 %% TODO user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     {ok, SpaceId};
-create(?USER, SpaceId, users, #{<<"userId">> := UserId}) ->
+create(_Client, SpaceId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_space, SpaceId,
         privileges:space_user()
     ),
     {ok, SpaceId};
-create(?USER, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
+create(_Client, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
     entity_graph:add_relation(
         od_group, GroupId,
         od_space, SpaceId,
         privileges:space_user()
     ),
     {ok, SpaceId};
-create(?USER(UserId), SpaceId, invite_provider_token, _) ->
+create(Client, SpaceId, invite_provider_token, _) ->
     {ok, Token} = token_logic:create(
-        ?USER(UserId),
+        Client,
         space_support_token,
         {space, SpaceId}
     ),
     {ok, Token};
-create(?USER(UserId), SpaceId, invite_user_token, _) ->
+create(Client, SpaceId, invite_user_token, _) ->
     {ok, Token} = token_logic:create(
-        ?USER(UserId),
+        Client,
         space_invite_user_token,
         {space, SpaceId}
     ),
@@ -108,18 +108,18 @@ exists(SpaceId, _) when is_binary(SpaceId) ->
 authorize(create, undefined, entity,?USER,  _) ->
     true;
 authorize(create, _SpaceId, users, ?USER(UserId), _) ->
-    auth_by_privilege(UserId, space_invite_user); %TODO admin privs
+    auth_by_oz_privilege(UserId, add_member_to_space);
 authorize(create, _SpaceId, groups, ?USER(UserId), _) ->
-    auth_by_privilege(UserId, space_invite_group); %TODO admin privs
+    auth_by_oz_privilege(UserId, add_member_to_space);
 authorize(create, _SpaceId, invite_provider_token, ?USER(UserId), _) ->
-    auth_by_privilege(UserId, space_add_provider); %TODO admin privs
+    auth_by_privilege(UserId, space_add_provider);
+authorize(create, _SpaceId, invite_user_token, ?USER(UserId), _) ->
+    auth_by_privilege(UserId, space_invite_user);
 
 authorize(get, _SpaceId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, space_view_data);
 authorize(get, _SpaceId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, space_view_data);
-authorize(get, _SpaceId, invite_user_token, ?USER(UserId), _) ->
-    auth_by_privilege(UserId, space_invite_user);
 
 authorize(update, _SpaceId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, space_change_data);
@@ -162,5 +162,11 @@ validate(update, entity) -> #{
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_space{} = Space) ->
        n_space_logic:has_eff_privilege(Space, UserId, Privilege)
+    end}.
+
+
+auth_by_oz_privilege(UserId, Privilege) ->
+    {external, fun() ->
+        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
     end}.
 

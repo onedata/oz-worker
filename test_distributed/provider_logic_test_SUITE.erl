@@ -102,8 +102,6 @@ support_space_test(Config) ->
         Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA]
     ),
     % Try bad token first
-    ct:print("a ~p", [P1]),
-    ct:print("b ~p", [?PROVIDER(P1)]),
     ?assertMatch({error, ?EL_BAD_TOKEN(<<"token">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(P1), P1, #{
             <<"token">> => <<"bad-token">>, <<"size">> => MinimumSupportSize
@@ -128,7 +126,7 @@ support_space_test(Config) ->
         }]
     ),
     % Correct request
-    ?assertMatch(ok, oz_test_utils:call_oz(
+    ?assertMatch({ok, S1}, oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(P1), P1, #{
             <<"token">> => Macaroon, <<"size">> => MinimumSupportSize
         }]
@@ -148,11 +146,12 @@ support_space_test(Config) ->
             <<"name">> => <<"Space2">>
         }]
     ),
+    ensure_eff_graph_up_to_date(Config),
     {ok, Macaroon3} = oz_test_utils:call_oz(
         Config, n_space_logic, create_invite_provider_token, [?USER(U1), S2]
     ),
-    Token = token_logic:serialize(Macaroon3),
-    ?assertMatch(ok, oz_test_utils:call_oz(
+    {ok, Token} = token_logic:serialize(Macaroon3),
+    ?assertMatch({ok, S2}, oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(P1), P1, #{
             <<"token">> => Token, <<"size">> => MinimumSupportSize
         }]
@@ -161,31 +160,46 @@ support_space_test(Config) ->
 
 get_test(Config) ->
     Data = ?CREATE_PROVIDER_DATA,
+    ExpName = maps:get(<<"name">>, Data),
+    ExpUrls = maps:get(<<"urls">>, Data),
+    ExpRedPoint = maps:get(<<"redirectionPoint">>, Data),
+    ExpLat = maps:get(<<"latitude">>, Data),
+    ExpLong = maps:get(<<"longitude">>, Data),
+
     {ok, {P1, _}} = oz_test_utils:call_oz(
         Config, n_provider_logic, create, [?NOBODY, Data]
     ),
-    ExpectedProvider = #od_provider{
-        name = maps:get(<<"name">>, Data),
-        urls = maps:get(<<"urls">>, Data),
-        redirection_point = maps:get(<<"redirectionPoint">>, Data),
-        latitude = maps:get(<<"latitude">>, Data),
-        longitude = maps:get(<<"longitude">>, Data),
-        spaces = [],
-        eff_users = #{},
-        eff_groups = #{}
-    },
-    ?assertMatch({ok, ExpectedProvider}, oz_test_utils:call_oz(
+
+    {ok, GetResult} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
         Config, n_provider_logic, get, [?PROVIDER(P1), P1]
     )),
+    ?assertEqual(ExpName, GetResult#od_provider.name),
+    ?assertEqual(ExpUrls, GetResult#od_provider.urls),
+    ?assertEqual(ExpRedPoint, GetResult#od_provider.redirection_point),
+    ?assertEqual(ExpLat, GetResult#od_provider.latitude),
+    ?assertEqual(ExpLong, GetResult#od_provider.longitude),
+    ?assertEqual([], GetResult#od_provider.spaces),
+    ?assertEqual(#{}, GetResult#od_provider.eff_users),
+    ?assertEqual(#{}, GetResult#od_provider.eff_groups),
+
     {ok, {P2, _}} = oz_test_utils:call_oz(
-        Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA]
+        Config, n_provider_logic, create, [?NOBODY, Data]
     ),
     % Provider 2 should be able to get data about provider 1
-    ?assertMatch({ok, ExpectedProvider}, oz_test_utils:call_oz(
+    {ok, GetResult2} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
         Config, n_provider_logic, get, [?PROVIDER(P2), P1]
     )),
+    ?assertEqual(ExpName, GetResult2#od_provider.name),
+    ?assertEqual(ExpUrls, GetResult2#od_provider.urls),
+    ?assertEqual(ExpRedPoint, GetResult2#od_provider.redirection_point),
+    ?assertEqual(ExpLat, GetResult2#od_provider.latitude),
+    ?assertEqual(ExpLong, GetResult2#od_provider.longitude),
+    ?assertEqual([], GetResult2#od_provider.spaces),
+    ?assertEqual(#{}, GetResult2#od_provider.eff_users),
+    ?assertEqual(#{}, GetResult2#od_provider.eff_groups),
+
     % But anyone should not
-    ?assertMatch({ok, ExpectedProvider}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?EL_UNAUTHORIZED}, oz_test_utils:call_oz(
         Config, n_provider_logic, get, [?NOBODY, P1]
     )).
 
@@ -215,17 +229,133 @@ get_spaces_test(Config) ->
     ?assertMatch({ok, #od_space{name = <<"s3">>}}, oz_test_utils:call_oz(
         Config, n_provider_logic, get_space, [?PROVIDER(P1), P1, S3]
     )),
-
-    ok.
+    % Check if getting random id does not work
+    ?assertMatch({error, ?EL_NOT_FOUND}, oz_test_utils:call_oz(
+        Config, n_provider_logic, get_space, [?PROVIDER(P1), P1, <<"asd">>]
+    )).
 
 
 get_eff_users_test(Config) ->
+    {ok, {P1, _}} = oz_test_utils:call_oz(
+        Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA]
+    ),
+    % Create a user and grant him admin privileges
+    {ok, U1} = oz_test_utils:call_oz(
+        Config, n_user_logic, create, [#od_user{}]
+    ),
+    ok = oz_test_utils:call_oz(
+        Config, n_user_logic, modify_oz_privileges, [?ROOT, U1, #{
+            <<"operation">> => grant, <<"privileges">> => [list_users_of_provider]
+        }]
+    ),
+    ensure_eff_graph_up_to_date(Config),
+    % For now, there are no users
+    ?assertMatch({ok, []}, oz_test_utils:call_oz(
+        Config, n_provider_logic, get_eff_users, [?USER(U1), P1]
+    )),
+    % Create some spaces and support them
+    {S1, S2, S3} = create_and_support_3_spaces(Config, P1),
+    % Add some users to the spaces (9 users, 3 in each space)
+    ExpectedUsers = lists:map(
+        fun({Counter, Space}) ->
+            UserName = str_utils:format_bin("u~B", [Counter]),
+            {ok, User} = oz_test_utils:call_oz(
+                Config, n_user_logic, create, [#od_user{name = UserName}]
+            ),
+            {ok, Space} = oz_test_utils:call_oz(
+                Config, n_space_logic, add_user, [?ROOT, Space, User]
+            ),
+            User
+        end, lists:zip(lists:seq(1, 9), [S1, S2, S3, S1, S2, S3, S1, S2, S3])),
+    ensure_eff_graph_up_to_date(Config),
+    {ok, Users} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
+        Config, n_provider_logic, get_eff_users, [?USER(U1), P1]
+    )),
+    ?assertEqual(lists:sort(Users), lists:sort(ExpectedUsers)),
+    % Create some more spaces and support them
+    {S4, S5, S6} = create_and_support_3_spaces(Config, P1),
+    % Create two groups for every space and three users for every group
+    ExpectedUsersFromGroups = lists:flatmap(
+        fun({Counter, Space}) ->
+            UserName1 = str_utils:format_bin("u1@g~B", [Counter]),
+            {ok, User1} = oz_test_utils:call_oz(
+                Config, n_user_logic, create, [#od_user{name = UserName1}]
+            ),
+            UserName2 = str_utils:format_bin("u2@g~B", [Counter]),
+            {ok, User2} = oz_test_utils:call_oz(
+                Config, n_user_logic, create, [#od_user{name = UserName2}]
+            ),
+            GroupName = str_utils:format_bin("g~B", [Counter]),
+            {ok, Group} = oz_test_utils:call_oz(
+                Config, n_group_logic, create, [?USER(User1), #{<<"name">> => GroupName}]
+            ),
+            {ok, Group} = oz_test_utils:call_oz(
+                Config, n_group_logic, add_user, [?ROOT, Group, User2]
+            ),
+            {ok, Space} = oz_test_utils:call_oz(
+                Config, n_space_logic, add_group, [?ROOT, Space, Group]
+            ),
+            [User1, User2]
+        end, lists:zip(lists:seq(1, 6), [S4, S5, S6, S4, S5, S6])),
+    ensure_eff_graph_up_to_date(Config),
+    {ok, Users2} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
+        Config, n_provider_logic, get_eff_users, [?USER(U1), P1]
+    )),
+    ?assertEqual(lists:sort(Users2), lists:sort(ExpectedUsers ++ ExpectedUsersFromGroups)),
     ok.
 
 
 get_eff_groups_test(Config) ->
+    try
+        {ok, {P1, _}} = oz_test_utils:call_oz(
+            Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA]
+        ),
+        % Create a user and grant him admin privileges
+        {ok, U1} = oz_test_utils:call_oz(
+            Config, n_user_logic, create, [#od_user{}]
+        ),
+        ok = oz_test_utils:call_oz(
+            Config, n_user_logic, modify_oz_privileges, [?ROOT, U1, #{
+                <<"operation">> => grant, <<"privileges">> => [list_groups_of_provider]
+            }]
+        ),
+        ensure_eff_graph_up_to_date(Config),
+        % For now, there are no groups
+        ?assertMatch({ok, []}, oz_test_utils:call_oz(
+            Config, n_provider_logic, get_eff_groups, [?USER(U1), P1]
+        )),
+        % Create some spaces and support them
+        {S1, S2, S3} = create_and_support_3_spaces(Config, P1),
+        {S4, S5, S6} = create_and_support_3_spaces(Config, P1),
+        % Create two groups for every space
+        ExpectedGroups = lists:map(
+            fun({Counter, Space}) ->
+                GroupName = str_utils:format_bin("g~B", [Counter]),
+                {ok, Group} = oz_test_utils:call_oz(
+                    Config, n_group_logic, create, [?ROOT, #{<<"name">> => GroupName}]
+                ),
+                {ok, Space} = oz_test_utils:call_oz(
+                    Config, n_space_logic, add_group, [?ROOT, Space, Group]
+                ),
+                Group
+            end, lists:zip(lists:seq(1, 6), [S1, S2, S3, S4, S5, S6])),
+        ensure_eff_graph_up_to_date(Config),
+        {ok, Groups2} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
+            Config, n_provider_logic, get_eff_groups, [?USER(U1), P1]
+        )),
+        ?assertEqual(lists:sort(Groups2), lists:sort(ExpectedGroups)),
+        lists:foreach(fun({Counter, Group}) ->
+            GroupName = str_utils:format_bin("g~B", [Counter]),
+            ?assertMatch({ok, #od_group{name = GroupName}}, oz_test_utils:call_oz(
+                Config, n_provider_logic, get_eff_group, [?PROVIDER(P1), P1, Group]
+            ))
+        end, lists:zip(lists:seq(1, 6), ExpectedGroups)),
+        ok
+    catch
+        T:M ->
+            ct:print("WAT: ~p", [{T, M, erlang:get_stacktrace()}])
+    end,
     ok.
-
 
 
 %%%===================================================================
@@ -265,22 +395,26 @@ create_and_support_3_spaces(Config, ProvId) ->
     {ok, Macaroon3} = oz_test_utils:call_oz(
         Config, n_space_logic, create_invite_provider_token, [?ROOT, S3]
     ),
-    ok = oz_test_utils:call_oz(
+    {ok, _} = oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(ProvId), ProvId, #{
             <<"token">> => Macaroon1, <<"size">> => MinimumSupportSize
         }]
     ),
-    ok = oz_test_utils:call_oz(
+    {ok, _} = oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(ProvId), ProvId, #{
             <<"token">> => Macaroon2, <<"size">> => MinimumSupportSize
         }]
     ),
-    ok = oz_test_utils:call_oz(
+    {ok, _} = oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(ProvId), ProvId, #{
             <<"token">> => Macaroon3, <<"size">> => MinimumSupportSize
         }]
     ),
     {S1, S2, S3}.
+
+
+ensure_eff_graph_up_to_date(Config) ->
+    oz_test_utils:call_oz(Config, entity_graph, ensure_up_to_date, []).
 
 
 min_support_size(Config) ->

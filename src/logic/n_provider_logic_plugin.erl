@@ -56,7 +56,7 @@ create(_, ProviderId, spaces, Data) ->
         SupportSize
     ) of
         ok ->
-            {ok, ProviderId};
+            {ok, SpaceId};
         Error ->
             Error
     end;
@@ -78,11 +78,11 @@ get_internal(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
 get_internal(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
     n_space_logic_plugin:get_entity(SpaceId);
 get_internal(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
-    {ok, EffUsers};
+    {ok, maps:keys(EffUsers)};
 get_internal(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
     n_user_logic_plugin:get_entity(UserId);
 get_internal(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
-    {ok, EffGroups};
+    {ok, maps:keys(EffGroups)};
 get_internal(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
     n_group_logic_plugin:get_entity(GroupId).
 

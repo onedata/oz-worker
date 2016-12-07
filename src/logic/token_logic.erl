@@ -40,7 +40,7 @@ space_support_token.
 %% Serializes a macaroon into a binary token.
 %% @end
 %%--------------------------------------------------------------------
--spec serialize(macaroon:macaroon()) -> Token :: binary().
+-spec serialize(macaroon:macaroon()) -> {ok, Token :: binary()} | {error, term()}.
 serialize(Macaroon) ->
     token_utils:serialize62(Macaroon).
 

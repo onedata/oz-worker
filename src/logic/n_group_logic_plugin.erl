@@ -23,6 +23,13 @@
 -export([exists/2, authorize/5, validate/2]).
 
 
+create(?ROOT, _, entity, Data) ->
+    Name = maps:get(<<"name">>, Data),
+    Type = maps:get(<<"type">>, Data, role),
+    {ok, GroupId} = od_group:create(
+        #document{value = #od_group{name = Name, type = Type}}
+    ),
+    {ok, GroupId};
 create(?USER(UserId), _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
     Type = maps:get(<<"type">>, Data, role),
@@ -35,14 +42,14 @@ create(?USER(UserId), _, entity, Data) ->
         privileges:group_admin()
     ),
     {ok, GroupId};
-create(?USER, GroupId, users, #{<<"userId">> := UserId}) ->
+create(_Client, GroupId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_group, GroupId,
         privileges:group_user()
     ),
     {ok, GroupId};
-create(?USER, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
+create(_Client, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
     entity_graph:add_relation(
         od_group, ChildGroupId,
         od_group, GroupId,
@@ -99,9 +106,9 @@ exists(GroupId, _) when is_binary(GroupId) ->
 authorize(create, undefined, entity, ?USER, _) ->
     true;
 authorize(create, _GroupId, users, ?USER(UserId), _) ->
-    auth_by_privilege(UserId, group_invite_user); %TODO admin privs
+    auth_by_oz_privilege(UserId, add_member_to_group);
 authorize(create, _GroupId, groups, ?USER(UserId), _) ->
-    auth_by_privilege(UserId, group_invite_group); %TODO admin privs
+    auth_by_oz_privilege(UserId, add_member_to_group);
 
 authorize(get, _GroupId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, group_view_data);

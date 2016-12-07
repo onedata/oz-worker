@@ -52,6 +52,7 @@ create(Issuer, Name) when is_binary(Name) ->
 create(Issuer, Data) ->
     n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
 
+
 create_invite_provider_token(Issuer, SpaceId) ->
     n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_provider_token, #{}).
 
@@ -121,7 +122,7 @@ has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
     has_eff_privilege(Space, UserId, Privilege);
 has_eff_privilege(#od_space{eff_users = UsersPrivileges}, UserId, Privilege) ->
     % TODO eff_users
-    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
 
 

@@ -25,7 +25,7 @@
     get/2
 ]).
 -export([
-    modify_oz_privileges/4
+    modify_oz_privileges/4, modify_oz_privileges/3
 %%    join_as_user/2,
 %%    join_as_group/3
 ]).
@@ -82,4 +82,5 @@ has_eff_oz_privilege(UserId, Privilege) when is_binary(UserId) ->
     {ok, #document{value = User}} = od_user:get(UserId),
     has_eff_oz_privilege(User, Privilege);
 has_eff_oz_privilege(#od_user{eff_oz_privileges = UserPrivileges}, Privilege) ->
+    ?emergency("~p ? ~p", [Privilege, UserPrivileges]),
     lists:member(Privilege, UserPrivileges).
