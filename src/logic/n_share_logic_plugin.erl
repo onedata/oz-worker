@@ -18,12 +18,12 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
-    delete_impl/1]).
--export([exists_impl/2, authorize_impl/5, validate_impl/2]).
+-export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
+    delete/1]).
+-export([exists/2, authorize/5, validate/2]).
 
 
-create_impl({user, _UserId}, _, entity, Data) ->
+create(#client{type = user}, _, entity, Data) ->
     ShareId = maps:get(<<"shareId">>, Data),
     Name = maps:get(<<"name">>, Data),
     SpaceId = maps:get(<<"spaceId">>, Data),
@@ -52,15 +52,15 @@ get_entity(ShareId) ->
     end.
 
 
-get_internal({user, _UserId}, _ShareId, _, _) ->
+get_internal(#client{type = user}, _ShareId, _, _) ->
     ok.
 
 
-get_external({user, _UserId}, _) ->
+get_external(#client{type = user}, _) ->
     ok.
 
 
-update_impl(ShareId, Data) when is_binary(ShareId) ->
+update(ShareId, Data) when is_binary(ShareId) ->
     {ok, _} = od_share:update(ShareId, fun(Share) ->
         % TODO czy cos sie da update?
         {ok, Share#od_share{}}
@@ -68,13 +68,13 @@ update_impl(ShareId, Data) when is_binary(ShareId) ->
     ok.
 
 
-delete_impl(ShareId) when is_binary(ShareId) ->
+delete(ShareId) when is_binary(ShareId) ->
     ok = od_share:delete(ShareId).
 
 
-exists_impl(undefined, entity) ->
+exists(undefined, entity) ->
     true;
-exists_impl(ShareId, entity) when is_binary(ShareId) ->
+exists(ShareId, entity) when is_binary(ShareId) ->
     {internal, fun(#od_share{}) ->
         % If the share with ShareId can be found, it exists. If not, the
         % verification will fail before this function is called.
@@ -82,31 +82,31 @@ exists_impl(ShareId, entity) when is_binary(ShareId) ->
     end}.
 
 
-authorize_impl({user, UserId}, create, undefined, entity, Data) ->
+authorize(#client{type = user, id = UserId}, create, undefined, entity, Data) ->
     SpaceId = maps:get(<<"spaceId">>, Data, <<"">>),
     {external, fun() ->
-        n_space_logic_plugin:has_eff_privilege(
+        n_space_logic:has_eff_privilege(
             SpaceId, UserId, space_manage_shares
         )
     end};
-authorize_impl({user, UserId}, get, _ShareId, entity, _) ->
+authorize(#client{type = user, id = UserId}, get, _ShareId, entity, _) ->
     {internal, fun(#od_share{space = SpaceId}) ->
         n_space_logic_plugin:has_eff_user(SpaceId, UserId)
     end};
 
 
-authorize_impl({user, UserId}, update, _ShareId, entity, _) ->
+authorize(#client{type = user, id = UserId}, update, _ShareId, entity, _) ->
     {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic_plugin:has_eff_privilege(SpaceId, UserId, space_manage_shares)
+        n_space_logic:has_eff_privilege(SpaceId, UserId, space_manage_shares)
     end};
 
-authorize_impl({user, UserId}, delete, _ShareId, entity, _) ->
+authorize(#client{type = user, id = UserId}, delete, _ShareId, entity, _) ->
     {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic_plugin:has_eff_privilege(SpaceId, UserId, space_manage_shares)
+        n_space_logic:has_eff_privilege(SpaceId, UserId, space_manage_shares)
     end}.
 
 
-validate_impl(create, entity) -> #{
+validate(create, entity) -> #{
     required => #{
         <<"shareId">> => {binary, {not_exists, fun(Value) ->
             not share_logic:exists(Value) end}
@@ -118,7 +118,7 @@ validate_impl(create, entity) -> #{
         }
     }
 };
-validate_impl(update, entity) -> #{
+validate(update, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
     }

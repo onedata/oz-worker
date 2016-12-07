@@ -18,13 +18,12 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
-    delete_impl/1]).
--export([exists_impl/2, authorize_impl/5, validate_impl/2]).
--export([has_eff_privilege/3]).
+-export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
+    delete/1]).
+-export([exists/2, authorize/5, validate/2]).
 
 
-create_impl({user, UserId}, _, entity, Data) ->
+create(#client{type = user, id = UserId}, _, entity, Data) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Data),
     ResourceType = maps:get(<<"resourceType">>, Data),
     ResourceId = maps:get(<<"resourceId">>, Data),
@@ -55,14 +54,14 @@ create_impl({user, UserId}, _, entity, Data) ->
             ok
     end,
     {ok, HandleId};
-create_impl({user, _UserId}, HandleId, users, #{<<"userId">> := UserId}) ->
+create(#client{type = user}, HandleId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_handle, HandleId,
         privileges:handle_user()
     ),
     {ok, HandleId};
-create_impl({user, _UserId}, HandleId, groups, #{<<"groupId">> := GroupId}) ->
+create(#client{type = user}, HandleId, groups, #{<<"groupId">> := GroupId}) ->
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle, HandleId,
@@ -80,15 +79,15 @@ get_entity(HandleId) ->
     end.
 
 
-get_internal({user, _UserId}, _HandleId, #od_handle{users = Users}, users) ->
+get_internal(#client{type = user}, _HandleId, #od_handle{users = Users}, users) ->
     {ok, Users}.
 
 
-get_external({user, _UserId}, _) ->
+get_external(#client{type = user}, _) ->
     ok.
 
 
-update_impl(HandleId, Data) when is_binary(HandleId) ->
+update(HandleId, Data) when is_binary(HandleId) ->
     {ok, _} = od_handle:update(HandleId, fun(Handle) ->
         % TODO czy cos sie da update?
         {ok, Handle#od_handle{}}
@@ -96,25 +95,25 @@ update_impl(HandleId, Data) when is_binary(HandleId) ->
     ok.
 
 
-delete_impl(HandleId) when is_binary(HandleId) ->
+delete(HandleId) when is_binary(HandleId) ->
     ok = od_handle:delete(HandleId).
 
 
-exists_impl(undefined, entity) ->
+exists(undefined, entity) ->
     true;
-exists_impl(HandleId, entity) when is_binary(HandleId) ->
+exists(HandleId, entity) when is_binary(HandleId) ->
     {internal, fun(#od_handle{}) ->
         % If the handle with HandleId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists_impl(HandleId, users) when is_binary(HandleId) ->
+exists(HandleId, users) when is_binary(HandleId) ->
     {internal, fun(#od_handle{}) ->
         % If the handle with HandleId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists_impl(HandleId, groups) when is_binary(HandleId) ->
+exists(HandleId, groups) when is_binary(HandleId) ->
     {internal, fun(#od_handle{}) ->
         % If the handle with HandleId can be found, it exists. If not, the
         % verification will fail before this function is called.
@@ -122,32 +121,32 @@ exists_impl(HandleId, groups) when is_binary(HandleId) ->
     end}.
 
 
-authorize_impl({user, UserId}, create, undefined, entity, Data) ->
+authorize(#client{type = user, id = UserId}, create, undefined, entity, Data) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
     {external, fun() ->
         % TODO moze przeniesc has_eff do logic?
-        n_handle_service_logic_plugin:has_eff_privilege(
+        n_handle_service_logic:has_eff_privilege(
             HandleServiceId, UserId, register_handle
         )
     end};
-authorize_impl({user, UserId}, create, HandleId, users, _) when is_binary(HandleId) ->
+authorize(#client{type = user, id = UserId}, create, _HandleId, users, _) ->
     auth_by_privilege(UserId, modify_handle);
-authorize_impl({user, UserId}, create, HandleId, groups, _) when is_binary(HandleId) ->
+authorize(#client{type = user, id = UserId}, create, _HandleId, groups, _) ->
     auth_by_privilege(UserId, modify_handle);
 
-authorize_impl({user, UserId}, get, HandleId, users, _) when is_binary(HandleId) ->
+authorize(#client{type = user, id = UserId}, get, _HandleId, users, _) ->
     auth_by_privilege(UserId, view_handle);
-authorize_impl({user, UserId}, get, HandleId, entity, _) when is_binary(HandleId) ->
+authorize(#client{type = user, id = UserId}, get, _HandleId, entity, _) ->
     auth_by_privilege(UserId, view_handle);
 
-authorize_impl({user, UserId}, update, HandleId, entity, _) when is_binary(HandleId) ->
+authorize(#client{type = user, id = UserId}, update, _HandleId, entity, _) ->
     auth_by_privilege(UserId, modify_handle);
 
-authorize_impl({user, UserId}, delete, HandleId, entity, _) when is_binary(HandleId) ->
+authorize(#client{type = user, id = UserId}, delete, _HandleId, entity, _) ->
     auth_by_privilege(UserId, delete_handle).
 
 
-validate_impl(create, entity) -> #{
+validate(create, entity) -> #{
     required => #{
         <<"handleServiceId">> => {binary, non_empty}, % TODO sprawdzic czy jest
         <<"resourceType">> => {binary, [<<"Share">>]},
@@ -155,21 +154,21 @@ validate_impl(create, entity) -> #{
         <<"metadata">> => {binary, non_empty}
     }
 };
-validate_impl(create, users) -> #{
+validate(create, users) -> #{
     required => #{
         <<"userId">> => {binary, {exists, fun(Value) ->
             user_logic:exists(Value) end}
         }
     }
 };
-validate_impl(create, groups) -> #{
+validate(create, groups) -> #{
     required => #{
         <<"groupId">> => {binary, {exists, fun(Value) ->
             group_logic:exists(Value) end}
         }
     }
 };
-validate_impl(update, entity) -> #{
+validate(update, entity) -> #{
     at_least_one => #{
         <<"resourceType">> => {binary, [<<"Share">>]},
         <<"resourceId">> => {binary, non_empty},
@@ -181,16 +180,5 @@ validate_impl(update, entity) -> #{
 
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_handle{} = Handle) ->
-        has_eff_privilege(Handle, UserId, Privilege)
+        n_handle_logic:has_eff_privilege(Handle, UserId, Privilege)
     end}.
-
-
-has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
-    % TODO a co jak nie ma tego handle?
-    {ok, #document{value = Handle}} = od_handle:get(HandleId),
-    has_eff_privilege(Handle, UserId, Privilege);
-has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    % TODO eff_users
-    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
-    lists:member(Privilege, UserPrivileges).
-

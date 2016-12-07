@@ -25,10 +25,12 @@
 -type qs_data() :: [{binary(), binary() | true}].
 -type data() :: json_object() | qs_data().
 
-%% A description of REST request's client.
+%% A description of request client (REST and subscriptions).
 -record(client, {
-    type :: user | provider | undefined, %% client's type
-    id = <<"">> :: binary()  %% client's ID in the database
+    % root is allowed to do anything, it must be used with caution
+    % (should not be used in any kind of API!)
+    type = nobody :: user | provider | root | nobody,
+    id = <<"">> :: binary()
 }).
 
 %% A record describing the state of REST request.

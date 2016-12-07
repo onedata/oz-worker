@@ -16,17 +16,16 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
+-define(PLUGIN, n_user_logic_plugin).
+
 -export([
     create/1
 ]).
 -export([
-    get/2,
-    get_users/2,
-    get_invite_user_token/2
+    get/2
 ]).
 -export([
-    add_user/3,
-    add_group/3
+    modify_oz_privileges/4
 %%    join_as_user/2,
 %%    join_as_group/3
 ]).
@@ -36,58 +35,51 @@
 -export([
     delete/2
 ]).
+-export([
+    exists/1,
+    has_eff_oz_privilege/2
+]).
 
 
 create(UserInfo) ->
     od_user:create(#document{value = UserInfo}).
 
 
-get(Issuer, SpaceId) ->
-    n_entity_logic:get(Issuer, n_space_logic_plugin, SpaceId, entity).
+get(Issuer, UserId) ->
+    n_entity_logic:get(Issuer, ?PLUGIN, UserId, entity).
 
 
-get_users(Issuer, SpaceId) ->
-    n_entity_logic:get(Issuer, n_space_logic_plugin, SpaceId, users).
+modify_oz_privileges(Issuer, UserId, Operation, Privs) when is_list(Privs) ->
+    modify_oz_privileges(Issuer, UserId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+modify_oz_privileges(Issuer, UserId, Data) ->
+    n_entity_logic:update(Issuer, ?PLUGIN, UserId, oz_privileges, Data).
 
 
-get_invite_user_token({user, UserId}, SpaceId) ->
-    n_entity_logic:get({user, UserId}, n_space_logic_plugin, SpaceId, space_invite_user_token).
+update(Issuer, UserId, NewName) when is_binary(NewName) ->
+    update(Issuer, UserId, #{<<"name">> => NewName});
+update(Issuer, UserId, Data) ->
+    n_entity_logic:update(Issuer, ?PLUGIN, UserId, entity, Data).
 
 
-add_user(Issuer, SpaceId, UserId) when is_binary(UserId) ->
-    add_user(Issuer, SpaceId, #{<<"userId">> => UserId});
-add_user(Issuer, SpaceId, Data) ->
-    n_entity_logic:create(
-        Issuer, n_space_logic_plugin, SpaceId, users, Data
-    ).
+delete(Issuer, UserId) ->
+    n_entity_logic:delete(Issuer, ?PLUGIN, UserId, entity).
 
 
-add_group(Issuer, SpaceId, GroupId) when is_binary(GroupId) ->
-    add_group(Issuer, SpaceId, #{<<"groupId">> => GroupId});
-add_group(Issuer, SpaceId, Data) ->
-    n_entity_logic:create(
-        Issuer, n_space_logic_plugin, SpaceId, groups, Data
-    ).
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether a user exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(UserId :: od_user:id()) -> boolean().
+exists(UserId) ->
+    od_user:exists(UserId).
 
 
-%%join_as_user({user, UserId}, Macaroon) ->
-%%    n_entity_logic:consume_token(
-%%        {user, UserId}, n_space_logic_plugin, undefined, {od_user, UserId}, Macaroon
-%%    ).
-%%
-%%
-%%join_as_group({user, UserId}, GroupId, Macaroon) ->
-%%    n_entity_logic:consume_token(
-%%        {user, UserId}, n_space_logic_plugin, undefined, {od_group, GroupId}, Macaroon
-%%    ).
-
-
-update(Issuer, SpaceId, NewName) when is_binary(NewName) ->
-    update(Issuer, SpaceId, #{<<"name">> => NewName});
-update(Issuer, SpaceId, Data) ->
-    n_entity_logic:update(Issuer, n_space_logic_plugin, SpaceId, entity, Data).
-
-
-delete(Issuer, SpaceId) ->
-    n_entity_logic:delete(Issuer, n_space_logic_plugin, SpaceId, entity).
-
+has_eff_oz_privilege(UserId, Privilege) when is_binary(UserId) ->
+    {ok, #document{value = User}} = od_user:get(UserId),
+    has_eff_oz_privilege(User, Privilege);
+has_eff_oz_privilege(#od_user{eff_oz_privileges = UserPrivileges}, Privilege) ->
+    lists:member(Privilege, UserPrivileges).

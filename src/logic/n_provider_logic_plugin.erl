@@ -18,30 +18,42 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
-    delete_impl/1]).
--export([exists_impl/2, authorize_impl/5, validate_impl/2]).
+-export([create/4, get_entity/1, get_internal/4, get_external/2,
+    update/3, delete/1]).
+-export([exists/2, authorize/5, validate/2]).
 
 
-create_impl(nobody, _, entity, Data) ->
+create(_, _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
-    {ok, ProviderId} = od_provider:create(
-        #document{value = #od_provider{name = Name}}
-    ),
-    {ok, ProviderId};
-create_impl({provider, ProviderId}, ProviderId, spaces, Data) ->
-    Token = maps:get(<<"token">>, Data),
-    % TODO walidacja w walidate!
-    {true, Macaroon} = token_logic:validate(Token, space_support_token),
-    % TODO to inaczej?
-    {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
+    URLs = maps:get(<<"urls">>, Data),
+    RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
+    CSR = maps:get(<<"csr">>, Data),
+    Latitude = maps:get(<<"latitude">>, Data, undefined),
+    Longitude = maps:get(<<"longitude">>, Data, undefined),
+
+    ProviderId = datastore_utils:gen_uuid(),
+    {ok, {ProviderCertPem, Serial}} = worker_proxy:call(ozpca_worker,
+        {sign_provider_req, ProviderId, CSR}),
+    Provider = #od_provider{name = Name, urls = URLs,
+        redirection_point = RedirectionPoint, serial = Serial,
+        latitude = Latitude, longitude = Longitude},
+    od_provider:create(#document{key = ProviderId, value = Provider}),
+    {ok, {ProviderId, ProviderCertPem}};
+
+create(_, ProviderId, spaces, Data) ->
     SupportSize = maps:get(<<"size">>, Data),
-    entity_graph:add_relation(
+    Macaroon = maps:get(<<"token">>, Data),
+    {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
+    case entity_graph:add_relation(
         od_space, SpaceId,
         od_provider, ProviderId,
         SupportSize
-    ),
-    {ok, ProviderId}.
+    ) of
+        ok ->
+            {ok, ProviderId};
+        Error ->
+            Error
+    end.
 
 
 get_entity(ProviderId) ->
@@ -53,62 +65,129 @@ get_entity(ProviderId) ->
     end.
 
 
-get_internal({provider, _ProviderId}, _, _, _) ->
+get_internal(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
+    {ok, Spaces};
+get_internal(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
+    n_space_logic_plugin:get_entity(SpaceId);
+get_internal(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
+    {ok, EffUsers};
+get_internal(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
+    n_user_logic_plugin:get_entity(UserId);
+get_internal(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
+    {ok, EffGroups};
+get_internal(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
+    n_group_logic_plugin:get_entity(GroupId).
+
+
+get_external(#client{type = provider}, _) ->
     ok.
 
 
-get_external({user, _UserId}, _) ->
-    ok.
-
-
-update_impl(ProviderId, Data) when is_binary(ProviderId) ->
+update(ProviderId, entity, Data) when is_binary(ProviderId) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
-        #od_provider{name = OldName} = Provider,
-        NewName = maps:get(<<"name">>, Data, OldName),
-        {ok, Provider#od_provider{name = NewName}}
+        #od_provider{
+            name = Name, urls = URLs, redirection_point = RedPoint,
+            latitude = Latitude, longitude = Longitude
+        } = Provider,
+        {ok, Provider#od_provider{
+            name = maps:get(<<"name">>, Data, Name),
+            urls = maps:get(<<"urls">>, Data, URLs),
+            redirection_point = maps:get(<<"redirectionPoint">>, Data, RedPoint),
+            latitude = maps:get(<<"latitude">>, Data, Latitude),
+            longitude = maps:get(<<"longitude">>, Data, Longitude)
+        }}
     end),
     ok.
 
 
-delete_impl(ProviderId) when is_binary(ProviderId) ->
+delete(ProviderId) when is_binary(ProviderId) ->
     ok = od_provider:delete(ProviderId).
 
 
-exists_impl(undefined, entity) ->
+exists(undefined, entity) ->
     true;
-exists_impl(ProviderId, entity) when is_binary(ProviderId) ->
+exists(_, check_my_ports) ->
+    true;
+exists(_, check_my_ip) ->
+    true;
+exists(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
+    % No matter the resource, return true if it belongs to a provider
+    {internal, fun(#od_provider{spaces = Spaces}) ->
+        lists:member(SpaceId, Spaces)
+    end};
+exists(ProviderId, {eff_user, UserId}) when is_binary(ProviderId) ->
+    % No matter the resource, return true if it belongs to a provider
+    {internal, fun(#od_provider{eff_users = EffUsers}) ->
+        lists:member(UserId, EffUsers)
+    end};
+exists(ProviderId, {eff_group, GroupId}) when is_binary(ProviderId) ->
+    % No matter the resource, return true if it belongs to a provider
+    {internal, fun(#od_provider{eff_groups = EffGroups}) ->
+        lists:member(GroupId, EffGroups)
+    end};
+exists(ProviderId, _) when is_binary(ProviderId) ->
+    % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{}) ->
         % If the provider with ProviderId can be found, it exists. If not, the
-        % verification will fail before this function is called.
-        true
-    end};
-exists_impl(ProviderId, spaces) when is_binary(ProviderId) ->
-    {internal, fun(#od_provider{}) ->
-        % If the space with SpaceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end}.
 
 
-authorize_impl(nobody, create, undefined, entity, _) ->
+authorize(_, create, undefined, check_my_ports, _) ->
     true;
-authorize_impl({provider, ProviderId}, create, ProviderId, spaces, _) ->
-    true.
+authorize(_, get, undefined, check_my_ip, _) ->
+    true;
+authorize(#client{type = nobody}, create, undefined, entity, _) ->
+    true;
+authorize(#client{type = provider, id = ProvId}, create, ProvId, spaces, _) ->
+    true;
+authorize(#client{type = provider}, get, _ProvId, entity, _) ->
+    true;
+authorize(#client{type = user, id = UserId}, get, _ProvId, entity, _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_providers);
+authorize(#client{type = provider, id = ProvId}, get, ProvId, spaces, _) ->
+    true;
+authorize(#client{type = user, id = UserId}, get, _ProvId, spaces, _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
+authorize(#client{type = user, id = UserId}, get, _ProvId, {space, _}, _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
+authorize(#client{type = user, id = UserId}, get, _ProvId, eff_users, _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
+authorize(#client{type = user, id = UserId}, get, _ProvId, {eff_user, _}, _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
+authorize(#client{type = user, id = UserId}, get, _ProvId, eff_groups, _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
+authorize(#client{type = user, id = UserId}, get, _ProvId, {eff_group, _}, _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider).
 
 
-validate_impl(create, entity) -> #{
+validate(create, entity) -> #{
     required => #{
-        <<"name">> => {binary, non_empty}
+        <<"name">> => {binary, non_empty},
+        <<"urls">> => {list_of_binaries, any},
+        <<"redirectionPoint">> => {binary, non_empty},
+        <<"csr">> => {binary, non_empty}
+    },
+    optional => #{
+        <<"latitude">> => {float, fun(F) -> F >= -90 andalso F =< 90 end},
+        <<"longitude">> => {float, fun(F) -> F >= -180 andalso F =< 180 end}
     }
 };
-validate_impl(create, spaces) -> #{
+validate(create, spaces) -> #{
     required => #{
-        <<"token">> => {binary, non_empty},
+        <<"token">> => {token, space_support_token},
         <<"size">> => {positive_integer, any}
     }
 };
-validate_impl(update, entity) -> #{
-    required => #{
-        <<"name">> => {binary, non_empty}
+validate(create, check_my_ports) -> #{
+};
+validate(update, entity) -> #{
+    at_least_one => #{
+        <<"name">> => {binary, non_empty},
+        <<"urls">> => {list_of_binaries, any},
+        <<"redirectionPoint">> => {binary, non_empty},
+        <<"latitude">> => {float, fun(F) -> F >= -90 andalso F =< 90 end},
+        <<"longitude">> => {float, fun(F) -> F >= -180 andalso F =< 180 end}
     }
 }.

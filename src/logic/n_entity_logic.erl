@@ -17,11 +17,11 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([create/5, get/4, update/5, delete/4, consume_token/4]).
+-export([create/5, get/4, update/5, delete/4]).
 -export([ahaha/0]).
 
 -record(request, {
-    issuer = undefined :: term(), % TODO
+    client = #client{} :: #client{},
     el_plugin = undefined :: undefined | atom(),
     entity_id = undefined :: undefined | binary(),
     entity = undefined :: undefined | term(),
@@ -40,7 +40,8 @@ type_rule() -> [
     integer,
     positive_integer,
     float,
-    json
+    json,
+    token
 ].
 
 value_rule() -> [
@@ -49,7 +50,8 @@ value_rule() -> [
     [possible_values],
     fun() -> true end,
     {exists, fun(Id) -> true end},
-    {not_exists, fun(Id) -> true end}
+    {not_exists, fun(Id) -> true end},
+    token_type % compatible only with token
 ].
 
 -define(PROXY_URL, <<"172.17.0.9:8080/api/v1">>).
@@ -84,59 +86,62 @@ value_rule() -> [
 
 ahaha() ->
     {ok, U1} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U1">>}]),
+    ok = n_user_logic:modify_oz_privileges(#client{type = root}, U1, set, [set_privileges]),
     {ok, U2} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U2">>}]),
     {ok, U3} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U3">>}]),
-    {ok, G1} = rpc:call(node(), n_group_logic, create, [{user, U1}, <<"G1">>]),
+    {ok, G1} = rpc:call(node(), n_group_logic, create, [#client{type = user, id = U1}, <<"G1">>]),
     entity_graph:ensure_up_to_date(),
-    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [{user, U1}, G1, U2]),
-    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [{user, U1}, G1, U3]),
+    ok = n_group_logic:modify_oz_privileges(#client{type = user, id = U1}, G1, set, privileges:oz_admin()),
+    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [#client{type = user, id = U1}, G1, U2]),
+    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [#client{type = user, id = U1}, G1, U3]),
 
     {ok, U4} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U4">>}]),
-    {ok, G2} = rpc:call(node(), n_group_logic, create, [{user, U4}, <<"G2">>]),
-    group_logic:set_oz_privileges(G2, privileges:oz_viewer()),
+    {ok, G2} = rpc:call(node(), n_group_logic, create, [#client{type = user, id = U4}, <<"G2">>]),
+    ok = n_group_logic:modify_oz_privileges(#client{type = user, id = U1}, G2, grant, privileges:oz_admin()),
+    ok = n_group_logic:modify_oz_privileges(#client{type = user, id = U1}, G2, revoke, privileges:oz_viewer()),
     entity_graph:ensure_up_to_date(),
-    {ok, G2} = rpc:call(node(), n_group_logic, add_group, [{user, U4}, G2, G1]),
+    {ok, G2} = rpc:call(node(), n_group_logic, add_group, [#client{type = user, id = U4}, G2, G1]),
 
     {ok, U5} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U5">>}]),
-    {ok, S1} = rpc:call(node(), n_space_logic, create, [{user, U5}, <<"S1">>]),
+    {ok, S1} = rpc:call(node(), n_space_logic, create, [#client{type = user, id = U5}, <<"S1">>]),
     entity_graph:ensure_up_to_date(),
-    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [{user, U5}, S1, G2]),
+    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [#client{type = user, id = U5}, S1, G2]),
 
     {ok, P1} = rpc:call(node(), n_provider_logic, create, [<<"P1">>]),
-    {ok, Token} = rpc:call(node(), n_space_logic, create_invite_provider_token, [{user, U5}, S1]),
+    {ok, Token} = rpc:call(node(), n_space_logic, create_invite_provider_token, [#client{type = user, id = U5}, S1]),
     {ok, P1} = rpc:call(node(), n_provider_logic, support_space, [{provider, P1}, P1, Token, 1000]),
 
     {ok, P2} = rpc:call(node(), n_provider_logic, create, [<<"P2">>]),
-    {ok, Token2} = rpc:call(node(), n_space_logic, create_invite_provider_token, [{user, U5}, S1]),
+    {ok, Token2} = rpc:call(node(), n_space_logic, create_invite_provider_token, [#client{type = user, id = U5}, S1]),
     {ok, P2} = rpc:call(node(), n_provider_logic, support_space, [{provider, P2}, P2, Token2, 1000]),
 
-    {ok, G3} = rpc:call(node(), n_group_logic, create, [{user, U1}, <<"G3">>]),
+    {ok, G3} = rpc:call(node(), n_group_logic, create, [#client{type = user, id = U1}, <<"G3">>]),
     entity_graph:ensure_up_to_date(),
-    {ok, G3} = rpc:call(node(), n_group_logic, add_user, [{user, U1}, G3, U3]),
-    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [{user, U5}, S1, G3]),
+    {ok, G3} = rpc:call(node(), n_group_logic, add_user, [#client{type = user, id = U1}, G3, U3]),
+    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [#client{type = user, id = U5}, S1, G3]),
 
     {ok, U6} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U6">>}]),
     {ok, HS1} = rpc:call(node(), n_handle_service_logic, create, [
-        {user, U6}, <<"HS1">>, ?PROXY_URL, ?SERVICE_PROPERTIES, <<"tajp">>
+        #client{type = user, id = U6}, <<"HS1">>, ?PROXY_URL, ?SERVICE_PROPERTIES, <<"tajp">>
     ]),
     entity_graph:ensure_up_to_date(),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [{user, U6}, HS1, G2]),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [{user, U6}, HS1, G3]),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_user, [{user, U6}, HS1, U5]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [#client{type = user, id = U6}, HS1, G2]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [#client{type = user, id = U6}, HS1, G3]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_user, [#client{type = user, id = U6}, HS1, U5]),
     entity_graph:ensure_up_to_date(),
 
         catch share_logic:remove(<<"Sh1ID">>),
     {ok, Sh1} = rpc:call(node(), n_share_logic, create, [
-        {user, U5}, <<"Sh1ID">>, <<"Sh1">>, <<"fileId">>, S1]),
+        #client{type = user, id = U5}, <<"Sh1ID">>, <<"Sh1">>, <<"fileId">>, S1]),
 
     % TODO TRICK
     {ok, _} = od_share:update(Sh1, #{public_url => <<"https://onedata.org/share/Sh1ID">>}),
 
     {ok, H1} = rpc:call(node(), n_handle_logic, create, [
-        {user, U1}, HS1, <<"Share">>, Sh1, ?METADATA
+        #client{type = user, id = U1}, HS1, <<"Share">>, Sh1, ?METADATA
     ]),
     entity_graph:ensure_up_to_date(),
-    {ok, H1} = rpc:call(node(), n_handle_logic, add_group, [{user, U1}, H1, G1]),
+    {ok, H1} = rpc:call(node(), n_handle_logic, add_group, [#client{type = user, id = U1}, H1, G1]),
     entity_graph:ensure_up_to_date(),
     timer:sleep(1500),
 
@@ -368,10 +373,10 @@ id_to_str(Id) ->
 
 
 
-create(Issuer, ELPlugin, EntityId, Resource, Data) ->
+create(Client, ELPlugin, EntityId, Resource, Data) ->
     try
         Request = #request{
-            issuer = Issuer,
+            client = Client,
             el_plugin = ELPlugin,
             entity_id = EntityId,
             operation = create,
@@ -389,14 +394,14 @@ create(Issuer, ELPlugin, EntityId, Resource, Data) ->
             ?error_stacktrace("Error in entity_logic:create - ~p:~p", [
                 Error, Message
             ]),
-            ?EL_INTERNAL_SERVER_ERROR
+            {error, ?EL_INTERNAL_SERVER_ERROR}
     end.
 
 
-get(Issuer, ELPlugin, EntityId, Resource) ->
+get(Client, ELPlugin, EntityId, Resource) ->
     try
         Request = #request{
-            issuer = Issuer,
+            client = Client,
             el_plugin = ELPlugin,
             entity_id = EntityId,
             operation = get,
@@ -412,14 +417,14 @@ get(Issuer, ELPlugin, EntityId, Resource) ->
             ?error_stacktrace("Error in entity_logic:get - ~p:~p", [
                 Error, Message
             ]),
-            ?EL_INTERNAL_SERVER_ERROR
+            {error, ?EL_INTERNAL_SERVER_ERROR}
     end.
 
 
-update(Issuer, ELPlugin, EntityId, Resource, Data) ->
+update(Client, ELPlugin, EntityId, Resource, Data) ->
     try
         Request = #request{
-            issuer = Issuer,
+            client = Client,
             el_plugin = ELPlugin,
             entity_id = EntityId,
             operation = update,
@@ -437,14 +442,14 @@ update(Issuer, ELPlugin, EntityId, Resource, Data) ->
             ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
                 Error, Message
             ]),
-            ?EL_INTERNAL_SERVER_ERROR
+            {error, ?EL_INTERNAL_SERVER_ERROR}
     end.
 
 
-delete(Issuer, ELPlugin, EntityId, Resource) ->
+delete(Client, ELPlugin, EntityId, Resource) ->
     try
         Request = #request{
-            issuer = Issuer,
+            client = Client,
             el_plugin = ELPlugin,
             entity_id = EntityId,
             operation = delete,
@@ -460,39 +465,7 @@ delete(Issuer, ELPlugin, EntityId, Resource) ->
             ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
                 Error, Message
             ]),
-            ?EL_INTERNAL_SERVER_ERROR
-    end.
-
-
-%%add_relation(Issuer, ELPlugin, Resource, ChildModel, ChildId) ->
-%%    try
-%%%%        check_authorization(Issuer, ELPlugin, add_relation, Resource),
-%%%%        call_add_relation(ELPlugin, Resource, ChildModel, ChildId)
-%%        ok
-%%    catch
-%%        throw:ElError ->
-%%            ElError;
-%%        Error:Message ->
-%%            ?error_stacktrace("Error in entity_logic:add_relation - ~p:~p", [
-%%                Error, Message
-%%            ]),
-%%            ?EL_INTERNAL_SERVER_ERROR
-%%    end.
-
-
-consume_token(Issuer, ELPlugin, Resource, Token) ->
-    try
-%%        check_authorization(Issuer, ELPlugin, consume_token, Resource),
-%%        call_add_relation(ELPlugin, Resource, ChildModel, ChildId)
-        ok
-    catch
-        throw:ElError ->
-            ElError;
-        Error:Message ->
-            ?error_stacktrace("Error in entity_logic:consume_token - ~p:~p", [
-                Error, Message
-            ]),
-            ?EL_INTERNAL_SERVER_ERROR
+            {error, ?EL_INTERNAL_SERVER_ERROR}
     end.
 
 
@@ -502,14 +475,14 @@ call_get_entity(Request) ->
     case ELPlugin:get_entity(EntityId) of
         {ok, Entity} ->
             Entity;
-        ?EL_NOT_FOUND ->
-            throw(?EL_NOT_FOUND)
+        {error, ?EL_NOT_FOUND} ->
+            throw({error, ?EL_NOT_FOUND})
     end.
 
 
 call_get_resource(Request) ->
     #request{
-        issuer = Issuer,
+        client = Client,
         el_plugin = ELPlugin,
         entity_id = EntityId,
         entity = Entity,
@@ -519,8 +492,8 @@ call_get_resource(Request) ->
     Result = case {EntityId, Entity, Resource} of
         {undefined, _, _} ->
             % EntityId is not defined -> external resource
-            io:format("> get_external: ~p~n", [{Issuer, Resource}]),
-            ELPlugin:get_external(Issuer, Resource);
+            io:format("> get_external: ~p~n", [{Client, Resource}]),
+            ELPlugin:get_external(Client, Resource);
         {_EntityId, undefined, entity} ->
             % EntityId is defined and asking for entity -> entity resource.
             % The Entity was not fetched yet, fetch and return it.
@@ -533,44 +506,41 @@ call_get_resource(Request) ->
             % EntityId is defined and some resource -> internal resource.
             % The Entity is already fetched, reuse it.
             FetchedEntity = call_get_entity(Request),
-            io:format("> get_internal: ~p~n", [{Issuer, EntityId, freshly_fetched_entity, Resource}]),
-            ELPlugin:get_internal(Issuer, EntityId, FetchedEntity, Resource);
+            io:format("> get_internal: ~p~n", [{Client, EntityId, freshly_fetched_entity, Resource}]),
+            ELPlugin:get_internal(Client, EntityId, FetchedEntity, Resource);
         {_EntityId, Entity, _} ->
             % EntityId is defined and some resource -> internal resource.
             % The Entity was not fetched yet, fetch and use it.
-            io:format("> get_internal: ~p~n", [{Issuer, EntityId, prefetched_entity, Resource}]),
-            ELPlugin:get_internal(Issuer, EntityId, Entity, Resource)
+            io:format("> get_internal: ~p~n", [{Client, EntityId, prefetched_entity, Resource}]),
+            ELPlugin:get_internal(Client, EntityId, Entity, Resource)
     end,
     case Result of
         {ok, _} ->
             Result;
-        ?EL_NOT_FOUND ->
-            throw(?EL_NOT_FOUND)
+        {error, ?EL_NOT_FOUND} ->
+            throw({error, ?EL_NOT_FOUND})
     end.
 
 
 call_create(Request) ->
     #request{
-        issuer = Issuer,
+        client = Client,
         el_plugin = ELPlugin,
         entity_id = EntityId,
         resource = Resource,
         data = Data
     } = Request,
-    ELPlugin:create_impl(Issuer, EntityId, Resource, Data).
-
-%%% TODO
-%%call_add_relation(ELPlugin, Resource, ChildModel, ChildId) ->
-%%    ELPlugin:add_relation_impl(Resource, ChildModel, ChildId).
+    ELPlugin:create(Client, EntityId, Resource, Data).
 
 
 call_update(Request) ->
     #request{
         el_plugin = ELPlugin,
+        entity_id = EntityId,
         resource = Resource,
         data = Data
     } = Request,
-    ELPlugin:update_impl(Resource, Data).
+    ELPlugin:update(EntityId, Resource, Data).
 
 
 call_delete(Request) ->
@@ -578,7 +548,7 @@ call_delete(Request) ->
         el_plugin = ELPlugin,
         resource = Resource
     } = Request,
-    ELPlugin:delete_impl(Resource).
+    ELPlugin:delete(Resource).
 
 
 call_exists(Request) ->
@@ -589,7 +559,7 @@ call_exists(Request) ->
         el_plugin = ELPlugin
     } = Request,
     % Call the plugin to obtain auth verification procedures
-    case ELPlugin:exists_impl(EntityId, Resource) of
+    case ELPlugin:exists(EntityId, Resource) of
         List when is_list(List) ->
             List;
         Item ->
@@ -597,9 +567,12 @@ call_exists(Request) ->
     end.
 
 
+call_authorize(#request{client = #client{type = root}}) ->
+    % Root client type is allowed to do everything
+    [true];
 call_authorize(Request) ->
     #request{
-        issuer = Issuer,
+        client = Client,
         entity_id = EntityId,
         operation = Operation,
         resource = Resource,
@@ -607,11 +580,16 @@ call_authorize(Request) ->
         data = Data
     } = Request,
     % Call the plugin to obtain auth verification procedures
-    case ELPlugin:authorize_impl(Issuer, Operation, EntityId, Resource, Data) of
+    try ELPlugin:authorize(Client, Operation, EntityId, Resource, Data) of
         List when is_list(List) ->
             List;
         Item ->
             [Item]
+    catch
+        throw:Error ->
+            throw(Error);
+        _:_ ->
+            throw({error, ?EL_UNAUTHORIZED})
     end.
 
 
@@ -621,18 +599,18 @@ call_validate(Request) ->
         resource = Resource,
         el_plugin = ELPlugin
     } = Request,
-    ELPlugin:validate_impl(Operation, Resource).
+    ELPlugin:validate(Operation, Resource).
 
 
 check_existence(Request) ->
     Verificators = call_exists(Request),
     check_authorization(Verificators, Request).
 check_existence([], _) ->
-    throw(?EL_NOT_FOUND);
+    throw({error, ?EL_NOT_FOUND});
 check_existence([true | _], Request) ->
     Request;
 check_existence([false | _], _) ->
-    throw(?EL_NOT_FOUND);
+    throw({error, ?EL_NOT_FOUND});
 check_existence([{external, Fun} | Tail], Request) ->
     case Fun() of
         true ->
@@ -656,11 +634,11 @@ check_authorization(Request) ->
     Verificators = call_authorize(Request),
     check_authorization(Verificators, Request).
 check_authorization([], _) ->
-    throw(?EL_UNAUTHORIZED);
+    throw({error, ?EL_UNAUTHORIZED});
 check_authorization([true | _], Request) ->
     Request;
 check_authorization([false | _], _) ->
-    throw(?EL_UNAUTHORIZED);
+    throw({error, ?EL_UNAUTHORIZED});
 check_authorization([{external, Fun} | Tail], Request) ->
     case Fun() of
         true ->
@@ -693,7 +671,7 @@ check_validity(#request{data = Data} = Request) ->
         fun(Key, DataAcc) ->
             case transform_and_check_value(Key, DataAcc, Required) of
                 false ->
-                    throw(?EL_MISSING_REQUIRED_DATA(Key));
+                    throw({error, ?EL_MISSING_REQUIRED_DATA(Key)});
                 {true, NewData} ->
                     NewData
             end
@@ -727,7 +705,7 @@ check_validity(#request{data = Data} = Request) ->
         {0, false} ->
             ok;
         {_, false} ->
-            throw(?EL_MISSING_ANY_DATA)
+            throw({error, ?EL_MISSING_ANY_DATA})
     end,
     Request#request{data = Data4}.
 
@@ -739,25 +717,29 @@ transform_and_check_value(Key, Data, Validator) ->
         Value ->
             {TypeRule, ValueRule} = maps:get(Key, Validator),
             try
-                % Pozwalamy crashowac obu checkom
                 NewValue = check_type(TypeRule, Value),
                 case check_value(TypeRule, ValueRule, NewValue) of
                     true ->
                         {true, Data#{Key => NewValue}};
                     false ->
-                        throw(?EL_BAD_DATA(Key));
-                    empty ->
-                        throw(?EL_EMPTY_DATA(Key));
-                    id_not_found ->
-                        throw(?EL_ID_NOT_FOUND(Key));
-                    id_occupied ->
-                        throw(?EL_ID_OCCUPIED(Key))
+                        throw({error, ?EL_BAD_DATA(Key)})
                 end
             catch
+                throw:empty ->
+                    throw({error, ?EL_EMPTY_DATA(Key)});
+                throw:id_not_found ->
+                    throw({error, ?EL_ID_NOT_FOUND(Key)});
+                throw:id_occupied ->
+                    throw({error, ?EL_ID_OCCUPIED(Key)});
+                throw:bad_token ->
+                    throw({error, ?EL_BAD_TOKEN(Key)});
+                throw:bad_token_type ->
+                    throw({error, ?EL_BAD_TOKEN_TYPE(Key)});
                 throw:Throw ->
                     throw(Throw);
-                _:_ ->
-                    throw(?EL_BAD_DATA(Key))
+                A:B ->
+                    ?dump({A, B, erlang:get_stacktrace()}),
+                    throw({error, ?EL_BAD_DATA(Key)})
             end
     end.
 
@@ -788,22 +770,36 @@ check_type(positive_integer, Int) when is_integer(Int) andalso Int > 0 ->
     Int;
 check_type(float, Float) when is_float(Float) ->
     Float;
+check_type(float, Int) when is_integer(Int) ->
+    float(Int);
 check_type(json, JSON) when is_map(JSON) ->
-    JSON.
+    JSON;
+check_type(token, Token) when is_binary(Token) ->
+    case token_logic:deserialize(Token) of
+        {ok, Macaroon} ->
+            Macaroon;
+        {error, macaroon_invalid} ->
+            throw(bad_token)
+    end;
+check_type(token, Macaroon) ->
+    Macaroon;
+check_type(Rule, _) ->
+    ?error("Unknown type rule: ~p", [Rule]),
+    throw({error, ?EL_INTERNAL_SERVER_ERROR}).
 
 
 check_value(_, any, _) ->
     true;
 check_value(atom, non_empty, '') ->
-    empty;
+    throw(empty);
 check_value(list_of_atoms, non_empty, []) ->
-    empty;
+    throw(empty);
 check_value(binary, non_empty, <<"">>) ->
-    empty;
+    throw(empty);
 check_value(list_of_binaries, non_empty, []) ->
-    empty;
+    throw(empty);
 check_value(json, non_empty, Map) when map_size(Map) == 0 ->
-    empty;
+    throw(empty);
 check_value(_, non_empty, _) ->
     true;
 check_value(_, AllowedVals, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
@@ -822,15 +818,22 @@ check_value(_, {exists, VerifyFun}, Val) when is_function(VerifyFun, 1) ->
         true ->
             true;
         false ->
-            id_not_found
+            throw(id_not_found)
     end;
 check_value(_, {not_exists, VerifyFun}, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->
             true;
         false ->
-            id_occupied
+            throw(id_occupied)
+    end;
+check_value(token, TokenType, Macaroon) ->
+    case token_logic:validate(Macaroon, TokenType) of
+        true ->
+            true;
+        false ->
+            throw(bad_token_type)
     end;
 check_value(_, Rule, _) ->
     ?error("Unknown value rule: ~p", [Rule]),
-    throw(?EL_INTERNAL_SERVER_ERROR).
+    throw({error, ?EL_INTERNAL_SERVER_ERROR}).

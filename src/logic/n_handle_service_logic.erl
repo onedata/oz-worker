@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 -behaviour(data_logic_behaviour).
 
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, n_handle_service_logic_plugin).
@@ -29,6 +30,12 @@
 -export([update/3]).
 
 -export([delete/2]).
+
+-export([
+    exists/1,
+    has_eff_privilege/3
+]).
+
 
 create(Issuer, Name, ProxyEndpoint, ServiceProperties, Type) ->
     create(Issuer, #{
@@ -69,3 +76,23 @@ update(Issuer, HandleServiceId, Data) ->
 
 delete(Issuer, HandleServiceId) ->
     n_entity_logic:delete(Issuer, ?PLUGIN, HandleServiceId, entity).
+
+
+has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->
+    {ok, #document{value = HService}} = od_handle_service:get(HServiceId),
+    has_eff_privilege(HService, UserId, Privilege);
+has_eff_privilege(#od_handle_service{eff_users = UsersPrivileges}, UserId, Privilege) ->
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
+    lists:member(Privilege, UserPrivileges).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether a handle service exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(HandleServiceId :: od_handle_service:id()) -> boolean().
+exists(HandleServiceId) ->
+    od_handle_service:exists(HandleServiceId).
+
+

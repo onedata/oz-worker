@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 -behaviour(data_logic_behaviour).
 
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, n_handle_logic_plugin).
@@ -29,6 +30,11 @@
 -export([update/3]).
 
 -export([delete/2]).
+
+-export([
+    exists/1,
+    has_eff_privilege/3
+]).
 
 
 
@@ -71,3 +77,24 @@ update(Issuer, HandleId, Data) ->
 
 delete(Issuer, HandleId) ->
     n_entity_logic:delete(Issuer, ?PLUGIN, HandleId, entity).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether a handle exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(HandleId :: od_handle:id()) -> boolean().
+exists(HandleId) ->
+    od_handle:exists(HandleId).
+
+
+has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
+    % TODO a co jak nie ma tego handle?
+    {ok, #document{value = Handle}} = od_handle:get(HandleId),
+    has_eff_privilege(Handle, UserId, Privilege);
+has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
+    % TODO eff_users
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
+    lists:member(Privilege, UserPrivileges).
+

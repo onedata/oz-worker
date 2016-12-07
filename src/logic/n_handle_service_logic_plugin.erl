@@ -18,13 +18,13 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
-    delete_impl/1]).
--export([exists_impl/2, authorize_impl/5, validate_impl/2]).
--export([has_eff_privilege/3]).
+-export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
+    delete/1]).
+-export([exists/2, authorize/5, validate/2]).
 
 
-create_impl({user, UserId}, _, entity, Data) ->
+
+create(#client{type = user, id = UserId}, _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
     ProxyEndpoint = maps:get(<<"proxyEndpoint">>, Data),
     ServiceProperties = maps:get(<<"serviceProperties">>, Data),
@@ -42,14 +42,14 @@ create_impl({user, UserId}, _, entity, Data) ->
         privileges:handle_service_admin()
     ),
     {ok, HServiceId};
-create_impl({user, _UserId}, HServiceId, users, #{<<"userId">> := UserId}) ->
+create(#client{type = user}, HServiceId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_handle_service, HServiceId,
         privileges:handle_service_user()
     ),
     {ok, HServiceId};
-create_impl({user, _UserId}, HServiceId, groups, #{<<"groupId">> := GroupId}) ->
+create(#client{type = user}, HServiceId, groups, #{<<"groupId">> := GroupId}) ->
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle_service, HServiceId,
@@ -67,15 +67,15 @@ get_entity(HServiceId) ->
     end.
 
 
-get_internal({user, _UserId}, _HServiceId, #od_handle_service{users = Users}, users) ->
+get_internal(#client{type = user}, _HServiceId, #od_handle_service{users = Users}, users) ->
     {ok, Users}.
 
 
-get_external({user, _UserId}, _) ->
+get_external(#client{type = user}, _) ->
     ok.
 
 
-update_impl(HServiceId, Data) when is_binary(HServiceId) ->
+update(HServiceId, Data) when is_binary(HServiceId) ->
     {ok, _} = od_handle_service:update(HServiceId, fun(HService) ->
         % TODO czy cos sie da update?
         {ok, HService#od_handle_service{}}
@@ -83,25 +83,25 @@ update_impl(HServiceId, Data) when is_binary(HServiceId) ->
     ok.
 
 
-delete_impl(HServiceId) when is_binary(HServiceId) ->
+delete(HServiceId) when is_binary(HServiceId) ->
     ok = od_handle_service:delete(HServiceId).
 
 
-exists_impl(undefined, entity) ->
+exists(undefined, entity) ->
     true;
-exists_impl(HServiceId, entity) when is_binary(HServiceId) ->
+exists(HServiceId, entity) when is_binary(HServiceId) ->
     {internal, fun(#od_handle_service{}) ->
         % If the handle service with HServiceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists_impl(HServiceId, users) when is_binary(HServiceId) ->
+exists(HServiceId, users) when is_binary(HServiceId) ->
     {internal, fun(#od_handle_service{}) ->
         % If the handle service with HServiceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists_impl(HServiceId, groups) when is_binary(HServiceId) ->
+exists(HServiceId, groups) when is_binary(HServiceId) ->
     {internal, fun(#od_handle_service{}) ->
         % If the handle service with HServiceId can be found, it exists. If not, the
         % verification will fail before this function is called.
@@ -109,26 +109,26 @@ exists_impl(HServiceId, groups) when is_binary(HServiceId) ->
     end}.
 
 
-authorize_impl({user, _UserId}, create, undefined, entity, _) ->
+authorize(#client{type = user}, create, undefined, entity, _) ->
     true;
-authorize_impl({user, UserId}, create, HServiceId, users, _) when is_binary(HServiceId) ->
+authorize(#client{type = user, id = UserId}, create, _HServiceId, users, _) ->
     auth_by_privilege(UserId, modify_handle_service);
-authorize_impl({user, UserId}, create, HServiceId, groups, _) when is_binary(HServiceId) ->
+authorize(#client{type = user, id = UserId}, create, _HServiceId, groups, _) ->
     auth_by_privilege(UserId, modify_handle_service);
 
-authorize_impl({user, UserId}, get, HServiceId, users, _) when is_binary(HServiceId) ->
+authorize(#client{type = user, id = UserId}, get, _HServiceId, users, _) ->
     auth_by_privilege(UserId, view_handle_service);
-authorize_impl({user, UserId}, get, HServiceId, entity, _) when is_binary(HServiceId) ->
+authorize(#client{type = user, id = UserId}, get, _HServiceId, entity, _) ->
     auth_by_privilege(UserId, view_handle_service);
 
-authorize_impl({user, UserId}, update, HServiceId, entity, _) when is_binary(HServiceId) ->
+authorize(#client{type = user, id = UserId}, update, _HServiceId, entity, _) ->
     auth_by_privilege(UserId, modify_handle_service);
 
-authorize_impl({user, UserId}, delete, HServiceId, entity, _) when is_binary(HServiceId) ->
+authorize(#client{type = user, id = UserId}, delete, _HServiceId, entity, _) ->
     auth_by_privilege(UserId, delete_handle_service).
 
 
-validate_impl(create, entity) -> #{
+validate(create, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty},
         <<"proxyEndpoint">> => {binary, non_empty},
@@ -136,21 +136,21 @@ validate_impl(create, entity) -> #{
         <<"type">> => {binary, non_empty}
     }
 };
-validate_impl(create, users) -> #{
+validate(create, users) -> #{
     required => #{
         <<"userId">> => {binary, {exists, fun(Value) ->
             user_logic:exists(Value) end}
         }
     }
 };
-validate_impl(create, groups) -> #{
+validate(create, groups) -> #{
     required => #{
         <<"groupId">> => {binary, {exists, fun(Value) ->
             group_logic:exists(Value) end}
         }
     }
 };
-validate_impl(update, entity) -> #{
+validate(update, entity) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
         <<"proxyEndpoint">> => {binary, non_empty},
@@ -162,14 +162,5 @@ validate_impl(update, entity) -> #{
 
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_handle_service{} = HService) ->
-        has_eff_privilege(HService, UserId, Privilege)
+        n_handle_service_logic:has_eff_privilege(HService, UserId, Privilege)
     end}.
-
-
-has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->
-    {ok, #document{value = HService}} = od_handle_service:get(HServiceId),
-    has_eff_privilege(HService, UserId, Privilege);
-has_eff_privilege(#od_handle_service{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
-    lists:member(Privilege, UserPrivileges).
-

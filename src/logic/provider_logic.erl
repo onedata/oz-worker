@@ -21,11 +21,12 @@
 -include_lib("hackney/include/hackney_lib.hrl").
 
 %% API
--export([create/4, create/5, modify/2, exists/1]).
--export([has_user/2, has_group/2]).
--export([get_effective_users/1, get_effective_groups/1]).
--export([get_data/1, get_spaces/1, get_url/1]).
--export([remove/1]).
+-export([create/4, create/5, modify/2, exists/1]). % DONE
+-export([has_user/2, has_group/2]). % TODO NEEDED?
+-export([get_effective_users/1, get_effective_groups/1]). % DONE
+-export([get_data/1, get_spaces/1, get_url/1]). % DONE
+-export([remove/1]). % DONE
+
 -export([test_connection/1, check_provider_connectivity/1]).
 -export([choose_provider_for_user/1]).
 -export([list/0]).

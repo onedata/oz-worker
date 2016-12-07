@@ -18,12 +18,12 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
-    delete_impl/1]).
--export([exists_impl/2, authorize_impl/5, validate_impl/2]).
--export([has_eff_privilege/3, has_eff_user/2]).
+-export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
+    delete/1]).
+-export([exists/2, authorize/5, validate/2]).
 
-create_impl({user, UserId}, _, entity, #{<<"name">> := Name}) ->
+
+create(#client{type = user, id = UserId}, _, entity, #{<<"name">> := Name}) ->
     {ok, SpaceId} = od_space:create(#document{value = #od_space{name = Name}}),
     entity_graph:add_relation(
         od_user, UserId,
@@ -32,22 +32,33 @@ create_impl({user, UserId}, _, entity, #{<<"name">> := Name}) ->
     ),
 %%  user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     {ok, SpaceId};
-create_impl({user, _UserId}, SpaceId, users, #{<<"userId">> := UserId}) ->
+create(#client{type = user}, SpaceId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_space, SpaceId,
         privileges:space_user()
     ),
     {ok, SpaceId};
-create_impl({user, _UserId}, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
+create(#client{type = user}, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
     entity_graph:add_relation(
         od_group, GroupId,
         od_space, SpaceId,
         privileges:space_user()
     ),
     {ok, SpaceId};
-create_impl({user, UserId}, SpaceId, provider_token, _) ->
-    {ok, Token} = token_logic:create(#client{type = user, id = UserId}, space_support_token, {space, SpaceId}),
+create(#client{type = user, id = UserId}, SpaceId, invite_provider_token, _) ->
+    {ok, Token} = token_logic:create(
+        #client{type = user, id = UserId},
+        space_support_token,
+        {space, SpaceId}
+    ),
+    {ok, Token};
+create(#client{type = user, id = UserId}, SpaceId, invite_user_token, _) ->
+    {ok, Token} = token_logic:create(
+        #client{type = user, id = UserId},
+        space_invite_user_token,
+        {space, SpaceId}
+    ),
     {ok, Token}.
 
 
@@ -60,32 +71,15 @@ get_entity(SpaceId) ->
     end.
 
 
-% TODO czy issuer jest potrzebny?? Moze zrobic z tokena create?
-get_internal({user, UserId}, SpaceId, _Space, space_invite_user_token) ->
-    {ok, Token} = token_logic:create(
-        #client{type = user, id = UserId},
-        space_invite_user_token,
-        {space, SpaceId}
-    ),
-    {ok, Token};
-get_internal({user, _UserId}, _SpaceId, Space, users) ->
+get_internal(#client{type = user}, _SpaceId, Space, users) ->
     {ok, Space#od_space.users}.
 
 
-get_external({user, _UserId}, _) ->
+get_external(#client{type = user}, _) ->
     ok.
 
 
-%%add_relation_impl({SpaceId, users}, od_user, UserId) ->
-%%    entity_graph:add_relation(
-%%        od_user, UserId,
-%%        od_space, SpaceId,
-%%        privileges:space_user()
-%%    ),
-%%    {ok, SpaceId}.
-
-
-update_impl(SpaceId, Data) when is_binary(SpaceId) ->
+update(SpaceId, Data) when is_binary(SpaceId) ->
     {ok, _} = od_space:update(SpaceId, fun(Space) ->
         #od_space{name = OldName} = Space,
         NewName = maps:get(<<"name">>, Data, OldName),
@@ -94,31 +88,31 @@ update_impl(SpaceId, Data) when is_binary(SpaceId) ->
     ok.
 
 
-delete_impl(SpaceId) when is_binary(SpaceId) ->
+delete(SpaceId) when is_binary(SpaceId) ->
     ok = od_space:delete(SpaceId).
 
 
-exists_impl(undefined, entity) ->
+exists(undefined, entity) ->
     true;
-exists_impl(SpaceId, entity) when is_binary(SpaceId) ->
+exists(SpaceId, entity) when is_binary(SpaceId) ->
     {internal, fun(#od_space{}) ->
         % If the space with SpaceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists_impl(SpaceId, users) when is_binary(SpaceId) ->
+exists(SpaceId, users) when is_binary(SpaceId) ->
     {internal, fun(#od_space{}) ->
         % If the space with SpaceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists_impl(SpaceId, groups) when is_binary(SpaceId) ->
+exists(SpaceId, groups) when is_binary(SpaceId) ->
     {internal, fun(#od_space{}) ->
         % If the space with SpaceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists_impl(SpaceId, provider_token) when is_binary(SpaceId) ->
+exists(SpaceId, invite_provider_token) when is_binary(SpaceId) ->
     {internal, fun(#od_space{}) ->
         % If the space with SpaceId can be found, it exists. If not, the
         % verification will fail before this function is called.
@@ -126,51 +120,53 @@ exists_impl(SpaceId, provider_token) when is_binary(SpaceId) ->
     end}.
 
 
-authorize_impl({user, _UserId}, create, undefined, entity, _) ->
+authorize(#client{type = user}, create, undefined, entity, _) ->
     true;
-authorize_impl({user, UserId}, create, SpaceId, users, _) when is_binary(SpaceId) ->
+authorize(#client{type = user, id = UserId}, create, _SpaceId, users, _) ->
     auth_by_privilege(UserId, space_invite_user); %TODO admin privs
-authorize_impl({user, UserId}, create, SpaceId, groups, _) when is_binary(SpaceId) ->
+authorize(#client{type = user, id = UserId}, create, _SpaceId, groups, _) ->
     auth_by_privilege(UserId, space_invite_group); %TODO admin privs
-authorize_impl({user, UserId}, create, SpaceId, provider_token, _) when is_binary(SpaceId) ->
+authorize(#client{type = user, id = UserId}, create, _SpaceId, invite_provider_token, _) ->
     auth_by_privilege(UserId, space_add_provider); %TODO admin privs
 
-authorize_impl({user, UserId}, get, SpaceId, users, _) when is_binary(SpaceId) ->
+authorize(#client{type = user, id = UserId}, get, _SpaceId, users, _) ->
     auth_by_privilege(UserId, space_view_data);
-authorize_impl({user, UserId}, get, SpaceId, entity, _) when is_binary(SpaceId) ->
+authorize(#client{type = user, id = UserId}, get, _SpaceId, entity, _) ->
     auth_by_privilege(UserId, space_view_data);
-authorize_impl({user, UserId}, get, SpaceId, space_invite_user_token, _) when is_binary(SpaceId) ->
+authorize(#client{type = user, id = UserId}, get, _SpaceId, invite_user_token, _) ->
     auth_by_privilege(UserId, space_invite_user);
 
-authorize_impl({user, UserId}, update, SpaceId, entity, _) when is_binary(SpaceId) ->
+authorize(#client{type = user, id = UserId}, update, _SpaceId, entity, _) ->
     auth_by_privilege(UserId, space_change_data);
 
-authorize_impl({user, UserId}, delete, SpaceId, entity, _) when is_binary(SpaceId) ->
+authorize(#client{type = user, id = UserId}, delete, _SpaceId, entity, _) ->
     auth_by_privilege(UserId, space_remove).
 
 
-validate_impl(create, entity) -> #{
+validate(create, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
     }
 };
-validate_impl(create, users) -> #{
+validate(create, users) -> #{
     required => #{
         <<"userId">> => {binary, {exists, fun(Value) ->
             user_logic:exists(Value) end}
         }
     }
 };
-validate_impl(create, groups) -> #{
+validate(create, groups) -> #{
     required => #{
         <<"groupId">> => {binary, {exists, fun(Value) ->
             group_logic:exists(Value) end}
         }
     }
 };
-validate_impl(create, provider_token) -> #{
+validate(create, invite_provider_token) -> #{
 };
-validate_impl(update, entity) -> #{
+validate(create, invite_user_token) -> #{
+};
+validate(update, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
     }
@@ -180,21 +176,6 @@ validate_impl(update, entity) -> #{
 
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_space{} = Space) ->
-        has_eff_privilege(Space, UserId, Privilege)
+       n_space_logic:has_eff_privilege(Space, UserId, Privilege)
     end}.
 
-
-has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
-    {ok, #document{value = Space}} = od_space:get(SpaceId),
-    has_eff_privilege(Space, UserId, Privilege);
-has_eff_privilege(#od_space{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    % TODO eff_users
-    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
-    lists:member(Privilege, UserPrivileges).
-
-
-has_eff_user(SpaceId, UserId) when is_binary(SpaceId) ->
-    {ok, #document{value = Space}} = od_space:get(SpaceId),
-    has_eff_user(Space, UserId);
-has_eff_user(#od_space{eff_users = EffUsers}, UserId) ->
-    maps:is_key(UserId, EffUsers).

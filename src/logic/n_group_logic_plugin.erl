@@ -18,13 +18,12 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create_impl/4, get_entity/1, get_internal/4, get_external/2, update_impl/2,
-    delete_impl/1]).
--export([exists_impl/2, authorize_impl/5, validate_impl/2]).
--export([has_eff_privilege/3]).
+-export([create/4, get_entity/1, get_internal/4, get_external/2, update/3,
+    delete/1]).
+-export([exists/2, authorize/5, validate/2]).
 
 
-create_impl({user, UserId}, _, entity, Data) ->
+create(#client{type = user, id = UserId}, _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
     Type = maps:get(<<"type">>, Data, role),
     {ok, GroupId} = od_group:create(
@@ -36,14 +35,14 @@ create_impl({user, UserId}, _, entity, Data) ->
         privileges:group_admin()
     ),
     {ok, GroupId};
-create_impl({user, _UserId}, GroupId, users, #{<<"userId">> := UserId}) ->
+create(#client{type = user}, GroupId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_group, GroupId,
         privileges:group_user()
     ),
     {ok, GroupId};
-create_impl({user, _UserId}, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
+create(#client{type = user}, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
     entity_graph:add_relation(
         od_group, ChildGroupId,
         od_group, GroupId,
@@ -61,52 +60,35 @@ get_entity(GroupId) ->
     end.
 
 
-get_internal({user, _UserId}, _GroupId, #od_group{users = Users}, users) ->
+get_internal(#client{type = user}, _GroupId, #od_group{users = Users}, users) ->
     {ok, Users}.
 
 
-get_external({user, _UserId}, _) ->
+get_external(#client{type = user}, _) ->
     ok.
 
 
-%%add_relation_impl({GroupId, users}, od_user, UserId) ->
-%%    entity_graph:add_relation(
-%%        od_user, UserId,
-%%        od_group, GroupId,
-%%        privileges:group_user()
-%%    ),
-%%    {ok, GroupId}.
-
-
-update_impl(GroupId, Data) when is_binary(GroupId) ->
+update(GroupId, entity, Data) when is_binary(GroupId) ->
     {ok, _} = od_group:update(GroupId, fun(Group) ->
         #od_group{name = OldName, type = OldType} = Group,
         NewName = maps:get(<<"name">>, Data, OldName),
         NewType = maps:get(<<"type">>, Data, OldType),
         {ok, Group#od_group{name = NewName, type = NewType}}
     end),
-    ok.
+    ok;
+update(GroupId, oz_privileges, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_oz_privileges(od_group, GroupId, Operation, Privileges).
 
 
-delete_impl(GroupId) when is_binary(GroupId) ->
+delete(GroupId) when is_binary(GroupId) ->
     ok = od_group:delete(GroupId).
 
 
-exists_impl(undefined, entity) ->
+exists(undefined, entity) ->
     true;
-exists_impl(GroupId, entity) when is_binary(GroupId) ->
-    {internal, fun(#od_group{}) ->
-        % If the group with GroupId can be found, it exists. If not, the
-        % verification will fail before this function is called.
-        true
-    end};
-exists_impl(GroupId, users) when is_binary(GroupId) ->
-    {internal, fun(#od_group{}) ->
-        % If the group with GroupId can be found, it exists. If not, the
-        % verification will fail before this function is called.
-        true
-    end};
-exists_impl(GroupId, groups) when is_binary(GroupId) ->
+exists(GroupId, _) when is_binary(GroupId) ->
     {internal, fun(#od_group{}) ->
         % If the group with GroupId can be found, it exists. If not, the
         % verification will fail before this function is called.
@@ -114,27 +96,26 @@ exists_impl(GroupId, groups) when is_binary(GroupId) ->
     end}.
 
 
-authorize_impl({user, _UserId}, create, undefined, entity, _) ->
+authorize(#client{type = user}, create, undefined, entity, _) ->
     true;
-authorize_impl({user, UserId}, create, GroupId, users, _) when is_binary(GroupId) ->
+authorize(#client{type = user, id = UserId}, create, _GroupId, users, _) ->
     auth_by_privilege(UserId, group_invite_user); %TODO admin privs
-authorize_impl({user, UserId}, create, GroupId, groups, _) when is_binary(GroupId) ->
+authorize(#client{type = user, id = UserId}, create, _GroupId, groups, _) ->
     auth_by_privilege(UserId, group_invite_group); %TODO admin privs
 
-authorize_impl({user, UserId}, get, GroupId, users, _) when is_binary(GroupId) ->
+authorize(#client{type = user, id = UserId}, get, _GroupId, users, _) ->
     auth_by_privilege(UserId, group_view_data);
-authorize_impl({user, UserId}, get, GroupId, entity, _) when is_binary(GroupId) ->
+authorize(#client{type = user, id = UserId}, get, _GroupId, entity, _) ->
     auth_by_privilege(UserId, group_view_data);
-authorize_impl({user, UserId}, update, GroupId, entity, _) when is_binary(GroupId) ->
+authorize(#client{type = user, id = UserId}, update, _GroupId, entity, _) ->
     auth_by_privilege(UserId, group_change_data);
-authorize_impl({user, UserId}, delete, GroupId, entity, _) when is_binary(GroupId) ->
+authorize(#client{type = user, id = UserId}, delete, _GroupId, entity, _) ->
     auth_by_privilege(UserId, group_remove);
+authorize(#client{type = user, id = UserId}, update, _GroupId, oz_privileges, _) ->
+    auth_by_oz_privilege(UserId, set_privileges).
 
-authorize_impl({user, UserId}, add_relation, todo, users, _) ->
-    auth_by_privilege(UserId, group_invite_user).
 
-
-validate_impl(create, entity) -> #{
+validate(create, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
     },
@@ -142,40 +123,43 @@ validate_impl(create, entity) -> #{
         <<"type">> => {atom, [organization, unit, team, role]}
     }
 };
-validate_impl(create, users) -> #{
+validate(create, users) -> #{
     required => #{
         <<"userId">> => {binary, {exists, fun(Value) ->
             user_logic:exists(Value) end}
         }
     }
 };
-validate_impl(create, groups) -> #{
+validate(create, groups) -> #{
     required => #{
         <<"groupId">> => {binary, {exists, fun(Value) ->
             group_logic:exists(Value) end}
         }
     }
 };
-validate_impl(update, entity) -> #{
+validate(update, entity) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
         <<"type">> => {atom, [organization, unit, team, role]}
     }
+};
+validate(update, oz_privileges) -> #{
+    required => #{
+        <<"privileges">> => {list_of_atoms, privileges:oz_privileges()}
+    },
+    optional => #{
+        <<"operation">> => {atom, [set, grant, revoke]}
+    }
 }.
-
 
 
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_group{} = Group) ->
-        has_eff_privilege(Group, UserId, Privilege)
+        n_group_logic:has_eff_privilege(Group, UserId, Privilege)
     end}.
 
 
-has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
-    {ok, #document{value = Group}} = od_group:get(GroupId),
-    has_eff_privilege(Group, UserId, Privilege);
-has_eff_privilege(#od_group{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    % TODO eff_users
-    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
-    lists:member(Privilege, UserPrivileges).
-
+auth_by_oz_privilege(UserId, Privilege) ->
+    {external, fun() ->
+        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
+    end}.

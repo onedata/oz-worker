@@ -20,12 +20,12 @@
 
 -export([
     create/2,
-    create_invite_provider_token/2
+    create_invite_provider_token/2,
+    create_invite_user_token/2
 ]).
 -export([
     get/2,
-    get_users/2,
-    get_invite_user_token/2
+    get_users/2
 ]).
 -export([
     add_user/3,
@@ -40,6 +40,12 @@
     delete/2
 ]).
 
+-export([
+    exists/1,
+    has_eff_privilege/3,
+    has_eff_user/2
+]).
+
 
 create(Issuer, Name) when is_binary(Name) ->
     create(Issuer, #{<<"name">> => Name});
@@ -47,7 +53,11 @@ create(Issuer, Data) ->
     n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
 
 create_invite_provider_token(Issuer, SpaceId) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, provider_token, #{}).
+    n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_provider_token, #{}).
+
+
+create_invite_user_token(Issuer, SpaceId) ->
+    n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_user_token, #{}).
 
 
 get(Issuer, SpaceId) ->
@@ -56,10 +66,6 @@ get(Issuer, SpaceId) ->
 
 get_users(Issuer, SpaceId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, SpaceId, users).
-
-
-get_invite_user_token({user, UserId}, SpaceId) ->
-    n_entity_logic:get({user, UserId}, ?PLUGIN, SpaceId, space_invite_user_token).
 
 
 add_user(Issuer, SpaceId, UserId) when is_binary(UserId) ->
@@ -98,4 +104,30 @@ update(Issuer, SpaceId, Data) ->
 
 delete(Issuer, SpaceId) ->
     n_entity_logic:delete(Issuer, ?PLUGIN, SpaceId, entity).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether a space exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(SpaceId :: od_space:id()) -> boolean().
+exists(SpaceId) ->
+    od_space:exists(SpaceId).
+
+
+has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
+    {ok, #document{value = Space}} = od_space:get(SpaceId),
+    has_eff_privilege(Space, UserId, Privilege);
+has_eff_privilege(#od_space{eff_users = UsersPrivileges}, UserId, Privilege) ->
+    % TODO eff_users
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
+    lists:member(Privilege, UserPrivileges).
+
+
+has_eff_user(SpaceId, UserId) when is_binary(SpaceId) ->
+    {ok, #document{value = Space}} = od_space:get(SpaceId),
+    has_eff_user(Space, UserId);
+has_eff_user(#od_space{eff_users = EffUsers}, UserId) ->
+    maps:is_key(UserId, EffUsers).
 

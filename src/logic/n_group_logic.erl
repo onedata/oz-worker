@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 -behaviour(data_logic_behaviour).
 
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, n_group_logic_plugin).
@@ -26,9 +27,17 @@
 
 -export([get/2]).
 
--export([update/3]).
+-export([
+    update/3,
+    modify_oz_privileges/4, modify_oz_privileges/3
+]).
 
 -export([delete/2]).
+
+-export([
+    exists/1,
+    has_eff_privilege/3
+]).
 
 create(Issuer, Name) when is_binary(Name) ->
     create(Issuer, #{<<"name">> => Name});
@@ -51,16 +60,42 @@ add_group(Issuer, GroupId, Data) ->
 get(Issuer, GroupId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, entity, GroupId).
 
-%%add_relation(Issuer, {GroupId, users}, od_user, UserId) ->
-%%    n_entity_logic:add_relation(
-%%        Issuer, ?PLUGIN, {GroupId, users}, od_user, UserId
-%%    ).
-
-
 
 
 update(Issuer, GroupId, Data) ->
     n_entity_logic:update(Issuer, ?PLUGIN, GroupId, entity, Data).
 
+
+modify_oz_privileges(Issuer, GroupId, Operation, Privs) when is_list(Privs) ->
+    modify_oz_privileges(Issuer, GroupId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+modify_oz_privileges(Issuer, GroupId, Data) ->
+    n_entity_logic:update(Issuer, ?PLUGIN, GroupId, oz_privileges, Data).
+
+
+
 delete(Issuer, GroupId) ->
     n_entity_logic:delete(Issuer, ?PLUGIN, GroupId, entity).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether a group exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(GroupId :: od_group:id()) -> boolean().
+exists(GroupId) ->
+    od_group:exists(GroupId).
+
+
+
+
+has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
+    {ok, #document{value = Group}} = od_group:get(GroupId),
+    has_eff_privilege(Group, UserId, Privilege);
+has_eff_privilege(#od_group{eff_users = UsersPrivileges}, UserId, Privilege) ->
+    % TODO eff_users
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, []),
+    lists:member(Privilege, UserPrivileges).

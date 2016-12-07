@@ -32,6 +32,8 @@
 
 -export([delete/2]).
 
+-export([exists/1]).
+
 -export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
 
 
@@ -76,6 +78,15 @@ update(Issuer, ShareId, Data) ->
 delete(Issuer, ShareId) ->
     n_entity_logic:delete(Issuer, ?PLUGIN, ShareId, entity).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether a share exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(ShareId :: od_share:id()) -> boolean().
+exists(ShareId) ->
+    od_share:exists(ShareId).
 
 
 %%--------------------------------------------------------------------
