@@ -127,12 +127,12 @@ exists(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
 exists(ProviderId, {eff_user, UserId}) when is_binary(ProviderId) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{eff_users = EffUsers}) ->
-        lists:member(UserId, EffUsers)
+        maps:is_key(UserId, EffUsers)
     end};
 exists(ProviderId, {eff_group, GroupId}) when is_binary(ProviderId) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{eff_groups = EffGroups}) ->
-        lists:member(GroupId, EffGroups)
+        maps:is_key(GroupId, EffGroups)
     end};
 exists(ProviderId, _) when is_binary(ProviderId) ->
     % No matter the resource, return true if it belongs to a provider

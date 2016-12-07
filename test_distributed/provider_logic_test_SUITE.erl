@@ -306,55 +306,49 @@ get_eff_users_test(Config) ->
 
 
 get_eff_groups_test(Config) ->
-    try
-        {ok, {P1, _}} = oz_test_utils:call_oz(
-            Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA]
-        ),
-        % Create a user and grant him admin privileges
-        {ok, U1} = oz_test_utils:call_oz(
-            Config, n_user_logic, create, [#od_user{}]
-        ),
-        ok = oz_test_utils:call_oz(
-            Config, n_user_logic, modify_oz_privileges, [?ROOT, U1, #{
-                <<"operation">> => grant, <<"privileges">> => [list_groups_of_provider]
-            }]
-        ),
-        ensure_eff_graph_up_to_date(Config),
-        % For now, there are no groups
-        ?assertMatch({ok, []}, oz_test_utils:call_oz(
-            Config, n_provider_logic, get_eff_groups, [?USER(U1), P1]
-        )),
-        % Create some spaces and support them
-        {S1, S2, S3} = create_and_support_3_spaces(Config, P1),
-        {S4, S5, S6} = create_and_support_3_spaces(Config, P1),
-        % Create two groups for every space
-        ExpectedGroups = lists:map(
-            fun({Counter, Space}) ->
-                GroupName = str_utils:format_bin("g~B", [Counter]),
-                {ok, Group} = oz_test_utils:call_oz(
-                    Config, n_group_logic, create, [?ROOT, #{<<"name">> => GroupName}]
-                ),
-                {ok, Space} = oz_test_utils:call_oz(
-                    Config, n_space_logic, add_group, [?ROOT, Space, Group]
-                ),
-                Group
-            end, lists:zip(lists:seq(1, 6), [S1, S2, S3, S4, S5, S6])),
-        ensure_eff_graph_up_to_date(Config),
-        {ok, Groups2} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-            Config, n_provider_logic, get_eff_groups, [?USER(U1), P1]
-        )),
-        ?assertEqual(lists:sort(Groups2), lists:sort(ExpectedGroups)),
-        lists:foreach(fun({Counter, Group}) ->
+    {ok, {P1, _}} = oz_test_utils:call_oz(
+        Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA]
+    ),
+    % Create a user and grant him admin privileges
+    {ok, U1} = oz_test_utils:call_oz(
+        Config, n_user_logic, create, [#od_user{}]
+    ),
+    ok = oz_test_utils:call_oz(
+        Config, n_user_logic, modify_oz_privileges, [?ROOT, U1, #{
+            <<"operation">> => grant, <<"privileges">> => [list_groups_of_provider]
+        }]
+    ),
+    ensure_eff_graph_up_to_date(Config),
+    % For now, there are no groups
+    ?assertMatch({ok, []}, oz_test_utils:call_oz(
+        Config, n_provider_logic, get_eff_groups, [?USER(U1), P1]
+    )),
+    % Create some spaces and support them
+    {S1, S2, S3} = create_and_support_3_spaces(Config, P1),
+    {S4, S5, S6} = create_and_support_3_spaces(Config, P1),
+    % Create two groups for every space
+    ExpectedGroups = lists:map(
+        fun({Counter, Space}) ->
             GroupName = str_utils:format_bin("g~B", [Counter]),
-            ?assertMatch({ok, #od_group{name = GroupName}}, oz_test_utils:call_oz(
-                Config, n_provider_logic, get_eff_group, [?PROVIDER(P1), P1, Group]
-            ))
-        end, lists:zip(lists:seq(1, 6), ExpectedGroups)),
-        ok
-    catch
-        T:M ->
-            ct:print("WAT: ~p", [{T, M, erlang:get_stacktrace()}])
-    end,
+            {ok, Group} = oz_test_utils:call_oz(
+                Config, n_group_logic, create, [?ROOT, #{<<"name">> => GroupName}]
+            ),
+            {ok, Space} = oz_test_utils:call_oz(
+                Config, n_space_logic, add_group, [?ROOT, Space, Group]
+            ),
+            Group
+        end, lists:zip(lists:seq(1, 6), [S1, S2, S3, S4, S5, S6])),
+    ensure_eff_graph_up_to_date(Config),
+    {ok, Groups2} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
+        Config, n_provider_logic, get_eff_groups, [?USER(U1), P1]
+    )),
+    ?assertEqual(lists:sort(Groups2), lists:sort(ExpectedGroups)),
+    lists:foreach(fun({Counter, Group}) ->
+        GroupName = str_utils:format_bin("g~B", [Counter]),
+        ?assertMatch({ok, #od_group{name = GroupName}}, oz_test_utils:call_oz(
+            Config, n_provider_logic, get_eff_group, [?USER(U1), P1, Group]
+        ))
+    end, lists:zip(lists:seq(1, 6), ExpectedGroups)),
     ok.
 
 
