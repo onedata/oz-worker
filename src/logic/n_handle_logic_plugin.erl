@@ -23,7 +23,7 @@
 -export([exists/2, authorize/5, validate/2]).
 
 
-create(#client{type = user, id = UserId}, _, entity, Data) ->
+create(?USER(UserId), _, entity, Data) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Data),
     ResourceType = maps:get(<<"resourceType">>, Data),
     ResourceId = maps:get(<<"resourceId">>, Data),
@@ -54,14 +54,14 @@ create(#client{type = user, id = UserId}, _, entity, Data) ->
             ok
     end,
     {ok, HandleId};
-create(#client{type = user}, HandleId, users, #{<<"userId">> := UserId}) ->
+create(?USER, HandleId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_handle, HandleId,
         privileges:handle_user()
     ),
     {ok, HandleId};
-create(#client{type = user}, HandleId, groups, #{<<"groupId">> := GroupId}) ->
+create(?USER, HandleId, groups, #{<<"groupId">> := GroupId}) ->
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle, HandleId,
@@ -79,11 +79,11 @@ get_entity(HandleId) ->
     end.
 
 
-get_internal(#client{type = user}, _HandleId, #od_handle{users = Users}, users) ->
+get_internal(?USER, _HandleId, #od_handle{users = Users}, users) ->
     {ok, Users}.
 
 
-get_external(#client{type = user}, _) ->
+get_external(?USER, _) ->
     ok.
 
 
@@ -121,7 +121,7 @@ exists(HandleId, groups) when is_binary(HandleId) ->
     end}.
 
 
-authorize(#client{type = user, id = UserId}, create, undefined, entity, Data) ->
+authorize(create, undefined, entity, ?USER(UserId), Data) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
     {external, fun() ->
         % TODO moze przeniesc has_eff do logic?
@@ -129,20 +129,20 @@ authorize(#client{type = user, id = UserId}, create, undefined, entity, Data) ->
             HandleServiceId, UserId, register_handle
         )
     end};
-authorize(#client{type = user, id = UserId}, create, _HandleId, users, _) ->
+authorize(create, _HandleId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, modify_handle);
-authorize(#client{type = user, id = UserId}, create, _HandleId, groups, _) ->
+authorize(create, _HandleId, groups, ?USER(UserId), _) ->
     auth_by_privilege(UserId, modify_handle);
 
-authorize(#client{type = user, id = UserId}, get, _HandleId, users, _) ->
+authorize(get, _HandleId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, view_handle);
-authorize(#client{type = user, id = UserId}, get, _HandleId, entity, _) ->
+authorize(get, _HandleId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, view_handle);
 
-authorize(#client{type = user, id = UserId}, update, _HandleId, entity, _) ->
+authorize(update, _HandleId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, modify_handle);
 
-authorize(#client{type = user, id = UserId}, delete, _HandleId, entity, _) ->
+authorize(delete, _HandleId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, delete_handle).
 
 

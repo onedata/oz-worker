@@ -23,7 +23,7 @@
 -export([exists/2, authorize/5, validate/2]).
 
 
-create(#client{type = user}, _, entity, Data) ->
+create(?USER, _, entity, Data) ->
     ShareId = maps:get(<<"shareId">>, Data),
     Name = maps:get(<<"name">>, Data),
     SpaceId = maps:get(<<"spaceId">>, Data),
@@ -52,11 +52,11 @@ get_entity(ShareId) ->
     end.
 
 
-get_internal(#client{type = user}, _ShareId, _, _) ->
+get_internal(?USER, _ShareId, _, _) ->
     ok.
 
 
-get_external(#client{type = user}, _) ->
+get_external(?USER, _) ->
     ok.
 
 
@@ -82,25 +82,25 @@ exists(ShareId, entity) when is_binary(ShareId) ->
     end}.
 
 
-authorize(#client{type = user, id = UserId}, create, undefined, entity, Data) ->
+authorize(create, undefined, entity, ?USER(UserId), Data) ->
     SpaceId = maps:get(<<"spaceId">>, Data, <<"">>),
     {external, fun() ->
         n_space_logic:has_eff_privilege(
             SpaceId, UserId, space_manage_shares
         )
     end};
-authorize(#client{type = user, id = UserId}, get, _ShareId, entity, _) ->
+authorize(get, _ShareId, entity, ?USER(UserId), _) ->
     {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic_plugin:has_eff_user(SpaceId, UserId)
+        n_space_logic:has_eff_user(SpaceId, UserId)
     end};
 
 
-authorize(#client{type = user, id = UserId}, update, _ShareId, entity, _) ->
+authorize(update, _ShareId, entity, ?USER(UserId), _) ->
     {internal, fun(#od_share{space = SpaceId}) ->
         n_space_logic:has_eff_privilege(SpaceId, UserId, space_manage_shares)
     end};
 
-authorize(#client{type = user, id = UserId}, delete, _ShareId, entity, _) ->
+authorize(delete, _ShareId, entity, ?USER(UserId), _) ->
     {internal, fun(#od_share{space = SpaceId}) ->
         n_space_logic:has_eff_privilege(SpaceId, UserId, space_manage_shares)
     end}.

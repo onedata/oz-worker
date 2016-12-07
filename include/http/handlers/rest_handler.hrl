@@ -32,6 +32,14 @@
     type = nobody :: user | provider | root | nobody,
     id = <<"">> :: binary()
 }).
+% Convenience macros for concise code
+-define(USER, #client{type = user}).
+-define(USER(__Id), #client{type = user, id = __Id}).
+-define(PROVIDER, #client{type = provider}).
+-define(PROVIDER(__Id), #client{type = provider, id = __Id}).
+-define(NOBODY, #client{type = nobody}).
+-define(ROOT, #client{type = root}).
+
 
 %% A record describing the state of REST request.
 -record(rstate, {

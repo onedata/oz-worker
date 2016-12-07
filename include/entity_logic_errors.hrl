@@ -20,6 +20,7 @@
 -define(EL_MISSING_REQUIRED_DATA_MATCHER, {missing_req_data, _}).
 -define(EL_MISSING_ANY_DATA, missing_any_data).
 -define(EL_MISSING_ANY_DATA_MATCHER, missing_any_data).
+-define(EL_BAD_DATA, bad_data).
 -define(EL_BAD_DATA(__Key), {bad_data, __Key}).
 -define(EL_BAD_DATA_MATCHER, bad_data, _).
 -define(EL_EMPTY_DATA(__Key), {empty_data, __Key}).

@@ -32,8 +32,14 @@ create(_, _, entity, Data) ->
     Longitude = maps:get(<<"longitude">>, Data, undefined),
 
     ProviderId = datastore_utils:gen_uuid(),
-    {ok, {ProviderCertPem, Serial}} = worker_proxy:call(ozpca_worker,
-        {sign_provider_req, ProviderId, CSR}),
+    {ok, {ProviderCertPem, Serial}} = try
+        {ok, {_, _}} = worker_proxy:call(
+            ozpca_worker, {sign_provider_req, ProviderId, CSR}
+        )
+    catch
+        _:_ ->
+            throw({error, ?EL_BAD_DATA(<<"csr">>)})
+    end,
     Provider = #od_provider{name = Name, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
         latitude = Latitude, longitude = Longitude},
@@ -53,7 +59,9 @@ create(_, ProviderId, spaces, Data) ->
             {ok, ProviderId};
         Error ->
             Error
-    end.
+    end;
+create(_, undefined, check_my_ports, Data) ->
+    test_connection(Data).
 
 
 get_entity(ProviderId) ->
@@ -79,8 +87,9 @@ get_internal(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
     n_group_logic_plugin:get_entity(GroupId).
 
 
-get_external(#client{type = provider}, _) ->
-    ok.
+get_external(_, check_my_ip) ->
+    % Peer is resolved and returned during response transformation.
+    {ok, peer}.
 
 
 update(ProviderId, entity, Data) when is_binary(ProviderId) ->
@@ -134,31 +143,34 @@ exists(ProviderId, _) when is_binary(ProviderId) ->
     end}.
 
 
-authorize(_, create, undefined, check_my_ports, _) ->
+authorize(create, undefined, check_my_ports, _, _) ->
     true;
-authorize(_, get, undefined, check_my_ip, _) ->
+authorize(create, undefined, entity, ?NOBODY, _) ->
     true;
-authorize(#client{type = nobody}, create, undefined, entity, _) ->
+authorize(create, ProvId, spaces, ?PROVIDER(ProvId), _) ->
     true;
-authorize(#client{type = provider, id = ProvId}, create, ProvId, spaces, _) ->
+
+authorize(get, undefined, check_my_ip, _, _) ->
     true;
-authorize(#client{type = provider}, get, _ProvId, entity, _) ->
+authorize(get, _ProvId, entity, ?PROVIDER, _) ->
     true;
-authorize(#client{type = user, id = UserId}, get, _ProvId, entity, _) ->
+authorize(get, _ProvId, entity, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_providers);
-authorize(#client{type = provider, id = ProvId}, get, ProvId, spaces, _) ->
+authorize(get, ProvId, spaces, ?PROVIDER(ProvId), _) ->
     true;
-authorize(#client{type = user, id = UserId}, get, _ProvId, spaces, _) ->
+authorize(get, _ProvId, spaces, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
-authorize(#client{type = user, id = UserId}, get, _ProvId, {space, _}, _) ->
+authorize(get, ProvId, {space, _}, ?PROVIDER(ProvId), _) ->
+    true;
+authorize(get, _ProvId, {space, _}, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
-authorize(#client{type = user, id = UserId}, get, _ProvId, eff_users, _) ->
+authorize(get, _ProvId, eff_users, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
-authorize(#client{type = user, id = UserId}, get, _ProvId, {eff_user, _}, _) ->
+authorize(get, _ProvId, {eff_user, _}, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
-authorize(#client{type = user, id = UserId}, get, _ProvId, eff_groups, _) ->
+authorize(get, _ProvId, eff_groups, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
-authorize(#client{type = user, id = UserId}, get, _ProvId, {eff_group, _}, _) ->
+authorize(get, _ProvId, {eff_group, _}, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider).
 
 
@@ -177,7 +189,10 @@ validate(create, entity) -> #{
 validate(create, spaces) -> #{
     required => #{
         <<"token">> => {token, space_support_token},
-        <<"size">> => {positive_integer, any}
+        <<"size">> => {positive_integer, fun(I) ->
+            {ok, Limit} = application:get_env(oz_worker, minimum_space_support_size),
+            I >= Limit
+        end}
     }
 };
 validate(create, check_my_ports) -> #{
@@ -191,3 +206,49 @@ validate(update, entity) -> #{
         <<"longitude">> => {float, fun(F) -> F >= -180 andalso F =< 180 end}
     }
 }.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tests connection to given urls.
+%% @end
+%% @equiv test_connection/2
+%%--------------------------------------------------------------------
+-spec test_connection(#{ServiceName :: binary() => Url :: binary()}) ->
+    {ok, #{ServiceName :: binary() => Status :: ok | error}}.
+test_connection(Map) ->
+    test_connection(maps:to_list(Map), []).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tests connection to given urls.
+%% @end
+%%--------------------------------------------------------------------
+-spec test_connection([{ServiceName :: binary(), Url :: binary()}], Result) ->
+    {ok, Result}
+    when Result :: #{ServiceName :: binary() => Status :: ok | error}.
+test_connection([], Acc) ->
+    {ok, Acc};
+test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
+    ConnStatus = case http_client:get(Url, [], <<>>, [insecure]) of
+        {ok, 200, _, _} ->
+            ok;
+        _ ->
+            error
+    end,
+    test_connection(Rest, Acc#{Url => ConnStatus});
+test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
+    ConnStatus = case http_client:get(Url, [], <<>>, [insecure]) of
+        {ok, 200, _, ServiceName} ->
+            ok;
+        Error ->
+            ?debug("Checking connection to ~p failed with error: ~n~p",
+                [Url, Error]),
+            error
+    end,
+    test_connection(Rest, Acc#{Url => ConnStatus});
+test_connection(_, _) ->
+    throw({error, ?EL_BAD_DATA}).

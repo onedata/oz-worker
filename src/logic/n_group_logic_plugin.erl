@@ -23,7 +23,7 @@
 -export([exists/2, authorize/5, validate/2]).
 
 
-create(#client{type = user, id = UserId}, _, entity, Data) ->
+create(?USER(UserId), _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
     Type = maps:get(<<"type">>, Data, role),
     {ok, GroupId} = od_group:create(
@@ -35,14 +35,14 @@ create(#client{type = user, id = UserId}, _, entity, Data) ->
         privileges:group_admin()
     ),
     {ok, GroupId};
-create(#client{type = user}, GroupId, users, #{<<"userId">> := UserId}) ->
+create(?USER, GroupId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_group, GroupId,
         privileges:group_user()
     ),
     {ok, GroupId};
-create(#client{type = user}, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
+create(?USER, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
     entity_graph:add_relation(
         od_group, ChildGroupId,
         od_group, GroupId,
@@ -60,11 +60,11 @@ get_entity(GroupId) ->
     end.
 
 
-get_internal(#client{type = user}, _GroupId, #od_group{users = Users}, users) ->
+get_internal(?USER, _GroupId, #od_group{users = Users}, users) ->
     {ok, Users}.
 
 
-get_external(#client{type = user}, _) ->
+get_external(?USER, _) ->
     ok.
 
 
@@ -96,22 +96,22 @@ exists(GroupId, _) when is_binary(GroupId) ->
     end}.
 
 
-authorize(#client{type = user}, create, undefined, entity, _) ->
+authorize(create, undefined, entity, ?USER, _) ->
     true;
-authorize(#client{type = user, id = UserId}, create, _GroupId, users, _) ->
+authorize(create, _GroupId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, group_invite_user); %TODO admin privs
-authorize(#client{type = user, id = UserId}, create, _GroupId, groups, _) ->
+authorize(create, _GroupId, groups, ?USER(UserId), _) ->
     auth_by_privilege(UserId, group_invite_group); %TODO admin privs
 
-authorize(#client{type = user, id = UserId}, get, _GroupId, users, _) ->
+authorize(get, _GroupId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, group_view_data);
-authorize(#client{type = user, id = UserId}, get, _GroupId, entity, _) ->
+authorize(get, _GroupId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, group_view_data);
-authorize(#client{type = user, id = UserId}, update, _GroupId, entity, _) ->
+authorize(update, _GroupId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, group_change_data);
-authorize(#client{type = user, id = UserId}, delete, _GroupId, entity, _) ->
+authorize(delete, _GroupId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, group_remove);
-authorize(#client{type = user, id = UserId}, update, _GroupId, oz_privileges, _) ->
+authorize(update, _GroupId, oz_privileges, ?USER(UserId), _) ->
     auth_by_oz_privilege(UserId, set_privileges).
 
 

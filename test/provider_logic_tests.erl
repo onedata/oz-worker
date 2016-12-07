@@ -12,6 +12,7 @@
 -author("Tomasz Lichon").
 
 -ifdef(TEST).
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================
@@ -54,18 +55,18 @@ test_connection_test() ->
             (<<"https://172.16.67.194:123/wrong_url">>, [], <<>>, [insecure]) ->
                 {error, {conn_failed, {error, econnrefused}}}
         end),
-    Arg = [
-        {<<"gui">>, <<"https://172.16.67.194:443/test">>},
-        {<<"rest">>, <<"https://172.16.67.194:8443/rest/latest/test">>},
-        {<<"unknown_service">>, <<"https://172.16.67.194:123/wrong_url">>}
-    ],
+    Args = #{
+        <<"gui">> => <<"https://172.16.67.194:443/test">>,
+        <<"rest">> => <<"https://172.16.67.194:8443/rest/latest/test">>,
+        <<"unknown_service">> => <<"https://172.16.67.194:123/wrong_url">>
+    },
 
-    Ans = provider_logic:test_connection(Arg),
-    Expected = {ok, [
-        {<<"https://172.16.67.194:443/test">>, ok},
-        {<<"https://172.16.67.194:8443/rest/latest/test">>, ok},
-        {<<"https://172.16.67.194:123/wrong_url">>, error}
-    ]},
+    Ans = n_provider_logic:check_my_ports(#client{}, Args),
+    Expected = {ok, #{
+        <<"https://172.16.67.194:443/test">> => ok,
+        <<"https://172.16.67.194:8443/rest/latest/test">> => ok,
+        <<"https://172.16.67.194:123/wrong_url">> => error
+    }},
 
     ?assertEqual(Expected, Ans),
     meck:unload(http_client).

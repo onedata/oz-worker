@@ -24,7 +24,7 @@
 
 
 
-create(#client{type = user, id = UserId}, _, entity, Data) ->
+create(?USER(UserId), _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
     ProxyEndpoint = maps:get(<<"proxyEndpoint">>, Data),
     ServiceProperties = maps:get(<<"serviceProperties">>, Data),
@@ -42,14 +42,14 @@ create(#client{type = user, id = UserId}, _, entity, Data) ->
         privileges:handle_service_admin()
     ),
     {ok, HServiceId};
-create(#client{type = user}, HServiceId, users, #{<<"userId">> := UserId}) ->
+create(?USER, HServiceId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
         od_handle_service, HServiceId,
         privileges:handle_service_user()
     ),
     {ok, HServiceId};
-create(#client{type = user}, HServiceId, groups, #{<<"groupId">> := GroupId}) ->
+create(?USER, HServiceId, groups, #{<<"groupId">> := GroupId}) ->
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle_service, HServiceId,
@@ -67,11 +67,11 @@ get_entity(HServiceId) ->
     end.
 
 
-get_internal(#client{type = user}, _HServiceId, #od_handle_service{users = Users}, users) ->
+get_internal(?USER, _HServiceId, #od_handle_service{users = Users}, users) ->
     {ok, Users}.
 
 
-get_external(#client{type = user}, _) ->
+get_external(?USER, _) ->
     ok.
 
 
@@ -109,22 +109,22 @@ exists(HServiceId, groups) when is_binary(HServiceId) ->
     end}.
 
 
-authorize(#client{type = user}, create, undefined, entity, _) ->
+authorize(create, undefined, entity, ?USER, _) ->
     true;
-authorize(#client{type = user, id = UserId}, create, _HServiceId, users, _) ->
+authorize(create, _HServiceId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, modify_handle_service);
-authorize(#client{type = user, id = UserId}, create, _HServiceId, groups, _) ->
+authorize(create, _HServiceId, groups, ?USER(UserId), _) ->
     auth_by_privilege(UserId, modify_handle_service);
 
-authorize(#client{type = user, id = UserId}, get, _HServiceId, users, _) ->
+authorize(get, _HServiceId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, view_handle_service);
-authorize(#client{type = user, id = UserId}, get, _HServiceId, entity, _) ->
+authorize(get, _HServiceId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, view_handle_service);
 
-authorize(#client{type = user, id = UserId}, update, _HServiceId, entity, _) ->
+authorize(update, _HServiceId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, modify_handle_service);
 
-authorize(#client{type = user, id = UserId}, delete, _HServiceId, entity, _) ->
+authorize(delete, _HServiceId, entity, ?USER(UserId), _) ->
     auth_by_privilege(UserId, delete_handle_service).
 
 

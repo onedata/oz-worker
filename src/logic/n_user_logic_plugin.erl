@@ -36,10 +36,10 @@ get_entity(UserId) ->
     end.
 
 
-get_internal(#client{type = user}, _, _, _) ->
+get_internal(?USER, _, _, _) ->
     ok.
 
-get_external(#client{type = user}, _) ->
+get_external(?USER, _) ->
     ok.
 
 
@@ -69,9 +69,7 @@ exists(UserId, _) when is_binary(UserId) ->
     end}.
 
 
-authorize(root, _, _, _, _) ->
-    true;
-authorize(#client{type = user, id = UserId}, update, UserId, oz_privileges, _) when is_binary(UserId) ->
+authorize(update, UserId, oz_privileges, ?USER(UserId), _) ->
     auth_by_oz_privilege(UserId, set_privileges).
 
 

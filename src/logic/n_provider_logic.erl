@@ -21,8 +21,7 @@
 -define(PLUGIN, n_provider_logic_plugin).
 
 -export([
-    create/5, create/7, create/2,
-    check_my_ports/2
+    create/5, create/7, create/2
 ]).
 -export([
     support_space/4, support_space/3
@@ -31,14 +30,17 @@
     get/2,
     get_spaces/2, get_space/3,
     get_effective_users/2, get_effective_user/3,
-    get_effective_groups/2, get_effective_group/3,
-    check_my_ip/1
+    get_effective_groups/2, get_effective_group/3
 ]).
 -export([
     update/3
 ]).
 -export([
     delete/2
+]).
+-export([
+    check_my_ports/2,
+    check_my_ip/1
 ]).
 -export([
     exists/1,
@@ -71,10 +73,6 @@ create(Issuer, Data) ->
     n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
 
 
-check_my_ports(Issuer, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, undefined, check_my_ports, Data).
-
-
 support_space(Issuer, ProviderId, Token, SupportSize) ->
     support_space(Issuer, ProviderId, #{
         <<"token">> => Token, <<"size">> => SupportSize
@@ -97,8 +95,8 @@ get_effective_groups(Issuer, ProviderId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, eff_groups).
 get_effective_group(Issuer, ProviderId, GroupId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, {eff_group, GroupId}).
-check_my_ip(Issuer) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, undefined, check_my_ip).
+
+
 
 
 update(Issuer, ProviderId, Data) ->
@@ -106,6 +104,14 @@ update(Issuer, ProviderId, Data) ->
 
 delete(Issuer, ProviderId) ->
     n_entity_logic:delete(Issuer, ?PLUGIN, ProviderId, entity).
+
+
+check_my_ports(Issuer, Data) ->
+    n_entity_logic:create(Issuer, ?PLUGIN, undefined, check_my_ports, Data).
+
+
+check_my_ip(Issuer) ->
+    n_entity_logic:get(Issuer, ?PLUGIN, undefined, check_my_ip).
 
 
 %%--------------------------------------------------------------------
@@ -210,7 +216,7 @@ check_provider_connectivity(ProviderId) ->
                 % a http request.
                 {ok, #od_provider{
                     redirection_point = RedPoint
-                }} = get(#client{type = root}, ProviderId),
+                }} = get(?ROOT, ProviderId),
                 #hackney_url{host = Host} = hackney_url:parse_url(RedPoint),
                 ConnCheckEndpoint = str_utils:format_bin("https://~s~s", [
                     Host, ?provider_id_endpoint

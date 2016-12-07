@@ -20,6 +20,8 @@
 -export([create/5, get/4, update/5, delete/4]).
 -export([ahaha/0]).
 
+% TODO HINT JAK JEST BAD VALUE TYPU ZA MALY SUPPORT SIZE
+
 -record(request, {
     client = #client{} :: #client{},
     el_plugin = undefined :: undefined | atom(),
@@ -86,7 +88,7 @@ value_rule() -> [
 
 ahaha() ->
     {ok, U1} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U1">>}]),
-    ok = n_user_logic:modify_oz_privileges(#client{type = root}, U1, set, [set_privileges]),
+    ok = n_user_logic:modify_oz_privileges(?ROOT, U1, set, [set_privileges]),
     {ok, U2} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U2">>}]),
     {ok, U3} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U3">>}]),
     {ok, G1} = rpc:call(node(), n_group_logic, create, [#client{type = user, id = U1}, <<"G1">>]),
@@ -567,7 +569,7 @@ call_exists(Request) ->
     end.
 
 
-call_authorize(#request{client = #client{type = root}}) ->
+call_authorize(#request{client = ?ROOT}) ->
     % Root client type is allowed to do everything
     [true];
 call_authorize(Request) ->
@@ -580,7 +582,7 @@ call_authorize(Request) ->
         data = Data
     } = Request,
     % Call the plugin to obtain auth verification procedures
-    try ELPlugin:authorize(Client, Operation, EntityId, Resource, Data) of
+    try ELPlugin:authorize(Operation, EntityId, Resource, Client, Data) of
         List when is_list(List) ->
             List;
         Item ->
@@ -768,10 +770,10 @@ check_type(integer, Int) when is_integer(Int) ->
     Int;
 check_type(positive_integer, Int) when is_integer(Int) andalso Int > 0 ->
     Int;
-check_type(float, Float) when is_float(Float) ->
-    Float;
 check_type(float, Int) when is_integer(Int) ->
     float(Int);
+check_type(float, Float) when is_float(Float) ->
+    Float;
 check_type(json, JSON) when is_map(JSON) ->
     JSON;
 check_type(token, Token) when is_binary(Token) ->
