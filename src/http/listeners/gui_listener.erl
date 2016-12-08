@@ -33,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec port() -> integer().
 port() ->
-    {ok, Port} = application:get_env(?APP_Name, gui_port),
+    {ok, Port} = application:get_env(?APP_NAME, gui_port),
     Port.
 
 
@@ -48,14 +48,14 @@ start() ->
         % Get gui config
         GuiPort = port(),
         {ok, GuiNbAcceptors} =
-            application:get_env(?APP_Name, gui_https_acceptors),
-        {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
-        {ok, MaxKeepAlive} = application:get_env(?APP_Name, gui_max_keepalive),
+            application:get_env(?APP_NAME, gui_https_acceptors),
+        {ok, Timeout} = application:get_env(?APP_NAME, gui_socket_timeout),
+        {ok, MaxKeepAlive} = application:get_env(?APP_NAME, gui_max_keepalive),
 
         % Get certs
-        {ok, KeyFile} = application:get_env(?APP_Name, web_key_file),
-        {ok, CertFile} = application:get_env(?APP_Name, web_cert_file),
-        {ok, CaCertsDir} = application:get_env(?APP_Name, cacerts_dir),
+        {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
+        {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
+        {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
         {ok, CaCerts} = file_utils:read_files({dir, CaCertsDir}),
 
         % Initialize auth handler
@@ -150,8 +150,8 @@ healthcheck() ->
 docs_routes() ->
     % Resolve static files root. First, check if there is a non-empty dir
     % located in gui_custom_static_root. If not, use default.
-    {ok, CstmRoot} = application:get_env(?APP_Name, gui_custom_static_root),
-    {ok, DefRoot} = application:get_env(?APP_Name, gui_default_static_root),
+    {ok, CstmRoot} = application:get_env(?APP_NAME, gui_custom_static_root),
+    {ok, DefRoot} = application:get_env(?APP_NAME, gui_default_static_root),
     DocRoot = case file:list_dir_all(CstmRoot) of
         {error, enoent} -> DefRoot;
         {ok, []} -> DefRoot;
@@ -160,9 +160,9 @@ docs_routes() ->
 
     Routes = [{"/[...]", gui_static_handler, {dir, DocRoot}}],
 
-    case application:get_env(?APP_Name, gui_docs_proxy_enabled) of
+    case application:get_env(?APP_NAME, gui_docs_proxy_enabled) of
         {ok, true} ->
-            {ok, DocsPath} = application:get_env(?APP_Name, gui_docs_static_root),
+            {ok, DocsPath} = application:get_env(?APP_NAME, gui_docs_static_root),
             [{DocsPath ++ "/[...]", static_docs_handler, []} | Routes];
         _ ->
             Routes

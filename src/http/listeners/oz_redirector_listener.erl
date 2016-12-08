@@ -58,7 +58,7 @@ start() ->
         http_number_of_http_acceptors),
     {ok, Timeout} = application:get_env(?CLUSTER_WORKER_APP_NAME,
         http_socket_timeout_seconds),
-    {ok, OAI_PMH_PATH} = application:get_env(?APP_Name, oai_pmh_api_prefix),
+    {ok, OAI_PMH_PATH} = application:get_env(?APP_NAME, oai_pmh_api_prefix),
     RedirectDispatch = [
         {'_', [
             {OAI_PMH_PATH ++ "/[...]", oai_handler, []},

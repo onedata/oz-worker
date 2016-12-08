@@ -46,7 +46,7 @@ app_name() ->
 %%--------------------------------------------------------------------
 -spec cm_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 cm_nodes() ->
-    application:get_env(?APP_Name, cm_nodes).
+    application:get_env(?APP_NAME, cm_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -55,7 +55,7 @@ cm_nodes() ->
 %%--------------------------------------------------------------------
 -spec db_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 db_nodes() ->
-    application:get_env(?APP_Name, db_nodes).
+    application:get_env(?APP_NAME, db_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -83,7 +83,7 @@ modules_with_args() ->
         {ozpca_worker, []},
         {subscriptions_worker, []}
     ],
-    case application:get_env(?APP_Name, location_service_enabled) of
+    case application:get_env(?APP_NAME, location_service_enabled) of
         {ok, false} -> Base;
         {ok, true} -> Base ++ [
             {location_service_worker, []},
@@ -118,7 +118,7 @@ after_init([]) ->
         %% This cannot be started before all workers are up
         %% and critical section is running
         %% todo: once critical section works in worker init, move it there
-        case application:get_env(?APP_Name, location_service_enabled) of
+        case application:get_env(?APP_NAME, location_service_enabled) of
             {ok, false} ->
                 ok;
             {ok, true} ->
@@ -231,7 +231,7 @@ on_code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 -spec check_node_ip_address() -> IPV4Addr :: {A :: byte(), B :: byte(), C :: byte(), D :: byte()}.
 check_node_ip_address() ->
-    case application:get_env(?APP_Name, external_ip, undefined) of
+    case application:get_env(?APP_NAME, external_ip, undefined) of
         undefined ->
             ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
             {127, 0, 0, 1};

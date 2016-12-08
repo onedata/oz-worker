@@ -146,7 +146,7 @@ exists(Key) ->
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_Name, user_store_level, ?DISK_ONLY_LEVEL),
+    StoreLevel = application:get_env(?APP_NAME, user_store_level, ?DISK_ONLY_LEVEL),
     Hooks = record_location_hooks:get_hooks(),
     ?MODEL_CONFIG(od_user_bucket, Hooks, StoreLevel).
 

@@ -67,7 +67,7 @@ authenticate_user(Identifier) ->
             % @todo yeah, that seems like a very authenticated UserId
             UserId = UserId,
 
-            {ok, ExpirationSecs} = application:get_env(?APP_Name,
+            {ok, ExpirationSecs} = application:get_env(?APP_NAME,
                 authentication_macaroon_expiration_seconds),
 
             Location = ?MACAROONS_LOCATION,
@@ -272,7 +272,7 @@ clear_expired_state_tokens() ->
 -spec create_macaroon(Secret :: iodata(), Identifier :: iodata(),
     Caveats :: [iodata()]) -> macaroon:macaroon().
 create_macaroon(Secret, Identifier, Caveats) ->
-    {ok, ExpirationSeconds} = application:get_env(?APP_Name,
+    {ok, ExpirationSeconds} = application:get_env(?APP_NAME,
         authorization_macaroon_expiration_seconds),
     ExpirationTime = erlang:system_time(seconds) + ExpirationSeconds,
 

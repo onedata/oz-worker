@@ -138,7 +138,7 @@ fetch_history(ResumeAt, Missing) ->
                     case fetch_from_cache(ToFetch) of
                         [] -> ok;
                         Misses ->
-                            {ok, Backoff} = application:get_env(?APP_Name,
+                            {ok, Backoff} = application:get_env(?APP_NAME,
                                 wait_for_latest_changes_in_cache),
                             {ok, _} = timer:apply_after(Backoff, ?MODULE,
                                 fetch_from_cache_and_db, [Misses]),
@@ -209,7 +209,7 @@ fetch_from_db(Seqs) ->
     To = lists:last(Seqs),
 
     spawn(fun() ->
-        {ok, Timeout} = application:get_env(?APP_Name,
+        {ok, Timeout} = application:get_env(?APP_NAME,
             history_changes_stream_life_limit_seconds),
         process_flag(trap_exit, true),
 

@@ -78,7 +78,7 @@ support_space(Issuer, ProviderId, Token, SupportSize) ->
         <<"token">> => Token, <<"size">> => SupportSize
     }).
 support_space(Issuer, ProviderId, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, ProviderId, spaces, Data).
+    n_entity_logic:create(Issuer, ?PLUGIN, ProviderId, support, Data).
 
 
 get(Issuer, ProviderId) ->

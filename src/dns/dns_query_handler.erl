@@ -124,7 +124,7 @@ load_config(ConfigFile) ->
                 ttl_oneprovider_a = GetProp(oneprovider_a, TTLProplist)
             }
         end, Config),
-    application:set_env(?APP_Name, dns_zones, DNSConfig).
+    application:set_env(?APP_NAME, dns_zones, DNSConfig).
 
 
 %%--------------------------------------------------------------------
@@ -133,7 +133,7 @@ load_config(ConfigFile) ->
 %%--------------------------------------------------------------------
 -spec get_canonical_hostname() -> string().
 get_canonical_hostname() ->
-    {ok, [#dns_zone{cname = Hostname} | _]} = application:get_env(?APP_Name, dns_zones),
+    {ok, [#dns_zone{cname = Hostname} | _]} = application:get_env(?APP_NAME, dns_zones),
     Hostname.
 
 
@@ -359,7 +359,7 @@ parse_domain(DomainArg) ->
         [$w, $w, $w, $. | Rest] -> Rest;
         Other -> Other
     end,
-    {ok, DNSZones} = application:get_env(?APP_Name, dns_zones),
+    {ok, DNSZones} = application:get_env(?APP_NAME, dns_zones),
     % Find first matching zone
     MatchingZone = lists:foldl(
         fun(#dns_zone{cname = CName} = CurrentZone, Acc) ->

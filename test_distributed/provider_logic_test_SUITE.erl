@@ -38,6 +38,7 @@ end).
     create_test/1,
     support_space_test/1,
     get_test/1,
+    %% TODO list_test/1,
     get_spaces_test/1,
     get_eff_users_test/1,
     get_eff_groups_test/1
@@ -343,13 +344,13 @@ get_eff_groups_test(Config) ->
         Config, n_provider_logic, get_eff_groups, [?USER(U1), P1]
     )),
     ?assertEqual(lists:sort(Groups2), lists:sort(ExpectedGroups)),
+    % Check each group
     lists:foreach(fun({Counter, Group}) ->
         GroupName = str_utils:format_bin("g~B", [Counter]),
         ?assertMatch({ok, #od_group{name = GroupName}}, oz_test_utils:call_oz(
             Config, n_provider_logic, get_eff_group, [?USER(U1), P1, Group]
         ))
-    end, lists:zip(lists:seq(1, 6), ExpectedGroups)),
-    ok.
+    end, lists:zip(lists:seq(1, 6), ExpectedGroups)).
 
 
 %%%===================================================================

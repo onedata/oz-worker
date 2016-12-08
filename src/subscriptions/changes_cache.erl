@@ -85,7 +85,7 @@ query(Seqs) ->
 %%--------------------------------------------------------------------
 -spec size_limit() -> pos_integer().
 size_limit() ->
-    {ok, Limit} = application:get_env(?APP_Name, subscription_cache_size),
+    {ok, Limit} = application:get_env(?APP_NAME, subscription_cache_size),
     Limit.
 
 %%--------------------------------------------------------------------

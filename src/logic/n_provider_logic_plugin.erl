@@ -46,7 +46,7 @@ create(_, _, entity, Data) ->
     od_provider:create(#document{key = ProviderId, value = Provider}),
     {ok, {ProviderId, ProviderCertPem}};
 
-create(_, ProviderId, spaces, Data) ->
+create(_, ProviderId, support, Data) ->
     SupportSize = maps:get(<<"size">>, Data),
     Macaroon = maps:get(<<"token">>, Data),
     {ok, {space, SpaceId}} = token_logic:consume(Macaroon),

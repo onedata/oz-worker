@@ -41,7 +41,7 @@
 %%--------------------------------------------------------------------
 -spec cacert_path(CaDir :: string()) -> string().
 cacert_path(CaDir) ->
-    {ok, CaDir} = application:get_env(?APP_Name, ozpca_dir),
+    {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
     filename:join(CaDir, ?CACERT_FILE).
 
 %%--------------------------------------------------------------------
@@ -305,7 +305,7 @@ loop(CaDir) ->
     PeerCert :: #'OTPCertificate'{}) ->
     valid | {bad_cert, Reason :: any()}.
 check_revoked(CaCertDer, CaCert, PeerCert) ->
-    {ok, CaDir} = application:get_env(?APP_Name, ozpca_dir),
+    {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
 
     {ok, CRLPem} = file:read_file(filename:join(CaDir, "crl.pem")),
     [{'CertificateList', CRLDer, not_encrypted}] = public_key:pem_decode(CRLPem),
@@ -395,8 +395,8 @@ req_cnf(DN) ->
 %%--------------------------------------------------------------------
 -spec ca_cnf(CaDir :: string()) -> Config :: iolist().
 ca_cnf(CaDir) ->
-    {ok, CertDomain} = application:get_env(?APP_Name, http_domain),
-    {ok, RestPort} = application:get_env(?APP_Name, rest_port),
+    {ok, CertDomain} = application:get_env(?APP_NAME, http_domain),
+    {ok, RestPort} = application:get_env(?APP_NAME, rest_port),
     Port = integer_to_binary(RestPort),
     ["# Purpose: Configuration for CAs.\n"
     "\n"

@@ -666,7 +666,7 @@ cleanup(_GroupId) ->
 -spec create_predefined_groups() -> ok.
 create_predefined_groups() ->
     {ok, PredefinedGroups} =
-        application:get_env(?APP_Name, predefined_groups),
+        application:get_env(?APP_NAME, predefined_groups),
     lists:foreach(
         fun(GroupMap) ->
             Id = maps:get(id, GroupMap),

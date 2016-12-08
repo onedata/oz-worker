@@ -78,11 +78,11 @@ optional_response_elements() ->
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"repositoryName">>, _Args) ->
-    {ok, RepositoryName} = application:get_env(?APP_Name, oz_name),
+    {ok, RepositoryName} = application:get_env(?APP_NAME, oz_name),
     list_to_binary(RepositoryName);
 get_response(<<"baseURL">>, _Args) ->
     {ok, Hostname} = application:get_env(oz_worker, http_domain),
-    {ok, OAI_PREFIX} = application:get_env(?APP_Name, oai_pmh_api_prefix),
+    {ok, OAI_PREFIX} = application:get_env(?APP_NAME, oai_pmh_api_prefix),
     list_to_binary(Hostname ++ OAI_PREFIX);
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
@@ -96,7 +96,7 @@ get_response(<<"deletedRecord">>, _Args) ->
 get_response(<<"granularity">>, _Args) ->
     <<"YYYY-MM-DDThh:mm:ssZ">>;
 get_response(<<"adminEmail">>, _Args) ->
-    {ok, AdminEmails} = application:get_env(?APP_Name, admin_emails),
+    {ok, AdminEmails} = application:get_env(?APP_NAME, admin_emails),
     lists:map(fun(AdminEmail) ->
         list_to_binary(AdminEmail)
     end, AdminEmails);

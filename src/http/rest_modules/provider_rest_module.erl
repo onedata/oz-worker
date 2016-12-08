@@ -99,7 +99,7 @@ is_authorized(provider_groups, _, _EntityId, #client{type = user, id = UserId}) 
 is_authorized(provider_group, _, _EntityId, #client{type = user, id = UserId}) ->
     user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
 is_authorized(provider_dev, _, _, _) ->
-    {ok, true} =:= application:get_env(?APP_Name, dev_mode);
+    {ok, true} =:= application:get_env(?APP_NAME, dev_mode);
 is_authorized(_, _, _, #client{type = provider}) ->
     true;
 is_authorized(_, _, _, _) ->

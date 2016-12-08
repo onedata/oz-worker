@@ -65,7 +65,7 @@ create(UserInfo, ProposedUserId) ->
 
     % Check if automatic first space is enabled, if so create a space
     % for the user.
-    case application:get_env(?APP_Name, enable_automatic_first_space) of
+    case application:get_env(?APP_NAME, enable_automatic_first_space) of
         {ok, true} ->
             SpaceName = case UserInfo#od_user.name of
                 <<"">> ->
@@ -82,9 +82,9 @@ create(UserInfo, ProposedUserId) ->
     end,
 
     % Check if global groups are enabled, if so add the new user to the groups.
-    case application:get_env(?APP_Name, enable_global_groups) of
+    case application:get_env(?APP_NAME, enable_global_groups) of
         {ok, true} ->
-            {ok, GlobalGroups} = application:get_env(?APP_Name, global_groups),
+            {ok, GlobalGroups} = application:get_env(?APP_NAME, global_groups),
             lists:foreach(
                 fun({GroupId, Privileges}) ->
                     {ok, GroupId} = group_logic:add_user(GroupId, UserId),
@@ -745,7 +745,7 @@ authenticate_by_basic_credentials(Login, Password) ->
             end,
             % Check if user's role entitles him to belong to any groups
             {ok, GroupMapping} = application:get_env(
-                ?APP_Name, onepanel_role_to_group_mapping),
+                ?APP_NAME, onepanel_role_to_group_mapping),
             Groups = maps:get(UserRole, GroupMapping, []),
             lists:foreach(
                 fun(GroupId) ->
@@ -903,9 +903,9 @@ basic_auth_header(Login, Password) ->
 -spec get_onepanel_rest_user_url(Login :: binary()) -> URL :: binary().
 get_onepanel_rest_user_url(Login) ->
     {ok, OnepanelRESTURL} =
-        application:get_env(?APP_Name, onepanel_rest_url),
+        application:get_env(?APP_NAME, onepanel_rest_url),
     {ok, OnepanelGetUsersEndpoint} =
-        application:get_env(?APP_Name, onepanel_users_endpoint),
+        application:get_env(?APP_NAME, onepanel_users_endpoint),
     <<(str_utils:to_binary(OnepanelRESTURL))/binary,
         (str_utils:to_binary(OnepanelGetUsersEndpoint))/binary, Login/binary>>.
 

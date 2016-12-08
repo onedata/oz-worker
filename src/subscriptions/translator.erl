@@ -302,7 +302,7 @@ get_public_msg(Seq, Doc, od_provider = Model) ->
 
 -spec revs_prop(Doc :: datastore:document()) -> term().
 revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
-    {ok, MaxSize} = application:get_env(?APP_Name, subscriptions_sent_revisions_limit),
+    {ok, MaxSize} = application:get_env(?APP_NAME, subscriptions_sent_revisions_limit),
     {Start, Hashes} = Revs,
     Size = min(MaxSize, length(Hashes)),
 

@@ -90,8 +90,8 @@ get_public_key_by_location(ID) ->
 -spec get_public_key_via_rest(OzDomain :: binary(), ID :: identity:id()) ->
     identity:encoded_public_key().
 get_public_key_via_rest(OzDomain, ID) ->
-    {ok, RESTAPIPrefixStr} = application:get_env(?APP_Name, rest_api_prefix),
-    {ok, RestPort} = application:get_env(?APP_Name, rest_port),
+    {ok, RESTAPIPrefixStr} = application:get_env(?APP_NAME, rest_api_prefix),
+    {ok, RestPort} = application:get_env(?APP_NAME, rest_port),
     URL = str_utils:format("https://~s:~B~s/publickey/~s", [
         OzDomain, RestPort, RESTAPIPrefixStr, http_utils:url_encode(ID)]),
     {ok, 200, _, Body} = http_client:get(URL, [], <<>>, [insecure]),

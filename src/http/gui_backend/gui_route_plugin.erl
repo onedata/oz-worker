@@ -84,14 +84,14 @@ route(<<"/do_logout">>) -> ?LOGOUT;
 route(<<"/do_login">>) -> ?BASIC_LOGIN;
 route(<<"/validate_login">>) -> ?VALIDATE_LOGIN;
 route(<<"/dev_login">>) ->
-    case application:get_env(?APP_Name, dev_mode) of
+    case application:get_env(?APP_NAME, dev_mode) of
         {ok, true} ->
             ?DEV_LOGIN;
         _ ->
             ?INDEX
     end;
 route(<<"/validate_dev_login">>) ->
-    case application:get_env(?APP_Name, dev_mode) of
+    case application:get_env(?APP_NAME, dev_mode) of
         {ok, true} ->
             ?VALIDATE_DEV_LOGIN;
         _ ->
@@ -200,5 +200,5 @@ error_500_html_file() ->
 %%--------------------------------------------------------------------
 -spec response_headers() -> [{Key :: binary(), Value :: binary()}].
 response_headers() ->
-    {ok, Headers} = application:get_env(?APP_Name, gui_response_headers),
+    {ok, Headers} = application:get_env(?APP_NAME, gui_response_headers),
     Headers.

@@ -34,7 +34,7 @@
 %%--------------------------------------------------------------------
 -spec port() -> integer().
 port() ->
-    {ok, WssPort} = application:get_env(?APP_Name, subscriptions_wss_port),
+    {ok, WssPort} = application:get_env(?APP_NAME, subscriptions_wss_port),
     WssPort.
 
 
@@ -48,15 +48,15 @@ start() ->
     try
         % Get rest config
         Port = port(),
-        {ok, HttpsAcceptors} = application:get_env(?APP_Name, subscroptions_https_acceptors),
+        {ok, HttpsAcceptors} = application:get_env(?APP_NAME, subscroptions_https_acceptors),
 
         % Get certs
-        {ok, ZoneCADir} = application:get_env(?APP_Name, ozpca_dir),
+        {ok, ZoneCADir} = application:get_env(?APP_NAME, ozpca_dir),
         {ok, ZoneCaCert} = file:read_file(ozpca:cacert_path(ZoneCADir)),
 
-        {ok, KeyFile} = application:get_env(?APP_Name, web_key_file),
-        {ok, CertFile} = application:get_env(?APP_Name, web_cert_file),
-        {ok, CaCertsDir} = application:get_env(?APP_Name, cacerts_dir),
+        {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
+        {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
+        {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
         {ok, CaCerts} = file_utils:read_files({dir, CaCertsDir}),
 
         Dispatch = [

@@ -95,5 +95,5 @@ setup_timer(ID, PushFun) ->
 %%--------------------------------------------------------------------
 -spec batch_ttl() -> pos_integer().
 batch_ttl() ->
-    {ok, TTL} = application:get_env(?APP_Name, subscription_batch_ttl),
+    {ok, TTL} = application:get_env(?APP_NAME, subscription_batch_ttl),
     TTL.

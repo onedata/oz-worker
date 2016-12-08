@@ -171,7 +171,7 @@ fetch_last_seq() ->
 
 -spec schedule_stream_presence_check() -> ok.
 schedule_stream_presence_check() ->
-    {ok, Interval} = application:get_env(?APP_Name,
+    {ok, Interval} = application:get_env(?APP_NAME,
         changes_stream_presence_check_interval_seconds),
 
     worker_proxy:cast({?MODULE, node()}, stream_presence_check),

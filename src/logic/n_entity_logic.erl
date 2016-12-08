@@ -32,6 +32,9 @@
     data = #{} :: maps:map()
 }).
 
+-type client() :: #client{}. %TODO przeniesc ten rekord w sensowne miejsce
+-export_type([client/0]).
+
 
 % TODO do typu
 type_rule() -> [
