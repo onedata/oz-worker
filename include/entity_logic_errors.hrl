@@ -16,6 +16,7 @@
 -define(EL_INTERNAL_SERVER_ERROR, internal_server_error).
 -define(EL_NOT_FOUND, not_found).
 -define(EL_UNAUTHORIZED, unauthorized).
+-define(EL_FORBIDDEN, forbidden).
 -define(EL_MISSING_REQUIRED_DATA(__Key), {missing_req_data, __Key}).
 -define(EL_MISSING_REQUIRED_DATA_MATCHER, {missing_req_data, _}).
 -define(EL_MISSING_ANY_DATA, missing_any_data).

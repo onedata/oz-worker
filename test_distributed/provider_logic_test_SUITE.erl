@@ -11,6 +11,7 @@
 -module(provider_logic_test_SUITE).
 -author("Lukasz Opiola").
 
+-include("entity_logic.hrl").
 -include("entity_logic_errors.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").

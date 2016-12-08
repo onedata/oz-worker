@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 -behaviour(data_logic_behaviour).
 
+-include("entity_logic.hrl").
 -include("entity_logic_errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -32,7 +33,7 @@
     data = #{} :: maps:map()
 }).
 
--type client() :: #client{}. %TODO przeniesc ten rekord w sensowne miejsce
+-type client() :: #client{}.
 -export_type([client/0]).
 
 
@@ -594,7 +595,7 @@ call_authorize(Request) ->
         throw:Error ->
             throw(Error);
         _:_ ->
-            throw({error, ?EL_UNAUTHORIZED})
+            throw({error, ?EL_FORBIDDEN})
     end.
 
 
@@ -609,7 +610,7 @@ call_validate(Request) ->
 
 check_existence(Request) ->
     Verificators = call_exists(Request),
-    check_authorization(Verificators, Request).
+    check_existence(Verificators, Request).
 check_existence([], _) ->
     throw({error, ?EL_NOT_FOUND});
 check_existence([true | _], Request) ->
@@ -635,15 +636,28 @@ check_existence([{internal, Fun} | Tail], #request{entity = Entity} = Req) ->
     end.
 
 
-check_authorization(Request) ->
+check_authorization(#request{client = Client} = Request) ->
     Verificators = call_authorize(Request),
-    check_authorization(Verificators, Request).
+    case check_authorization(Verificators, Request) of
+        false ->
+            case Client of
+                ?NOBODY ->
+                    % The client was not authenticated -> unauthorized
+                    throw({error, ?EL_UNAUTHORIZED});
+                _ ->
+                    % The client was authenticated but cannot access the
+                    % resource -> forbidden
+                    throw({error, ?EL_FORBIDDEN})
+            end;
+        NewRequest ->
+            NewRequest
+    end.
 check_authorization([], _) ->
-    throw({error, ?EL_UNAUTHORIZED});
+    false;
 check_authorization([true | _], Request) ->
     Request;
 check_authorization([false | _], _) ->
-    throw({error, ?EL_UNAUTHORIZED});
+    false;
 check_authorization([{external, Fun} | Tail], Request) ->
     case Fun() of
         true ->
@@ -653,7 +667,7 @@ check_authorization([{external, Fun} | Tail], Request) ->
     end;
 check_authorization([{internal, _} | _] = List, #request{entity = undefined} = Req) ->
     Entity = call_get_entity(Req),
-    check_existence(List, Req#request{entity = Entity});
+    check_authorization(List, Req#request{entity = Entity});
 check_authorization([{internal, Fun} | Tail], #request{entity = Entity} = Req) ->
     case Fun(Entity) of
         true ->

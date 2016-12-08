@@ -23,11 +23,18 @@
 -export([
     init/3,
     rest_init/2,
-    allowed_methods/2, content_types_accepted/2, is_authorized/2,
-    content_types_provided/2, delete_resource/2, delete_completed/2,
-    accept_resource_json/2, accept_resource_form/2, provide_resource/2,
-    forbidden/2, resource_exists/2, requests_effective_state/1]).
-
+    allowed_methods/2,
+    content_types_accepted/2,
+    content_types_provided/2,
+    resource_exists/2,
+    forbidden/2,
+    is_authorized/2,
+    accept_resource_json/2,
+    accept_resource_form/2,
+    provide_resource/2,
+    delete_resource/2,
+    delete_completed/2
+]).
 
 
 %%%===================================================================
@@ -45,6 +52,7 @@
 init({_, http}, _Req, _Opts) ->
     {upgrade, protocol, cowboy_rest}.
 
+
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
 %% Initialize the state for this request.
@@ -55,20 +63,18 @@ init({_, http}, _Req, _Opts) ->
 rest_init(Req, #rstate{} = Opts) ->
     {ok, Req, Opts}.
 
+
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
 %% Return the list of allowed methods.
 %% @end
 %%--------------------------------------------------------------------
--spec allowed_methods(Req :: cowboy_req:req(), State :: rstate()) ->
+-spec allowed_methods(Req :: cowboy_req:req(), State :: rest_req()) ->
     {[binary()], cowboy_req:req(), rstate()}.
-allowed_methods(Req, #rstate{methods = Methods} = State) ->
-    BinMethods =
-        case requests_effective_state(Req) of
-            true -> [method_to_binary(M) || M <- Methods, M =:= get];
-            false -> [method_to_binary(M) || M <- Methods]
-        end,
+allowed_methods(Req, #rest_req{methods = Methods} = State) ->
+    BinMethods = [method_to_binary(M) || M <- maps:keys(Methods)],
     {BinMethods, Req, State}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
@@ -88,6 +94,7 @@ content_types_accepted(Req, #rstate{} = State) ->
         {<<"application/x-www-form-urlencoded">>, accept_resource_form}
     ], Req, State}.
 
+
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
 %% Return the list of content-types the resource provides.
@@ -103,28 +110,18 @@ content_types_accepted(Req, #rstate{} = State) ->
 content_types_provided(Req, #rstate{} = State) ->
     {[{<<"application/json">>, provide_resource}], Req, State}.
 
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Delete the resource.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_resource(Req :: cowboy_req:req(), State :: rstate()) ->
-    {boolean(), cowboy_req:req(), rstate()}.
-delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
-    {ResId, Req2} = get_res_id(Req, State),
-    {Result, Req3} = Mod:delete_resource(Resource, ResId, Req2),
-    {Result, Req3, State}.
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
-%% Returns if there is a guarantee that the resource gets deleted immediately
-%% from the system.
+%% Return whether the resource exists.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_completed(Req :: cowboy_req:req(), State :: rstate()) ->
+-spec resource_exists(Req :: cowboy_req:req(), State :: rstate()) ->
     {boolean(), cowboy_req:req(), rstate()}.
-delete_completed(Req, State) ->
-    {false, Req, State}.
+resource_exists(Req, State) ->
+    % Always return true - this is checked by entity_logic later.
+    {true, Req, State}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
@@ -135,14 +132,9 @@ delete_completed(Req, State) ->
 -spec forbidden(Req :: cowboy_req:req(), State :: rstate()) ->
     {boolean(), cowboy_req:req(), rstate()}.
 forbidden(Req, State) ->
-    #rstate{module = Mod, resource = Res, client = Client} = State,
+    % Always return false - this is checked by entity_logic later.
+    {false, Req, State}.
 
-    {ResId, Req2} = get_res_id(Req, State),
-    {BinMethod, Req3} = cowboy_req:method(Req2),
-    Method = binary_to_method(BinMethod),
-
-    Forbidden = not Mod:is_authorized(Res, Method, ResId, Client),
-    {Forbidden, Req3, State}.
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
@@ -294,25 +286,6 @@ authorize_by_provider_certs(Req) ->
             false
     end.
 
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Return whether the resource exists.
-%% @end
-%%--------------------------------------------------------------------
--spec resource_exists(Req :: cowboy_req:req(), State :: rstate()) ->
-    {boolean(), cowboy_req:req(), rstate()}.
-resource_exists(Req, #rstate{module = Mod, resource = Resource} = State) ->
-    {Method, Req2} = cowboy_req:method(Req),
-    case Method of
-        %% OZ REST API always creates new resource on POST
-        <<"POST">> -> {false, Req2, State};
-        _ ->
-            {ResId, Req3} = get_res_id(Req2, State),
-            {Exists, Req4} = Mod:resource_exists(Resource, ResId, Req3),
-            {Exists, Req4, State}
-    end.
-
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
 %% Process the request body of application/json content type.
@@ -406,24 +379,38 @@ provide_resource(Req, State) ->
     JSON = json_utils:encode(Data),
     {JSON, Req3, State}.
 
-%%--------------------------------------------------------------------
-%% @doc Determines whether an "effective" state has been requested through
-%% a query parameter. Effective state can mean different things for different
-%% rest modules, but the state universally reduces allowed methods to GET only.
-%% @end
-%%--------------------------------------------------------------------
--spec requests_effective_state(Req :: cowboy_req:req()) ->
-    boolean().
-requests_effective_state(Req) ->
-    % @todo change to qs_parse on Cowboy upgrade
-    {QsVals, _} = cowboy_req:qs_vals(Req),
-    case lists:keyfind(<<"effective">>, 1, QsVals) of
-        {_, <<"true">>} -> true;
-        {_, true} -> true;
-        _ -> false
-    end.
 
 %%--------------------------------------------------------------------
+%% @doc Cowboy callback function.
+%% Delete the resource.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_resource(Req :: cowboy_req:req(), State :: rstate()) ->
+    {boolean(), cowboy_req:req(), rstate()}.
+delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
+    {ResId, Req2} = get_res_id(Req, State),
+    {Result, Req3} = Mod:delete_resource(Resource, ResId, Req2),
+    {Result, Req3, State}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Cowboy callback function.
+%% Returns if there is a guarantee that the resource gets deleted immediately
+%% from the system.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_completed(Req :: cowboy_req:req(), State :: rstate()) ->
+    {boolean(), cowboy_req:req(), rstate()}.
+delete_completed(Req, State) ->
+    {false, Req, State}.
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
 %% @doc Converts an atom representing a REST method to a binary representing
 %% the method.
 %% @end
