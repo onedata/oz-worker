@@ -90,64 +90,91 @@ value_rule() -> [
 }).
 
 
+-define(TEMP_DIR, "/tmp").
+
+-define(CREATE_PROVIDER_DATA, begin
+    {_, __CSRFile, _} = generate_cert_files(),
+    {ok, __CSR} = file:read_file(__CSRFile),
+    #{
+        <<"name">> => <<"P1">>,
+        <<"urls">> => [<<"127.0.0.1">>],
+        <<"redirectionPoint">> => <<"https://127.0.0.1">>,
+        <<"csr">> => __CSR,
+        <<"latitude">> => 50.0,
+        <<"longitude">> => -24.8
+    }
+end).
+
+
+generate_cert_files() ->
+    Prefix = "provider" ++ integer_to_list(erlang:system_time(micro_seconds)),
+    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
+    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
+    CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
+    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
+    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
+    {KeyFile, CSRFile, CertFile}.
+
+
 ahaha() ->
     {ok, U1} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U1">>}]),
     ok = n_user_logic:modify_oz_privileges(?ROOT, U1, set, [set_privileges]),
     {ok, U2} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U2">>}]),
     {ok, U3} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U3">>}]),
-    {ok, G1} = rpc:call(node(), n_group_logic, create, [#client{type = user, id = U1}, <<"G1">>]),
+    {ok, G1} = rpc:call(node(), n_group_logic, create, [?USER(U1), <<"G1">>]),
     entity_graph:ensure_up_to_date(),
-    ok = n_group_logic:modify_oz_privileges(#client{type = user, id = U1}, G1, set, privileges:oz_admin()),
-    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [#client{type = user, id = U1}, G1, U2]),
-    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [#client{type = user, id = U1}, G1, U3]),
+    ok = n_group_logic:modify_oz_privileges(?USER(U1), G1, set, privileges:oz_admin()),
+    entity_graph:ensure_up_to_date(),
+    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [?USER(U1), G1, U2]),
+    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [?USER(U1), G1, U3]),
 
     {ok, U4} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U4">>}]),
-    {ok, G2} = rpc:call(node(), n_group_logic, create, [#client{type = user, id = U4}, <<"G2">>]),
-    ok = n_group_logic:modify_oz_privileges(#client{type = user, id = U1}, G2, grant, privileges:oz_admin()),
-    ok = n_group_logic:modify_oz_privileges(#client{type = user, id = U1}, G2, revoke, privileges:oz_viewer()),
+    {ok, G2} = rpc:call(node(), n_group_logic, create, [?USER(U4), <<"G2">>]),
+    ok = n_group_logic:modify_oz_privileges(?USER(U1), G2, grant, privileges:oz_admin()),
+    ok = n_group_logic:modify_oz_privileges(?USER(U1), G2, revoke, privileges:oz_viewer()),
     entity_graph:ensure_up_to_date(),
-    {ok, G2} = rpc:call(node(), n_group_logic, add_group, [#client{type = user, id = U4}, G2, G1]),
+    {ok, G2} = rpc:call(node(), n_group_logic, add_group, [?USER(U4), G2, G1]),
 
     {ok, U5} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U5">>}]),
-    {ok, S1} = rpc:call(node(), n_space_logic, create, [#client{type = user, id = U5}, <<"S1">>]),
+    {ok, S1} = rpc:call(node(), n_space_logic, create, [?USER(U5), <<"S1">>]),
     entity_graph:ensure_up_to_date(),
-    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [#client{type = user, id = U5}, S1, G2]),
+    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [?USER(U1), S1, G2]),
+    ProviderData = ?CREATE_PROVIDER_DATA,
+    {ok, {P1, _}} = rpc:call(node(), n_provider_logic, create, [?NOBODY, ProviderData]),
+    {ok, Token} = rpc:call(node(), n_space_logic, create_invite_provider_token, [?USER(U5), S1]),
+    {ok, S1} = rpc:call(node(), n_provider_logic, support_space, [?PROVIDER(P1), P1, Token, 1000000000]),
 
-    {ok, P1} = rpc:call(node(), n_provider_logic, create, [<<"P1">>]),
-    {ok, Token} = rpc:call(node(), n_space_logic, create_invite_provider_token, [#client{type = user, id = U5}, S1]),
-    {ok, P1} = rpc:call(node(), n_provider_logic, support_space, [{provider, P1}, P1, Token, 1000]),
+    {ok, {P2, _}} = rpc:call(node(), n_provider_logic, create, [?NOBODY, ProviderData#{<<"name">> => <<"P2">>}]),
+    {ok, Token2} = rpc:call(node(), n_space_logic, create_invite_provider_token, [?USER(U5), S1]),
+    {ok, S1} = rpc:call(node(), n_provider_logic, support_space, [?PROVIDER(P2), P2, Token2, 1000000000]),
 
-    {ok, P2} = rpc:call(node(), n_provider_logic, create, [<<"P2">>]),
-    {ok, Token2} = rpc:call(node(), n_space_logic, create_invite_provider_token, [#client{type = user, id = U5}, S1]),
-    {ok, P2} = rpc:call(node(), n_provider_logic, support_space, [{provider, P2}, P2, Token2, 1000]),
-
-    {ok, G3} = rpc:call(node(), n_group_logic, create, [#client{type = user, id = U1}, <<"G3">>]),
+    {ok, G3} = rpc:call(node(), n_group_logic, create, [?USER(U1), <<"G3">>]),
     entity_graph:ensure_up_to_date(),
-    {ok, G3} = rpc:call(node(), n_group_logic, add_user, [#client{type = user, id = U1}, G3, U3]),
-    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [#client{type = user, id = U5}, S1, G3]),
+    {ok, G3} = rpc:call(node(), n_group_logic, add_user, [?USER(U1), G3, U3]),
+    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [?USER(U5), S1, G3]),
 
     {ok, U6} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U6">>}]),
     {ok, HS1} = rpc:call(node(), n_handle_service_logic, create, [
-        #client{type = user, id = U6}, <<"HS1">>, ?PROXY_URL, ?SERVICE_PROPERTIES, <<"tajp">>
+        ?USER(U6), <<"HS1">>, ?PROXY_URL, ?SERVICE_PROPERTIES, <<"tajp">>
     ]),
     entity_graph:ensure_up_to_date(),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [#client{type = user, id = U6}, HS1, G2]),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [#client{type = user, id = U6}, HS1, G3]),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_user, [#client{type = user, id = U6}, HS1, U5]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [?USER(U6), HS1, G2]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [?USER(U6), HS1, G3]),
+    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_user, [?USER(U6), HS1, U5]),
     entity_graph:ensure_up_to_date(),
 
         catch share_logic:remove(<<"Sh1ID">>),
     {ok, Sh1} = rpc:call(node(), n_share_logic, create, [
-        #client{type = user, id = U5}, <<"Sh1ID">>, <<"Sh1">>, <<"fileId">>, S1]),
+        ?USER(U5), <<"Sh1ID">>, <<"Sh1">>, <<"fileId">>, S1]),
 
     % TODO TRICK
     {ok, _} = od_share:update(Sh1, #{public_url => <<"https://onedata.org/share/Sh1ID">>}),
 
     {ok, H1} = rpc:call(node(), n_handle_logic, create, [
-        #client{type = user, id = U1}, HS1, <<"Share">>, Sh1, ?METADATA
+        ?USER(U1), HS1, <<"Share">>, Sh1, ?METADATA
     ]),
     entity_graph:ensure_up_to_date(),
-    {ok, H1} = rpc:call(node(), n_handle_logic, add_group, [#client{type = user, id = U1}, H1, G1]),
+    {ok, H1} = rpc:call(node(), n_handle_logic, add_group, [?USER(U1), H1, G1]),
     entity_graph:ensure_up_to_date(),
     timer:sleep(1500),
 

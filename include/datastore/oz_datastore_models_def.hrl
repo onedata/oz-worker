@@ -13,7 +13,6 @@
 -define(GR_DATASTORE_MODELS_HRL, 1).
 
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
--include("http/handlers/rest_handler.hrl").
 
 % Value in DB meaning that alias is not set.
 % Empty list, must be used as a list not binary so JS view will work correctly
@@ -182,9 +181,9 @@
     name = <<"New Space">> :: binary(),
 
     % Direct relations to other entities
-    providers = #{} :: relation_with_attrs(od_provider:id(), Size :: pos_integer()),
     users = #{} :: relation_with_attrs(od_user:id(), [privileges:space_privilege()]),
     groups = #{} :: relation_with_attrs(od_group:id(), [privileges:space_privilege()]),
+    providers = #{} :: relation_with_attrs(od_provider:id(), Size :: pos_integer()),
     % All shares that belong to this space.
     shares = [] :: relation(od_share:id()),
 

@@ -174,7 +174,7 @@ validate_login() ->
                                                 % Everything ok, get the user and add new provider info
                                                 UserId = gui_session:get_user_id(),
                                                 ok = user_logic:add_oauth_account(UserId, OAuthAccount),
-                                                {redirect, <<?page_after_login, "?expand_accounts=true">>}
+                                                {redirect, <<?PAGE_AFTER_LOGIN, "?expand_accounts=true">>}
                                         end
                                 end
                         end

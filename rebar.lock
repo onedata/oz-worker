@@ -33,7 +33,7 @@
   2},
  {<<"ctool">>,
   {git,"ssh://git@git.plgrid.pl:7999/vfs/ctool.git",
-       {ref,"3eb3b160df8e3ed1d3ce3aaa984ecd3375c069a6"}},
+       {ref,"e7800bddc2090810e1708a0a0cb12fabe17609e3"}},
   0},
  {<<"dht_ring">>,
   {git,"git://github.com/RoXeon/dht_ring.git",

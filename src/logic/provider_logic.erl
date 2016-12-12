@@ -330,7 +330,7 @@ check_provider_connectivity(ProviderId) ->
                     host = Host
                 } = hackney_url:parse_url(RedirectionPoint),
                 ConnCheckEndpoint = str_utils:format_bin("https://~s~s", [
-                    Host, ?provider_id_endpoint
+                    Host, ?PROVIDER_ID_ENDPOINT
                 ]),
                 {ok, _, _, ProviderId} =
                     http_client:get(ConnCheckEndpoint, [], <<>>, [insecure]),

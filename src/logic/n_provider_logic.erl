@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 -behaviour(data_logic_behaviour).
 
+-include("entity_logic.hrl").
 -include("gui/common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -219,7 +220,7 @@ check_provider_connectivity(ProviderId) ->
                 }} = get(?ROOT, ProviderId),
                 #hackney_url{host = Host} = hackney_url:parse_url(RedPoint),
                 ConnCheckEndpoint = str_utils:format_bin("https://~s~s", [
-                    Host, ?provider_id_endpoint
+                    Host, ?PROVIDER_ID_ENDPOINT
                 ]),
                 {ok, _, _, ProviderId} =
                     http_client:get(ConnCheckEndpoint, [], <<>>, [insecure]),

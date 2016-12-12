@@ -14,7 +14,6 @@
 -behaviour(application).
 
 -include_lib("ctool/include/logging.hrl").
--include("rest_config.hrl").
 -include("registered_names.hrl").
 
 %% Application callbacks

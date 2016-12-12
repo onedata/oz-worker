@@ -12,6 +12,7 @@
 -module(rest_handler).
 -author("Konrad Zemek").
 
+-include("rest.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("http/handlers/rest_handler.hrl").
 -include_lib("ctool/include/logging.hrl").

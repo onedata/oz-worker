@@ -11,6 +11,7 @@
 -author("Tomasz Lichon").
 
 -include("http/handlers/rest_handler.hrl").
+-include("rest.hrl").
 
 -behavior(rest_module_behavior).
 

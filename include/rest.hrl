@@ -12,15 +12,19 @@
 -ifndef(REST_CONFIG_HRL).
 -define(REST_CONFIG_HRL, 1).
 
+-include("entity_logic.hrl").
+
 -define(REST_LISTENER, rest).
 -define(REST_HANDLER_MODULE, n_rest_handler).
 
 %% Record containing the state of REST request.
 -record(rest_req, {
+    client = #client{} :: n_entity_logic:client(),
+
     % tODO strict typy
-    methods = #{} :: #{Method :: get => {data_plugin, entityid, resource}},
+    methods = #{} :: #{Method :: get => {data_plugin, entityid, resource}}
     % To jest wywnioskowane z methods
-    handler = {module, function, [args]}
+%%    handler = {module, function, [args]}
 }).
 % Convenience macros user in rest_req
 -define(BINDING(__KEY), {binding, __KEY}).

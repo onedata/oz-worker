@@ -13,8 +13,14 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
+-include("entity_logic.hrl").
+-include("entity_logic_errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+
+-type method() :: atom(). % TODO
+
+-type entity_logic_function() :: atom(). % TODO
 
 -type rest_req() :: #rest_req{}.
 -export_type([rest_req/0]).
@@ -30,7 +36,6 @@
     forbidden/2,
     is_authorized/2,
     accept_resource_json/2,
-    accept_resource_form/2,
     provide_resource/2,
     delete_resource/2,
     delete_completed/2
@@ -58,9 +63,9 @@ init({_, http}, _Req, _Opts) ->
 %% Initialize the state for this request.
 %% @end
 %%--------------------------------------------------------------------
--spec rest_init(Req :: cowboy_req:req(), Opts :: rstate()) ->
-    {ok, cowboy_req:req(), rstate()}.
-rest_init(Req, #rstate{} = Opts) ->
+-spec rest_init(Req :: cowboy_req:req(), Opts :: rest_req()) ->
+    {ok, cowboy_req:req(), rest_req()}.
+rest_init(Req, Opts) ->
     {ok, Req, Opts}.
 
 
@@ -70,7 +75,7 @@ rest_init(Req, #rstate{} = Opts) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec allowed_methods(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {[binary()], cowboy_req:req(), rstate()}.
+    {[binary()], cowboy_req:req(), rest_req()}.
 allowed_methods(Req, #rest_req{methods = Methods} = State) ->
     BinMethods = [method_to_binary(M) || M <- maps:keys(Methods)],
     {BinMethods, Req, State}.
@@ -81,18 +86,15 @@ allowed_methods(Req, #rest_req{methods = Methods} = State) ->
 %% Return the list of content-types the resource accepts.
 %% @end
 %%--------------------------------------------------------------------
--spec content_types_accepted(Req :: cowboy_req:req(), State :: rstate()) ->
-    {Value, cowboy_req:req(), rstate()} when
+-spec content_types_accepted(Req :: cowboy_req:req(), State :: rest_req()) ->
+    {Value, cowboy_req:req(), rest_req()} when
     Value :: [{binary() | {Type, SubType, Params}, AcceptResource}],
     Type :: binary(),
     SubType :: binary(),
     Params :: '*' | [{binary(), binary()}],
     AcceptResource :: atom().
-content_types_accepted(Req, #rstate{} = State) ->
-    {[
-        {<<"application/json">>, accept_resource_json},
-        {<<"application/x-www-form-urlencoded">>, accept_resource_form}
-    ], Req, State}.
+content_types_accepted(Req, State) ->
+    {[{<<"application/json">>, accept_resource_json}], Req, State}.
 
 
 %%--------------------------------------------------------------------
@@ -100,14 +102,14 @@ content_types_accepted(Req, #rstate{} = State) ->
 %% Return the list of content-types the resource provides.
 %% @end
 %%--------------------------------------------------------------------
--spec content_types_provided(Req :: cowboy_req:req(), State :: rstate()) ->
-    {Value, cowboy_req:req(), rstate()} when
+-spec content_types_provided(Req :: cowboy_req:req(), State :: rest_req()) ->
+    {Value, cowboy_req:req(), rest_req()} when
     Value :: [{binary() | {Type, SubType, Params}, ProvideResource}],
     Type :: binary(),
     SubType :: binary(),
     Params :: '*' | [{binary(), binary()}],
     ProvideResource :: atom().
-content_types_provided(Req, #rstate{} = State) ->
+content_types_provided(Req, State) ->
     {[{<<"application/json">>, provide_resource}], Req, State}.
 
 
@@ -116,24 +118,11 @@ content_types_provided(Req, #rstate{} = State) ->
 %% Return whether the resource exists.
 %% @end
 %%--------------------------------------------------------------------
--spec resource_exists(Req :: cowboy_req:req(), State :: rstate()) ->
-    {boolean(), cowboy_req:req(), rstate()}.
+-spec resource_exists(Req :: cowboy_req:req(), State :: rest_req()) ->
+    {boolean(), cowboy_req:req(), rest_req()}.
 resource_exists(Req, State) ->
     % Always return true - this is checked by entity_logic later.
     {true, Req, State}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Return whether access to the resource is forbidden.
-%% @see is_authorized/2
-%% @end
-%%--------------------------------------------------------------------
--spec forbidden(Req :: cowboy_req:req(), State :: rstate()) ->
-    {boolean(), cowboy_req:req(), rstate()}.
-forbidden(Req, State) ->
-    % Always return false - this is checked by entity_logic later.
-    {false, Req, State}.
 
 
 %%--------------------------------------------------------------------
@@ -145,40 +134,30 @@ forbidden(Req, State) ->
 %% is unauthorized to perform an operation.
 %% @end
 %%--------------------------------------------------------------------
--spec is_authorized(Req :: cowboy_req:req(), State :: rstate()) ->
-    {true | {false, binary()}, cowboy_req:req(), rstate()}.
-is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
-    {BinMethod, _} = cowboy_req:method(Req),
-    Method = binary_to_method(BinMethod),
-
+-spec is_authorized(Req :: cowboy_req:req(), State :: rest_req()) ->
+    {true | {false, binary()}, cowboy_req:req(), rest_req()}.
+is_authorized(Req, State) ->
     try
-        case lists:member(Method, NoAuth) of
-            true ->
-                % No authorization required for this method,
-                % accept every request
-                {true, Req, State#rstate{client = #client{}}};
+        % This method requires authorization. First, check for basic
+        % auth headers.
+        case authenticate_by_basic_auth(Req) of
+            {true, BasicClient} ->
+                {true, Req, State#rest_req{client = BasicClient}};
             false ->
-                % This method requires authorization. First, check for basic
-                % auth headers.
-                case authorize_by_basic_auth(Req) of
-                    {true, BasicClient} ->
-                        {true, Req, State#rstate{client = BasicClient}};
+                % Basic auth not found, try macaroons
+                case authenticate_by_macaroons(Req) of
+                    {true, MacaroonClient} ->
+                        {true, Req, State#rest_req{client = MacaroonClient}};
                     false ->
-                        % Basic auth not found, try macaroons
-                        case authorize_by_macaroons(Req, BinMethod, Root) of
-                            {true, McrnClient} ->
-                                {true, Req, State#rstate{client = McrnClient}};
+                        % Macaroon auth not found,
+                        % try to authorize as provider
+                        case authenticate_by_provider_certs(Req) of
+                            {true, ProviderClient} ->
+                                {true, Req, State#rest_req{
+                                    client = ProviderClient}};
                             false ->
-                                % Macaroon auth not found,
-                                % try to authorize as provider
-                                case authorize_by_provider_certs(Req) of
-                                    {true, ProviderClient} ->
-                                        {true, Req, State#rstate{
-                                            client = ProviderClient}};
-                                    false ->
-                                        %% Not authorized
-                                        {{false, <<"">>}, Req, State}
-                                end
+                                %% Not authorized
+                                {{false, <<"">>}, Req, State}
                         end
                 end
         end
@@ -208,15 +187,113 @@ is_authorized(Req, #rstate{noauth = NoAuth, root = Root} = State) ->
             {halt, ReqY, State}
     end.
 
+
+%%--------------------------------------------------------------------
+%% @doc Cowboy callback function.
+%% Return whether access to the resource is forbidden.
+%% @see is_authorized/2
+%% @end
+%%--------------------------------------------------------------------
+-spec forbidden(Req :: cowboy_req:req(), State :: rest_req()) ->
+    {boolean(), cowboy_req:req(), rest_req()}.
+forbidden(Req, #rest_req{} = State) ->
+    % TODO
+%%    % State is initialized here, as this callback finalizes the checkup of
+%%    % rest request. This way, we are sure that chosen method is allowed,
+%%    % content-type is correct etc. and it's safe to proceed with the request.
+%%    NewState = call_entity_logic(Req, State),
+    % Always return false - this is checked by entity_logic later.
+    {false, Req, State}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Cowboy callback function.
+%% Process the request body of application/json content type.
+%% @end
+%%--------------------------------------------------------------------
+-spec accept_resource_json(Req :: cowboy_req:req(), State :: rest_req()) ->
+    {{true, URL :: binary()} | boolean(), cowboy_req:req(), rest_req()}.
+accept_resource_json(Req, State) ->
+    try
+        {ok, Body, Req2} = cowboy_req:body(Req),
+        Data = try
+            json_utils:decode_map(Body)
+        catch _:_ ->
+            throw({error, ?MALFORMED_JSON})
+        end,
+        % Method might be POST, PUT, PATCH
+        {MethodBin, _} = cowboy_req:method(Req),
+        Method = binary_to_method(MethodBin),
+        call_entity_logic(Method, Req2, State, Data)
+    catch
+        Type:Message ->
+            handle_error(Type, Message, erlang:get_stacktrace(), Req, State)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Cowboy callback function.
+%% Process the request body.
+%% @end
+%%--------------------------------------------------------------------
+-spec provide_resource(Req :: cowboy_req:req(), State :: rest_req()) ->
+    {iodata(), cowboy_req:req(), rest_req()}.
+provide_resource(Req, State) ->
+    try
+        call_entity_logic(get, Req, State, undefined)
+    catch
+        Type:Message ->
+            handle_error(Type, Message, erlang:get_stacktrace(), Req, State)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Cowboy callback function.
+%% Delete the resource.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_resource(Req :: cowboy_req:req(), State :: rest_req()) ->
+    {boolean(), cowboy_req:req(), rest_req()}.
+delete_resource(Req, State) ->
+    try
+        call_entity_logic(delete, Req, State, undefined)
+    catch
+        Type:Message ->
+            handle_error(Type, Message, erlang:get_stacktrace(), Req, State)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc Cowboy callback function.
+%% Returns if there is a guarantee that the resource gets deleted immediately
+%% from the system.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_completed(Req :: cowboy_req:req(), State :: rest_req()) ->
+    {boolean(), cowboy_req:req(), rest_req()}.
+delete_completed(Req, State) ->
+    {false, Req, State}.
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+handle_error(Type, Message, Stacktrace, Req, State) ->
+    % TODO
+    ?dump({Type, Message, Stacktrace}),
+    {halt, State, Req}.
+
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Tries to authenticate client by basic auth headers.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_basic_auth(Req :: cowboy_req:req()) ->
+-spec authenticate_by_basic_auth(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
-authorize_by_basic_auth(Req) ->
+authenticate_by_basic_auth(Req) ->
     {Header, _} = cowboy_req:header(<<"authorization">>, Req),
     case Header of
         <<"Basic ", UserPasswdB64/binary>> ->
@@ -233,15 +310,16 @@ authorize_by_basic_auth(Req) ->
             false
     end.
 
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Tries to authenticate client by macaroons.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_macaroons(Req :: cowboy_req:req(), BinMethod :: binary(),
-    Root :: atom()) -> false | {true, #client{}}.
-authorize_by_macaroons(Req, BinMethod, Root) ->
+-spec authenticate_by_macaroons(Req :: cowboy_req:req()) ->
+    false | {true, #client{}}.
+authenticate_by_macaroons(Req) ->
     {Macaroon, DischargeMacaroons, _} = parse_macaroons_from_headers(Req),
     %% @todo: VFS-1869
     %% Pass empty string as providerId because we do
@@ -252,14 +330,15 @@ authorize_by_macaroons(Req, BinMethod, Root) ->
             false;
         _ ->
             case auth_logic:validate_token(<<>>, Macaroon,
-                DischargeMacaroons, BinMethod, Root) of
+                DischargeMacaroons, undefined, undefined) of
                 {ok, UserId} ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};
-                {error, Reason} ->
-                    rest_module_helper:report_token_validation_error(Reason, Req)
+                {error, Error} ->
+                    throw({error, Error})
             end
     end.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -267,9 +346,9 @@ authorize_by_macaroons(Req, BinMethod, Root) ->
 %% Tries to authenticate client by provider certs.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_provider_certs(Req :: cowboy_req:req()) ->
+-spec authenticate_by_provider_certs(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
-authorize_by_provider_certs(Req) ->
+authenticate_by_provider_certs(Req) ->
     case etls:peercert(cowboy_req:get(socket, Req)) of
         {ok, PeerCert} ->
             case worker_proxy:call(ozpca_worker,
@@ -286,128 +365,6 @@ authorize_by_provider_certs(Req) ->
             false
     end.
 
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Process the request body of application/json content type.
-%% @end
-%%--------------------------------------------------------------------
--spec accept_resource_json(Req :: cowboy_req:req(), State :: rstate()) ->
-    {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
-accept_resource_json(Req, #rstate{} = State) ->
-    {ok, Body, Req2} = cowboy_req:body(Req),
-    Data = try
-        json_utils:decode(Body)
-    catch
-        _:_ -> malformed
-    end,
-
-    case Data =:= malformed of
-        true ->
-            Body = json_utils:encode([
-                {<<"error">>, <<"invalid_request">>},
-                {<<"error_description">>, <<"malformed JSON data">>}]),
-            Req3 = cowboy_req:set_resp_body(Body, Req2),
-            {false, Req3, State};
-
-        false ->
-            accept_resource(Data, Req2, State)
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Process the request body of application/x-www-form-urlencoded content type.
-%% @end
-%%--------------------------------------------------------------------
--spec accept_resource_form(Req :: cowboy_req:req(), State :: rstate()) ->
-    {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
-accept_resource_form(Req, #rstate{} = State) ->
-    {ok, Data, Req2} = cowboy_req:body_qs(Req),
-    accept_resource(Data, Req2, State).
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Process the request body.
-%% @end
-%%--------------------------------------------------------------------
--spec accept_resource(Data :: [proplists:property()], Req :: cowboy_req:req(),
-    State :: rstate()) ->
-    {{true, URL :: binary()} | boolean(), cowboy_req:req(), rstate()}.
-accept_resource(Data, Req, State) ->
-    #rstate{module = Mod, resource = Resource, client = Client} = State,
-
-    {ResId, Req2} = get_res_id(Req, State),
-    {BinMethod, Req3} = cowboy_req:method(Req2),
-    Method = binary_to_method(BinMethod),
-
-    try
-        {Result, Req4} = Mod:accept_resource(Resource, Method, ResId, Data,
-            Client, Req3),
-
-        {Result, Req4, State}
-    catch
-        {rest_error, Error, ReqX}
-            when is_atom(Error) ->
-
-            Body = json_utils:encode([{<<"error">>, Error}]),
-            ReqY = cowboy_req:set_resp_body(Body, ReqX),
-            {false, ReqY, State};
-
-
-        {rest_error, Error, Description, ReqX}
-            when is_atom(Error), is_binary(Description) ->
-
-            Body = json_utils:encode([
-                {<<"error">>, Error},
-                {<<"error_description">>, Description}
-            ]),
-            ReqY = cowboy_req:set_resp_body(Body, ReqX),
-            {false, ReqY, State}
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Process the request body.
-%% @end
-%%--------------------------------------------------------------------
--spec provide_resource(Req :: cowboy_req:req(), State :: rstate()) ->
-    {iodata(), cowboy_req:req(), rstate()}.
-provide_resource(Req, State) ->
-    #rstate{module = Mod, resource = Resource, client = Client} = State,
-
-    {ResId, Req2} = get_res_id(Req, State),
-    {Data, Req3} = Mod:provide_resource(Resource, ResId, Client, Req2),
-    JSON = json_utils:encode(Data),
-    {JSON, Req3, State}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Delete the resource.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_resource(Req :: cowboy_req:req(), State :: rstate()) ->
-    {boolean(), cowboy_req:req(), rstate()}.
-delete_resource(Req, #rstate{module = Mod, resource = Resource} = State) ->
-    {ResId, Req2} = get_res_id(Req, State),
-    {Result, Req3} = Mod:delete_resource(Resource, ResId, Req2),
-    {Result, Req3, State}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Returns if there is a guarantee that the resource gets deleted immediately
-%% from the system.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_completed(Req :: cowboy_req:req(), State :: rstate()) ->
-    {boolean(), cowboy_req:req(), rstate()}.
-delete_completed(Req, State) ->
-    {false, Req, State}.
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @private
@@ -422,7 +379,9 @@ method_to_binary(get) -> <<"GET">>;
 method_to_binary(put) -> <<"PUT">>;
 method_to_binary(delete) -> <<"DELETE">>.
 
+
 %%--------------------------------------------------------------------
+%% @private
 %% @doc Converts a binary representing a REST method to an atom representing
 %% the method.
 %% @end
@@ -434,20 +393,54 @@ binary_to_method(<<"GET">>) -> get;
 binary_to_method(<<"PUT">>) -> put;
 binary_to_method(<<"DELETE">>) -> delete.
 
+
+call_entity_logic(Method, Req, #rest_req{client = Client, methods = Methods} = State, Data) ->
+    Function = method_to_el_function(Method),
+    {LogicPlugin, EntityIdVal, ResourceVal} = maps:get(Method, Methods),
+    EntityId = resolve_bindings(EntityIdVal, Client, Req),
+    Resource = resolve_bindings(ResourceVal, Client, Req),
+    Args = el_function_args(Function, Client, LogicPlugin, EntityId, Resource, Data),
+    Result = erlang:apply(n_entity_logic, Function, Args),
+    Req2 = rest_translator:reply(Function, LogicPlugin, EntityId, Resource, Result, Req),
+    {halt, Req2, State}.
+
+
 %%--------------------------------------------------------------------
-%% @doc Returns the resource id for the request or client's id if the resource
-%% id is undefined.
+%% @private
+%% @doc Converts a an atom representing a REST method into function name of
+%% entity logic that should be called to handle it.
 %% @end
 %%--------------------------------------------------------------------
--spec get_res_id(Req :: cowboy_req:req(), State :: rstate()) ->
-    {ResId :: binary(), cowboy_req:req()}.
-get_res_id(Req, #rstate{client = #client{id = ClientId}}) ->
-    {Bindings, Req2} = cowboy_req:bindings(Req),
-    ResId = case proplists:get_value(id, Bindings) of
-        undefined -> ClientId;
-        X -> X
-    end,
-    {ResId, Req2}.
+-spec method_to_el_function(method()) -> entity_logic_function().
+method_to_el_function(post) -> create;
+method_to_el_function(put) -> create;
+method_to_el_function(get) -> get;
+method_to_el_function(patch) -> update;
+method_to_el_function(delete) -> delete.
+
+
+el_function_args(create, Client, DataLogicPlugin, EntityId, Resource, Data) ->
+    [Client, DataLogicPlugin, EntityId, Resource, Data];
+el_function_args(get, Client, DataLogicPlugin, EntityId, Resource, _Data) ->
+    [Client, DataLogicPlugin, EntityId, Resource];
+el_function_args(update, Client, DataLogicPlugin, EntityId, Resource, Data) ->
+    [Client, DataLogicPlugin, EntityId, Resource, Data];
+el_function_args(delete, Client, DataLogicPlugin, EntityId, Resource, _Data) ->
+    [Client, DataLogicPlugin, EntityId, Resource].
+
+
+resolve_bindings({Atom, ?BINDING(Key)}, Client, Req) when is_atom(Atom) ->
+    {Atom, resolve_bindings(?BINDING(Key), Client, Req)};
+resolve_bindings(?BINDING(Key), _Client, Req) ->
+    {Binding, _} = cowboy_req:binding(Key, Req),
+    Binding;
+resolve_bindings({Atom, ?CLIENT_ID}, Client, Req) ->
+    {Atom, resolve_bindings(?CLIENT_ID, Client, Req)};
+resolve_bindings(?CLIENT_ID, #client{id = Id}, _Req) ->
+    Id;
+resolve_bindings(Other, _Client, _Req) ->
+    Other.
+
 
 %%--------------------------------------------------------------------
 %% @doc Parses macaroon and discharge macaroons out of request's

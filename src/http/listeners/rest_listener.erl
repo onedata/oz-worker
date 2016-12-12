@@ -11,7 +11,7 @@
 -module(rest_listener).
 -author("Michal Zmuda").
 
--include("rest_config.hrl").
+-include("rest.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -137,16 +137,7 @@ routes() ->
     Prefix = str_utils:to_binary(PrefixStr),
     Routes = lists:map(fun({Path, Module, InitialState}) ->
         {<<Prefix/binary, Path/binary>>, Module, InitialState}
-    end, lists:append([
-        identities_rest_module:routes(),
-        user_rest_module:routes(),
-        provider_rest_module:routes(),
-        spaces_rest_module:routes(),
-        shares_rest_module:routes(),
-        groups_rest_module:routes(),
-        handle_services_rest_module:routes(),
-        handles_rest_module:routes()
-    ])),
+    end, rest_routes:all()),
     {ok, ZoneCADir} = application:get_env(?APP_NAME, ozpca_dir),
     [
         {<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}} |

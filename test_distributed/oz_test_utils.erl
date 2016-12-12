@@ -16,7 +16,7 @@
 
 
 %% API
--export([call_oz/4]).
+-export([call_oz/4, generate_provider_cert_files/0, ensure_eff_graph_up_to_date/1]).
 
 -export([create_user/2, get_user/2, get_client_token/2, remove_user/2]).
 -export([set_user_oz_privileges/3]).
@@ -443,3 +443,29 @@ remove_all_entities(Config, RemovePredefinedGroups) ->
     {ok, UserDocs} = call_oz(Config, od_user, list, []),
     [true = remove_user(Config, UId) || #document{key = UId} <- UserDocs],
     ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc Creates a key/cert pair and a corresponding CSR for
+%% provider registration.
+%% @end
+%%--------------------------------------------------------------------
+-spec generate_provider_cert_files() ->
+    {KeyFile :: string(), CSRFile :: string(), CertFile :: string()}.
+generate_provider_cert_files() ->
+    Prefix = "provider" ++ integer_to_list(erlang:system_time(micro_seconds)),
+    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
+    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
+    CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
+    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
+    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
+    {KeyFile, CSRFile, CertFile}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Returns when effective graph has been fully recalculated.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_eff_graph_up_to_date(Config :: proplists:proplist()) -> ok.
+ensure_eff_graph_up_to_date(Config) ->
+    oz_test_utils:call_oz(Config, entity_graph, ensure_up_to_date, []).

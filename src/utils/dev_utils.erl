@@ -50,9 +50,10 @@
 %%%-------------------------------------------------------------------
 -module(dev_utils).
 
--include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("entity_logic.hrl").
 -include("http/handlers/rest_handler.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).

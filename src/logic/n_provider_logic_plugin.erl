@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
+-include("entity_logic.hrl").
 -include("entity_logic_errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -69,7 +70,7 @@ get_entity(ProviderId) ->
         {ok, #document{value = Provider}} ->
             {ok, Provider};
         _ ->
-            ?EL_NOT_FOUND
+            {error, ?EL_NOT_FOUND}
     end.
 
 
@@ -147,7 +148,7 @@ authorize(create, undefined, check_my_ports, _, _) ->
     true;
 authorize(create, undefined, entity, ?NOBODY, _) ->
     true;
-authorize(create, ProvId, spaces, ?PROVIDER(ProvId), _) ->
+authorize(create, ProvId, support, ?PROVIDER(ProvId), _) ->
     true;
 
 authorize(get, undefined, check_my_ip, _, _) ->
@@ -177,7 +178,7 @@ authorize(get, _ProvId, {eff_group, _}, ?USER(UserId), _) ->
 validate(create, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty},
-        <<"urls">> => {list_of_binaries, any},
+        <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty},
         <<"csr">> => {binary, non_empty}
     },
@@ -186,7 +187,7 @@ validate(create, entity) -> #{
         <<"longitude">> => {float, fun(F) -> F >= -180 andalso F =< 180 end}
     }
 };
-validate(create, spaces) -> #{
+validate(create, support) -> #{
     required => #{
         <<"token">> => {token, space_support_token},
         <<"size">> => {positive_integer, fun(I) ->

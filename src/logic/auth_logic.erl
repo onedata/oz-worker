@@ -163,7 +163,7 @@ gen_token(UserId, _ProviderId) ->
     DischargeMacaroons :: [macaroon:macaroon()], Method :: binary(),
     RootResource :: atom()) ->
     {ok, UserId :: binary()} | {error, Reason :: any()}.
-validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) ->
+validate_token(ProviderId, Macaroon, DischargeMacaroons, _Method, _RootResource) ->
     Identifier = macaroon:identifier(Macaroon),
     case onedata_auth:get(Identifier) of
         {ok, #document{value = #onedata_auth{secret = Secret, user_id = UserId}}} ->
@@ -172,11 +172,12 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
             VerifyFun = fun
                 (<<"time < ", Integer/binary>>) ->
                     erlang:system_time(seconds) < binary_to_integer(Integer);
-                (<<"method = ", Met/binary>>) ->
-                    Method =:= Met;
-                (<<"rootResource in ", Resources/binary>>) ->
-                    lists:member(atom_to_binary(RootResource, utf8),
-                        binary:split(Resources, <<",">>, [global]));
+                % TODO currently not used, to be fixed in VFS-2874
+%%                (<<"method = ", Met/binary>>) ->
+%%                    Method =:= Met;
+%%                (<<"rootResource in ", Resources/binary>>) ->
+%%                    lists:member(atom_to_binary(RootResource, utf8),
+%%                        binary:split(Resources, <<",">>, [global]));
                 (<<"providerId = ", PID/binary>>) ->
                     PID =:= ProviderId;
                 (_) ->

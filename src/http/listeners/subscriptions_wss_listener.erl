@@ -12,7 +12,6 @@
 -module(subscriptions_wss_listener).
 -author("Michal Zmuda").
 
--include("rest_config.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 

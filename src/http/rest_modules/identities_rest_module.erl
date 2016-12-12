@@ -11,6 +11,7 @@
 -author("Michal Zmuda").
 
 -include("http/handlers/rest_handler.hrl").
+-include("rest.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").

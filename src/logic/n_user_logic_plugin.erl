@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 -behaviour(data_logic_plugin_behaviour).
 
+-include("entity_logic.hrl").
 -include("entity_logic_errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -32,7 +33,7 @@ get_entity(UserId) ->
         {ok, #document{value = Group}} ->
             {ok, Group};
         _ ->
-            ?EL_NOT_FOUND
+            {error, ?EL_NOT_FOUND}
     end.
 
 

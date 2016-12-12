@@ -19,7 +19,14 @@
 
 
 %% API
--export([set_config/1, check_rest_call/1]).
+-export([get_rest_api_prefix/1, set_config/1, check_rest_call/1]).
+
+
+get_rest_api_prefix(Config) ->
+    {ok, RestApiPrefix} = oz_test_utils:call_oz(
+        Config, application, get_env, [oz_worker, rest_api_prefix]
+    ),
+    RestApiPrefix.
 
 
 set_config(Config) ->
