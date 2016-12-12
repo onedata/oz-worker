@@ -96,7 +96,7 @@ clean_space_name_mapping_test(Config) ->
         {ok, _}, oz_test_utils:create_space(Config, {group, GroupId}, SpaceName)
     ),
     ?assertMatch({ok, _},
-        oz_test_utils:add_member_to_space(Config, {user, UserId}, SpaceId)),
+        oz_test_utils:add_user_to_space(Config, {user, UserId}, SpaceId)),
 
     ?assertNot(clean_space_name_mapping(Node, UserId, SpaceId)),
     ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),

@@ -37,12 +37,6 @@ provider_routes() ->
         {<<"/providers/:id">>, #rest_req{methods = #{
             get => {P, ?BINDING(id), entity}
         }}},
-        {<<"/providers/:id/spaces">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), spaces}
-        }}},
-        {<<"/providers/:id/spaces/:sid">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), {space, ?BINDING(sid)}}
-        }}},
         {<<"/providers/:id/users">>, #rest_req{methods = #{
             get => {P, ?BINDING(id), users}
         }}},
@@ -54,6 +48,12 @@ provider_routes() ->
         }}},
         {<<"/providers/:id/groups/:gid">>, #rest_req{methods = #{
             get => {P, ?BINDING(id), {group, ?BINDING(gid)}}
+        }}},
+        {<<"/providers/:id/spaces">>, #rest_req{methods = #{
+            get => {P, ?BINDING(id), spaces}
+        }}},
+        {<<"/providers/:id/spaces/:sid">>, #rest_req{methods = #{
+            get => {P, ?BINDING(id), {space, ?BINDING(sid)}}
         }}},
         {<<"/provider">>, #rest_req{methods = #{
             get => {P, ?CLIENT_ID, entity},

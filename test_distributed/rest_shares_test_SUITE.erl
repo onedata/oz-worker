@@ -167,7 +167,7 @@ create_share_test(Config) ->
     % User should be able to create shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
-    {ok, _} = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
+    {ok, _} = oz_test_utils:add_user_to_space(Config, {group, Group}, Space),
     ok = oz_test_utils:set_space_privileges(
         Config, {group, Group}, Space, [space_manage_shares]
     ),
@@ -249,7 +249,7 @@ view_shares_test(Config) ->
     % However, when we add him to a group and the group to the Space, it should
     % be possible again.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
-    {ok, _} = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
+    {ok, _} = oz_test_utils:add_user_to_space(Config, {group, Group}, Space),
     ?assert(check_get_share(200, User, Share1Id, Share1ExpectedData)),
     ?assert(check_get_share(200, User, Share2Id, Share2ExpectedData)),
     ?assert(check_get_share(200, User, Share3Id, Share3ExpectedData)),
@@ -309,7 +309,7 @@ modify_share_test(Config) ->
     % User should be able to rename shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
-    {ok, _} = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
+    {ok, _} = oz_test_utils:add_user_to_space(Config, {group, Group}, Space),
     ok = oz_test_utils:set_space_privileges(
         Config, {group, Group}, Space, [space_manage_shares]
     ),
@@ -358,7 +358,7 @@ remove_share_test(Config) ->
     % User should be able to remove shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
-    {ok, _} = oz_test_utils:add_member_to_space(Config, {group, Group}, Space),
+    {ok, _} = oz_test_utils:add_user_to_space(Config, {group, Group}, Space),
     ok = oz_test_utils:set_space_privileges(
         Config, {group, Group}, Space, [space_manage_shares]
     ),

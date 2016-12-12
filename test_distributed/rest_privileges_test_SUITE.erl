@@ -1424,7 +1424,7 @@ list_users_of_provider_test(Config) ->
     ),
     % User 3 belongs to space 3 by nested groups
     {_, _, ParentGroup} = create_3_nested_groups(Config, User3),
-    {ok, Space3} = oz_test_utils:add_member_to_space(
+    {ok, Space3} = oz_test_utils:add_user_to_space(
         Config, {group, ParentGroup}, Space3
     ),
     {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 100),
@@ -1582,14 +1582,14 @@ list_groups_of_provider_test(Config) ->
     %   BottomGroup2,
     %   MiddleGroup2,
     %   TopGroup2
-    {ok, MiddleGroup1} = oz_test_utils:add_member_to_group(
+    {ok, MiddleGroup1} = oz_test_utils:add_user_to_group(
         Config, {group, TopGroup2}, MiddleGroup1
     ),
     % Add the groups to spaces
-    {ok, Space1} = oz_test_utils:add_member_to_space(
+    {ok, Space1} = oz_test_utils:add_user_to_space(
         Config, {group, TopGroup1}, Space1
     ),
-    {ok, Space2} = oz_test_utils:add_member_to_space(
+    {ok, Space2} = oz_test_utils:add_user_to_space(
         Config, {group, SomeGroup}, Space2
     ),
     ExpectedGroups = [
@@ -1868,10 +1868,10 @@ create_3_nested_groups(Config, TestUser, BotGrName, MidGrName, TopGrName) ->
     {ok, TopGroup} = oz_test_utils:create_group(
         Config, DummyUser, TopGrName
     ),
-    {ok, MiddleGroup} = oz_test_utils:add_member_to_group(
+    {ok, MiddleGroup} = oz_test_utils:add_user_to_group(
         Config, {group, BottomGroup}, MiddleGroup
     ),
-    {ok, TopGroup} = oz_test_utils:add_member_to_group(
+    {ok, TopGroup} = oz_test_utils:add_user_to_group(
         Config, {group, MiddleGroup}, TopGroup
     ),
     % Remove the dummy user, he is not needed anymore

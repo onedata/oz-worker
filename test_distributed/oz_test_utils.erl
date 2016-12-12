@@ -11,6 +11,7 @@
 
 -module(oz_test_utils).
 
+-include("entity_logic.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 
@@ -19,19 +20,30 @@
 -export([call_oz/4, generate_provider_cert_files/0, ensure_eff_graph_up_to_date/1]).
 
 -export([create_user/2, get_user/2, get_client_token/2, remove_user/2]).
--export([set_user_oz_privileges/3]).
+-export([set_user_oz_privileges/4]).
 
 -export([create_group/3, get_group/2, remove_group/2]).
--export([add_member_to_group/3, group_remove_user/3]).
+-export([add_user_to_group/4, add_group_to_group/4, group_remove_user/3]).
 -export([set_group_oz_privileges/3]).
 
--export([create_space/3, add_member_to_space/3, leave_space/3, remove_space/2]).
--export([modify_space/4, support_space/4, set_space_privileges/4]).
+-export([
+    create_space/3,
+    add_user_to_space/4,
+    add_group_to_space/4,
+    space_invite_provider_token/3,
+    leave_space/3,
+    remove_space/2]).
+-export([modify_space/4, set_space_privileges/4]).
 -export([space_has_effective_user/3]).
 
 -export([create_share/5, remove_share/2]).
 
--export([create_provider/2, remove_provider/2]).
+-export([
+    create_provider_and_certs/2,
+    create_provider/2,
+    support_space/5,
+    remove_provider/2
+]).
 
 -export([create_handle_service/5, remove_handle_service/2]).
 
@@ -87,7 +99,7 @@ call_oz(Config, Module, Function, Args) ->
 -spec create_user(Config :: term(), User :: #od_user{}) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_user(Config, User) ->
-    call_oz(Config, user_logic, create, [User]).
+    call_oz(Config, n_user_logic, create, [User]).
 
 
 %%--------------------------------------------------------------------
@@ -123,10 +135,12 @@ remove_user(Config, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec set_user_oz_privileges(Config :: term(), UserId :: binary(),
-    Privileges :: [privileges:oz_privilege()]) ->
+    Operation :: set | grant | revoke, Privileges :: [privileges:oz_privilege()]) ->
     ok | {error, Reason :: term()}.
-set_user_oz_privileges(Config, UserId, Privileges) ->
-    call_oz(Config, user_logic, set_oz_privileges, [UserId, Privileges]).
+set_user_oz_privileges(Config, UserId, Operation, Privileges) ->
+    call_oz(Config, n_user_logic, set_oz_privileges, [
+        ?ROOT, UserId, Operation, Privileges
+    ]).
 
 %%--------------------------------------------------------------------
 %% @doc Creates group in onezone.
@@ -134,15 +148,15 @@ set_user_oz_privileges(Config, UserId, Privileges) ->
 %%--------------------------------------------------------------------
 -spec create_group(Config :: term(), UserId :: binary(), Name :: binary()) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
-create_group(Config, UserId, Name) ->
-    call_oz(Config, group_logic, create, [UserId, Name, role]).
+create_group(Config, Client, Name) ->
+    call_oz(Config, n_group_logic, create, [Client, Name]).
 
 
 %%--------------------------------------------------------------------
 %% @doc Retrieves user data from onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group(Config :: term(), GroupId :: binary()) ->
+-spec get_group(Config :: term(), GroupId :: od_group:id()) ->
     {ok, #document{}} | {error, Reason :: term()}.
 get_group(Config, GroupId) ->
     call_oz(Config, od_group, get, [GroupId]).
@@ -152,21 +166,21 @@ get_group(Config, GroupId) ->
 %% @doc Adds a user or group to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec add_member_to_group(Config :: term(), Member :: {user | group, Id :: binary()},
-    GroupId :: binary()) ->
-    {ok, GroupId :: binary()} | {error, Reason :: term()}.
-add_member_to_group(Config, {user, UserId}, GroupId) ->
-    call_oz(Config, group_logic, add_user, [GroupId, UserId]);
+-spec add_user_to_group(Config :: term(), Client :: n_entity_logic:client(),
+    GroupId :: od_group:id(), UserId :: od_user:id()) ->
+    {ok, GroupId :: od_group:id()} | {error, Reason :: term()}.
+add_user_to_group(Config, Client, GroupId, UserId) ->
+    call_oz(Config, n_group_logic, add_user, [Client, GroupId, UserId]).
 
-add_member_to_group(Config, {group, ChildGroupId}, ParentGroupId) ->
-    call_oz(Config, group_logic, add_group, [ParentGroupId, ChildGroupId]).
+add_group_to_group(Config, Client, ParentGroupId, ChildGroupId) ->
+    call_oz(Config, n_group_logic, add_group, [Client, ParentGroupId, ChildGroupId]).
 
 
 %%--------------------------------------------------------------------
 %% @doc Removes user from a group from onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec group_remove_user(Config :: term(), GroupId :: binary(),
+-spec group_remove_user(Config :: term(), GroupId :: od_group:id(),
     UserId :: binary()) -> true | {error, Reason :: term()}.
 group_remove_user(Config, GroupId, UserId) ->
     call_oz(Config, group_logic, remove_user, [GroupId, UserId]).
@@ -176,7 +190,7 @@ group_remove_user(Config, GroupId, UserId) ->
 %% @doc Removes group from onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(Config :: term(), GroupId :: binary()) ->
+-spec remove_group(Config :: term(), GroupId :: od_group:id()) ->
     boolean() | {error, Reason :: term()}.
 remove_group(Config, GroupId) ->
     call_oz(Config, group_logic, remove, [GroupId]).
@@ -185,7 +199,7 @@ remove_group(Config, GroupId) ->
 %% @doc Sets OZ privileges of a group.
 %% @end
 %%--------------------------------------------------------------------
--spec set_group_oz_privileges(Config :: term(), GroupId :: binary(),
+-spec set_group_oz_privileges(Config :: term(), GroupId :: od_group:id(),
     Privileges :: [privileges:oz_privilege()]) ->
     ok | {error, Reason :: term()}.
 set_group_oz_privileges(Config, GroupId, Privileges) ->
@@ -198,22 +212,29 @@ set_group_oz_privileges(Config, GroupId, Privileges) ->
 %%--------------------------------------------------------------------
 -spec create_space(Config :: term(), Member :: {user | group, Id :: binary()},
     Name :: binary()) -> {ok, Id :: binary()} | {error, Reason :: term()}.
-create_space(Config, Member, Name) ->
-    call_oz(Config, space_logic, create, [Member, Name]).
+create_space(Config, Client, Name) ->
+    call_oz(Config, n_space_logic, create, [Client, Name]).
 
 
 %%--------------------------------------------------------------------
 %% @doc Joins space as a user or a group.
 %% @end
 %%--------------------------------------------------------------------
--spec add_member_to_space(Config :: term(), {user | group, Id :: binary()},
-    SpaceId :: binary()) ->
-    {ok, SpaceId :: binary()}  | {error, Reason :: term()}.
-add_member_to_space(Config, {user, UserId}, SpaceId) ->
-    call_oz(Config, space_logic, add_user, [SpaceId, UserId]);
+-spec add_user_to_space(Config :: term(), Client :: n_entity_logic:client(),
+    SpaceId :: od_space:id(), UserId :: od_user:id()) ->
+    {ok, SpaceId :: od_space:id()} | {error, Reason :: term()}.
+add_user_to_space(Config, Client, SpaceId, UserId) ->
+    call_oz(Config, n_space_logic, add_user, [Client, SpaceId, UserId]).
 
-add_member_to_space(Config, {group, GroupId}, SpaceId) ->
-    call_oz(Config, space_logic, add_group, [SpaceId, GroupId]).
+add_group_to_space(Config, Client, SpaceId, GroupId) ->
+    call_oz(Config, n_space_logic, add_group, [Client, SpaceId, GroupId]).
+
+
+
+space_invite_provider_token(Config, Client, SpaceId) ->
+    call_oz(Config, n_space_logic, create_invite_provider_token, [
+        Client, SpaceId
+    ]).
 
 
 %%--------------------------------------------------------------------
@@ -221,30 +242,19 @@ add_member_to_space(Config, {group, GroupId}, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec leave_space(Config :: term(), {user | group, Id :: binary()},
-    SpaceId :: binary()) -> boolean() | {error, Reason :: term()}.
+    SpaceId :: od_space:id()) -> boolean() | {error, Reason :: term()}.
 leave_space(Config, {user, UserId}, SpaceId) ->
     call_oz(Config, space_logic, remove_user, [SpaceId, UserId]);
 
 leave_space(Config, {group, GroupId}, SpaceId) ->
     call_oz(Config, space_logic, remove_group, [SpaceId, GroupId]).
 
-
-%%--------------------------------------------------------------------
-%% @doc Supports space by provider.
-%% @end
-%%--------------------------------------------------------------------
--spec support_space(Config :: term(), ProviderId :: binary(),
-    SpaceId :: binary(), Size :: non_neg_integer()) ->
-    ok | {error, Reason :: term()}.
-support_space(Config, ProviderId, SpaceId, Size) ->
-    call_oz(Config, space_logic, add_provider, [SpaceId, ProviderId, Size]).
-
 %%--------------------------------------------------------------------
 %% @doc Sets privileges in a space for a user or group.
 %% @end
 %%--------------------------------------------------------------------
 -spec set_space_privileges(Config :: term(), Member :: {user, Id :: binary()},
-    SpaceId :: binary(), Privileges :: [privileges:space_privilege()]) ->
+    SpaceId :: od_space:id(), Privileges :: [privileges:space_privilege()]) ->
     ok | {error, Reason :: term()}.
 set_space_privileges(Config, Member, SpaceId, Privileges) ->
     call_oz(Config, space_logic, set_privileges, [SpaceId, Member, Privileges]).
@@ -254,7 +264,7 @@ set_space_privileges(Config, Member, SpaceId, Privileges) ->
 %% @doc Checks if given space has given effective user.
 %% @end
 %%--------------------------------------------------------------------
--spec space_has_effective_user(Config :: term(), SpaceId :: binary(),
+-spec space_has_effective_user(Config :: term(), SpaceId :: od_space:id(),
     UserId :: binary()) -> boolean() | {error, Reason :: term()}.
 space_has_effective_user(Config, SpaceId, UserId) ->
     call_oz(Config, space_logic, has_effective_user, [SpaceId, UserId]).
@@ -264,7 +274,7 @@ space_has_effective_user(Config, SpaceId, UserId) ->
 %% @doc Modifies space name.
 %% @end
 %%--------------------------------------------------------------------
--spec modify_space(Config :: term(), SpaceId :: binary(),
+-spec modify_space(Config :: term(), SpaceId :: od_space:id(),
     Member :: {user, Id :: binary()} | provider, Name :: binary()) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 modify_space(Config, SpaceId, Member, Name) ->
@@ -275,7 +285,7 @@ modify_space(Config, SpaceId, Member, Name) ->
 %% @doc Removes space.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_space(Config :: term(), SpaceId :: binary()) ->
+-spec remove_space(Config :: term(), SpaceId :: od_space:id()) ->
     boolean() | {error, Reason :: term()}.
 remove_space(Config, SpaceId) ->
     call_oz(Config, space_logic, remove, [SpaceId]).
@@ -286,7 +296,7 @@ remove_space(Config, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_share(Config :: term(), ShareId :: binary(),
-    Name :: binary(), RootFileId :: binary(), ParentSpaceId :: binary()) ->
+    Name :: binary(), RootFileId :: binary(), ParentSpaceId :: od_space:id()) ->
     {ok, ShareId :: binary()} | {error, Reason :: term()}.
 create_share(Config, ShareId, Name, RootFileId, ParentSpaceId) ->
     call_oz(Config, share_logic, create, [ShareId, Name, RootFileId, ParentSpaceId]).
@@ -306,21 +316,35 @@ remove_share(Config, ShareId) ->
 %% @doc Creates a provider.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider(Config :: term(), Name :: binary()) ->
-    {ok, ProviderId :: binary(), ProviderCertPem :: binary()} |
-    {error, Reason :: term()}.
-create_provider(Config, Name) ->
-    Prefix = "provider" ++ integer_to_list(rand:uniform(123345123)),
-    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
-    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
-    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
-    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
+-spec create_provider_and_certs(Config :: term(), Name :: binary()) ->
+    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
+create_provider_and_certs(Config, Name) ->
+    {KeyFile, CSRFile, CertFile} = generate_provider_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
-    call_oz(Config, provider_logic, create, [
+    {ok, {ProviderId, Certificate}} = call_oz(Config, n_provider_logic, create, [
+        ?NOBODY,
         Name,
         [<<"127.0.0.1">>],
         <<"127.0.0.1">>,
         CSR
+    ]),
+    ok = file:write_file(CertFile, Certificate),
+    {ok, {ProviderId, KeyFile, CertFile}}.
+
+
+create_provider(Config, Data) ->
+    {ok, {ProviderId, Certificate}} = call_oz(
+        Config, n_provider_logic, create, [?NOBODY, Data]),
+    {ok, {ProviderId, Certificate}}.
+
+
+%%--------------------------------------------------------------------
+%% @doc Supports space by provider.
+%% @end
+%%--------------------------------------------------------------------
+support_space(Config, Client, ProviderId, Token, Size) ->
+    call_oz(Config, n_space_logic, support_space, [
+        Client, ProviderId, Token, Size
     ]).
 
 
