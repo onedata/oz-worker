@@ -69,7 +69,7 @@ provider_routes() ->
             post => {P, ?CLIENT_ID, spaces}
         }}},
         {<<"/provider/spaces/support">>, #rest_req{methods = #{
-            post => {P, ?CLIENT_ID, entity}
+            post => {P, ?CLIENT_ID, support}
         }}},
         {<<"/provider/spaces/:sid">>, #rest_req{methods = #{
             get => {P, ?CLIENT_ID, {space, ?BINDING(sid)}},

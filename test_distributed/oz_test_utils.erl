@@ -31,6 +31,7 @@
     add_user_to_space/4,
     add_group_to_space/4,
     space_invite_provider_token/3,
+    space_invite_user_token/3,
     leave_space/3,
     remove_space/2]).
 -export([modify_space/4, set_space_privileges/4]).
@@ -235,6 +236,15 @@ space_invite_provider_token(Config, Client, SpaceId) ->
     call_oz(Config, n_space_logic, create_invite_provider_token, [
         Client, SpaceId
     ]).
+
+
+space_invite_user_token(Config, Client, SpaceId) ->
+    call_oz(Config, n_space_logic, create_invite_user_token, [
+        Client, SpaceId
+    ]).
+
+
+
 
 
 %%--------------------------------------------------------------------
