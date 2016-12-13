@@ -20,70 +20,7 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
--record(api_test_spec, {
-    method = get :: get | patch | post | put | delete,
-    client_spec = undefined :: undefined | #client_spec{},
-    rest_spec = undefined :: undefined | #rest_spec{},
-    logic_spec = undefined :: undefined | #logic_spec{},
-    data_spec = undefined :: undefined | #data_spec{}
-}).
-
--record(client_spec, {
-    correct = [],
-    unauthorized = [],
-    forbidden = []
-}).
-
--record(data_spec, {
-    required = [],
-    optional = [],
-    at_least_one = [],
-    correct_values = #{binary => binary},
-    bad_values = [{key, value, error_type}]
-}).
-
--record(rest_spec, {
-    path = <<"">> :: binary() | [binary()],
-    expected_code = undefined,
-    expected_headers = undefined :: #{} | {contains, #{}},
-    expected_body = undefined :: #{} | {contains, #{}}
-}).
-
--record(logic_spec, {
-    module = n_provider_logic,
-    entity_id = undefined,
-    resource = undefined,
-    expected_result = undefined
-}).
-
--define(OK_BINARY, fun(Result) ->
-    case Result of
-        {ok, Bin} when is_binary(Bin) -> true;
-        _ -> false
-    end
-end).
-
--define(OK_BINARY(__ExactValue), fun(Result) ->
-    case Result of
-        {ok, __ExactValue} -> true;
-        _ -> false
-    end
-end).
-
--define(OK_ENTITY(__VerifyFun), fun(Result) ->
-    case Result of
-        {ok, Entity} -> __VerifyFun(Entity);
-        _ -> false
-    end
-end).
-
--define(OK_LIST(__ExpectedList), fun(Result) ->
-    lists:sort(__ExpectedList) =:= lists:sort(Result)
-end).
-
--define(ERROR_REASON(__ExpectedError), fun(Result) ->
-    __ExpectedError =:= Result
-end).
+-include("api_test_utils.hrl").
 
 
 %% API
@@ -118,7 +55,7 @@ create_test(Config) ->
     {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
     ApiTestSpec = #api_test_spec{
-        method = create,
+        operation = create,
         client_spec = #client_spec{
             correct = [root, nobody]
         },
@@ -168,7 +105,7 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 support_space_test(Config) ->
@@ -184,7 +121,7 @@ support_space_test(Config) ->
     {ok, BadTokenType} = token_logic:serialize(BadMacaroon1),
 
     ApiTestSpec = #api_test_spec{
-        method = create,
+        operation = create,
         client_spec = #client_spec{
             correct = [root, {provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
@@ -220,13 +157,13 @@ support_space_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % provider_logic should also allow using non-serialized macaroons, check it
     {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(Config, ?USER(U1), S1),
     {ok, BadMacaroon2} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     ApiTestSpec2 = #api_test_spec{
-        method = create,
+        operation = create,
         client_spec = #client_spec{
             correct = [root, {provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
@@ -255,7 +192,7 @@ support_space_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 list_test(Config) ->
@@ -277,7 +214,7 @@ list_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -295,7 +232,7 @@ list_test(Config) ->
             expected_result = ?OK_BINARY
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_test(Config) ->
@@ -325,7 +262,7 @@ get_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [
                 root,
@@ -365,11 +302,11 @@ get_test(Config) ->
             end)
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
     % Provider should be also able to retrieve this info using another path,
     % without id (id is deduced from authorization)
     ApiTestSpec2 = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
@@ -388,7 +325,7 @@ get_test(Config) ->
             }
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 get_eff_users_test(Config) ->
@@ -406,7 +343,7 @@ get_eff_users_test(Config) ->
 
     % There are no users yet
     ApiTestSpec = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -424,7 +361,7 @@ get_eff_users_test(Config) ->
             expected_result = ?OK_LIST([])
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % Create some spaces and support them
     {{S1, _}, {S2, _}, {S3, _}} = create_and_support_3_spaces(Config, P1),
@@ -443,7 +380,7 @@ get_eff_users_test(Config) ->
     {ExpUserIds, _} = lists:unzip(ExpUsers),
 
     ApiTestSpec2 = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -465,7 +402,7 @@ get_eff_users_test(Config) ->
             expected_result = ?OK_LIST(ExpUserIds)
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec2)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
     % Create some more spaces and support them
     {{S4, _}, {S5, _}, {S6, _}} = create_and_support_3_spaces(Config, P1),
@@ -496,7 +433,7 @@ get_eff_users_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Ensure user list is correct.
     ApiTestSpec3 = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -518,13 +455,13 @@ get_eff_users_test(Config) ->
             expected_result = ?OK_LIST(ExpUserIds ++ ExpGroupUserIds)
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec3)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
 
     % Check every user one by one.
     lists:foreach(
         fun(UserId, UserName) ->
             ApiTestSpec4 = #api_test_spec{
-                method = get,
+                operation = get,
                 client_spec = #client_spec{
                     correct = [root, {user, Admin}],
                     unauthorized = [nobody],
@@ -551,14 +488,14 @@ get_eff_users_test(Config) ->
                     end)
                 }
             },
-            ?assert(api_test_utils:run_tests(ApiTestSpec4))
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec4))
         end, ExpUserIds ++ ExpGroupUserIds),
 
     % Make sure that other users cannot be reached this way.
     {ok, OtherUser} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpec5 = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -579,7 +516,7 @@ get_eff_users_test(Config) ->
             expected_result = ?ERROR_REASON(?EL_NOT_FOUND)
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec5)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
 
 
 get_eff_groups_test(Config) ->
@@ -596,7 +533,7 @@ get_eff_groups_test(Config) ->
 
     % There are no groups yet
     ApiTestSpec = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -614,7 +551,7 @@ get_eff_groups_test(Config) ->
             expected_result = ?OK_LIST([])
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % Create some spaces and support them
     {{S1, _}, {S2, _}, {S3, _}} = create_and_support_3_spaces(Config, P1),
@@ -636,7 +573,7 @@ get_eff_groups_test(Config) ->
     % Check if correct groups are returned
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpec = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -657,13 +594,13 @@ get_eff_groups_test(Config) ->
             expected_result = ?OK_LIST(ExpGroupIds)
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % Check every group one by one.
     lists:foreach(
         fun(GroupId, GroupName) ->
             ApiTestSpec2 = #api_test_spec{
-                method = get,
+                operation = get,
                 client_spec = #client_spec{
                     correct = [root, {user, Admin}],
                     unauthorized = [nobody],
@@ -689,14 +626,14 @@ get_eff_groups_test(Config) ->
                     end)
                 }
             },
-            ?assert(api_test_utils:run_tests(ApiTestSpec2))
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
         end, ExpGroups),
 
     % Make sure that other groups cannot be reached this way.
     {ok, OtherGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"other">>),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpec3 = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -716,7 +653,7 @@ get_eff_groups_test(Config) ->
             expected_result = ?ERROR_REASON(?EL_NOT_FOUND)
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec3)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 
 get_spaces_test(Config) ->
@@ -733,7 +670,7 @@ get_spaces_test(Config) ->
 
     % There are no spaces yet
     ApiTestSpec = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}, {provider, P1, KeyFile, CertFile}],
             unauthorized = [nobody],
@@ -751,7 +688,7 @@ get_spaces_test(Config) ->
             expected_result = ?OK_LIST([])
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % Create some spaces
     ExpSpaces = create_and_support_3_spaces(Config, P1),
@@ -761,7 +698,7 @@ get_spaces_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Check if correct spaces are returned
     ApiTestSpec2 = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}, {provider, P1, KeyFile, CertFile}],
             unauthorized = [nobody],
@@ -779,13 +716,13 @@ get_spaces_test(Config) ->
             expected_result = ?OK_LIST(ExpSpaceIds)
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec2)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
     % Check every space one by one.
     lists:foreach(
         fun(SpaceId, SpaceName) ->
             ApiTestSpec2 = #api_test_spec{
-                method = get,
+                operation = get,
                 client_spec = #client_spec{
                     correct = [root, {user, Admin}],
                     unauthorized = [nobody],
@@ -811,14 +748,14 @@ get_spaces_test(Config) ->
                     end)
                 }
             },
-            ?assert(api_test_utils:run_tests(ApiTestSpec2))
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
         end, ExpSpaces),
 
     % Make sure that other spaces cannot be reached this way.
     {ok, OtherSpace} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpec4 = #api_test_spec{
-        method = get,
+        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -838,7 +775,7 @@ get_spaces_test(Config) ->
             expected_result = ?ERROR_REASON(?EL_NOT_FOUND)
         }
     },
-    ?assert(api_test_utils:run_tests(ApiTestSpec4)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
 
 
 %%%===================================================================

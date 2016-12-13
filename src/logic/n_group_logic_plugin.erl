@@ -49,14 +49,14 @@ create(_Client, GroupId, users, #{<<"userId">> := UserId}) ->
         od_group, GroupId,
         privileges:group_user()
     ),
-    {ok, GroupId};
+    {ok, UserId};
 create(_Client, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
     entity_graph:add_relation(
         od_group, ChildGroupId,
         od_group, GroupId,
         privileges:group_user()
     ),
-    {ok, GroupId}.
+    {ok, ChildGroupId}.
 
 
 get_entity(GroupId) ->

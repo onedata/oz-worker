@@ -34,9 +34,7 @@ create(_, _, entity, Data) ->
 
     ProviderId = datastore_utils:gen_uuid(),
     {ok, {ProviderCertPem, Serial}} = try
-        {ok, {_, _}} = worker_proxy:call(
-            ozpca_worker, {sign_provider_req, ProviderId, CSR}
-        )
+        worker_proxy:call(ozpca_worker, {sign_provider_req, ProviderId, CSR})
     catch
         _:_ ->
             throw({error, ?EL_BAD_DATA(<<"csr">>)})

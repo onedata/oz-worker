@@ -41,14 +41,14 @@ create(_Client, SpaceId, users, #{<<"userId">> := UserId}) ->
         od_space, SpaceId,
         privileges:space_user()
     ),
-    {ok, SpaceId};
+    {ok, UserId};
 create(_Client, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
     entity_graph:add_relation(
         od_group, GroupId,
         od_space, SpaceId,
         privileges:space_user()
     ),
-    {ok, SpaceId};
+    {ok, GroupId};
 create(Client, SpaceId, invite_provider_token, _) ->
     {ok, Token} = token_logic:create(
         Client,
