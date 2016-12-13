@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([all/0]).
 -export([init_per_testcase/2, end_per_testcase/2]).
 -export([
     space_update_through_support_test/1,
@@ -921,9 +921,6 @@ fetches_changes_when_cache_has_gaps(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-init_per_suite(Config) ->
-    ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
-
 init_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_new(Nodes, group_graph),
@@ -936,10 +933,6 @@ end_per_testcase(_, Config) ->
     test_utils:mock_unload(Nodes),
     subscriptions_test_utils:flush(),
     ok.
-
-end_per_suite(Config) ->
-    test_node_starter:clean_environment(Config).
-
 
 %%%===================================================================
 %%% Internal functions

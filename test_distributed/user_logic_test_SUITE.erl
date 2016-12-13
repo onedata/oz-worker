@@ -259,15 +259,11 @@ change_password_test(Config) ->
 init_per_suite(Config) ->
     application:start(etls),
     hackney:start(),
-    NewConfig = ?TEST_INIT(
-        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
-    ),
-    NewConfig.
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
-end_per_suite(Config) ->
+end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls),
-    test_node_starter:clean_environment(Config).
+    application:stop(etls).
 
 end_per_testcase(Config, set_space_name_mapping_test) ->
     Nodes = ?config(oz_worker_nodes, Config),
