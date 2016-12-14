@@ -71,6 +71,7 @@ start() ->
             {":alias." ++ Hostname, [{'_', client_redirect_handler, [RestPort]}]},
             {'_', routes()}
         ]),
+        ?emergency("routes: ~p~n", [routes()]),
 
         {ok, _} = ranch:start_listener(?REST_LISTENER, RestHttpsAcceptors,
             ranch_etls, [

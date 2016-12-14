@@ -139,7 +139,7 @@ remove_user(Config, UserId) ->
     Operation :: set | grant | revoke, Privileges :: [privileges:oz_privilege()]) ->
     ok | {error, Reason :: term()}.
 set_user_oz_privileges(Config, UserId, Operation, Privileges) ->
-    call_oz(Config, n_user_logic, set_oz_privileges, [
+    call_oz(Config, n_user_logic, modify_oz_privileges, [
         ?ROOT, UserId, Operation, Privileges
     ]).
 
@@ -204,7 +204,7 @@ remove_group(Config, GroupId) ->
     Privileges :: [privileges:oz_privilege()]) ->
     ok | {error, Reason :: term()}.
 set_group_oz_privileges(Config, GroupId, Privileges) ->
-    call_oz(Config, group_logic, set_oz_privileges, [GroupId, Privileges]).
+    call_oz(Config, group_logic, modify_oz_privileges, [GroupId, Privileges]).
 
 
 %%--------------------------------------------------------------------

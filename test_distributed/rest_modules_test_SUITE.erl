@@ -1982,11 +1982,11 @@ is_included([H | T], MainList) ->
     end.
 
 get_rest_port(Node) ->
-    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
+    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_NAME, rest_port]),
     RestPort.
 
 get_rest_api_prefix(Node) ->
-    {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_Name, rest_api_prefix]),
+    {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_NAME, rest_api_prefix]),
     RestAPIPrefix.
 
 generate_cert_files() ->

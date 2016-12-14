@@ -21,7 +21,7 @@
 -define(EL_FORBIDDEN, forbidden).
 
 -define(EL_MISSING_REQUIRED_DATA(__Key), {missing_req_data, __Key}).
--define(EL_MISSING_ANY_DATA, missing_any_data).
+-define(EL_MISSING_AT_LEAST_ONE_DATA, missing_at_least_one_data).
 
 -define(EL_BAD_DATA, bad_data).
 -define(EL_BAD_DATA(__Key), {bad_data, __Key}).

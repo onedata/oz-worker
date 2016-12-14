@@ -55,21 +55,21 @@ create_test(Config) ->
     {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
     ApiTestSpec = #api_test_spec{
-        operation = create,
         client_spec = #client_spec{
             correct = [root, nobody]
         },
         rest_spec = #rest_spec{
+            method = post,
             path = <<"/providers">>,
             expected_code = 201,
-            expected_headers = #{
+            expected_headers = {contains, #{
                 <<"location">> => {match, <<RestPrefix/binary, "/provider/.*">>}
-            }
+            }}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = undefined,
-            resource = entity,
+            function = create,
+            args = [client, data],
             expected_result = ?OK_BINARY
         },
         data_spec = #data_spec{
@@ -121,23 +121,23 @@ support_space_test(Config) ->
     {ok, BadTokenType} = token_logic:serialize(BadMacaroon1),
 
     ApiTestSpec = #api_test_spec{
-        operation = create,
         client_spec = #client_spec{
             correct = [root, {provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
             forbidden = [{user, U1}, {provider, P2, KeyFile2, CertFile2}]
         },
         rest_spec = #rest_spec{
+            method = post,
             path = <<"/provider/spaces/support">>,
             expected_code = 201,
-            expected_headers = #{
+            expected_headers = {contains, #{
                 <<"location">> => {match, <<RestPrefix/binary, "/provider/spaces/.*">>}
-            }
+            }}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = support,
+            function = support_space,
+            args = [client, P1, data],
             expected_result = ?OK_BINARY(S1)
         },
         data_spec = #data_spec{
@@ -163,7 +163,6 @@ support_space_test(Config) ->
     {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(Config, ?USER(U1), S1),
     {ok, BadMacaroon2} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     ApiTestSpec2 = #api_test_spec{
-        operation = create,
         client_spec = #client_spec{
             correct = [root, {provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
@@ -171,8 +170,8 @@ support_space_test(Config) ->
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = support,
+            function = support_space,
+            args = [client, P1, data],
             expected_result = ?OK_BINARY(S1)
         },
         data_spec = #data_spec{
@@ -214,21 +213,21 @@ list_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
             forbidden = [{user, NonAdmin}, {provider, P1, KeyFile, CertFile}]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = <<"/providers">>,
             expected_code = 200,
             expected_body = #{<<"providers">> => [P1, P2, P3, P4, P5]}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = undefined,
-            resource = list,
+            function = list,
+            args = [client],
             expected_result = ?OK_BINARY
         }
     },
@@ -262,7 +261,6 @@ get_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [
                 root,
@@ -274,6 +272,7 @@ get_test(Config) ->
             forbidden = [{user, NonAdmin}]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1],
             expected_code = 200,
             expected_body = #{
@@ -287,8 +286,8 @@ get_test(Config) ->
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = entity,
+            function = get,
+            args = [client, P1],
             expected_result = ?OK_ENTITY(fun(Entity) ->
                 #od_provider{name = Name, urls = Urls,
                     redirection_point = RedPoint, latitude = Latitude,
@@ -306,13 +305,13 @@ get_test(Config) ->
     % Provider should be also able to retrieve this info using another path,
     % without id (id is deduced from authorization)
     ApiTestSpec2 = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
             forbidden = [{user, NonAdmin}]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/provider/">>, P1],
             expected_code = 200,
             expected_body = #{
@@ -343,21 +342,21 @@ get_eff_users_test(Config) ->
 
     % There are no users yet
     ApiTestSpec = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
             forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/users">>],
             expected_code = 200,
             expected_body = #{<<"users">> => []}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = users,
+            function = get_eff_users,
+            args = [client, P1],
             expected_result = ?OK_LIST([])
         }
     },
@@ -380,7 +379,6 @@ get_eff_users_test(Config) ->
     {ExpUserIds, _} = lists:unzip(ExpUsers),
 
     ApiTestSpec2 = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -391,14 +389,15 @@ get_eff_users_test(Config) ->
             ]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/users">>],
             expected_code = 200,
             expected_body = #{<<"users">> => ExpUserIds}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = users,
+            function = get_eff_users,
+            args = [client, P1],
             expected_result = ?OK_LIST(ExpUserIds)
         }
     },
@@ -433,7 +432,6 @@ get_eff_users_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Ensure user list is correct.
     ApiTestSpec3 = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -444,14 +442,15 @@ get_eff_users_test(Config) ->
             ]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/users">>],
             expected_code = 200,
             expected_body = #{<<"users">> => ExpUserIds ++ ExpGroupUserIds}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = users,
+            function = get_eff_users,
+            args = [client, P1],
             expected_result = ?OK_LIST(ExpUserIds ++ ExpGroupUserIds)
         }
     },
@@ -461,7 +460,6 @@ get_eff_users_test(Config) ->
     lists:foreach(
         fun(UserId, UserName) ->
             ApiTestSpec4 = #api_test_spec{
-                operation = get,
                 client_spec = #client_spec{
                     correct = [root, {user, Admin}],
                     unauthorized = [nobody],
@@ -472,6 +470,7 @@ get_eff_users_test(Config) ->
                     ]
                 },
                 rest_spec = #rest_spec{
+                    method = get,
                     path = [<<"/providers/">>, P1, <<"/users/">>, UserId],
                     expected_code = 200,
                     expected_body = {contains, #{
@@ -481,8 +480,8 @@ get_eff_users_test(Config) ->
                 },
                 logic_spec = #logic_spec{
                     module = n_provider_logic,
-                    entity_id = P1,
-                    resource = {user, UserId},
+                    function = get_eff_user,
+                    args = [client, P1, UserId],
                     expected_result = ?OK_ENTITY(fun(#od_user{name = Name}) ->
                         Name =:= UserName
                     end)
@@ -495,7 +494,6 @@ get_eff_users_test(Config) ->
     {ok, OtherUser} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpec5 = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -506,13 +504,14 @@ get_eff_users_test(Config) ->
             ]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/users/">>, OtherUser],
             expected_code = 404
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = {user, OtherUser},
+            function = get_eff_user,
+            args = [client, P1, OtherUser],
             expected_result = ?ERROR_REASON(?EL_NOT_FOUND)
         }
     },
@@ -533,21 +532,21 @@ get_eff_groups_test(Config) ->
 
     % There are no groups yet
     ApiTestSpec = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
             forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/groups">>],
             expected_code = 200,
             expected_body = #{<<"groups">> => []}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = groups,
+            function = get_eff_groups,
+            args = [client, P1],
             expected_result = ?OK_LIST([])
         }
     },
@@ -573,7 +572,6 @@ get_eff_groups_test(Config) ->
     % Check if correct groups are returned
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpec = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -583,14 +581,15 @@ get_eff_groups_test(Config) ->
             ]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/groups">>],
             expected_code = 200,
             expected_body = #{<<"groups">> => ExpGroupIds}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = groups,
+            function = get_eff_groups,
+            args = [client, P1],
             expected_result = ?OK_LIST(ExpGroupIds)
         }
     },
@@ -600,7 +599,6 @@ get_eff_groups_test(Config) ->
     lists:foreach(
         fun(GroupId, GroupName) ->
             ApiTestSpec2 = #api_test_spec{
-                operation = get,
                 client_spec = #client_spec{
                     correct = [root, {user, Admin}],
                     unauthorized = [nobody],
@@ -610,6 +608,7 @@ get_eff_groups_test(Config) ->
                     ]
                 },
                 rest_spec = #rest_spec{
+                    method = get,
                     path = [<<"/providers/">>, P1, <<"/groups/">>, GroupId],
                     expected_code = 200,
                     expected_body = {contains, #{
@@ -619,8 +618,8 @@ get_eff_groups_test(Config) ->
                 },
                 logic_spec = #logic_spec{
                     module = n_provider_logic,
-                    entity_id = P1,
-                    resource = {group, GroupId},
+                    function = get_eff_group,
+                    args = [client, P1, GroupId],
                     expected_result = ?OK_ENTITY(fun(#od_group{name = Name}) ->
                         Name =:= GroupName
                     end)
@@ -633,7 +632,6 @@ get_eff_groups_test(Config) ->
     {ok, OtherGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"other">>),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpec3 = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -643,13 +641,14 @@ get_eff_groups_test(Config) ->
             ]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/groups/">>, OtherGroup],
             expected_code = 404
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = {group, OtherGroup},
+            function = get_eff_group,
+            args = [client, P1, OtherGroup],
             expected_result = ?ERROR_REASON(?EL_NOT_FOUND)
         }
     },
@@ -670,21 +669,21 @@ get_spaces_test(Config) ->
 
     % There are no spaces yet
     ApiTestSpec = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}, {provider, P1, KeyFile, CertFile}],
             unauthorized = [nobody],
             forbidden = [{user, NonAdmin}]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/spaces">>],
             expected_code = 200,
             expected_body = #{<<"spaces">> => []}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = spaces,
+            function = get_eff_spaces,
+            args = [client, P1],
             expected_result = ?OK_LIST([])
         }
     },
@@ -698,21 +697,21 @@ get_spaces_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Check if correct spaces are returned
     ApiTestSpec2 = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}, {provider, P1, KeyFile, CertFile}],
             unauthorized = [nobody],
             forbidden = [{user, NonAdmin}]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/spaces">>],
             expected_code = 200,
             expected_body = #{<<"spaces">> => ExpSpaceIds}
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = spaces,
+            function = get_eff_spaces,
+            args = [client, P1],
             expected_result = ?OK_LIST(ExpSpaceIds)
         }
     },
@@ -722,7 +721,6 @@ get_spaces_test(Config) ->
     lists:foreach(
         fun(SpaceId, SpaceName) ->
             ApiTestSpec2 = #api_test_spec{
-                operation = get,
                 client_spec = #client_spec{
                     correct = [root, {user, Admin}],
                     unauthorized = [nobody],
@@ -732,6 +730,7 @@ get_spaces_test(Config) ->
                     ]
                 },
                 rest_spec = #rest_spec{
+                    method = get,
                     path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
                     expected_code = 200,
                     expected_body = {contains, #{
@@ -741,8 +740,8 @@ get_spaces_test(Config) ->
                 },
                 logic_spec = #logic_spec{
                     module = n_provider_logic,
-                    entity_id = P1,
-                    resource = {space, SpaceId},
+                    function = get_eff_space,
+                    args = [client, P1, SpaceId],
                     expected_result = ?OK_ENTITY(fun(#od_space{name = Name}) ->
                         Name =:= SpaceName
                     end)
@@ -755,7 +754,6 @@ get_spaces_test(Config) ->
     {ok, OtherSpace} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpec4 = #api_test_spec{
-        operation = get,
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -765,13 +763,14 @@ get_spaces_test(Config) ->
             ]
         },
         rest_spec = #rest_spec{
+            method = get,
             path = [<<"/providers/">>, P1, <<"/spaces/">>, OtherSpace],
             expected_code = 404
         },
         logic_spec = #logic_spec{
             module = n_provider_logic,
-            entity_id = P1,
-            resource = {space, OtherSpace},
+            function = get_eff_space,
+            args = [client, P1, OtherSpace],
             expected_result = ?ERROR_REASON(?EL_NOT_FOUND)
         }
     },
@@ -783,6 +782,8 @@ get_spaces_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
+    application:start(etls),
+    hackney:start(),
     NewConfig = ?TEST_INIT(
         Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
     ),
@@ -790,6 +791,8 @@ init_per_suite(Config) ->
 
 
 end_per_suite(Config) ->
+    hackney:stop(),
+    application:stop(etls),
     ok.
 %%    test_node_starter:clean_environment(Config).
 

@@ -137,30 +137,31 @@ resource_exists(Req, State) ->
 -spec is_authorized(Req :: cowboy_req:req(), State :: rest_req()) ->
     {true | {false, binary()}, cowboy_req:req(), rest_req()}.
 is_authorized(Req, State) ->
+    % Check if the request carries any authorization
     try
-        % This method requires authorization. First, check for basic
-        % auth headers.
-        case authenticate_by_basic_auth(Req) of
+        % First, check for basic auth headers.
+        Client = case authenticate_by_basic_auth(Req) of
             {true, BasicClient} ->
-                {true, Req, State#rest_req{client = BasicClient}};
+                BasicClient;
             false ->
                 % Basic auth not found, try macaroons
                 case authenticate_by_macaroons(Req) of
                     {true, MacaroonClient} ->
-                        {true, Req, State#rest_req{client = MacaroonClient}};
+                        MacaroonClient;
                     false ->
                         % Macaroon auth not found,
                         % try to authorize as provider
                         case authenticate_by_provider_certs(Req) of
                             {true, ProviderClient} ->
-                                {true, Req, State#rest_req{
-                                    client = ProviderClient}};
+                                ProviderClient;
                             false ->
-                                %% Not authorized
-                                {{false, <<"">>}, Req, State}
+                                % No auth found, client is nobody.
+                                ?NOBODY
                         end
                 end
-        end
+        end,
+        % Always return true - this is checked by entity_logic later.
+        {true, Req, State#rest_req{client = Client}}
     catch
         {silent_error, ReqX} -> %% As per RFC 6750 section 3.1
             {{false, <<"">>}, ReqX, State};

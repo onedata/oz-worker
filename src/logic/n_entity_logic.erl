@@ -751,7 +751,7 @@ check_validity(#request{data = Data} = Request) ->
         {0, false} ->
             ok;
         {_, false} ->
-            throw({error, ?EL_MISSING_ANY_DATA})
+            throw({error, ?EL_MISSING_AT_LEAST_ONE_DATA})
     end,
     Request#request{data = Data4}.
 

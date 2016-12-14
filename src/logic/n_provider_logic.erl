@@ -29,6 +29,7 @@
 ]).
 -export([
     get/2,
+    list/1,
     get_spaces/2, get_space/3,
     get_eff_users/2, get_eff_user/3,
     get_eff_groups/2, get_eff_group/3
@@ -84,6 +85,8 @@ support_space(Issuer, ProviderId, Data) ->
 
 get(Issuer, ProviderId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, entity).
+list(Issuer) ->
+    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
 get_spaces(Issuer, ProviderId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, spaces).
 get_space(Issuer, ProviderId, SpaceId) ->

@@ -157,7 +157,7 @@ verify(Node, Cert) ->
     rpc:call(Node, identity, verify, [Cert]).
 
 get_cert(Node) ->
-    {ok, IdentityCertFile} = rpc:call(Node, application, get_env, [?APP_Name, identity_cert_file]),
+    {ok, IdentityCertFile} = rpc:call(Node, application, get_env, [?APP_NAME, identity_cert_file]),
     rpc:call(Node, identity_utils, read_cert, [IdentityCertFile]).
 
 get_id(Node) ->
@@ -232,9 +232,9 @@ get_node_ip(Node) ->
     re:replace(os:cmd(CMD), "\\s+", "", [global, {return, list}]).
 
 get_rest_port(Node) ->
-    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
+    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_NAME, rest_port]),
     RestPort.
 
 get_rest_api_prefix(Node) ->
-    {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_Name, rest_api_prefix]),
+    {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_NAME, rest_api_prefix]),
     RestAPIPrefix.

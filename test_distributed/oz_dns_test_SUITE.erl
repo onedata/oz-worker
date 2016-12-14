@@ -85,7 +85,7 @@ get_dns_port(Node) ->
     DNSPort.
 
 get_dns_ip(Node) ->
-    {ok, ExternalIP} = rpc:call(Node, application, get_env, [?APP_Name, external_ip]),
+    {ok, ExternalIP} = rpc:call(Node, application, get_env, [?APP_NAME, external_ip]),
     str_utils:to_list(ExternalIP).
 
 get_domain(Node) ->

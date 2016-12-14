@@ -9,19 +9,14 @@
 %%%-------------------------------------------------------------------
 -author("Lukasz Opiola").
 
+-ifndef(API_TEST_UTILS_HRL).
+-define(API_TEST_UTILS_HRL, 1).
+
 -type client() :: nobody | root | {user, UserId :: binary()} |
 {provider, ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}.
 
 -type data_error() :: bad | empty | bad_token | bad_token_type |
 id_not_found | id_occupied | relation_exists | relation_does_not_exist.
-
--record(api_test_spec, {
-    operation = get :: create | get | update | delete,
-    client_spec = undefined :: undefined | #client_spec{},
-    rest_spec = undefined :: undefined | #rest_spec{},
-    logic_spec = undefined :: undefined | #logic_spec{},
-    data_spec = undefined :: undefined | #data_spec{}
-}).
 
 -record(client_spec, {
     correct = [] :: [client()],
@@ -48,9 +43,18 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 
 -record(logic_spec, {
     module = undefined :: module(),
-    entity_id = undefined :: undefined | binary(),
-    resource = undefined :: undefined | atom() | {atom(), binary()},
-    expected_result = undefined :: undefined | fun((Result) -> boolean())
+    function = undefined :: atom(),
+    % In args, special atoms 'client' and 'data' can be used. In this case,
+    % client and data will be automatically injected in these placeholders.
+    args = [] :: [term()],
+    expected_result = undefined :: undefined | fun((Result :: term()) -> boolean())
+}).
+
+-record(api_test_spec, {
+    client_spec = undefined :: undefined | #client_spec{},
+    rest_spec = undefined :: undefined | #rest_spec{},
+    logic_spec = undefined :: undefined | #logic_spec{},
+    data_spec = undefined :: undefined | #data_spec{}
 }).
 
 % Convenience macros for expected_result functions of logic_spec
@@ -61,24 +65,26 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     end
 end).
 
--define(OK_BINARY(__ExactValue), fun(Result) ->
-    case Result of
+-define(OK_BINARY(__ExactValue), fun(__Result) ->
+    case __Result of
         {ok, __ExactValue} -> true;
         _ -> false
     end
 end).
 
--define(OK_ENTITY(__VerifyFun), fun(Result) ->
-    case Result of
+-define(OK_ENTITY(__VerifyFun), fun(__Result) ->
+    case __Result of
         {ok, Entity} -> __VerifyFun(Entity);
         _ -> false
     end
 end).
 
--define(OK_LIST(__ExpectedList), fun(Result) ->
-    lists:sort(__ExpectedList) =:= lists:sort(Result)
+-define(OK_LIST(__ExpectedList), fun(__Result) ->
+    lists:sort(__ExpectedList) =:= lists:sort(__Result)
 end).
 
--define(ERROR_REASON(__ExpectedError), fun(Result) ->
-    __ExpectedError =:= Result
+-define(ERROR_REASON(__ExpectedError), fun(__Result) ->
+    __ExpectedError =:= __Result
 end).
+
+-endif.

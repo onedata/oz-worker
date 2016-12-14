@@ -19,44 +19,15 @@
 
 
 %% API
--export([get_rest_api_prefix/1, set_config/1, check_rest_call/1]).
+-export([get_rest_api_prefix/1, check_rest_call/2]).
 
 
 get_rest_api_prefix(Config) ->
     {ok, RestApiPrefix} = oz_test_utils:call_oz(
         Config, application, get_env, [oz_worker, rest_api_prefix]
     ),
-    RestApiPrefix.
+    list_to_binary(RestApiPrefix).
 
-
-set_config(Config) ->
-    % Resolve REST URLs of oz-worker nodes
-    Nodes = ?config(oz_worker_nodes, Config),
-    RestURLs = lists:map(fun(Node) ->
-        NodeIP = test_utils:get_docker_ip(Node),
-        {ok, RestPort} = rpc:call(
-            Node, application, get_env, [?APP_Name, rest_port]
-        ),
-        {ok, RestAPIPrefix} = rpc:call(
-            Node, application, get_env, [?APP_Name, rest_api_prefix]
-        ),
-        str_utils:format_bin(
-            "https://~s:~B~s", [NodeIP, RestPort, RestAPIPrefix]
-        )
-    end, Nodes),
-    % Save the config and REST URLs in process dict.
-    put(config, Config),
-    put(rest_urls, RestURLs),
-    ok.
-
-
-get_config(Key) ->
-    case get(Key) of
-        undefined ->
-            error("Use rest_test_utils:set_config/1 first.");
-        Val ->
-            Val
-    end.
 
 %%--------------------------------------------------------------------
 %% Performs a REST call and check the output if it matches the expected.
@@ -69,7 +40,7 @@ get_config(Key) ->
 %%      path => [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>], % Mandatory
 %%      headers => [{<<"key">>, <<"value">>}], % Optional, default: ct=app/json
 %%      body => <<"body content">>, % Optional, default: <<"">>
-%%      auth => <<"uid">> orelse undefined, % Optional, default: undefined
+%%      auth => nobody | root | {user, <<"uid">>} | {provider, <<"id">>, "KeyFile", "CertFile"} orelse undefined, % Optional, default: undefined
 %%      opts => [http_client_option] % Optional, default: []
 %%    },
 %%    expect => #{
@@ -83,7 +54,7 @@ get_config(Key) ->
 %%    }
 %% }
 %%--------------------------------------------------------------------
-check_rest_call(ArgsMap) ->
+check_rest_call(Config, ArgsMap) ->
     try
         RequestMap = maps:get(request, ArgsMap),
         ExpectMap = maps:get(expect, ArgsMap),
@@ -104,24 +75,27 @@ check_rest_call(ArgsMap) ->
             Map2 when is_map(Map2) ->
                 json_utils:encode_map(Map2)
         end,
-        ReqAuth = maps:get(auth, RequestMap, undefined),
         ReqOpts = maps:get(opts, RequestMap, []),
-        ReqURL = maps:get(url, RequestMap, get_random_oz_url()),
+        ReqURL = maps:get(url, RequestMap, get_random_oz_url(Config)),
 
         ExpCode = maps:get(code, ExpectMap, undefined),
         ExpHeaders = maps:get(headers, ExpectMap, undefined),
         ExpBody = maps:get(body, ExpectMap, undefined),
 
         URL = str_utils:join_binary([ReqURL | ReqPath], <<"">>),
+        ReqAuth = maps:get(auth, RequestMap, nobody),
         HeadersPlusAuth = case ReqAuth of
-            undefined ->
+            nobody ->
                 ReqHeaders;
-            UserId ->
+            {provider, _, _, _} ->
+                % Provider authorizes by certs
+                ReqHeaders;
+            {user, UserId} ->
                 % Cache user auth tokens, if none in cache create a new one.
                 Macaroon = case get({macaroon, UserId}) of
                     undefined ->
                         Mac = oz_test_utils:get_client_token(
-                            get_config(config), UserId
+                            Config, UserId
                         ),
                         put({macaroon, UserId}, Mac),
                         Mac;
@@ -136,9 +110,21 @@ check_rest_call(ArgsMap) ->
                 end,
                 [{HeaderName, Macaroon} | ReqHeaders]
         end,
+        ReqOptsPlusAuth = case ReqAuth of
+            nobody ->
+                ReqOpts;
+            {user, _UserId} ->
+                % User authorizes by macaroon
+                ReqOpts;
+            {provider, _ProviderId, KeyFile, CertFile} ->
+                [{ssl_options, [
+                    {keyfile, KeyFile}, {certfile, CertFile}
+                ]} | ReqOpts]
+        end,
         % Add insecure option - we do not want the OZ server cert to be checked.
+        ct:print("~p", [{ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOptsPlusAuth]}]),
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
-            ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOpts]
+            ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOptsPlusAuth]
         ),
 
         % Check response code if specified
@@ -159,20 +145,18 @@ check_rest_call(ArgsMap) ->
             undefined ->
                 ok;
             {contains, ActualExpHeaders} ->
-                NormExpHeaders = normalize_headers(ActualExpHeaders),
-                NormRespHeaders = normalize_headers(RespHeaders),
-                case NormExpHeaders -- NormRespHeaders of
-                    [] -> ok;
-                    _ -> throw({headers, NormRespHeaders, NormExpHeaders})
+                case contains_headers(ActualExpHeaders, RespHeaders) of
+                    true ->
+                        ok;
+                    false ->
+                        throw({headers_contain, RespHeaders, ActualExpHeaders})
                 end;
             _ ->
-                NormExpHeaders = normalize_headers(ExpHeaders),
-                NormRespHeaders = normalize_headers(RespHeaders),
-                case NormRespHeaders of
-                    NormExpHeaders ->
+                case compare_headers(ExpHeaders, RespHeaders) of
+                    true ->
                         ok;
-                    _ ->
-                        throw({headers, NormRespHeaders, NormExpHeaders})
+                    false ->
+                        throw({headers, RespHeaders, ExpHeaders})
                 end
         end,
 
@@ -218,27 +202,83 @@ check_rest_call(ArgsMap) ->
     catch
         % Something wrong, return details. If assert is used, the test will fail
         % and properly display the point of failure.
-        {Type, Actual, Expected} ->
+        throw:{Type, Actual, Expected} ->
             {
                 Type,
                 {got, Actual},
                 {expected, Expected}
-            }
+            };
+        % Unexpected error
+        Type:Message ->
+            ct:print(
+                "~p:check_rest_call failed with unexpected result - ~p:~p~n"
+                "Stacktrace: ~p", [
+                    ?MODULE, Type, Message, erlang:get_stacktrace()
+                ]),
+            false
     end.
 
 
-get_random_oz_url() ->
-    RestURLs = get_config(rest_urls),
+get_random_oz_url(Config) ->
+    % Resolve REST URLs of oz-worker nodes
+    Nodes = ?config(oz_worker_nodes, Config),
+    RestURLs = lists:map(fun(Node) ->
+        NodeIP = test_utils:get_docker_ip(Node),
+        {ok, RestPort} = rpc:call(
+            Node, application, get_env, [?APP_NAME, rest_port]
+        ),
+        {ok, RestAPIPrefix} = rpc:call(
+            Node, application, get_env, [?APP_NAME, rest_api_prefix]
+        ),
+        str_utils:format_bin(
+            "https://~s:~B~s", [NodeIP, RestPort, RestAPIPrefix]
+        )
+    end, Nodes),
     lists:nth(rand:uniform(length(RestURLs)), RestURLs).
 
 
+compare_headers(ExpectedMapInput, ActualMapInput) ->
+    ExpectedMap = normalize_headers(ExpectedMapInput),
+    ActualMap = normalize_headers(ActualMapInput),
+    case maps:keys(ExpectedMap) =:= maps:keys(ActualMap) of
+        false ->
+            false;
+        true ->
+            lists:all(
+                fun({Key, ExpValue}) ->
+                    ActualValue = maps:get(Key, ActualMap),
+                    case {ExpValue, ActualValue} of
+                        {{match, Bin}, _} ->
+                            match =:= re:run(ActualValue, Bin, [{capture, none}]);
+                        {B1, B2} when is_binary(B1) andalso is_binary(B2) ->
+                            ExpValue =:= ActualValue
+                    end
+                end, maps:to_list(ExpectedMap))
+    end.
+
+
+contains_headers(ExpectedMapInput, ActualMapInput) ->
+    ExpectedMap = normalize_headers(ExpectedMapInput),
+    ActualMap = normalize_headers(ActualMapInput),
+    case maps:keys(ExpectedMap) -- maps:keys(ActualMap) =:= [] of
+        false ->
+            false;
+        true ->
+            FilteredActualMap = maps:filter(
+                fun(Key, _Value) ->
+                    lists:member(Key, maps:keys(ExpectedMap))
+                end, ActualMap),
+            compare_headers(ExpectedMap, FilteredActualMap)
+    end.
+
+
 % Convert all header keys to lowercase so comparing is easier
-normalize_headers(Headers) ->
-    lists:sort(
+normalize_headers(HeadersMap) ->
+    maps:from_list(
         lists:map(fun({Key, Value}) ->
             KeyLower = list_to_binary(string:to_lower(binary_to_list(Key))),
             {KeyLower, Value}
-        end, Headers)
+        end, maps:to_list(HeadersMap))
     ).
 
 

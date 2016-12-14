@@ -88,7 +88,10 @@ get_internal(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
 
 get_external(_, check_my_ip) ->
     % Peer is resolved and returned during response transformation.
-    {ok, peer}.
+    {ok, peer};
+get_external(_, list) ->
+    {ok, ProviderDocs} = od_provider:list(),
+    {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]}.
 
 
 update(ProviderId, entity, Data) when is_binary(ProviderId) ->
@@ -117,6 +120,8 @@ exists(undefined, entity) ->
 exists(_, check_my_ports) ->
     true;
 exists(_, check_my_ip) ->
+    true;
+exists(_, list) ->
     true;
 exists(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
     % No matter the resource, return true if it belongs to a provider
@@ -154,6 +159,8 @@ authorize(get, undefined, check_my_ip, _, _) ->
 authorize(get, _ProvId, entity, ?PROVIDER, _) ->
     true;
 authorize(get, _ProvId, entity, ?USER(UserId), _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_providers);
+authorize(get, undefined, list, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_providers);
 authorize(get, ProvId, spaces, ?PROVIDER(ProvId), _) ->
     true;
