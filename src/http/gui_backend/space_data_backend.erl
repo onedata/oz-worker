@@ -218,11 +218,12 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
     % Try to get space name from personal user's mapping, if not use its
     % default name.
     Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),
-    {Providers, _} = lists:unzip(ProvidersSupports),
+    {Providers, SupportSizes} = lists:unzip(ProvidersSupports),
     ProvidersToDisplay = lists:filter(
         fun(Provider) ->
             lists:member(Provider, UserProviders)
         end, Providers),
+    Size = lists:sum(SupportSizes),
     case HasViewPrivileges of
         false ->
             [
@@ -230,6 +231,7 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
                 {<<"name">>, Name},
                 {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
                 {<<"hasViewPrivilege">>, false},
+                {<<"size">>, Size},
                 % TODO For now, return all providers so that user can see
                 % spaces of provider in go to your files tab.
                 % Must be solved better!
@@ -242,6 +244,7 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
                 {<<"name">>, Name},
                 {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
                 {<<"hasViewPrivilege">>, true},
+                {<<"size">>, Size},
                 {<<"providers">>, ProvidersToDisplay}
             ]
     end.

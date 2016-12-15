@@ -162,6 +162,7 @@ provider_record(ProviderId, DefaultProvider, UserSpaces) ->
     Latitude = proplists:get_value(latitude, ProviderData, 0.0),
     Longitude = proplists:get_value(longitude, ProviderData, 0.0),
     RedPoint = proplists:get_value(redirectionPoint, ProviderData),
+    #{host := Host} = url_utils:parse(RedPoint),
     IsWorking = provider_logic:check_provider_connectivity(ProviderId),
     {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
     SpacesToDisplay = lists:filter(
@@ -173,7 +174,7 @@ provider_record(ProviderId, DefaultProvider, UserSpaces) ->
         {<<"name">>, Name},
         {<<"isDefault">>, ProviderId =:= DefaultProvider},
         {<<"isWorking">>, IsWorking},
-        {<<"host">>, RedPoint},
+        {<<"host">>, Host},
         {<<"spaces">>, SpacesToDisplay},
         {<<"latitude">>, Latitude},
         {<<"longitude">>, Longitude}
