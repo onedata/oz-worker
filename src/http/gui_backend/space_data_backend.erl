@@ -223,7 +223,7 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
         fun(Provider) ->
             lists:member(Provider, UserProviders)
         end, Providers),
-    Size = lists:sum(SupportSizes),
+    TotalSize = lists:sum(SupportSizes),
     case HasViewPrivileges of
         false ->
             [
@@ -231,7 +231,8 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
                 {<<"name">>, Name},
                 {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
                 {<<"hasViewPrivilege">>, false},
-                {<<"size">>, Size},
+                {<<"totalSize">>, TotalSize},
+                {<<"supportSizes">>, ProvidersSupports},
                 % TODO For now, return all providers so that user can see
                 % spaces of provider in go to your files tab.
                 % Must be solved better!
@@ -244,7 +245,8 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
                 {<<"name">>, Name},
                 {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
                 {<<"hasViewPrivilege">>, true},
-                {<<"size">>, Size},
+                {<<"totalSize">>, TotalSize},
+                {<<"supportSizes">>, ProvidersSupports},
                 {<<"providers">>, ProvidersToDisplay}
             ]
     end.
