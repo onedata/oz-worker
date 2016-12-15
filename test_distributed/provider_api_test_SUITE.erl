@@ -51,7 +51,6 @@ all() ->
 %%%===================================================================
 
 create_test(Config) ->
-    RestPrefix = rest_test_utils:get_rest_api_prefix(Config),
     {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
     ApiTestSpec = #api_test_spec{
@@ -61,16 +60,20 @@ create_test(Config) ->
         rest_spec = #rest_spec{
             method = post,
             path = <<"/providers">>,
-            expected_code = 201,
-            expected_headers = {contains, #{
-                <<"location">> => {match, <<RestPrefix/binary, "/provider/.*">>}
-            }}
+            expected_code = 200,
+            expected_body = #{
+                <<"providerId">> => {check_type, binary},
+                <<"certificate">> => {check_type, binary}
+            }
         },
         logic_spec = #logic_spec{
+            operation = create,
             module = n_provider_logic,
             function = create,
             args = [client, data],
-            expected_result = ?OK_BINARY
+            expected_result = ?OK_TERM(fun({B1, B2}) ->
+                is_binary(B1) andalso is_binary(B2)
+            end)
         },
         data_spec = #data_spec{
             required = [<<"name">>, <<"urls">>, <<"redirectionPoint">>, <<"csr">>],
@@ -135,6 +138,7 @@ support_space_test(Config) ->
             }}
         },
         logic_spec = #logic_spec{
+            operation = create,
             module = n_provider_logic,
             function = support_space,
             args = [client, P1, data],
@@ -169,6 +173,7 @@ support_space_test(Config) ->
             forbidden = [{user, U1}, {provider, P2, KeyFile2, CertFile2}]
         },
         logic_spec = #logic_spec{
+            operation = create,
             module = n_provider_logic,
             function = support_space,
             args = [client, P1, data],
@@ -225,6 +230,7 @@ list_test(Config) ->
             expected_body = #{<<"providers">> => [P1, P2, P3, P4, P5]}
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = list,
             args = [client],
@@ -285,10 +291,11 @@ get_test(Config) ->
             }
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get,
             args = [client, P1],
-            expected_result = ?OK_ENTITY(fun(Entity) ->
+            expected_result = ?OK_TERM(fun(Entity) ->
                 #od_provider{name = Name, urls = Urls,
                     redirection_point = RedPoint, latitude = Latitude,
                     longitude = Longitude, spaces = Spaces} = Entity,
@@ -354,6 +361,7 @@ get_eff_users_test(Config) ->
             expected_body = #{<<"users">> => []}
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_users,
             args = [client, P1],
@@ -395,6 +403,7 @@ get_eff_users_test(Config) ->
             expected_body = #{<<"users">> => ExpUserIds}
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_users,
             args = [client, P1],
@@ -448,6 +457,7 @@ get_eff_users_test(Config) ->
             expected_body = #{<<"users">> => ExpUserIds ++ ExpGroupUserIds}
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_users,
             args = [client, P1],
@@ -479,10 +489,11 @@ get_eff_users_test(Config) ->
                     }}
                 },
                 logic_spec = #logic_spec{
+                    operation = get,
                     module = n_provider_logic,
                     function = get_eff_user,
                     args = [client, P1, UserId],
-                    expected_result = ?OK_ENTITY(fun(#od_user{name = Name}) ->
+                    expected_result = ?OK_TERM(fun(#od_user{name = Name}) ->
                         Name =:= UserName
                     end)
                 }
@@ -509,6 +520,7 @@ get_eff_users_test(Config) ->
             expected_code = 404
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_user,
             args = [client, P1, OtherUser],
@@ -544,6 +556,7 @@ get_eff_groups_test(Config) ->
             expected_body = #{<<"groups">> => []}
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_groups,
             args = [client, P1],
@@ -587,6 +600,7 @@ get_eff_groups_test(Config) ->
             expected_body = #{<<"groups">> => ExpGroupIds}
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_groups,
             args = [client, P1],
@@ -617,10 +631,11 @@ get_eff_groups_test(Config) ->
                     }}
                 },
                 logic_spec = #logic_spec{
+                    operation = get,
                     module = n_provider_logic,
                     function = get_eff_group,
                     args = [client, P1, GroupId],
-                    expected_result = ?OK_ENTITY(fun(#od_group{name = Name}) ->
+                    expected_result = ?OK_TERM(fun(#od_group{name = Name}) ->
                         Name =:= GroupName
                     end)
                 }
@@ -646,6 +661,7 @@ get_eff_groups_test(Config) ->
             expected_code = 404
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_group,
             args = [client, P1, OtherGroup],
@@ -681,6 +697,7 @@ get_spaces_test(Config) ->
             expected_body = #{<<"spaces">> => []}
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_spaces,
             args = [client, P1],
@@ -709,6 +726,7 @@ get_spaces_test(Config) ->
             expected_body = #{<<"spaces">> => ExpSpaceIds}
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_spaces,
             args = [client, P1],
@@ -739,10 +757,11 @@ get_spaces_test(Config) ->
                     }}
                 },
                 logic_spec = #logic_spec{
+                    operation = get,
                     module = n_provider_logic,
                     function = get_eff_space,
                     args = [client, P1, SpaceId],
-                    expected_result = ?OK_ENTITY(fun(#od_space{name = Name}) ->
+                    expected_result = ?OK_TERM(fun(#od_space{name = Name}) ->
                         Name =:= SpaceName
                     end)
                 }
@@ -768,6 +787,7 @@ get_spaces_test(Config) ->
             expected_code = 404
         },
         logic_spec = #logic_spec{
+            operation = get,
             module = n_provider_logic,
             function = get_eff_space,
             args = [client, P1, OtherSpace],

@@ -122,7 +122,6 @@ check_rest_call(Config, ArgsMap) ->
                 ]} | ReqOpts]
         end,
         % Add insecure option - we do not want the OZ server cert to be checked.
-        ct:print("~p", [{ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOptsPlusAuth]}]),
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
             ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOptsPlusAuth]
         ),
@@ -144,15 +143,15 @@ check_rest_call(Config, ArgsMap) ->
         case ExpHeaders of
             undefined ->
                 ok;
-            {contains, ActualExpHeaders} ->
-                case contains_headers(ActualExpHeaders, RespHeaders) of
+            {contains, ExpContainsHeaders} ->
+                case contains_headers(RespHeaders, ExpContainsHeaders) of
                     true ->
                         ok;
                     false ->
-                        throw({headers_contain, RespHeaders, ActualExpHeaders})
+                        throw({headers_contain, RespHeaders, ExpContainsHeaders})
                 end;
             _ ->
-                case compare_headers(ExpHeaders, RespHeaders) of
+                case compare_headers(RespHeaders, ExpHeaders) of
                     true ->
                         ok;
                     false ->
@@ -172,20 +171,20 @@ check_rest_call(Config, ArgsMap) ->
                         throw({body, RespBody, ExpBody})
                 end;
             Map3 when is_map(Map3) ->
-                RespBodyMap = json_utils:decode_map(RespBody),
-                case compare_maps(RespBodyMap, ExpBody) of
+                ActualBodyMap = json_utils:decode_map(RespBody),
+                case compare_maps(ActualBodyMap, ExpBody) of
                     true ->
                         ok;
                     false ->
-                        throw({body, RespBodyMap, ExpBody})
+                        throw({body, ActualBodyMap, ExpBody})
                 end;
-            {contains, Map4} when is_map(Map4) ->
-                RespBodyMap = json_utils:decode_map(RespBody),
-                case contains_map(Map4, RespBodyMap) of
+            {contains, ExpContainsMap} when is_map(ExpContainsMap) ->
+                ActualBodyMap = json_utils:decode_map(RespBody),
+                case contains_map(ActualBodyMap, ExpContainsMap) of
                     true ->
                         ok;
                     false ->
-                        throw({body_contains, RespBodyMap, Map4})
+                        throw({body_contains, ActualBodyMap, ExpContainsMap})
                 end;
             #xmlElement{} = ExpBodyXML ->
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
@@ -237,7 +236,7 @@ get_random_oz_url(Config) ->
     lists:nth(rand:uniform(length(RestURLs)), RestURLs).
 
 
-compare_headers(ExpectedMapInput, ActualMapInput) ->
+compare_headers(ActualMapInput, ExpectedMapInput) ->
     ExpectedMap = normalize_headers(ExpectedMapInput),
     ActualMap = normalize_headers(ActualMapInput),
     case maps:keys(ExpectedMap) =:= maps:keys(ActualMap) of
@@ -251,13 +250,13 @@ compare_headers(ExpectedMapInput, ActualMapInput) ->
                         {{match, Bin}, _} ->
                             match =:= re:run(ActualValue, Bin, [{capture, none}]);
                         {B1, B2} when is_binary(B1) andalso is_binary(B2) ->
-                            ExpValue =:= ActualValue
+                            B1 =:= B2
                     end
                 end, maps:to_list(ExpectedMap))
     end.
 
 
-contains_headers(ExpectedMapInput, ActualMapInput) ->
+contains_headers(ActualMapInput, ExpectedMapInput) ->
     ExpectedMap = normalize_headers(ExpectedMapInput),
     ActualMap = normalize_headers(ActualMapInput),
     case maps:keys(ExpectedMap) -- maps:keys(ActualMap) =:= [] of
@@ -283,25 +282,38 @@ normalize_headers(HeadersMap) ->
 
 
 % Returns true if two maps have the same contents
-compare_maps(Map1, Map2) ->
-    sort_map(Map1) =:= sort_map(Map2).
+compare_maps(ActualMapInput, ExpectedMapInput) ->
+    ExpectedMap = sort_map(ExpectedMapInput),
+    ActualMap = sort_map(ActualMapInput),
+    case maps:keys(ExpectedMap) =:= maps:keys(ActualMap) of
+        false ->
+            false;
+        true ->
+            lists:all(
+                fun({Key, ExpValue}) ->
+                    ActualValue = maps:get(Key, ActualMap),
+                    case {ExpValue, ActualValue} of
+                        {{check_type, binary}, ActualValue} ->
+                            is_binary(ActualValue);
+                        {_, _} ->
+                            ExpValue =:= ActualValue
+                    end
+                end, maps:to_list(ExpectedMap))
+    end.
 
 % Returns true if second map has all the mappings of the first map with
 % same values.
-contains_map(Map1, Map2) ->
-    SortedMap1 = sort_map(Map1),
-    SortedMap2 = sort_map(Map2),
-    lists:all(
-        fun(Key) ->
-            Value1 = maps:get(Key, SortedMap1),
-            case maps:is_key(Key, SortedMap2) of
-                false ->
-                    false;
-                true ->
-                    Value2 = maps:get(Key, SortedMap2),
-                    Value1 =:= Value2
-            end
-        end, maps:keys(SortedMap1)).
+contains_map(ActualMap, ExpectedMap) ->
+    case maps:keys(ExpectedMap) -- maps:keys(ActualMap) =:= [] of
+        false ->
+            false;
+        true ->
+            FilteredActualMap = maps:filter(
+                fun(Key, _Value) ->
+                    lists:member(Key, maps:keys(ExpectedMap))
+                end, ActualMap),
+            compare_maps(ExpectedMap, FilteredActualMap)
+    end.
 
 
 % Sorts all nested lists in a map and returns the result map

@@ -751,7 +751,7 @@ check_validity(#request{data = Data} = Request) ->
         {0, false} ->
             ok;
         {_, false} ->
-            throw({error, ?EL_MISSING_AT_LEAST_ONE_DATA})
+            throw({error, ?EL_MISSING_AT_LEAST_ONE_DATA(maps:keys(AtLeastOne))})
     end,
     Request#request{data = Data4}.
 
@@ -763,7 +763,9 @@ transform_and_check_value(Key, Data, Validator) ->
         Value ->
             {TypeRule, ValueRule} = maps:get(Key, Validator),
             try
+                ?dump({TypeRule, ValueRule}),
                 NewValue = check_type(TypeRule, Value),
+                ?dump(NewValue),
                 case check_value(TypeRule, ValueRule, NewValue) of
                     true ->
                         {true, Data#{Key => NewValue}};
@@ -771,6 +773,8 @@ transform_and_check_value(Key, Data, Validator) ->
                         throw({error, ?EL_BAD_DATA(Key)})
                 end
             catch
+                throw:bad_data ->
+                    throw({error, ?EL_BAD_DATA(Key)});
                 throw:empty ->
                     throw({error, ?EL_EMPTY_DATA(Key)});
                 throw:id_not_found ->
@@ -794,32 +798,48 @@ check_type(atom, Atom) when is_atom(Atom) ->
     Atom;
 check_type(atom, Binary) when is_binary(Binary) ->
     binary_to_existing_atom(Binary, utf8);
+check_type(atom, _) ->
+    throw(bad_data);
 check_type(list_of_atoms, []) ->
     [];
 check_type(list_of_atoms, [Atom | _] = Atoms) when is_atom(Atom) ->
     Atoms;
 check_type(list_of_atoms, [Binary | _] = Binaries) when is_binary(Binary) ->
     [binary_to_existing_atom(Bin, utf8) || Bin <- Binaries];
+check_type(list_of_atoms, _) ->
+    throw(bad_data);
 check_type(binary, Binary) when is_binary(Binary) ->
     Binary;
 check_type(binary, Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
+check_type(binary, _) ->
+    throw(bad_data);
 check_type(list_of_binaries, []) ->
     [];
 check_type(list_of_binaries, [Binary | _] = Binaries) when is_binary(Binary) ->
     Binaries;
 check_type(list_of_binaries, [Atom | _] = Atoms) when is_atom(Atom) ->
     [atom_to_binary(A, utf8) || A <- Atoms];
+check_type(list_of_binaries, _) ->
+    throw(bad_data);
 check_type(integer, Int) when is_integer(Int) ->
     Int;
+check_type(integer, _) ->
+    throw(bad_data);
 check_type(positive_integer, Int) when is_integer(Int) andalso Int > 0 ->
     Int;
+check_type(positive_integer, _) ->
+    throw(bad_data);
 check_type(float, Int) when is_integer(Int) ->
     float(Int);
 check_type(float, Float) when is_float(Float) ->
     Float;
+check_type(float, _) ->
+    throw(bad_data);
 check_type(json, JSON) when is_map(JSON) ->
     JSON;
+check_type(json, _) ->
+    throw(bad_data);
 check_type(token, Token) when is_binary(Token) ->
     case token_logic:deserialize(Token) of
         {ok, Macaroon} ->
@@ -829,6 +849,8 @@ check_type(token, Token) when is_binary(Token) ->
     end;
 check_type(token, Macaroon) ->
     Macaroon;
+check_type(token, _) ->
+    throw(bad_data);
 check_type(Rule, _) ->
     ?error("Unknown type rule: ~p", [Rule]),
     throw({error, ?EL_INTERNAL_SERVER_ERROR}).

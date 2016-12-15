@@ -220,7 +220,7 @@ accept_resource_json(Req, State) ->
         Data = try
             json_utils:decode_map(Body)
         catch _:_ ->
-            throw({error, ?MALFORMED_JSON})
+            throw({error, ?EL_MALFORMED_DATA})
         end,
         % Method might be POST, PUT, PATCH
         {MethodBin, _} = cowboy_req:method(Req),

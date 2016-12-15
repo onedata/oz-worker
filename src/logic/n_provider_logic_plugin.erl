@@ -34,7 +34,33 @@ create(_, _, entity, Data) ->
 
     ProviderId = datastore_utils:gen_uuid(),
     {ok, {ProviderCertPem, Serial}} = try
-        worker_proxy:call(ozpca_worker, {sign_provider_req, ProviderId, CSR})
+        {ok, {_, _}} = worker_proxy:call(
+            ozpca_worker, {sign_provider_req, ProviderId, CSR}
+        )
+    catch
+        _:_ ->
+            throw({error, ?EL_BAD_DATA(<<"csr">>)})
+    end,
+    Provider = #od_provider{name = Name, urls = URLs,
+        redirection_point = RedirectionPoint, serial = Serial,
+        latitude = Latitude, longitude = Longitude},
+    od_provider:create(#document{key = ProviderId, value = Provider}),
+    {ok, {ProviderId, ProviderCertPem}};
+
+create(_, _, entity_dev, Data) ->
+    Name = maps:get(<<"name">>, Data),
+    URLs = maps:get(<<"urls">>, Data),
+    RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
+    CSR = maps:get(<<"csr">>, Data),
+    Latitude = maps:get(<<"latitude">>, Data, undefined),
+    Longitude = maps:get(<<"longitude">>, Data, undefined),
+    UUID = maps:get(<<"uuid">>, Data, undefined),
+
+    ProviderId = UUID,
+    {ok, {ProviderCertPem, Serial}} = try
+        {ok, {_, _}} = worker_proxy:call(
+            ozpca_worker, {sign_provider_req, ProviderId, CSR}
+        )
     catch
         _:_ ->
             throw({error, ?EL_BAD_DATA(<<"csr">>)})
@@ -117,6 +143,8 @@ delete(ProviderId) when is_binary(ProviderId) ->
 
 exists(undefined, entity) ->
     true;
+exists(undefined, entity_dev) ->
+    true;
 exists(_, check_my_ports) ->
     true;
 exists(_, check_my_ip) ->
@@ -149,7 +177,9 @@ exists(ProviderId, _) when is_binary(ProviderId) ->
 
 authorize(create, undefined, check_my_ports, _, _) ->
     true;
-authorize(create, undefined, entity, ?NOBODY, _) ->
+authorize(create, undefined, entity, _, _) ->
+    true;
+authorize(create, undefined, entity_dev, _, _) ->
     true;
 authorize(create, ProvId, support, ?PROVIDER(ProvId), _) ->
     true;
@@ -186,6 +216,19 @@ validate(create, entity) -> #{
         <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty},
         <<"csr">> => {binary, non_empty}
+    },
+    optional => #{
+        <<"latitude">> => {float, fun(F) -> F >= -90 andalso F =< 90 end},
+        <<"longitude">> => {float, fun(F) -> F >= -180 andalso F =< 180 end}
+    }
+};
+validate(create, entity_dev) -> #{
+    required => #{
+        <<"name">> => {binary, non_empty},
+        <<"urls">> => {list_of_binaries, non_empty},
+        <<"redirectionPoint">> => {binary, non_empty},
+        <<"csr">> => {binary, non_empty},
+        <<"uuid">> => {binary, non_empty}
     },
     optional => #{
         <<"latitude">> => {float, fun(F) -> F >= -90 andalso F =< 90 end},
@@ -256,5 +299,5 @@ test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
             error
     end,
     test_connection(Rest, Acc#{Url => ConnStatus});
-test_connection(_, _) ->
-    throw({error, ?EL_BAD_DATA}).
+test_connection([{Key, _} | _], _) ->
+    throw({error, ?EL_BAD_DATA(Key)}).

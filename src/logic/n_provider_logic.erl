@@ -22,7 +22,7 @@
 -define(PLUGIN, n_provider_logic_plugin).
 
 -export([
-    create/5, create/7, create/2
+    create/5, create/7, create/2, create_dev/2
 ]).
 -export([
     support_space/4, support_space/3
@@ -73,6 +73,8 @@ create(Issuer, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
     }).
 create(Issuer, Data) ->
     n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
+create_dev(Issuer, Data) ->
+    n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity_dev, Data).
 
 
 support_space(Issuer, ProviderId, Token, SupportSize) ->

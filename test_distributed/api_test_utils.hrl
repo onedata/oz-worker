@@ -42,6 +42,7 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 }).
 
 -record(logic_spec, {
+    operation = get :: create | get | update | delete,
     module = undefined :: module(),
     function = undefined :: atom(),
     % In args, special atoms 'client' and 'data' can be used. In this case,
@@ -72,7 +73,7 @@ end).
     end
 end).
 
--define(OK_ENTITY(__VerifyFun), fun(__Result) ->
+-define(OK_TERM(__VerifyFun), fun(__Result) ->
     case __Result of
         {ok, Entity} -> __VerifyFun(Entity);
         _ -> false
