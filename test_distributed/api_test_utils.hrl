@@ -63,6 +63,7 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 }).
 
 % Convenience macros for expressing logic result expectations
+-define(OK, ok).
 -define(OK_BINARY, ok_binary).
 -define(OK_BINARY(__ExactValue), {ok_binary, __ExactValue}).
 -define(OK_LIST(__ExpectedList), {ok_list, __ExpectedList}).

@@ -33,7 +33,8 @@
     get_eff_users_test/1,
     get_eff_groups_test/1,
     get_spaces_test/1,
-    update_test/1
+    update_test/1,
+    delete_test/1
 ]).
 
 all() ->
@@ -45,7 +46,8 @@ all() ->
         get_users_test,
         get_eff_groups_test,
         get_spaces_test,
-        update_test
+        update_test,
+        delete_test
     ]).
 
 %%%===================================================================
@@ -819,9 +821,7 @@ update_test(Config) ->
             module = n_provider_logic,
             function = update,
             args = [client, P1, data],
-            expected_result = ?OK_TERM(fun({B1, B2}) ->
-                is_binary(B1) andalso is_binary(B2)
-            end)
+            expected_result = ?OK
         },
         data_spec = #data_spec{
             required = [<<"name">>, <<"urls">>, <<"redirectionPoint">>],
@@ -853,6 +853,13 @@ update_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+delete_test(Config) ->
+
+
+    ok.
+
 
 
 %%%===================================================================

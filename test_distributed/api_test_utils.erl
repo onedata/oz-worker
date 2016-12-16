@@ -27,7 +27,6 @@ run_tests(Config, ApiTestSpec) ->
         logic_spec = LogicSpec,
         data_spec = DataSpec
     } = ApiTestSpec,
-    % Save config in process dictionary for cleaner code
     try
         % Run tests for REST and logic (if specified). If the code does not
         % crash, it means that all tests passed (return true). If throw:fail is
@@ -94,7 +93,7 @@ run_rest_tests(Config, RestSpec, #client_spec{correct = []} = ClientSpec, DataSp
                     code => ExpCode
                 }
             })
-    end, DataSets),
+        end, DataSets),
     run_rest_tests(Config, RestSpec, NewClientSpec, DataSpec);
 % Check correct client concerning endpoints without data sent (get, delete).
 run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataSpec)
@@ -132,7 +131,6 @@ run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataS
         expected_body = ExpBody
     } = RestSpec,
     CorrectDataSets = correct_data_sets(DataSpec),
-    ct:print("CorrectDataSets: ~p", [CorrectDataSets]),
     lists:foreach(
         fun(Data) ->
             verify_rest_result(Config, "correct data should succeed", #{
@@ -150,7 +148,6 @@ run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataS
             })
         end, CorrectDataSets),
     BadDataSets = bad_data_sets(DataSpec),
-    ct:print("BadDataSets: ~p", [BadDataSets]),
     lists:foreach(
         fun({Data, BadKey, ErrorType}) ->
             {ErrorCode, ErrorBodyMap} = rest_translate_error(Config, ErrorType),
@@ -194,9 +191,11 @@ rest_translate_error(Config, ErrorType) ->
         ErrorType
     ]),
     case Res of
+        {Code, _Headers, Body} ->
+            {Code, Body};
         {Code, Body} ->
             {Code, Body};
-        Code ->
+        Code when is_integer(Code) ->
             {Code, undefined}
     end.
 
@@ -234,12 +233,14 @@ run_logic_tests(Config, LogicSpec, #client_spec{correct = []} = ClientSpec, Data
     lists:foreach(
         fun(Data) ->
             PreparedArgs = prepare_logic_args(Args, Client, Data),
-            case oz_test_utils:call_oz(Config, Module, Function, PreparedArgs) of
-                ExpResult ->
+            Result = oz_test_utils:call_oz(Config, Module, Function, PreparedArgs),
+            ExpectedError = ?ERROR_REASON(ExpResult),
+            case verify_logic_result(Result, ExpectedError) of
+                true ->
                     ok;
-                Other ->
+                false ->
                     log_failed_logic_test(
-                        TestDesc, Module, Function, Args, Client, ExpResult, Other
+                        TestDesc, Module, Function, Args, Client, ExpectedError, Result
                     ),
                     throw(fail)
             end
@@ -256,7 +257,6 @@ run_logic_tests(Config, #logic_spec{operation = Operation} = LogicSpec, ClientSp
         expected_result = ExpectedResult
     } = LogicSpec,
     CorrectDataSets = correct_data_sets(DataSpec),
-    ct:print("CorrectDataSets: ~p", [CorrectDataSets]),
     lists:foreach(
         fun(Data) ->
             PreparedArgs = prepare_logic_args(Args, Client, Data),
@@ -272,22 +272,42 @@ run_logic_tests(Config, #logic_spec{operation = Operation} = LogicSpec, ClientSp
             end
         end, CorrectDataSets),
     BadDataSets = bad_data_sets(DataSpec),
-    ct:print("BadDataSets: ~p", [BadDataSets]),
     lists:foreach(
         fun({Data, BadKey, ErrorType}) ->
             PreparedArgs = prepare_logic_args(Args, Client, Data),
             Result = oz_test_utils:call_oz(Config, Module, Function, PreparedArgs),
-            ExpectedResult = ?ERROR_REASON(ErrorType),
-            case verify_logic_result(Result, ExpectedResult) of
+            ExpectedError = ?ERROR_REASON(ErrorType),
+            case verify_logic_result(Result, ExpectedError) of
                 true ->
                     ok;
                 false ->
                     log_failed_logic_test(["bad data should fail with bad key:", BadKey],
-                        Module, Function, Args, Client, ExpectedResult, Result
+                        Module, Function, Args, Client, ExpectedError, Result
                     ),
                     throw(fail)
             end
         end, BadDataSets),
+    run_logic_tests(Config, LogicSpec, ClientSpec#client_spec{correct = Tail}, DataSpec);
+run_logic_tests(Config, #logic_spec{operation = Operation} = LogicSpec, ClientSpec, DataSpec)
+    when Operation =:= get; Operation =:= delete ->
+    #client_spec{correct = [Client | Tail]} = ClientSpec,
+    #logic_spec{
+        module = Module,
+        function = Function,
+        args = Args,
+        expected_result = ExpectedResult
+    } = LogicSpec,
+    PreparedArgs = prepare_logic_args(Args, Client, []),
+    Result = oz_test_utils:call_oz(Config, Module, Function, PreparedArgs),
+    case verify_logic_result(Result, ExpectedResult) of
+        true ->
+            ok;
+        false ->
+            log_failed_logic_test("correct client should succeed",
+                Module, Function, Args, Client, ExpectedResult, Result
+            ),
+            throw(fail)
+    end,
     run_logic_tests(Config, LogicSpec, ClientSpec#client_spec{correct = Tail}, DataSpec).
 
 
@@ -308,15 +328,17 @@ client_to_logic_client({user, UserId}) -> ?USER(UserId);
 client_to_logic_client({provider, ProviderId, _, _}) -> ?PROVIDER(ProviderId).
 
 
-verify_logic_result({ok, Bin}, ok_binary) when is_binary(Bin) ->
+verify_logic_result(ok, ?OK) ->
     true;
-verify_logic_result({ok, Value}, {ok_binary, Value}) when is_binary(Value) ->
+verify_logic_result({ok, Bin}, ?OK_BINARY) when is_binary(Bin) ->
     true;
-verify_logic_result({ok, GotList}, {ok_list, ExpList}) ->
+verify_logic_result({ok, Value}, ?OK_BINARY(Value)) when is_binary(Value) ->
+    true;
+verify_logic_result({ok, GotList}, ?OK_LIST(ExpList)) ->
     lists:sort(ExpList) =:= lists:sort(GotList);
-verify_logic_result({error, Error}, {error_reason, {error, Error}}) ->
+verify_logic_result({error, Error}, ?ERROR_REASON({error, Error})) ->
     true;
-verify_logic_result({ok, Result}, {ok_term, VerifyFun}) ->
+verify_logic_result({ok, Result}, ?OK_TERM(VerifyFun)) ->
     try
         VerifyFun(Result)
     catch

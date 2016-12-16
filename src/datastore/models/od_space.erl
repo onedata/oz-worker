@@ -36,9 +36,9 @@
 record_struct(1) ->
     {record, [
         {name, string},
-        {providers, #{string => integer}},
         {users, #{string => [atom]}},
         {groups, #{string => [atom]}},
+        {providers, #{string => integer}},
         {shares, [string]},
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},

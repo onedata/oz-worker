@@ -763,20 +763,18 @@ transform_and_check_value(Key, Data, Validator) ->
         Value ->
             {TypeRule, ValueRule} = maps:get(Key, Validator),
             try
-                ?dump({TypeRule, ValueRule}),
                 NewValue = check_type(TypeRule, Value),
-                ?dump(NewValue),
                 case check_value(TypeRule, ValueRule, NewValue) of
                     true ->
                         {true, Data#{Key => NewValue}};
                     false ->
-                        throw(?EL_BAD_DATA(Key})
+                        throw(?EL_BAD_DATA(Key))
                 end
             catch
                 throw:bad_data ->
-                    throw(?EL_BAD_DATA(Key});
+                    throw(?EL_BAD_DATA(Key));
                 throw:empty ->
-                    throw(?EL_EMPTY_DATA(Key});
+                    throw(?EL_EMPTY_DATA(Key));
                 throw:id_not_found ->
                     throw(?EL_ID_NOT_FOUND(Key));
                 throw:id_occupied ->
@@ -789,7 +787,7 @@ transform_and_check_value(Key, Data, Validator) ->
                     throw(Throw);
                 A:B ->
                     ?dump({A, B, erlang:get_stacktrace()}),
-                    throw(?EL_BAD_DATA(Key})
+                    throw(?EL_BAD_DATA(Key))
             end
     end.
 
