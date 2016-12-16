@@ -66,7 +66,10 @@ translate_error(?EL_BAD_TOKEN_TYPE(Key)) ->
 translate_error(?EL_RELATION_EXISTS) ->
     {400, #{<<"error">> => <<"Such relation already exists">>}};
 translate_error(?EL_RELATION_DOES_NOT_EXIST) ->
-    {400, #{<<"error">> => <<"Such relation does not exist">>}}.
+    {400, #{<<"error">> => <<"Such relation does not exist">>}};
+translate_error({error, Reason}) ->
+    ?warning("Unexpected error: {error, ~p} in rest error translator", [Reason]),
+    translate_error(?EL_INTERNAL_SERVER_ERROR).
 
 
 translate(_, _, _, _, {error, Type}) ->

@@ -285,7 +285,7 @@ add_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChModel, ChId) of
             true ->
-               ?EL_RELATION_EXISTS;
+                ?EL_RELATION_EXISTS;
             false ->
                 {ok, mark_dirty(bottom_up, true, ParModel, ParId, add_child(
                     Parent, ChModel, ChId, ChAttrs
@@ -388,7 +388,7 @@ remove_relation(ChModel, ChId, ParModel, ParId) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChModel, ChId) of
             false ->
-                 ?EL_RELATION_DOES_NOT_EXIST;
+                ?EL_RELATION_DOES_NOT_EXIST;
             true ->
                 {ok, mark_dirty(bottom_up, true, ParModel, ParId, remove_child(
                     Parent, ChModel, ChId
@@ -398,7 +398,7 @@ remove_relation(ChModel, ChId, ParModel, ParId) ->
     ChildUpdateFun = fun(Child) ->
         case has_parent(Child, ParModel, ParId) of
             false ->
-                 ?EL_RELATION_DOES_NOT_EXIST;
+                ?EL_RELATION_DOES_NOT_EXIST;
             true ->
                 {ok, mark_dirty(top_down, true, ChModel, ChId, remove_parent(
                     Child, ParModel, ParId
@@ -430,6 +430,14 @@ update_oz_privileges(EntityModel, EntityId, Operation, Privileges) ->
             Entity, NewOzPrivileges))}
     end),
     schedule_refresh(),
+    ok.
+
+
+delete_with_relations(EntityModel, EntityId) ->
+    {ok, #document{value = #od_provider{
+        spaces = Spaces
+    }}} = od_provider:get(EntityId),
+    TODO JESTES TUTEJ!
     ok.
 
 
@@ -521,6 +529,15 @@ set_dirty_flag(top_down, Flag, #od_group{} = Group) ->
 set_dirty_flag(top_down, Flag, #od_space{} = Space) ->
     Space#od_space{top_down_dirty = Flag}.
 
+
+all_children(#od_share{space = Space}) ->
+    #{od_space => [Space]};
+all_children(Entity) ->
+    successors(top_down, Entity).
+
+
+all_parents(Entity) ->
+    successors(bottom_up, Entity).
 
 
 has_child(#od_group{users = Users}, od_user, UserId) ->
@@ -700,10 +717,6 @@ remove_parent(#od_space{shares = Shares} = Space, od_share, ShareId) ->
     Space#od_space{shares = lists:delete(ShareId, Shares)};
 remove_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId) ->
     Space#od_space{providers = maps:remove(ProviderId, Providers)}.
-
-
-
-
 
 
 gather_eff_from_itself(bottom_up, EntityId, #od_group{} = Group) ->

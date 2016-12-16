@@ -138,7 +138,7 @@ update(ProviderId, entity, Data) when is_binary(ProviderId) ->
 
 
 delete(ProviderId) when is_binary(ProviderId) ->
-    ok = od_provider:delete(ProviderId).
+    entity_graph:delete_with_relations(od_provider, ProviderId).
 
 
 exists(undefined, entity) ->

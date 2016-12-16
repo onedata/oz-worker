@@ -69,10 +69,10 @@
 %
 % The below ASCII visual shows possible relations in entities graph.
 %
-%        provider
-%           ^
-%           |
-%           |
+%     share  provider
+%       ^      ^
+%        \    /
+%         \  /
 %         space    handle_service     handle
 %         ^  ^        ^        ^       ^   ^
 %         |   \      /         |      /    |
@@ -87,10 +87,10 @@
 %              /       \
 %            user     user
 %
-% Members of providers, shares, handle_services and handles are
+% Members of groups, spaces, providers, handle_services and handles are
 % calculated bottom-up.
 %
-% Memberships of users are calculated top-down.
+% Memberships of users, groups and spaces are calculated top-down.
 %
 % Groups and spaces must be processed top-down and bottom-up, as they hold the
 % information about users' memberships and members of entities.

@@ -236,9 +236,9 @@ get_random_oz_url(Config) ->
     lists:nth(rand:uniform(length(RestURLs)), RestURLs).
 
 
-compare_headers(ActualMapInput, ExpectedMapInput) ->
-    ExpectedMap = normalize_headers(ExpectedMapInput),
-    ActualMap = normalize_headers(ActualMapInput),
+compare_headers(ActualHeadersInput, ExpectedHeadersInput) ->
+    ExpectedMap = normalize_headers(ExpectedHeadersInput),
+    ActualMap = normalize_headers(ActualHeadersInput),
     case maps:keys(ExpectedMap) =:= maps:keys(ActualMap) of
         false ->
             false;
@@ -246,8 +246,8 @@ compare_headers(ActualMapInput, ExpectedMapInput) ->
             lists:all(
                 fun({Key, ExpValue}) ->
                     ActualValue = maps:get(Key, ActualMap),
-                    case {ExpValue, ActualValue} of
-                        {{match, Bin}, _} ->
+                    case {ActualValue, ExpValue} of
+                        {_, {match, Bin}} ->
                             match =:= re:run(ActualValue, Bin, [{capture, none}]);
                         {B1, B2} when is_binary(B1) andalso is_binary(B2) ->
                             B1 =:= B2
@@ -256,9 +256,9 @@ compare_headers(ActualMapInput, ExpectedMapInput) ->
     end.
 
 
-contains_headers(ActualMapInput, ExpectedMapInput) ->
-    ExpectedMap = normalize_headers(ExpectedMapInput),
-    ActualMap = normalize_headers(ActualMapInput),
+contains_headers(ActualHeadersInput, ExpectedHeadersInput) ->
+    ExpectedMap = normalize_headers(ExpectedHeadersInput),
+    ActualMap = normalize_headers(ActualHeadersInput),
     case maps:keys(ExpectedMap) -- maps:keys(ActualMap) =:= [] of
         false ->
             false;
@@ -267,11 +267,13 @@ contains_headers(ActualMapInput, ExpectedMapInput) ->
                 fun(Key, _Value) ->
                     lists:member(Key, maps:keys(ExpectedMap))
                 end, ActualMap),
-            compare_headers(ExpectedMap, FilteredActualMap)
+            compare_headers(FilteredActualMap, ExpectedMap)
     end.
 
 
-% Convert all header keys to lowercase so comparing is easier
+% Convert all header keys to maps with lowercase keys so comparing is easier
+normalize_headers(HeadersList) when is_list(HeadersList) ->
+    normalize_headers(maps:from_list(HeadersList));
 normalize_headers(HeadersMap) ->
     maps:from_list(
         lists:map(fun({Key, Value}) ->
