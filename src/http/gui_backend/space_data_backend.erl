@@ -134,14 +134,9 @@ create_record(<<"space">>, Data) ->
             {ok, SpaceId} = space_logic:create(
                 {user, gui_session:get_user_id()}, Name
             ),
-            NewSpaceData = [
-                {<<"id">>, SpaceId},
-                {<<"name">>, Name},
-                {<<"isDefault">>, false},
-                {<<"hasViewPrivilege">>, true},
-                {<<"providers">>, []}
-            ],
-            {ok, NewSpaceData};
+            % Return newly created space, it is not default and does not have
+            % providers
+            space_record(SpaceId, #{SpaceId => Name}, undefined, [], true);
         _ ->
             gui_error:report_error(<<"Invalid space name">>)
     end.
