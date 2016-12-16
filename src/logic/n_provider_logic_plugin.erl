@@ -39,7 +39,7 @@ create(_, _, entity, Data) ->
         )
     catch
         _:_ ->
-            throw({error, ?EL_BAD_DATA(<<"csr">>)})
+            throw(?EL_BAD_DATA(<<"csr">>))
     end,
     Provider = #od_provider{name = Name, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
@@ -63,7 +63,7 @@ create(_, _, entity_dev, Data) ->
         )
     catch
         _:_ ->
-            throw({error, ?EL_BAD_DATA(<<"csr">>)})
+            throw(?EL_BAD_DATA(<<"csr">>))
     end,
     Provider = #od_provider{name = Name, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
@@ -94,7 +94,7 @@ get_entity(ProviderId) ->
         {ok, #document{value = Provider}} ->
             {ok, Provider};
         _ ->
-            {error, ?EL_NOT_FOUND}
+            ?EL_NOT_FOUND
     end.
 
 
@@ -187,6 +187,7 @@ authorize(create, ProvId, support, ?PROVIDER(ProvId), _) ->
 authorize(get, undefined, check_my_ip, _, _) ->
     true;
 authorize(get, _ProvId, entity, ?PROVIDER, _) ->
+    % Any provider can get info about other providers
     true;
 authorize(get, _ProvId, entity, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_providers);
@@ -207,7 +208,10 @@ authorize(get, _ProvId, {eff_user, _}, ?USER(UserId), _) ->
 authorize(get, _ProvId, eff_groups, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
 authorize(get, _ProvId, {eff_group, _}, ?USER(UserId), _) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider).
+    n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
+
+authorize(update, ProvId, entity, ?PROVIDER(ProvId), _) ->
+    true.
 
 
 validate(create, entity) -> #{
@@ -249,7 +253,7 @@ validate(create, check_my_ports) -> #{
 validate(update, entity) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
-        <<"urls">> => {list_of_binaries, any},
+        <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty},
         <<"latitude">> => {float, fun(F) -> F >= -90 andalso F =< 90 end},
         <<"longitude">> => {float, fun(F) -> F >= -180 andalso F =< 180 end}
@@ -300,4 +304,4 @@ test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
     end,
     test_connection(Rest, Acc#{Url => ConnStatus});
 test_connection([{Key, _} | _], _) ->
-    throw({error, ?EL_BAD_DATA(Key)}).
+    throw(?EL_BAD_DATA(Key)).

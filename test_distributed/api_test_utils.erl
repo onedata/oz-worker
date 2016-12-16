@@ -74,24 +74,27 @@ run_rest_tests(Config, RestSpec, #client_spec{correct = []} = ClientSpec, DataSp
                 forbidden = Tail
             }}
     end,
-    Data = case Method of
+    DataSets = case Method of
         patch -> required_data_sets(DataSpec);
         post -> required_data_sets(DataSpec);
         put -> required_data_sets(DataSpec);
-        get -> undefined;
-        delete -> undefined
+        get -> [undefined];
+        delete -> [undefined]
     end,
-    verify_rest_result(Config, TestDesc, #{
-        request => #{
-            method => Method,
-            path => Path,
-            body => Data,
-            auth => Client
-        },
-        expect => #{
-            code => ExpCode
-        }
-    }),
+    lists:foreach(
+        fun(Data) ->
+            verify_rest_result(Config, TestDesc, #{
+                request => #{
+                    method => Method,
+                    path => Path,
+                    body => Data,
+                    auth => Client
+                },
+                expect => #{
+                    code => ExpCode
+                }
+            })
+    end, DataSets),
     run_rest_tests(Config, RestSpec, NewClientSpec, DataSpec);
 % Check correct client concerning endpoints without data sent (get, delete).
 run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataSpec)
@@ -150,7 +153,7 @@ run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataS
     ct:print("BadDataSets: ~p", [BadDataSets]),
     lists:foreach(
         fun({Data, BadKey, ErrorType}) ->
-            {ErrorCode, ErrorMap} = rest_translate_error(Config, ErrorType, BadKey),
+            {ErrorCode, ErrorBodyMap} = rest_translate_error(Config, ErrorType),
             verify_rest_result(Config, ["bad data should fail with bad key:", BadKey], #{
                 request => #{
                     method => Method,
@@ -160,7 +163,7 @@ run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataS
                 },
                 expect => #{
                     code => ErrorCode,
-                    body => ErrorMap
+                    body => ErrorBodyMap
                 }
             })
         end, BadDataSets),
@@ -185,9 +188,10 @@ verify_rest_result(Config, TestDesc, ArgsMap) ->
             throw(fail)
     end.
 
-rest_translate_error(Config, ErrorType, Key) ->
+
+rest_translate_error(Config, ErrorType) ->
     Res = oz_test_utils:call_oz(Config, rest_translator, translate_error, [
-        translate_error(ErrorType, Key)
+        ErrorType
     ]),
     case Res of
         {Code, Body} ->
@@ -205,26 +209,42 @@ run_logic_tests(_, _, #client_spec{correct = [], unauthorized = [], forbidden = 
     ok;
 % Check bad clients
 run_logic_tests(Config, LogicSpec, #client_spec{correct = []} = ClientSpec, DataSpec) ->
-    #logic_spec{module = Module, function = Function, args = Args} = LogicSpec,
+    #logic_spec{
+        operation = Operation,
+        module = Module,
+        function = Function,
+        args = Args
+    } = LogicSpec,
     {TestDesc, Client, ExpResult, NewClientSpec} = case ClientSpec of
         #client_spec{unauthorized = [Head | Tail]} ->
-            {"unauthorized client should fail", Head, {error, ?EL_UNAUTHORIZED}, ClientSpec#client_spec{
-                unauthorized = Tail
-            }};
+            {"unauthorized client should fail", Head, {error, ?EL_UNAUTHORIZED},
+                ClientSpec#client_spec{unauthorized = Tail}
+            };
         #client_spec{forbidden = [Head | Tail]} ->
-            {"forbidden client should fail", Head, {error, ?EL_FORBIDDEN}, ClientSpec#client_spec{
-                forbidden = Tail
-            }}
+            {"forbidden client should fail", Head, {error, ?EL_FORBIDDEN},
+                ClientSpec#client_spec{forbidden = Tail}
+            }
     end,
-    Data = required_data_sets(DataSpec),
-    PreparedArgs = prepare_logic_args(Args, Client, Data),
-    case oz_test_utils:call_oz(Config, Module, Function, PreparedArgs) of
-        ExpResult ->
-            ok;
-        Other ->
-            log_failed_logic_test(TestDesc, Module, Function, Args, Client, Other),
-            throw(fail)
-    end;
+    DataSets = case Operation of
+        create -> required_data_sets(DataSpec);
+        update -> required_data_sets(DataSpec);
+        get -> [undefined];
+        delete -> [undefined]
+    end,
+    lists:foreach(
+        fun(Data) ->
+            PreparedArgs = prepare_logic_args(Args, Client, Data),
+            case oz_test_utils:call_oz(Config, Module, Function, PreparedArgs) of
+                ExpResult ->
+                    ok;
+                Other ->
+                    log_failed_logic_test(
+                        TestDesc, Module, Function, Args, Client, ExpResult, Other
+                    ),
+                    throw(fail)
+            end
+        end, DataSets),
+    run_logic_tests(Config, LogicSpec, NewClientSpec, DataSpec);
 % Check correct clients
 run_logic_tests(Config, #logic_spec{operation = Operation} = LogicSpec, ClientSpec, DataSpec)
     when Operation =:= create; Operation =:= update ->
@@ -233,7 +253,7 @@ run_logic_tests(Config, #logic_spec{operation = Operation} = LogicSpec, ClientSp
         module = Module,
         function = Function,
         args = Args,
-        expected_result = ExpectedResultFun
+        expected_result = ExpectedResult
     } = LogicSpec,
     CorrectDataSets = correct_data_sets(DataSpec),
     ct:print("CorrectDataSets: ~p", [CorrectDataSets]),
@@ -241,13 +261,13 @@ run_logic_tests(Config, #logic_spec{operation = Operation} = LogicSpec, ClientSp
         fun(Data) ->
             PreparedArgs = prepare_logic_args(Args, Client, Data),
             Result = oz_test_utils:call_oz(Config, Module, Function, PreparedArgs),
-            try
-                true = ExpectedResultFun(Result),
-                ok
-            catch
-                _:_ ->
+            case verify_logic_result(Result, ExpectedResult) of
+                true ->
+                    ok;
+                false ->
                     log_failed_logic_test("correct data should succeed",
-                        Module, Function, Args, Client, Result),
+                        Module, Function, Args, Client, ExpectedResult, Result
+                    ),
                     throw(fail)
             end
         end, CorrectDataSets),
@@ -257,13 +277,14 @@ run_logic_tests(Config, #logic_spec{operation = Operation} = LogicSpec, ClientSp
         fun({Data, BadKey, ErrorType}) ->
             PreparedArgs = prepare_logic_args(Args, Client, Data),
             Result = oz_test_utils:call_oz(Config, Module, Function, PreparedArgs),
-            ExpectedResult = translate_error(ErrorType, BadKey),
-            case Result of
-                ExpectedResult ->
+            ExpectedResult = ?ERROR_REASON(ErrorType),
+            case verify_logic_result(Result, ExpectedResult) of
+                true ->
                     ok;
-                _ ->
+                false ->
                     log_failed_logic_test(["bad data should fail with bad key:", BadKey],
-                        Module, Function, Args, Client, Result),
+                        Module, Function, Args, Client, ExpectedResult, Result
+                    ),
                     throw(fail)
             end
         end, BadDataSets),
@@ -287,14 +308,38 @@ client_to_logic_client({user, UserId}) -> ?USER(UserId);
 client_to_logic_client({provider, ProviderId, _, _}) -> ?PROVIDER(ProviderId).
 
 
-log_failed_logic_test(TestDesc, Module, Function, Args, Client, Got) ->
+verify_logic_result({ok, Bin}, ok_binary) when is_binary(Bin) ->
+    true;
+verify_logic_result({ok, Value}, {ok_binary, Value}) when is_binary(Value) ->
+    true;
+verify_logic_result({ok, GotList}, {ok_list, ExpList}) ->
+    lists:sort(ExpList) =:= lists:sort(GotList);
+verify_logic_result({error, Error}, {error_reason, {error, Error}}) ->
+    true;
+verify_logic_result({ok, Result}, {ok_term, VerifyFun}) ->
+    try
+        VerifyFun(Result)
+    catch
+        Type:Message ->
+            ct:print("Logic result verification function crashed - ~p:~p~n"
+            "Stacktrace: ~p", [
+                Type, Message, erlang:get_stacktrace()
+            ]),
+            false
+    end;
+verify_logic_result(_, _) ->
+    false.
+
+
+log_failed_logic_test(TestDesc, Module, Function, Args, Client, Expected, Got) ->
     ct:print("API logic test failed: ~p~n"
     "Module: ~p~n"
     "Function: ~s~n"
     "Args: ~p~n"
-    "Client: ~p~n"
-    "Got: ~p (which did not pass the verification function)", [
-        TestDesc, Module, Function, Args, client_to_readable(Client), Got
+    "Client: ~s~n"
+    "Expected: ~p~n"
+    "Got: ~p", [
+        TestDesc, Module, Function, Args, client_to_readable(Client), Expected, Got
     ]).
 
 
@@ -302,7 +347,7 @@ log_failed_rest_test(TestDesc, Method, Path, Client, UnmetExp, Got, Expected) ->
     ct:print("API REST test failed: ~p~n"
     "Method: ~p~n"
     "Path: ~s~n"
-    "Client: ~p~n"
+    "Client: ~s~n"
     "Unmet expectation: ~p~n"
     "Got: ~p~n"
     "Expected: ~p", [
@@ -310,27 +355,6 @@ log_failed_rest_test(TestDesc, Method, Path, Client, UnmetExp, Got, Expected) ->
         UnmetExp, Got, Expected
     ]).
 
-
-
-
-
-
-translate_error(bad, Key) ->
-    {error, ?EL_BAD_DATA(Key)};
-translate_error(empty, Key) ->
-    {error, ?EL_EMPTY_DATA(Key)};
-translate_error(id_not_found, Key) ->
-    {error, ?EL_ID_NOT_FOUND(Key)};
-translate_error(id_occupied, Key) ->
-    {error, ?EL_ID_OCCUPIED(Key)};
-translate_error(bad_token, Key) ->
-    {error, ?EL_BAD_TOKEN(Key)};
-translate_error(bad_token_type, Key) ->
-    {error, ?EL_BAD_TOKEN_TYPE(Key)};
-translate_error(relation_exists, _Key) ->
-    {error, ?EL_RELATION_EXISTS};
-translate_error(relation_does_not_exist, _Key) ->
-    {error, ?EL_RELATION_DOES_NOT_EXIST}.
 
 
 client_to_readable(nobody) ->

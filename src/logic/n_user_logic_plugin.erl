@@ -33,7 +33,7 @@ get_entity(UserId) ->
         {ok, #document{value = Group}} ->
             {ok, Group};
         _ ->
-            {error, ?EL_NOT_FOUND}
+            ?EL_NOT_FOUND
     end.
 
 

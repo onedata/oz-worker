@@ -104,9 +104,9 @@ get_eff_group(Issuer, ProviderId, GroupId) ->
 
 
 
-
 update(Issuer, ProviderId, Data) ->
     n_entity_logic:update(Issuer, ?PLUGIN, ProviderId, entity, Data).
+
 
 delete(Issuer, ProviderId) ->
     n_entity_logic:delete(Issuer, ?PLUGIN, ProviderId, entity).

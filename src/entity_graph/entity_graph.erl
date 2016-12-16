@@ -285,7 +285,7 @@ add_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChModel, ChId) of
             true ->
-                {error, ?EL_RELATION_EXISTS};
+               ?EL_RELATION_EXISTS;
             false ->
                 {ok, mark_dirty(bottom_up, true, ParModel, ParId, add_child(
                     Parent, ChModel, ChId, ChAttrs
@@ -295,7 +295,7 @@ add_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     ChildUpdateFun = fun(Child) ->
         case has_parent(Child, ParModel, ParId) of
             true ->
-                {error, ?EL_RELATION_EXISTS};
+                ?EL_RELATION_EXISTS;
             false ->
                 {ok, mark_dirty(top_down, true, ChModel, ChId, add_parent(
                     Child, ParModel, ParId, ParAttrs
@@ -312,7 +312,7 @@ add_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
             case update_entity_sync(ChModel, ChId, ChildUpdateFun) of
                 ok ->
                     ok;
-                {error, ?EL_RELATION_EXISTS} ->
+                ?EL_RELATION_EXISTS ->
                     % Relation exists, but apparently it did not exist
                     % in the parent, so we just fixed the relation -> ok.
                     ok;
@@ -357,7 +357,7 @@ update_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChModel, ChId) of
             false ->
-                {error, ?EL_RELATION_DOES_NOT_EXIST};
+                ?EL_RELATION_DOES_NOT_EXIST;
             true ->
                 {ok, mark_dirty(bottom_up, true, ParModel, ParId, update_child(
                     Parent, ChModel, ChId, ParAttrs
@@ -367,7 +367,7 @@ update_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     ChildUpdateFun = fun(Child) ->
         case has_parent(Child, ParModel, ParId) of
             false ->
-                {error, ?EL_RELATION_DOES_NOT_EXIST};
+                ?EL_RELATION_DOES_NOT_EXIST;
             true ->
                 {ok, mark_dirty(top_down, true, ChModel, ChId, update_parent(
                     Child, ParModel, ParId, ChAttrs
@@ -388,7 +388,7 @@ remove_relation(ChModel, ChId, ParModel, ParId) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChModel, ChId) of
             false ->
-                {error, ?EL_RELATION_DOES_NOT_EXIST};
+                 ?EL_RELATION_DOES_NOT_EXIST;
             true ->
                 {ok, mark_dirty(bottom_up, true, ParModel, ParId, remove_child(
                     Parent, ChModel, ChId
@@ -398,7 +398,7 @@ remove_relation(ChModel, ChId, ParModel, ParId) ->
     ChildUpdateFun = fun(Child) ->
         case has_parent(Child, ParModel, ParId) of
             false ->
-                {error, ?EL_RELATION_DOES_NOT_EXIST};
+                 ?EL_RELATION_DOES_NOT_EXIST;
             true ->
                 {ok, mark_dirty(top_down, true, ChModel, ChId, remove_parent(
                     Child, ParModel, ParId

@@ -18,6 +18,10 @@
 -type data_error() :: bad | empty | bad_token | bad_token_type |
 id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 
+-type logic_expectation() :: ok_binary| {ok_binary, binary()} |
+{ok_list, [term()]} | {ok_term, fun((Result :: term()) -> boolean())} |
+{error_reason, term()}.
+
 -record(client_spec, {
     correct = [] :: [client()],
     unauthorized = [] :: [client()],
@@ -48,7 +52,7 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     % In args, special atoms 'client' and 'data' can be used. In this case,
     % client and data will be automatically injected in these placeholders.
     args = [] :: [term()],
-    expected_result = undefined :: undefined | fun((Result :: term()) -> boolean())
+    expected_result = undefined :: undefined | logic_expectation()
 }).
 
 -record(api_test_spec, {
@@ -58,34 +62,11 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     data_spec = undefined :: undefined | #data_spec{}
 }).
 
-% Convenience macros for expected_result functions of logic_spec
--define(OK_BINARY, fun(Result) ->
-    case Result of
-        {ok, Bin} when is_binary(Bin) -> true;
-        _ -> false
-    end
-end).
-
--define(OK_BINARY(__ExactValue), fun(__Result) ->
-    case __Result of
-        {ok, __ExactValue} -> true;
-        _ -> false
-    end
-end).
-
--define(OK_TERM(__VerifyFun), fun(__Result) ->
-    case __Result of
-        {ok, Entity} -> __VerifyFun(Entity);
-        _ -> false
-    end
-end).
-
--define(OK_LIST(__ExpectedList), fun(__Result) ->
-    lists:sort(__ExpectedList) =:= lists:sort(__Result)
-end).
-
--define(ERROR_REASON(__ExpectedError), fun(__Result) ->
-    __ExpectedError =:= __Result
-end).
+% Convenience macros for expressing logic result expectations
+-define(OK_BINARY, ok_binary).
+-define(OK_BINARY(__ExactValue), {ok_binary, __ExactValue}).
+-define(OK_LIST(__ExpectedList), {ok_list, __ExpectedList}).
+-define(OK_TERM(__VerifyFun), {ok_term, __VerifyFun}).
+-define(ERROR_REASON(__ExpectedError), {error_reason, __ExpectedError}).
 
 -endif.

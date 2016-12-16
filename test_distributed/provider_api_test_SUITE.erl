@@ -32,7 +32,8 @@
     get_test/1,
     get_eff_users_test/1,
     get_eff_groups_test/1,
-    get_spaces_test/1
+    get_spaces_test/1,
+    update_test/1
 ]).
 
 all() ->
@@ -43,7 +44,8 @@ all() ->
         get_test,
         get_users_test,
         get_eff_groups_test,
-        get_spaces_test
+        get_spaces_test,
+        update_test
     ]).
 
 %%%===================================================================
@@ -77,7 +79,7 @@ create_test(Config) ->
         },
         data_spec = #data_spec{
             required = [<<"name">>, <<"urls">>, <<"redirectionPoint">>, <<"csr">>],
-            optional = [<<"longitude">>, <<"longitude">>],
+            optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"name">> => <<"ProvName">>,
                 <<"urls">> => [<<"127.0.0.1">>],
@@ -87,24 +89,24 @@ create_test(Config) ->
                 <<"longitude">> => -24.8
             },
             bad_values = [
-                {<<"name">>, <<"">>, empty},
-                {<<"name">>, 1234, bad},
-                {<<"urls">>, [], empty},
-                {<<"urls">>, <<"127.0.0.1">>, bad},
-                {<<"urls">>, 1234, bad},
-                {<<"redirectionPoint">>, <<"">>, empty},
-                {<<"redirectionPoint">>, 1234, bad},
-                {<<"csr">>, <<"">>, empty},
-                {<<"csr">>, 1234, bad},
-                {<<"csr">>, <<"wrong-csr">>, bad},
-                {<<"latitude">>, -1500, bad},
-                {<<"latitude">>, -90.1, bad},
-                {<<"latitude">>, 90.1, bad},
-                {<<"latitude">>, 1500, bad},
-                {<<"longitude">>, -1500, bad},
-                {<<"longitude">>, -180.1, bad},
-                {<<"longitude">>, 180.1, bad},
-                {<<"longitude">>, 1500, bad}
+                {<<"name">>, <<"">>, ?EL_EMPTY_DATA(<<"name">>)},
+                {<<"name">>, 1234, ?EL_BAD_DATA(<<"name">>)},
+                {<<"urls">>, [], ?EL_EMPTY_DATA(<<"urls">>)},
+                {<<"urls">>, <<"127.0.0.1">>, ?EL_BAD_DATA(<<"urls">>)},
+                {<<"urls">>, 1234, ?EL_BAD_DATA(<<"urls">>)},
+                {<<"redirectionPoint">>, <<"">>, ?EL_EMPTY_DATA(<<"redirectionPoint">>)},
+                {<<"redirectionPoint">>, 1234, ?EL_BAD_DATA(<<"redirectionPoint">>)},
+                {<<"csr">>, <<"">>, ?EL_EMPTY_DATA(<<"csr">>)},
+                {<<"csr">>, 1234, ?EL_BAD_DATA(<<"csr">>)},
+                {<<"csr">>, <<"wrong-csr">>, ?EL_BAD_DATA(<<"csr">>)},
+                {<<"latitude">>, -1500, ?EL_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, -90.1, ?EL_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, 90.1, ?EL_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, 1500, ?EL_BAD_DATA(<<"latitude">>)},
+                {<<"longitude">>, -1500, ?EL_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, -180.1, ?EL_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, 180.1, ?EL_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, 1500, ?EL_BAD_DATA(<<"longitude">>)}
             ]
         }
     },
@@ -151,13 +153,13 @@ support_space_test(Config) ->
                 <<"size">> => MinimumSupportSize
             },
             bad_values = [
-                {<<"token">>, <<"bad-token">>, bad_token},
-                {<<"token">>, 1234, bad_token},
-                {<<"token">>, BadTokenType, bad_token_type},
-                {<<"size">>, <<"binary">>, bad},
-                {<<"size">>, 0, bad},
-                {<<"size">>, -1000, bad},
-                {<<"size">>, MinimumSupportSize - 1, bad}
+                {<<"token">>, <<"bad-token">>, ?EL_BAD_TOKEN(<<"token">>)},
+                {<<"token">>, 1234, ?EL_BAD_TOKEN(<<"token">>)},
+                {<<"token">>, BadTokenType, ?EL_BAD_TOKEN_TYPE(<<"token">>)},
+                {<<"size">>, <<"binary">>, ?EL_BAD_DATA(<<"size">>)},
+                {<<"size">>, 0, ?EL_BAD_DATA(<<"size">>)},
+                {<<"size">>, -1000, ?EL_BAD_DATA(<<"size">>)},
+                {<<"size">>, MinimumSupportSize - 1, ?EL_BAD_DATA(<<"size">>)}
             ]
         }
     },
@@ -186,13 +188,13 @@ support_space_test(Config) ->
                 <<"size">> => MinimumSupportSize
             },
             bad_values = [
-                {<<"token">>, <<"asd">>, bad_token},
-                {<<"token">>, 1234, bad_token},
-                {<<"token">>, BadMacaroon2, bad_token_type},
-                {<<"size">>, <<"binary">>, bad},
-                {<<"size">>, 0, bad},
-                {<<"size">>, -1000, bad},
-                {<<"size">>, MinimumSupportSize - 1, bad}
+                {<<"token">>, <<"asd">>, ?EL_BAD_TOKEN(<<"token">>)},
+                {<<"token">>, 1234, ?EL_BAD_TOKEN(<<"token">>)},
+                {<<"token">>, BadMacaroon2, ?EL_BAD_TOKEN_TYPE(<<"token">>)},
+                {<<"size">>, <<"binary">>, ?EL_BAD_DATA(<<"size">>)},
+                {<<"size">>, 0, ?EL_BAD_DATA(<<"size">>)},
+                {<<"size">>, -1000, ?EL_BAD_DATA(<<"size">>)},
+                {<<"size">>, MinimumSupportSize - 1, ?EL_BAD_DATA(<<"size">>)}
             ]
         }
     },
@@ -795,6 +797,62 @@ get_spaces_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
+
+
+update_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {provider, P1, KeyFile1, CertFile1}]
+            % No need to check other clients - this endpoint is dedicated to the
+            % provider that presents it certs.
+        },
+        rest_spec = #rest_spec{
+            method = patch,
+            path = <<"/provider">>,
+            expected_code = 204
+        },
+        logic_spec = #logic_spec{
+            operation = update,
+            module = n_provider_logic,
+            function = update,
+            args = [client, P1, data],
+            expected_result = ?OK_TERM(fun({B1, B2}) ->
+                is_binary(B1) andalso is_binary(B2)
+            end)
+        },
+        data_spec = #data_spec{
+            required = [<<"name">>, <<"urls">>, <<"redirectionPoint">>],
+            optional = [<<"latitude">>, <<"longitude">>],
+            correct_values = #{
+                <<"name">> => <<"New Prov name">>,
+                <<"urls">> => [<<"new.url">>],
+                <<"redirectionPoint">> => <<"https://new.url">>,
+                <<"latitude">> => -12.87645,
+                <<"longitude">> => -4.44
+            },
+            bad_values = [
+                {<<"name">>, <<"">>, ?EL_EMPTY_DATA(<<"name">>)},
+                {<<"name">>, 1234, ?EL_BAD_DATA(<<"name">>)},
+                {<<"urls">>, [], ?EL_EMPTY_DATA(<<"urls">>)},
+                {<<"urls">>, <<"127.0.0.1">>, ?EL_BAD_DATA(<<"urls">>)},
+                {<<"urls">>, 1234, ?EL_BAD_DATA(<<"urls">>)},
+                {<<"redirectionPoint">>, <<"">>, ?EL_EMPTY_DATA(<<"redirectionPoint">>)},
+                {<<"redirectionPoint">>, 1234, ?EL_BAD_DATA(<<"redirectionPoint">>)},
+                {<<"latitude">>, -1500, ?EL_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, -90.1, ?EL_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, 90.1, ?EL_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, 1500, ?EL_BAD_DATA(<<"latitude">>)},
+                {<<"longitude">>, -1500, ?EL_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, -180.1, ?EL_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, 180.1, ?EL_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, 1500, ?EL_BAD_DATA(<<"longitude">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 %%%===================================================================
