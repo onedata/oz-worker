@@ -92,7 +92,10 @@ modules_with_args() ->
     Base = node_manager:cluster_worker_modules() ++ [
         {groups_graph_caches_worker, []},
         {changes_worker, []},
-        {ozpca_worker, []},
+        {singleton, ozpca_worker, [
+            {supervisor_spec, ozpca_worker:supervisor_spec()},
+            {supervisor_child_spec, [ozpca_worker:supervisor_child_spec()]}
+        ]},
         {subscriptions_worker, []}
     ],
     case application:get_env(?APP_Name, location_service_enabled) of
