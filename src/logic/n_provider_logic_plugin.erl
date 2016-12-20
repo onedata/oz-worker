@@ -14,7 +14,7 @@
 -behaviour(entity_logic_plugin_behaviour).
 
 -include("entity_logic.hrl").
--include("entity_logic_errors.hrl").
+-include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -82,8 +82,8 @@ create(_, ProviderId, support, Data) ->
     ) of
         ok ->
             {ok, SpaceId};
-        Error ->
-            Error
+        {error, Reason} ->
+            {error, Reason}
     end;
 create(_, undefined, check_my_ports, Data) ->
     test_connection(Data).

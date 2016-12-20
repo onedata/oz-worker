@@ -13,7 +13,7 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("entity_logic_errors.hrl").
+-include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -35,45 +35,76 @@ reply(Function, LogicPlugin, EntityId, Resource, Result, Req) ->
     {ok, Req2} = cowboy_req:reply(Code, Headers, Body, Req),
     Req2.
 
-% TODO moze wyciagnac error przed nawias
+
+% General errors
 translate_error(?ERROR_INTERNAL_SERVER_ERROR) ->
     500;
-translate_error(?ERROR_MALFORMED_DATA) ->
-    {400, #{<<"error">> => <<"Provided data could not be understood by the server">>}};
 translate_error(?ERROR_NOT_FOUND) ->
     404;
 translate_error(?ERROR_UNAUTHORIZED) ->
     401;
 translate_error(?ERROR_FORBIDDEN) ->
     403;
+% Errors connected with bad data
+translate_error(?ERROR_MALFORMED_DATA) ->
+    {400, <<"Provided data could not be understood by the server">>};
 translate_error(?ERROR_MISSING_REQUIRED_DATA(Key)) ->
-    {400, #{<<"error">> => <<"Missing required data: ", Key/binary>>}};
+    {400, {<<"Missing required data: ~s">>, [Key]}};
 translate_error(?ERROR_MISSING_AT_LEAST_ONE_DATA(Keys)) ->
     KeysList = str_utils:join_binary(maps:keys(Keys), <<", ">>),
-    {400, #{<<"error">> => <<"Missing data, you must provide at least one of: ", KeysList/binary>>}};
+    {400, {<<"Missing data, you must provide at least one of: ">>, [KeysList]}};
 translate_error(?ERROR_BAD_DATA(Key)) ->
-    {400, #{<<"error">> => <<"Bad data: ", Key/binary, "">>}};
+    {400, {<<"Bad value: provided \"~s\"">>, [Key]}};
 translate_error(?ERROR_EMPTY_DATA(Key)) ->
-    {400, #{<<"error">> => <<Key/binary, " cannot be empty">>}};
+    {400, {<<"Bad value: provided \"~s\" cannot be empty">>, [Key]}};
 translate_error(?ERROR_ID_NOT_FOUND(Key)) ->
-    {400, #{<<"error">> => <<"Provided ", Key/binary, " could not be found">>}};
+    {400, {<<"Bad value: provided ID (\"~s\") does not exist">>, [Key]}};
 translate_error(?ERROR_ID_OCCUPIED(Key)) ->
-    {400, #{<<"error">> => <<"Provided ", Key/binary, " is occupied">>}};
+    {400, {<<"Bad value: provided ID (\"~s\") is already occupied">>, [Key]}};
 translate_error(?ERROR_BAD_TOKEN(Key)) ->
-    {400, #{<<"error">> => <<"Provided ", Key/binary, " is not valid">>}};
+    {400, {<<"Bad value: provided \"~s\" is not a valid token">>, [Key]}};
 translate_error(?ERROR_BAD_TOKEN_TYPE(Key)) ->
-    {400, #{<<"error">> => <<"Provided ", Key/binary, " is of incorrect type">>}};
-translate_error(?EL_RELATION_EXISTS) ->
-    {400, #{<<"error">> => <<"Such relation already exists">>}};
-translate_error(?EL_RELATION_DOES_NOT_EXIST) ->
-    {400, #{<<"error">> => <<"Such relation does not exist">>}};
+    {400, {<<"Bad value: provided \"~s\" is of invalid type">>, [Key]}};
+translate_error(?ERROR_VALUE_NOT_POSITIVE(Key)) ->
+    {400, {<<"Bad value: provided \"~s\" must be a positive integer">>, [Key]}};
+translate_error(?ERROR_VALUE_TOO_LOW(Key, Threshold)) ->
+    {400, {<<"Bad value: provided \"~s\" must be at least ~B">>, [Key, Threshold]}};
+translate_error(?ERROR_VALUE_TOO_HIGH(Key, Threshold)) ->
+    {400, {<<"Bad value: provided \"~s\" must not exceed ~B">>, [Key, Threshold]}};
+translate_error(?ERROR_VALUE_NOT_BETWEEN(Key, Low, High)) ->
+    {400, {<<"Bad value: provided \"~s\" must be between <~B, ~B>">>, [Key, Low, High]}};
+% Errors connected with relations between entities
+translate_error(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
+    RelationToString = case {ChType, ParType} of
+        {od_space, od_provider} -> <<"is not supported by">>;
+        {_, _} -> <<"is not a member of">>
+    end,
+    {400, {<<"Bad value: ~s \"~s\" ~s ~s \"~s\"">>, [
+        model_to_string(ChType), ChId, RelationToString, model_to_string(ParType), ParId
+    ]}};
+translate_error(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
+    RelationToString = case {ChType, ParType} of
+        {od_space, od_provider} -> <<"is alraedy supported by">>;
+        {_, _} -> <<"is already a member of">>
+    end,
+    {400, {<<"Bad value: ~s \"~s\" ~s ~s \"~s\"">>, [
+        model_to_string(ChType), ChId, RelationToString, model_to_string(ParType), ParId
+    ]}};
+% Wildcard match
 translate_error({error, Reason}) ->
     ?warning("Unexpected error: {error, ~p} in rest error translator", [Reason]),
     translate_error(?ERROR_INTERNAL_SERVER_ERROR).
 
 
 translate(_, _, _, _, {error, Type}) ->
-    translate_error({error, Type});
+    case translate_error({error, Type}) of
+        Code when is_integer(Code) ->
+            Code;
+        {Code, MessageBinary} ->
+            {Code, #{<<"error">> => MessageBinary}};
+        {Code, {MessageFormat, FormatArgs}} ->
+            {Code, #{<<"error">> => str_utils:format_bin(MessageFormat, FormatArgs)}}
+    end;
 translate(create, ?PROVIDER_PLUGIN, undefined, entity, {ok, {ProvId, Certificate}}) ->
     {200, #{
         <<"providerId">> => ProvId,
@@ -134,3 +165,12 @@ created_reply(PathTokens) ->
         {<<"location">>, filename:join([RestPrefix | PathTokens])}
     ],
     {201, LocationHeader, <<"">>}.
+
+
+model_to_string(od_user) -> <<"user">>;
+model_to_string(od_group) -> <<"group">>;
+model_to_string(od_provider) -> <<"provider">>;
+model_to_string(od_space) -> <<"space">>;
+model_to_string(od_share) -> <<"share">>;
+model_to_string(od_handle_service) -> <<"handle service">>;
+model_to_string(od_handle) -> <<"handle">>.
