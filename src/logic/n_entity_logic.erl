@@ -427,7 +427,7 @@ create(Client, ELPlugin, EntityId, Resource, Data) ->
             ?error_stacktrace("Error in entity_logic:create - ~p:~p", [
                 Error, Message
             ]),
-            ?EL_INTERNAL_SERVER_ERROR
+            ?ERROR_INTERNAL_SERVER_ERROR
     end.
 
 
@@ -450,7 +450,7 @@ get(Client, ELPlugin, EntityId, Resource) ->
             ?error_stacktrace("Error in entity_logic:get - ~p:~p", [
                 Error, Message
             ]),
-            ?EL_INTERNAL_SERVER_ERROR
+            ?ERROR_INTERNAL_SERVER_ERROR
     end.
 
 
@@ -475,7 +475,7 @@ update(Client, ELPlugin, EntityId, Resource, Data) ->
             ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
                 Error, Message
             ]),
-            ?EL_INTERNAL_SERVER_ERROR
+            ?ERROR_INTERNAL_SERVER_ERROR
     end.
 
 
@@ -498,7 +498,7 @@ delete(Client, ELPlugin, EntityId, Resource) ->
             ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
                 Error, Message
             ]),
-            ?EL_INTERNAL_SERVER_ERROR
+            ?ERROR_INTERNAL_SERVER_ERROR
     end.
 
 
@@ -508,8 +508,8 @@ call_get_entity(Request) ->
     case ELPlugin:get_entity(EntityId) of
         {ok, Entity} ->
             Entity;
-        ?EL_NOT_FOUND ->
-            throw(?EL_NOT_FOUND)
+        ?ERROR_NOT_FOUND ->
+            throw(?ERROR_NOT_FOUND)
     end.
 
 
@@ -550,8 +550,8 @@ call_get_resource(Request) ->
     case Result of
         {ok, _} ->
             Result;
-        ?EL_NOT_FOUND ->
-            throw(?EL_NOT_FOUND)
+        ?ERROR_NOT_FOUND ->
+            throw(?ERROR_NOT_FOUND)
     end.
 
 
@@ -625,11 +625,11 @@ call_authorize(Request) ->
             case Client of
                 ?NOBODY ->
                     % The client was not authenticated -> unauthorized
-                    throw(?EL_UNAUTHORIZED);
+                    throw(?ERROR_UNAUTHORIZED);
                 _ ->
                     % The client was authenticated but cannot access the
                     % resource -> forbidden
-                    throw(?EL_FORBIDDEN)
+                    throw(?ERROR_FORBIDDEN)
             end
     end.
 
@@ -647,11 +647,11 @@ check_existence(Request) ->
     Verificators = call_exists(Request),
     check_existence(Verificators, Request).
 check_existence([], _) ->
-    throw(?EL_NOT_FOUND);
+    throw(?ERROR_NOT_FOUND);
 check_existence([true | _], Request) ->
     Request;
 check_existence([false | _], _) ->
-    throw(?EL_NOT_FOUND);
+    throw(?ERROR_NOT_FOUND);
 check_existence([{external, Fun} | Tail], Request) ->
     case Fun() of
         true ->
@@ -678,11 +678,11 @@ check_authorization(#request{client = Client} = Request) ->
             case Client of
                 ?NOBODY ->
                     % The client was not authenticated -> unauthorized
-                    throw(?EL_UNAUTHORIZED);
+                    throw(?ERROR_UNAUTHORIZED);
                 _ ->
                     % The client was authenticated but cannot access the
                     % resource -> forbidden
-                    throw(?EL_FORBIDDEN)
+                    throw(?ERROR_FORBIDDEN)
             end;
         NewRequest ->
             NewRequest
@@ -725,7 +725,7 @@ check_validity(#request{data = Data} = Request) ->
         fun(Key, DataAcc) ->
             case transform_and_check_value(Key, DataAcc, Required) of
                 false ->
-                    throw(?EL_MISSING_REQUIRED_DATA(Key));
+                    throw(?ERROR_MISSING_REQUIRED_DATA(Key));
                 {true, NewData} ->
                     NewData
             end
@@ -759,7 +759,7 @@ check_validity(#request{data = Data} = Request) ->
         {0, false} ->
             ok;
         {_, false} ->
-            throw(?EL_MISSING_AT_LEAST_ONE_DATA(maps:keys(AtLeastOne)))
+            throw(?ERROR_MISSING_AT_LEAST_ONE_DATA(maps:keys(AtLeastOne)))
     end,
     Request#request{data = Data4}.
 
@@ -776,26 +776,26 @@ transform_and_check_value(Key, Data, Validator) ->
                     true ->
                         {true, Data#{Key => NewValue}};
                     false ->
-                        throw(?EL_BAD_DATA(Key))
+                        throw(?ERROR_BAD_DATA(Key))
                 end
             catch
                 throw:bad_data ->
-                    throw(?EL_BAD_DATA(Key));
+                    throw(?ERROR_BAD_DATA(Key));
                 throw:empty ->
-                    throw(?EL_EMPTY_DATA(Key));
+                    throw(?ERROR_EMPTY_DATA(Key));
                 throw:id_not_found ->
-                    throw(?EL_ID_NOT_FOUND(Key));
+                    throw(?ERROR_ID_NOT_FOUND(Key));
                 throw:id_occupied ->
-                    throw(?EL_ID_OCCUPIED(Key));
+                    throw(?ERROR_ID_OCCUPIED(Key));
                 throw:bad_token ->
-                    throw(?EL_BAD_TOKEN(Key));
+                    throw(?ERROR_BAD_TOKEN(Key));
                 throw:bad_token_type ->
-                    throw(?EL_BAD_TOKEN_TYPE(Key));
+                    throw(?ERROR_BAD_TOKEN_TYPE(Key));
                 throw:Throw ->
                     throw(Throw);
                 A:B ->
                     ?dump({A, B, erlang:get_stacktrace()}),
-                    throw(?EL_BAD_DATA(Key))
+                    throw(?ERROR_BAD_DATA(Key))
             end
     end.
 
@@ -858,7 +858,7 @@ check_type(token, Macaroon) ->
     Macaroon;
 check_type(Rule, _) ->
     ?error("Unknown type rule: ~p", [Rule]),
-    throw(?EL_INTERNAL_SERVER_ERROR).
+    throw(?ERROR_INTERNAL_SERVER_ERROR).
 
 
 check_value(_, any, _) ->
@@ -913,4 +913,4 @@ check_value(token, TokenType, Macaroon) ->
     end;
 check_value(_, Rule, _) ->
     ?error("Unknown value rule: ~p", [Rule]),
-    throw(?EL_INTERNAL_SERVER_ERROR).
+    throw(?ERROR_INTERNAL_SERVER_ERROR).

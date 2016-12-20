@@ -35,7 +35,7 @@ provider_routes() ->
         }}},
         {<<"/providers/:id">>, #rest_req{methods = #{
             get => {P, ?BINDING(id), entity},  % DONE
-            delete => {P, ?BINDING(id), entity} % TODO
+            delete => {P, ?BINDING(id), entity} % DONE
         }}},
         {<<"/providers/:id/users">>, #rest_req{methods = #{
             get => {P, ?BINDING(id), users}  % DONE
@@ -58,11 +58,11 @@ provider_routes() ->
         {<<"/provider">>, #rest_req{methods = #{
             get => {P, ?CLIENT_ID, entity},  % DONE
             post => {P, undefined, entity},  % DONE
-            patch => {P, ?CLIENT_ID, entity},
-            delete => {P, ?CLIENT_ID, entity}
+            patch => {P, ?CLIENT_ID, entity},  % DONE
+            delete => {P, ?CLIENT_ID, entity}  % DONE
         }}},
         {<<"/provider_dev">>, #rest_req{methods = #{
-            post => {P, undefined, entity}
+            post => {P, undefined, entity}  % DONE
         }}},
         {<<"/provider/spaces">>, #rest_req{methods = #{
             get => {P, ?CLIENT_ID, spaces},

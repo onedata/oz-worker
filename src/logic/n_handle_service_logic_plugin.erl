@@ -64,7 +64,7 @@ get_entity(HServiceId) ->
         {ok, #document{value = HandleService}} ->
             {ok, HandleService};
         _ ->
-            ?EL_NOT_FOUND
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -92,6 +92,8 @@ delete(HServiceId) when is_binary(HServiceId) ->
 
 
 exists(undefined, entity) ->
+    true;
+exists(undefined, list) ->
     true;
 exists(HServiceId, entity) when is_binary(HServiceId) ->
     {internal, fun(#od_handle_service{}) ->

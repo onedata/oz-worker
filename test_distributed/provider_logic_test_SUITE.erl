@@ -63,27 +63,27 @@ create_test(Config) ->
     ?assertMatch({ok, _}, oz_test_utils:call_oz(
         Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA]
     )),
-    ?assertMatch({error, ?EL_BAD_DATA(<<"csr">>)}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_BAD_DATA(<<"csr">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA#{
             <<"csr">> => <<"wrong-csr">>
         }]
     )),
-    ?assertMatch({error, ?EL_BAD_DATA(<<"latitude">>)}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_BAD_DATA(<<"latitude">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA#{
             <<"latitude">> => -91
         }]
     )),
-    ?assertMatch({error, ?EL_BAD_DATA(<<"latitude">>)}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_BAD_DATA(<<"latitude">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA#{
             <<"latitude">> => 91
         }]
     )),
-    ?assertMatch({error, ?EL_BAD_DATA(<<"longitude">>)}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_BAD_DATA(<<"longitude">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA#{
             <<"longitude">> => -181
         }]
     )),
-    ?assertMatch({error, ?EL_BAD_DATA(<<"longitude">>)}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_BAD_DATA(<<"longitude">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA#{
             <<"longitude">> => 181
         }]
@@ -104,7 +104,7 @@ support_space_test(Config) ->
         Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA]
     ),
     % Try bad token first
-    ?assertMatch({error, ?EL_BAD_TOKEN(<<"token">>)}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_BAD_TOKEN(<<"token">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(P1), P1, #{
             <<"token">> => <<"bad-token">>, <<"size">> => MinimumSupportSize
         }]
@@ -113,7 +113,7 @@ support_space_test(Config) ->
     {ok, BadMacaroon} = oz_test_utils:call_oz(
         Config, n_space_logic, create_invite_user_token, [?USER(U1), S1]
     ),
-    ?assertMatch({error, ?EL_BAD_TOKEN_TYPE(<<"token">>)}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_BAD_TOKEN_TYPE(<<"token">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(P1), P1, #{
             <<"token">> => BadMacaroon, <<"size">> => MinimumSupportSize
         }]
@@ -122,7 +122,7 @@ support_space_test(Config) ->
         Config, n_space_logic, create_invite_provider_token, [?USER(U1), S1]
     ),
     % Bad support size
-    {error, ?EL_BAD_DATA(<<"size">>)} = oz_test_utils:call_oz(
+    {error, ?ERROR_BAD_DATA(<<"size">>)} = oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(P1), P1, #{
             <<"token">> => Macaroon, <<"size">> => 100
         }]
@@ -201,7 +201,7 @@ get_test(Config) ->
     ?assertEqual(#{}, GetResult2#od_provider.eff_groups),
 
     % But anyone should not
-    ?assertMatch({error, ?EL_UNAUTHORIZED}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_UNAUTHORIZED}, oz_test_utils:call_oz(
         Config, n_provider_logic, get, [?NOBODY, P1]
     )).
 
@@ -232,7 +232,7 @@ get_spaces_test(Config) ->
         Config, n_provider_logic, get_space, [?PROVIDER(P1), P1, S3]
     )),
     % Check if getting random id does not work
-    ?assertMatch({error, ?EL_NOT_FOUND}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_NOT_FOUND}, oz_test_utils:call_oz(
         Config, n_provider_logic, get_space, [?PROVIDER(P1), P1, <<"asd">>]
     )).
 

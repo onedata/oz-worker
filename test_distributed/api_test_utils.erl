@@ -217,11 +217,11 @@ run_logic_tests(Config, LogicSpec, #client_spec{correct = []} = ClientSpec, Data
     } = LogicSpec,
     {TestDesc, Client, ExpResult, NewClientSpec} = case ClientSpec of
         #client_spec{unauthorized = [Head | Tail]} ->
-            {"unauthorized client should fail", Head, ?EL_UNAUTHORIZED,
+            {"unauthorized client should fail", Head, ?ERROR_UNAUTHORIZED,
                 ClientSpec#client_spec{unauthorized = Tail}
             };
         #client_spec{forbidden = [Head | Tail]} ->
-            {"forbidden client should fail", Head, ?EL_FORBIDDEN,
+            {"forbidden client should fail", Head, ?ERROR_FORBIDDEN,
                 ClientSpec#client_spec{forbidden = Tail}
             }
     end,

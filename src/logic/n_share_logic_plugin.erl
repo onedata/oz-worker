@@ -49,7 +49,7 @@ get_entity(ShareId) ->
         {ok, #document{value = Share}} ->
             {ok, Share};
         _ ->
-            ?EL_NOT_FOUND
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -77,6 +77,8 @@ delete(ShareId) when is_binary(ShareId) ->
 
 
 exists(undefined, entity) ->
+    true;
+exists(undefined, list) ->
     true;
 exists(ShareId, entity) when is_binary(ShareId) ->
     {internal, fun(#od_share{}) ->

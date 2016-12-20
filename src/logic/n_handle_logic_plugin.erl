@@ -76,7 +76,7 @@ get_entity(HandleId) ->
         {ok, #document{value = Handle}} ->
             {ok, Handle};
         _ ->
-            ?EL_NOT_FOUND
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -103,6 +103,8 @@ delete(HandleId) when is_binary(HandleId) ->
 
 
 exists(undefined, entity) ->
+    true;
+exists(undefined, list) ->
     true;
 exists(HandleId, entity) when is_binary(HandleId) ->
     {internal, fun(#od_handle{}) ->

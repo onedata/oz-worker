@@ -36,32 +36,32 @@ reply(Function, LogicPlugin, EntityId, Resource, Result, Req) ->
     Req2.
 
 % TODO moze wyciagnac error przed nawias
-translate_error(?EL_INTERNAL_SERVER_ERROR) ->
+translate_error(?ERROR_INTERNAL_SERVER_ERROR) ->
     500;
-translate_error(?EL_MALFORMED_DATA) ->
+translate_error(?ERROR_MALFORMED_DATA) ->
     {400, #{<<"error">> => <<"Provided data could not be understood by the server">>}};
-translate_error(?EL_NOT_FOUND) ->
+translate_error(?ERROR_NOT_FOUND) ->
     404;
-translate_error(?EL_UNAUTHORIZED) ->
+translate_error(?ERROR_UNAUTHORIZED) ->
     401;
-translate_error(?EL_FORBIDDEN) ->
+translate_error(?ERROR_FORBIDDEN) ->
     403;
-translate_error(?EL_MISSING_REQUIRED_DATA(Key)) ->
+translate_error(?ERROR_MISSING_REQUIRED_DATA(Key)) ->
     {400, #{<<"error">> => <<"Missing required data: ", Key/binary>>}};
-translate_error(?EL_MISSING_AT_LEAST_ONE_DATA(Keys)) ->
+translate_error(?ERROR_MISSING_AT_LEAST_ONE_DATA(Keys)) ->
     KeysList = str_utils:join_binary(maps:keys(Keys), <<", ">>),
     {400, #{<<"error">> => <<"Missing data, you must provide at least one of: ", KeysList/binary>>}};
-translate_error(?EL_BAD_DATA(Key)) ->
+translate_error(?ERROR_BAD_DATA(Key)) ->
     {400, #{<<"error">> => <<"Bad data: ", Key/binary, "">>}};
-translate_error(?EL_EMPTY_DATA(Key)) ->
+translate_error(?ERROR_EMPTY_DATA(Key)) ->
     {400, #{<<"error">> => <<Key/binary, " cannot be empty">>}};
-translate_error(?EL_ID_NOT_FOUND(Key)) ->
+translate_error(?ERROR_ID_NOT_FOUND(Key)) ->
     {400, #{<<"error">> => <<"Provided ", Key/binary, " could not be found">>}};
-translate_error(?EL_ID_OCCUPIED(Key)) ->
+translate_error(?ERROR_ID_OCCUPIED(Key)) ->
     {400, #{<<"error">> => <<"Provided ", Key/binary, " is occupied">>}};
-translate_error(?EL_BAD_TOKEN(Key)) ->
+translate_error(?ERROR_BAD_TOKEN(Key)) ->
     {400, #{<<"error">> => <<"Provided ", Key/binary, " is not valid">>}};
-translate_error(?EL_BAD_TOKEN_TYPE(Key)) ->
+translate_error(?ERROR_BAD_TOKEN_TYPE(Key)) ->
     {400, #{<<"error">> => <<"Provided ", Key/binary, " is of incorrect type">>}};
 translate_error(?EL_RELATION_EXISTS) ->
     {400, #{<<"error">> => <<"Such relation already exists">>}};
@@ -69,7 +69,7 @@ translate_error(?EL_RELATION_DOES_NOT_EXIST) ->
     {400, #{<<"error">> => <<"Such relation does not exist">>}};
 translate_error({error, Reason}) ->
     ?warning("Unexpected error: {error, ~p} in rest error translator", [Reason]),
-    translate_error(?EL_INTERNAL_SERVER_ERROR).
+    translate_error(?ERROR_INTERNAL_SERVER_ERROR).
 
 
 translate(_, _, _, _, {error, Type}) ->
@@ -122,7 +122,7 @@ translate(Function, LogicPlugin, EntityId, Resource, Result) ->
     "Result: ~p~n", [
         Function, LogicPlugin, EntityId, Resource, Result
     ]),
-    translate([], [], [], [], ?EL_INTERNAL_SERVER_ERROR).
+    translate([], [], [], [], ?ERROR_INTERNAL_SERVER_ERROR).
 
 
 % Make sure there is no leading slash

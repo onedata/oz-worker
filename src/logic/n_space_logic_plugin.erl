@@ -70,7 +70,7 @@ get_entity(SpaceId) ->
         {ok, #document{value = Space}} ->
             {ok, Space};
         _ ->
-            ?EL_NOT_FOUND
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -101,6 +101,8 @@ delete(SpaceId) when is_binary(SpaceId) ->
 
 exists(undefined, entity) ->
     true;
+exists(undefined, list) ->
+    true;
 exists(SpaceId, _) when is_binary(SpaceId) ->
     % No matter the resource, return true if it belongs to a space
     {internal, fun(#od_space{}) ->
@@ -121,6 +123,8 @@ authorize(create, _SpaceId, invite_provider_token, ?USER(UserId), _) ->
 authorize(create, _SpaceId, invite_user_token, ?USER(UserId), _) ->
     auth_by_privilege(UserId, space_invite_user);
 
+authorize(get, undefined, list, ?USER(UserId), _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_spaces);
 authorize(get, _SpaceId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, space_view_data);
 authorize(get, _SpaceId, entity, ?USER(UserId), _) ->

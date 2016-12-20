@@ -45,8 +45,8 @@ get_rest_api_prefix(Config) ->
 %%    },
 %%    expect => #{
 %%      code => 200, % Optional, by default not validated
-%%      headers => [{<<"key">>, <<"value">>}], % Optional, by def. not validated
-%%                 {contains, [{<<"key">>, <<"value">>}]} % checks if given
+%%      headers => #{<<"key">> => <<"value">>}, % Optional, by def. not validated
+%%                 {contains, #{<<"key">> => <<"value">>}} % checks if given
 %%                      (key, value) pair is included in response headers
 %%      body => <<"binary">> orelse #{} % Optional, by default not validated
 %%      % Specifying a map here will cause validation of JSON content-wise
@@ -61,19 +61,24 @@ check_rest_call(Config, ArgsMap) ->
 
         ReqMethod = maps:get(method, RequestMap, get),
         ReqPath = case maps:get(path, RequestMap) of
-            Bin when is_binary(Bin) ->
-                [Bin];
+            Bin1 when is_binary(Bin1) ->
+                [Bin1];
             List ->
                 List
         end,
-        ReqHeaders = maps:get(headers, RequestMap, [
-            {<<"content-type">>, <<"application/json">>}
-        ]),
-        ReqBody = case maps:get(body, RequestMap, <<"">>) of
-            Bin2 when is_binary(Bin2) ->
-                Bin2;
+        ReqHeaders = case maps:get(headers, RequestMap, undefined) of
+            undefined ->
+                #{<<"content-type">> => <<"application/json">>};
             Map2 when is_map(Map2) ->
-                json_utils:encode_map(Map2)
+                Map2
+        end,
+        ReqBody = case maps:get(body, RequestMap, undefined) of
+            undefined ->
+                <<"">>;
+            Bin3 when is_binary(Bin3) ->
+                Bin3;
+            Map3 when is_map(Map3) ->
+                json_utils:encode_map(Map3)
         end,
         ReqOpts = maps:get(opts, RequestMap, []),
         ReqURL = maps:get(url, RequestMap, get_random_oz_url(Config)),
@@ -108,7 +113,7 @@ check_rest_call(Config, ArgsMap) ->
                     1 -> <<"macaroon">>;
                     2 -> <<"X-Auth-Token">>
                 end,
-                [{HeaderName, Macaroon} | ReqHeaders]
+                ReqHeaders#{HeaderName => Macaroon}
         end,
         ReqOptsPlusAuth = case ReqAuth of
             nobody ->
@@ -122,9 +127,14 @@ check_rest_call(Config, ArgsMap) ->
                 ]} | ReqOpts]
         end,
         % Add insecure option - we do not want the OZ server cert to be checked.
-        {ok, RespCode, RespHeaders, RespBody} = http_client:request(
-            ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOptsPlusAuth]
+        {ok, RespCode, RespHeadersList, RespBody} = http_client:request(
+            ReqMethod,
+            URL,
+            maps:to_list(HeadersPlusAuth),
+            ReqBody,
+            [insecure | ReqOptsPlusAuth]
         ),
+        RespHeaders = maps:from_list(RespHeadersList),
 
         % Check response code if specified
         case ExpCode of
@@ -169,7 +179,7 @@ check_rest_call(Config, ArgsMap) ->
         case ExpBody of
             undefined ->
                 ok;
-            Bin3 when is_binary(Bin3) ->
+            Bin4 when is_binary(Bin4) ->
                 case RespBody of
                     ExpBody ->
                         ok;
@@ -178,7 +188,7 @@ check_rest_call(Config, ArgsMap) ->
                             RespCode, RespHeaders, RespBody
                         }})
                 end;
-            Map3 when is_map(Map3) ->
+            Map4 when is_map(Map4) ->
                 ActualBodyMap = json_utils:decode_map(RespBody),
                 case compare_maps(ActualBodyMap, ExpBody) of
                     true ->
@@ -216,13 +226,12 @@ check_rest_call(Config, ArgsMap) ->
         % Something wrong, return details. If assert is used, the test will fail
         % and properly display the point of failure.
         throw:{Type, Actual, Expected, {Code, Headers, Body}} ->
-            HeadersMap = maps:from_list(Headers),
             BodyMap = try json_utils:decode_map(Body) catch _:_ -> Body end,
             {
                 Type,
                 {got, Actual},
                 {expected, Expected},
-                {response, {Code, HeadersMap, BodyMap}}
+                {response, {Code, Headers, BodyMap}}
             };
         % Unexpected error
         Type:Message ->

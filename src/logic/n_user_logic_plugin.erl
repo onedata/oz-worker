@@ -33,7 +33,7 @@ get_entity(UserId) ->
         {ok, #document{value = Group}} ->
             {ok, Group};
         _ ->
-            ?EL_NOT_FOUND
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -65,6 +65,8 @@ delete(UserId) when is_binary(UserId) ->
 
 
 exists(undefined, entity) ->
+    true;
+exists(undefined, list) ->
     true;
 exists(UserId, _) when is_binary(UserId) ->
     {internal, fun(#od_user{}) ->

@@ -24,7 +24,7 @@
 
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
+-export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([
     create_test/1,
     support_space_test/1,
@@ -91,24 +91,24 @@ create_test(Config) ->
                 <<"longitude">> => -24.8
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?EL_EMPTY_DATA(<<"name">>)},
-                {<<"name">>, 1234, ?EL_BAD_DATA(<<"name">>)},
-                {<<"urls">>, [], ?EL_EMPTY_DATA(<<"urls">>)},
-                {<<"urls">>, <<"127.0.0.1">>, ?EL_BAD_DATA(<<"urls">>)},
-                {<<"urls">>, 1234, ?EL_BAD_DATA(<<"urls">>)},
-                {<<"redirectionPoint">>, <<"">>, ?EL_EMPTY_DATA(<<"redirectionPoint">>)},
-                {<<"redirectionPoint">>, 1234, ?EL_BAD_DATA(<<"redirectionPoint">>)},
-                {<<"csr">>, <<"">>, ?EL_EMPTY_DATA(<<"csr">>)},
-                {<<"csr">>, 1234, ?EL_BAD_DATA(<<"csr">>)},
-                {<<"csr">>, <<"wrong-csr">>, ?EL_BAD_DATA(<<"csr">>)},
-                {<<"latitude">>, -1500, ?EL_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, -90.1, ?EL_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, 90.1, ?EL_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, 1500, ?EL_BAD_DATA(<<"latitude">>)},
-                {<<"longitude">>, -1500, ?EL_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, -180.1, ?EL_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, 180.1, ?EL_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, 1500, ?EL_BAD_DATA(<<"longitude">>)}
+                {<<"name">>, <<"">>, ?ERROR_EMPTY_DATA(<<"name">>)},
+                {<<"name">>, 1234, ?ERROR_BAD_DATA(<<"name">>)},
+                {<<"urls">>, [], ?ERROR_EMPTY_DATA(<<"urls">>)},
+                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_DATA(<<"urls">>)},
+                {<<"urls">>, 1234, ?ERROR_BAD_DATA(<<"urls">>)},
+                {<<"redirectionPoint">>, <<"">>, ?ERROR_EMPTY_DATA(<<"redirectionPoint">>)},
+                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_DATA(<<"redirectionPoint">>)},
+                {<<"csr">>, <<"">>, ?ERROR_EMPTY_DATA(<<"csr">>)},
+                {<<"csr">>, 1234, ?ERROR_BAD_DATA(<<"csr">>)},
+                {<<"csr">>, <<"wrong-csr">>, ?ERROR_BAD_DATA(<<"csr">>)},
+                {<<"latitude">>, -1500, ?ERROR_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, -90.1, ?ERROR_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, 90.1, ?ERROR_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, 1500, ?ERROR_BAD_DATA(<<"latitude">>)},
+                {<<"longitude">>, -1500, ?ERROR_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, -180.1, ?ERROR_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, 180.1, ?ERROR_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, 1500, ?ERROR_BAD_DATA(<<"longitude">>)}
             ]
         }
     },
@@ -126,6 +126,18 @@ support_space_test(Config) ->
     {ok, BadMacaroon1} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     {ok, BadTokenType1} = token_logic:serialize(BadMacaroon1),
 
+    % Reused in all specs
+    BadValues = [
+        {<<"token">>, <<"bad-token">>, ?ERROR_BAD_TOKEN(<<"token">>)},
+        {<<"token">>, 1234, ?ERROR_BAD_TOKEN(<<"token">>)},
+        {<<"token">>, BadTokenType1, ?ERROR_BAD_TOKEN_TYPE(<<"token">>)},
+        {<<"size">>, <<"binary">>, ?ERROR_BAD_DATA(<<"size">>)},
+        {<<"size">>, 0, ?ERROR_BAD_DATA(<<"size">>)},
+        {<<"size">>, -1000, ?ERROR_BAD_DATA(<<"size">>)},
+        {<<"size">>, MinimumSupportSize - 1, ?ERROR_BAD_DATA(<<"size">>)}
+    ],
+
+    % Check only REST first
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             % Both providers are correct clients, as this is an endpoint
@@ -136,7 +148,6 @@ support_space_test(Config) ->
                 {provider, P2, KeyFile2, CertFile2}
             ]
         },
-        logic_spec = undefined,
         rest_spec = #rest_spec{
             method = post,
             path = <<"/provider/spaces/support">>,
@@ -164,51 +175,17 @@ support_space_test(Config) ->
                 end,
                 <<"size">> => MinimumSupportSize
             },
-            bad_values = [
-                {<<"token">>, <<"bad-token">>, ?EL_BAD_TOKEN(<<"token">>)},
-                {<<"token">>, 1234, ?EL_BAD_TOKEN(<<"token">>)},
-                {<<"token">>, BadTokenType1, ?EL_BAD_TOKEN_TYPE(<<"token">>)},
-                {<<"size">>, <<"binary">>, ?EL_BAD_DATA(<<"size">>)},
-                {<<"size">>, 0, ?EL_BAD_DATA(<<"size">>)},
-                {<<"size">>, -1000, ?EL_BAD_DATA(<<"size">>)},
-                {<<"size">>, MinimumSupportSize - 1, ?EL_BAD_DATA(<<"size">>)}
-            ]
+            bad_values = BadValues
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
     % Check logic endpoints - here we have to specify provider Id, so
     % different clients will be authorized.
-    % We expect {ok, SpaceId} upon success
-    ExpectedSupportResult = ?OK_TERM(fun(SpaceId) ->
-        % Should return space id of the newly supported space
-        {ok, #od_space{
-            providers = Providers
-        }} = oz_test_utils:get_space(Config, ?ROOT, SpaceId),
-        maps:is_key(P1, Providers)
-    end),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             % Only provider 1 is authorized to perform support operation on
             % behalf of provider 1.
-            correct = [root, {provider, P1, KeyFile1, CertFile1}],
-            unauthorized = [nobody],
-            forbidden = [{provider, P2, KeyFile2, CertFile2}]
-        },
-        logic_spec = #logic_spec{
-            operation = create,
-            module = n_provider_logic,
-            function = support_space,
-            args = [client, P1, data],
-            expected_result = ExpectedSupportResult
-        },
-        rest_spec = undefined
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-
-    % provider_logic should also allow using non-serialized macaroons, check it
-    {ok, BadMacaroon3} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
-    ApiTestSpec3 = #api_test_spec{
-        client_spec = #client_spec{
             correct = [root, {provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
             forbidden = [{user, U1}, {provider, P2, KeyFile2, CertFile2}]
@@ -218,8 +195,23 @@ support_space_test(Config) ->
             module = n_provider_logic,
             function = support_space,
             args = [client, P1, data],
-            expected_result = ExpectedSupportResult
+            expected_result = ?OK_TERM(fun(SpaceId) ->
+                % Should return space id of the newly supported space
+                {ok, #od_space{
+                    providers = Providers
+                }} = oz_test_utils:get_space(Config, ?ROOT, SpaceId),
+                maps:is_key(P1, Providers)
+            end)
         },
+        rest_spec = undefined
+        % data_spec is inherited from ApiTestSpec
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % provider_logic should also allow using non-serialized macaroons, check it
+    {ok, BadMacaroon3} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
+    ApiTestSpec3 = ApiTestSpec2#api_test_spec{
+        % client_spec and logic_spec are inherited from ApiTestSpec
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
@@ -238,14 +230,8 @@ support_space_test(Config) ->
                 end,
                 <<"size">> => MinimumSupportSize
             },
-            bad_values = [
-                {<<"token">>, <<"asd">>, ?EL_BAD_TOKEN(<<"token">>)},
-                {<<"token">>, 1234, ?EL_BAD_TOKEN(<<"token">>)},
-                {<<"token">>, BadMacaroon3, ?EL_BAD_TOKEN_TYPE(<<"token">>)},
-                {<<"size">>, <<"binary">>, ?EL_BAD_DATA(<<"size">>)},
-                {<<"size">>, 0, ?EL_BAD_DATA(<<"size">>)},
-                {<<"size">>, -1000, ?EL_BAD_DATA(<<"size">>)},
-                {<<"size">>, MinimumSupportSize - 1, ?EL_BAD_DATA(<<"size">>)}
+            bad_values = BadValues ++ [
+                {<<"token">>, BadMacaroon3, ?ERROR_BAD_TOKEN_TYPE(<<"token">>)}
             ]
         }
     },
@@ -253,6 +239,8 @@ support_space_test(Config) ->
 
 
 list_test(Config) ->
+    % Make sure that providers created in other tests are deleted.
+    ok = oz_test_utils:delete_all_entities(Config),
     % Register some providers
     {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
@@ -261,12 +249,13 @@ list_test(Config) ->
     {ok, {P3, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P3">>),
     {ok, {P4, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P4">>),
     {ok, {P5, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P5">>),
+    ExpProviders = [P1, P2, P3, P4, P5],
     % Create two users, grant one of them the privilege to list providers.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         list_providers
-    ]    ),
+    ]),
 
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
@@ -280,14 +269,14 @@ list_test(Config) ->
             method = get,
             path = <<"/providers">>,
             expected_code = 200,
-            expected_body = #{<<"providers">> => [P1, P2, P3, P4, P5]}
+            expected_body = #{<<"providers">> => ExpProviders}
         },
         logic_spec = #logic_spec{
             operation = get,
             module = n_provider_logic,
             function = list,
             args = [client],
-            expected_result = ?OK_BINARY
+            expected_result = ?OK_LIST(ExpProviders)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -402,18 +391,18 @@ get_eff_users_test(Config) ->
 
     % There are no users yet
     ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
+        client_spec = ClientSpec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
             forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = get,
             path = [<<"/providers/">>, P1, <<"/users">>],
             expected_code = 200,
             expected_body = #{<<"users">> => []}
         },
-        logic_spec = #logic_spec{
+        logic_spec = LogicSpec = #logic_spec{
             operation = get,
             module = n_provider_logic,
             function = get_eff_users,
@@ -439,27 +428,18 @@ get_eff_users_test(Config) ->
         end, lists:zip(lists:seq(1, 9), [S1, S2, S3, S1, S2, S3, S1, S2, S3])),
     {ExpUserIds, _} = lists:unzip(ExpUsers),
     % Ensure user list is correct.
-    ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {user, Admin}],
-            unauthorized = [nobody],
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = ClientSpec#client_spec{
             forbidden = [
                 {user, lists:nth(1, ExpUserIds)},
                 {user, NonAdmin},
                 {provider, P1, KeyFile, CertFile}
             ]
         },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/users">>],
-            expected_code = 200,
+        rest_spec = RestSpec#rest_spec{
             expected_body = #{<<"users">> => ExpUserIds}
         },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_eff_users,
-            args = [client, P1],
+        logic_spec = LogicSpec#logic_spec{
             expected_result = ?OK_LIST(ExpUserIds)
         }
     },
@@ -493,27 +473,18 @@ get_eff_users_test(Config) ->
     {ExpGroupUserIds, _} = lists:unzip(ExpGroupUsers),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Ensure user list is correct.
-    ApiTestSpec3 = #api_test_spec{
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {user, Admin}],
-            unauthorized = [nobody],
             forbidden = [
                 {user, lists:nth(1, ExpGroupUserIds)},
                 {user, NonAdmin},
                 {provider, P1, KeyFile, CertFile}
             ]
         },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/users">>],
-            expected_code = 200,
+        rest_spec = RestSpec#rest_spec{
             expected_body = #{<<"users">> => ExpUserIds ++ ExpGroupUserIds}
         },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_eff_users,
-            args = [client, P1],
+        logic_spec = LogicSpec#logic_spec{
             expected_result = ?OK_LIST(ExpUserIds ++ ExpGroupUserIds)
         }
     },
@@ -528,6 +499,7 @@ get_eff_users_test(Config) ->
                     unauthorized = [nobody],
                     forbidden = [
                         {user, lists:nth(1, ExpUserIds)},
+                        {user, lists:nth(1, ExpGroupUserIds)},
                         {user, NonAdmin},
                         {provider, P1, KeyFile, CertFile}
                     ]
@@ -563,6 +535,7 @@ get_eff_users_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, lists:nth(1, ExpUserIds)},
+                {user, lists:nth(1, ExpGroupUserIds)},
                 {user, NonAdmin},
                 {provider, P1, KeyFile, CertFile}
             ]
@@ -577,7 +550,7 @@ get_eff_users_test(Config) ->
             module = n_provider_logic,
             function = get_eff_user,
             args = [client, P1, OtherUser],
-            expected_result = ?ERROR_REASON(?EL_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
@@ -602,13 +575,13 @@ get_eff_groups_test(Config) ->
             unauthorized = [nobody],
             forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = get,
             path = [<<"/providers/">>, P1, <<"/groups">>],
             expected_code = 200,
             expected_body = #{<<"groups">> => []}
         },
-        logic_spec = #logic_spec{
+        logic_spec = LogicSpec = #logic_spec{
             operation = get,
             module = n_provider_logic,
             function = get_eff_groups,
@@ -637,35 +610,20 @@ get_eff_groups_test(Config) ->
 
     % Check if correct groups are returned
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {user, Admin}],
-            unauthorized = [nobody],
-            forbidden = [
-                {provider, P1, KeyFile, CertFile},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/groups">>],
-            expected_code = 200,
+    ApiTestSpec2 = #api_test_spec{
+        rest_spec = RestSpec#rest_spec{
             expected_body = #{<<"groups">> => ExpGroupIds}
         },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_eff_groups,
-            args = [client, P1],
+        logic_spec = LogicSpec#logic_spec{
             expected_result = ?OK_LIST(ExpGroupIds)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
     % Check every group one by one.
     lists:foreach(
         fun(GroupId, GroupName) ->
-            ApiTestSpec2 = #api_test_spec{
+            ApiTestSpec3 = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [root, {user, Admin}],
                     unauthorized = [nobody],
@@ -693,13 +651,13 @@ get_eff_groups_test(Config) ->
                     end)
                 }
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec3))
         end, ExpGroups),
 
     % Make sure that other groups cannot be reached this way.
     {ok, OtherGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"other">>),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    ApiTestSpec3 = #api_test_spec{
+    ApiTestSpec4 = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
             unauthorized = [nobody],
@@ -718,10 +676,10 @@ get_eff_groups_test(Config) ->
             module = n_provider_logic,
             function = get_eff_group,
             args = [client, P1, OtherGroup],
-            expected_result = ?ERROR_REASON(?EL_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
 
 
 get_spaces_test(Config) ->
@@ -743,13 +701,13 @@ get_spaces_test(Config) ->
             unauthorized = [nobody],
             forbidden = [{user, NonAdmin}]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = get,
             path = [<<"/providers/">>, P1, <<"/spaces">>],
             expected_code = 200,
             expected_body = #{<<"spaces">> => []}
         },
-        logic_spec = #logic_spec{
+        logic_spec = LogicSpec = #logic_spec{
             operation = get,
             module = n_provider_logic,
             function = get_eff_spaces,
@@ -758,6 +716,19 @@ get_spaces_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    % Also check the endpoint dedicated for provider
+    ApiTestSpecForProvider = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, KeyFile, CertFile}]
+        },
+        rest_spec = RestSpecForProvider = #rest_spec{
+            method = get,
+            path = <<"/provider/spaces">>,
+            expected_code = 200,
+            expected_body = #{<<"spaces">> => []}
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider)),
 
     % Create some spaces
     ExpSpaces = create_and_support_3_spaces(Config, P1),
@@ -767,26 +738,21 @@ get_spaces_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Check if correct spaces are returned
     ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {user, Admin}, {provider, P1, KeyFile, CertFile}],
-            unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/spaces">>],
-            expected_code = 200,
+        rest_spec = RestSpec#rest_spec{
             expected_body = #{<<"spaces">> => ExpSpaceIds}
         },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_eff_spaces,
-            args = [client, P1],
+        logic_spec = LogicSpec#logic_spec{
             expected_result = ?OK_LIST(ExpSpaceIds)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+    % Also check the endpoint dedicated for provider
+    ApiTestSpecForProvider2 = ApiTestSpecForProvider#api_test_spec{
+        rest_spec = RestSpecForProvider#rest_spec{
+            expected_body = #{<<"spaces">> => ExpSpaceIds}
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider2)),
 
     % Check every space one by one.
     lists:foreach(
@@ -819,7 +785,23 @@ get_spaces_test(Config) ->
                     end)
                 }
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+            % Also check the endpoint dedicated for provider
+            ApiTestSpecForProvider3 = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [{provider, P1, KeyFile, CertFile}]
+                },
+                rest_spec = RestSpecForProvider = #rest_spec{
+                    method = get,
+                    path = [<<"/provider/spaces/">>, SpaceId],
+                    expected_code = 200,
+                    expected_body = {contains, #{
+                        <<"spaceId">> => SpaceId,
+                        <<"name">> => SpaceName
+                    }}
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider3))
         end, ExpSpaces),
 
     % Make sure that other spaces cannot be reached this way.
@@ -844,10 +826,22 @@ get_spaces_test(Config) ->
             module = n_provider_logic,
             function = get_eff_space,
             args = [client, P1, OtherSpace],
-            expected_result = ?ERROR_REASON(?EL_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)),
+    % Also check the endpoint dedicated for provider
+    ApiTestSpecForProvider4 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, KeyFile, CertFile}]
+        },
+        rest_spec = RestSpecForProvider = #rest_spec{
+            method = get,
+            path = [<<"/provider/spaces/">>, OtherSpace],
+            expected_code = 404
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider4)).
 
 
 update_test(Config) ->
@@ -884,21 +878,21 @@ update_test(Config) ->
                 <<"longitude">> => -4.44
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?EL_EMPTY_DATA(<<"name">>)},
-                {<<"name">>, 1234, ?EL_BAD_DATA(<<"name">>)},
-                {<<"urls">>, [], ?EL_EMPTY_DATA(<<"urls">>)},
-                {<<"urls">>, <<"127.0.0.1">>, ?EL_BAD_DATA(<<"urls">>)},
-                {<<"urls">>, 1234, ?EL_BAD_DATA(<<"urls">>)},
-                {<<"redirectionPoint">>, <<"">>, ?EL_EMPTY_DATA(<<"redirectionPoint">>)},
-                {<<"redirectionPoint">>, 1234, ?EL_BAD_DATA(<<"redirectionPoint">>)},
-                {<<"latitude">>, -1500, ?EL_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, -90.1, ?EL_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, 90.1, ?EL_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, 1500, ?EL_BAD_DATA(<<"latitude">>)},
-                {<<"longitude">>, -1500, ?EL_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, -180.1, ?EL_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, 180.1, ?EL_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, 1500, ?EL_BAD_DATA(<<"longitude">>)}
+                {<<"name">>, <<"">>, ?ERROR_EMPTY_DATA(<<"name">>)},
+                {<<"name">>, 1234, ?ERROR_BAD_DATA(<<"name">>)},
+                {<<"urls">>, [], ?ERROR_EMPTY_DATA(<<"urls">>)},
+                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_DATA(<<"urls">>)},
+                {<<"urls">>, 1234, ?ERROR_BAD_DATA(<<"urls">>)},
+                {<<"redirectionPoint">>, <<"">>, ?ERROR_EMPTY_DATA(<<"redirectionPoint">>)},
+                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_DATA(<<"redirectionPoint">>)},
+                {<<"latitude">>, -1500, ?ERROR_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, -90.1, ?ERROR_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, 90.1, ?ERROR_BAD_DATA(<<"latitude">>)},
+                {<<"latitude">>, 1500, ?ERROR_BAD_DATA(<<"latitude">>)},
+                {<<"longitude">>, -1500, ?ERROR_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, -180.1, ?ERROR_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, 180.1, ?ERROR_BAD_DATA(<<"longitude">>)},
+                {<<"longitude">>, 1500, ?ERROR_BAD_DATA(<<"longitude">>)}
             ]
         }
     },
@@ -935,7 +929,7 @@ delete_test(Config) ->
     {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
     ),
-    % Create two users, grant one of them the privilege to list providers.
+    % Create two users, grant one of them the privilege to remove providers.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
@@ -971,7 +965,6 @@ delete_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
-
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -990,11 +983,6 @@ end_per_suite(Config) ->
     application:stop(etls),
     ok.
 %%    test_node_starter:clean_environment(Config).
-
-
-end_per_testcase(_, Config) ->
-    % Remove everything that was created during every testcase
-    ok = oz_test_utils:delete_all_entities(Config).
 
 
 %%%===================================================================

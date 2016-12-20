@@ -64,7 +64,7 @@ get_entity(GroupId) ->
         {ok, #document{value = Group}} ->
             {ok, Group};
         _ ->
-            ?EL_NOT_FOUND
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -99,6 +99,8 @@ delete(GroupId) when is_binary(GroupId) ->
 
 exists(undefined, entity) ->
     true;
+exists(undefined, list) ->
+    true;
 exists(GroupId, _) when is_binary(GroupId) ->
     {internal, fun(#od_group{}) ->
         % If the group with GroupId can be found, it exists. If not, the
@@ -114,6 +116,8 @@ authorize(create, _GroupId, users, ?USER(UserId), _) ->
 authorize(create, _GroupId, groups, ?USER(UserId), _) ->
     auth_by_oz_privilege(UserId, add_member_to_group);
 
+authorize(get, undefined, list, ?USER(UserId), _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_groups);
 authorize(get, _GroupId, users, ?USER(UserId), _) ->
     auth_by_privilege(UserId, group_view_data);
 authorize(get, _GroupId, entity, ?USER(UserId), _) ->

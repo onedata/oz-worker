@@ -39,7 +39,7 @@ create(_, _, entity, Data) ->
         )
     catch
         _:_ ->
-            throw(?EL_BAD_DATA(<<"csr">>))
+            throw(?ERROR_BAD_DATA(<<"csr">>))
     end,
     Provider = #od_provider{name = Name, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
@@ -63,7 +63,7 @@ create(_, _, entity_dev, Data) ->
         )
     catch
         _:_ ->
-            throw(?EL_BAD_DATA(<<"csr">>))
+            throw(?ERROR_BAD_DATA(<<"csr">>))
     end,
     Provider = #od_provider{name = Name, urls = URLs,
         redirection_point = RedirectionPoint, serial = Serial,
@@ -94,7 +94,7 @@ get_entity(ProviderId) ->
         {ok, #document{value = Provider}} ->
             {ok, Provider};
         _ ->
-            ?EL_NOT_FOUND
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -145,11 +145,11 @@ exists(undefined, entity) ->
     true;
 exists(undefined, entity_dev) ->
     true;
+exists(undefined, list) ->
+    true;
 exists(_, check_my_ports) ->
     true;
 exists(_, check_my_ip) ->
-    true;
-exists(_, list) ->
     true;
 exists(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
     % No matter the resource, return true if it belongs to a provider
@@ -186,12 +186,12 @@ authorize(create, ProvId, support, ?PROVIDER(ProvId), _) ->
 
 authorize(get, undefined, check_my_ip, _, _) ->
     true;
+authorize(get, undefined, list, ?USER(UserId), _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, list_providers);
 authorize(get, _ProvId, entity, ?PROVIDER, _) ->
     % Any provider can get info about other providers
     true;
 authorize(get, _ProvId, entity, ?USER(UserId), _) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_providers);
-authorize(get, undefined, list, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_providers);
 authorize(get, ProvId, spaces, ?PROVIDER(ProvId), _) ->
     true;
@@ -309,4 +309,4 @@ test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
     end,
     test_connection(Rest, Acc#{Url => ConnStatus});
 test_connection([{Key, _} | _], _) ->
-    throw(?EL_BAD_DATA(Key)).
+    throw(?ERROR_BAD_DATA(Key)).
