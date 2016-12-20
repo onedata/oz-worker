@@ -406,8 +406,13 @@ call_entity_logic(Method, Req, #rest_req{client = Client, methods = Methods} = S
         code = Code,
         headers = Headers,
         body = Body
-    } = rest_translator:reply(Function, LogicPlugin, EntityId, Resource, Result),
-    {ok, Req2} = cowboy_req:reply(Code, Headers, Body, Req),
+    } = rest_translator:response(Function, LogicPlugin, EntityId, Resource, Result),
+    HeadersList = maps:to_list(Headers),
+    BodyBinary = case Body of
+        Bin when is_binary(Bin) -> Bin;
+        Map when is_map(Map) -> json_utils:encode_map(Map)
+    end,
+    {ok, Req2} = cowboy_req:reply(Code, HeadersList, BodyBinary, Req),
     {halt, Req2, State}.
 
 

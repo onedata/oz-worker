@@ -423,11 +423,11 @@ create(Client, ELPlugin, EntityId, Resource, Data) ->
                 check_authorization(
                     check_existence(Request))))
     catch
-        throw:ElError ->
-            ElError;
-        Error:Message ->
+        throw:Error ->
+            Error;
+        Type:Message ->
             ?error_stacktrace("Error in entity_logic:create - ~p:~p", [
-                Error, Message
+                Type, Message
             ]),
             ?ERROR_INTERNAL_SERVER_ERROR
     end.
@@ -446,11 +446,11 @@ get(Client, ELPlugin, EntityId, Resource) ->
             check_authorization(
                 check_existence(Request)))
     catch
-        throw:ElError ->
-            ElError;
-        Error:Message ->
+        throw:Error ->
+            Error;
+        Type:Message ->
             ?error_stacktrace("Error in entity_logic:get - ~p:~p", [
-                Error, Message
+                Type, Message
             ]),
             ?ERROR_INTERNAL_SERVER_ERROR
     end.
@@ -471,11 +471,11 @@ update(Client, ELPlugin, EntityId, Resource, Data) ->
                 check_authorization(
                     check_existence(Request))))
     catch
-        throw:ElError ->
-            ElError;
-        Error:Message ->
+        throw:Error ->
+            Error;
+        Type:Message ->
             ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
-                Error, Message
+                Type, Message
             ]),
             ?ERROR_INTERNAL_SERVER_ERROR
     end.
@@ -494,11 +494,11 @@ delete(Client, ELPlugin, EntityId, Resource) ->
             check_authorization(
                 check_existence(Request)))
     catch
-        throw:ElError ->
-            ElError;
-        Error:Message ->
+        throw:Error ->
+            Error;
+        Type:Message ->
             ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
-                Error, Message
+                Type, Message
             ]),
             ?ERROR_INTERNAL_SERVER_ERROR
     end.
@@ -777,6 +777,8 @@ transform_and_check_value(Key, Data, Validator) ->
                 check_value(TypeRule, ValueRule, Key, NewValue),
                 {true, Data#{Key => NewValue}}
             catch
+                throw:Error ->
+                    throw(Error);
                 Type:Message ->
                     ?error_stacktrace(
                         "Error in entity_logic:transform_and_check_value - ~p:~p",

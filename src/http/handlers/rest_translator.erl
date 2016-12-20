@@ -20,16 +20,16 @@
 
 % TODO definy dla codow
 
--export([reply/5]).
+-export([response/5]).
 -export([created_reply/1, updated_reply/0]).
 
 -define(PROVIDER_PLUGIN, n_provider_logic_plugin).
 
 
-reply(_, _, _, _, {error, Type}) ->
-    error_rest_translator:reply({error, Type});
-reply(Function, ?PROVIDER_PLUGIN, EntityId, Resource, Result) ->
-    provider_rest_translator:reply(Function, EntityId, Resource, Result).
+response(_, _, _, _, {error, Type}) ->
+    error_rest_translator:response({error, Type});
+response(Function, ?PROVIDER_PLUGIN, EntityId, Resource, Result) ->
+    provider_rest_translator:response(Function, EntityId, Resource, Result).
 
 
 % Make sure there is no leading slash (so filename can be used for joining path)
@@ -37,9 +37,9 @@ created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
 created_reply(PathTokens) ->
     {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
-    LocationHeader = [
-        {<<"location">>, filename:join([RestPrefix | PathTokens])}
-    ],
+    LocationHeader = #{
+        <<"location">> => filename:join([RestPrefix | PathTokens])
+    },
     #rest_resp{code = 201, headers = LocationHeader}.
 
 updated_reply() ->

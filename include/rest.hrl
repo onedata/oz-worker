@@ -32,7 +32,7 @@
 -record(rest_resp, {
     code = 200 :: integer(),
     headers = #{} :: #{binary() => binary()},
-    body = <<"">> :: binary() | JSON :: #{}
+    body = <<"">> :: binary() | jiffy:json_value()
 }).
 
 % Defines with HTTP codes

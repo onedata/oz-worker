@@ -12,8 +12,9 @@
 
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
--include_lib("entity_logic.hrl").
--include_lib("errors.hrl").
+-include("rest.hrl").
+-include("entity_logic.hrl").
+-include("errors.hrl").
 -include_lib("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 
@@ -150,7 +151,7 @@ run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataS
     BadDataSets = bad_data_sets(DataSpec),
     lists:foreach(
         fun({Data, BadKey, ErrorType}) ->
-            {ExpCode2, ExpHeaders2, ExpBody2} = rest_error_to_expectations(Config, ErrorType),
+            {ExpCode2, ExpHeaders2, ExpBody2} = error_to_rest_expectations(Config, ErrorType),
             verify_rest_result(Config,
                 {"bad data should fail: ~s => ~p", [BadKey, maps:get(BadKey, Data)]}, #{
                     request => #{
@@ -188,12 +189,14 @@ verify_rest_result(Config, TestDesc, ArgsMap) ->
     end.
 
 
-rest_error_to_expectations(Config, ErrorType) ->
-    {ExpCode, Headers, Body} = oz_test_utils:call_oz(
-        Config, rest_error_translator, translate_error, [ErrorType]
-    ),
+error_to_rest_expectations(Config, ErrorType) ->
+    #rest_resp{
+        code = ExpCode,
+        headers = Headers,
+        body = Body
+    } = oz_test_utils:call_oz(Config, error_rest_translator, response, [ErrorType]),
     ExpHeaders = case Headers of
-        [] -> undefined;
+        #{} -> undefined;
         _ -> Headers
     end,
     ExpBody = case Body of
