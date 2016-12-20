@@ -13,7 +13,7 @@
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
 -include_lib("entity_logic.hrl").
--include_lib("entity_logic_errors.hrl").
+-include_lib("errors.hrl").
 -include_lib("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 

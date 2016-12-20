@@ -227,8 +227,8 @@ validate(create, entity) -> #{
         <<"csr">> => {binary, non_empty}
     },
     optional => #{
-        <<"latitude">> => {float, fun(F) -> F >= -90 andalso F =< 90 end},
-        <<"longitude">> => {float, fun(F) -> F >= -180 andalso F =< 180 end}
+        <<"latitude">> => {float, {between, -90, 90.0}},
+        <<"longitude">> => {float, {between, -180, 180.0}}
     }
 };
 validate(create, entity_dev) -> #{
@@ -240,17 +240,17 @@ validate(create, entity_dev) -> #{
         <<"uuid">> => {binary, non_empty}
     },
     optional => #{
-        <<"latitude">> => {float, fun(F) -> F >= -90 andalso F =< 90 end},
-        <<"longitude">> => {float, fun(F) -> F >= -180 andalso F =< 180 end}
+        <<"latitude">> => {float, {between, -90, 90.0}},
+        <<"longitude">> => {float, {between, -180, 180.0}}
     }
 };
 validate(create, support) -> #{
+    {ok, MinSupportSize} = application:get_env(
+        oz_worker, minimum_space_support_size
+    ),
     required => #{
         <<"token">> => {token, space_support_token},
-        <<"size">> => {positive_integer, fun(I) ->
-            {ok, Limit} = application:get_env(oz_worker, minimum_space_support_size),
-            I >= Limit
-        end}
+        <<"size">> => {not_lower_than, MinSupportSize}
     }
 };
 validate(create, check_my_ports) -> #{
@@ -260,8 +260,8 @@ validate(update, entity) -> #{
         <<"name">> => {binary, non_empty},
         <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty},
-        <<"latitude">> => {float, fun(F) -> F >= -90 andalso F =< 90 end},
-        <<"longitude">> => {float, fun(F) -> F >= -180 andalso F =< 180 end}
+        <<"latitude">> => {float, {between, -90, 90}},
+        <<"longitude">> => {float, {between, -180, 180.0}}
     }
 }.
 

@@ -44,7 +44,6 @@ type_rule() -> [
     binary,
     list_of_binaries,
     integer,
-    positive_integer,
     float,
     json,
     token
@@ -53,6 +52,9 @@ type_rule() -> [
 value_rule() -> [
     any,
     non_empty,
+    {not_lower_than, threshold},
+    {not_greater_than, threshold},
+    {between, low, high},
     [possible_values],
     fun() -> true end,
     {exists, fun(Id) -> true end},
@@ -725,7 +727,7 @@ check_validity(#request{data = Data} = Request) ->
         fun(Key, DataAcc) ->
             case transform_and_check_value(Key, DataAcc, Required) of
                 false ->
-                    throw(?ERROR_MISSING_REQUIRED_DATA(Key));
+                    throw(?ERROR_MISSING_REQUIRED_VALUE(Key));
                 {true, NewData} ->
                     NewData
             end
@@ -759,7 +761,7 @@ check_validity(#request{data = Data} = Request) ->
         {0, false} ->
             ok;
         {_, false} ->
-            throw(?ERROR_MISSING_AT_LEAST_ONE_DATA(maps:keys(AtLeastOne)))
+            throw(?ERROR_MISSING_AT_LEAST_ONE_VALUE(maps:keys(AtLeastOne)))
     end,
     Request#request{data = Data4}.
 
@@ -771,146 +773,177 @@ transform_and_check_value(Key, Data, Validator) ->
         Value ->
             {TypeRule, ValueRule} = maps:get(Key, Validator),
             try
-                NewValue = check_type(TypeRule, Value),
-                case check_value(TypeRule, ValueRule, NewValue) of
-                    true ->
-                        {true, Data#{Key => NewValue}};
-                    false ->
-                        throw(?ERROR_BAD_DATA(Key))
-                end
+                NewValue = check_type(TypeRule, Key, Value),
+                check_value(TypeRule, ValueRule, Key, NewValue),
+                {true, Data#{Key => NewValue}}
             catch
-                throw:bad_data ->
-                    throw(?ERROR_BAD_DATA(Key));
-                throw:empty ->
-                    throw(?ERROR_EMPTY_DATA(Key));
-                throw:id_not_found ->
-                    throw(?ERROR_ID_NOT_FOUND(Key));
-                throw:id_occupied ->
-                    throw(?ERROR_ID_OCCUPIED(Key));
-                throw:bad_token ->
-                    throw(?ERROR_BAD_TOKEN(Key));
-                throw:bad_token_type ->
-                    throw(?ERROR_BAD_TOKEN_TYPE(Key));
-                throw:Throw ->
-                    throw(Throw);
-                A:B ->
-                    ?dump({A, B, erlang:get_stacktrace()}),
+                Type:Message ->
+                    ?error_stacktrace(
+                        "Error in entity_logic:transform_and_check_value - ~p:~p",
+                        [Type, Message]
+                    ),
                     throw(?ERROR_BAD_DATA(Key))
             end
     end.
 
 
-check_type(atom, Atom) when is_atom(Atom) ->
+check_type(atom, _Key, Atom) when is_atom(Atom) ->
     Atom;
-check_type(atom, Binary) when is_binary(Binary) ->
-    binary_to_existing_atom(Binary, utf8);
-check_type(atom, _) ->
-    throw(bad_data);
-check_type(list_of_atoms, []) ->
+check_type(atom, Key, Binary) when is_binary(Binary) ->
+    try
+        binary_to_existing_atom(Binary, utf8)
+    catch
+        _:_ ->
+            throw(?ERROR_BAD_VALUE_ATOM(Key))
+    end;
+check_type(atom, Key, _) ->
+    throw(?ERROR_BAD_VALUE_ATOM(Key));
+check_type(list_of_atoms, _Key, []) ->
     [];
-check_type(list_of_atoms, [Atom | _] = Atoms) when is_atom(Atom) ->
+check_type(list_of_atoms, _Key, [Atom | _] = Atoms) when is_atom(Atom) ->
     Atoms;
-check_type(list_of_atoms, [Binary | _] = Binaries) when is_binary(Binary) ->
-    [binary_to_existing_atom(Bin, utf8) || Bin <- Binaries];
-check_type(list_of_atoms, _) ->
-    throw(bad_data);
-check_type(binary, Binary) when is_binary(Binary) ->
+check_type(list_of_atoms, Key, [Binary | _] = Binaries) when is_binary(Binary) ->
+    try
+        [binary_to_existing_atom(Bin, utf8) || Bin <- Binaries]
+    catch
+        _:_ ->
+            throw(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key))
+    end;
+check_type(list_of_atoms, Key, _) ->
+    throw(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key));
+check_type(binary, _Key, Binary) when is_binary(Binary) ->
     Binary;
-check_type(binary, Atom) when is_atom(Atom) ->
+check_type(binary, _Key, Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
-check_type(binary, _) ->
-    throw(bad_data);
-check_type(list_of_binaries, []) ->
+check_type(binary, Key, _) ->
+    throw(?ERROR_BAD_VALUE_BINARY(Key));
+check_type(list_of_binaries, _Key, []) ->
     [];
-check_type(list_of_binaries, [Binary | _] = Binaries) when is_binary(Binary) ->
+check_type(list_of_binaries, _Key, [Binary | _] = Binaries) when is_binary(Binary) ->
     Binaries;
-check_type(list_of_binaries, [Atom | _] = Atoms) when is_atom(Atom) ->
+check_type(list_of_binaries, _Key, [Atom | _] = Atoms) when is_atom(Atom) ->
     [atom_to_binary(A, utf8) || A <- Atoms];
-check_type(list_of_binaries, _) ->
-    throw(bad_data);
-check_type(integer, Int) when is_integer(Int) ->
+check_type(list_of_binaries, Key, _) ->
+    throw(?ERROR_BAD_VALUE_LIST_OF_BINARIES(Key));
+check_type(integer, _Key, Int) when is_integer(Int) ->
     Int;
-check_type(integer, _) ->
-    throw(bad_data);
-check_type(positive_integer, Int) when is_integer(Int) andalso Int > 0 ->
-    Int;
-check_type(positive_integer, _) ->
-    throw(bad_data);
-check_type(float, Int) when is_integer(Int) ->
+check_type(integer, Key, _) ->
+    throw(?ERROR_BAD_VALUE_INTEGER(Key));
+check_type(float, _Key, Int) when is_integer(Int) ->
     float(Int);
-check_type(float, Float) when is_float(Float) ->
+check_type(float, _Key, Float) when is_float(Float) ->
     Float;
-check_type(float, _) ->
-    throw(bad_data);
-check_type(json, JSON) when is_map(JSON) ->
+check_type(float, Key, _) ->
+    throw(?ERROR_BAD_VALUE_FLOAT(Key));
+check_type(json, _Key, JSON) when is_map(JSON) ->
     JSON;
-check_type(json, _) ->
-    throw(bad_data);
-check_type(token, Token) when is_binary(Token) ->
+check_type(json, Key, _) ->
+    throw(?ERROR_BAD_VALUE_JSON(Key));
+check_type(token, Key, Token) when is_binary(Token) ->
     case token_logic:deserialize(Token) of
         {ok, Macaroon} ->
             Macaroon;
         {error, macaroon_invalid} ->
-            throw(bad_token)
+            throw(?ERROR_BAD_TOKEN(Key))
     end;
-check_type(token, Macaroon) ->
+check_type(token, _Key, Macaroon) ->
     % Accept everything, it will be validated in check_value
     Macaroon;
-check_type(Rule, _) ->
-    ?error("Unknown type rule: ~p", [Rule]),
+check_type(Rule, Key, _) ->
+    ?error("Unknown type rule: ~p for key: ~p", [Rule, Key]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
 
 
-check_value(_, any, _) ->
-    true;
-check_value(atom, non_empty, '') ->
-    throw(empty);
-check_value(list_of_atoms, non_empty, []) ->
-    throw(empty);
-check_value(binary, non_empty, <<"">>) ->
-    throw(empty);
-check_value(list_of_binaries, non_empty, []) ->
-    throw(empty);
-check_value(json, non_empty, Map) when map_size(Map) == 0 ->
-    throw(empty);
-check_value(_, non_empty, _) ->
-    true;
-check_value(_, AllowedVals, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
-    [] =:= ordsets:subtract(
-        ordsets:from_list(Vals),
-        ordsets:from_list(AllowedVals)
-    );
-check_value(_, AllowedVals, Val) when is_list(AllowedVals) ->
-    lists:member(Val, AllowedVals);
-check_value(_, VerifyFun, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
-    lists:all(VerifyFun, Vals); %TODO fun -> boolean() | empty
-check_value(_, VerifyFun, Val) when is_function(VerifyFun, 1) ->
-    VerifyFun(Val); %TODO fun -> boolean() | empty
-check_value(_, {exists, VerifyFun}, Val) when is_function(VerifyFun, 1) ->
+check_value(_, any, _Key, _) ->
+    ok;
+check_value(atom, non_empty, Key, '') ->
+    throw(?ERROR_EMPTY_VALUE(Key));
+check_value(list_of_atoms, non_empty, Key, []) ->
+    throw(?ERROR_EMPTY_VALUE(Key));
+check_value(binary, non_empty, Key, <<"">>) ->
+    throw(?ERROR_EMPTY_VALUE(Key));
+check_value(list_of_binaries, non_empty, Key, []) ->
+    throw(?ERROR_EMPTY_VALUE(Key));
+check_value(json, non_empty, Key, Map) when map_size(Map) == 0 ->
+    throw(?ERROR_EMPTY_VALUE(Key));
+check_value(_, non_empty, _Key, _) ->
+    ok;
+check_value(_, {not_lower_than, Threshold}, Key, Value) ->
+    case Value >= Threshold of
+        true ->
+            ok;
+        false ->
+            throw(?ERROR_VALUE_TOO_LOW(Key, Threshold))
+    end;
+check_value(_, {not_greater_than, Threshold}, Key, Value) ->
+    case Value =< Threshold of
+        true ->
+            ok;
+        false ->
+            throw(?ERROR_VALUE_TOO_HIGH(Key, Threshold))
+    end;
+check_value(_, {between, Low, High}, Key, Value) ->
+    case Value >= Low andalso Value =< High of
+        true ->
+            ok;
+        false ->
+            throw(?ERROR_VALUE_NOT_BETWEEN(Key, Low, High))
+    end;
+check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
+    case ordsets:subtract(ordsets:from_list(Vals), ordsets:from_list(AllowedVals)) of
+        [] ->
+            ok;
+        _ ->
+            throw(?ERROR_LIST_OF_VALUES_NOT_ALLOWED(Key, AllowedVals))
+    end;
+check_value(_, AllowedVals, Key, Val) when is_list(AllowedVals) ->
+    case lists:member(Val, AllowedVals) of
+        true ->
+            ok;
+        _ ->
+            throw(?ERROR_VALUE_NOT_ALLOWED(Key, AllowedVals))
+    end;
+check_value(_, VerifyFun, Key, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
+    case lists:all(VerifyFun, Vals) of
+        true ->
+            ok;
+        false ->
+            throw(?ERROR_BAD_DATA(Key))
+    end;
+check_value(_, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->
-            true;
+            ok;
         false ->
-            throw(id_not_found)
+            throw(?ERROR_BAD_DATA(Key))
     end;
-check_value(_, {not_exists, VerifyFun}, Val) when is_function(VerifyFun, 1) ->
+check_value(_, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->
-            true;
+            ok;
         false ->
-            throw(id_occupied)
+            throw(?ERROR_ID_NOT_FOUND(Key))
     end;
-check_value(token, TokenType, Macaroon) ->
+check_value(_, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+    case VerifyFun(Val) of
+        true ->
+            ok;
+        false ->
+            throw(?ERROR_ID_OCCUPIED(Key))
+    end;
+check_value(token, TokenType, Key, Macaroon) ->
     case token_logic:validate(Macaroon, TokenType) of
         ok ->
-            true;
+            ok;
         inexistent ->
-            throw(bad_token);
+            throw(?ERROR_BAD_TOKEN(Key));
         bad_macaroon ->
-            throw(bad_token);
+            throw(?ERROR_BAD_TOKEN(Key));
         bad_type ->
-            throw(bad_token_type)
+            throw(?ERROR_BAD_TOKEN_TYPE(Key))
     end;
-check_value(_, Rule, _) ->
-    ?error("Unknown value rule: ~p", [Rule]),
+check_value(TypeRule, ValueRule, Key, _) ->
+    ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [
+        TypeRule, ValueRule, Key
+    ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).

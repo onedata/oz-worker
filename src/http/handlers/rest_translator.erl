@@ -39,40 +39,97 @@ reply(Function, LogicPlugin, EntityId, Resource, Result, Req) ->
 % General errors
 translate_error(?ERROR_INTERNAL_SERVER_ERROR) ->
     500;
+
 translate_error(?ERROR_NOT_FOUND) ->
     404;
+
 translate_error(?ERROR_UNAUTHORIZED) ->
     401;
+
 translate_error(?ERROR_FORBIDDEN) ->
     403;
+
 % Errors connected with bad data
 translate_error(?ERROR_MALFORMED_DATA) ->
     {400, <<"Provided data could not be understood by the server">>};
-translate_error(?ERROR_MISSING_REQUIRED_DATA(Key)) ->
-    {400, {<<"Missing required data: ~s">>, [Key]}};
-translate_error(?ERROR_MISSING_AT_LEAST_ONE_DATA(Keys)) ->
+
+translate_error(?ERROR_MISSING_REQUIRED_VALUE(Key)) ->
+    {400, {<<"Missing required value: ~s">>, [Key]}};
+
+translate_error(?ERROR_MISSING_AT_LEAST_ONE_VALUE(Keys)) ->
     KeysList = str_utils:join_binary(maps:keys(Keys), <<", ">>),
     {400, {<<"Missing data, you must provide at least one of: ">>, [KeysList]}};
+
 translate_error(?ERROR_BAD_DATA(Key)) ->
-    {400, {<<"Bad value: provided \"~s\"">>, [Key]}};
-translate_error(?ERROR_EMPTY_DATA(Key)) ->
-    {400, {<<"Bad value: provided \"~s\" cannot be empty">>, [Key]}};
-translate_error(?ERROR_ID_NOT_FOUND(Key)) ->
-    {400, {<<"Bad value: provided ID (\"~s\") does not exist">>, [Key]}};
-translate_error(?ERROR_ID_OCCUPIED(Key)) ->
-    {400, {<<"Bad value: provided ID (\"~s\") is already occupied">>, [Key]}};
-translate_error(?ERROR_BAD_TOKEN(Key)) ->
-    {400, {<<"Bad value: provided \"~s\" is not a valid token">>, [Key]}};
-translate_error(?ERROR_BAD_TOKEN_TYPE(Key)) ->
-    {400, {<<"Bad value: provided \"~s\" is of invalid type">>, [Key]}};
-translate_error(?ERROR_VALUE_NOT_POSITIVE(Key)) ->
-    {400, {<<"Bad value: provided \"~s\" must be a positive integer">>, [Key]}};
+    {400, {<<"Bad value: provided \"~s\" could not be understood">>, [Key]}};
+
+translate_error(?ERROR_BAD_VALUE_ATOM(Key)) ->
+    % Atoms are strings in json
+    translate_error(?ERROR_BAD_VALUE_BINARY(Key));
+
+translate_error(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key)) ->
+    % Atoms are strings in json
+    translate_error(?ERROR_BAD_VALUE_LIST_OF_BINARIES(Key));
+
+translate_error(?ERROR_BAD_VALUE_BINARY(Key)) ->
+    {400, {<<"Bad value: provided \"~s\" must be a string">>, [Key]}};
+
+translate_error(?ERROR_BAD_VALUE_LIST_OF_BINARIES(Key)) ->
+    {400, {<<"Bad value: provided \"~s\" must be a list of strings">>, [Key]}};
+
+translate_error(?ERROR_BAD_VALUE_INTEGER(Key)) ->
+    {400, {<<"Bad value: provided \"~s\" must be an integer">>, [Key]}};
+
+translate_error(?ERROR_BAD_VALUE_FLOAT(Key)) ->
+    {400, {<<"Bad value: provided \"~s\" must be a float">>, [Key]}};
+
+translate_error(?ERROR_BAD_VALUE_JSON(Key)) ->
+    {400, {<<"Bad value: provided \"~s\" must be a valid JSON">>, [Key]}};
+
+translate_error(?ERROR_EMPTY_VALUE(Key)) ->
+    {400, {<<"Bad value: provided \"~s\" must not be empty">>, [Key]}};
+
 translate_error(?ERROR_VALUE_TOO_LOW(Key, Threshold)) ->
     {400, {<<"Bad value: provided \"~s\" must be at least ~B">>, [Key, Threshold]}};
+
 translate_error(?ERROR_VALUE_TOO_HIGH(Key, Threshold)) ->
     {400, {<<"Bad value: provided \"~s\" must not exceed ~B">>, [Key, Threshold]}};
+
 translate_error(?ERROR_VALUE_NOT_BETWEEN(Key, Low, High)) ->
     {400, {<<"Bad value: provided \"~s\" must be between <~B, ~B>">>, [Key, Low, High]}};
+
+translate_error(?ERROR_VALUE_NOT_ALLOWED(Key, AllowedValues)) ->
+    % Convert binaries to strings so that we do not include << >> signs in the response.
+    AllowedValuesNotBin = lists:map(
+        fun(Val) when is_binary(Val) -> binary_to_list(Val);
+            (Val) -> Val
+        end, AllowedValues),
+    {400, {<<"Bad value: provided \"~s\" must be one of: ~p">>, [
+        Key, AllowedValuesNotBin]
+    }};
+
+translate_error(?ERROR_LIST_OF_VALUES_NOT_ALLOWED(Key, AllowedValues)) ->
+    % Convert binaries to strings so that we do not include << >> signs in the response.
+    AllowedValuesNotBin = lists:map(
+        fun(Val) when is_binary(Val) -> binary_to_list(Val);
+            (Val) -> Val
+        end, AllowedValues),
+    {400, {<<"Bad value: provided \"~s\" must be a list containing zero or more following values: ~p">>, [
+        Key, AllowedValuesNotBin]
+    }};
+
+translate_error(?ERROR_ID_NOT_FOUND(Key)) ->
+    {400, {<<"Bad value: provided ID (\"~s\") does not exist">>, [Key]}};
+
+translate_error(?ERROR_ID_OCCUPIED(Key)) ->
+    {400, {<<"Bad value: provided ID (\"~s\") is already occupied">>, [Key]}};
+
+translate_error(?ERROR_BAD_TOKEN(Key)) ->
+    {400, {<<"Bad value: provided \"~s\" is not a valid token">>, [Key]}};
+
+translate_error(?ERROR_BAD_TOKEN_TYPE(Key)) ->
+    {400, {<<"Bad value: provided \"~s\" is of invalid type">>, [Key]}};
+
 % Errors connected with relations between entities
 translate_error(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of
@@ -82,6 +139,7 @@ translate_error(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     {400, {<<"Bad value: ~s \"~s\" ~s ~s \"~s\"">>, [
         model_to_string(ChType), ChId, RelationToString, model_to_string(ParType), ParId
     ]}};
+
 translate_error(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of
         {od_space, od_provider} -> <<"is alraedy supported by">>;
@@ -90,6 +148,7 @@ translate_error(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
     {400, {<<"Bad value: ~s \"~s\" ~s ~s \"~s\"">>, [
         model_to_string(ChType), ChId, RelationToString, model_to_string(ParType), ParId
     ]}};
+
 % Wildcard match
 translate_error({error, Reason}) ->
     ?warning("Unexpected error: {error, ~p} in rest error translator", [Reason]),
