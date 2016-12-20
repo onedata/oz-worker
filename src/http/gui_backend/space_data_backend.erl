@@ -134,14 +134,9 @@ create_record(<<"space">>, Data) ->
             {ok, SpaceId} = space_logic:create(
                 {user, gui_session:get_user_id()}, Name
             ),
-            NewSpaceData = [
-                {<<"id">>, SpaceId},
-                {<<"name">>, Name},
-                {<<"isDefault">>, false},
-                {<<"hasViewPrivilege">>, true},
-                {<<"providers">>, []}
-            ],
-            {ok, NewSpaceData};
+            % Return newly created space, it is not default and does not have
+            % providers
+            {ok, space_record(SpaceId, #{SpaceId => Name}, undefined, [], true)};
         _ ->
             gui_error:report_error(<<"Invalid space name">>)
     end.
@@ -218,11 +213,12 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
     % Try to get space name from personal user's mapping, if not use its
     % default name.
     Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),
-    {Providers, _} = lists:unzip(ProvidersSupports),
+    {Providers, SupportSizes} = lists:unzip(ProvidersSupports),
     ProvidersToDisplay = lists:filter(
         fun(Provider) ->
             lists:member(Provider, UserProviders)
         end, Providers),
+    TotalSize = lists:sum(SupportSizes),
     case HasViewPrivileges of
         false ->
             [
@@ -230,6 +226,8 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
                 {<<"name">>, Name},
                 {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
                 {<<"hasViewPrivilege">>, false},
+                {<<"totalSize">>, TotalSize},
+                {<<"supportSizes">>, ProvidersSupports},
                 % TODO For now, return all providers so that user can see
                 % spaces of provider in go to your files tab.
                 % Must be solved better!
@@ -242,6 +240,8 @@ space_record(SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders,
                 {<<"name">>, Name},
                 {<<"isDefault">>, SpaceId =:= DefaultSpaceId},
                 {<<"hasViewPrivilege">>, true},
+                {<<"totalSize">>, TotalSize},
+                {<<"supportSizes">>, ProvidersSupports},
                 {<<"providers">>, ProvidersToDisplay}
             ]
     end.
