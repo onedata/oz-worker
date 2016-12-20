@@ -150,16 +150,21 @@ create_record(<<"space">>, Data) ->
 -spec update_record(RsrcType :: binary(), Id :: binary(),
     Data :: proplists:proplist()) ->
     ok | gui_error:error_result().
-update_record(<<"space">>, SpaceId, Data) ->
+update_record(<<"space">>, SpaceId, [{<<"isDefault">>, IsDefault}]) ->
     UserId = gui_session:get_user_id(),
-    IsDefault = proplists:get_value(<<"isDefault">>, Data),
     case IsDefault of
         true ->
             user_logic:set_default_space(UserId, SpaceId);
         false ->
             ok
     end,
-    ok.
+    ok;
+update_record(<<"space">>, SpaceId, [{<<"name">>, NewName}]) ->
+    UserId = gui_session:get_user_id(),
+    space_logic:modify(SpaceId, {user, UserId}, NewName);
+update_record(<<"space">>, _SpaceId, _Data) ->
+    gui_error:report_error(<<"Not implemented">>).
+
 
 
 %%--------------------------------------------------------------------

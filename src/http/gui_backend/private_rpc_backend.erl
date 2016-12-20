@@ -150,7 +150,6 @@ handle(<<"unsupportSpace">>, Props) ->
             )
     end;
 
-
 handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
     UserId = gui_session:get_user_id(),
     case token_logic:validate(Token, space_invite_user_token) of
@@ -170,4 +169,9 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
             ),
             gui_async:push_created(<<"space">>, SpaceRecord),
             {ok, [{<<"spaceId">>, SpaceId}]}
-    end.
+    end;
+
+handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
+    UserId = gui_session:get_user_id(),
+    space_logic:remove_user(SpaceId, UserId),
+    ok.
