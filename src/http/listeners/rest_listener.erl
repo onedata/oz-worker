@@ -52,9 +52,6 @@ start() ->
 
         % Get cert paths
         {ok, ZoneCADir} = application:get_env(?APP_Name, ozpca_dir),
-        {ok, ZoneKeyFile} = application:get_env(?APP_Name, oz_key_file),
-        {ok, ZoneCertFile} = application:get_env(?APP_Name, oz_cert_file),
-        {ok, ZoneCertDomain} = application:get_env(?APP_Name, http_domain),
         {ok, ZoneCaCert} = file:read_file(ozpca:cacert_path(ZoneCADir)),
 
         {ok, KeyFile} = application:get_env(?APP_Name, web_key_file),
@@ -62,7 +59,6 @@ start() ->
         {ok, CaCertsDir} = application:get_env(?APP_Name, cacerts_dir),
         {ok, CaCerts} = file_utils:read_files({dir, CaCertsDir}),
 
-        ozpca:start(ZoneCADir, ZoneCertFile, ZoneKeyFile, ZoneCertDomain),
         auth_logic:start(),
 
         Hostname = dns_query_handler:get_canonical_hostname(),
