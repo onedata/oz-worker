@@ -201,7 +201,7 @@ error_to_rest_expectations(Config, ErrorType) ->
     end,
     ExpBody = case Body of
         <<"">> -> undefined;
-        _ -> Headers
+        _ -> Body
     end,
     {ExpCode, ExpHeaders, ExpBody}.
 
