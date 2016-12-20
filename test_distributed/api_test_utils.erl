@@ -150,7 +150,7 @@ run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataS
     BadDataSets = bad_data_sets(DataSpec),
     lists:foreach(
         fun({Data, BadKey, ErrorType}) ->
-            {ErrorCode, ErrorBodyMap} = rest_translate_error(Config, ErrorType),
+            {ExpCode2, ExpHeaders2, ExpBody2} = rest_error_to_expectations(Config, ErrorType),
             verify_rest_result(Config,
                 {"bad data should fail: ~s => ~p", [BadKey, maps:get(BadKey, Data)]}, #{
                     request => #{
@@ -160,8 +160,9 @@ run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataS
                         auth => Client
                     },
                     expect => #{
-                        code => ErrorCode,
-                        body => ErrorBodyMap
+                        code => ExpCode2,
+                        headers => ExpHeaders2,
+                        body => ExpBody2
                     }
                 })
         end, BadDataSets),
@@ -187,18 +188,19 @@ verify_rest_result(Config, TestDesc, ArgsMap) ->
     end.
 
 
-rest_translate_error(Config, ErrorType) ->
-    Res = oz_test_utils:call_oz(Config, rest_translator, translate_error, [
-        ErrorType
-    ]),
-    case Res of
-        {Code, _Headers, Body} ->
-            {Code, Body};
-        {Code, Body} ->
-            {Code, Body};
-        Code when is_integer(Code) ->
-            {Code, undefined}
-    end.
+rest_error_to_expectations(Config, ErrorType) ->
+    {ExpCode, Headers, Body} = oz_test_utils:call_oz(
+        Config, rest_error_translator, translate_error, [ErrorType]
+    ),
+    ExpHeaders = case Headers of
+        [] -> undefined;
+        _ -> Headers
+    end,
+    ExpBody = case Body of
+        <<"">> -> undefined;
+        _ -> Headers
+    end,
+    {ExpCode, ExpHeaders, ExpBody}.
 
 
 % If spec is undefined do not do anything -> success.

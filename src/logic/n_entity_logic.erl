@@ -844,7 +844,7 @@ check_type(token, Key, Token) when is_binary(Token) ->
         {ok, Macaroon} ->
             Macaroon;
         {error, macaroon_invalid} ->
-            throw(?ERROR_BAD_TOKEN(Key))
+            throw(?ERROR_BAD_VALUE_TOKEN(Key))
     end;
 check_type(token, _Key, Macaroon) ->
     % Accept everything, it will be validated in check_value
@@ -857,15 +857,15 @@ check_type(Rule, Key, _) ->
 check_value(_, any, _Key, _) ->
     ok;
 check_value(atom, non_empty, Key, '') ->
-    throw(?ERROR_EMPTY_VALUE(Key));
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(list_of_atoms, non_empty, Key, []) ->
-    throw(?ERROR_EMPTY_VALUE(Key));
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(binary, non_empty, Key, <<"">>) ->
-    throw(?ERROR_EMPTY_VALUE(Key));
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(list_of_binaries, non_empty, Key, []) ->
-    throw(?ERROR_EMPTY_VALUE(Key));
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(json, non_empty, Key, Map) when map_size(Map) == 0 ->
-    throw(?ERROR_EMPTY_VALUE(Key));
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(_, non_empty, _Key, _) ->
     ok;
 check_value(_, {not_lower_than, Threshold}, Key, Value) ->
@@ -873,35 +873,35 @@ check_value(_, {not_lower_than, Threshold}, Key, Value) ->
         true ->
             ok;
         false ->
-            throw(?ERROR_VALUE_TOO_LOW(Key, Threshold))
+            throw(?ERROR_BAD_VALUE_TOO_LOW(Key, Threshold))
     end;
 check_value(_, {not_greater_than, Threshold}, Key, Value) ->
     case Value =< Threshold of
         true ->
             ok;
         false ->
-            throw(?ERROR_VALUE_TOO_HIGH(Key, Threshold))
+            throw(?ERROR_BAD_VALUE_TOO_HIGH(Key, Threshold))
     end;
 check_value(_, {between, Low, High}, Key, Value) ->
     case Value >= Low andalso Value =< High of
         true ->
             ok;
         false ->
-            throw(?ERROR_VALUE_NOT_BETWEEN(Key, Low, High))
+            throw(?ERROR_BAD_VALUE_NOT_BETWEEN(Key, Low, High))
     end;
 check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
     case ordsets:subtract(ordsets:from_list(Vals), ordsets:from_list(AllowedVals)) of
         [] ->
             ok;
         _ ->
-            throw(?ERROR_LIST_OF_VALUES_NOT_ALLOWED(Key, AllowedVals))
+            throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, AllowedVals))
     end;
 check_value(_, AllowedVals, Key, Val) when is_list(AllowedVals) ->
     case lists:member(Val, AllowedVals) of
         true ->
             ok;
         _ ->
-            throw(?ERROR_VALUE_NOT_ALLOWED(Key, AllowedVals))
+            throw(?ERROR_BAD_VALUE_NOT_ALLOWED(Key, AllowedVals))
     end;
 check_value(_, VerifyFun, Key, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
     case lists:all(VerifyFun, Vals) of
@@ -922,25 +922,25 @@ check_value(_, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
         true ->
             ok;
         false ->
-            throw(?ERROR_ID_NOT_FOUND(Key))
+            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key))
     end;
 check_value(_, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->
             ok;
         false ->
-            throw(?ERROR_ID_OCCUPIED(Key))
+            throw(?ERROR_BAD_VALUE_ID_OCCUPIED(Key))
     end;
 check_value(token, TokenType, Key, Macaroon) ->
     case token_logic:validate(Macaroon, TokenType) of
         ok ->
             ok;
         inexistent ->
-            throw(?ERROR_BAD_TOKEN(Key));
+            throw(?ERROR_BAD_VALUE_TOKEN(Key));
         bad_macaroon ->
-            throw(?ERROR_BAD_TOKEN(Key));
+            throw(?ERROR_BAD_VALUE_TOKEN(Key));
         bad_type ->
-            throw(?ERROR_BAD_TOKEN_TYPE(Key))
+            throw(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key))
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [

@@ -20,7 +20,6 @@
 %% Record containing the state of REST request.
 -record(rest_req, {
     client = #client{} :: n_entity_logic:client(),
-
     % tODO strict typy
     methods = #{} :: #{Method :: get => {data_plugin, entityid, resource}}
     % To jest wywnioskowane z methods
@@ -29,5 +28,24 @@
 % Convenience macros user in rest_req
 -define(BINDING(__KEY), {binding, __KEY}).
 -define(CLIENT_ID, client_id).
+%% Record representing REST response.
+-record(rest_resp, {
+    code = 200 :: integer(),
+    headers = #{} :: #{binary() => binary()},
+    body = <<"">> :: binary() | JSON :: #{}
+}).
+
+% Defines with HTTP codes
+-define(HTTP_200_OK, 200).
+-define(HTTP_201_CREATED, 201).
+-define(HTTP_202_ACCEPTED, 202).
+-define(HTTP_204_NO_CONTENT, 204).
+
+-define(HTTP_400_BAD_REQUEST, 401).
+-define(HTTP_401_UNAUTHORIZED, 401).
+-define(HTTP_403_FORBIDDEN, 403).
+-define(HTTP_404_NOT_FOUND, 404).
+
+-define(HTTP_500_INTERNAL_SERVER_ERROR, 500).
 
 -endif.

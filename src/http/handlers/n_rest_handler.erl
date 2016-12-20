@@ -402,7 +402,12 @@ call_entity_logic(Method, Req, #rest_req{client = Client, methods = Methods} = S
     Resource = resolve_bindings(ResourceVal, Client, Req),
     Args = el_function_args(Function, Client, LogicPlugin, EntityId, Resource, Data),
     Result = erlang:apply(n_entity_logic, Function, Args),
-    Req2 = rest_translator:reply(Function, LogicPlugin, EntityId, Resource, Result, Req),
+    #rest_resp{
+        code = Code,
+        headers = Headers,
+        body = Body
+    } = rest_translator:reply(Function, LogicPlugin, EntityId, Resource, Result),
+    {ok, Req2} = cowboy_req:reply(Code, Headers, Body, Req),
     {halt, Req2, State}.
 
 

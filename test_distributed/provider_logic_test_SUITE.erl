@@ -104,7 +104,7 @@ support_space_test(Config) ->
         Config, n_provider_logic, create, [?NOBODY, ?CREATE_PROVIDER_DATA]
     ),
     % Try bad token first
-    ?assertMatch({error, ?ERROR_BAD_TOKEN(<<"token">>)}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(P1), P1, #{
             <<"token">> => <<"bad-token">>, <<"size">> => MinimumSupportSize
         }]
@@ -113,7 +113,7 @@ support_space_test(Config) ->
     {ok, BadMacaroon} = oz_test_utils:call_oz(
         Config, n_space_logic, create_invite_user_token, [?USER(U1), S1]
     ),
-    ?assertMatch({error, ?ERROR_BAD_TOKEN_TYPE(<<"token">>)}, oz_test_utils:call_oz(
+    ?assertMatch({error, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)}, oz_test_utils:call_oz(
         Config, n_provider_logic, support_space, [?PROVIDER(P1), P1, #{
             <<"token">> => BadMacaroon, <<"size">> => MinimumSupportSize
         }]

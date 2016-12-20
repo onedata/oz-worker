@@ -91,24 +91,24 @@ create_test(Config) ->
                 <<"longitude">> => -24.8
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_EMPTY_VALUE(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_DATA(<<"name">>)},
-                {<<"urls">>, [], ?ERROR_EMPTY_VALUE(<<"urls">>)},
-                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_DATA(<<"urls">>)},
-                {<<"urls">>, 1234, ?ERROR_BAD_DATA(<<"urls">>)},
-                {<<"redirectionPoint">>, <<"">>, ?ERROR_EMPTY_VALUE(<<"redirectionPoint">>)},
-                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_DATA(<<"redirectionPoint">>)},
-                {<<"csr">>, <<"">>, ?ERROR_EMPTY_VALUE(<<"csr">>)},
-                {<<"csr">>, 1234, ?ERROR_BAD_DATA(<<"csr">>)},
+                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
+                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
+                {<<"urls">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"urls">>)},
+                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
+                {<<"urls">>, 1234, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
+                {<<"redirectionPoint">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"redirectionPoint">>)},
+                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
+                {<<"csr">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"csr">>)},
+                {<<"csr">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"csr">>)},
                 {<<"csr">>, <<"wrong-csr">>, ?ERROR_BAD_DATA(<<"csr">>)},
-                {<<"latitude">>, -1500, ?ERROR_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, -90.1, ?ERROR_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, 90.1, ?ERROR_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, 1500, ?ERROR_BAD_DATA(<<"latitude">>)},
-                {<<"longitude">>, -1500, ?ERROR_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, -180.1, ?ERROR_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, 180.1, ?ERROR_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_DATA(<<"longitude">>)}
+                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -180, 180)},
+                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -180, 180)},
+                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -180, 180)},
+                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -180, 180)}
             ]
         }
     },
@@ -117,7 +117,7 @@ create_test(Config) ->
 
 support_space_test(Config) ->
     RestPrefix = rest_test_utils:get_rest_api_prefix(Config),
-    MinimumSupportSize = min_support_size(Config),
+    MinSupportSize = min_support_size(Config),
     {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(Config, <<"P1">>),
     {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
@@ -128,13 +128,13 @@ support_space_test(Config) ->
 
     % Reused in all specs
     BadValues = [
-        {<<"token">>, <<"bad-token">>, ?ERROR_BAD_TOKEN(<<"token">>)},
-        {<<"token">>, 1234, ?ERROR_BAD_TOKEN(<<"token">>)},
-        {<<"token">>, BadTokenType1, ?ERROR_BAD_TOKEN_TYPE(<<"token">>)},
-        {<<"size">>, <<"binary">>, ?ERROR_BAD_DATA(<<"size">>)},
-        {<<"size">>, 0, ?ERROR_BAD_DATA(<<"size">>)},
-        {<<"size">>, -1000, ?ERROR_BAD_DATA(<<"size">>)},
-        {<<"size">>, MinimumSupportSize - 1, ?ERROR_BAD_DATA(<<"size">>)}
+        {<<"token">>, <<"bad-token">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+        {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+        {<<"token">>, BadTokenType1, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)},
+        {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
+        {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">> , MinSupportSize)},
+        {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
     ],
 
     % Check only REST first
@@ -173,7 +173,7 @@ support_space_test(Config) ->
                     {ok, TokenBin} = token_logic:serialize(Macaroon),
                     TokenBin
                 end,
-                <<"size">> => MinimumSupportSize
+                <<"size">> => MinSupportSize
             },
             bad_values = BadValues
         }
@@ -228,10 +228,10 @@ support_space_test(Config) ->
                     ),
                     Macaroon
                 end,
-                <<"size">> => MinimumSupportSize
+                <<"size">> => MinSupportSize
             },
             bad_values = BadValues ++ [
-                {<<"token">>, BadMacaroon3, ?ERROR_BAD_TOKEN_TYPE(<<"token">>)}
+                {<<"token">>, BadMacaroon3, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)}
             ]
         }
     },
@@ -355,13 +355,11 @@ get_test(Config) ->
     % without id (id is deduced from authorization)
     ApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
-            correct = [{provider, P1, KeyFile1, CertFile1}],
-            unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}]
+            correct = [{provider, P1, KeyFile1, CertFile1}]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = <<"/provider/">>,
+            path = <<"/provider">>,
             expected_code = 200,
             expected_body = #{
                 <<"providerId">> => P1,
@@ -878,21 +876,21 @@ update_test(Config) ->
                 <<"longitude">> => -4.44
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_EMPTY_VALUE(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_DATA(<<"name">>)},
-                {<<"urls">>, [], ?ERROR_EMPTY_VALUE(<<"urls">>)},
-                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_DATA(<<"urls">>)},
-                {<<"urls">>, 1234, ?ERROR_BAD_DATA(<<"urls">>)},
-                {<<"redirectionPoint">>, <<"">>, ?ERROR_EMPTY_VALUE(<<"redirectionPoint">>)},
-                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_DATA(<<"redirectionPoint">>)},
-                {<<"latitude">>, -1500, ?ERROR_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, -90.1, ?ERROR_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, 90.1, ?ERROR_BAD_DATA(<<"latitude">>)},
-                {<<"latitude">>, 1500, ?ERROR_BAD_DATA(<<"latitude">>)},
-                {<<"longitude">>, -1500, ?ERROR_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, -180.1, ?ERROR_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, 180.1, ?ERROR_BAD_DATA(<<"longitude">>)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_DATA(<<"longitude">>)}
+                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
+                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
+                {<<"urls">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"urls">>)},
+                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
+                {<<"urls">>, 1234, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
+                {<<"redirectionPoint">>, <<"">>, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
+                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
+                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -180, 180)},
+                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -180, 180)},
+                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -180, 180)},
+                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -180, 180)}
             ]
         }
     },
