@@ -78,6 +78,10 @@ get_internal(?USER, _SpaceId, Space, users) ->
     {ok, Space#od_space.users}.
 
 
+
+get_external(_, list) ->
+    {ok, SpaceDocs} = od_space:list(),
+    {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
 get_external(?USER, _) ->
     ok.
 

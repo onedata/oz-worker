@@ -437,7 +437,7 @@ delete_with_relations(EntityModel, EntityId) ->
     {ok, #document{value = #od_provider{
         spaces = Spaces
     }}} = od_provider:get(EntityId),
-    TODO JESTES TUTEJ!
+%%    TODO JESTES TUTEJ!
     ok.
 
 

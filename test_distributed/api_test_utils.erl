@@ -35,7 +35,7 @@ run_tests(Config, ApiTestSpec) ->
         run_logic_tests(Config, LogicSpec, ClientSpec, DataSpec),
         true
     catch
-        % Tests failed, return false
+        % Tests failed, return false (failure details are printed before the throw)
         throw:fail ->
             false;
         % Unexpected error
@@ -151,18 +151,19 @@ run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataS
     lists:foreach(
         fun({Data, BadKey, ErrorType}) ->
             {ErrorCode, ErrorBodyMap} = rest_translate_error(Config, ErrorType),
-            verify_rest_result(Config, ["bad data should fail with bad key:", BadKey], #{
-                request => #{
-                    method => Method,
-                    path => Path,
-                    body => Data,
-                    auth => Client
-                },
-                expect => #{
-                    code => ErrorCode,
-                    body => ErrorBodyMap
-                }
-            })
+            verify_rest_result(Config,
+                {"bad data should fail: ~s => ~p", [BadKey, maps:get(BadKey, Data)]}, #{
+                    request => #{
+                        method => Method,
+                        path => Path,
+                        body => Data,
+                        auth => Client
+                    },
+                    expect => #{
+                        code => ErrorCode,
+                        body => ErrorBodyMap
+                    }
+                })
         end, BadDataSets),
     run_rest_tests(Config, RestSpec, ClientSpec#client_spec{correct = Tail}, DataSpec).
 
@@ -173,14 +174,14 @@ verify_rest_result(Config, TestDesc, ArgsMap) ->
     case Result of
         true ->
             ok;
-        {UnmetExp, {got, Got}, {expected, Expected}} ->
+        {UnmetExp, {got, Got}, {expected, Expected}, {response, Response}} ->
             #{request := #{
                 method := Method,
                 path := Path,
                 auth := Client
             }} = ArgsMap,
             log_failed_rest_test(
-                TestDesc, Method, Path, Client, UnmetExp, Got, Expected
+                TestDesc, Method, Path, Client, UnmetExp, Got, Expected, Response
             ),
             throw(fail)
     end.
@@ -216,11 +217,11 @@ run_logic_tests(Config, LogicSpec, #client_spec{correct = []} = ClientSpec, Data
     } = LogicSpec,
     {TestDesc, Client, ExpResult, NewClientSpec} = case ClientSpec of
         #client_spec{unauthorized = [Head | Tail]} ->
-            {"unauthorized client should fail", Head, {error, ?EL_UNAUTHORIZED},
+            {"unauthorized client should fail", Head, ?EL_UNAUTHORIZED,
                 ClientSpec#client_spec{unauthorized = Tail}
             };
         #client_spec{forbidden = [Head | Tail]} ->
-            {"forbidden client should fail", Head, {error, ?EL_FORBIDDEN},
+            {"forbidden client should fail", Head, ?EL_FORBIDDEN,
                 ClientSpec#client_spec{forbidden = Tail}
             }
     end,
@@ -281,7 +282,8 @@ run_logic_tests(Config, #logic_spec{operation = Operation} = LogicSpec, ClientSp
                 true ->
                     ok;
                 false ->
-                    log_failed_logic_test(["bad data should fail with bad key:", BadKey],
+                    log_failed_logic_test(
+                        {"bad data should fail: ~s => ~p", [BadKey, maps:get(BadKey, Data)]},
                         Module, Function, Args, Client, ExpectedError, Result
                     ),
                     throw(fail)
@@ -354,6 +356,12 @@ verify_logic_result(_, _) ->
 
 
 log_failed_logic_test(TestDesc, Module, Function, Args, Client, Expected, Got) ->
+    TestDescString = case TestDesc of
+        {Format, Args} ->
+            str_utils:format(Format, Args);
+        Other ->
+            Other
+    end,
     ct:print("API logic test failed: ~p~n"
     "Module: ~p~n"
     "Function: ~s~n"
@@ -361,20 +369,33 @@ log_failed_logic_test(TestDesc, Module, Function, Args, Client, Expected, Got) -
     "Client: ~s~n"
     "Expected: ~p~n"
     "Got: ~p", [
-        TestDesc, Module, Function, Args, client_to_readable(Client), Expected, Got
+        TestDescString, Module, Function, Args, client_to_readable(Client),
+        Expected, Got
     ]).
 
 
-log_failed_rest_test(TestDesc, Method, Path, Client, UnmetExp, Got, Expected) ->
+log_failed_rest_test(TestDesc, Method, Path, Client, UnmetExp, Got, Expected, Response) ->
+    {Code, Headers, Body} = Response,
+    TestDescString = case TestDesc of
+        {Format, Args} ->
+            str_utils:format(Format, Args);
+        Other ->
+            Other
+    end,
     ct:print("API REST test failed: ~p~n"
     "Method: ~p~n"
     "Path: ~s~n"
     "Client: ~s~n"
     "Unmet expectation: ~p~n"
     "Got: ~p~n"
-    "Expected: ~p", [
-        TestDesc, Method, Path, client_to_readable(Client),
-        UnmetExp, Got, Expected
+    "Expected: ~p~n"
+    "--------~n"
+    "Full response: ~n"
+    "   Code: ~p~n"
+    "   Headers: ~p~n"
+    "   Body: ~p", [
+        TestDescString, Method, Path, client_to_readable(Client),
+        UnmetExp, Got, Expected, Code, Headers, Body
     ]).
 
 
@@ -384,23 +405,22 @@ client_to_readable(nobody) ->
 client_to_readable(root) ->
     "ROOT";
 client_to_readable({user, UserId}) ->
-    str_utils:format_bin("USER#~s", [UserId]);
+    str_utils:format_bin("USER # ~s", [UserId]);
 client_to_readable({provider, ProviderId, _, _}) ->
-    str_utils:format_bin("PROVIDER#~s", [ProviderId]).
+    str_utils:format_bin("PROVIDER # ~s", [ProviderId]).
 
 
 % Wszystkie erquired z po jednym at least one i z wszystkimi na raz
 required_data_sets(DataSpec) ->
     #data_spec{
-        correct_values = CorrectValues,
         required = Required,
         at_least_one = AtLeastOne
     } = DataSpec,
     RequiredWithValues = lists:map(fun(Key) ->
-        {Key, maps:get(Key, CorrectValues)}
+        {Key, get_correct_value(Key, DataSpec)}
     end, Required),
     AtLeastOneWithValues = lists:map(fun(Key) ->
-        {Key, maps:get(Key, CorrectValues)}
+        {Key, get_correct_value(Key, DataSpec)}
     end, AtLeastOne),
     RequiredWithOne = lists:map(
         fun({Key, Value}) ->
@@ -416,11 +436,10 @@ required_data_sets(DataSpec) ->
 % (e.g. returns 5 data sets for 4 optional params).
 optional_data_sets(DataSpec) ->
     #data_spec{
-        correct_values = CorrectValues,
         optional = Optional
     } = DataSpec,
     WithValues = lists:map(fun(Key) ->
-        {Key, maps:get(Key, CorrectValues)}
+        {Key, get_correct_value(Key, DataSpec)}
     end, Optional),
     [RequiredWithAll | _] = required_data_sets(DataSpec),
     RequiredWithOneOptional = lists:map(
@@ -442,14 +461,13 @@ correct_data_sets(DataSpec) ->
 % bierze wszystko mozliwe i podstaiwa jeden zly
 bad_data_sets(DataSpec) ->
     #data_spec{
-        correct_values = CorrectValues,
         required = Required,
         at_least_one = AtLeastOne,
         optional = Optional,
         bad_values = BadValues
     } = DataSpec,
     AllCorrect = maps:from_list(lists:map(fun(Key) ->
-        {Key, maps:get(Key, CorrectValues)}
+        {Key, get_correct_value(Key, DataSpec)}
     end, Required ++ AtLeastOne ++ Optional)),
     lists:map(
         fun({Key, Value, ErrorType}) ->
@@ -457,3 +475,11 @@ bad_data_sets(DataSpec) ->
             {Data, Key, ErrorType}
         end, BadValues).
 
+
+get_correct_value(Key, #data_spec{correct_values = CorrectValues}) ->
+    case maps:get(Key, CorrectValues) of
+        Fun when is_function(Fun, 0) ->
+            Fun();
+        Value ->
+            Value
+    end.

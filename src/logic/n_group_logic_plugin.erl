@@ -72,6 +72,9 @@ get_internal(?USER, _GroupId, #od_group{users = Users}, users) ->
     {ok, Users}.
 
 
+get_external(_, list) ->
+    {ok, GroupDocs} = od_group:list(),
+    {ok, [GroupId || #document{key = GroupId} <- GroupDocs]};
 get_external(?USER, _) ->
     ok.
 

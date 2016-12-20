@@ -25,7 +25,10 @@
     add_group/3
 ]).
 
--export([get/2]).
+-export([
+    get/2,
+    list/1
+]).
 
 -export([update/3]).
 
@@ -62,6 +65,11 @@ add_group(Issuer, HandleServiceId, Data) ->
 
 get(Issuer, HandleServiceId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, entity, HandleServiceId).
+
+
+list(Issuer) ->
+    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
+
 
 %%add_relation(Issuer, {HandleServiceId, users}, od_user, UserId) ->
 %%    n_entity_logic:add_relation(

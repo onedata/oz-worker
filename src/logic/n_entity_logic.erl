@@ -622,7 +622,15 @@ call_authorize(Request) ->
         throw:Error ->
             throw(Error);
         _:_ ->
-            throw(?EL_FORBIDDEN)
+            case Client of
+                ?NOBODY ->
+                    % The client was not authenticated -> unauthorized
+                    throw(?EL_UNAUTHORIZED);
+                _ ->
+                    % The client was authenticated but cannot access the
+                    % resource -> forbidden
+                    throw(?EL_FORBIDDEN)
+            end
     end.
 
 
@@ -846,9 +854,8 @@ check_type(token, Token) when is_binary(Token) ->
             throw(bad_token)
     end;
 check_type(token, Macaroon) ->
+    % Accept everything, it will be validated in check_value
     Macaroon;
-check_type(token, _) ->
-    throw(bad_data);
 check_type(Rule, _) ->
     ?error("Unknown type rule: ~p", [Rule]),
     throw(?EL_INTERNAL_SERVER_ERROR).
@@ -895,9 +902,13 @@ check_value(_, {not_exists, VerifyFun}, Val) when is_function(VerifyFun, 1) ->
     end;
 check_value(token, TokenType, Macaroon) ->
     case token_logic:validate(Macaroon, TokenType) of
-        true ->
+        ok ->
             true;
-        false ->
+        inexistent ->
+            throw(bad_token);
+        bad_macaroon ->
+            throw(bad_token);
+        bad_type ->
             throw(bad_token_type)
     end;
 check_value(_, Rule, _) ->

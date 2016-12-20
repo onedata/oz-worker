@@ -25,6 +25,7 @@
 ]).
 -export([
     get/2,
+    list/1,
     get_users/2
 ]).
 -export([
@@ -63,6 +64,10 @@ create_invite_user_token(Issuer, SpaceId) ->
 
 get(Issuer, SpaceId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, SpaceId, entity).
+
+
+list(Issuer) ->
+    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
 
 
 get_users(Issuer, SpaceId) ->

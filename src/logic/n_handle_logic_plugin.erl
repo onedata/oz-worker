@@ -83,7 +83,9 @@ get_entity(HandleId) ->
 get_internal(?USER, _HandleId, #od_handle{users = Users}, users) ->
     {ok, Users}.
 
-
+get_external(_, list) ->
+    {ok, HandleDocs} = od_handle:list(),
+    {ok, [HandleId || #document{key = HandleId} <- HandleDocs]};
 get_external(?USER, _) ->
     ok.
 

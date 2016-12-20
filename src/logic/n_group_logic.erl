@@ -25,7 +25,10 @@
     add_group/3
 ]).
 
--export([get/2]).
+-export([
+    get/2,
+    list/1
+]).
 
 -export([
     update/3,
@@ -60,6 +63,9 @@ add_group(Issuer, GroupId, Data) ->
 get(Issuer, GroupId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, entity, GroupId).
 
+
+list(Issuer) ->
+    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
 
 
 update(Issuer, GroupId, Data) ->

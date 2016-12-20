@@ -24,7 +24,7 @@
 
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
 -export([
     create_test/1,
     support_space_test/1,
@@ -63,7 +63,7 @@ create_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = post,
-            path = <<"/providers">>,
+            path = <<"/provider">>,
             expected_code = 200,
             expected_body = #{
                 <<"providerId">> => {check_type, binary},
@@ -118,21 +118,25 @@ create_test(Config) ->
 support_space_test(Config) ->
     RestPrefix = rest_test_utils:get_rest_api_prefix(Config),
     MinimumSupportSize = min_support_size(Config),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"S1">>),
     {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(Config, <<"P1">>),
     {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
-    {ok, Macaroon1} = oz_test_utils:space_invite_provider_token(Config, ?USER(U1), S1),
-    {ok, TokenBin} = token_logic:serialize(Macaroon1),
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"S1">>),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, BadMacaroon1} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
-    {ok, BadTokenType} = token_logic:serialize(BadMacaroon1),
+    {ok, BadTokenType1} = token_logic:serialize(BadMacaroon1),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {provider, P1, KeyFile1, CertFile1}],
-            unauthorized = [nobody],
-            forbidden = [{user, U1}, {provider, P2, KeyFile2, CertFile2}]
+            % Both providers are correct clients, as this is an endpoint
+            % dedicated for provider that presents a cert
+            correct = [
+                root,
+                {provider, P1, KeyFile1, CertFile1},
+                {provider, P2, KeyFile2, CertFile2}
+            ]
         },
+        logic_spec = undefined,
         rest_spec = #rest_spec{
             method = post,
             path = <<"/provider/spaces/support">>,
@@ -141,23 +145,29 @@ support_space_test(Config) ->
                 <<"location">> => {match, <<RestPrefix/binary, "/provider/spaces/.*">>}
             }}
         },
-        logic_spec = #logic_spec{
-            operation = create,
-            module = n_provider_logic,
-            function = support_space,
-            args = [client, P1, data],
-            expected_result = ?OK_BINARY(S1)
-        },
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
-                <<"token">> => TokenBin,
+                <<"token">> => fun() ->
+                    % Create a new space and token for every test case
+                    % (this value is reused multiple times as many cases of
+                    % the api test must be checked).
+                    {ok, Space} = oz_test_utils:create_space(
+                        Config, ?USER(U1), <<"space">>
+                    ),
+                    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+                    {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
+                        Config, ?USER(U1), Space
+                    ),
+                    {ok, TokenBin} = token_logic:serialize(Macaroon),
+                    TokenBin
+                end,
                 <<"size">> => MinimumSupportSize
             },
             bad_values = [
                 {<<"token">>, <<"bad-token">>, ?EL_BAD_TOKEN(<<"token">>)},
                 {<<"token">>, 1234, ?EL_BAD_TOKEN(<<"token">>)},
-                {<<"token">>, BadTokenType, ?EL_BAD_TOKEN_TYPE(<<"token">>)},
+                {<<"token">>, BadTokenType1, ?EL_BAD_TOKEN_TYPE(<<"token">>)},
                 {<<"size">>, <<"binary">>, ?EL_BAD_DATA(<<"size">>)},
                 {<<"size">>, 0, ?EL_BAD_DATA(<<"size">>)},
                 {<<"size">>, -1000, ?EL_BAD_DATA(<<"size">>)},
@@ -166,11 +176,38 @@ support_space_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    % Check logic endpoints - here we have to specify provider Id, so
+    % different clients will be authorized.
+    % We expect {ok, SpaceId} upon success
+    ExpectedSupportResult = ?OK_TERM(fun(SpaceId) ->
+        % Should return space id of the newly supported space
+        {ok, #od_space{
+            providers = Providers
+        }} = oz_test_utils:get_space(Config, ?ROOT, SpaceId),
+        maps:is_key(P1, Providers)
+    end),
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            % Only provider 1 is authorized to perform support operation on
+            % behalf of provider 1.
+            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            unauthorized = [nobody],
+            forbidden = [{provider, P2, KeyFile2, CertFile2}]
+        },
+        logic_spec = #logic_spec{
+            operation = create,
+            module = n_provider_logic,
+            function = support_space,
+            args = [client, P1, data],
+            expected_result = ExpectedSupportResult
+        },
+        rest_spec = undefined
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
     % provider_logic should also allow using non-serialized macaroons, check it
-    {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(Config, ?USER(U1), S1),
-    {ok, BadMacaroon2} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
-    ApiTestSpec2 = #api_test_spec{
+    {ok, BadMacaroon3} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
+    ApiTestSpec3 = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, {provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
@@ -181,18 +218,30 @@ support_space_test(Config) ->
             module = n_provider_logic,
             function = support_space,
             args = [client, P1, data],
-            expected_result = ?OK_BINARY(S1)
+            expected_result = ExpectedSupportResult
         },
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
-                <<"token">> => Macaroon2,
+                <<"token">> => fun() ->
+                    % Create a new space and token for every test case
+                    % (this value is reused multiple times as many cases of
+                    % the api test must be checked).
+                    {ok, Space} = oz_test_utils:create_space(
+                        Config, ?USER(U1), <<"space">>
+                    ),
+                    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+                    {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
+                        Config, ?USER(U1), Space
+                    ),
+                    Macaroon
+                end,
                 <<"size">> => MinimumSupportSize
             },
             bad_values = [
                 {<<"token">>, <<"asd">>, ?EL_BAD_TOKEN(<<"token">>)},
                 {<<"token">>, 1234, ?EL_BAD_TOKEN(<<"token">>)},
-                {<<"token">>, BadMacaroon2, ?EL_BAD_TOKEN_TYPE(<<"token">>)},
+                {<<"token">>, BadMacaroon3, ?EL_BAD_TOKEN_TYPE(<<"token">>)},
                 {<<"size">>, <<"binary">>, ?EL_BAD_DATA(<<"size">>)},
                 {<<"size">>, 0, ?EL_BAD_DATA(<<"size">>)},
                 {<<"size">>, -1000, ?EL_BAD_DATA(<<"size">>)},
@@ -200,7 +249,7 @@ support_space_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 
 list_test(Config) ->
@@ -216,8 +265,8 @@ list_test(Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        list_providers]
-    ),
+        list_providers
+    ]    ),
 
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
@@ -317,13 +366,13 @@ get_test(Config) ->
     % without id (id is deduced from authorization)
     ApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            correct = [{provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
             forbidden = [{user, NonAdmin}]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/provider/">>, P1],
+            path = <<"/provider/">>,
             expected_code = 200,
             expected_body = #{
                 <<"providerId">> => P1,
@@ -389,7 +438,7 @@ get_eff_users_test(Config) ->
             {User, UserName}
         end, lists:zip(lists:seq(1, 9), [S1, S2, S3, S1, S2, S3, S1, S2, S3])),
     {ExpUserIds, _} = lists:unzip(ExpUsers),
-
+    % Ensure user list is correct.
     ApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, {user, Admin}],
@@ -810,6 +859,7 @@ update_test(Config) ->
             correct = [root, {provider, P1, KeyFile1, CertFile1}]
             % No need to check other clients - this endpoint is dedicated to the
             % provider that presents it certs.
+            % root client is only checked in logic tests
         },
         rest_spec = #rest_spec{
             method = patch,
@@ -856,9 +906,69 @@ update_test(Config) ->
 
 
 delete_test(Config) ->
-
-
-    ok.
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {provider, P1, KeyFile1, CertFile1}]
+            % No need to check other clients - this endpoint is dedicated to the
+            % provider that presents it certs.
+            % root client is only checked in logic tests
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = <<"/provider">>,
+            expected_code = 202
+        },
+        logic_spec = #logic_spec{
+            operation = delete,
+            module = n_provider_logic,
+            function = delete,
+            args = [client, P1],
+            expected_result = ?OK
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    % There is also an admin endpoint for deleting providers, provider 1
+    % should also be able to use it, but other providers should not.
+    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    % Create two users, grant one of them the privilege to list providers.
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        remove_provider
+    ]),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, Admin},
+                {provider, P1, KeyFile1, CertFile1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {provider, P2, KeyFile2, CertFile2}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/providers/">>, P1],
+            expected_code = 202
+        },
+        logic_spec = #logic_spec{
+            operation = delete,
+            module = n_provider_logic,
+            function = delete,
+            args = [client, P1],
+            expected_result = ?OK
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 
@@ -880,6 +990,11 @@ end_per_suite(Config) ->
     application:stop(etls),
     ok.
 %%    test_node_starter:clean_environment(Config).
+
+
+end_per_testcase(_, Config) ->
+    % Remove everything that was created during every testcase
+    ok = oz_test_utils:delete_all_entities(Config).
 
 
 %%%===================================================================

@@ -218,7 +218,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     )),
     % Make sure that removing the first user from global group will cause him
     % to lose access to OpenSpace.
-    true = oz_test_utils:group_remove_user(
+    true = oz_test_utils:group_delete_user(
         Config, <<"all_users_group">>, UserId
     ),
     {ok, #document{value = #od_user{

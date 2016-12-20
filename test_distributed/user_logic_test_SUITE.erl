@@ -122,7 +122,7 @@ remove_space_test(Config) ->
     ),
 
     ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
-    oz_test_utils:remove_space(Config, SpaceId),
+    oz_test_utils:delete_space(Config, SpaceId),
     ?assertMatch({ok, #document{value = #od_user{
         spaces = [], space_aliases = #{}
     }}}, rpc:call(Node, od_user, get, [UserId])).

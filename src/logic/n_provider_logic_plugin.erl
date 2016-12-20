@@ -211,7 +211,12 @@ authorize(get, _ProvId, {eff_group, _}, ?USER(UserId), _) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
 
 authorize(update, ProvId, entity, ?PROVIDER(ProvId), _) ->
-    true.
+    true;
+
+authorize(delete, ProvId, entity, ?PROVIDER(ProvId), _) ->
+    true;
+authorize(delete, _ProvId, entity, ?USER(UserId), _) ->
+    n_user_logic:has_eff_oz_privilege(UserId, remove_provider).
 
 
 validate(create, entity) -> #{

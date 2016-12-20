@@ -892,7 +892,7 @@ list_users_test(Config) ->
 list_groups_test(Config) ->
     rest_test_utils:set_config(Config),
     % Remove predefined groups as they spoil the test results
-    ok = oz_test_utils:remove_all_entities(Config, true),
+    ok = oz_test_utils:delete_all_entities(Config, true),
     % Create some groups with some users
     {ok, UserWithGroups1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, UserWithGroups2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -1875,7 +1875,7 @@ create_3_nested_groups(Config, TestUser, BotGrName, MidGrName, TopGrName) ->
         Config, {group, MiddleGroup}, TopGroup
     ),
     % Remove the dummy user, he is not needed anymore
-    true = oz_test_utils:remove_user(Config, DummyUser),
+    true = oz_test_utils:delete_user(Config, DummyUser),
     {BottomGroup, MiddleGroup, TopGroup}.
 
 %%%===================================================================
@@ -1897,4 +1897,4 @@ end_per_suite(Config) ->
 
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
-    ok = oz_test_utils:remove_all_entities(Config).
+    ok = oz_test_utils:delete_all_entities(Config).

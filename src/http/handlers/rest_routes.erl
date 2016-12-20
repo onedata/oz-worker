@@ -31,33 +31,33 @@ provider_routes() ->
     P = n_provider_logic_plugin,
     [
         {<<"/providers">>, #rest_req{methods = #{
-            get => {P, undefined, list},
-            post => {P, undefined, entity}
+            get => {P, undefined, list}  % DONE
         }}},
         {<<"/providers/:id">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), entity}
+            get => {P, ?BINDING(id), entity},  % DONE
+            delete => {P, ?BINDING(id), entity} % TODO
         }}},
         {<<"/providers/:id/users">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), users}
+            get => {P, ?BINDING(id), users}  % DONE
         }}},
         {<<"/providers/:id/users/:uid">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), {user, ?BINDING(uid)}}
+            get => {P, ?BINDING(id), {user, ?BINDING(uid)}}  % DONE
         }}},
         {<<"/providers/:id/groups">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), groups}
+            get => {P, ?BINDING(id), groups}  % DONE
         }}},
         {<<"/providers/:id/groups/:gid">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), {group, ?BINDING(gid)}}
+            get => {P, ?BINDING(id), {group, ?BINDING(gid)}}  % DONE
         }}},
         {<<"/providers/:id/spaces">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), spaces}
+            get => {P, ?BINDING(id), spaces}  % DONE
         }}},
         {<<"/providers/:id/spaces/:sid">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), {space, ?BINDING(sid)}}
+            get => {P, ?BINDING(id), {space, ?BINDING(sid)}}  % DONE
         }}},
         {<<"/provider">>, #rest_req{methods = #{
-            get => {P, ?CLIENT_ID, entity},
-            post => {P, undefined, entity},
+            get => {P, ?CLIENT_ID, entity},  % DONE
+            post => {P, undefined, entity},  % DONE
             patch => {P, ?CLIENT_ID, entity},
             delete => {P, ?CLIENT_ID, entity}
         }}},

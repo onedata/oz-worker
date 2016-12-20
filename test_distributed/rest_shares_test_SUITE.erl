@@ -398,5 +398,5 @@ end_per_suite(Config) ->
 
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
-    ok = oz_test_utils:remove_all_entities(Config).
+    ok = oz_test_utils:delete_all_entities(Config).
 

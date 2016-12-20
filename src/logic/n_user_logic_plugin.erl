@@ -40,6 +40,10 @@ get_entity(UserId) ->
 get_internal(?USER, _, _, _) ->
     ok.
 
+
+get_external(_, list) ->
+    {ok, UserDocs} = od_user:list(),
+    {ok, [UserId || #document{key = UserId} <- UserDocs]};
 get_external(?USER, _) ->
     ok.
 

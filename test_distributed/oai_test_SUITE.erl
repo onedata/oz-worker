@@ -952,7 +952,7 @@ init_per_testcase(_, Config) ->
     Config.
 
 end_per_testcase(_, Config) ->
-    oz_test_utils:remove_all_entities(Config),
+    oz_test_utils:delete_all_entities(Config),
     unmock_handle_proxy(Config),
     ok.
 

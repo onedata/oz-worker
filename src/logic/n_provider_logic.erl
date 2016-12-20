@@ -45,8 +45,7 @@
     check_my_ip/1
 ]).
 -export([
-    exists/1,
-    list/0
+    exists/1
 ]).
 -export([
     get_url/1,
@@ -190,17 +189,6 @@ choose_provider_for_user(UserId) ->
                     {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
             end
     end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns a list of all providers in the system (their ids).
-%% @end
-%%--------------------------------------------------------------------
--spec list() -> {ok, [od_provider:id()]}.
-list() ->
-    {ok, ProviderDocs} = od_provider:list(),
-    {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]}.
 
 
 %%--------------------------------------------------------------------

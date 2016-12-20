@@ -94,7 +94,7 @@ check_rest_call(Config, ArgsMap) ->
                 % Cache user auth tokens, if none in cache create a new one.
                 Macaroon = case get({macaroon, UserId}) of
                     undefined ->
-                        Mac = oz_test_utils:get_client_token(
+                        Mac = oz_test_utils:create_client_token(
                             Config, UserId
                         ),
                         put({macaroon, UserId}, Mac),
@@ -135,7 +135,9 @@ check_rest_call(Config, ArgsMap) ->
                     ExpCode ->
                         ok;
                     _ ->
-                        throw({code, RespCode, ExpCode})
+                        throw({code, RespCode, ExpCode, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end
         end,
 
@@ -148,14 +150,18 @@ check_rest_call(Config, ArgsMap) ->
                     true ->
                         ok;
                     false ->
-                        throw({headers_contain, RespHeaders, ExpContainsHeaders})
+                        throw({headers_contain, RespHeaders, ExpContainsHeaders, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end;
             _ ->
                 case compare_headers(RespHeaders, ExpHeaders) of
                     true ->
                         ok;
                     false ->
-                        throw({headers, RespHeaders, ExpHeaders})
+                        throw({headers, RespHeaders, ExpHeaders, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end
         end,
 
@@ -168,7 +174,9 @@ check_rest_call(Config, ArgsMap) ->
                     ExpBody ->
                         ok;
                     _ ->
-                        throw({body, RespBody, ExpBody})
+                        throw({body, RespBody, ExpBody, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end;
             Map3 when is_map(Map3) ->
                 ActualBodyMap = json_utils:decode_map(RespBody),
@@ -176,7 +184,9 @@ check_rest_call(Config, ArgsMap) ->
                     true ->
                         ok;
                     false ->
-                        throw({body, ActualBodyMap, ExpBody})
+                        throw({body, ActualBodyMap, ExpBody, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end;
             {contains, ExpContainsMap} when is_map(ExpContainsMap) ->
                 ActualBodyMap = json_utils:decode_map(RespBody),
@@ -184,7 +194,9 @@ check_rest_call(Config, ArgsMap) ->
                     true ->
                         ok;
                     false ->
-                        throw({body_contains, ActualBodyMap, ExpContainsMap})
+                        throw({body_contains, ActualBodyMap, ExpContainsMap, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end;
             #xmlElement{} = ExpBodyXML ->
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
@@ -192,7 +204,9 @@ check_rest_call(Config, ArgsMap) ->
                     true ->
                         ok;
                     false ->
-                        throw({body, RespBodyXML, ExpBodyXML})
+                        throw({body, RespBodyXML, ExpBodyXML, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end
         end,
 
@@ -201,11 +215,14 @@ check_rest_call(Config, ArgsMap) ->
     catch
         % Something wrong, return details. If assert is used, the test will fail
         % and properly display the point of failure.
-        throw:{Type, Actual, Expected} ->
+        throw:{Type, Actual, Expected, {Code, Headers, Body}} ->
+            HeadersMap = maps:from_list(Headers),
+            BodyMap = try json_utils:decode_map(Body) catch _:_ -> Body end,
             {
                 Type,
                 {got, Actual},
-                {expected, Expected}
+                {expected, Expected},
+                {response, {Code, HeadersMap, BodyMap}}
             };
         % Unexpected error
         Type:Message ->
@@ -247,8 +264,8 @@ compare_headers(ActualHeadersInput, ExpectedHeadersInput) ->
                 fun({Key, ExpValue}) ->
                     ActualValue = maps:get(Key, ActualMap),
                     case {ActualValue, ExpValue} of
-                        {_, {match, Bin}} ->
-                            match =:= re:run(ActualValue, Bin, [{capture, none}]);
+                        {_, {match, RegExp}} ->
+                            match =:= re:run(ActualValue, RegExp, [{capture, none}]);
                         {B1, B2} when is_binary(B1) andalso is_binary(B2) ->
                             B1 =:= B2
                     end

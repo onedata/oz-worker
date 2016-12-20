@@ -72,6 +72,9 @@ get_internal(?USER, _HServiceId, #od_handle_service{users = Users}, users) ->
     {ok, Users}.
 
 
+get_external(_, list) ->
+    {ok, HServiceDocs} = od_handle_service:list(),
+    {ok, [HServiceId || #document{key = HServiceId} <- HServiceDocs]};
 get_external(?USER, _) ->
     ok.
 

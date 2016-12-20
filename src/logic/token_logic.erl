@@ -58,27 +58,32 @@ deserialize(Token) ->
 
 %%--------------------------------------------------------------------
 %% @doc Checks if a given token is a valid macaroon of a given type.
-%% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(macaroon:macaroon(), TokenType :: token_type()) -> boolean().
+-spec validate(macaroon:macaroon(), TokenType :: token_type()) ->
+    ok | inexistent | bad_macaroon | bad_type.
 validate(Macaroon, TokenType) ->
-    Id = macaroon:identifier(Macaroon),
-    case token:get(Id) of
-        {error, _} ->
-            false;
-        {ok, #document{value = #token{secret = Secret}}} ->
-            V = macaroon_verifier:create(),
-            V1 = macaroon_verifier:satisfy_exact(V,
-                ["tokenType = ", atom_to_list(TokenType)]),
+    try
+        Id = macaroon:identifier(Macaroon),
+        case token:get(Id) of
+            {error, _} ->
+                inexistent;
+            {ok, #document{value = #token{secret = Secret}}} ->
+                V = macaroon_verifier:create(),
+                V1 = macaroon_verifier:satisfy_exact(V,
+                    ["tokenType = ", atom_to_list(TokenType)]),
 
-            case macaroon_verifier:verify(V1, Macaroon, Secret) of
-                ok ->
-                    true;
-                {error, Reason} ->
-                    ?info("Bad macaroon ~p: ~p", [Id, Reason]),
-                    false
-            end
+                case macaroon_verifier:verify(V1, Macaroon, Secret) of
+                    ok ->
+                        ok;
+                    {error, Reason} ->
+                        ?debug("Bad macaroon ~p: ~p", [Id, Reason]),
+                        bad_type
+                end
+        end
+    catch
+        _:_ ->
+            bad_macaroon
     end.
 
 

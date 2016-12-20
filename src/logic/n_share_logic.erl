@@ -26,7 +26,10 @@
     add_group/3
 ]).
 
--export([get/2]).
+-export([
+    get/2,
+    list/1
+]).
 
 -export([update/3]).
 
@@ -64,10 +67,9 @@ add_group(Issuer, ShareId, Data) ->
 get(Issuer, ShareId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, entity, ShareId).
 
-%%add_relation(Issuer, {ShareId, users}, od_user, UserId) ->
-%%    n_entity_logic:add_relation(
-%%        Issuer, ?PLUGIN, {ShareId, users}, od_user, UserId
-%%    ).
+
+list(Issuer) ->
+    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
 
 
 

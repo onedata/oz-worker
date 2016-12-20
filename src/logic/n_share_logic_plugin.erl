@@ -57,6 +57,9 @@ get_internal(?USER, _ShareId, _, _) ->
     ok.
 
 
+get_external(_, list) ->
+    {ok, ShareDocs} = od_share:list(),
+    {ok, [ShareId || #document{key = ShareId} <- ShareDocs]};
 get_external(?USER, _) ->
     ok.
 

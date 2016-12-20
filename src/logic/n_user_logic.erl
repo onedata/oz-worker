@@ -22,7 +22,8 @@
     create/1
 ]).
 -export([
-    get/2
+    get/2,
+    list/1
 ]).
 -export([
     modify_oz_privileges/4, modify_oz_privileges/3
@@ -47,6 +48,10 @@ create(UserInfo) ->
 
 get(Issuer, UserId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, UserId, entity).
+
+
+list(Issuer) ->
+    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
 
 
 modify_oz_privileges(Issuer, UserId, Operation, Privs) when is_list(Privs) ->
