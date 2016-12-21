@@ -40,7 +40,7 @@ created_reply(PathTokens) ->
     LocationHeader = #{
         <<"location">> => filename:join([RestPrefix | PathTokens])
     },
-    #rest_resp{code = 201, headers = LocationHeader}.
+    #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
 updated_reply() ->
-    #rest_resp{code = 204}.
+    #rest_resp{code = ?HTTP_204_NO_CONTENT}.

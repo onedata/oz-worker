@@ -66,6 +66,10 @@
 -define(ERROR_RELATION_ALREADY_EXISTS(__ChModel, __ChId, __ParModel, __ParId),
     {error, {relation_already_exists, __ChModel, __ChId, __ParModel, __ParId}}
 ).
+-define(ERROR_CANNOT_DELETE_ENTITY(__EntityModel, __EntityId),
+    {error, {cannot_delete_entity, __EntityModel, __EntityId}}
+).
+
 
 
 -endif.

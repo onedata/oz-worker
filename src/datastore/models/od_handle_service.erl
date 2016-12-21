@@ -45,6 +45,7 @@ record_struct(1) ->
         {service_properties, #{term => term}},
         {users, #{string => [atom]}},
         {groups, #{string => [atom]}},
+        {handles, [string]},
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {bottom_up_dirty, boolean}

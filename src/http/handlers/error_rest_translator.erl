@@ -161,6 +161,11 @@ translate(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
     {?HTTP_400_BAD_REQUEST, {<<"Bad value: ~s \"~s\" ~s ~s \"~s\"">>,
         [model_to_string(ChType), ChId, RelationToString, model_to_string(ParType), ParId]
     }};
+translate(?ERROR_CANNOT_DELETE_ENTITY(EntityModel, EntityId)) ->
+    {?HTTP_500_INTERNAL_SERVER_ERROR, {
+        <<"Cannot delete ~s \"~s\", failed to delete some dependent relations">>,
+        [model_to_string(EntityModel), EntityId]
+    }};
 % Wildcard match
 translate({error, Reason}) ->
     ?warning("Unexpected error: {error, ~p} in rest error translator", [Reason]),

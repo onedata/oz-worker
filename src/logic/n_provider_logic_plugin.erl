@@ -20,7 +20,7 @@
 
 
 -export([create/4, get_entity/1, get_internal/4, get_external/2,
-    update/3, delete/1]).
+    update/3, delete/2]).
 -export([exists/2, authorize/5, validate/2]).
 
 
@@ -137,7 +137,7 @@ update(ProviderId, entity, Data) when is_binary(ProviderId) ->
     ok.
 
 
-delete(ProviderId) when is_binary(ProviderId) ->
+delete(ProviderId, entity) when is_binary(ProviderId) ->
     entity_graph:delete_with_relations(od_provider, ProviderId).
 
 
@@ -251,7 +251,7 @@ validate(create, support) ->
     #{
         required => #{
             <<"token">> => {token, space_support_token},
-            <<"size">> => {not_lower_than, MinSupportSize}
+            <<"size">> => {integer, {not_lower_than, MinSupportSize}}
         }
     };
 validate(create, check_my_ports) -> #{

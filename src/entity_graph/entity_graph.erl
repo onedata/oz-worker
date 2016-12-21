@@ -61,15 +61,45 @@
 -define(ENTITY_GRAPH_LOCK, entity_graph).
 -define(STATE_KEY, <<"entity_graph_state">>).
 
+% Data types that hold different types of relations.
+-type relation(EntityId) :: [EntityId].
+-type relation_with_attrs(EntityId, Attributes) :: #{EntityId => Attributes}.
+% Data types that hold different types of effective relations. {Model, Id} pairs
+% hold pairs of {record type, record id} through which the effective
+% relation exists (intermediaries).
+% There may be multiple such pairs on the list. If the effective neighbour
+% has a direct relation to the entity, it will be listed there (which means
+% that it belongs "by itself").
+-type eff_relation(EntityId) :: #{EntityId => [{Model :: atom(), Id :: binary()}]}.
+-type eff_relation_with_attrs(EntityId, Attributes) ::
+#{EntityId => {Attributes, [{Model :: atom(), Id :: binary()}]}}.
+
+% Types of operations on privileges
+-type privileges_operation() :: set | grant | revoke.
+
+-export_type([
+    relation/1, relation_with_attrs/2,
+    eff_relation/1, eff_relation_with_attrs/2,
+    privileges_operation/0
+]).
+
+% Internal types
 % Direction in effective graph
 -type direction() :: top_down | bottom_up.
--type entity_id() :: binary().
--type entity_type() :: od_user | od_group | od_space | od_share | od_provider |
-od_handle_service | od_handle.
--type entity() :: #od_user{} | #od_group{} | #od_space{} | #od_share{} |
-#od_provider{} | #od_handle_service{} | #od_handle{}.
-% Attributes of relation, can be any term (list of privileges, support size etc)
+-type entity_id() :: od_user:id() | od_group:id() | od_space:id() |
+od_share:id() | od_provider | od_handle_service:id() | od_handle:id().
+-type entity_type() :: od_user | od_group | od_space |
+od_share | od_provider | od_handle_service | od_handle.
+-type entity() :: #od_user{} | #od_group{} | #od_space{} |
+#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
+% Relation attributes
 -type attributes() :: term().
+% Maps used across functions to gather relations and effective relations
+-type relations_map() :: #{entity_type() => [entity_id()]}.
+-type eff_relations_map() :: #{entity_type() => [
+eff_relation(entity_id()) |
+eff_relation_with_attrs(entity_id(), attributes())
+]}.
 
 %% API
 -export([init_state/0]).
@@ -77,6 +107,7 @@ od_handle_service | od_handle.
 -export([add_relation/4, add_relation/5]).
 -export([update_relation/5]).
 -export([remove_relation/4]).
+-export([delete_with_relations/2]).
 -export([update_oz_privileges/4]).
 
 %%%===================================================================
@@ -97,42 +128,36 @@ init_state() ->
             {ok, #document{value = #entity_graph_state{}}} ->
                 ok;
             {error, {not_found, entity_graph_state}} ->
-                entity_graph_state:create(
+                {ok, ?STATE_KEY} = entity_graph_state:create(
                     #document{key = ?STATE_KEY, value = #entity_graph_state{}}
-                )
+                ),
+                ok
         end
     end).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves effective graph state, which is a globally shared singleton.
+%% Spawns an async process that will attempt to refresh the entity graph.
 %% @end
 %%--------------------------------------------------------------------
--spec get_state() -> #entity_graph_state{} | {error, term()}.
-get_state() ->
-    case entity_graph_state:get(?STATE_KEY) of
-        {ok, #document{value = State}} ->
-            State;
-        Error ->
-            ?error("Cannot retrieve state of effective graph: ~p", [Error]),
-            error(cannot_get_state)
-    end.
-
-
-update_state(UpdateFun) ->
-    entity_graph_state:update(?STATE_KEY, UpdateFun).
-
-
+-spec schedule_refresh() -> ok.
 schedule_refresh() ->
-    ?emergency("Refresh scheduled"),
-    spawn(fun refresh_if_needed/0).
+    spawn(fun refresh_if_needed/0),
+    ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Waits until entity graph is recalculated and returns true. Returns false upon
+%% failure (10 retries, with 3 second interval between them).
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_up_to_date() -> boolean.
 ensure_up_to_date() ->
     ensure_up_to_date(10).
 ensure_up_to_date(0) ->
-    error(cannot_ensure_up_to_date);
+    false;
 ensure_up_to_date(Retries) ->
     Result = critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
         case get_state() of
@@ -144,7 +169,7 @@ ensure_up_to_date(Retries) ->
     end),
     case Result of
         true ->
-            ok;
+            true;
         false ->
             schedule_refresh(),
             timer:sleep(3000),
@@ -154,111 +179,28 @@ ensure_up_to_date(Retries) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Performs refreshing of effective graph. If the graph is already up to date
-%% (i.e. not dirty according to its state), it does nothing. If the graph is
-%% dirty, it is processed until all documents that were marked dirty are
-%% recalculated.
+%% Adds a relation between given entities. Used for relations without attributes.
 %% @end
 %%--------------------------------------------------------------------
--spec refresh_if_needed() -> ok.
-refresh_if_needed() ->
-    critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
-        case get_state() of
-            #entity_graph_state{bottom_up_dirty = [], top_down_dirty = []} ->
-                ?emergency("Refresh skipped."),
-                ok;
-            State ->
-                try
-                    refresh_entity_graph(State)
-                catch Type:Message ->
-                    ?error_stacktrace("Cannot refresh entity graph - ~p:~p", [
-                        Type, Message
-                    ]),
-                    % Sleep for a while to avoid an aggressive loop
-                    % (in general, the refresh process should not fail at all).
-                    timer:sleep(5000),
-                    schedule_refresh()
-                end
-        end
-    end),
-    ok.
+-spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
+    ParentType :: entity_type(), ParentId :: entity_id()) -> ok | {error, term()}.
+add_relation(od_share, ShareId, od_space, SpaceId) ->
+    add_relation(od_share, ShareId, od_space, SpaceId, undefined, undefined);
+add_relation(od_handle, HandleId, od_share, ShareId) ->
+    add_relation(od_handle, HandleId, undefined, od_share, ShareId, undefined);
+add_relation(od_handle, HandleId, od_handle_service, HServiceId) ->
+    add_relation(od_handle, HandleId, undefined, od_handle_service, HServiceId, undefined).
 
 
-refresh_entity_graph(#entity_graph_state{bottom_up_dirty = [First | _]}) ->
-    {_Priority, EntityType, EntityId} = First,
-    % Make user that the entity is not modified during the whole update
-    sync_on_entity(EntityType, EntityId, fun() ->
-        refresh_entity(bottom_up, EntityType, EntityId)
-    end),
-    refresh_entity_graph(get_state());
-refresh_entity_graph(#entity_graph_state{top_down_dirty = [First | _]}) ->
-    {_Priority, EntityType, EntityId} = First,
-    % Make user that the entity is not modified during the whole update
-    sync_on_entity(EntityType, EntityId, fun() ->
-        refresh_entity(top_down, EntityType, EntityId)
-    end),
-    refresh_entity_graph(get_state());
-refresh_entity_graph(#entity_graph_state{}) ->
-    % There are no entities to update, finish.
-    ok.
-
-
-refresh_entity(WhichWay, ModelType, EntityId) ->
-    {ok, #document{value = Entity}} = ModelType:get(EntityId),
-    ?emergency("Refreshing (~p) ~s", [WhichWay, readable(EntityId, Entity)]),
-    % Get effective relations from the entity itself
-    EffOfItself = gather_eff_from_itself(WhichWay, EntityId, Entity),
-%%    ?emergency("NeighboursAsEff: ~p", [NeighboursAsEff]),
-    % Get effective relations from all neighbours
-    EffOfNeighbours = gather_eff_from_neighbours(WhichWay, Entity),
-%%    ?emergency("EffOfNeighbours: ~p", [EffOfNeighbours]),
-
-    % Aggregate all effective relations
-    AggregatedEffRelations = lists:foldl(
-        fun(EffOfNeighbour, OuterMapAcc) ->
-            lists:foldl(
-                fun({NType, EffRelationsMap}, InnerMapAcc) ->
-                    InnerMapAcc#{NType => merge_eff_relations(
-                        maps:get(NType, InnerMapAcc, #{}), EffRelationsMap
-                    )}
-                end, OuterMapAcc, maps:to_list(EffOfNeighbour))
-        end, EffOfItself, EffOfNeighbours),
-%%    ?emergency("AggregatedEffRelations: ~p", [AggregatedEffRelations]),
-    % Check if anything changed, if so successors should be marked dirty
-    case AggregatedEffRelations =:= get_eff_relations(WhichWay, Entity) of
-        true ->
-            % Nothing changed, no action is needed
-            ?emergency("Nothing changed"),
-            ok;
-        false ->
-            % Mark all successors as dirty
-            % (these that are in the direction of update)
-            Successors = successors(WhichWay, Entity),
-            ?emergency("Successors: ~p", [Successors]),
-            lists:foreach(
-                fun({NType, NList}) ->
-                    lists:foreach(
-                        fun(NId) ->
-                            NType:update(NId, fun(Ent) ->
-                                {ok, mark_dirty(WhichWay, true, NType, NId, Ent)}
-                            end)
-                        end, NList)
-                end, maps:to_list(Successors))
-    end,
-    % Update the record marking it not dirty and setting newly calculated
-    % effective relations.
-    {ok, _} = ModelType:update(EntityId, fun(Ent) ->
-        {ok, mark_dirty(WhichWay, false, ModelType, EntityId, update_eff_relations(
-            WhichWay, Ent, AggregatedEffRelations
-        ))}
-    end),
-    ok.
-
-
-add_relation(od_space, GroupId, od_share, ShareId) ->
-    add_relation(od_space, GroupId, undefined, od_share, ShareId, undefined).
-
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a relation between given entities. Used for relations with attributes.
+%% Based on entity types, attributes are added to proper relation.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
+    ParentType :: entity_type(), ParentId :: entity_id(),
+    Attributes :: attributes()) -> ok | {error, term()}.
 add_relation(od_user, UserId, od_group, GroupId, Privileges) ->
     add_relation(od_user, UserId, Privileges, od_group, GroupId, undefined);
 add_relation(od_user, UserId, od_space, SpaceId, Privileges) ->
@@ -278,9 +220,20 @@ add_relation(od_group, GroupId, od_handle_service, HServiceId, Privileges) ->
     add_relation(od_group, GroupId, Privileges, od_handle_service, HServiceId, undefined);
 
 add_relation(od_space, GroupId, od_provider, ProviderId, SupportSize) ->
-    add_relation(od_space, GroupId, undefined, od_provider, ProviderId, SupportSize).
+    % Support size is kept in both records
+    add_relation(od_space, GroupId, SupportSize, od_provider, ProviderId, SupportSize).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Adds a relation between given entities. Used for relations with attributes.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
+    ChildAttributes :: attributes(), ParentType :: entity_type(),
+    ParentId :: entity_id(), ParentAttributes :: attributes()) ->
+    ok | {error, term()}.
 add_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChModel, ChId) of
@@ -329,6 +282,15 @@ add_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     Result.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a relation between given entities. Used for relations with attributes.
+%% Based on entity types, attributes are updated in proper relation.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_relation(ChildType :: entity_type(), ChildId :: entity_id(),
+    ParentType :: entity_type(), ParentId :: entity_id(),
+    Attributes :: attributes()) -> ok | {error, term()}.
 update_relation(od_user, UserId, od_group, GroupId, NewPrivs) ->
     update_relation(od_user, UserId, NewPrivs, od_group, GroupId, undefined);
 update_relation(od_group, ChGroupId, od_group, ParGroupId, NewPrivs) ->
@@ -350,14 +312,24 @@ update_relation(od_group, GroupId, od_handle, HandleId, NewPrivs) ->
     update_relation(od_group, GroupId, NewPrivs, od_handle, HandleId, undefined);
 
 update_relation(od_space, SpaceId, od_provider, ProviderId, NewSupportSize) ->
-    update_relation(od_group, SpaceId, undefined, od_provider, ProviderId, NewSupportSize).
+    update_relation(od_group, SpaceId, NewSupportSize, od_provider, ProviderId, NewSupportSize).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates a relation between given entities. Used for relations with attributes.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_relation(ChildType :: entity_type(), ChildId :: entity_id(),
+    ParentType :: entity_type(), ChildAttributes :: attributes(),
+    ParentId :: entity_id(), ParentAttributes :: attributes()) ->
+    ok | {error, term()}.
 update_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChModel, ChId) of
             false ->
-                ?ERROR_RELATION_ALREADY_EXISTS(ChModel, ChId, ParModel, ParId);
+                ?ERROR_RELATION_DOES_NOT_EXIST(ChModel, ChId, ParModel, ParId);
             true ->
                 {ok, mark_dirty(bottom_up, true, ParModel, ParId, update_child(
                     Parent, ChModel, ChId, ParAttrs
@@ -367,7 +339,7 @@ update_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     ChildUpdateFun = fun(Child) ->
         case has_parent(Child, ParModel, ParId) of
             false ->
-                ?ERROR_RELATION_ALREADY_EXISTS(ChModel, ChId, ParModel, ParId);
+                ?ERROR_RELATION_DOES_NOT_EXIST(ChModel, ChId, ParModel, ParId);
             true ->
                 {ok, mark_dirty(top_down, true, ChModel, ChId, update_parent(
                     Child, ParModel, ParId, ChAttrs
@@ -384,11 +356,18 @@ update_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
     Result.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes a relation between given entities.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_relation(ChildType :: entity_type(), ChildId :: entity_id(),
+    ParentType :: entity_type(), ParentId :: entity_id()) -> ok | {error, term()}.
 remove_relation(ChModel, ChId, ParModel, ParId) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChModel, ChId) of
             false ->
-                ?ERROR_RELATION_ALREADY_EXISTS(ChModel, ChId, ParModel, ParId);
+                relation_does_not_exist;
             true ->
                 {ok, mark_dirty(bottom_up, true, ParModel, ParId, remove_child(
                     Parent, ChModel, ChId
@@ -398,23 +377,98 @@ remove_relation(ChModel, ChId, ParModel, ParId) ->
     ChildUpdateFun = fun(Child) ->
         case has_parent(Child, ParModel, ParId) of
             false ->
-                ?ERROR_RELATION_ALREADY_EXISTS(ChModel, ChId, ParModel, ParId);
+                relation_does_not_exist;
             true ->
                 {ok, mark_dirty(top_down, true, ChModel, ChId, remove_parent(
                     Child, ParModel, ParId
                 ))}
         end
     end,
-    Result = case update_entity_sync(ParModel, ParId, ParentUpdateFun) of
-        ok ->
-            update_entity_sync(ChModel, ChId, ChildUpdateFun);
-        Error ->
-            Error
-    end,
+    Result1 = update_entity_sync(ParModel, ParId, ParentUpdateFun),
+    Result2 = update_entity_sync(ChModel, ChId, ChildUpdateFun),
     schedule_refresh(),
-    Result.
+    case {Result1, Result2} of
+        {relation_does_not_exist, relation_does_not_exist} ->
+            % Both sides of relation were not found, report an error
+            ?ERROR_RELATION_DOES_NOT_EXIST(ChModel, ChId, ParModel, ParId);
+        {_, _} ->
+            % At least one side of relation existed, which means success
+            % (either both sides were removed, or
+            % a broken one-side relation was fixed by removing the side)
+            ok
+    end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Safely deletes an entity, first removing all its relations and dependent
+%% entities. Fails when anything goes wrong in the cleanup procedure.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_with_relations(EntityModel :: entity_type(), EntityId :: entity_id()) ->
+    ok | {error, term()}.
+delete_with_relations(EntityModel, EntityId) ->
+    {ok, #document{value = Entity}} = EntityModel:get(EntityId),
+    Parents = get_parents(Entity),
+    DependentParents = maps:get(dependent, Parents, #{}),
+    IndependentParents = maps:get(independent, Parents, #{}),
+    Children = get_children(Entity),
+    DependentChildren = maps:get(dependent, Children, #{}),
+    IndependentChildren = maps:get(independent, Children, #{}),
+    % Try catch will catch all unexpected failures in relations removal
+    % (all sensitive operations are matched to ok)
+    try
+        % Remove all independent relations
+        maps:map(
+            fun(ParType, ParentIds) ->
+                lists:foreach(
+                    fun(ParId) ->
+                        ok = remove_relation(EntityModel, EntityId, ParType, ParId)
+                    end, ParentIds)
+            end, IndependentParents),
+        maps:map(
+            fun(ChType, ChIds) ->
+                lists:foreach(
+                    fun(ChId) ->
+                        ok = remove_relation(ChType, ChId, EntityModel, EntityId)
+                    end, ChIds)
+            end, IndependentChildren),
+        % Remove all dependent relations and dependent entities
+        maps:map(
+            fun(ParType, ParentIds) ->
+                lists:foreach(
+                    fun(ParId) ->
+                        ok = remove_relation(EntityModel, EntityId, ParType, ParId),
+                        ok = ParType:delete(ParId)
+                    end, ParentIds)
+            end, DependentParents),
+        maps:map(
+            fun(ChType, ChIds) ->
+                lists:foreach(
+                    fun(ChId) ->
+                        ok = remove_relation(ChType, ChId, EntityModel, EntityId),
+                        ok = ChType:delete(ChId)
+                    end, ChIds)
+            end, DependentChildren),
+        ok
+    catch
+        Type:Message ->
+            ?error_stacktrace(
+                "Unexpected error while deleting ~p#~s with relations - ~p:~p",
+                [EntityModel, EntityId, Type, Message]
+            ),
+            ?ERROR_CANNOT_DELETE_ENTITY(EntityModel, EntityId)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates oz privileges of a user or a group.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_oz_privileges(EntityModel :: entity_type(), EntityId :: entity_id(),
+    Operation :: privileges_operation(),
+    Privileges :: [privileges:oz_privilege()]) -> ok.
 update_oz_privileges(EntityModel, EntityId, Operation, Privileges) ->
     {ok, _} = EntityModel:update(EntityId, fun(Entity) ->
         OzPrivileges = get_oz_privileges(Entity),
@@ -433,65 +487,219 @@ update_oz_privileges(EntityModel, EntityId, Operation, Privileges) ->
     ok.
 
 
-delete_with_relations(EntityModel, EntityId) ->
-    {ok, #document{value = #od_provider{
-        spaces = Spaces
-    }}} = od_provider:get(EntityId),
-%%    TODO JESTES TUTEJ!
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Retrieves effective graph state, which is a globally shared singleton.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_state() -> #entity_graph_state{}.
+get_state() ->
+    case entity_graph_state:get(?STATE_KEY) of
+        {ok, #document{value = State}} ->
+            State;
+        Error ->
+            ?error("Cannot retrieve state of effective graph: ~p", [Error]),
+            error(cannot_get_state)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates effective graph state.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_state(fun((#entity_graph_state{}) -> #entity_graph_state{})) -> ok.
+update_state(UpdateFun) ->
+    ok = entity_graph_state:update(?STATE_KEY, UpdateFun).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Performs refreshing of effective graph. If the graph is already up to date
+%% (i.e. not dirty according to its state), it does nothing. If the graph is
+%% dirty, it is processed until all documents that were marked dirty are
+%% recalculated.
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_if_needed() -> ok.
+refresh_if_needed() ->
+    critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
+        case get_state() of
+            #entity_graph_state{bottom_up_dirty = [], top_down_dirty = []} ->
+                ok;
+            State ->
+                try
+                    refresh_entity_graph(State)
+                catch Type:Message ->
+                    ?error_stacktrace("Cannot refresh entity graph - ~p:~p", [
+                        Type, Message
+                    ]),
+                    % Sleep for a while to avoid an aggressive loop
+                    % (in general, the refresh process should not fail at all).
+                    timer:sleep(5000),
+                    schedule_refresh()
+                end
+        end
+    end),
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Refreshes the entity graph, starting with bottom up dirty entities with
+%% highest priorities (lowest priority values) and finishing with top down
+%% dirty entities with lowest priorities.
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_entity_graph(#entity_graph_state{}) -> ok.
+refresh_entity_graph(#entity_graph_state{bottom_up_dirty = [First | _]}) ->
+    {_Priority, EntityType, EntityId} = First,
+    % Make sure that the entity is not modified during the whole update
+    sync_on_entity(EntityType, EntityId, fun() ->
+        refresh_entity(bottom_up, EntityType, EntityId)
+    end),
+    refresh_entity_graph(get_state());
+refresh_entity_graph(#entity_graph_state{top_down_dirty = [First | _]}) ->
+    {_Priority, EntityType, EntityId} = First,
+    % Make sure that the entity is not modified during the whole update
+    sync_on_entity(EntityType, EntityId, fun() ->
+        refresh_entity(top_down, EntityType, EntityId)
+    end),
+    refresh_entity_graph(get_state());
+refresh_entity_graph(#entity_graph_state{}) ->
+    % There are no entities to update, finish.
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Refreshes a single entity. Gathers its effective relations from its own
+%% relations and from effective relations of neighbours. If anything changed,
+%% all successors (direction-wise) are marked as dirty.
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_entity(Direction :: direction(), EntityType :: entity_type(),
+    EntityId :: entity_id()) -> ok.
+refresh_entity(Direction, EntityType, EntityId) ->
+    {ok, #document{value = Entity}} = EntityType:get(EntityId),
+    % Get effective relations from the entity itself
+    EffOfItself = gather_eff_from_itself(Direction, EntityId, Entity),
+    % Get effective relations from all neighbours
+    EffOfNeighbours = gather_eff_from_neighbours(Direction, Entity),
+    % Aggregate all effective relations
+    AggregatedEffRelations = lists:foldl(
+        fun(EffOfNeighbour, OuterMapAcc) ->
+            lists:foldl(
+                fun({NType, EffRelationsMap}, InnerMapAcc) ->
+                    InnerMapAcc#{NType => merge_eff_relations(
+                        maps:get(NType, InnerMapAcc, #{}), EffRelationsMap
+                    )}
+                end, OuterMapAcc, maps:to_list(EffOfNeighbour))
+        end, EffOfItself, EffOfNeighbours),
+    % Check if anything changed, if so successors should be marked dirty
+    case AggregatedEffRelations =:= get_eff_relations(Direction, Entity) of
+        true ->
+            % Nothing changed, no action is needed
+            ok;
+        false ->
+            % Mark all successors as dirty
+            % (these that are in the direction of update)
+            Successors = get_successors(Direction, Entity),
+            lists:foreach(
+                fun({NType, NList}) ->
+                    lists:foreach(
+                        fun(NId) ->
+                            NType:update(NId, fun(Ent) ->
+                                {ok, mark_dirty(Direction, true, NType, NId, Ent)}
+                            end)
+                        end, NList)
+                end, maps:to_list(Successors))
+    end,
+    % Update the record marking it not dirty and setting newly calculated
+    % effective relations.
+    {ok, _} = EntityType:update(EntityId, fun(Ent) ->
+        {ok, mark_dirty(Direction, false, EntityType, EntityId, update_eff_relations(
+            Direction, Ent, AggregatedEffRelations
+        ))}
+    end),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Marks given entity as dirty and returns update entity record (it still needs
+%% to be saved to datastore). If an entity is already marked as dirty, it's
+%% priority is updated.
+%% @end
+%%--------------------------------------------------------------------
+-spec mark_dirty(Direction :: direction(), Flag :: boolean(),
+    EntityType :: entity_type(), EntityId :: entity_id(),
+    Entity :: entity()) -> entity().
 % Shares do not take part in eff graph recomputation
 mark_dirty(_, _, _, _, #od_share{} = Entity) ->
     Entity;
-mark_dirty(WhichWay, Flag, Model, Id, Entity) ->
-    % TODO jak juz jest dirty to ne dodawac!
-    Priority = get_priority(WhichWay, Entity),
+mark_dirty(Direction, Flag, EntityType, EntityId, Entity) ->
+    Priority = get_priority(Direction, Entity),
     update_state(
         fun(EffGraphState) ->
             #entity_graph_state{
                 bottom_up_dirty = BottomUpDirty,
                 top_down_dirty = TopDownDirty
             } = EffGraphState,
-            NewState = case {WhichWay, Flag} of
+            NewState = case {Direction, Flag} of
                 {bottom_up, true} ->
-                    ?emergency("bottom-up dirty: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
                         bottom_up_dirty = lists:sort(lists:keystore(
-                            Id, 3, BottomUpDirty, {Priority, Model, Id}
+                            EntityId, 3, BottomUpDirty, {Priority, EntityType, EntityId}
                         ))
                     };
                 {bottom_up, false} ->
-                    ?emergency("bottom-up clean: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
-                        bottom_up_dirty = lists:keydelete(Id, 3, BottomUpDirty)
+                        bottom_up_dirty = lists:keydelete(EntityId, 3, BottomUpDirty)
                     };
                 {top_down, true} ->
-                    ?emergency("top-down dirty: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
                         top_down_dirty = lists:sort(lists:keystore(
-                            Id, 3, TopDownDirty, {Priority, Model, Id}
+                            EntityId, 3, TopDownDirty, {Priority, EntityType, EntityId}
                         ))
                     };
                 {top_down, false} ->
-                    ?emergency("top-down clean: ~s", [readable(Id, Entity)]),
                     EffGraphState#entity_graph_state{
-                        top_down_dirty = lists:keydelete(Id, 3, TopDownDirty)
+                        top_down_dirty = lists:keydelete(EntityId, 3, TopDownDirty)
                     }
             end,
             {ok, NewState}
         end),
-    set_dirty_flag(WhichWay, Flag, Entity).
+    set_dirty_flag(Direction, Flag, Entity).
 
 
-% Priorities for records during effective graph recomputation
-
-% For bottom-up:
-%   1) groups (sorted by children num)
-%   2) spaces, handles and handle_services
-%   3) providers
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Priorities for entities during effective graph recomputation.
+%% For bottom-up:
+%%    1) groups (sorted by children num)
+%%    2) spaces, handles and handle_services
+%%    3) providers
+%% For top-down:
+%%    1) spaces
+%%    2) groups (sorted by parents num)
+%%    3) users
+%% @end
+%%--------------------------------------------------------------------
+-spec get_priority(Direction :: direction(), Entity :: entity()) -> integer().
 get_priority(bottom_up, #od_group{children = Children}) ->
-    maps:size(Children) + 1;
+    maps:size(Children);
 get_priority(bottom_up, #od_space{}) ->
     1000000000;
 get_priority(bottom_up, #od_handle_service{}) ->
@@ -500,18 +708,22 @@ get_priority(bottom_up, #od_handle{}) ->
     1000000000;
 get_priority(bottom_up, #od_provider{}) ->
     1000000001;
-% For top-down:
-%   1) spaces
-%   1) groups (sorted by parents num)
-%   3) users
 get_priority(top_down, #od_space{}) ->
-    -1000000000;
+    -1;
 get_priority(top_down, #od_group{parents = Parents}) ->
-    length(Parents) + 1;
+    length(Parents);
 get_priority(top_down, #od_user{}) ->
     1000000000.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Sets dirty flag in given entity record, depending on direction.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_dirty_flag(Direction :: direction(), Flag :: boolean(),
+    Entity :: entity()) -> entity().
 set_dirty_flag(bottom_up, Flag, #od_group{} = Group) ->
     Group#od_group{bottom_up_dirty = Flag};
 set_dirty_flag(bottom_up, Flag, #od_space{} = Space) ->
@@ -530,16 +742,14 @@ set_dirty_flag(top_down, Flag, #od_space{} = Space) ->
     Space#od_space{top_down_dirty = Flag}.
 
 
-all_children(#od_share{space = Space}) ->
-    #{od_space => [Space]};
-all_children(Entity) ->
-    successors(top_down, Entity).
-
-
-all_parents(Entity) ->
-    successors(bottom_up, Entity).
-
-
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Predicate saying if given entity has given child relation.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_child(Entity :: entity(), ChildType :: entity_type(),
+    ChildId :: entity_id()) -> boolean().
 has_child(#od_group{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
 has_child(#od_group{children = Children}, od_group, GroupId) ->
@@ -549,17 +759,21 @@ has_child(#od_space{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
 has_child(#od_space{groups = Groups}, od_group, GroupId) ->
     maps:is_key(GroupId, Groups);
+has_child(#od_space{shares = Shares}, od_share, ShareId) ->
+    lists:member(ShareId, Shares);
 
-has_child(#od_share{space = Space}, od_space, SpaceId) ->
-    SpaceId =:= Space;
+has_child(#od_share{handle = Handle}, od_handle, HandleId) ->
+    Handle =:= HandleId;
 
 has_child(#od_provider{spaces = Spaces}, od_space, SpaceId) ->
-    lists:member(SpaceId, Spaces);
+    maps:is_key(SpaceId, Spaces);
 
 has_child(#od_handle_service{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
 has_child(#od_handle_service{groups = Groups}, od_group, GroupId) ->
     maps:is_key(GroupId, Groups);
+has_child(#od_handle_service{handles = Handles}, od_handle, HandleId) ->
+    maps:is_key(HandleId, Handles);
 
 has_child(#od_handle{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
@@ -567,7 +781,14 @@ has_child(#od_handle{groups = Groups}, od_group, GroupId) ->
     maps:is_key(GroupId, Groups).
 
 
-
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Adds a child relation to given entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_child(Entity :: entity(), ChildType :: entity_type(),
+    ChildId :: entity_id(), Attributes :: attributes()) -> Entity :: entity().
 add_child(#od_group{users = Users} = Group, od_user, UserId, Privs) ->
     Group#od_group{users = maps:put(UserId, Privs, Users)};
 add_child(#od_group{children = Children} = Group, od_group, GroupId, Privs) ->
@@ -577,17 +798,21 @@ add_child(#od_space{users = Users} = Space, od_user, UserId, Privs) ->
     Space#od_space{users = maps:put(UserId, Privs, Users)};
 add_child(#od_space{groups = Groups} = Space, od_group, GroupId, Privs) ->
     Space#od_space{groups = maps:put(GroupId, Privs, Groups)};
+add_child(#od_space{shares = Shares} = Space, od_share, ShareId, _) ->
+    Space#od_space{shares = [ShareId | Shares]};
 
-add_child(#od_share{} = Share, od_space, SpaceId, _) ->
-    Share#od_share{space = SpaceId};
+add_child(#od_share{} = Share, oh_handle, HandleId, _) ->
+    Share#od_share{handle = HandleId};
 
-add_child(#od_provider{spaces = Spaces} = Provider, od_space, SpaceId, _) ->
-    Provider#od_provider{spaces = [SpaceId | Spaces]};
+add_child(#od_provider{spaces = Spaces} = Provider, od_space, SpaceId, SupportSize) ->
+    Provider#od_provider{spaces = maps:put(SpaceId, SupportSize, Spaces)};
 
 add_child(#od_handle_service{users = Users} = HS, od_user, UserId, Privs) ->
     HS#od_handle_service{users = maps:put(UserId, Privs, Users)};
 add_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId, Privs) ->
     HS#od_handle_service{groups = maps:put(GroupId, Privs, Groups)};
+add_child(#od_handle_service{handles = Handles} = HS, od_handle, HandleId, _) ->
+    HS#od_handle_service{handles = [HandleId | Handles]};
 
 add_child(#od_handle{users = Users} = Handle, od_user, UserId, Privs) ->
     Handle#od_handle{users = maps:put(UserId, Privs, Users)};
@@ -595,6 +820,15 @@ add_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, Privs) ->
     Handle#od_handle{groups = maps:put(GroupId, Privs, Groups)}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates a child relation of given entity. Only applicable to relations
+%% with attributes.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_child(Entity :: entity(), ChildType :: entity_type(),
+    ChildId :: entity_id(), NewAttributes :: attributes()) -> Entity :: entity().
 update_child(#od_group{users = Users} = Group, od_user, UserId, NewPrivs) ->
     Group#od_group{users = maps:put(UserId, NewPrivs, Users)};
 update_child(#od_group{children = Children} = Group, od_group, GroupId, NewPrivs) ->
@@ -616,6 +850,14 @@ update_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, NewPrivs) 
     Handle#od_handle{groups = maps:put(GroupId, NewPrivs, Groups)}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Removes a child relation from given entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_child(Entity :: entity(), ChildType :: entity_type(),
+    ChildId :: entity_id()) -> Entity :: entity().
 remove_child(#od_group{users = Users} = Group, od_user, UserId) ->
     Group#od_group{users = maps:remove(UserId, Users)};
 remove_child(#od_group{children = Children} = Group, od_group, GroupId) ->
@@ -625,17 +867,21 @@ remove_child(#od_space{users = Users} = Space, od_user, UserId) ->
     Space#od_space{users = maps:remove(UserId, Users)};
 remove_child(#od_space{groups = Groups} = Space, od_group, GroupId) ->
     Space#od_space{groups = maps:remove(GroupId, Groups)};
+remove_child(#od_space{shares = Shares} = Space, od_share, ShareId) ->
+    Space#od_space{shares = lists:delete(ShareId, Shares)};
 
-remove_child(#od_share{} = Share, od_space, _SpaceId) ->
-    Share#od_share{space = undefined};
+remove_child(#od_share{} = Share, oh_handle, _HandleId) ->
+    Share#od_share{handle = undefined};
 
 remove_child(#od_provider{spaces = Spaces} = Provider, od_space, SpaceId) ->
-    Provider#od_provider{spaces = lists:delete(SpaceId, Spaces)};
+    Provider#od_provider{spaces = maps:remove(SpaceId, Spaces)};
 
 remove_child(#od_handle_service{users = Users} = HS, od_user, UserId) ->
     HS#od_handle_service{users = maps:remove(UserId, Users)};
 remove_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId) ->
     HS#od_handle_service{groups = maps:remove(GroupId, Groups)};
+remove_child(#od_handle_service{handles = Handles} = HS, od_handle, HandleId) ->
+    HS#od_handle_service{handles = lists:delete(HandleId, Handles)};
 
 remove_child(#od_handle{users = Users} = Handle, od_user, UserId) ->
     Handle#od_handle{users = maps:remove(UserId, Users)};
@@ -643,6 +889,14 @@ remove_child(#od_handle{groups = Groups} = Handle, od_group, GroupId) ->
     Handle#od_handle{groups = maps:remove(GroupId, Groups)}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Predicate saying if given entity has given parent relation.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_parent(Entity :: entity(), ParentType :: entity_type(),
+    ParentId :: entity_id()) -> boolean().
 has_parent(#od_user{groups = Groups}, od_group, GroupId) ->
     lists:member(GroupId, Groups);
 has_parent(#od_user{spaces = Spaces}, od_space, SpaceId) ->
@@ -661,12 +915,26 @@ has_parent(#od_group{handle_services = HandleServices}, od_handle_service, HSId)
 has_parent(#od_group{handles = Handles}, od_handle, HandleId) ->
     lists:member(HandleId, Handles);
 
-has_parent(#od_space{shares = Shares}, od_share, ShareId) ->
-    lists:member(ShareId, Shares);
 has_parent(#od_space{providers = Providers}, od_provider, ProviderId) ->
-    maps:is_key(ProviderId, Providers).
+    maps:is_key(ProviderId, Providers);
+
+has_parent(#od_share{space = Space}, od_space, SpaceId) ->
+    SpaceId =:= Space;
+
+has_parent(#od_handle{resource_type = ResType, resource_id = ResId}, od_share, ShareId) ->
+    ResType =:= <<"Share">> andalso ResId =:= ShareId;
+has_parent(#od_handle{handle_service = HService}, od_handle_service, HServiceId) ->
+    HService =:= HServiceId.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Adds a parent relation to given entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_parent(Entity :: entity(), ParentType :: entity_type(),
+    ParentId :: entity_id(), Attributes :: attributes()) -> Entity :: entity().
 add_parent(#od_user{groups = Groups} = User, od_group, GroupId, _) ->
     User#od_user{groups = [GroupId | Groups]};
 add_parent(#od_user{spaces = Spaces} = User, od_space, SpaceId, _) ->
@@ -685,16 +953,40 @@ add_parent(#od_group{handle_services = HandleServices} = Group, od_handle_servic
 add_parent(#od_group{handles = Handles} = Group, od_handle, HandleId, _) ->
     Group#od_group{handles = [HandleId | Handles]};
 
-add_parent(#od_space{shares = Shares} = Space, od_share, ShareId, _) ->
-    Space#od_space{shares = [ShareId | Shares]};
 add_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId, SupportSize) ->
-    Space#od_space{providers = maps:put(ProviderId, SupportSize, Providers)}.
+    Space#od_space{providers = maps:put(ProviderId, SupportSize, Providers)};
+
+add_parent(#od_share{} = Share, od_space, SpaceId, _) ->
+    Share#od_share{space = SpaceId};
+
+add_parent(#od_handle{} = Handle, od_share, ShareId, _) ->
+    Handle#od_handle{resource_type = <<"Share">>, resource_id = ShareId};
+
+add_parent(#od_handle{} = Handle, od_handle_service, HServiceId, _) ->
+    Handle#od_handle{handle_service = HServiceId}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates a parent relation of given entity. Only applicable to relations
+%% with attributes.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_parent(Entity :: entity(), ParentType :: entity_type(),
+    ParentId :: entity_id(), NewAttributes :: attributes()) -> Entity :: entity().
 update_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId, SupportSize) ->
     Space#od_space{providers = maps:put(ProviderId, SupportSize, Providers)}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Removes a parent relation from given entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_parent(Entity :: entity(), ParentType :: entity_type(),
+    ParentId :: entity_id()) -> Entity :: entity().
 remove_parent(#od_user{groups = Groups} = User, od_group, GroupId) ->
     User#od_user{groups = lists:delete(GroupId, Groups)};
 remove_parent(#od_user{spaces = Spaces} = User, od_space, SpaceId) ->
@@ -713,38 +1005,53 @@ remove_parent(#od_group{handle_services = HandleServices} = Group, od_handle_ser
 remove_parent(#od_group{handles = Handles} = Group, od_handle, HandleId) ->
     Group#od_group{handles = lists:delete(HandleId, Handles)};
 
-remove_parent(#od_space{shares = Shares} = Space, od_share, ShareId) ->
-    Space#od_space{shares = lists:delete(ShareId, Shares)};
 remove_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId) ->
-    Space#od_space{providers = maps:remove(ProviderId, Providers)}.
+    Space#od_space{providers = maps:remove(ProviderId, Providers)};
+
+remove_parent(#od_share{} = Share, od_space, _SpaceId) ->
+    Share#od_share{space = undefined};
+
+remove_parent(#od_handle{} = Handle, od_share, _ShareId) ->
+    Handle#od_handle{resource_type = undefined, resource_id = undefined};
+
+remove_parent(#od_handle{} = Handle, od_handle_service, _HServiceId) ->
+    Handle#od_handle{handle_service = undefined}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Return relations of given entity transformed into effective relations.
+%% @end
+%%--------------------------------------------------------------------
+-spec gather_eff_from_itself(Direction :: direction(), EntityId :: entity_id(),
+    Entity :: entity()) -> eff_relations_map().
 gather_eff_from_itself(bottom_up, EntityId, #od_group{} = Group) ->
     #od_group{users = Users, children = Groups} = Group,
     #{
-        od_user => relation_to_eff(od_group, EntityId, Users),
-        od_group => relation_to_eff(od_group, EntityId, Groups)
+        od_user => relation_to_eff_relation(od_group, EntityId, Users),
+        od_group => relation_to_eff_relation(od_group, EntityId, Groups)
     };
 gather_eff_from_itself(bottom_up, EntityId, #od_space{} = Space) ->
     #od_space{users = Users, groups = Groups} = Space,
     #{
-        od_user => relation_to_eff(od_space, EntityId, Users),
-        od_group => relation_to_eff(od_space, EntityId, Groups)
+        od_user => relation_to_eff_relation(od_space, EntityId, Users),
+        od_group => relation_to_eff_relation(od_space, EntityId, Groups)
     };
 gather_eff_from_itself(bottom_up, EntityId, #od_provider{} = Provider) ->
     #od_provider{spaces = Spaces} = Provider,
-    #{od_space => relation_to_eff(od_provider, EntityId, Spaces)};
+    #{od_space => relation_to_eff_relation(od_provider, EntityId, Spaces)};
 gather_eff_from_itself(bottom_up, EntityId, #od_handle_service{} = HService) ->
     #od_handle_service{users = Users, groups = Groups} = HService,
     #{
-        od_user => relation_to_eff(od_handle_service, EntityId, Users),
-        od_group => relation_to_eff(od_handle_service, EntityId, Groups)
+        od_user => relation_to_eff_relation(od_handle_service, EntityId, Users),
+        od_group => relation_to_eff_relation(od_handle_service, EntityId, Groups)
     };
 gather_eff_from_itself(bottom_up, EntityId, #od_handle{} = Handle) ->
     #od_handle{users = Users, groups = Groups} = Handle,
     #{
-        od_user => relation_to_eff(od_handle, EntityId, Users),
-        od_group => relation_to_eff(od_handle, EntityId, Groups)
+        od_user => relation_to_eff_relation(od_handle, EntityId, Users),
+        od_group => relation_to_eff_relation(od_handle, EntityId, Groups)
     };
 gather_eff_from_itself(top_down, EntityId, #od_user{} = User) ->
     #od_user{
@@ -753,10 +1060,10 @@ gather_eff_from_itself(top_down, EntityId, #od_user{} = User) ->
         oz_privileges = OzPrivileges
     } = User,
     #{
-        od_group => relation_to_eff(od_user, EntityId, Groups),
-        od_space => relation_to_eff(od_user, EntityId, Spaces),
-        od_handle_service => relation_to_eff(od_user, EntityId, HServices),
-        od_handle => relation_to_eff(od_user, EntityId, Handles),
+        od_group => relation_to_eff_relation(od_user, EntityId, Groups),
+        od_space => relation_to_eff_relation(od_user, EntityId, Spaces),
+        od_handle_service => relation_to_eff_relation(od_user, EntityId, HServices),
+        od_handle => relation_to_eff_relation(od_user, EntityId, Handles),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, EntityId, #od_group{} = Group) ->
@@ -766,16 +1073,25 @@ gather_eff_from_itself(top_down, EntityId, #od_group{} = Group) ->
         oz_privileges = OzPrivileges
     } = Group,
     #{
-        od_group => relation_to_eff(od_group, EntityId, Groups),
-        od_space => relation_to_eff(od_group, EntityId, Spaces),
-        od_handle_service => relation_to_eff(od_group, EntityId, HServices),
-        od_handle => relation_to_eff(od_group, EntityId, Handles),
+        od_group => relation_to_eff_relation(od_group, EntityId, Groups),
+        od_space => relation_to_eff_relation(od_group, EntityId, Spaces),
+        od_handle_service => relation_to_eff_relation(od_group, EntityId, HServices),
+        od_handle => relation_to_eff_relation(od_group, EntityId, Handles),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, _EntityId, #od_space{}) ->
     #{}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns effective relations of neighbours of given entity, in the form
+%% expected by given entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec gather_eff_from_neighbours(Direction :: direction(), Entity :: entity()) ->
+    eff_relations_map().
 gather_eff_from_neighbours(bottom_up, #od_group{} = Group) ->
     #od_group{children = Children} = Group,
     lists:map(
@@ -793,10 +1109,10 @@ gather_eff_from_neighbours(bottom_up, #od_space{} = Space) ->
 gather_eff_from_neighbours(bottom_up, #od_provider{} = Provider) ->
     #od_provider{spaces = Spaces} = Provider,
     lists:map(
-        fun(SpaceId) ->
+        fun({SpaceId, _SupportSize}) ->
             EffRelations = get_eff_relations(bottom_up, od_space, SpaceId),
-            remove_eff_privileges(EffRelations, [od_user, od_group])
-        end, Spaces);
+            eff_rel_with_attrs_to_eff_rel(EffRelations, [od_user, od_group])
+        end, maps:to_list(Spaces));
 gather_eff_from_neighbours(bottom_up, #od_handle_service{} = HService) ->
     #od_handle_service{groups = Groups} = HService,
     lists:map(
@@ -823,7 +1139,9 @@ gather_eff_from_neighbours(top_down, #od_user{} = User) ->
                 value = #od_space{
                     providers = Providers
                 }}} = od_space:get(SpaceId),
-            #{od_provider => relation_to_eff(od_space, SpaceId, remove_attributes(Providers))}
+            #{od_provider => relation_to_eff_relation(
+                od_space, SpaceId, relation_with_attrs_to_relation(Providers)
+            )}
         end, Spaces),
     FromGroups ++ FromSpaces;
 gather_eff_from_neighbours(top_down, #od_group{} = Group) ->
@@ -838,16 +1156,36 @@ gather_eff_from_neighbours(top_down, #od_group{} = Group) ->
                 value = #od_space{
                     providers = Providers
                 }}} = od_space:get(SpaceId),
-            #{od_provider => relation_to_eff(od_space, SpaceId, remove_attributes(Providers))}
+            #{od_provider => relation_to_eff_relation(od_space, SpaceId,
+                relation_with_attrs_to_relation(Providers)
+            )}
         end, Spaces),
     FromGroups ++ FromSpaces;
 gather_eff_from_neighbours(top_down, #od_space{}) ->
     [].
 
 
-get_eff_relations(WhichWay, EntityType, EntityId) ->
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns effective relations of given entity (by type and id).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_relations(Direction :: direction(), EntityType :: entity_type(),
+    EntityId :: entity_id()) -> eff_relations_map().
+get_eff_relations(Direction, EntityType, EntityId) ->
     {ok, #document{value = Entity}} = EntityType:get(EntityId),
-    get_eff_relations(WhichWay, Entity).
+    get_eff_relations(Direction, Entity).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns effective relations of given entity (by entity record).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_relations(Direction :: direction(), EntityType :: entity_type(),
+    EntityId :: entity_id()) -> eff_relations_map().
 get_eff_relations(bottom_up, #od_group{} = Group) ->
     #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
     #{od_user => EffUsers, od_group => EffGroups};
@@ -893,6 +1231,16 @@ get_eff_relations(top_down, #od_group{} = Group) ->
 get_eff_relations(top_down, #od_space{}) ->
     #{}.
 
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates effective relations of given entity and returns
+%% modified entity record.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_eff_relations(Direction :: direction(), Entity :: entity(),
+    EffNeighbours :: eff_relations_map()) -> entity().
 update_eff_relations(bottom_up, #od_group{} = Group, EffNeighbours) ->
     Group#od_group{
         eff_users = maps:get(od_user, EffNeighbours, #{}),
@@ -941,7 +1289,71 @@ update_eff_relations(top_down, #od_space{} = Space, _) ->
     Space.
 
 
-successors(bottom_up, #od_user{} = User) ->
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns all children of given entity, divided into two groups. Dependent
+%% entities are those which cannot exist without its parent, independent can.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_children(Entity :: entity()) ->
+    #{dependent => relations_map(), independent => relations_map()}.
+get_children(#od_space{shares = Shares} = Space) -> #{
+    dependent => #{od_share => Shares},
+    independent => get_successors(top_down, Space)
+};
+get_children(#od_share{handle = undefined}) -> #{
+};
+get_children(#od_share{handle = Handle}) -> #{
+    dependent => #{od_handle => [Handle]}
+};
+get_children(#od_handle_service{handles = Handles}) -> #{
+    dependent => #{od_handle => Handles}
+};
+get_children(Entity) -> #{
+    independent => get_successors(top_down, Entity)
+}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns all parents of given entity, divided into two groups. Dependent
+%% entities are those which cannot exist without its child, independent can.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_parents(Entity :: entity()) ->
+    #{dependent => relations_map(), independent => relations_map()}.
+get_parents(#od_handle{} = Handle) ->
+    #od_handle{
+        resource_type = ResourceType, resource_id = ResourceId,
+        handle_service = HService
+    } = Handle,
+    Independent = case ResourceType of
+        <<"Share">> -> #{od_share => [ResourceId]};
+        _ -> #{}
+    end,
+    #{
+        independent => Independent#{od_handle_service => [HService]}
+    };
+get_parents(#od_share{space = Space}) -> #{
+    independent => #{od_space => [Space]}
+};
+get_parents(Entity) -> #{
+    independent => get_successors(bottom_up, Entity)
+}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns all successors of given entity (direction-wise). Those entities will
+%% be marked dirty if the effective relations of the entity change.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_successors(Direction :: direction(), Entity :: entity()) ->
+    relations_map().
+get_successors(bottom_up, #od_user{} = User) ->
     #od_user{
         groups = Groups, spaces = Spaces,
         handle_services = HServices, handles = Handles
@@ -950,7 +1362,7 @@ successors(bottom_up, #od_user{} = User) ->
         od_group => Groups, od_space => Spaces,
         od_handle_service => HServices, od_handle => Handles
     };
-successors(bottom_up, #od_group{} = Group) ->
+get_successors(bottom_up, #od_group{} = Group) ->
     #od_group{
         parents = Groups, spaces = Spaces,
         handle_services = HServices, handles = Handles
@@ -959,42 +1371,49 @@ successors(bottom_up, #od_group{} = Group) ->
         od_group => Groups, od_space => Spaces,
         od_handle_service => HServices, od_handle => Handles
     };
-successors(bottom_up, #od_space{} = Space) ->
+get_successors(bottom_up, #od_space{} = Space) ->
     #od_space{providers = Providers} = Space,
-    #{od_provider => remove_attributes(Providers)};
+    #{od_provider => relation_with_attrs_to_relation(Providers)};
 
-successors(top_down, #od_group{} = Group) ->
+get_successors(top_down, #od_group{} = Group) ->
     #od_group{users = Users, children = Groups} = Group,
     #{
-        od_user => remove_attributes(Users),
-        od_group => remove_attributes(Groups)
+        od_user => relation_with_attrs_to_relation(Users),
+        od_group => relation_with_attrs_to_relation(Groups)
     };
-successors(top_down, #od_space{} = Space) ->
+get_successors(top_down, #od_space{} = Space) ->
     #od_space{users = Users, groups = Groups} = Space,
     #{
-        od_user => remove_attributes(Users),
-        od_group => remove_attributes(Groups)
+        od_user => relation_with_attrs_to_relation(Users),
+        od_group => relation_with_attrs_to_relation(Groups)
     };
-successors(top_down, #od_provider{} = Provider) ->
+get_successors(top_down, #od_provider{} = Provider) ->
     #od_provider{spaces = Spaces} = Provider,
-    #{od_space => Spaces};
-successors(top_down, #od_handle_service{} = HService) ->
+    #{od_space => relation_with_attrs_to_relation(Spaces)};
+get_successors(top_down, #od_handle_service{} = HService) ->
     #od_handle_service{users = Users, groups = Groups} = HService,
     #{
-        od_user => remove_attributes(Users),
-        od_group => remove_attributes(Groups)
+        od_user => relation_with_attrs_to_relation(Users),
+        od_group => relation_with_attrs_to_relation(Groups)
     };
-successors(top_down, #od_handle{} = Handle) ->
+get_successors(top_down, #od_handle{} = Handle) ->
     #od_handle{users = Users, groups = Groups} = Handle,
     #{
-        od_user => remove_attributes(Users),
-        od_group => remove_attributes(Groups)
+        od_user => relation_with_attrs_to_relation(Users),
+        od_group => relation_with_attrs_to_relation(Groups)
     };
 % All other relations should return an empty map (have no successors).
-successors(_, _) ->
+get_successors(_, _) ->
     #{}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns oz privileges of user or group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_oz_privileges(Entity :: entity()) -> [privileges:oz_privilege()].
 get_oz_privileges(#od_user{oz_privileges = OzPrivs}) ->
     OzPrivs;
 get_oz_privileges(#od_group{oz_privileges = OzPrivs}) ->
@@ -1014,55 +1433,55 @@ merge_eff_relations(EffMap1, EffMap2) when is_map(EffMap1) andalso is_map(EffMap
                 undefined ->
                     EffRelation1;
                 EffRelation2 ->
-                    merge_eff_relations(EffRelation1, EffRelation2)
+                    case {EffRelation1, EffRelation2} of
+                        {{Privs1, Int1}, {Privs2, Int2}} ->
+                            % Covers eff_relation_with_attrs() type
+                            {ordsets_union(Privs1, Privs2), ordsets_union(Int1, Int2)};
+                        {List1, List2} ->
+                            % Covers eff_relation() type and lists of atoms
+                            % (effective oz privileges)
+                            ordsets_union(List1, List2)
+                    end
             end,
             MapAcc#{EntityId => NewValue}
-        end, EffMap1, maps:to_list(EffMap2));
-
-% TODO na razie to sa zawsze privs
-merge_eff_relations({Privs1, Through1}, {Privs2, Through2}) ->
-    {ordsets_union(Privs1, Privs2), ordsets_union(Through1, Through2)};
-
-% Covers oz_privileges (list of atoms) and intermediaries (list of tuples)
-merge_eff_relations(List1, List2) ->
-    ordsets_union(List1, List2).
+        end, EffMap1, maps:to_list(EffMap2)).
 
 
-relation_to_eff(EntityType, EntityId, List) when is_list(List) ->
+override_eff_privileges(EffRelations, [], _) ->
+    EffRelations;
+override_eff_privileges(EffRelations, [EntityType | Tail], Privileges) ->
+    OverridenPrivs = maps:map(
+        fun(_, {_OldPrivileges, Intermediaries}) ->
+            {Privileges, Intermediaries}
+        end, maps:get(EntityType, EffRelations)),
+    NewEffRelations = EffRelations#{EntityType => OverridenPrivs},
+    override_eff_privileges(NewEffRelations, Tail, Privileges).
+
+
+relation_to_eff_relation(EntityType, EntityId, List) when is_list(List) ->
     lists:foldl(
         fun(NeighbourId, AccMap) ->
             AccMap#{NeighbourId => [{EntityType, EntityId}]}
         end, #{}, List);
-relation_to_eff(EntityType, EntityId, Map) when is_map(Map) ->
+relation_to_eff_relation(EntityType, EntityId, Map) when is_map(Map) ->
     maps:map(
         fun(_NeighbourId, Attributes) ->
             {Attributes, [{EntityType, EntityId}]}
         end, Map).
 
 
-override_eff_privileges(EffRelations, [], _) ->
+eff_rel_with_attrs_to_eff_rel(EffRelations, []) ->
     EffRelations;
-override_eff_privileges(EffRelations, [ModelType | Tail], Privileges) ->
-    OverridenPrivs = maps:map(
-        fun(_, {_OldPrivileges, Intermediaries}) ->
-            {Privileges, Intermediaries}
-        end, maps:get(ModelType, EffRelations)),
-    NewEffRelations = EffRelations#{ModelType => OverridenPrivs},
-    override_eff_privileges(NewEffRelations, Tail, Privileges).
-
-
-remove_eff_privileges(EffRelations, []) ->
-    EffRelations;
-remove_eff_privileges(EffRelations, [ModelType | Tail]) ->
+eff_rel_with_attrs_to_eff_rel(EffRelations, [EntityType | Tail]) ->
     OverridenPrivs = maps:map(
         fun(_Key, {_OldPrivileges, Intermediaries}) ->
             Intermediaries
-        end, maps:get(ModelType, EffRelations)),
-    NewEffRelations = EffRelations#{ModelType => OverridenPrivs},
-    remove_eff_privileges(NewEffRelations, Tail).
+        end, maps:get(EntityType, EffRelations)),
+    NewEffRelations = EffRelations#{EntityType => OverridenPrivs},
+    eff_rel_with_attrs_to_eff_rel(NewEffRelations, Tail).
 
 
-remove_attributes(RelationsMap) ->
+relation_with_attrs_to_relation(RelationsMap) ->
     maps:keys(RelationsMap).
 
 

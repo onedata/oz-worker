@@ -497,7 +497,7 @@ delete(Client, ELPlugin, EntityId, Resource) ->
         throw:Error ->
             Error;
         Type:Message ->
-            ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
+            ?error_stacktrace("Error in entity_logic:delete - ~p:~p", [
                 Type, Message
             ]),
             ?ERROR_INTERNAL_SERVER_ERROR
@@ -581,9 +581,10 @@ call_update(Request) ->
 call_delete(Request) ->
     #request{
         el_plugin = ELPlugin,
+        entity_id = EntityId,
         resource = Resource
     } = Request,
-    ELPlugin:delete(Resource).
+    ELPlugin:delete(EntityId, Resource).
 
 
 call_exists(Request) ->

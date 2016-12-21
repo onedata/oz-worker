@@ -562,9 +562,10 @@ generate_provider_cert_files() ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns when effective graph has been fully recalculated.
+%% @doc
+%% Returns when effective graph has been fully recalculated.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_eff_graph_up_to_date(Config :: proplists:proplist()) -> ok.
+-spec ensure_eff_graph_up_to_date(Config :: proplists:proplist()) -> true.
 ensure_eff_graph_up_to_date(Config) ->
-    oz_test_utils:call_oz(Config, entity_graph, ensure_up_to_date, []).
+    ?assert(oz_test_utils:call_oz(Config, entity_graph, ensure_up_to_date, [])).

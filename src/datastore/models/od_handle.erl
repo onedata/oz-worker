@@ -48,9 +48,9 @@ record_struct(1) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
-        {resource_id, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
+        {resource_id, string},
         {handle_service, string},
         {users, #{string => [atom]}},
         {groups, #{string => [atom]}},

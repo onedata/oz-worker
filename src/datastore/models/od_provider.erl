@@ -42,7 +42,7 @@ record_struct(1) ->
         {serial, string},
         {latitude, float},
         {longitude, float},
-        {spaces, [string]},
+        {spaces, #{string => integer}},
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
         {bottom_up_dirty, boolean}
