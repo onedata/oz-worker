@@ -87,19 +87,24 @@
 % Direction in effective graph
 -type direction() :: top_down | bottom_up.
 -type entity_id() :: od_user:id() | od_group:id() | od_space:id() |
-od_share:id() | od_provider | od_handle_service:id() | od_handle:id().
+od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id().
+% OZ privileges are treated differently, but the recalculation process is
+% in large part the same as other relations.
 -type entity_type() :: od_user | od_group | od_space |
-od_share | od_provider | od_handle_service | od_handle.
+od_share | od_provider | od_handle_service | od_handle | oz_privileges.
 -type entity() :: #od_user{} | #od_group{} | #od_space{} |
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
 % Relation attributes
 -type attributes() :: term().
-% Maps used across functions to gather relations and effective relations
--type relations_map() :: #{entity_type() => [entity_id()]}.
--type eff_relations_map() :: #{entity_type() => [
-eff_relation(entity_id()) |
-eff_relation_with_attrs(entity_id(), attributes())
-]}.
+
+-type map_of_eff_relations() ::
+#{entity_type() => [eff_relation(entity_id()) | privileges:oz_privilege()]}.
+-type map_of_eff_relations_with_attrs() ::
+#{entity_type() => [eff_relation_with_attrs(entity_id(), attributes())]}.
+-type map_of_any_eff_relations() ::
+#{entity_type() =>
+eff_relation(entity_id()) | eff_relation_with_attrs(entity_id(), attributes()) | [privileges:oz_privilege()]
+}.
 
 %% API
 -export([init_state/0]).
@@ -1025,7 +1030,7 @@ remove_parent(#od_handle{} = Handle, od_handle_service, _HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec gather_eff_from_itself(Direction :: direction(), EntityId :: entity_id(),
-    Entity :: entity()) -> eff_relations_map().
+    Entity :: entity()) -> map_of_any_eff_relations().
 gather_eff_from_itself(bottom_up, EntityId, #od_group{} = Group) ->
     #od_group{users = Users, children = Groups} = Group,
     #{
@@ -1091,7 +1096,7 @@ gather_eff_from_itself(top_down, _EntityId, #od_space{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec gather_eff_from_neighbours(Direction :: direction(), Entity :: entity()) ->
-    eff_relations_map().
+    map_of_any_eff_relations().
 gather_eff_from_neighbours(bottom_up, #od_group{} = Group) ->
     #od_group{children = Children} = Group,
     lists:map(
@@ -1168,11 +1173,11 @@ gather_eff_from_neighbours(top_down, #od_space{}) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns effective relations of given entity (by type and id).
+%% Returns a map of effective relations of given entity (by type and id).
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_relations(Direction :: direction(), EntityType :: entity_type(),
-    EntityId :: entity_id()) -> eff_relations_map().
+    EntityId :: entity_id()) -> map_of_any_eff_relations().
 get_eff_relations(Direction, EntityType, EntityId) ->
     {ok, #document{value = Entity}} = EntityType:get(EntityId),
     get_eff_relations(Direction, Entity).
@@ -1181,11 +1186,11 @@ get_eff_relations(Direction, EntityType, EntityId) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns effective relations of given entity (by entity record).
+%% Returns a map of effective relations of given entity (by entity record).
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_relations(Direction :: direction(), EntityType :: entity_type(),
-    EntityId :: entity_id()) -> eff_relations_map().
+-spec get_eff_relations(Direction :: direction(),
+    EntityType :: entity_type()) -> map_of_any_eff_relations().
 get_eff_relations(bottom_up, #od_group{} = Group) ->
     #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
     #{od_user => EffUsers, od_group => EffGroups};
@@ -1420,12 +1425,29 @@ get_oz_privileges(#od_group{oz_privileges = OzPrivs}) ->
     OzPrivs.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates oz privileges of user or group and returns modified entity record.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_oz_privileges(Entity :: entity(), [privileges:oz_privilege()]) ->
+    Entity :: entity().
 update_oz_privileges(#od_user{} = User, NewOzPrivileges) ->
     User#od_user{oz_privileges = NewOzPrivileges};
 update_oz_privileges(#od_group{} = Group, NewOzPrivileges) ->
     Group#od_group{oz_privileges = NewOzPrivileges}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Merges two maps of effective relations. Privileges and intermediaries are
+%% merged as a union of two sets.
+%% @end
+%%--------------------------------------------------------------------
+-spec merge_eff_relations(EffMap1 :: map_of_any_eff_relations(),
+    EffMap2 :: eff_relations_map()) -> map_of_any_eff_relations().
 merge_eff_relations(EffMap1, EffMap2) when is_map(EffMap1) andalso is_map(EffMap2) ->
     lists:foldl(
         fun({EntityId, EffRelation1}, MapAcc) ->
@@ -1447,6 +1469,16 @@ merge_eff_relations(EffMap1, EffMap2) when is_map(EffMap1) andalso is_map(EffMap
         end, EffMap1, maps:to_list(EffMap2)).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Overrides effective privileges of all entities of given types with given
+%% privileges. Other entities are filtered out.
+%% @end
+%%--------------------------------------------------------------------
+-spec override_eff_privileges(EffRelations :: map_of_eff_relations_with_attrs(),
+    EntityTypes :: [entity_type()], NewPrivileges :: [atom()]) ->
+    map_of_eff_relations_with_attrs().
 override_eff_privileges(EffRelations, [], _) ->
     EffRelations;
 override_eff_privileges(EffRelations, [EntityType | Tail], Privileges) ->
@@ -1458,6 +1490,15 @@ override_eff_privileges(EffRelations, [EntityType | Tail], Privileges) ->
     override_eff_privileges(NewEffRelations, Tail, Privileges).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts a relation (with attrs or without) to effective relation.
+%% @end
+%%--------------------------------------------------------------------
+-spec relation_to_eff_relation(EntityType :: entity_type(), EntityId :: entity_id(),
+    Relation :: relation(entity_id()) | relation_with_attrs(entity_id(), attributes())) ->
+    map_of_any_eff_relations().
 relation_to_eff_relation(EntityType, EntityId, List) when is_list(List) ->
     lists:foldl(
         fun(NeighbourId, AccMap) ->
@@ -1470,6 +1511,16 @@ relation_to_eff_relation(EntityType, EntityId, Map) when is_map(Map) ->
         end, Map).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts an effective relation with attrs to effective relation without attrs
+%% for all provided entity types.
+%% @end
+%%--------------------------------------------------------------------
+-spec eff_rel_with_attrs_to_eff_rel(
+    EffRelations :: map_of_eff_relations_with_attrs(),
+    EntityTypes :: [entity_type()]) -> map_of_eff_relations().
 eff_rel_with_attrs_to_eff_rel(EffRelations, []) ->
     EffRelations;
 eff_rel_with_attrs_to_eff_rel(EffRelations, [EntityType | Tail]) ->
@@ -1481,10 +1532,26 @@ eff_rel_with_attrs_to_eff_rel(EffRelations, [EntityType | Tail]) ->
     eff_rel_with_attrs_to_eff_rel(NewEffRelations, Tail).
 
 
-relation_with_attrs_to_relation(RelationsMap) ->
-    maps:keys(RelationsMap).
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts a relation with attrs to a relation without attrs.
+%% @end
+%%--------------------------------------------------------------------
+-spec relation_with_attrs_to_relation(
+    RelationWithAttrs :: relation_with_attrs(entity_id(), attributes())) ->
+    relation(entity_id()).
+relation_with_attrs_to_relation(RelationWithAttrs) ->
+    maps:keys(RelationWithAttrs).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns a union of two lists, converted into ordsets (ordered lists).
+%% @end
+%%--------------------------------------------------------------------
+-spec ordsets_union(ListA :: [term()], ListB :: [term()]) -> [term()].
 ordsets_union(ListA, ListB) ->
     ordsets:union(
         ordsets:from_list(ListA),
@@ -1492,9 +1559,17 @@ ordsets_union(ListA, ListB) ->
     ).
 
 
-update_entity_sync(EntityModel, EntityId, UpdateFun) ->
-    sync_on_entity(EntityModel, EntityId, fun() ->
-        case EntityModel:update(EntityId, UpdateFun) of
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates an entity synchronously (sequentially with another synced operations).
+%% @end
+%%--------------------------------------------------------------------
+-spec update_entity_sync(EntityType :: entity_type(), EntityId :: entity_id(),
+    UpdateFun :: fun((entity()) -> entity())) -> term().
+update_entity_sync(EntityType, EntityId, UpdateFun) ->
+    sync_on_entity(EntityType, EntityId, fun() ->
+        case EntityType:update(EntityId, UpdateFun) of
             {ok, _} ->
                 ok;
             Error ->
@@ -1503,23 +1578,13 @@ update_entity_sync(EntityModel, EntityId, UpdateFun) ->
     end).
 
 
-sync_on_entity(EntityModel, EntityId, Function) ->
-    critical_section:run({EntityModel, EntityId}, Function).
-
-
-readable(Id, #od_user{name = Name}) ->
-    readable(Name, <<"usr">>, Id);
-readable(Id, #od_group{name = Name}) ->
-    readable(Name, <<"grp">>, Id);
-readable(Id, #od_space{name = Name}) ->
-    readable(Name, <<"spc">>, Id);
-readable(Id, #od_provider{name = Name}) ->
-    readable(Name, <<"prv">>, Id);
-readable(Id, #od_handle_service{name = Name}) ->
-    readable(Name, <<"hsr">>, Id);
-readable(Id, #od_handle{resource_id = ResId}) ->
-    readable(ResId, <<"hnd">>, Id).
-
-
-readable(Name, Type, Id) ->
-    str_utils:format_bin("~s-~s#~s", [Name, Type, binary:part(Id, {0, 8})]).
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Runs a function synchronously locking on given entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_entity_sync(EntityType :: entity_type(), EntityId :: entity_id(),
+    Function :: fun()) -> term().
+sync_on_entity(EntityType, EntityId, Function) ->
+    critical_section:run({EntityType, EntityId}, Function).
