@@ -64,15 +64,15 @@
 % Data types that hold different types of relations.
 -type relation(EntityId) :: [EntityId].
 -type relation_with_attrs(EntityId, Attributes) :: #{EntityId => Attributes}.
-% Data types that hold different types of effective relations. {Model, Id} pairs
+% Data types that hold different types of effective relations. {Type, Id} pairs
 % hold pairs of {record type, record id} through which the effective
 % relation exists (intermediaries).
 % There may be multiple such pairs on the list. If the effective neighbour
 % has a direct relation to the entity, it will be listed there (which means
 % that it belongs "by itself").
--type eff_relation(EntityId) :: #{EntityId => [{Model :: atom(), Id :: binary()}]}.
+-type eff_relation(EntityId) :: #{EntityId => [{Type :: atom(), Id :: binary()}]}.
 -type eff_relation_with_attrs(EntityId, Attributes) ::
-#{EntityId => {Attributes, [{Model :: atom(), Id :: binary()}]}}.
+#{EntityId => {Attributes, [{Type :: atom(), Id :: binary()}]}}.
 
 % Types of operations on privileges
 -type privileges_operation() :: set | grant | revoke.
@@ -97,6 +97,7 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
 % Relation attributes
 -type attributes() :: term().
 
+-type map_of_relations() :: #{entity_type() => relation(entity_id())}.
 -type map_of_eff_relations() ::
 #{entity_type() => [eff_relation(entity_id()) | privileges:oz_privilege()]}.
 -type map_of_eff_relations_with_attrs() ::
@@ -158,7 +159,7 @@ schedule_refresh() ->
 %% failure (10 retries, with 3 second interval between them).
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_up_to_date() -> boolean.
+-spec ensure_up_to_date() -> boolean().
 ensure_up_to_date() ->
     ensure_up_to_date(10).
 ensure_up_to_date(0) ->
@@ -190,7 +191,7 @@ ensure_up_to_date(Retries) ->
 -spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
     ParentType :: entity_type(), ParentId :: entity_id()) -> ok | {error, term()}.
 add_relation(od_share, ShareId, od_space, SpaceId) ->
-    add_relation(od_share, ShareId, od_space, SpaceId, undefined, undefined);
+    add_relation(od_share, ShareId, undefined, od_space, SpaceId, undefined);
 add_relation(od_handle, HandleId, od_share, ShareId) ->
     add_relation(od_handle, HandleId, undefined, od_share, ShareId, undefined);
 add_relation(od_handle, HandleId, od_handle_service, HServiceId) ->
@@ -239,45 +240,45 @@ add_relation(od_space, GroupId, od_provider, ProviderId, SupportSize) ->
     ChildAttributes :: attributes(), ParentType :: entity_type(),
     ParentId :: entity_id(), ParentAttributes :: attributes()) ->
     ok | {error, term()}.
-add_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
+add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
-        case has_child(Parent, ChModel, ChId) of
+        case has_child(Parent, ChType, ChId) of
             true ->
-                ?ERROR_RELATION_ALREADY_EXISTS(ChModel, ChId, ParModel, ParId);
+                ?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId);
             false ->
-                {ok, mark_dirty(bottom_up, true, ParModel, ParId, add_child(
-                    Parent, ChModel, ChId, ChAttrs
+                {ok, mark_dirty(bottom_up, true, ParType, ParId, add_child(
+                    Parent, ChType, ChId, ChAttrs
                 ))}
         end
     end,
     ChildUpdateFun = fun(Child) ->
-        case has_parent(Child, ParModel, ParId) of
+        case has_parent(Child, ParType, ParId) of
             true ->
-                ?ERROR_RELATION_ALREADY_EXISTS(ChModel, ChId, ParModel, ParId);
+                ?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId);
             false ->
-                {ok, mark_dirty(top_down, true, ChModel, ChId, add_parent(
-                    Child, ParModel, ParId, ParAttrs
+                {ok, mark_dirty(top_down, true, ChType, ChId, add_parent(
+                    Child, ParType, ParId, ParAttrs
                 ))}
         end
     end,
     ParentRevertFun = fun(Parent) ->
-        {ok, mark_dirty(bottom_up, true, ParModel, ParId, remove_child(
-            Parent, ChModel, ChId
+        {ok, mark_dirty(bottom_up, true, ParType, ParId, remove_child(
+            Parent, ChType, ChId
         ))}
     end,
-    Result = case update_entity_sync(ParModel, ParId, ParentUpdateFun) of
+    Result = case update_entity_sync(ParType, ParId, ParentUpdateFun) of
         ok ->
-            case update_entity_sync(ChModel, ChId, ChildUpdateFun) of
+            case update_entity_sync(ChType, ChId, ChildUpdateFun) of
                 ok ->
                     ok;
-                ?ERROR_RELATION_ALREADY_EXISTS(ChModel, ChId, ParModel, ParId) ->
+                ?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId) ->
                     % Relation exists, but apparently it did not exist
                     % in the parent, so we just fixed the relation -> ok.
                     ok;
                 Err1 ->
                     % Some other error, we have to attempt reverting the
                     % relation in parent.
-                    update_entity_sync(ParModel, ParId, ParentRevertFun),
+                    update_entity_sync(ParType, ParId, ParentRevertFun),
                     Err1
             end;
         Err2 ->
@@ -330,30 +331,30 @@ update_relation(od_space, SpaceId, od_provider, ProviderId, NewSupportSize) ->
     ParentType :: entity_type(), ChildAttributes :: attributes(),
     ParentId :: entity_id(), ParentAttributes :: attributes()) ->
     ok | {error, term()}.
-update_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
+update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
-        case has_child(Parent, ChModel, ChId) of
+        case has_child(Parent, ChType, ChId) of
             false ->
-                ?ERROR_RELATION_DOES_NOT_EXIST(ChModel, ChId, ParModel, ParId);
+                ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
             true ->
-                {ok, mark_dirty(bottom_up, true, ParModel, ParId, update_child(
-                    Parent, ChModel, ChId, ParAttrs
+                {ok, mark_dirty(bottom_up, true, ParType, ParId, update_child(
+                    Parent, ChType, ChId, ParAttrs
                 ))}
         end
     end,
     ChildUpdateFun = fun(Child) ->
-        case has_parent(Child, ParModel, ParId) of
+        case has_parent(Child, ParType, ParId) of
             false ->
-                ?ERROR_RELATION_DOES_NOT_EXIST(ChModel, ChId, ParModel, ParId);
+                ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
             true ->
-                {ok, mark_dirty(top_down, true, ChModel, ChId, update_parent(
-                    Child, ParModel, ParId, ChAttrs
+                {ok, mark_dirty(top_down, true, ChType, ChId, update_parent(
+                    Child, ParType, ParId, ChAttrs
                 ))}
         end
     end,
-    Result = case update_entity_sync(ParModel, ParId, ParentUpdateFun) of
+    Result = case update_entity_sync(ParType, ParId, ParentUpdateFun) of
         ok ->
-            update_entity_sync(ChModel, ChId, ChildUpdateFun);
+            update_entity_sync(ChType, ChId, ChildUpdateFun);
         Error ->
             Error
     end,
@@ -368,34 +369,34 @@ update_relation(ChModel, ChId, ChAttrs, ParModel, ParId, ParAttrs) ->
 %%--------------------------------------------------------------------
 -spec remove_relation(ChildType :: entity_type(), ChildId :: entity_id(),
     ParentType :: entity_type(), ParentId :: entity_id()) -> ok | {error, term()}.
-remove_relation(ChModel, ChId, ParModel, ParId) ->
+remove_relation(ChType, ChId, ParType, ParId) ->
     ParentUpdateFun = fun(Parent) ->
-        case has_child(Parent, ChModel, ChId) of
+        case has_child(Parent, ChType, ChId) of
             false ->
-                relation_does_not_exist;
+                {error, relation_does_not_exist};
             true ->
-                {ok, mark_dirty(bottom_up, true, ParModel, ParId, remove_child(
-                    Parent, ChModel, ChId
+                {ok, mark_dirty(bottom_up, true, ParType, ParId, remove_child(
+                    Parent, ChType, ChId
                 ))}
         end
     end,
     ChildUpdateFun = fun(Child) ->
-        case has_parent(Child, ParModel, ParId) of
+        case has_parent(Child, ParType, ParId) of
             false ->
-                relation_does_not_exist;
+                {error, relation_does_not_exist};
             true ->
-                {ok, mark_dirty(top_down, true, ChModel, ChId, remove_parent(
-                    Child, ParModel, ParId
+                {ok, mark_dirty(top_down, true, ChType, ChId, remove_parent(
+                    Child, ParType, ParId
                 ))}
         end
     end,
-    Result1 = update_entity_sync(ParModel, ParId, ParentUpdateFun),
-    Result2 = update_entity_sync(ChModel, ChId, ChildUpdateFun),
+    Result1 = update_entity_sync(ParType, ParId, ParentUpdateFun),
+    Result2 = update_entity_sync(ChType, ChId, ChildUpdateFun),
     schedule_refresh(),
     case {Result1, Result2} of
-        {relation_does_not_exist, relation_does_not_exist} ->
+        {{error, relation_does_not_exist}, {error, relation_does_not_exist}} ->
             % Both sides of relation were not found, report an error
-            ?ERROR_RELATION_DOES_NOT_EXIST(ChModel, ChId, ParModel, ParId);
+            ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
         {_, _} ->
             % At least one side of relation existed, which means success
             % (either both sides were removed, or
@@ -410,10 +411,10 @@ remove_relation(ChModel, ChId, ParModel, ParId) ->
 %% entities. Fails when anything goes wrong in the cleanup procedure.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_with_relations(EntityModel :: entity_type(), EntityId :: entity_id()) ->
+-spec delete_with_relations(EntityType :: entity_type(), EntityId :: entity_id()) ->
     ok | {error, term()}.
-delete_with_relations(EntityModel, EntityId) ->
-    {ok, #document{value = Entity}} = EntityModel:get(EntityId),
+delete_with_relations(EntityType, EntityId) ->
+    {ok, #document{value = Entity}} = EntityType:get(EntityId),
     Parents = get_parents(Entity),
     DependentParents = maps:get(dependent, Parents, #{}),
     IndependentParents = maps:get(independent, Parents, #{}),
@@ -428,14 +429,14 @@ delete_with_relations(EntityModel, EntityId) ->
             fun(ParType, ParentIds) ->
                 lists:foreach(
                     fun(ParId) ->
-                        ok = remove_relation(EntityModel, EntityId, ParType, ParId)
+                        ok = remove_relation(EntityType, EntityId, ParType, ParId)
                     end, ParentIds)
             end, IndependentParents),
         maps:map(
             fun(ChType, ChIds) ->
                 lists:foreach(
                     fun(ChId) ->
-                        ok = remove_relation(ChType, ChId, EntityModel, EntityId)
+                        ok = remove_relation(ChType, ChId, EntityType, EntityId)
                     end, ChIds)
             end, IndependentChildren),
         % Remove all dependent relations and dependent entities
@@ -443,7 +444,7 @@ delete_with_relations(EntityModel, EntityId) ->
             fun(ParType, ParentIds) ->
                 lists:foreach(
                     fun(ParId) ->
-                        ok = remove_relation(EntityModel, EntityId, ParType, ParId),
+                        ok = remove_relation(EntityType, EntityId, ParType, ParId),
                         ok = ParType:delete(ParId)
                     end, ParentIds)
             end, DependentParents),
@@ -451,7 +452,7 @@ delete_with_relations(EntityModel, EntityId) ->
             fun(ChType, ChIds) ->
                 lists:foreach(
                     fun(ChId) ->
-                        ok = remove_relation(ChType, ChId, EntityModel, EntityId),
+                        ok = remove_relation(ChType, ChId, EntityType, EntityId),
                         ok = ChType:delete(ChId)
                     end, ChIds)
             end, DependentChildren),
@@ -460,9 +461,9 @@ delete_with_relations(EntityModel, EntityId) ->
         Type:Message ->
             ?error_stacktrace(
                 "Unexpected error while deleting ~p#~s with relations - ~p:~p",
-                [EntityModel, EntityId, Type, Message]
+                [EntityType, EntityId, Type, Message]
             ),
-            ?ERROR_CANNOT_DELETE_ENTITY(EntityModel, EntityId)
+            ?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)
     end.
 
 
@@ -471,11 +472,11 @@ delete_with_relations(EntityModel, EntityId) ->
 %% Updates oz privileges of a user or a group.
 %% @end
 %%--------------------------------------------------------------------
--spec update_oz_privileges(EntityModel :: entity_type(), EntityId :: entity_id(),
+-spec update_oz_privileges(EntityType :: entity_type(), EntityId :: entity_id(),
     Operation :: privileges_operation(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
-update_oz_privileges(EntityModel, EntityId, Operation, Privileges) ->
-    {ok, _} = EntityModel:update(EntityId, fun(Entity) ->
+update_oz_privileges(EntityType, EntityId, Operation, Privileges) ->
+    {ok, _} = EntityType:update(EntityId, fun(Entity) ->
         OzPrivileges = get_oz_privileges(Entity),
         NewOzPrivileges = case Operation of
             set ->
@@ -485,7 +486,7 @@ update_oz_privileges(EntityModel, EntityId, Operation, Privileges) ->
             revoke ->
                 privileges:subtract(OzPrivileges, Privileges)
         end,
-        {ok, mark_dirty(top_down, true, EntityModel, EntityId, update_oz_privileges(
+        {ok, mark_dirty(top_down, true, EntityType, EntityId, update_oz_privileges(
             Entity, NewOzPrivileges))}
     end),
     schedule_refresh(),
@@ -521,7 +522,8 @@ get_state() ->
 %%--------------------------------------------------------------------
 -spec update_state(fun((#entity_graph_state{}) -> #entity_graph_state{})) -> ok.
 update_state(UpdateFun) ->
-    ok = entity_graph_state:update(?STATE_KEY, UpdateFun).
+    {ok, _} = entity_graph_state:update(?STATE_KEY, UpdateFun),
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -778,7 +780,7 @@ has_child(#od_handle_service{users = Users}, od_user, UserId) ->
 has_child(#od_handle_service{groups = Groups}, od_group, GroupId) ->
     maps:is_key(GroupId, Groups);
 has_child(#od_handle_service{handles = Handles}, od_handle, HandleId) ->
-    maps:is_key(HandleId, Handles);
+    lists:member(HandleId, Handles);
 
 has_child(#od_handle{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
@@ -793,7 +795,7 @@ has_child(#od_handle{groups = Groups}, od_group, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec add_child(Entity :: entity(), ChildType :: entity_type(),
-    ChildId :: entity_id(), Attributes :: attributes()) -> Entity :: entity().
+    ChildId :: entity_id(), Attributes :: attributes()) -> entity().
 add_child(#od_group{users = Users} = Group, od_user, UserId, Privs) ->
     Group#od_group{users = maps:put(UserId, Privs, Users)};
 add_child(#od_group{children = Children} = Group, od_group, GroupId, Privs) ->
@@ -806,7 +808,7 @@ add_child(#od_space{groups = Groups} = Space, od_group, GroupId, Privs) ->
 add_child(#od_space{shares = Shares} = Space, od_share, ShareId, _) ->
     Space#od_space{shares = [ShareId | Shares]};
 
-add_child(#od_share{} = Share, oh_handle, HandleId, _) ->
+add_child(#od_share{} = Share, od_handle, HandleId, _) ->
     Share#od_share{handle = HandleId};
 
 add_child(#od_provider{spaces = Spaces} = Provider, od_space, SpaceId, SupportSize) ->
@@ -833,7 +835,7 @@ add_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, Privs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_child(Entity :: entity(), ChildType :: entity_type(),
-    ChildId :: entity_id(), NewAttributes :: attributes()) -> Entity :: entity().
+    ChildId :: entity_id(), NewAttributes :: attributes()) -> entity().
 update_child(#od_group{users = Users} = Group, od_user, UserId, NewPrivs) ->
     Group#od_group{users = maps:put(UserId, NewPrivs, Users)};
 update_child(#od_group{children = Children} = Group, od_group, GroupId, NewPrivs) ->
@@ -862,7 +864,7 @@ update_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, NewPrivs) 
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_child(Entity :: entity(), ChildType :: entity_type(),
-    ChildId :: entity_id()) -> Entity :: entity().
+    ChildId :: entity_id()) -> entity().
 remove_child(#od_group{users = Users} = Group, od_user, UserId) ->
     Group#od_group{users = maps:remove(UserId, Users)};
 remove_child(#od_group{children = Children} = Group, od_group, GroupId) ->
@@ -875,7 +877,7 @@ remove_child(#od_space{groups = Groups} = Space, od_group, GroupId) ->
 remove_child(#od_space{shares = Shares} = Space, od_share, ShareId) ->
     Space#od_space{shares = lists:delete(ShareId, Shares)};
 
-remove_child(#od_share{} = Share, oh_handle, _HandleId) ->
+remove_child(#od_share{} = Share, od_handle, _HandleId) ->
     Share#od_share{handle = undefined};
 
 remove_child(#od_provider{spaces = Spaces} = Provider, od_space, SpaceId) ->
@@ -939,7 +941,7 @@ has_parent(#od_handle{handle_service = HService}, od_handle_service, HServiceId)
 %% @end
 %%--------------------------------------------------------------------
 -spec add_parent(Entity :: entity(), ParentType :: entity_type(),
-    ParentId :: entity_id(), Attributes :: attributes()) -> Entity :: entity().
+    ParentId :: entity_id(), Attributes :: attributes()) -> entity().
 add_parent(#od_user{groups = Groups} = User, od_group, GroupId, _) ->
     User#od_user{groups = [GroupId | Groups]};
 add_parent(#od_user{spaces = Spaces} = User, od_space, SpaceId, _) ->
@@ -979,7 +981,7 @@ add_parent(#od_handle{} = Handle, od_handle_service, HServiceId, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_parent(Entity :: entity(), ParentType :: entity_type(),
-    ParentId :: entity_id(), NewAttributes :: attributes()) -> Entity :: entity().
+    ParentId :: entity_id(), NewAttributes :: attributes()) -> entity().
 update_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId, SupportSize) ->
     Space#od_space{providers = maps:put(ProviderId, SupportSize, Providers)}.
 
@@ -991,7 +993,7 @@ update_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId,
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_parent(Entity :: entity(), ParentType :: entity_type(),
-    ParentId :: entity_id()) -> Entity :: entity().
+    ParentId :: entity_id()) -> entity().
 remove_parent(#od_user{groups = Groups} = User, od_group, GroupId) ->
     User#od_user{groups = lists:delete(GroupId, Groups)};
 remove_parent(#od_user{spaces = Spaces} = User, od_space, SpaceId) ->
@@ -1096,7 +1098,7 @@ gather_eff_from_itself(top_down, _EntityId, #od_space{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec gather_eff_from_neighbours(Direction :: direction(), Entity :: entity()) ->
-    map_of_any_eff_relations().
+    [map_of_any_eff_relations()].
 gather_eff_from_neighbours(bottom_up, #od_group{} = Group) ->
     #od_group{children = Children} = Group,
     lists:map(
@@ -1190,7 +1192,7 @@ get_eff_relations(Direction, EntityType, EntityId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_relations(Direction :: direction(),
-    EntityType :: entity_type()) -> map_of_any_eff_relations().
+    Entity :: entity()) -> map_of_any_eff_relations().
 get_eff_relations(bottom_up, #od_group{} = Group) ->
     #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
     #{od_user => EffUsers, od_group => EffGroups};
@@ -1245,7 +1247,7 @@ get_eff_relations(top_down, #od_space{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_eff_relations(Direction :: direction(), Entity :: entity(),
-    EffNeighbours :: eff_relations_map()) -> entity().
+    EffNeighbours :: map_of_any_eff_relations()) -> entity().
 update_eff_relations(bottom_up, #od_group{} = Group, EffNeighbours) ->
     Group#od_group{
         eff_users = maps:get(od_user, EffNeighbours, #{}),
@@ -1302,7 +1304,7 @@ update_eff_relations(top_down, #od_space{} = Space, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_children(Entity :: entity()) ->
-    #{dependent => relations_map(), independent => relations_map()}.
+    #{dependent => map_of_relations(), independent => map_of_relations()}.
 get_children(#od_space{shares = Shares} = Space) -> #{
     dependent => #{od_share => Shares},
     independent => get_successors(top_down, Space)
@@ -1328,7 +1330,7 @@ get_children(Entity) -> #{
 %% @end
 %%--------------------------------------------------------------------
 -spec get_parents(Entity :: entity()) ->
-    #{dependent => relations_map(), independent => relations_map()}.
+    #{dependent => map_of_relations(), independent => map_of_relations()}.
 get_parents(#od_handle{} = Handle) ->
     #od_handle{
         resource_type = ResourceType, resource_id = ResourceId,
@@ -1357,7 +1359,7 @@ get_parents(Entity) -> #{
 %% @end
 %%--------------------------------------------------------------------
 -spec get_successors(Direction :: direction(), Entity :: entity()) ->
-    relations_map().
+    map_of_relations().
 get_successors(bottom_up, #od_user{} = User) ->
     #od_user{
         groups = Groups, spaces = Spaces,
@@ -1447,7 +1449,7 @@ update_oz_privileges(#od_group{} = Group, NewOzPrivileges) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec merge_eff_relations(EffMap1 :: map_of_any_eff_relations(),
-    EffMap2 :: eff_relations_map()) -> map_of_any_eff_relations().
+    EffMap2 :: map_of_any_eff_relations()) -> map_of_any_eff_relations().
 merge_eff_relations(EffMap1, EffMap2) when is_map(EffMap1) andalso is_map(EffMap2) ->
     lists:foldl(
         fun({EntityId, EffRelation1}, MapAcc) ->
@@ -1566,7 +1568,7 @@ ordsets_union(ListA, ListB) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_entity_sync(EntityType :: entity_type(), EntityId :: entity_id(),
-    UpdateFun :: fun((entity()) -> entity())) -> term().
+    UpdateFun :: fun((entity()) -> entity())) -> ok | {error, term()}.
 update_entity_sync(EntityType, EntityId, UpdateFun) ->
     sync_on_entity(EntityType, EntityId, fun() ->
         case EntityType:update(EntityId, UpdateFun) of
@@ -1584,7 +1586,7 @@ update_entity_sync(EntityType, EntityId, UpdateFun) ->
 %% Runs a function synchronously locking on given entity.
 %% @end
 %%--------------------------------------------------------------------
--spec update_entity_sync(EntityType :: entity_type(), EntityId :: entity_id(),
+-spec sync_on_entity(EntityType :: entity_type(), EntityId :: entity_id(),
     Function :: fun()) -> term().
 sync_on_entity(EntityType, EntityId, Function) ->
     critical_section:run({EntityType, EntityId}, Function).

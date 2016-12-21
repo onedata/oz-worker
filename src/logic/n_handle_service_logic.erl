@@ -18,7 +18,7 @@
 
 -define(PLUGIN, n_handle_service_logic_plugin).
 
--export([create/5, create/2]).
+-export([create/4, create/2]).
 
 -export([
     add_user/3,
@@ -40,12 +40,11 @@
 ]).
 
 
-create(Issuer, Name, ProxyEndpoint, ServiceProperties, Type) ->
+create(Issuer, Name, ProxyEndpoint, ServiceProperties) ->
     create(Issuer, #{
         <<"name">> => Name,
         <<"proxyEndpoint">> => ProxyEndpoint,
-        <<"serviceProperties">> => ServiceProperties,
-        <<"type">> => Type
+        <<"serviceProperties">> => ServiceProperties
     }).
 create(Issuer, Data) ->
     n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).

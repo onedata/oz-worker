@@ -129,7 +129,6 @@ exists(HandleId, groups) when is_binary(HandleId) ->
 authorize(create, undefined, entity, ?USER(UserId), Data) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
     {external, fun() ->
-        % TODO moze przeniesc has_eff do logic?
         n_handle_service_logic:has_eff_privilege(
             HandleServiceId, UserId, register_handle
         )

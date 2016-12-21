@@ -17,7 +17,12 @@
 
 
 %% API
--export([call_oz/4, generate_provider_cert_files/0, ensure_eff_graph_up_to_date/1]).
+-export([
+    call_oz/4,
+    generate_provider_cert_files/0,
+    ensure_eff_graph_up_to_date/1
+]).
+
 
 -export([
     create_user/2,
@@ -36,7 +41,7 @@
     add_group_to_group/4,
     get_group/2,
     list_groups/2,
-    set_group_oz_privileges/3,
+    set_group_oz_privileges/4,
     group_delete_user/3,
     delete_group/3]).
 
@@ -55,7 +60,7 @@
 -export([space_has_effective_user/3]).
 
 -export([
-    create_share/5,
+    create_share/3,
     list_shares/2,
     delete_share/3
 ]).
@@ -69,13 +74,15 @@
 ]).
 
 -export([
-    create_handle_service/5,
+    create_handle_service/3,
+    add_user_to_handle_service/4,
+    add_group_to_handle_service/4,
     list_handle_services/2,
     delete_handle_service/3
 ]).
 
 -export([
-    create_handle/6,
+    create_handle/3,
     list_handles/2,
     modify_handle/5,
     delete_handle/3
@@ -165,7 +172,7 @@ create_client_token(Config, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_user(Client :: n_entity_logic:client(), Config :: term(),
-    UserId :: binary()) ->    boolean() | {error, Reason :: term()}.
+    UserId :: binary()) -> boolean() | {error, Reason :: term()}.
 delete_user(Config, Client, UserId) ->
     call_oz(Config, n_user_logic, delete, [Client, UserId]).
 
@@ -238,15 +245,11 @@ group_delete_user(Config, GroupId, UserId) ->
 delete_group(Config, Client, GroupId) ->
     call_oz(Config, n_group_logic, delete, [Client, GroupId]).
 
-%%--------------------------------------------------------------------
-%% @doc Sets OZ privileges of a group.
-%% @end
-%%--------------------------------------------------------------------
--spec set_group_oz_privileges(Config :: term(), GroupId :: od_group:id(),
-    Privileges :: [privileges:oz_privilege()]) ->
-    ok | {error, Reason :: term()}.
-set_group_oz_privileges(Config, GroupId, Privileges) ->
-    call_oz(Config, group_logic, modify_oz_privileges, [GroupId, Privileges]).
+
+set_group_oz_privileges(Config, GroupId, Operation, Privileges) ->
+    call_oz(Config, n_group_logic, modify_oz_privileges, [
+        ?ROOT, GroupId, Operation, Privileges
+    ]).
 
 
 %%--------------------------------------------------------------------
@@ -350,15 +353,8 @@ delete_space(Config, Client, SpaceId) ->
     call_oz(Config, n_space_logic, delete, [Client, SpaceId]).
 
 
-%%--------------------------------------------------------------------
-%% @doc Creates share.
-%% @end
-%%--------------------------------------------------------------------
--spec create_share(Config :: term(), ShareId :: binary(),
-    Name :: binary(), RootFileId :: binary(), ParentSpaceId :: od_space:id()) ->
-    {ok, ShareId :: binary()} | {error, Reason :: term()}.
-create_share(Config, ShareId, Name, RootFileId, ParentSpaceId) ->
-    call_oz(Config, share_logic, create, [ShareId, Name, RootFileId, ParentSpaceId]).
+create_share(Config, Client, Data) ->
+    call_oz(Config, n_share_logic, create, [Client, Data]).
 
 
 
@@ -426,18 +422,17 @@ delete_provider(Config, Client, ProviderId) ->
     call_oz(Config, n_provider_logic, delete, [Client, ProviderId]).
 
 
-%%--------------------------------------------------------------------
-%% @doc Creates a handle_service
-%% @end
-%%--------------------------------------------------------------------
--spec create_handle_service(Config :: term(), UserId :: od_user:id(),
-    Name :: od_handle_service:name(),
-    ProxyEndpoint :: od_handle_service:proxy_endpoint(),
-    ServiceProperties :: od_handle_service:service_properties()) ->
-    {ok, HandleServiceId :: od_handle_service:id()}.
-create_handle_service(Config, UserId, Name, ProxyEndpoint, ServiceProperties) ->
-    call_oz(Config, handle_service_logic, create,
-        [UserId, Name, ProxyEndpoint, ServiceProperties]).
+create_handle_service(Config, Client, Data) ->
+    call_oz(Config, n_handle_service_logic, create, [Client, Data]).
+
+
+add_user_to_handle_service(Config, Client, HServiceId, UserId) ->
+    call_oz(Config, n_handle_service_logic, add_user, [Client, HServiceId, UserId]).
+
+
+add_group_to_handle_service(Config, Client, HServiceId, GroupId) ->
+    call_oz(Config, n_handle_service_logic, add_group, [Client, HServiceId, GroupId]).
+
 
 
 list_handle_services(Config, Client) ->
@@ -454,16 +449,8 @@ delete_handle_service(Config, Client, HandleServiceId) ->
     call_oz(Config, n_handle_service_logic, delete, [Client, HandleServiceId]).
 
 
-%%--------------------------------------------------------------------
-%% @doc Creates a handle.
-%% @end
-%%--------------------------------------------------------------------
--spec create_handle(Config :: term(), od_user:id(), od_handle_service:id(),
-    od_handle:resource_type(), od_handle:resource_id(), od_handle:metadata()) ->
-    {ok, od_handle:id()}.
-create_handle(Config, UserId, HandleServiceId, ResourceType, ResourceId, Metadata) ->
-    call_oz(Config, handle_logic, create,
-        [UserId, HandleServiceId, ResourceType, ResourceId, Metadata]).
+create_handle(Config, Client, Data) ->
+    call_oz(Config, n_handle_logic, create, [Client, Data]).
 
 
 list_handles(Config, Client) ->
@@ -474,7 +461,7 @@ list_handles(Config, Client) ->
 %% @doc Removes handle
 %% @end
 %%--------------------------------------------------------------------
--spec delete_handle(Config :: term(), ClientClient :: n_entity_logic:client(),
+-spec delete_handle(Config :: term(), Client :: n_entity_logic:client(),
     HandleId :: od_handle:id()) -> boolean().
 delete_handle(Config, Client, HandleId) ->
     call_oz(Config, handle_logic, delete, [Client, HandleId]).
@@ -519,7 +506,7 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Groups} = list_groups(Config, ?ROOT),
     {ok, Users} = list_users(Config, ?ROOT),
     [true = delete_provider(Config, ?ROOT, PId) || PId <- Providers],
-    [true = delete_share(Config,?ROOT, ShId) || ShId <- Shares],
+    [true = delete_share(Config, ?ROOT, ShId) || ShId <- Shares],
     [true = delete_space(Config, ?ROOT, SpId) || SpId <- Spaces],
     [true = delete_handle(Config, ?ROOT, HId) || HId <- Handles],
     [true = delete_handle_service(Config, ?ROOT, HSId) || HSId <- HServices],
@@ -540,7 +527,7 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
                 end, Groups)
     end,
     [true = delete_group(Config, ?ROOT, GId) || GId <- GroupsToDelete],
-    [true = delete_user(Config,?ROOT,  UId) || UId <- Users],
+    [true = delete_user(Config, ?ROOT, UId) || UId <- Users],
     ok.
 
 

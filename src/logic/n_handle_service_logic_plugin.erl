@@ -29,13 +29,11 @@ create(?USER(UserId), _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
     ProxyEndpoint = maps:get(<<"proxyEndpoint">>, Data),
     ServiceProperties = maps:get(<<"serviceProperties">>, Data),
-    _Type = maps:get(<<"type">>, Data),
     HandleService = #document{value = #od_handle_service{
         name = Name,
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties
     }},
-    ?dump(HandleService),
     {ok, HServiceId} = od_handle_service:create(HandleService),
     entity_graph:add_relation(
         od_user, UserId,
@@ -138,8 +136,7 @@ validate(create, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty},
         <<"proxyEndpoint">> => {binary, non_empty},
-        <<"serviceProperties">> => {json, non_empty},
-        <<"type">> => {binary, non_empty}
+        <<"serviceProperties">> => {json, non_empty}
     }
 };
 validate(create, users) -> #{
