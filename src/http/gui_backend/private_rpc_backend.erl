@@ -189,12 +189,15 @@ handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
                 value = #od_user{
                     space_aliases = SpaceNamesMap
                 }}} = od_user:get(UserId),
+            {ok, [{providers, UserProviders}]} = user_logic:get_providers(
+                UserId
+            ),
             lists:foreach(
                 fun(SpaceId) ->
                     SpaceRecord = space_data_backend:space_record(
                         % DefaultSpaceId does not matter because this is
                         % a new space - it's not default
-                        SpaceId, SpaceNamesMap, <<"">>, []
+                        SpaceId, SpaceNamesMap, <<"">>, UserProviders
                     ),
                     gui_async:push_created(<<"space">>, SpaceRecord)
                 end, Spaces),
