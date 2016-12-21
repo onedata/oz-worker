@@ -136,7 +136,7 @@ create_record(<<"space">>, Data) ->
             ),
             % Return newly created space, it is not default and does not have
             % providers
-            {ok, space_record(SpaceId, #{SpaceId => Name}, undefined, [], true)};
+            {ok, space_record(SpaceId, #{SpaceId => Name}, <<"">>, [], true)};
         _ ->
             gui_error:report_error(<<"Invalid space name">>)
     end.
