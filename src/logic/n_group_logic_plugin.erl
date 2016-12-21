@@ -20,8 +20,8 @@
 
 
 -export([create/4, get_entity/1, get_internal/4, get_external/2, update/3,
-    delete/1]).
--export([exists/2, authorize/5, validate/2]).
+    delete/2]).
+-export([exists/2, authorize/4, validate/2]).
 
 
 create(?ROOT, _, entity, Data) ->
@@ -93,13 +93,11 @@ update(GroupId, oz_privileges, Data) ->
     entity_graph:update_oz_privileges(od_group, GroupId, Operation, Privileges).
 
 
-delete(GroupId) when is_binary(GroupId) ->
-    ok = od_group:delete(GroupId).
+delete(GroupId, entity) when is_binary(GroupId) ->
+    entity_graph:delete_with_relations(od_group, GroupId).
 
 
-exists(undefined, entity) ->
-    true;
-exists(undefined, list) ->
+exists(undefined, _) ->
     true;
 exists(GroupId, _) when is_binary(GroupId) ->
     {internal, fun(#od_group{}) ->
@@ -109,24 +107,24 @@ exists(GroupId, _) when is_binary(GroupId) ->
     end}.
 
 
-authorize(create, undefined, entity, ?USER, _) ->
+authorize(create, undefined, entity, ?USER) ->
     true;
-authorize(create, _GroupId, users, ?USER(UserId), _) ->
+authorize(create, _GroupId, users, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, add_member_to_group);
-authorize(create, _GroupId, groups, ?USER(UserId), _) ->
+authorize(create, _GroupId, groups, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, add_member_to_group);
 
-authorize(get, undefined, list, ?USER(UserId), _) ->
+authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_groups);
-authorize(get, _GroupId, users, ?USER(UserId), _) ->
+authorize(get, _GroupId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_view_data);
-authorize(get, _GroupId, entity, ?USER(UserId), _) ->
+authorize(get, _GroupId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_view_data);
-authorize(update, _GroupId, entity, ?USER(UserId), _) ->
+authorize(update, _GroupId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_change_data);
-authorize(delete, _GroupId, entity, ?USER(UserId), _) ->
+authorize(delete, _GroupId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_remove);
-authorize(update, _GroupId, oz_privileges, ?USER(UserId), _) ->
+authorize(update, _GroupId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, set_privileges).
 
 

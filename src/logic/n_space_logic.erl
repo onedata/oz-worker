@@ -123,10 +123,13 @@ exists(SpaceId) ->
 
 
 has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
-    {ok, #document{value = Space}} = od_space:get(SpaceId),
-    has_eff_privilege(Space, UserId, Privilege);
+    case od_space:get(SpaceId) of
+        {ok, #document{value = Space}} ->
+            has_eff_privilege(Space, UserId, Privilege);
+        _ ->
+            false
+    end;
 has_eff_privilege(#od_space{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    % TODO eff_users
     {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
 

@@ -93,6 +93,7 @@ eff_users_test(Config) ->
     {ok, G2} = oz_test_utils:add_group_to_group(Config, ?ROOT, G1, G2),
     {ok, G3} = oz_test_utils:add_group_to_group(Config, ?ROOT, G1, G3),
     {ok, G4} = oz_test_utils:add_group_to_group(Config, ?ROOT, G3, G4),
+    {ok, U4} = oz_test_utils:add_user_to_group(Config, ?ROOT, G3, U4),
 
     {ok, U6} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U7} = oz_test_utils:create_user(Config, #od_user{}),
@@ -145,6 +146,9 @@ eff_users_test(Config) ->
     {ok, G3} = oz_test_utils:add_group_to_handle_service(Config, ?USER(U4), HS2, G3),
     {ok, G5} = oz_test_utils:add_group_to_handle_service(Config, ?USER(U5), HS3, G5),
     {ok, U4} = oz_test_utils:add_user_to_handle_service(Config, ?USER(U5), HS3, U4),
+    {ok, U6} = oz_test_utils:add_user_to_handle_service(Config, ?USER(U5), HS1, U6),
+    {ok, U7} = oz_test_utils:add_user_to_handle_service(Config, ?USER(U5), HS2, U7),
+    {ok, U8} = oz_test_utils:add_user_to_handle_service(Config, ?USER(U5), HS3, U8),
 
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
@@ -157,12 +161,41 @@ eff_users_test(Config) ->
     {ok, H1} = oz_test_utils:create_handle(Config, ?USER(U2), HandleData#{
         <<"handleServiceId">> => HS1, <<"resourceId">> => Sh1
     }),
-    {ok, H2} = oz_test_utils:create_handle(Config, ?USER(U2), HandleData#{
+    {ok, H2} = oz_test_utils:create_handle(Config, ?USER(U4), HandleData#{
         <<"handleServiceId">> => HS2, <<"resourceId">> => Sh2
     }),
-    {ok, H3} = oz_test_utils:create_handle(Config, ?USER(U2), HandleData#{
+    {ok, H3} = oz_test_utils:create_handle(Config, ?USER(U5), HandleData#{
         <<"handleServiceId">> => HS3, <<"resourceId">> => Sh3
     }),
+    {ok, G2} = oz_test_utils:add_group_to_handle(Config, ?USER(U1), H1, G2),
+    {ok, G4} = oz_test_utils:add_group_to_handle(Config, ?USER(U4), H2, G4),
+    {ok, U8} = oz_test_utils:add_user_to_handle(Config, ?USER(U4), H3, U8),
+
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+
+    ?assert(has_eff_relations(od_user, U1, od_group, #{
+        G1 => [{od_user, U1}]
+    })),
+    ?assert(has_eff_relations(od_user, U2, od_group, #{
+        G1 => [{od_group, G2}],
+        G2 => [{od_user, U2}]
+    })),
+    ?assert(has_eff_relations(od_user, U3, od_group, #{
+        G1 => [{od_group, G3}],
+        G3 => [{od_user, U3}]
+    })),
+    ?assert(has_eff_relations(od_user, U4, od_group, #{
+        G1 => [{od_group, G3}],
+        G3 => [{od_group, G4}, {od_user, U4}],
+        G4 => [{od_user, U4}]
+    })),
+    ?assert(has_eff_relations(od_user, U5, od_group, #{
+        G5 => [{od_user, U5}]
+    })),
+    ?assert(has_eff_relations(od_user, U6, od_group, #{})),
+    ?assert(has_eff_relations(od_user, U7, od_group, #{})),
+    ?assert(has_eff_relations(od_user, U8, od_group, #{})),
+
 
     ok.
 
@@ -176,14 +209,19 @@ init_per_suite(Config) ->
     NewConfig = ?TEST_INIT(
         Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
     ),
+    oz_test_utils:mock_handle_proxy(NewConfig),
     NewConfig.
 
 
 end_per_suite(Config) ->
-    test_node_starter:clean_environment(Config).
+    oz_test_utils:unmock_handle_proxy(Config),
+    ok.
+%%    test_node_starter:clean_environment(Config).
 
 min_support_size(Config) ->
     {ok, MinimumSupportSize} = oz_test_utils:call_oz(
         Config, application, get_env, [oz_worker, minimum_space_support_size]
     ),
     MinimumSupportSize.
+
+has_eff_relations(_, _, _, _) -> ok.

@@ -20,8 +20,8 @@
 
 
 -export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
-    delete/1]).
--export([exists/2, authorize/5, validate/2]).
+    delete/2]).
+-export([exists/2, authorize/4, validate/2]).
 
 
 create(?USER(UserId), _, entity, Data) ->
@@ -98,13 +98,11 @@ update(HandleId, Data) when is_binary(HandleId) ->
     ok.
 
 
-delete(HandleId) when is_binary(HandleId) ->
-    ok = od_handle:delete(HandleId).
+delete(HandleId, entity) when is_binary(HandleId) ->
+    entity_graph:delete_with_relations(od_handle, HandleId).
 
 
-exists(undefined, entity) ->
-    true;
-exists(undefined, list) ->
+exists(undefined, _) ->
     true;
 exists(HandleId, entity) when is_binary(HandleId) ->
     {internal, fun(#od_handle{}) ->
@@ -126,56 +124,60 @@ exists(HandleId, groups) when is_binary(HandleId) ->
     end}.
 
 
-authorize(create, undefined, entity, ?USER(UserId), Data) ->
-    HandleServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
-    {external, fun() ->
-        n_handle_service_logic:has_eff_privilege(
-            HandleServiceId, UserId, register_handle
-        )
+authorize(create, undefined, entity, ?USER(UserId)) ->
+    {data_dependent, fun(Data) ->
+        HServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
+        n_handle_service_logic:has_eff_privilege(HServiceId, UserId, register_handle)
     end};
-authorize(create, _HandleId, users, ?USER(UserId), _) ->
+authorize(create, _HandleId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, modify_handle);
-authorize(create, _HandleId, groups, ?USER(UserId), _) ->
+authorize(create, _HandleId, groups, ?USER(UserId)) ->
     auth_by_privilege(UserId, modify_handle);
 
-authorize(get, _HandleId, users, ?USER(UserId), _) ->
+authorize(get, _HandleId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, view_handle);
-authorize(get, _HandleId, entity, ?USER(UserId), _) ->
+authorize(get, _HandleId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, view_handle);
 
-authorize(update, _HandleId, entity, ?USER(UserId), _) ->
+authorize(update, _HandleId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, modify_handle);
 
-authorize(delete, _HandleId, entity, ?USER(UserId), _) ->
+authorize(delete, _HandleId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, delete_handle).
 
 
 validate(create, entity) -> #{
     required => #{
-        <<"handleServiceId">> => {binary, non_empty}, % TODO sprawdzic czy jest
+        <<"handleServiceId">> => {binary, {exists, fun(Value) ->
+            n_handle_service_logic:exists(Value)
+        end}},
         <<"resourceType">> => {binary, [<<"Share">>]},
-        <<"resourceId">> => {binary, non_empty}, % TODO sprawdzic czy jest
+        <<"resourceId">> => {binary, {exists, fun(Value) ->
+            n_share_logic:exists(Value) end
+        }},
         <<"metadata">> => {binary, non_empty}
     }
 };
 validate(create, users) -> #{
     required => #{
         <<"userId">> => {binary, {exists, fun(Value) ->
-            user_logic:exists(Value) end}
-        }
+            n_user_logic:exists(Value)
+        end}}
     }
 };
 validate(create, groups) -> #{
     required => #{
         <<"groupId">> => {binary, {exists, fun(Value) ->
-            group_logic:exists(Value) end}
-        }
+            n_group_logic:exists(Value)
+        end}}
     }
 };
 validate(update, entity) -> #{
     at_least_one => #{
         <<"resourceType">> => {binary, [<<"Share">>]},
-        <<"resourceId">> => {binary, non_empty},
+        <<"resourceId">> => {binary, {exists, fun(Value) ->
+            n_share_logic:exists(Value) end
+        }},
         <<"metadata">> => {binary, non_empty}
     }
 }.

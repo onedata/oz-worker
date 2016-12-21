@@ -56,7 +56,7 @@ value_rule() -> [
     {not_greater_than, threshold},
     {between, low, high},
     [possible_values],
-    fun() -> true end,
+    fun() -> true end,  % TODO czy to potrzebne?
     {exists, fun(Id) -> true end},
     {not_exists, fun(Id) -> true end},
     token_type % compatible only with token
@@ -612,11 +612,10 @@ call_authorize(Request) ->
         entity_id = EntityId,
         operation = Operation,
         resource = Resource,
-        el_plugin = ELPlugin,
-        data = Data
+        el_plugin = ELPlugin
     } = Request,
     % Call the plugin to obtain auth verification procedures
-    try ELPlugin:authorize(Operation, EntityId, Resource, Client, Data) of
+    try ELPlugin:authorize(Operation, EntityId, Resource, Client) of
         List when is_list(List) ->
             List;
         Item ->
@@ -675,8 +674,17 @@ check_existence([{internal, Fun} | Tail], #request{entity = Entity} = Req) ->
 
 
 check_authorization(#request{client = Client} = Request) ->
-    Verificators = call_authorize(Request),
-    case check_authorization(Verificators, Request) of
+    Result = try
+        Verificators = call_authorize(Request),
+        check_authorization(Verificators, Request)
+    catch
+        Type:Message ->
+            ?error_stacktrace("Error in entity_logic:check_authorization - ~p:~p", [
+                Type, Message
+            ]),
+            false
+    end,
+    case Result of
         false ->
             case Client of
                 ?NOBODY ->
@@ -696,6 +704,13 @@ check_authorization([true | _], Request) ->
     Request;
 check_authorization([false | _], _) ->
     false;
+check_authorization([{data_dependent, Fun} | Tail], #request{data = Data} = Req) ->
+    case Fun(Data) of
+        true ->
+            Req;
+        false ->
+            check_authorization(Tail, Req)
+    end;
 check_authorization([{external, Fun} | Tail], Request) ->
     case Fun() of
         true ->

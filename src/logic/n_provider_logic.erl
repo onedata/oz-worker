@@ -25,9 +25,6 @@
     create/5, create/7, create/2, create_dev/2
 ]).
 -export([
-    support_space/4, support_space/3
-]).
--export([
     get/2,
     list/1,
     get_spaces/2, get_space/3,
@@ -39,6 +36,12 @@
 ]).
 -export([
     delete/2
+]).
+-export([
+    create_space/5,
+    support_space/4, support_space/3,
+    update_support_size/4,
+    revoke_support/3
 ]).
 -export([
     check_my_ports/2,
@@ -54,15 +57,15 @@
 ]).
 
 
-create(Issuer, Name, URLs, RedirectionPoint, CSR) ->
-    create(Issuer, #{
+create(Client, Name, URLs, RedirectionPoint, CSR) ->
+    create(Client, #{
         <<"name">> => Name,
         <<"urls">> => URLs,
         <<"redirectionPoint">> => RedirectionPoint,
         <<"csr">> => CSR
     }).
-create(Issuer, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
-    create(Issuer, #{
+create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
+    create(Client, #{
         <<"name">> => Name,
         <<"urls">> => URLs,
         <<"redirectionPoint">> => RedirectionPoint,
@@ -70,53 +73,75 @@ create(Issuer, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude
     }).
-create(Issuer, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
-create_dev(Issuer, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity_dev, Data).
+create(Client, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+create_dev(Client, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, undefined, entity_dev, Data).
 
 
-support_space(Issuer, ProviderId, Token, SupportSize) ->
-    support_space(Issuer, ProviderId, #{
+get(Client, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, entity).
+list(Client) ->
+    n_entity_logic:get(Client, ?PLUGIN, undefined, list).
+get_spaces(Client, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, spaces).
+get_space(Client, ProviderId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
+get_eff_users(Client, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_users).
+get_eff_user(Client, ProviderId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_user, UserId}).
+get_eff_groups(Client, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_groups).
+get_eff_group(Client, ProviderId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_group, GroupId}).
+
+
+
+update(Client, ProviderId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, ProviderId, entity, Data).
+
+
+delete(Client, ProviderId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, ProviderId, entity).
+
+
+create_space(Client, ProviderId, Name, Token, SupportSize) ->
+    create_space(Client, ProviderId, #{
+        <<"name">> => Name,
+        <<"token">> => Token,
+        <<"size">> => SupportSize
+    }).
+create_space(Client, ProviderId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, ProviderId, spaces, Data).
+
+
+support_space(Client, ProviderId, Token, SupportSize) ->
+    support_space(Client, ProviderId, #{
         <<"token">> => Token, <<"size">> => SupportSize
     }).
-support_space(Issuer, ProviderId, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, ProviderId, support, Data).
+support_space(Client, ProviderId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, ProviderId, support, Data).
 
 
-get(Issuer, ProviderId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, entity).
-list(Issuer) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
-get_spaces(Issuer, ProviderId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, spaces).
-get_space(Issuer, ProviderId, SpaceId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, {space, SpaceId}).
-get_eff_users(Issuer, ProviderId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, eff_users).
-get_eff_user(Issuer, ProviderId, UserId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, {eff_user, UserId}).
-get_eff_groups(Issuer, ProviderId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, eff_groups).
-get_eff_group(Issuer, ProviderId, GroupId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, ProviderId, {eff_group, GroupId}).
+update_support_size(Client, ProviderId, SpaceId, SupSize) when is_integer(SupSize) ->
+    update_support_size(Client, ProviderId, SpaceId, #{
+        <<"size">> => SupSize
+    });
+update_support_size(Client, ProviderId, SpaceId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, ProviderId, {space, SpaceId}, Data).
 
 
-
-update(Issuer, ProviderId, Data) ->
-    n_entity_logic:update(Issuer, ?PLUGIN, ProviderId, entity, Data).
-
-
-delete(Issuer, ProviderId) ->
-    n_entity_logic:delete(Issuer, ?PLUGIN, ProviderId, entity).
+revoke_support(Client, ProviderId, SpaceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
 
 
-check_my_ports(Issuer, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, undefined, check_my_ports, Data).
+check_my_ports(Client, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, undefined, check_my_ports, Data).
 
 
-check_my_ip(Issuer) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, undefined, check_my_ip).
+check_my_ip(Client) ->
+    n_entity_logic:get(Client, ?PLUGIN, undefined, check_my_ip).
 
 
 %%--------------------------------------------------------------------

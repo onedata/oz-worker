@@ -91,11 +91,13 @@ exists(HandleId) ->
 
 
 has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
-    % TODO a co jak nie ma tego handle?
-    {ok, #document{value = Handle}} = od_handle:get(HandleId),
-    has_eff_privilege(Handle, UserId, Privilege);
+    case od_handle:get(HandleId) of
+        {ok, #document{value = Handle}} ->
+            has_eff_privilege(Handle, UserId, Privilege);
+        _ ->
+            false
+    end;
 has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    % TODO eff_users
     {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
 

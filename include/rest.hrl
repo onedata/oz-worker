@@ -47,5 +47,6 @@
 -define(HTTP_404_NOT_FOUND, 404).
 
 -define(HTTP_500_INTERNAL_SERVER_ERROR, 500).
+-define(HTTP_501_NOT_IMPLEMENTED, 501).
 
 -endif.

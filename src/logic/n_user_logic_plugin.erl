@@ -20,12 +20,12 @@
 
 
 -export([create/4, get_entity/1, get_internal/4, get_external/2, update/3,
-    delete/1]).
--export([exists/2, authorize/5, validate/2]).
+    delete/2]).
+-export([exists/2, authorize/4, validate/2]).
 
 
 create(_, _, _, _) ->
-    error.
+    ?ERROR_NOT_IMPLEMENTED.
 
 
 get_entity(UserId) ->
@@ -60,13 +60,11 @@ update(UserId, oz_privileges, Data) ->
     entity_graph:update_oz_privileges(od_user, UserId, Operation, Privileges).
 
 
-delete(UserId) when is_binary(UserId) ->
-    ok = od_user:delete(UserId).
+delete(UserId, entity) when is_binary(UserId) ->
+    entity_graph:delete_with_relations(od_user, UserId).
 
 
-exists(undefined, entity) ->
-    true;
-exists(undefined, list) ->
+exists(undefined, _) ->
     true;
 exists(UserId, _) when is_binary(UserId) ->
     {internal, fun(#od_user{}) ->
@@ -76,7 +74,7 @@ exists(UserId, _) when is_binary(UserId) ->
     end}.
 
 
-authorize(update, UserId, oz_privileges, ?USER(UserId), _) ->
+authorize(update, UserId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, set_privileges).
 
 

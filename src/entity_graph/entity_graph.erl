@@ -239,7 +239,7 @@ add_relation(od_space, GroupId, od_provider, ProviderId, SupportSize) ->
 -spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
     ChildAttributes :: attributes(), ParentType :: entity_type(),
     ParentId :: entity_id(), ParentAttributes :: attributes()) ->
-    ok | {error, term()}.
+    ok | no_return().
 add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChType, ChId) of
@@ -285,7 +285,12 @@ add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
             Err2
     end,
     schedule_refresh(),
-    Result.
+    case Result of
+        {error, Reason} ->
+            throw({error, Reason});
+        _ ->
+            Result
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -330,7 +335,7 @@ update_relation(od_space, SpaceId, od_provider, ProviderId, NewSupportSize) ->
 -spec update_relation(ChildType :: entity_type(), ChildId :: entity_id(),
     ParentType :: entity_type(), ChildAttributes :: attributes(),
     ParentId :: entity_id(), ParentAttributes :: attributes()) ->
-    ok | {error, term()}.
+    ok | no_return().
 update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChType, ChId) of
@@ -359,7 +364,12 @@ update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
             Error
     end,
     schedule_refresh(),
-    Result.
+    case Result of
+        {error, Reason} ->
+            throw({error, Reason});
+        _ ->
+            Result
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -368,7 +378,7 @@ update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_relation(ChildType :: entity_type(), ChildId :: entity_id(),
-    ParentType :: entity_type(), ParentId :: entity_id()) -> ok | {error, term()}.
+    ParentType :: entity_type(), ParentId :: entity_id()) -> ok | no_return().
 remove_relation(ChType, ChId, ParType, ParId) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChType, ChId) of
@@ -396,7 +406,7 @@ remove_relation(ChType, ChId, ParType, ParId) ->
     case {Result1, Result2} of
         {{error, relation_does_not_exist}, {error, relation_does_not_exist}} ->
             % Both sides of relation were not found, report an error
-            ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
+            throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId));
         {_, _} ->
             % At least one side of relation existed, which means success
             % (either both sides were removed, or
@@ -412,7 +422,7 @@ remove_relation(ChType, ChId, ParType, ParId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_with_relations(EntityType :: entity_type(), EntityId :: entity_id()) ->
-    ok | {error, term()}.
+    ok | no_return().
 delete_with_relations(EntityType, EntityId) ->
     {ok, #document{value = Entity}} = EntityType:get(EntityId),
     Parents = get_parents(Entity),
@@ -463,7 +473,7 @@ delete_with_relations(EntityType, EntityId) ->
                 "Unexpected error while deleting ~p#~s with relations - ~p:~p",
                 [EntityType, EntityId, Type, Message]
             ),
-            ?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)
+            throw(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId))
     end.
 
 

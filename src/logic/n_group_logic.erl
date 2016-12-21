@@ -18,72 +18,96 @@
 
 -define(PLUGIN, n_group_logic_plugin).
 
--export([create/2]).
-
 -export([
-    add_user/3,
-    add_group/3
+    create/2
 ]).
-
 -export([
     get/2,
     list/1
 ]).
-
 -export([
     update/3,
     modify_oz_privileges/4, modify_oz_privileges/3
 ]).
-
--export([delete/2]).
-
+-export([
+    delete/2
+]).
+-export([
+    add_user/3, set_user_privileges/5, set_user_privileges/4, remove_user/3,
+    add_group/3, set_group_privileges/5, set_group_privileges/4, remove_group/3
+]).
 -export([
     exists/1,
     has_eff_privilege/3
 ]).
 
-create(Issuer, Name) when is_binary(Name) ->
-    create(Issuer, #{<<"name">> => Name});
-create(Issuer, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
+create(Client, Name) when is_binary(Name) ->
+    create(Client, #{<<"name">> => Name});
+create(Client, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
-add_user(Issuer, GroupId, UserId) when is_binary(UserId) ->
-    add_user(Issuer, GroupId, #{<<"userId">> => UserId});
-add_user(Issuer, GroupId, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, GroupId, users, Data).
+get(Client, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, entity, GroupId).
 
 
-add_group(Issuer, GroupId, ChildGroupId) when is_binary(ChildGroupId) ->
-    add_group(Issuer, GroupId, #{<<"groupId">> => ChildGroupId});
-add_group(Issuer, GroupId, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, GroupId, groups, Data).
+list(Client) ->
+    n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
-get(Issuer, GroupId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, entity, GroupId).
+update(Client, GroupId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, GroupId, entity, Data).
 
 
-list(Issuer) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
-
-
-update(Issuer, GroupId, Data) ->
-    n_entity_logic:update(Issuer, ?PLUGIN, GroupId, entity, Data).
-
-
-modify_oz_privileges(Issuer, GroupId, Operation, Privs) when is_list(Privs) ->
-    modify_oz_privileges(Issuer, GroupId, #{
+modify_oz_privileges(Client, GroupId, Operation, Privs) when is_list(Privs) ->
+    modify_oz_privileges(Client, GroupId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
-modify_oz_privileges(Issuer, GroupId, Data) ->
-    n_entity_logic:update(Issuer, ?PLUGIN, GroupId, oz_privileges, Data).
+modify_oz_privileges(Client, GroupId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, GroupId, oz_privileges, Data).
 
 
+delete(Client, GroupId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, GroupId, entity).
 
-delete(Issuer, GroupId) ->
-    n_entity_logic:delete(Issuer, ?PLUGIN, GroupId, entity).
+
+add_user(Client, GroupId, UserId) when is_binary(UserId) ->
+    add_user(Client, GroupId, #{<<"userId">> => UserId});
+add_user(Client, GroupId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, users, Data).
+
+
+set_user_privileges(Client, GroupId, UserId, Operation, Privs) when is_list(Privs) ->
+    set_user_privileges(Client, GroupId, UserId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+set_user_privileges(Client, GroupId, UserId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, GroupId, {user, UserId}, Data).
+
+
+remove_user(Client, GroupId, UserId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, GroupId, {user, UserId}).
+
+
+add_group(Client, GroupId, ChildGroupId) when is_binary(ChildGroupId) ->
+    add_group(Client, GroupId, #{<<"groupId">> => ChildGroupId});
+add_group(Client, GroupId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, groups, Data).
+
+
+set_group_privileges(Client, ParentId, ChildId, Operation, Privs) when is_list(Privs) ->
+    set_group_privileges(Client, ParentId, ChildId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+set_group_privileges(Client, ParentId, ChildId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, ParentId, {group, ChildId}, Data).
+
+
+remove_group(Client, ParentId, ChildId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, ParentId, {group, ChildId}).
 
 
 %%--------------------------------------------------------------------
@@ -99,9 +123,12 @@ exists(GroupId) ->
 
 
 has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
-    {ok, #document{value = Group}} = od_group:get(GroupId),
-    has_eff_privilege(Group, UserId, Privilege);
+    case od_group:get(GroupId) of
+        {ok, #document{value = Group}} ->
+            has_eff_privilege(Group, UserId, Privilege);
+        _ ->
+            false
+    end;
 has_eff_privilege(#od_group{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    % TODO eff_users
     {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).

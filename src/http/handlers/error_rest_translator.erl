@@ -35,6 +35,9 @@ response({error, Type}) ->
 translate(?ERROR_INTERNAL_SERVER_ERROR) ->
     ?HTTP_500_INTERNAL_SERVER_ERROR;
 
+translate(?ERROR_NOT_IMPLEMENTED) ->
+    ?HTTP_501_NOT_IMPLEMENTED;
+
 translate(?ERROR_UNAUTHORIZED) ->
     ?HTTP_401_UNAUTHORIZED;
 

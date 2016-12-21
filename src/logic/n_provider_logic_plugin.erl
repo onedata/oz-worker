@@ -19,9 +19,9 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create/4, get_entity/1, get_internal/4, get_external/2,
-    update/3, delete/2]).
--export([exists/2, authorize/5, validate/2]).
+-export([create/4, get_entity/1, get_internal/4, get_external/2, update/3,
+    delete/2]).
+-export([exists/2, authorize/4, validate/2]).
 
 
 create(_, _, entity, Data) ->
@@ -71,20 +71,32 @@ create(_, _, entity_dev, Data) ->
     od_provider:create(#document{key = ProviderId, value = Provider}),
     {ok, {ProviderId, ProviderCertPem}};
 
+create(_, ProviderId, spaces, Data) ->
+    Name = maps:get(<<"name">>, Data),
+    SupportSize = maps:get(<<"size">>, Data),
+    Macaroon = maps:get(<<"token">>, Data),
+    {ok, SpaceId} = n_space_logic:create(?ROOT, #{<<"name">> => Name}),
+    entity_graph:add_relation(
+        od_space, SpaceId, od_provider, ProviderId, SupportSize
+    ),
+    {ok, Member} = token_logic:consume(Macaroon),
+    {ChildType, ChildId} = case Member of
+        {group, GroupId} -> {od_group, GroupId};
+        {user, UserId} -> {od_user, UserId}
+    end,
+    entity_graph:add_relation(
+        ChildType, ChildId, od_space, SpaceId, privileges:space_admin()
+    );
+
 create(_, ProviderId, support, Data) ->
     SupportSize = maps:get(<<"size">>, Data),
     Macaroon = maps:get(<<"token">>, Data),
     {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
-    case entity_graph:add_relation(
-        od_space, SpaceId,
-        od_provider, ProviderId,
-        SupportSize
-    ) of
-        ok ->
-            {ok, SpaceId};
-        {error, Reason} ->
-            {error, Reason}
-    end;
+    entity_graph:add_relation(
+        od_space, SpaceId, od_provider, ProviderId, SupportSize
+    ),
+    {ok, SpaceId};
+
 create(_, undefined, check_my_ports, Data) ->
     test_connection(Data).
 
@@ -134,22 +146,25 @@ update(ProviderId, entity, Data) when is_binary(ProviderId) ->
             longitude = maps:get(<<"longitude">>, Data, Longitude)
         }}
     end),
-    ok.
+    ok;
+
+update(ProviderId, {space, SpaceId}, Data) when is_binary(ProviderId) ->
+    NewSupportSize = maps:get(<<"size">>, Data),
+    entity_graph:update_relation(
+        od_space, SpaceId, od_provider, ProviderId, NewSupportSize
+    ).
 
 
 delete(ProviderId, entity) when is_binary(ProviderId) ->
-    entity_graph:delete_with_relations(od_provider, ProviderId).
+    entity_graph:delete_with_relations(od_provider, ProviderId);
+
+delete(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
+    entity_graph:remove_relation(
+        od_space, SpaceId, od_provider, ProviderId
+    ).
 
 
-exists(undefined, entity) ->
-    true;
-exists(undefined, entity_dev) ->
-    true;
-exists(undefined, list) ->
-    true;
-exists(_, check_my_ports) ->
-    true;
-exists(_, check_my_ip) ->
+exists(undefined, _) ->
     true;
 exists(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
     % No matter the resource, return true if it belongs to a provider
@@ -167,7 +182,6 @@ exists(ProviderId, {eff_group, GroupId}) when is_binary(ProviderId) ->
         maps:is_key(GroupId, EffGroups)
     end};
 exists(ProviderId, _) when is_binary(ProviderId) ->
-    % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{}) ->
         % If the provider with ProviderId can be found, it exists. If not, the
         % verification will fail before this function is called.
@@ -175,48 +189,54 @@ exists(ProviderId, _) when is_binary(ProviderId) ->
     end}.
 
 
-authorize(create, undefined, check_my_ports, _, _) ->
+authorize(create, undefined, check_my_ports, _) ->
     true;
-authorize(create, undefined, entity, _, _) ->
+authorize(create, undefined, entity, _) ->
     true;
-authorize(create, undefined, entity_dev, _, _) ->
+authorize(create, undefined, entity_dev, _) ->
     true;
-authorize(create, ProvId, support, ?PROVIDER(ProvId), _) ->
+authorize(create, ProvId, support, ?PROVIDER(ProvId)) ->
+    true;
+authorize(create, ProvId, spaces, ?PROVIDER(ProvId)) ->
     true;
 
-authorize(get, undefined, check_my_ip, _, _) ->
+authorize(get, undefined, check_my_ip, _) ->
     true;
-authorize(get, undefined, list, ?USER(UserId), _) ->
+authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_providers);
-authorize(get, _ProvId, entity, ?PROVIDER, _) ->
+authorize(get, _ProvId, entity, ?PROVIDER) ->
     % Any provider can get info about other providers
     true;
-authorize(get, _ProvId, entity, ?USER(UserId), _) ->
+authorize(get, _ProvId, entity, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_providers);
-authorize(get, ProvId, spaces, ?PROVIDER(ProvId), _) ->
+authorize(get, ProvId, spaces, ?PROVIDER(ProvId)) ->
     true;
-authorize(get, _ProvId, spaces, ?USER(UserId), _) ->
+authorize(get, _ProvId, spaces, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
-authorize(get, ProvId, {space, _}, ?PROVIDER(ProvId), _) ->
+authorize(get, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true;
-authorize(get, _ProvId, {space, _}, ?USER(UserId), _) ->
+authorize(get, _ProvId, {space, _}, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
-authorize(get, _ProvId, eff_users, ?USER(UserId), _) ->
+authorize(get, _ProvId, eff_users, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
-authorize(get, _ProvId, {eff_user, _}, ?USER(UserId), _) ->
+authorize(get, _ProvId, {eff_user, _}, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
-authorize(get, _ProvId, eff_groups, ?USER(UserId), _) ->
+authorize(get, _ProvId, eff_groups, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
-authorize(get, _ProvId, {eff_group, _}, ?USER(UserId), _) ->
+authorize(get, _ProvId, {eff_group, _}, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
 
-authorize(update, ProvId, entity, ?PROVIDER(ProvId), _) ->
+authorize(update, ProvId, entity, ?PROVIDER(ProvId)) ->
+    true;
+authorize(update, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true;
 
-authorize(delete, ProvId, entity, ?PROVIDER(ProvId), _) ->
+authorize(delete, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;
-authorize(delete, _ProvId, entity, ?USER(UserId), _) ->
-    n_user_logic:has_eff_oz_privilege(UserId, remove_provider).
+authorize(delete, _ProvId, entity, ?USER(UserId)) ->
+    n_user_logic:has_eff_oz_privilege(UserId, remove_provider);
+authorize(delete, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
+    true.
 
 
 validate(create, entity) -> #{
@@ -244,16 +264,19 @@ validate(create, entity_dev) -> #{
         <<"longitude">> => {float, {between, -180, 180}}
     }
 };
-validate(create, support) ->
-    {ok, MinSupportSize} = application:get_env(
-        oz_worker, minimum_space_support_size
-    ),
-    #{
-        required => #{
-            <<"token">> => {token, space_support_token},
-            <<"size">> => {integer, {not_lower_than, MinSupportSize}}
-        }
-    };
+validate(create, support) -> #{
+    required => #{
+        <<"token">> => {token, space_support_token},
+        <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
+    }
+};
+validate(create, spaces) -> #{
+    required => #{
+        <<"name">> => {binary, non_empty},
+        <<"token">> => {token, space_create_token},
+        <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
+    }
+};
 validate(create, check_my_ports) -> #{
 };
 validate(update, entity) -> #{
@@ -311,3 +334,10 @@ test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
     test_connection(Rest, Acc#{Url => ConnStatus});
 test_connection([{Key, _} | _], _) ->
     throw(?ERROR_BAD_DATA(Key)).
+
+
+get_min_support_size() ->
+    {ok, MinSupportSize} = application:get_env(
+        oz_worker, minimum_space_support_size
+    ),
+    MinSupportSize.

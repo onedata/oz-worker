@@ -1,6 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% @author Krzysztof Trzepla
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2014-2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -8,7 +9,6 @@
 %%% @doc Common functions for ct tests.
 %%% @end
 %%%-------------------------------------------------------------------
-
 -module(oz_test_utils).
 
 -include("entity_logic.hrl").
@@ -20,9 +20,10 @@
 -export([
     call_oz/4,
     generate_provider_cert_files/0,
-    ensure_eff_graph_up_to_date/1
+    ensure_eff_graph_up_to_date/1,
+    mock_handle_proxy/1,
+    unmock_handle_proxy/1
 ]).
-
 
 -export([
     create_user/2,
@@ -32,8 +33,6 @@
     set_user_oz_privileges/4,
     delete_user/3
 ]).
-
-
 
 -export([
     create_group/3,
@@ -54,7 +53,8 @@
     get_space/3,
     list_spaces/2,
     leave_space/3,
-    delete_space/3]).
+    delete_space/3
+]).
 
 -export([modify_space/4, set_space_privileges/4]).
 -export([space_has_effective_user/3]).
@@ -83,6 +83,8 @@
 
 -export([
     create_handle/3,
+    add_user_to_handle/4,
+    add_group_to_handle/4,
     list_handles/2,
     modify_handle/5,
     delete_handle/3
@@ -141,7 +143,7 @@ call_oz(Config, Module, Function, Args) ->
 -spec create_user(Config :: term(), User :: #od_user{}) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_user(Config, User) ->
-    call_oz(Config, n_user_logic, create, [User]).
+    ?assertMatch({ok, _}, call_oz(Config, n_user_logic, create, [User])).
 
 
 %%--------------------------------------------------------------------
@@ -155,7 +157,7 @@ get_user(Config, UserId) ->
 
 
 list_users(Config, Client) ->
-    call_oz(Config, n_user_logic, list, [Client]).
+    ?assertMatch({ok, _}, call_oz(Config, n_user_logic, list, [Client])).
 
 
 %%--------------------------------------------------------------------
@@ -165,7 +167,7 @@ list_users(Config, Client) ->
 -spec create_client_token(Config :: term(), UserId :: binary()) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_client_token(Config, UserId) ->
-    call_oz(Config, auth_logic, gen_token, [UserId]).
+    ?assertMatch({ok, _}, call_oz(Config, auth_logic, gen_token, [UserId])).
 
 %%--------------------------------------------------------------------
 %% @doc Removes user from onezone.
@@ -174,7 +176,7 @@ create_client_token(Config, UserId) ->
 -spec delete_user(Client :: n_entity_logic:client(), Config :: term(),
     UserId :: binary()) -> boolean() | {error, Reason :: term()}.
 delete_user(Config, Client, UserId) ->
-    call_oz(Config, n_user_logic, delete, [Client, UserId]).
+    ?assertMatch(ok, call_oz(Config, n_user_logic, delete, [Client, UserId])).
 
 %%--------------------------------------------------------------------
 %% @doc Sets OZ privileges of a user.
@@ -184,9 +186,9 @@ delete_user(Config, Client, UserId) ->
     Operation :: set | grant | revoke, Privileges :: [privileges:oz_privilege()]) ->
     ok | {error, Reason :: term()}.
 set_user_oz_privileges(Config, UserId, Operation, Privileges) ->
-    call_oz(Config, n_user_logic, modify_oz_privileges, [
+    ?assertMatch(ok, call_oz(Config, n_user_logic, modify_oz_privileges, [
         ?ROOT, UserId, Operation, Privileges
-    ]).
+    ])).
 
 %%--------------------------------------------------------------------
 %% @doc Creates group in onezone.
@@ -195,7 +197,9 @@ set_user_oz_privileges(Config, UserId, Operation, Privileges) ->
 -spec create_group(Config :: term(), UserId :: binary(), Name :: binary()) ->
     {ok, Id :: binary()} | {error, Reason :: term()}.
 create_group(Config, Client, Name) ->
-    call_oz(Config, n_group_logic, create, [Client, Name]).
+    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, create, [
+        Client, Name
+    ])).
 
 
 %%--------------------------------------------------------------------
@@ -209,7 +213,7 @@ get_group(Config, GroupId) ->
 
 
 list_groups(Config, Client) ->
-    call_oz(Config, n_group_logic, list, [Client]).
+    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, list, [Client])).
 
 
 %%--------------------------------------------------------------------
@@ -220,10 +224,14 @@ list_groups(Config, Client) ->
     GroupId :: od_group:id(), UserId :: od_user:id()) ->
     {ok, GroupId :: od_group:id()} | {error, Reason :: term()}.
 add_user_to_group(Config, Client, GroupId, UserId) ->
-    call_oz(Config, n_group_logic, add_user, [Client, GroupId, UserId]).
+    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, add_user, [
+        Client, GroupId, UserId
+    ])).
 
 add_group_to_group(Config, Client, ParentGroupId, ChildGroupId) ->
-    call_oz(Config, n_group_logic, add_group, [Client, ParentGroupId, ChildGroupId]).
+    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, add_group, [
+        Client, ParentGroupId, ChildGroupId
+    ])).
 
 
 %%--------------------------------------------------------------------
@@ -243,13 +251,15 @@ group_delete_user(Config, GroupId, UserId) ->
 -spec delete_group(Config :: term(), ClientClient :: n_entity_logic:client(),
     GroupId :: od_group:id()) -> boolean() | {error, Reason :: term()}.
 delete_group(Config, Client, GroupId) ->
-    call_oz(Config, n_group_logic, delete, [Client, GroupId]).
+    ?assertMatch(ok, call_oz(Config, n_group_logic, delete, [
+        Client, GroupId
+    ])).
 
 
 set_group_oz_privileges(Config, GroupId, Operation, Privileges) ->
-    call_oz(Config, n_group_logic, modify_oz_privileges, [
+    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, modify_oz_privileges, [
         ?ROOT, GroupId, Operation, Privileges
-    ]).
+    ])).
 
 
 %%--------------------------------------------------------------------
@@ -259,7 +269,9 @@ set_group_oz_privileges(Config, GroupId, Operation, Privileges) ->
 -spec create_space(Config :: term(), Member :: {user | group, Id :: binary()},
     Name :: binary()) -> {ok, Id :: binary()} | {error, Reason :: term()}.
 create_space(Config, Client, Name) ->
-    call_oz(Config, n_space_logic, create, [Client, Name]).
+    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, create, [
+        Client, Name
+    ])).
 
 
 %%--------------------------------------------------------------------
@@ -270,33 +282,37 @@ create_space(Config, Client, Name) ->
     SpaceId :: od_space:id(), UserId :: od_user:id()) ->
     {ok, SpaceId :: od_space:id()} | {error, Reason :: term()}.
 add_user_to_space(Config, Client, SpaceId, UserId) ->
-    call_oz(Config, n_space_logic, add_user, [Client, SpaceId, UserId]).
+    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, add_user, [
+        Client, SpaceId, UserId
+    ])).
 
 add_group_to_space(Config, Client, SpaceId, GroupId) ->
-    call_oz(Config, n_space_logic, add_group, [Client, SpaceId, GroupId]).
+    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, add_group, [
+        Client, SpaceId, GroupId
+    ])).
 
 
 
 space_invite_provider_token(Config, Client, SpaceId) ->
-    call_oz(Config, n_space_logic, create_invite_provider_token, [
+    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, create_invite_provider_token, [
         Client, SpaceId
-    ]).
+    ])).
 
 
 space_invite_user_token(Config, Client, SpaceId) ->
-    call_oz(Config, n_space_logic, create_invite_user_token, [
+    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, create_invite_user_token, [
         Client, SpaceId
-    ]).
+    ])).
 
 
 get_space(Config, Client, SpaceId) ->
-    call_oz(Config, n_space_logic, get, [
+    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, get, [
         Client, SpaceId
-    ]).
+    ])).
 
 
 list_spaces(Config, Client) ->
-    call_oz(Config, n_space_logic, list, [Client]).
+    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, list, [Client])).
 
 
 %%--------------------------------------------------------------------
@@ -350,16 +366,18 @@ modify_space(Config, SpaceId, Member, Name) ->
 -spec delete_space(Config :: term(), ClientClient :: n_entity_logic:client(),
     SpaceId :: od_space:id()) -> boolean() | {error, Reason :: term()}.
 delete_space(Config, Client, SpaceId) ->
-    call_oz(Config, n_space_logic, delete, [Client, SpaceId]).
+    ?assertMatch(ok, call_oz(Config, n_space_logic, delete, [
+        Client, SpaceId
+    ])).
 
 
 create_share(Config, Client, Data) ->
-    call_oz(Config, n_share_logic, create, [Client, Data]).
+    ?assertMatch({ok, _}, call_oz(Config, n_share_logic, create, [Client, Data])).
 
 
 
 list_shares(Config, Client) ->
-    call_oz(Config, n_share_logic, list, [Client]).
+    ?assertMatch({ok, _}, call_oz(Config, n_share_logic, list, [Client])).
 
 
 %%--------------------------------------------------------------------
@@ -369,7 +387,7 @@ list_shares(Config, Client) ->
 -spec delete_share(Config :: term(), ClientClient :: n_entity_logic:client(),
     ShareId :: binary()) -> boolean() | {error, Reason :: term()}.
 delete_share(Config, Client, ShareId) ->
-    call_oz(Config, share_logic, delete, [Client, ShareId]).
+    ?assertMatch(ok, call_oz(Config, share_logic, delete, [Client, ShareId])).
 
 
 %%--------------------------------------------------------------------
@@ -381,21 +399,22 @@ delete_share(Config, Client, ShareId) ->
 create_provider_and_certs(Config, Name) ->
     {KeyFile, CSRFile, CertFile} = generate_provider_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
-    {ok, {ProviderId, Certificate}} = call_oz(Config, n_provider_logic, create, [
-        ?NOBODY,
-        Name,
-        [<<"127.0.0.1">>],
-        <<"127.0.0.1">>,
-        CSR
-    ]),
+    {ok, {ProviderId, Certificate}} = ?assertMatch({ok, _}, call_oz(
+        Config, n_provider_logic, create, [
+            ?NOBODY,
+            Name,
+            [<<"127.0.0.1">>],
+            <<"127.0.0.1">>,
+            CSR
+        ])),
     ok = file:write_file(CertFile, Certificate),
     {ok, {ProviderId, KeyFile, CertFile}}.
 
 
 create_provider(Config, Data) ->
-    {ok, {ProviderId, Certificate}} = call_oz(
-        Config, n_provider_logic, create, [?NOBODY, Data]),
-    {ok, {ProviderId, Certificate}}.
+    ?assertMatch({ok, _}, call_oz(Config, n_provider_logic, create, [
+        ?NOBODY, Data
+    ])).
 
 
 %%--------------------------------------------------------------------
@@ -403,13 +422,13 @@ create_provider(Config, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 support_space(Config, Client, ProviderId, Token, Size) ->
-    call_oz(Config, n_space_logic, support_space, [
+    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, support_space, [
         Client, ProviderId, Token, Size
-    ]).
+    ])).
 
 
 list_providers(Config, Client) ->
-    call_oz(Config, n_provider_logic, list, [Client]).
+    ?assertMatch({ok, _}, call_oz(Config, n_provider_logic, list, [Client])).
 
 
 %%--------------------------------------------------------------------
@@ -419,24 +438,34 @@ list_providers(Config, Client) ->
 -spec delete_provider(Config :: term(), ClientClient :: n_entity_logic:client(),
     ProviderId :: binary()) -> boolean() | {error, Reason :: term()}.
 delete_provider(Config, Client, ProviderId) ->
-    call_oz(Config, n_provider_logic, delete, [Client, ProviderId]).
+    ?assertMatch(ok, call_oz(Config, n_provider_logic, delete, [
+        Client, ProviderId
+    ])).
 
 
 create_handle_service(Config, Client, Data) ->
-    call_oz(Config, n_handle_service_logic, create, [Client, Data]).
+    ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, create, [
+        Client, Data
+    ])).
 
 
 add_user_to_handle_service(Config, Client, HServiceId, UserId) ->
-    call_oz(Config, n_handle_service_logic, add_user, [Client, HServiceId, UserId]).
+    ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, add_user, [
+        Client, HServiceId, UserId
+    ])).
 
 
 add_group_to_handle_service(Config, Client, HServiceId, GroupId) ->
-    call_oz(Config, n_handle_service_logic, add_group, [Client, HServiceId, GroupId]).
+    ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, add_group, [
+        Client, HServiceId, GroupId
+    ])).
 
 
 
 list_handle_services(Config, Client) ->
-    call_oz(Config, n_handle_service_logic, list, [Client]).
+    ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, list, [
+        Client
+    ])).
 
 
 %%--------------------------------------------------------------------
@@ -446,15 +475,33 @@ list_handle_services(Config, Client) ->
 -spec delete_handle_service(Config :: term(), Client :: n_entity_logic:client(),
     HandleServiceId :: od_handle_service:id()) -> boolean().
 delete_handle_service(Config, Client, HandleServiceId) ->
-    call_oz(Config, n_handle_service_logic, delete, [Client, HandleServiceId]).
+    ?assertMatch(ok, call_oz(Config, n_handle_service_logic, delete, [
+        Client, HandleServiceId
+    ])).
 
 
 create_handle(Config, Client, Data) ->
-    call_oz(Config, n_handle_logic, create, [Client, Data]).
+    ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, create, [
+        Client, Data
+    ])).
+
+
+add_user_to_handle(Config, Client, HandleId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, add_user, [
+        Client, HandleId, UserId
+    ])).
+
+
+add_group_to_handle(Config, Client, HandleId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, add_group, [
+        Client, HandleId, GroupId
+    ])).
 
 
 list_handles(Config, Client) ->
-    call_oz(Config, n_handle_logic, list, [Client]).
+    ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, list, [
+        Client
+    ])).
 
 
 %%--------------------------------------------------------------------
@@ -556,3 +603,24 @@ generate_provider_cert_files() ->
 -spec ensure_eff_graph_up_to_date(Config :: proplists:proplist()) -> true.
 ensure_eff_graph_up_to_date(Config) ->
     ?assert(oz_test_utils:call_oz(Config, entity_graph, ensure_up_to_date, [])).
+
+
+mock_handle_proxy(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
+        fun(_, <<"/handle", _/binary>>, _, _) ->
+            {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
+        end),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
+        fun(_, <<"/handle", _/binary>>, _, _) ->
+            {ok, 204, [], <<"">>}
+        end),
+    ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
+        fun(_, <<"/handle", _/binary>>, _, _) ->
+            {ok, 200, [], <<"">>}
+        end).
+
+unmock_handle_proxy(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, handle_proxy_client).

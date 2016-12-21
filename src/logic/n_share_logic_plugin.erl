@@ -20,8 +20,8 @@
 
 
 -export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
-    delete/1]).
--export([exists/2, authorize/5, validate/2]).
+    delete/2]).
+-export([exists/2, authorize/4, validate/2]).
 
 
 create(?USER, _, entity, Data) ->
@@ -72,13 +72,11 @@ update(ShareId, Data) when is_binary(ShareId) ->
     ok.
 
 
-delete(ShareId) when is_binary(ShareId) ->
-    ok = od_share:delete(ShareId).
+delete(ShareId, entity) when is_binary(ShareId) ->
+    entity_graph:delete_with_relations(od_share, ShareId).
 
 
-exists(undefined, entity) ->
-    true;
-exists(undefined, list) ->
+exists(undefined, _) ->
     true;
 exists(ShareId, entity) when is_binary(ShareId) ->
     {internal, fun(#od_share{}) ->
@@ -88,25 +86,25 @@ exists(ShareId, entity) when is_binary(ShareId) ->
     end}.
 
 
-authorize(create, undefined, entity, ?USER(UserId), Data) ->
-    SpaceId = maps:get(<<"spaceId">>, Data, <<"">>),
-    {external, fun() ->
+authorize(create, undefined, entity, ?USER(UserId)) ->
+    {data_dependent, fun(Data) ->
+        SpaceId = maps:get(<<"spaceId">>, Data, <<"">>),
         n_space_logic:has_eff_privilege(
             SpaceId, UserId, space_manage_shares
         )
     end};
-authorize(get, _ShareId, entity, ?USER(UserId), _) ->
+authorize(get, _ShareId, entity, ?USER(UserId)) ->
     {internal, fun(#od_share{space = SpaceId}) ->
         n_space_logic:has_eff_user(SpaceId, UserId)
     end};
 
 
-authorize(update, _ShareId, entity, ?USER(UserId), _) ->
+authorize(update, _ShareId, entity, ?USER(UserId)) ->
     {internal, fun(#od_share{space = SpaceId}) ->
         n_space_logic:has_eff_privilege(SpaceId, UserId, space_manage_shares)
     end};
 
-authorize(delete, _ShareId, entity, ?USER(UserId), _) ->
+authorize(delete, _ShareId, entity, ?USER(UserId)) ->
     {internal, fun(#od_share{space = SpaceId}) ->
         n_space_logic:has_eff_privilege(SpaceId, UserId, space_manage_shares)
     end}.
@@ -115,13 +113,13 @@ authorize(delete, _ShareId, entity, ?USER(UserId), _) ->
 validate(create, entity) -> #{
     required => #{
         <<"shareId">> => {binary, {not_exists, fun(Value) ->
-            not share_logic:exists(Value) end}
-        },
+            not n_share_logic:exists(Value)
+        end}},
         <<"name">> => {binary, non_empty},
         <<"rootFileId">> => {binary, non_empty},
         <<"spaceId">> => {binary, {exists, fun(Value) ->
-            space_logic:exists(Value) end}
-        }
+            n_space_logic:exists(Value)
+        end}}
     }
 };
 validate(update, entity) -> #{

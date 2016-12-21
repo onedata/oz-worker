@@ -20,8 +20,8 @@
 
 
 -export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
-    delete/1]).
--export([exists/2, authorize/5, validate/2]).
+    delete/2]).
+-export([exists/2, authorize/4, validate/2]).
 
 
 create(?ROOT, _, entity, #{<<"name">> := Name}) ->
@@ -95,13 +95,11 @@ update(SpaceId, Data) when is_binary(SpaceId) ->
     ok.
 
 
-delete(SpaceId) when is_binary(SpaceId) ->
-    ok = od_space:delete(SpaceId).
+delete(SpaceId, entity) when is_binary(SpaceId) ->
+    entity_graph:delete_with_relations(od_space, SpaceId).
 
 
-exists(undefined, entity) ->
-    true;
-exists(undefined, list) ->
+exists(undefined, _) ->
     true;
 exists(SpaceId, _) when is_binary(SpaceId) ->
     % No matter the resource, return true if it belongs to a space
@@ -112,28 +110,28 @@ exists(SpaceId, _) when is_binary(SpaceId) ->
     end}.
 
 
-authorize(create, undefined, entity,?USER,  _) ->
+authorize(create, undefined, entity, ?USER) ->
     true;
-authorize(create, _SpaceId, users, ?USER(UserId), _) ->
+authorize(create, _SpaceId, users, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, add_member_to_space);
-authorize(create, _SpaceId, groups, ?USER(UserId), _) ->
+authorize(create, _SpaceId, groups, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, add_member_to_space);
-authorize(create, _SpaceId, invite_provider_token, ?USER(UserId), _) ->
+authorize(create, _SpaceId, invite_provider_token, ?USER(UserId)) ->
     auth_by_privilege(UserId, space_add_provider);
-authorize(create, _SpaceId, invite_user_token, ?USER(UserId), _) ->
+authorize(create, _SpaceId, invite_user_token, ?USER(UserId)) ->
     auth_by_privilege(UserId, space_invite_user);
 
-authorize(get, undefined, list, ?USER(UserId), _) ->
+authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_spaces);
-authorize(get, _SpaceId, users, ?USER(UserId), _) ->
+authorize(get, _SpaceId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, space_view_data);
-authorize(get, _SpaceId, entity, ?USER(UserId), _) ->
+authorize(get, _SpaceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, space_view_data);
 
-authorize(update, _SpaceId, entity, ?USER(UserId), _) ->
+authorize(update, _SpaceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, space_change_data);
 
-authorize(delete, _SpaceId, entity, ?USER(UserId), _) ->
+authorize(delete, _SpaceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, space_remove).
 
 
@@ -145,15 +143,15 @@ validate(create, entity) -> #{
 validate(create, users) -> #{
     required => #{
         <<"userId">> => {binary, {exists, fun(Value) ->
-            user_logic:exists(Value) end}
-        }
+            n_user_logic:exists(Value)
+        end}}
     }
 };
 validate(create, groups) -> #{
     required => #{
         <<"groupId">> => {binary, {exists, fun(Value) ->
-            group_logic:exists(Value) end}
-        }
+            n_group_logic:exists(Value)
+        end}}
     }
 };
 validate(create, invite_provider_token) -> #{
@@ -170,7 +168,7 @@ validate(update, entity) -> #{
 
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_space{} = Space) ->
-       n_space_logic:has_eff_privilege(Space, UserId, Privilege)
+        n_space_logic:has_eff_privilege(Space, UserId, Privilege)
     end}.
 
 

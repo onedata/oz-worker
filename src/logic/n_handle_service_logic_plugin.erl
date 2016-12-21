@@ -20,8 +20,8 @@
 
 
 -export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
-    delete/1]).
--export([exists/2, authorize/5, validate/2]).
+    delete/2]).
+-export([exists/2, authorize/4, validate/2]).
 
 
 
@@ -85,13 +85,11 @@ update(HServiceId, Data) when is_binary(HServiceId) ->
     ok.
 
 
-delete(HServiceId) when is_binary(HServiceId) ->
-    ok = od_handle_service:delete(HServiceId).
+delete(HServiceId, entity) when is_binary(HServiceId) ->
+    entity_graph:delete_with_relations(od_handle_service, HServiceId).
 
 
-exists(undefined, entity) ->
-    true;
-exists(undefined, list) ->
+exists(undefined, _) ->
     true;
 exists(HServiceId, entity) when is_binary(HServiceId) ->
     {internal, fun(#od_handle_service{}) ->
@@ -113,22 +111,22 @@ exists(HServiceId, groups) when is_binary(HServiceId) ->
     end}.
 
 
-authorize(create, undefined, entity, ?USER, _) ->
+authorize(create, undefined, entity, ?USER) ->
     true;
-authorize(create, _HServiceId, users, ?USER(UserId), _) ->
+authorize(create, _HServiceId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, modify_handle_service);
-authorize(create, _HServiceId, groups, ?USER(UserId), _) ->
+authorize(create, _HServiceId, groups, ?USER(UserId)) ->
     auth_by_privilege(UserId, modify_handle_service);
 
-authorize(get, _HServiceId, users, ?USER(UserId), _) ->
+authorize(get, _HServiceId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, view_handle_service);
-authorize(get, _HServiceId, entity, ?USER(UserId), _) ->
+authorize(get, _HServiceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, view_handle_service);
 
-authorize(update, _HServiceId, entity, ?USER(UserId), _) ->
+authorize(update, _HServiceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, modify_handle_service);
 
-authorize(delete, _HServiceId, entity, ?USER(UserId), _) ->
+authorize(delete, _HServiceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, delete_handle_service).
 
 
@@ -142,15 +140,15 @@ validate(create, entity) -> #{
 validate(create, users) -> #{
     required => #{
         <<"userId">> => {binary, {exists, fun(Value) ->
-            user_logic:exists(Value) end}
-        }
+            n_user_logic:exists(Value) end
+        }}
     }
 };
 validate(create, groups) -> #{
     required => #{
         <<"groupId">> => {binary, {exists, fun(Value) ->
-            group_logic:exists(Value) end}
-        }
+            n_group_logic:exists(Value) end
+        }}
     }
 };
 validate(update, entity) -> #{

@@ -15,6 +15,7 @@
 
 % General errors
 -define(ERROR_INTERNAL_SERVER_ERROR, {error, internal_server_error}).
+-define(ERROR_NOT_IMPLEMENTED, {error, not_implemented}).
 -define(ERROR_NOT_FOUND, {error, not_found}).
 -define(ERROR_UNAUTHORIZED, {error, unauthorized}).
 -define(ERROR_FORBIDDEN, {error, forbidden}).
