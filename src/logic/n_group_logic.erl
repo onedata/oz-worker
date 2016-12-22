@@ -120,8 +120,6 @@ exists(GroupId) ->
     od_group:exists(GroupId).
 
 
-
-
 has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
     case od_group:get(GroupId) of
         {ok, #document{value = Group}} ->

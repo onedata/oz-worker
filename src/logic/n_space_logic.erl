@@ -29,8 +29,8 @@
     get_users/2
 ]).
 -export([
-    add_user/3,
-    add_group/3
+    add_user/3, set_user_privileges/5, set_user_privileges/4, remove_user/3,
+    add_group/3, set_group_privileges/5, set_group_privileges/4, remove_group/3
 %%    join_as_user/2,
 %%    join_as_group/3
 ]).
@@ -82,6 +82,19 @@ add_user(Issuer, SpaceId, Data) ->
     ).
 
 
+set_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(Privs) ->
+    set_user_privileges(Client, SpaceId, UserId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+set_user_privileges(Client, SpaceId, UserId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {user, UserId}, Data).
+
+
+remove_user(Client, SpaceId, UserId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {user, UserId}).
+
+
 add_group(Issuer, SpaceId, GroupId) when is_binary(GroupId) ->
     add_group(Issuer, SpaceId, #{<<"groupId">> => GroupId});
 add_group(Issuer, SpaceId, Data) ->
@@ -90,16 +103,17 @@ add_group(Issuer, SpaceId, Data) ->
     ).
 
 
-%%join_as_user({user, UserId}, Macaroon) ->
-%%    n_entity_logic:consume_token(
-%%        {user, UserId}, ?PLUGIN, undefined, {od_user, UserId}, Macaroon
-%%    ).
-%%
-%%
-%%join_as_group({user, UserId}, GroupId, Macaroon) ->
-%%    n_entity_logic:consume_token(
-%%        {user, UserId}, ?PLUGIN, undefined, {od_group, GroupId}, Macaroon
-%%    ).
+set_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list(Privs) ->
+    set_group_privileges(Client, SpaceId, GroupId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+set_group_privileges(Client, SpaceId, GroupId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {group, GroupId}, Data).
+
+
+remove_group(Client, SpaceId, GroupId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {group, GroupId}).
 
 
 update(Issuer, SpaceId, NewName) when is_binary(NewName) ->

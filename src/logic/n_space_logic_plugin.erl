@@ -19,7 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
+-export([create/4, get_entity/1, get_internal/4, get_external/2, update/3,
     delete/2]).
 -export([exists/2, authorize/4, validate/2]).
 
@@ -86,17 +86,47 @@ get_external(?USER, _) ->
     ok.
 
 
-update(SpaceId, Data) when is_binary(SpaceId) ->
+update(SpaceId, entity, Data) when is_binary(SpaceId) ->
     {ok, _} = od_space:update(SpaceId, fun(Space) ->
         #od_space{name = OldName} = Space,
         NewName = maps:get(<<"name">>, Data, OldName),
         {ok, Space#od_space{name = NewName}}
     end),
-    ok.
+    ok;
+
+update(SpaceId, {user, UserId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_user, UserId,
+        od_space, SpaceId,
+        {Operation, Privileges}
+    );
+
+update(SpaceId, {group, GroupId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_group, GroupId,
+        od_space, SpaceId,
+        {Operation, Privileges}
+    ).
 
 
 delete(SpaceId, entity) when is_binary(SpaceId) ->
-    entity_graph:delete_with_relations(od_space, SpaceId).
+    entity_graph:delete_with_relations(od_space, SpaceId);
+
+delete(SpaceId, {user, UserId}) when is_binary(SpaceId) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_space, SpaceId
+    );
+
+delete(SpaceId, {group, ChildGroupId}) when is_binary(SpaceId) ->
+    entity_graph:remove_relation(
+        od_group, ChildGroupId,
+        od_space, SpaceId
+    ).
 
 
 exists(undefined, _) ->
@@ -121,6 +151,7 @@ authorize(create, _SpaceId, invite_provider_token, ?USER(UserId)) ->
 authorize(create, _SpaceId, invite_user_token, ?USER(UserId)) ->
     auth_by_privilege(UserId, space_invite_user);
 
+
 authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_spaces);
 authorize(get, _SpaceId, users, ?USER(UserId)) ->
@@ -128,11 +159,29 @@ authorize(get, _SpaceId, users, ?USER(UserId)) ->
 authorize(get, _SpaceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, space_view_data);
 
+
 authorize(update, _SpaceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, space_change_data);
 
+authorize(update, _SpaceId, {user, _UserId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, space_set_privileges);
+
+authorize(update, _SpaceId, {group, _GroupId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, space_set_privileges);
+
+
 authorize(delete, _SpaceId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, space_remove).
+    auth_by_privilege(UserId, space_remove);
+
+authorize(delete, _SpaceId, {user, _UserId}, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, space_remove_user),
+    auth_by_oz_privilege(UserId, remove_member_from_space)
+];
+
+authorize(delete, _SpaceId, {group, _UserId}, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, space_remove_group),
+    auth_by_oz_privilege(UserId, remove_member_from_space)
+].
 
 
 validate(create, entity) -> #{
@@ -161,6 +210,14 @@ validate(create, invite_user_token) -> #{
 validate(update, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
+    }
+};
+validate(update, Member) when Member =:= user orelse Member =:= group -> #{
+    required => #{
+        <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
+    },
+    optional => #{
+        <<"operation">> => {atom, [set, grant, revoke]}
     }
 }.
 

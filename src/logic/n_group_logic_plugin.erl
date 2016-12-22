@@ -87,6 +87,26 @@ update(GroupId, entity, Data) when is_binary(GroupId) ->
         {ok, Group#od_group{name = NewName, type = NewType}}
     end),
     ok;
+
+update(GroupId, {user, UserId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_user, UserId,
+        od_group, GroupId,
+        {Operation, Privileges}
+    );
+
+update(ParentGroupId, {group, ChildGroupId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_group, ChildGroupId,
+        od_group, ParentGroupId,
+        {Operation, Privileges}
+    );
+
+
 update(GroupId, oz_privileges, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
@@ -94,7 +114,19 @@ update(GroupId, oz_privileges, Data) ->
 
 
 delete(GroupId, entity) when is_binary(GroupId) ->
-    entity_graph:delete_with_relations(od_group, GroupId).
+    entity_graph:delete_with_relations(od_group, GroupId);
+
+delete(GroupId, {user, UserId}) when is_binary(GroupId) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_group, GroupId
+    );
+
+delete(ParentGroupId, {group, ChildGroupId}) when is_binary(ParentGroupId) ->
+    entity_graph:remove_relation(
+        od_group, ChildGroupId,
+        od_group, ParentGroupId
+    ).
 
 
 exists(undefined, _) ->
@@ -115,17 +147,38 @@ authorize(create, _GroupId, groups, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, add_member_to_group);
 
 authorize(get, undefined, list, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_groups);
+    auth_by_oz_privilege(UserId, list_groups);
 authorize(get, _GroupId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_view_data);
 authorize(get, _GroupId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_view_data);
+
+
 authorize(update, _GroupId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_change_data);
+
+authorize(update, _GroupId, {user, _UserId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, group_set_privileges);
+
+authorize(update, _GroupId, {group, _ChildGroupId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, group_set_privileges);
+
+authorize(update, _GroupId, oz_privileges, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, set_privileges);
+
+
 authorize(delete, _GroupId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_remove);
-authorize(update, _GroupId, oz_privileges, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, set_privileges).
+
+authorize(delete, _GroupId, {user, _UserId}, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, group_remove_user),
+    auth_by_oz_privilege(UserId, remove_member_from_group)
+];
+
+authorize(delete, _GroupId, {group, _ChildGroupId}, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, group_remove_group),
+    auth_by_oz_privilege(UserId, remove_member_from_group)
+].
 
 
 validate(create, entity) -> #{
@@ -156,6 +209,14 @@ validate(update, entity) -> #{
         <<"type">> => {atom, [organization, unit, team, role]}
     }
 };
+validate(update, Member) when Member =:= user orelse Member =:= group -> #{
+    required => #{
+        <<"privileges">> => {list_of_atoms, privileges:group_privileges()}
+    },
+    optional => #{
+        <<"operation">> => {atom, [set, grant, revoke]}
+    }
+};
 validate(update, oz_privileges) -> #{
     required => #{
         <<"privileges">> => {list_of_atoms, privileges:oz_privileges()}
@@ -174,5 +235,5 @@ auth_by_privilege(UserId, Privilege) ->
 
 auth_by_oz_privilege(UserId, Privilege) ->
     {external, fun() ->
-        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
+        auth_by_oz_privilege(UserId, Privilege)
     end}.

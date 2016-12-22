@@ -34,14 +34,18 @@ create(?USER, _, entity, Data) ->
         root_file = RootFileId,
         public_url = n_share_logic:share_id_to_public_url(ShareId)
     }},
-    % TODO error handling a nie badmatch
-    {ok, ShareId} = od_share:create(Share),
-    % TODO error handling a nie badmatch
-    ok = entity_graph:add_relation(
-        od_space, SpaceId,
-        od_share, ShareId
-    ),
-    {ok, ShareId}.
+    case od_share:create(Share) of
+        {ok, ShareId} ->
+            entity_graph:add_relation(
+                od_share, ShareId,
+                od_space, SpaceId
+            ),
+            {ok, ShareId};
+        _ ->
+            % This can potentially happen if a share with given share id
+            % has been created between data verification and create
+            ?ERROR_INTERNAL_SERVER_ERROR
+    end.
 
 
 get_entity(ShareId) ->

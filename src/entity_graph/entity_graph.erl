@@ -96,6 +96,9 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
 % Relation attributes
 -type attributes() :: term().
+% Possible values for attributes update - either new attributes or a pair
+% {attributes operation, attributes}
+-type attributes_update() :: attributes() | {privileges_operation(), attributes()}.
 
 -type map_of_relations() :: #{entity_type() => relation(entity_id())}.
 -type map_of_eff_relations() ::
@@ -301,7 +304,7 @@ add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
 %%--------------------------------------------------------------------
 -spec update_relation(ChildType :: entity_type(), ChildId :: entity_id(),
     ParentType :: entity_type(), ParentId :: entity_id(),
-    Attributes :: attributes()) -> ok | {error, term()}.
+    Attributes :: attributes_update()) -> ok | {error, term()}.
 update_relation(od_user, UserId, od_group, GroupId, NewPrivs) ->
     update_relation(od_user, UserId, NewPrivs, od_group, GroupId, undefined);
 update_relation(od_group, ChGroupId, od_group, ParGroupId, NewPrivs) ->
@@ -333,8 +336,8 @@ update_relation(od_space, SpaceId, od_provider, ProviderId, NewSupportSize) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_relation(ChildType :: entity_type(), ChildId :: entity_id(),
-    ParentType :: entity_type(), ChildAttributes :: attributes(),
-    ParentId :: entity_id(), ParentAttributes :: attributes()) ->
+    ParentType :: entity_type(), ChildAttributes :: attributes_update(),
+    ParentId :: entity_id(), ParentAttributes :: attributes_update()) ->
     ok | no_return().
 update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
@@ -845,26 +848,29 @@ add_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, Privs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_child(Entity :: entity(), ChildType :: entity_type(),
-    ChildId :: entity_id(), NewAttributes :: attributes()) -> entity().
-update_child(#od_group{users = Users} = Group, od_user, UserId, NewPrivs) ->
-    Group#od_group{users = maps:put(UserId, NewPrivs, Users)};
-update_child(#od_group{children = Children} = Group, od_group, GroupId, NewPrivs) ->
-    Group#od_group{users = maps:put(GroupId, NewPrivs, Children)};
+    ChildId :: entity_id(), NewAttributes :: attributes_update()) -> entity().
+update_child(#od_group{users = Users} = Group, od_user, UserId, {Operation, Privs}) ->
+    Group#od_group{users = update_privileges(UserId, Users, Operation, Privs)};
+update_child(#od_group{children = Children} = Group, od_group, GroupId, {Operation, Privs}) ->
+    Group#od_group{users = update_privileges(GroupId, Children, Operation, Privs)};
 
-update_child(#od_space{users = Users} = Space, od_user, UserId, NewPrivs) ->
-    Space#od_space{users = maps:put(UserId, NewPrivs, Users)};
-update_child(#od_space{groups = Groups} = Space, od_group, GroupId, NewPrivs) ->
-    Space#od_space{groups = maps:put(GroupId, NewPrivs, Groups)};
+update_child(#od_space{users = Users} = Space, od_user, UserId, {Operation, Privs}) ->
+    Space#od_space{users = update_privileges(UserId, Users, Operation, Privs)};
+update_child(#od_space{groups = Groups} = Space, od_group, GroupId, {Operation, Privs}) ->
+    Space#od_space{groups = update_privileges(GroupId, Groups, Operation, Privs)};
 
-update_child(#od_handle_service{users = Users} = HS, od_user, UserId, NewPrivs) ->
-    HS#od_handle_service{users = maps:put(UserId, NewPrivs, Users)};
-update_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId, NewPrivs) ->
-    HS#od_handle_service{groups = maps:put(GroupId, NewPrivs, Groups)};
+update_child(#od_provider{spaces = Spaces} = Provider, od_space, SpaceId, NewSupportSize) ->
+    Provider#od_provider{spaces = maps:put(SpaceId, NewSupportSize, Spaces)};
 
-update_child(#od_handle{users = Users} = Handle, od_user, UserId, NewPrivs) ->
-    Handle#od_handle{users = maps:put(UserId, NewPrivs, Users)};
-update_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, NewPrivs) ->
-    Handle#od_handle{groups = maps:put(GroupId, NewPrivs, Groups)}.
+update_child(#od_handle_service{users = Users} = HS, od_user, UserId, {Operation, Privs}) ->
+    HS#od_handle_service{users = update_privileges(UserId, Users, Operation, Privs)};
+update_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId, {Operation, Privs}) ->
+    HS#od_handle_service{groups = update_privileges(GroupId, Groups, Operation, Privs)};
+
+update_child(#od_handle{users = Users} = Handle, od_user, UserId, {Operation, Privs}) ->
+    Handle#od_handle{users = update_privileges(UserId, Users, Operation, Privs)};
+update_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, {Operation, Privs}) ->
+    Handle#od_handle{groups = update_privileges(GroupId, Groups, Operation, Privs)}.
 
 
 %%--------------------------------------------------------------------
@@ -991,7 +997,7 @@ add_parent(#od_handle{} = Handle, od_handle_service, HServiceId, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_parent(Entity :: entity(), ParentType :: entity_type(),
-    ParentId :: entity_id(), NewAttributes :: attributes()) -> entity().
+    ParentId :: entity_id(), NewAttributes :: attributes_update()) -> entity().
 update_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId, SupportSize) ->
     Space#od_space{providers = maps:put(ProviderId, SupportSize, Providers)}.
 
@@ -1454,6 +1460,29 @@ update_oz_privileges(#od_group{} = Group, NewOzPrivileges) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
+%% Updates privileges in a relation_with_attrs().
+%% @end
+%%--------------------------------------------------------------------
+-spec update_privileges(EntityId :: entity_id(),
+    Relation :: relation_with_attrs(entity_id(), [atom()]),
+    Operation :: privileges_operation(), Privileges :: [atom()]) ->
+    relation_with_attrs(entity_id(), [atom()]).
+update_privileges(EntityId, Relation, Operation, Privileges) ->
+    OldPrivileges = maps:get(EntityId, Relation),
+    NewPrivileges = case Operation of
+        set ->
+            privileges:from_list(Privileges);
+        grant ->
+            privileges:union(OldPrivileges, Privileges);
+        revoke ->
+            privileges:subtract(OldPrivileges, Privileges)
+    end,
+    maps:put(EntityId, NewPrivileges, Relation).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
 %% Merges two maps of effective relations. Privileges and intermediaries are
 %% merged as a union of two sets.
 %% @end
@@ -1470,7 +1499,7 @@ merge_eff_relations(EffMap1, EffMap2) when is_map(EffMap1) andalso is_map(EffMap
                     case {EffRelation1, EffRelation2} of
                         {{Privs1, Int1}, {Privs2, Int2}} ->
                             % Covers eff_relation_with_attrs() type
-                            {ordsets_union(Privs1, Privs2), ordsets_union(Int1, Int2)};
+                            {privileges:union(Privs1, Privs2), ordsets_union(Int1, Int2)};
                         {List1, List2} ->
                             % Covers eff_relation() type and lists of atoms
                             % (effective oz privileges)
