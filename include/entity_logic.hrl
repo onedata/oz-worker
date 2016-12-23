@@ -28,4 +28,37 @@
 -define(NOBODY, #client{type = nobody}).
 -define(ROOT, #client{type = root}).
 
+% Macro used in entity logic modules to make sure that result of a call
+% returns success, in other case it throws an error that will be caught by
+% entity_logic and properly handled.
+-define(assert_success(__Result), case __Result of
+    {error, __Reason} ->
+        throw({error, __Reason});
+    __Success ->
+        __Success
+end).
+
+% Conversion to human readable strings
+-define(ENTITY_TO_READABLE(__EntityType, __EntityId), begin
+    __TypeString = case __EntityType of
+        od_user -> "user";
+        od_group -> "group";
+        od_space -> "space";
+        od_share -> "share";
+        od_provider -> "provider";
+        od_handle_service -> "handle_service";
+        od_handle -> "handle"
+    end,
+    str_utils:format_bin("~s:~s", [__TypeString, __EntityId])
+end).
+
+-define(CLIENT_TO_READABLE(__Client), begin
+    case __Client of
+        ?NOBODY -> "nobody (unauthenticated user)";
+        ?ROOT -> "root";
+        ?USER(__UId) -> ?ENTITY_TO_READABLE(od_user, __UId);
+        ?PROVIDER(__PId) -> ?ENTITY_TO_READABLE(od_provider, __PId)
+    end
+end).
+
 -endif.

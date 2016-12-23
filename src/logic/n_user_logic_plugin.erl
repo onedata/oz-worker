@@ -13,19 +13,45 @@
 -author("Lukasz Opiola").
 -behaviour(data_logic_plugin_behaviour).
 
--include("entity_logic.hrl").
 -include("errors.hrl").
+-include("tokens.hrl").
+-include("entity_logic.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 
--export([create/4, get_entity/1, get_internal/4, get_external/2, update/3,
-    delete/2]).
+-export([entity_type/0, create/4, get_entity/1, get_internal/4, get_external/2,
+    update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
 
 
-create(_, _, _, _) ->
-    ?ERROR_NOT_IMPLEMENTED.
+entity_type() ->
+    od_user.
+
+
+create(?USER(UserId), UserId, client_tokens, _Data) ->
+    Token = auth_logic:gen_token(UserId),
+    {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens}) ->
+        {ok, #od_user{client_tokens = [Token | Tokens]}}
+    end),
+    {ok, Token};
+
+create(?USER(UserId), UserId, join_group, Data) ->
+    Macaroon = maps:get(<<"token">>, Data),
+    {ok, {od_group, GroupId}} = token_logic:consume(Macaroon),
+    entity_graph:add_relation(
+        od_user, UserId, od_group, GroupId, privileges:group_user()
+    ),
+    {ok, GroupId};
+
+create(?USER(UserId), UserId, join_space, Data) ->
+    Macaroon = maps:get(<<"token">>, Data),
+    {ok, {od_space, SpaceId}} = token_logic:consume(Macaroon),
+    entity_graph:add_relation(
+        od_user, UserId, od_space, SpaceId, privileges:space_user()
+    ),
+    {ok, SpaceId}.
 
 
 get_entity(UserId) ->
@@ -74,10 +100,26 @@ exists(UserId, _) when is_binary(UserId) ->
     end}.
 
 
-authorize(update, UserId, oz_privileges, ?USER(UserId)) ->
+authorize(create, UserId, client_tokens, ?USER(UserId)) ->
+    true;
+authorize(create, UserId, join_group, ?USER(UserId)) ->
+    true;
+authorize(create, UserId, join_space, ?USER(UserId)) ->
+    true;
+authorize(update, _UserId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, set_privileges).
 
 
+validate(create, join_group) -> #{
+    required => #{
+        <<"token">> => {token, ?GROUP_INVITE_USER_TOKEN}
+    }
+};
+validate(create, join_space) -> #{
+    required => #{
+        <<"token">> => {token, ?SPACE_INVITE_USER_TOKEN}
+    }
+};
 validate(update, oz_privileges) -> #{
     required => #{
         <<"privileges">> => {list_of_atoms, privileges:oz_privileges()}

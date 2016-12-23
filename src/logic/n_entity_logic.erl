@@ -490,9 +490,21 @@ delete(Client, ELPlugin, EntityId, Resource) ->
             operation = delete,
             resource = Resource
         },
-        call_delete(
+        Result = call_delete(
             check_authorization(
-                check_existence(Request)))
+                check_existence(Request))),
+        case {Result, Resource} of
+            {ok, entity} ->
+                % If an entity is deleted, log an information about it
+                % (it's a serious operation and this information might be useful).
+                ?info("~s has been deleted by client: ~s", [
+                    ?ENTITY_TO_READABLE(EntityId, ELPlugin:entity_type()),
+                    ?CLIENT_TO_READABLE(Client)
+                ]),
+                ok;
+            _ ->
+                Result
+        end
     catch
         throw:Error ->
             Error;

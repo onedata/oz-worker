@@ -29,7 +29,7 @@
     list/1,
     get_default_space/2,
     get_default_provider/2,
-    get_client_tokens/2
+    list_client_tokens/2
 ]).
 -export([
     update/3,
@@ -41,17 +41,20 @@
 -export([
     delete/2,
     remove_client_token/3,
-    remove_space_alias/3
+    delete_space_alias/3
 ]).
 -export([
     join_group/3,
     join_space/3,
     get_groups/2, get_eff_groups/2,
+    get_group/3, get_eff_group/3,
     get_spaces/2, get_eff_spaces/2,
-    get_shares/2,
-    get_providers/2,
+    get_space/3, get_eff_space/3,
+    get_eff_providers/2, get_eff_provider/3,
     get_handle_services/2, get_eff_handle_services/2,
-    get_handles/2, get_eff_handles/2
+    get_handle_service/3, get_eff_handle_service/3,
+    get_handles/2, get_eff_handles/2,
+    get_handle/3, get_eff_handle/3
 ]).
 -export([
     exists/1,
@@ -98,12 +101,8 @@ get_default_provider(Client, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, UserId, default_provider).
 
 
-get_client_tokens(Client, UserId) ->
+list_client_tokens(Client, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, UserId, client_tokens).
-
-
-get_groups(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_groups).
 
 
 update_oz_privileges(Client, UserId, Operation, Privs) when is_list(Privs) ->
@@ -115,6 +114,24 @@ update_oz_privileges(Client, UserId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, UserId, oz_privileges, Data).
 
 
+set_default_space(Client, UserId, SpaceId) when is_binary(SpaceId) ->
+    set_default_space(Client, UserId, #{<<"spaceId">> => SpaceId});
+set_default_space(Client, UserId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, UserId, default_space, Data).
+
+
+set_space_alias(Client, UserId, SpaceId, Alias) when is_binary(Alias) ->
+    set_space_alias(Client, UserId, SpaceId, #{<<"alias">> => Alias});
+set_space_alias(Client, UserId, SpaceId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, UserId, {space_alias, SpaceId}, Data).
+
+
+set_default_provider(Client, UserId, ProviderId) when is_binary(ProviderId) ->
+    set_default_provider(Client, UserId, #{<<"providerId">> => ProviderId});
+set_default_provider(Client, UserId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, UserId, default_provider, Data).
+
+
 update(Client, UserId, NewName) when is_binary(NewName) ->
     update(Client, UserId, #{<<"name">> => NewName});
 update(Client, UserId, Data) ->
@@ -123,6 +140,98 @@ update(Client, UserId, Data) ->
 
 delete(Client, UserId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, entity).
+
+
+remove_client_token(Client, UserId, TokenId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {client_token, TokenId}).
+
+
+delete_space_alias(Client, UserId, SpaceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {space_alias, SpaceId}).
+
+
+join_group(Client, UserId, Data) when is_map(Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, UserId, join_group, Data);
+join_group(Client, UserId, Token) ->
+    join_group(Client, UserId, #{<<"token">> => Token}).
+
+
+join_space(Client, UserId, Data) when is_map(Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, UserId, join_space, Data);
+join_space(Client, UserId, Token) ->
+    join_space(Client, UserId, #{<<"token">> => Token}).
+
+
+get_groups(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, groups).
+
+
+get_eff_groups(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_groups).
+
+
+get_group(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {group, GroupId}).
+
+
+get_eff_group(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_group, GroupId}).
+
+
+get_spaces(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, spaces).
+
+
+get_eff_spaces(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_spaces).
+
+
+get_space(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {space, SpaceId}).
+
+
+get_eff_space(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_space, SpaceId}).
+
+
+get_eff_providers(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_providers).
+
+
+get_eff_provider(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_provider, SpaceId}).
+
+
+get_handle_services(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, handle_services).
+
+
+get_eff_handle_services(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_handle_services).
+
+
+get_handle_service(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {handle_service, SpaceId}).
+
+
+get_eff_handle_service(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_handle_service, SpaceId}).
+
+
+get_handles(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, handles).
+
+
+get_eff_handles(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_handles).
+
+
+get_handle(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {handle, SpaceId}).
+
+
+get_eff_handle(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_handle, SpaceId}).
 
 
 %%--------------------------------------------------------------------

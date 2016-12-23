@@ -19,9 +19,13 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create/4, get_entity/1, get_internal/4, get_external/2, update/2,
-    delete/2]).
+-export([entity_type/0, create/4, get_entity/1, get_internal/4, get_external/2,
+    update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
+
+
+entity_type() ->
+    od_handle.
 
 
 create(?USER(UserId), _, entity, Data) ->
@@ -90,7 +94,7 @@ get_external(?USER, _) ->
     ok.
 
 
-update(HandleId, Data) when is_binary(HandleId) ->
+update(HandleId, entity, Data) when is_binary(HandleId) ->
     {ok, _} = od_handle:update(HandleId, fun(Handle) ->
         % TODO czy cos sie da update?
         {ok, Handle#od_handle{}}

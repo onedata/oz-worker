@@ -19,9 +19,13 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([create/4, get_entity/1, get_internal/4, get_external/2, update/3,
-    delete/2]).
+-export([entity_type/0, create/4, get_entity/1, get_internal/4, get_external/2,
+    update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
+
+
+entity_type() ->
+    od_group.
 
 
 create(?ROOT, _, entity, Data) ->

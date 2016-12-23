@@ -64,6 +64,10 @@ create_user_invite_token(Issuer, SpaceId) ->
     n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_user_token, #{}).
 
 
+create_group_invite_token(Issuer, SpaceId) ->
+    n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_group_token, #{}).
+
+
 get(Issuer, SpaceId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, SpaceId, entity).
 

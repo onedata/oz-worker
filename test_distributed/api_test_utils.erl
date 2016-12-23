@@ -374,7 +374,8 @@ log_failed_logic_test(TestDesc, Module, Function, Args, Client, Expected, Got) -
     "Client: ~s~n"
     "Expected: ~p~n"
     "Got: ~p", [
-        TestDescString, Module, Function, Args, client_to_readable(Client),
+        TestDescString, Module, Function, Args,
+        ?CLIENT_TO_READABLE(client_to_logic_client(Client)),
         Expected, Got
     ]).
 
@@ -399,20 +400,11 @@ log_failed_rest_test(TestDesc, Method, Path, Client, UnmetExp, Got, Expected, Re
     "   Code: ~p~n"
     "   Headers: ~p~n"
     "   Body: ~p", [
-        TestDescString, Method, Path, client_to_readable(Client),
+        TestDescString, Method, Path,
+        ?CLIENT_TO_READABLE(client_to_logic_client(Client)),
         UnmetExp, Got, Expected, Code, Headers, Body
     ]).
 
-
-
-client_to_readable(nobody) ->
-    "NOBODY";
-client_to_readable(root) ->
-    "ROOT";
-client_to_readable({user, UserId}) ->
-    str_utils:format_bin("USER # ~s", [UserId]);
-client_to_readable({provider, ProviderId, _, _}) ->
-    str_utils:format_bin("PROVIDER # ~s", [ProviderId]).
 
 
 % Wszystkie erquired z po jednym at least one i z wszystkimi na raz

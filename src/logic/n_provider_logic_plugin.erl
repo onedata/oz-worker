@@ -13,15 +13,20 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("entity_logic.hrl").
 -include("errors.hrl").
+-include("tokens.hrl").
+-include("entity_logic.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
--export([create/4, get_entity/1, get_internal/4, get_external/2, update/3,
-    delete/2]).
+-export([entity_type/0, create/4, get_entity/1, get_internal/4, get_external/2,
+    update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
+
+
+entity_type() ->
+    od_provider.
 
 
 create(_, _, entity, Data) ->
@@ -71,27 +76,10 @@ create(_, _, entity_dev, Data) ->
     od_provider:create(#document{key = ProviderId, value = Provider}),
     {ok, {ProviderId, ProviderCertPem}};
 
-create(_, ProviderId, spaces, Data) ->
-    Name = maps:get(<<"name">>, Data),
+create(?PROVIDER(ProviderId), ProviderId, support, Data) ->
     SupportSize = maps:get(<<"size">>, Data),
     Macaroon = maps:get(<<"token">>, Data),
-    {ok, SpaceId} = n_space_logic:create(?ROOT, #{<<"name">> => Name}),
-    entity_graph:add_relation(
-        od_space, SpaceId, od_provider, ProviderId, SupportSize
-    ),
-    {ok, Member} = token_logic:consume(Macaroon),
-    {ChildType, ChildId} = case Member of
-        {group, GroupId} -> {od_group, GroupId};
-        {user, UserId} -> {od_user, UserId}
-    end,
-    entity_graph:add_relation(
-        ChildType, ChildId, od_space, SpaceId, privileges:space_admin()
-    );
-
-create(_, ProviderId, support, Data) ->
-    SupportSize = maps:get(<<"size">>, Data),
-    Macaroon = maps:get(<<"token">>, Data),
-    {ok, {space, SpaceId}} = token_logic:consume(Macaroon),
+    {ok, {od_space, SpaceId}} = token_logic:consume(Macaroon),
     entity_graph:add_relation(
         od_space, SpaceId, od_provider, ProviderId, SupportSize
     ),
@@ -113,15 +101,15 @@ get_entity(ProviderId) ->
 get_internal(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
     {ok, Spaces};
 get_internal(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
-    n_space_logic_plugin:get_entity(SpaceId);
+    ?assert_success(n_space_logic_plugin:get_entity(SpaceId));
 get_internal(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
     {ok, maps:keys(EffUsers)};
 get_internal(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
-    n_user_logic_plugin:get_entity(UserId);
+    ?assert_success(n_user_logic_plugin:get_entity(UserId));
 get_internal(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
     {ok, maps:keys(EffGroups)};
 get_internal(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
-    n_group_logic_plugin:get_entity(GroupId).
+    ?assert_success(n_group_logic_plugin:get_entity(GroupId)).
 
 
 get_external(_, check_my_ip) ->
@@ -197,8 +185,6 @@ authorize(create, undefined, entity_dev, _) ->
     true;
 authorize(create, ProvId, support, ?PROVIDER(ProvId)) ->
     true;
-authorize(create, ProvId, spaces, ?PROVIDER(ProvId)) ->
-    true;
 
 authorize(get, undefined, check_my_ip, _) ->
     true;
@@ -234,7 +220,7 @@ authorize(update, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
 authorize(delete, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;
 authorize(delete, _ProvId, entity, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, remove_provider);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_DELETE);
 authorize(delete, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true.
 
@@ -266,14 +252,7 @@ validate(create, entity_dev) -> #{
 };
 validate(create, support) -> #{
     required => #{
-        <<"token">> => {token, space_support_token},
-        <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
-    }
-};
-validate(create, spaces) -> #{
-    required => #{
-        <<"name">> => {binary, non_empty},
-        <<"token">> => {token, space_create_token},
+        <<"token">> => {token, ?SPACE_SUPPORT_TOKEN},
         <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
     }
 };

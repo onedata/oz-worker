@@ -38,7 +38,6 @@
     delete/2
 ]).
 -export([
-    create_space/5,
     support_space/4, support_space/3,
     update_support_size/4,
     revoke_support/3
@@ -104,16 +103,6 @@ update(Client, ProviderId, Data) ->
 
 delete(Client, ProviderId) ->
     n_entity_logic:delete(Client, ?PLUGIN, ProviderId, entity).
-
-
-create_space(Client, ProviderId, Name, Token, SupportSize) ->
-    create_space(Client, ProviderId, #{
-        <<"name">> => Name,
-        <<"token">> => Token,
-        <<"size">> => SupportSize
-    }).
-create_space(Client, ProviderId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, ProviderId, spaces, Data).
 
 
 support_space(Client, ProviderId, Token, SupportSize) ->
