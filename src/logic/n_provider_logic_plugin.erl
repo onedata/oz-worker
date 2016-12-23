@@ -17,7 +17,7 @@
 -include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
-
+-include_lib("ctool/include/privileges.hrl").
 
 -export([create/4, get_entity/1, get_internal/4, get_external/2, update/3,
     delete/2]).
@@ -203,28 +203,28 @@ authorize(create, ProvId, spaces, ?PROVIDER(ProvId)) ->
 authorize(get, undefined, check_my_ip, _) ->
     true;
 authorize(get, undefined, list, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_providers);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
 authorize(get, _ProvId, entity, ?PROVIDER) ->
     % Any provider can get info about other providers
     true;
 authorize(get, _ProvId, entity, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_providers);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
 authorize(get, ProvId, spaces, ?PROVIDER(ProvId)) ->
     true;
 authorize(get, _ProvId, spaces, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
 authorize(get, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true;
 authorize(get, _ProvId, {space, _}, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_spaces_of_provider);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
 authorize(get, _ProvId, eff_users, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
 authorize(get, _ProvId, {eff_user, _}, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_users_of_provider);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
 authorize(get, _ProvId, eff_groups, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
 authorize(get, _ProvId, {eff_group, _}, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_groups_of_provider);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
 
 authorize(update, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;
