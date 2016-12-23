@@ -33,8 +33,15 @@
     delete/2
 ]).
 -export([
-    add_user/3, set_user_privileges/5, set_user_privileges/4, remove_user/3,
-    add_group/3, set_group_privileges/5, set_group_privileges/4, remove_group/3
+    create_space_create_token/3,
+    join_group/3,
+    join_space/3,
+    add_user/3,
+    add_group/3,
+    update_user_privileges/5, update_user_privileges/4,
+    update_group_privileges/5, update_group_privileges/4,
+    remove_user/3,
+    remove_group/3
 ]).
 -export([
     exists/1,
@@ -78,12 +85,12 @@ add_user(Client, GroupId, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, GroupId, users, Data).
 
 
-set_user_privileges(Client, GroupId, UserId, Operation, Privs) when is_list(Privs) ->
-    set_user_privileges(Client, GroupId, UserId, #{
+update_user_privileges(Client, GroupId, UserId, Operation, Privs) when is_list(Privs) ->
+    update_user_privileges(Client, GroupId, UserId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
-set_user_privileges(Client, GroupId, UserId, Data) ->
+update_user_privileges(Client, GroupId, UserId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, GroupId, {user, UserId}, Data).
 
 
@@ -97,12 +104,12 @@ add_group(Client, GroupId, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, GroupId, groups, Data).
 
 
-set_group_privileges(Client, ParentId, ChildId, Operation, Privs) when is_list(Privs) ->
-    set_group_privileges(Client, ParentId, ChildId, #{
+update_group_privileges(Client, ParentId, ChildId, Operation, Privs) when is_list(Privs) ->
+    update_group_privileges(Client, ParentId, ChildId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
-set_group_privileges(Client, ParentId, ChildId, Data) ->
+update_group_privileges(Client, ParentId, ChildId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, ParentId, {group, ChildId}, Data).
 
 

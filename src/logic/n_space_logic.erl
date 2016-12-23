@@ -19,20 +19,11 @@
 -define(PLUGIN, n_space_logic_plugin).
 
 -export([
-    create/2,
-    create_invite_provider_token/2,
-    create_invite_user_token/2
+    create/2
 ]).
 -export([
     get/2,
-    list/1,
-    get_users/2
-]).
--export([
-    add_user/3, set_user_privileges/5, set_user_privileges/4, remove_user/3,
-    add_group/3, set_group_privileges/5, set_group_privileges/4, remove_group/3
-%%    join_as_user/2,
-%%    join_as_group/3
+    list/1
 ]).
 -export([
     update/3
@@ -40,7 +31,18 @@
 -export([
     delete/2
 ]).
-
+-export([
+    create_user_invite_token/2,
+    create_group_invite_token/2,
+    create_provider_invite_token/2,
+    add_user/3,
+    add_group/3,
+    get_users/2,
+    update_user_privileges/5, update_user_privileges/4,
+    update_group_privileges/5, update_group_privileges/4,
+    remove_user/3,
+    remove_group/3
+]).
 -export([
     exists/1,
     has_eff_privilege/3,
@@ -54,11 +56,11 @@ create(Issuer, Data) ->
     n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
 
 
-create_invite_provider_token(Issuer, SpaceId) ->
+create_provider_invite_token(Issuer, SpaceId) ->
     n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_provider_token, #{}).
 
 
-create_invite_user_token(Issuer, SpaceId) ->
+create_user_invite_token(Issuer, SpaceId) ->
     n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_user_token, #{}).
 
 
@@ -82,12 +84,12 @@ add_user(Issuer, SpaceId, Data) ->
     ).
 
 
-set_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(Privs) ->
-    set_user_privileges(Client, SpaceId, UserId, #{
+update_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(Privs) ->
+    update_user_privileges(Client, SpaceId, UserId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
-set_user_privileges(Client, SpaceId, UserId, Data) ->
+update_user_privileges(Client, SpaceId, UserId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, SpaceId, {user, UserId}, Data).
 
 
@@ -103,12 +105,12 @@ add_group(Issuer, SpaceId, Data) ->
     ).
 
 
-set_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list(Privs) ->
-    set_group_privileges(Client, SpaceId, GroupId, #{
+update_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list(Privs) ->
+    update_group_privileges(Client, SpaceId, GroupId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
-set_group_privileges(Client, SpaceId, GroupId, Data) ->
+update_group_privileges(Client, SpaceId, GroupId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, SpaceId, {group, GroupId}, Data).
 
 

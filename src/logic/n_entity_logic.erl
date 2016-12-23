@@ -120,7 +120,7 @@ generate_cert_files() ->
 
 ahaha() ->
     {ok, U1} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U1">>}]),
-    ok = n_user_logic:modify_oz_privileges(?ROOT, U1, set, [set_privileges]),
+    ok = n_user_logic:update_oz_privileges(?ROOT, U1, set, [set_privileges]),
     {ok, U2} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U2">>}]),
     {ok, U3} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U3">>}]),
     {ok, G1} = rpc:call(node(), n_group_logic, create, [?USER(U1), <<"G1">>]),
@@ -143,11 +143,11 @@ ahaha() ->
     {ok, S1} = rpc:call(node(), n_space_logic, add_group, [?USER(U1), S1, G2]),
     ProviderData = ?CREATE_PROVIDER_DATA,
     {ok, {P1, _}} = rpc:call(node(), n_provider_logic, create, [?NOBODY, ProviderData]),
-    {ok, Token} = rpc:call(node(), n_space_logic, create_invite_provider_token, [?USER(U5), S1]),
+    {ok, Token} = rpc:call(node(), n_space_logic, create_provider_invite_token, [?USER(U5), S1]),
     {ok, S1} = rpc:call(node(), n_provider_logic, support_space, [?PROVIDER(P1), P1, Token, 1000000000]),
 
     {ok, {P2, _}} = rpc:call(node(), n_provider_logic, create, [?NOBODY, ProviderData#{<<"name">> => <<"P2">>}]),
-    {ok, Token2} = rpc:call(node(), n_space_logic, create_invite_provider_token, [?USER(U5), S1]),
+    {ok, Token2} = rpc:call(node(), n_space_logic, create_provider_invite_token, [?USER(U5), S1]),
     {ok, S1} = rpc:call(node(), n_provider_logic, support_space, [?PROVIDER(P2), P2, Token2, 1000000000]),
 
     {ok, G3} = rpc:call(node(), n_group_logic, create, [?USER(U1), <<"G3">>]),

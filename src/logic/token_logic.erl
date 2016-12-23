@@ -12,18 +12,19 @@
 -module(token_logic).
 -author("Konrad Zemek").
 
+-include("tokens.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% Atoms representing types of valid tokens.
--type token_type() :: group_invite_user_token | group_invite_group_token |
-space_create_token | space_invite_user_token | space_invite_group_token |
-space_support_token.
+-type token_type() :: ?GROUP_INVITE_USER_TOKEN | ?GROUP_INVITE_GROUP_TOKEN |
+?SPACE_INVITE_USER_TOKEN | ?SPACE_INVITE_GROUP_TOKEN |
+?SPACE_SUPPORT_TOKEN.
 
 %% Atoms representing valid resource types.
--type resource_type() :: user | group | space.
+-type resource_type() :: od_user | od_group | od_space.
 
 -export_type([token_type/0, resource_type/0]).
 

@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Errors common for all entity logic modules.
+%%% Error definitions used across onezone modules.
 %%% @end
 %%%-------------------------------------------------------------------
 
