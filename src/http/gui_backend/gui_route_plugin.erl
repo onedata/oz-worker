@@ -109,10 +109,10 @@ route(_) -> ?INDEX.
 %%--------------------------------------------------------------------
 -spec data_backend(HasSession :: boolean(), Identifier :: binary()) ->
     HandlerModule :: module().
+data_backend(true, <<"user">>) -> user_data_backend;
+data_backend(true, <<"clienttoken">>) -> client_token_data_backend;
 data_backend(true, <<"space">>) -> space_data_backend;
-data_backend(true, <<"authorizer">>) -> authorizer_data_backend;
-data_backend(true, <<"provider">>) -> provider_data_backend;
-data_backend(true, <<"clienttoken">>) -> client_token_data_backend.
+data_backend(true, <<"provider">>) -> provider_data_backend.
 
 
 %%--------------------------------------------------------------------
@@ -139,16 +139,9 @@ public_rpc_backend() -> public_rpc_backend.
 -spec session_details() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 session_details() ->
-    {ok, #document{
-        value = #od_user{
-            name = Name,
-            basic_auth_enabled = BasicAuthEnabled
-        }}} = od_user:get(gui_session:get_user_id()),
     FirstLogin = gui_session:get_value(firstLogin, false),
     Res = [
-        {<<"userName">>, Name},
-        {<<"firstLogin">>, FirstLogin},
-        {<<"basicAuthEnabled">>, BasicAuthEnabled}
+        {<<"firstLogin">>, FirstLogin}
     ],
     {ok, Res}.
 

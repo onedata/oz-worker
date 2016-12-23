@@ -66,13 +66,7 @@ find(<<"clienttoken">>, _Id) ->
 -spec find_all(ResourceType :: binary()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"clienttoken">>) ->
-    UserId = gui_session:get_user_id(),
-    {ok, ClientTokens} = user_logic:get_client_tokens(UserId),
-    Res = lists:map(
-        fun(Id) ->
-            [{<<"id">>, Id}]
-        end, ClientTokens),
-    {ok, Res}.
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -97,6 +91,8 @@ create_record(<<"clienttoken">>, _Data) ->
     UserId = gui_session:get_user_id(),
     Token = auth_logic:gen_token(UserId),
     user_logic:add_client_token(UserId, Token),
+    % Push user record with a new client token list.
+    gui_async:push_updated(<<"user">>, user_data_backend:user_record(UserId)),
     {ok, [
         {<<"id">>, Token}
     ]}.
@@ -126,4 +122,7 @@ delete_record(<<"clienttoken">>, Token) ->
     {ok, Macaroon} = token_utils:deserialize(Token),
     Identifier = macaroon:identifier(Macaroon),
     onedata_auth:delete(Identifier),
-    user_logic:delete_client_token(UserId, Token).
+    user_logic:delete_client_token(UserId, Token),
+    % Push user record with a new client token list.
+    gui_async:push_updated(<<"user">>, user_data_backend:user_record(UserId)),
+    ok.

@@ -1,29 +1,31 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2016 ACK CYFRONET AGH
+%%% @author Jakub Liput
+%%% @copyright (C) 2015-2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module implements data_backend_behaviour and is used to synchronize
-%%% the `space` model used in Ember application.
+%%% the data-space model used in Ember application.
 %%% @end
 %%%-------------------------------------------------------------------
--module(space_data_backend).
+-module(user_data_backend).
+-behavior(data_backend_behaviour).
 -author("Lukasz Opiola").
--behaviour(data_backend_behaviour).
+-author("Jakub Liput").
+
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-%% data_backend_behaviour callbacks
 -export([init/0, terminate/0]).
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
-%% API
--export([space_record/2, space_record/3]).
+-export([user_record/1]).
 
+-define(CURRENT_USER_ID, <<"0">>).
 
 %%%===================================================================
 %%% data_backend_behaviour callbacks
@@ -56,15 +58,11 @@ terminate() ->
 %%--------------------------------------------------------------------
 -spec find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find(<<"space">>, SpaceId) ->
+find(<<"user">>, ?CURRENT_USER_ID) ->
     UserId = gui_session:get_user_id(),
-    % Check if the user belongs to this space
-    case space_logic:has_effective_user(SpaceId, UserId) of
-        false ->
-            gui_error:unauthorized();
-        true ->
-            {ok, space_record(SpaceId, UserId)}
-    end.
+    {ok, user_record(UserId)};
+find(<<"user">>, _) ->
+    gui_error:unauthorized().
 
 
 %%--------------------------------------------------------------------
@@ -74,7 +72,7 @@ find(<<"space">>, SpaceId) ->
 %%--------------------------------------------------------------------
 -spec find_all(ResourceType :: binary()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
-find_all(<<"space">>) ->
+find_all(<<"user">>) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
@@ -85,7 +83,7 @@ find_all(<<"space">>) ->
 %%--------------------------------------------------------------------
 -spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find_query(<<"space">>, _Data) ->
+find_query(<<"user">>, _Data) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
@@ -96,22 +94,8 @@ find_query(<<"space">>, _Data) ->
 %%--------------------------------------------------------------------
 -spec create_record(RsrcType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-create_record(<<"space">>, Data) ->
-    Name = proplists:get_value(<<"name">>, Data),
-    case Name of
-        <<"">> ->
-            gui_error:report_error(<<"Empty space names are not allowed">>);
-        Bin when is_binary(Bin) ->
-            UserId = gui_session:get_user_id(),
-            {ok, SpaceId} = space_logic:create({user, UserId}, Name),
-            % Push user record with a new space list.
-            gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(UserId)
-            ),
-            space_record(SpaceId, UserId);
-        _ ->
-            gui_error:report_error(<<"Invalid space name">>)
-    end.
+create_record(<<"user">>, _Data) ->
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -122,8 +106,32 @@ create_record(<<"space">>, Data) ->
 -spec update_record(RsrcType :: binary(), Id :: binary(),
     Data :: proplists:proplist()) ->
     ok | gui_error:error_result().
-update_record(<<"space">>, _SpaceId, _Data) ->
-    gui_error:report_error(<<"Not implemented">>).
+update_record(<<"user">>, ?CURRENT_USER_ID, [{<<"alias">>, NewAlias}]) ->
+    UserId = gui_session:get_user_id(),
+    case user_logic:set_alias(UserId, NewAlias) of
+        ok ->
+            ok;
+        {error, disallowed_alias_prefix} ->
+            gui_error:report_warning(
+                <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
+        {error, invalid_alias} ->
+            gui_error:report_warning(
+                <<"Alias can contain only lowercase letters and digits, and "
+                "must be at least 5 characters long.">>);
+        {error, alias_occupied} ->
+            gui_error:report_warning(
+                <<"This alias is occupied by someone else. "
+                "Please choose other alias.">>)
+    end;
+update_record(<<"user">>, ?CURRENT_USER_ID, Data) ->
+    UserUpdateDiff = case Data of
+        [{<<"defaultSpace">>, DefaultSpace}] ->
+            #{default_space => DefaultSpace};
+        [{<<"defaultProvider">>, DefaultProvider}] ->
+            #{default_provider => DefaultProvider}
+    end,
+    {ok, _} = od_user:update(gui_session:get_user_id(), UserUpdateDiff),
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -133,56 +141,80 @@ update_record(<<"space">>, _SpaceId, _Data) ->
 %%--------------------------------------------------------------------
 -spec delete_record(RsrcType :: binary(), Id :: binary()) ->
     ok | gui_error:error_result().
-delete_record(<<"space">>, _Id) ->
+delete_record(<<"user">>, _Id) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
 %%%===================================================================
-%%% API functions
+%%% Internal functions
 %%%===================================================================
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
-%% Returns a client-compliant space record based on space id. Automatically
-%% check if the user has view privileges in that space and returns proper data.
+%% Returns a client-compliant user record based on space id.
 %% @end
 %%--------------------------------------------------------------------
--spec space_record(SpaceId :: binary(), UserId :: binary()) ->
-    proplists:proplist().
-space_record(SpaceId, UserId) ->
-    % Check if that user has view privileges in that space
-    HasViewPrivs = space_logic:has_effective_privilege(
-        SpaceId, UserId, space_view_data
-    ),
-    space_record(SpaceId, UserId, HasViewPrivs).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns a client-compliant space record based on space id. Allows to
-%% override HasViewPrivileges.
-%% @end
-%%--------------------------------------------------------------------
--spec space_record(SpaceId :: binary(), UserId :: od_user:id(),
-    HasViewPrivileges :: boolean()) -> proplists:proplist().
-space_record(SpaceId, UserId, HasViewPrivileges) ->
-    {ok, #document{value = #od_space{
-        name = DefaultName,
-        providers_supports = ProvidersSupports
-    }}} = od_space:get(SpaceId),
+-spec user_record(UserId :: od_user:id()) -> proplists:proplist().
+user_record(UserId) ->
     {ok, #document{value = #od_user{
-        space_aliases = SpaceNamesMap
+        name = Name,
+        alias = UserAlias,
+        basic_auth_enabled = BasicAuthEnabled,
+        connected_accounts = OAuthAccounts,
+        client_tokens = ClientTokenIds,
+        default_space = DefaultSpaceValue,
+        default_provider = DefaultProviderValue
     }}} = od_user:get(UserId),
-    % Try to get space name from personal user's mapping, if not use its
-    % default name.
-    Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),
-    {Providers, SupportSizes} = lists:unzip(ProvidersSupports),
-    TotalSize = lists:sum(SupportSizes),
+    Alias = case str_utils:to_binary(UserAlias) of
+        <<"">> -> null;
+        Bin -> Bin
+    end,
+    Authorizers = lists:foldl(
+        fun(OAuthAccount, Acc) ->
+            #oauth_account{
+                provider_id = Provider,
+                email_list = Emails,
+                user_id = UserId} = OAuthAccount,
+            ProviderBin = str_utils:to_binary(Provider),
+            UserIdBin = str_utils:to_binary(UserId),
+            AccId = <<ProviderBin/binary, "#", UserIdBin/binary>>,
+            Accounts = lists:map(
+                fun(Email) ->
+                    [
+                        {<<"id">>, AccId},
+                        {<<"type">>, ProviderBin},
+                        {<<"email">>, Email}
+                    ]
+                end, Emails),
+            Accounts ++ Acc
+        end, [], OAuthAccounts),
+    ClientTokens = lists:map(
+        fun(Id) ->
+            [{<<"id">>, Id}]
+        end, ClientTokenIds),
+    DefaultSpace = case DefaultSpaceValue of
+        undefined -> null;
+        _ -> DefaultSpaceValue
+    end,
+    DefaultProvider = case DefaultProviderValue of
+        undefined -> null;
+        _ -> DefaultProviderValue
+    end,
+    Groups = user_logic:get_effective_groups(UserId),
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    Spaces = proplists:get_value(spaces, UserSpaces),
+    {ok, [{providers, Providers}]} = user_logic:get_providers(UserId),
     [
-        {<<"id">>, SpaceId},
+        {<<"id">>, UserId},
         {<<"name">>, Name},
-        {<<"hasViewPrivilege">>, HasViewPrivileges},
-        {<<"totalSize">>, TotalSize},
-        {<<"supportSizes">>, ProvidersSupports},
+        {<<"alias">>, Alias},
+        {<<"basicAuthEnabled">>, BasicAuthEnabled},
+        {<<"authorizers">>, Authorizers},
+        {<<"clientTokens">>, ClientTokens},
+        {<<"defaultSpace">>, DefaultSpace},
+        {<<"defaultProvider">>, DefaultProvider},
+        {<<"groups">>, Groups},
+        {<<"spaces">>, Spaces},
         {<<"providers">>, Providers}
     ].

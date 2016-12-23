@@ -22,7 +22,7 @@
 -export([find/2, find_all/1, find_query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
 %% API
--export([provider_record/3]).
+-export([provider_record/2]).
 
 
 %%%===================================================================
@@ -58,22 +58,7 @@ terminate() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find(<<"provider">>, ProviderId) ->
     UserId = gui_session:get_user_id(),
-    %% TODO Currently, perms to view provider are not checked
-%%    % Check if the user is supported by this provider
-%%    case user_logic:has_provider(UserId, ProviderId) of
-%%        false ->
-%%            gui_error:unauthorized();
-%%        true ->
-%%            {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
-%%            {ok, UserSpaces} = user_logic:get_spaces(UserId),
-%%            SpaceIds = proplists:get_value(spaces, UserSpaces),
-%%            Res = provider_record(ProviderId, DefaultProvider, SpaceIds),
-%%            {ok, Res}
-%%    end,
-    {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
-    {ok, UserSpaces} = user_logic:get_spaces(UserId),
-    SpaceIds = proplists:get_value(spaces, UserSpaces),
-    Res = provider_record(ProviderId, DefaultProvider, SpaceIds),
+    Res = provider_record(ProviderId, UserId),
     {ok, Res}.
 
 
@@ -85,16 +70,7 @@ find(<<"provider">>, ProviderId) ->
 -spec find_all(ResourceType :: binary()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"provider">>) ->
-    UserId = gui_session:get_user_id(),
-    {ok, [{providers, ProviderIds}]} = user_logic:get_providers(UserId),
-    {ok, DefaultProvider} = user_logic:get_default_provider(UserId),
-    {ok, UserSpaces} = user_logic:get_spaces(UserId),
-    SpaceIds = proplists:get_value(spaces, UserSpaces),
-    Res = lists:map(
-        fun(ProviderId) ->
-            provider_record(ProviderId, DefaultProvider, SpaceIds)
-        end, ProviderIds),
-    {ok, Res}.
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -127,11 +103,8 @@ create_record(<<"provider">>, _Data) ->
 -spec update_record(RsrcType :: binary(), Id :: binary(),
     Data :: proplists:proplist()) ->
     ok | gui_error:error_result().
-update_record(<<"provider">>, ProviderId, Data) ->
-    UserId = gui_session:get_user_id(),
-    IsDefault = proplists:get_value(<<"isDefault">>, Data),
-    user_logic:set_provider_as_default(UserId, ProviderId, IsDefault),
-    ok.
+update_record(<<"provider">>, _ProviderId, _Data) ->
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
@@ -151,12 +124,14 @@ delete_record(<<"provider">>, _Id) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a client-compliant space record.
+%% Returns a client-compliant provider record.
 %% @end
 %%--------------------------------------------------------------------
--spec provider_record(ProviderId :: binary(), DefaultProvider :: binary(),
-    UserSpaces :: [binary()]) -> proplists:proplist().
-provider_record(ProviderId, DefaultProvider, UserSpaces) ->
+-spec provider_record(ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
+    proplists:proplist().
+provider_record(ProviderId, UserId) ->
+    {ok, UserSpaces} = user_logic:get_spaces(UserId),
+    UserSpaceIds = proplists:get_value(spaces, UserSpaces),
     {ok, ProviderData} = provider_logic:get_data(ProviderId),
     Name = proplists:get_value(clientName, ProviderData),
     Latitude = proplists:get_value(latitude, ProviderData, 0.0),
@@ -167,12 +142,11 @@ provider_record(ProviderId, DefaultProvider, UserSpaces) ->
     {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
     SpacesToDisplay = lists:filter(
         fun(Space) ->
-            lists:member(Space, UserSpaces)
+            lists:member(Space, UserSpaceIds)
         end, Spaces),
     [
         {<<"id">>, ProviderId},
         {<<"name">>, Name},
-        {<<"isDefault">>, ProviderId =:= DefaultProvider},
         {<<"isWorking">>, IsWorking},
         {<<"host">>, Host},
         {<<"spaces">>, SpacesToDisplay},
