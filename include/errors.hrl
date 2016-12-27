@@ -60,6 +60,7 @@
 -define(ERROR_BAD_VALUE_ID_NOT_FOUND(__Key), {error, {id_not_found, __Key}}).
 -define(ERROR_BAD_VALUE_ID_OCCUPIED(__Key), {error, {id_occupied, __Key}}).
 -define(ERROR_BAD_VALUE_BAD_TOKEN_TYPE(__Key), {error, {bad_token_type, __Key}}).
+-define(ERROR_BAD_VALUE_ALIAS(__Key), {error, {bad_alias, __Key}}).
 % Errors connected with relations between entities
 -define(ERROR_RELATION_DOES_NOT_EXIST(__ChModel, __ChId, __ParModel, __ParId),
     {error, {relation_does_not_exist, __ChModel, __ChId, __ParModel, __ParId}}
@@ -67,6 +68,7 @@
 -define(ERROR_RELATION_ALREADY_EXISTS(__ChModel, __ChId, __ParModel, __ParId),
     {error, {relation_already_exists, __ChModel, __ChId, __ParModel, __ParId}}
 ).
+-define(ERROR_ALIAS_OCCUPIED, {error, aliast_occupied}).
 -define(ERROR_CANNOT_DELETE_ENTITY(__EntityModel, __EntityId),
     {error, {cannot_delete_entity, __EntityModel, __EntityId}}
 ).

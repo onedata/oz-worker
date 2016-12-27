@@ -13,9 +13,10 @@
 -author("Lukasz Opiola").
 -behaviour(data_logic_behaviour).
 
--include("datastore/oz_datastore_models_def.hrl").
--include("registered_names.hrl").
+-include("errors.hrl").
 -include("entity_logic.hrl").
+-include("registered_names.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, n_user_logic_plugin).
@@ -28,19 +29,19 @@
     get/2,
     list/1,
     get_default_space/2,
+    get_space_alias/3,
     get_default_provider/2,
     list_client_tokens/2
 ]).
 -export([
-    update/3,
+    update_name/3, update_alias/3, update/3,
     update_oz_privileges/4, update_oz_privileges/3,
     set_default_space/3,
     set_space_alias/4,
-    set_default_provider/3
-]).
+    set_default_provider/3]).
 -export([
     delete/2,
-    remove_client_token/3,
+    delete_client_token/3,
     delete_space_alias/3
 ]).
 -export([
@@ -72,12 +73,13 @@ create(UserInfo) ->
     create(UserInfo, undefined).
 
 create(UserInfo, ProposedUserId) ->
-    % TODO error handling
-    {ok, _UserId} = od_user:create(
-        #document{key = ProposedUserId, value = UserInfo}
-    ).
-% TODO automatic first space
-% TODO automatic group
+    case od_user:create(#document{key = ProposedUserId, value = UserInfo}) of
+        {error, already_exists} ->
+            ?ERROR_BAD_VALUE_ID_OCCUPIED;
+        {ok, UserId} ->
+            setup_user(UserId, UserInfo),
+            {ok, UserId}
+    end.
 
 
 create_client_token(Client, UserId) ->
@@ -95,6 +97,10 @@ list(Client) ->
 
 get_default_space(Client, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, UserId, default_space).
+
+
+get_space_alias(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {space_alias, SpaceId}).
 
 
 get_default_provider(Client, UserId) ->
@@ -132,8 +138,14 @@ set_default_provider(Client, UserId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, UserId, default_provider, Data).
 
 
-update(Client, UserId, NewName) when is_binary(NewName) ->
-    update(Client, UserId, #{<<"name">> => NewName});
+update_name(Client, UserId, NewName) ->
+    update(Client, UserId, #{<<"name">> => NewName}).
+
+
+update_alias(Client, UserId, NewAlias) ->
+    update(Client, UserId, #{<<"alias">> => NewAlias}).
+
+
 update(Client, UserId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, UserId, entity, Data).
 
@@ -142,7 +154,7 @@ delete(Client, UserId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, entity).
 
 
-remove_client_token(Client, UserId, TokenId) ->
+delete_client_token(Client, UserId, TokenId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, {client_token, TokenId}).
 
 
@@ -458,3 +470,34 @@ get_onepanel_rest_user_url(Login) ->
         application:get_env(?APP_NAME, onepanel_users_endpoint),
     <<(str_utils:to_binary(OnepanelRESTURL))/binary,
         (str_utils:to_binary(OnepanelGetUsersEndpoint))/binary, Login/binary>>.
+
+setup_user(UserId, UserInfo) ->
+    % Check if automatic first space is enabled, if so create a space
+    % for the user.
+    case application:get_env(?APP_NAME, enable_automatic_first_space) of
+        {ok, true} ->
+            SpaceName = case UserInfo#od_user.name of
+                <<"">> ->
+                    <<"Your First Space">>;
+                Name ->
+                    <<Name/binary, "'s space">>
+            end,
+            {ok, SpaceId} = n_space_logic:create(?USER(UserId), SpaceName),
+            set_default_space(?USER(UserId), UserId, SpaceId);
+        _ ->
+            ok
+    end,
+
+    % Check if global groups are enabled, if so add the user to the groups.
+    case application:get_env(?APP_NAME, enable_global_groups) of
+        {ok, true} ->
+            {ok, GlobalGroups} = application:get_env(?APP_NAME, global_groups),
+            lists:foreach(
+                fun({GroupId, Privileges}) ->
+                    {ok, GroupId} = n_group_logic:add_user(
+                        ?ROOT, GroupId, UserId, Privileges
+                    )
+                end, GlobalGroups);
+        _ ->
+            ok
+    end.

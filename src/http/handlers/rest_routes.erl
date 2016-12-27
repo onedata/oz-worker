@@ -76,7 +76,7 @@ provider_routes() ->
             delete => {P, ?CLIENT_ID, {space, ?BINDING(sid)}}
         }}},
         {<<"/provider/test/check_my_ip">>, #rest_req{methods = #{
-            get => {P, undefined, check_my_ip}
+            get => {P, undefined, {check_my_ip, ?COWBOY_REQ}}
         }}},
         {<<"/provider/test/check_my_ports">>, #rest_req{methods = #{
             post => {P, undefined, check_my_ports}

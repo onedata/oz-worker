@@ -19,13 +19,21 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([entity_type/0, create/4, get_entity/1, get_internal/4, get_external/2,
-    update/3, delete/2]).
+-export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
 
 
 entity_type() ->
     od_space.
+
+
+get_entity(SpaceId) ->
+    case od_space:get(SpaceId) of
+        {ok, #document{value = Space}} ->
+            {ok, Space};
+        _ ->
+            ?ERROR_NOT_FOUND
+    end.
 
 
 create(?ROOT, _, entity, #{<<"name">> := Name}) ->
@@ -69,25 +77,12 @@ create(Client, SpaceId, invite_user_token, _) ->
     {ok, Token}.
 
 
-get_entity(SpaceId) ->
-    case od_space:get(SpaceId) of
-        {ok, #document{value = Space}} ->
-            {ok, Space};
-        _ ->
-            ?ERROR_NOT_FOUND
-    end.
-
-
-get_internal(?USER, _SpaceId, Space, users) ->
-    {ok, Space#od_space.users}.
-
-
-
-get_external(_, list) ->
+get(_, undefined, undefined, list) ->
     {ok, SpaceDocs} = od_space:list(),
     {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
-get_external(?USER, _) ->
-    ok.
+get(?USER, _SpaceId, Space, users) ->
+    {ok, Space#od_space.users}.
+
 
 
 update(SpaceId, entity, Data) when is_binary(SpaceId) ->

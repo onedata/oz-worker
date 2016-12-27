@@ -20,13 +20,21 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
--export([entity_type/0, create/4, get_entity/1, get_internal/4, get_external/2,
-    update/3, delete/2]).
+-export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
 
 
 entity_type() ->
     od_provider.
+
+
+get_entity(ProviderId) ->
+    case od_provider:get(ProviderId) of
+        {ok, #document{value = Provider}} ->
+            {ok, Provider};
+        _ ->
+            ?ERROR_NOT_FOUND
+    end.
 
 
 create(_, _, entity, Data) ->
@@ -89,35 +97,24 @@ create(_, undefined, check_my_ports, Data) ->
     test_connection(Data).
 
 
-get_entity(ProviderId) ->
-    case od_provider:get(ProviderId) of
-        {ok, #document{value = Provider}} ->
-            {ok, Provider};
-        _ ->
-            ?ERROR_NOT_FOUND
-    end.
-
-
-get_internal(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
-    {ok, Spaces};
-get_internal(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
-    ?assert_success(n_space_logic_plugin:get_entity(SpaceId));
-get_internal(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
-    {ok, maps:keys(EffUsers)};
-get_internal(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
-    ?assert_success(n_user_logic_plugin:get_entity(UserId));
-get_internal(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
-    {ok, maps:keys(EffGroups)};
-get_internal(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
-    ?assert_success(n_group_logic_plugin:get_entity(GroupId)).
-
-
-get_external(_, check_my_ip) ->
-    % Peer is resolved and returned during response transformation.
-    {ok, peer};
-get_external(_, list) ->
+get(_, undefined, undefined, list) ->
     {ok, ProviderDocs} = od_provider:list(),
-    {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]}.
+    {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]};
+get(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
+    {ok, Spaces};
+get(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
+    ?assert_success(n_space_logic_plugin:get_entity(SpaceId));
+get(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
+    {ok, maps:keys(EffUsers)};
+get(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
+    ?assert_success(n_user_logic_plugin:get_entity(UserId));
+get(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
+    {ok, maps:keys(EffGroups)};
+get(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
+    ?assert_success(n_group_logic_plugin:get_entity(GroupId));
+get(_, undefined, undefined, {check_my_ip, Req}) ->
+    {{Ip, _Port}, _} = cowboy_req:peer(Req),
+    {ok, list_to_binary(inet_parse:ntoa(Ip))}.
 
 
 update(ProviderId, entity, Data) when is_binary(ProviderId) ->

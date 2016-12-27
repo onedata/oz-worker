@@ -169,6 +169,10 @@ translate(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
         RelationToString,
         ?ENTITY_TO_READABLE(ParType, ParId)]
     }};
+translate(?ERROR_ALIAS_OCCUPIED) ->
+    {?HTTP_400_BAD_REQUEST,
+        <<"Provided alias is already occupied, please choose other alias.">>
+    };
 translate(?ERROR_CANNOT_DELETE_ENTITY(EntityModel, EntityId)) ->
     {?HTTP_500_INTERNAL_SERVER_ERROR, {
         <<"Cannot delete ~s, failed to delete some dependent relations">>,

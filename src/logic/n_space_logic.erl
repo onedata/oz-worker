@@ -35,8 +35,8 @@
     create_user_invite_token/2,
     create_group_invite_token/2,
     create_provider_invite_token/2,
-    add_user/3,
-    add_group/3,
+    add_user/4, add_user/3,
+    add_group/4, add_group/3,
     get_users/2,
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
@@ -80,6 +80,11 @@ get_users(Issuer, SpaceId) ->
     n_entity_logic:get(Issuer, ?PLUGIN, SpaceId, users).
 
 
+add_user(Client, SpaceId, UserId, Privileges) when is_binary(UserId) ->
+    add_user(Client, SpaceId, #{
+        <<"userId">> => UserId,
+        <<"privileges">> => Privileges
+    }).
 add_user(Issuer, SpaceId, UserId) when is_binary(UserId) ->
     add_user(Issuer, SpaceId, #{<<"userId">> => UserId});
 add_user(Issuer, SpaceId, Data) ->
@@ -101,6 +106,11 @@ remove_user(Client, SpaceId, UserId) ->
     n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {user, UserId}).
 
 
+add_group(Client, SpaceId, GroupId, Privileges) when is_binary(GroupId) ->
+    add_group(Client, SpaceId, #{
+        <<"groupId">> => GroupId,
+        <<"privileges">> => Privileges
+    }).
 add_group(Issuer, SpaceId, GroupId) when is_binary(GroupId) ->
     add_group(Issuer, SpaceId, #{<<"groupId">> => GroupId});
 add_group(Issuer, SpaceId, Data) ->

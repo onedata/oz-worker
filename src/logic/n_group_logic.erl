@@ -33,11 +33,10 @@
     delete/2
 ]).
 -export([
-    create_space_create_token/3,
     join_group/3,
     join_space/3,
-    add_user/3,
-    add_group/3,
+    add_user/4, add_user/3,
+    add_group/4, add_group/3,
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
     remove_user/3,
@@ -79,6 +78,23 @@ delete(Client, GroupId) ->
     n_entity_logic:delete(Client, ?PLUGIN, GroupId, entity).
 
 
+join_group(Client, UserId, Data) when is_map(Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, UserId, join_group, Data);
+join_group(Client, UserId, Token) ->
+    join_group(Client, UserId, #{<<"token">> => Token}).
+
+
+join_space(Client, UserId, Data) when is_map(Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, UserId, join_space, Data);
+join_space(Client, UserId, Token) ->
+    join_space(Client, UserId, #{<<"token">> => Token}).
+
+
+add_user(Client, GroupId, UserId, Privileges) when is_binary(UserId) ->
+    add_user(Client, GroupId, #{
+        <<"userId">> => UserId,
+        <<"privileges">> => Privileges
+    }).
 add_user(Client, GroupId, UserId) when is_binary(UserId) ->
     add_user(Client, GroupId, #{<<"userId">> => UserId});
 add_user(Client, GroupId, Data) ->
@@ -98,6 +114,11 @@ remove_user(Client, GroupId, UserId) ->
     n_entity_logic:delete(Client, ?PLUGIN, GroupId, {user, UserId}).
 
 
+add_group(Client, GroupId, ChildGroupId, Privileges) when is_binary(ChildGroupId) ->
+    add_group(Client, GroupId, #{
+        <<"userId">> => ChildGroupId,
+        <<"privileges">> => Privileges
+    }).
 add_group(Client, GroupId, ChildGroupId) when is_binary(ChildGroupId) ->
     add_group(Client, GroupId, #{<<"groupId">> => ChildGroupId});
 add_group(Client, GroupId, Data) ->

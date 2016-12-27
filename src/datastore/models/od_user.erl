@@ -28,7 +28,7 @@
 -export([record_struct/1]).
 
 %% API
--export([get_all_ids/0, get_by_criterion/1]).
+-export([get_by_criterion/1]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -174,25 +174,6 @@ before(ModelName, Method, _Level, Context) ->
 %%%===================================================================
 %%% API callbacks
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc 
-%% @private
-%% Gets all users from DB (that have at least one email address set).
-%% This function is used for development purposes, there appears to be no production use case.
-%% @end
-%%--------------------------------------------------------------------
--spec get_all_ids() -> {ok, [binary()]}.
-get_all_ids() ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #od_user{}, key = Id}, Acc) ->
-            {next, [Id | Acc]};
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).
 
 %%--------------------------------------------------------------------
 %% @doc 

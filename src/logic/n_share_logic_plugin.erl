@@ -19,13 +19,21 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([entity_type/0, create/4, get_entity/1, get_internal/4, get_external/2,
-    update/3, delete/2]).
+-export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
 
 
 entity_type() ->
     od_share.
+
+
+get_entity(ShareId) ->
+    case od_share:get(ShareId) of
+        {ok, #document{value = Share}} ->
+            {ok, Share};
+        _ ->
+            ?ERROR_NOT_FOUND
+    end.
 
 
 create(?USER, _, entity, Data) ->
@@ -52,23 +60,10 @@ create(?USER, _, entity, Data) ->
     end.
 
 
-get_entity(ShareId) ->
-    case od_share:get(ShareId) of
-        {ok, #document{value = Share}} ->
-            {ok, Share};
-        _ ->
-            ?ERROR_NOT_FOUND
-    end.
-
-
-get_internal(?USER, _ShareId, _, _) ->
-    ok.
-
-
-get_external(_, list) ->
+get(_, undefined, undefined, list) ->
     {ok, ShareDocs} = od_share:list(),
     {ok, [ShareId || #document{key = ShareId} <- ShareDocs]};
-get_external(?USER, _) ->
+get(?USER, _ShareId, _, _) ->
     ok.
 
 

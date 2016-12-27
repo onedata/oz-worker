@@ -59,7 +59,8 @@ value_rule() -> [
     fun() -> true end,  % TODO czy to potrzebne?
     {exists, fun(Id) -> true end},
     {not_exists, fun(Id) -> true end},
-    token_type % compatible only with token
+    token_type, % compatible only with token
+    {custom, fun(Value) -> ok end, returned_error}
 ].
 
 -define(PROXY_URL, <<"172.17.0.9:8080/api/v1">>).
@@ -538,9 +539,9 @@ call_get_resource(Request) ->
     % Entity might be already prefetched, reuse it if possible.
     Result = case {EntityId, Entity, Resource} of
         {undefined, _, _} ->
-            % EntityId is not defined -> external resource
-            io:format("> get_external: ~p~n", [{Client, Resource}]),
-            ELPlugin:get_external(Client, Resource);
+            % EntityId is not defined, do not fetch entity.
+            io:format("> get: ~p~n", [{Client, EntityId, undefined_entity, Resource}]),
+            ELPlugin:get(Client, undefined, undefined, Resource);
         {_EntityId, undefined, entity} ->
             % EntityId is defined and asking for entity -> entity resource.
             % The Entity was not fetched yet, fetch and return it.
@@ -553,13 +554,13 @@ call_get_resource(Request) ->
             % EntityId is defined and some resource -> internal resource.
             % The Entity is already fetched, reuse it.
             FetchedEntity = call_get_entity(Request),
-            io:format("> get_internal: ~p~n", [{Client, EntityId, freshly_fetched_entity, Resource}]),
-            ELPlugin:get_internal(Client, EntityId, FetchedEntity, Resource);
+            io:format("> get: ~p~n", [{Client, EntityId, freshly_fetched_entity, Resource}]),
+            ELPlugin:get(Client, EntityId, FetchedEntity, Resource);
         {_EntityId, Entity, _} ->
             % EntityId is defined and some resource -> internal resource.
             % The Entity was not fetched yet, fetch and use it.
-            io:format("> get_internal: ~p~n", [{Client, EntityId, prefetched_entity, Resource}]),
-            ELPlugin:get_internal(Client, EntityId, Entity, Resource)
+            io:format("> get: ~p~n", [{Client, EntityId, prefetched_entity, Resource}]),
+            ELPlugin:get(Client, EntityId, Entity, Resource)
     end,
     case Result of
         {ok, _} ->
@@ -971,6 +972,13 @@ check_value(token, TokenType, Key, Macaroon) ->
             throw(?ERROR_BAD_VALUE_TOKEN(Key));
         bad_type ->
             throw(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key))
+    end;
+check_value(_, {custom, VerifyFun, ErrorToReport}, _Key, Val) when is_function(VerifyFun, 1) ->
+    case VerifyFun(Val) of
+        true ->
+            ok;
+        false ->
+            throw(ErrorToReport)
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [

@@ -19,13 +19,21 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([entity_type/0, create/4, get_entity/1, get_internal/4, get_external/2,
-    update/3, delete/2]).
+-export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
 
 
 entity_type() ->
     od_handle_service.
+
+
+get_entity(HServiceId) ->
+    case od_handle_service:get(HServiceId) of
+        {ok, #document{value = HandleService}} ->
+            {ok, HandleService};
+        _ ->
+            ?ERROR_NOT_FOUND
+    end.
 
 
 
@@ -61,24 +69,12 @@ create(?USER, HServiceId, groups, #{<<"groupId">> := GroupId}) ->
     {ok, HServiceId}.
 
 
-get_entity(HServiceId) ->
-    case od_handle_service:get(HServiceId) of
-        {ok, #document{value = HandleService}} ->
-            {ok, HandleService};
-        _ ->
-            ?ERROR_NOT_FOUND
-    end.
-
-
-get_internal(?USER, _HServiceId, #od_handle_service{users = Users}, users) ->
-    {ok, Users}.
-
-
-get_external(_, list) ->
+get(_, undefined, undefined, list) ->
     {ok, HServiceDocs} = od_handle_service:list(),
     {ok, [HServiceId || #document{key = HServiceId} <- HServiceDocs]};
-get_external(?USER, _) ->
-    ok.
+get(?USER, _HServiceId, #od_handle_service{users = Users}, users) ->
+    {ok, Users}.
+
 
 
 update(HServiceId, entity, Data) when is_binary(HServiceId) ->

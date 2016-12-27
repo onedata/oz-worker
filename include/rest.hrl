@@ -28,6 +28,7 @@
 % Convenience macros user in rest_req
 -define(BINDING(__KEY), {binding, __KEY}).
 -define(CLIENT_ID, client_id).
+-define(COWBOY_REQ, cowboy_req).
 %% Record representing REST response.
 -record(rest_resp, {
     code = 200 :: integer(),

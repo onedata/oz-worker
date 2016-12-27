@@ -19,13 +19,21 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([entity_type/0, create/4, get_entity/1, get_internal/4, get_external/2,
-    update/3, delete/2]).
+-export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
 
 
 entity_type() ->
     od_group.
+
+
+get_entity(GroupId) ->
+    case od_group:get(GroupId) of
+        {ok, #document{value = Group}} ->
+            {ok, Group};
+        _ ->
+            ?ERROR_NOT_FOUND
+    end.
 
 
 create(?ROOT, _, entity, Data) ->
@@ -63,24 +71,12 @@ create(_Client, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
     {ok, ChildGroupId}.
 
 
-get_entity(GroupId) ->
-    case od_group:get(GroupId) of
-        {ok, #document{value = Group}} ->
-            {ok, Group};
-        _ ->
-            ?ERROR_NOT_FOUND
-    end.
-
-
-get_internal(?USER, _GroupId, #od_group{users = Users}, users) ->
-    {ok, Users}.
-
-
-get_external(_, list) ->
+get(_, undefined, undefined, list) ->
     {ok, GroupDocs} = od_group:list(),
     {ok, [GroupId || #document{key = GroupId} <- GroupDocs]};
-get_external(?USER, _) ->
-    ok.
+get(?USER, _GroupId, #od_group{users = Users}, users) ->
+    {ok, Users}.
+
 
 
 update(GroupId, entity, Data) when is_binary(GroupId) ->
