@@ -41,44 +41,44 @@
 
 
 
-create(Issuer, ShareId, Name, RootFileId, SpaceId) ->
-    create(Issuer, #{
+create(Client, ShareId, Name, RootFileId, SpaceId) ->
+    create(Client, #{
         <<"shareId">> => ShareId,
         <<"name">> => Name,
         <<"spaceId">> => SpaceId,
         <<"rootFileId">> => RootFileId
     }).
-create(Issuer, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
+create(Client, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
-add_user(Issuer, ShareId, UserId) when is_binary(UserId) ->
-    add_user(Issuer, ShareId, #{<<"userId">> => UserId});
-add_user(Issuer, ShareId, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, ShareId, users, Data).
+add_user(Client, ShareId, UserId) when is_binary(UserId) ->
+    add_user(Client, ShareId, #{<<"userId">> => UserId});
+add_user(Client, ShareId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, ShareId, users, Data).
 
 
-add_group(Issuer, ShareId, GroupId) when is_binary(GroupId) ->
-    add_group(Issuer, ShareId, #{<<"groupId">> => GroupId});
-add_group(Issuer, ShareId, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, ShareId, groups, Data).
+add_group(Client, ShareId, GroupId) when is_binary(GroupId) ->
+    add_group(Client, ShareId, #{<<"groupId">> => GroupId});
+add_group(Client, ShareId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, ShareId, groups, Data).
 
 
-get(Issuer, ShareId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, entity, ShareId).
+get(Client, ShareId) ->
+    n_entity_logic:get(Client, ?PLUGIN, entity, ShareId).
 
 
-list(Issuer) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
+list(Client) ->
+    n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
 
 
-update(Issuer, ShareId, Data) ->
-    n_entity_logic:update(Issuer, ?PLUGIN, ShareId, entity, Data).
+update(Client, ShareId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, ShareId, entity, Data).
 
-delete(Issuer, ShareId) ->
-    n_entity_logic:delete(Issuer, ?PLUGIN, ShareId, entity).
+delete(Client, ShareId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, ShareId, entity).
 
 
 %%--------------------------------------------------------------------

@@ -28,10 +28,11 @@
 -export([
     get/2,
     list/1,
+    get_oz_privileges/2, get_eff_oz_privileges/2,
+    list_client_tokens/2,
     get_default_space/2,
     get_space_alias/3,
-    get_default_provider/2,
-    list_client_tokens/2
+    get_default_provider/2
 ]).
 -export([
     update_name/3, update_alias/3, update/3,
@@ -41,6 +42,7 @@
     set_default_provider/3]).
 -export([
     delete/2,
+    delete_oz_privileges/2,
     delete_client_token/3,
     delete_space_alias/3
 ]).
@@ -55,7 +57,9 @@
     get_handle_services/2, get_eff_handle_services/2,
     get_handle_service/3, get_eff_handle_service/3,
     get_handles/2, get_eff_handles/2,
-    get_handle/3, get_eff_handle/3
+    get_handle/3, get_eff_handle/3,
+    leave_space/3,
+    leave_group/3
 ]).
 -export([
     exists/1,
@@ -75,7 +79,7 @@ create(UserInfo) ->
 create(UserInfo, ProposedUserId) ->
     case od_user:create(#document{key = ProposedUserId, value = UserInfo}) of
         {error, already_exists} ->
-            ?ERROR_BAD_VALUE_ID_OCCUPIED;
+            ?ERROR_BAD_VALUE_ID_OCCUPIED(user_id);
         {ok, UserId} ->
             setup_user(UserId, UserInfo),
             {ok, UserId}
@@ -93,6 +97,14 @@ get(Client, UserId) ->
 
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
+
+
+get_oz_privileges(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, oz_privileges).
+
+
+get_eff_oz_privileges(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_oz_privileges).
 
 
 get_default_space(Client, UserId) ->
@@ -152,6 +164,10 @@ update(Client, UserId, Data) ->
 
 delete(Client, UserId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, entity).
+
+
+delete_oz_privileges(Client, UserId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, oz_privileges).
 
 
 delete_client_token(Client, UserId, TokenId) ->
@@ -244,6 +260,14 @@ get_handle(Client, UserId, SpaceId) ->
 
 get_eff_handle(Client, UserId, SpaceId) ->
     n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_handle, SpaceId}).
+
+
+leave_space(Client, UserId, SpaceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {spaces, SpaceId}).
+
+
+leave_group(Client, UserId, GroupId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {groups, GroupId}).
 
 
 %%--------------------------------------------------------------------

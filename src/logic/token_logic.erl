@@ -30,7 +30,7 @@
 
 %% API
 -export([serialize/1, deserialize/1]).
--export([validate/2, create/3, get_issuer/1, consume/1]).
+-export([validate/2, create/3, get_issuer/1, consume/1, delete/1]).
 
 %%%===================================================================
 %%% API
@@ -146,3 +146,13 @@ consume(M) ->
     ok = token:delete(Identifier),
     {ok, {ResourceType, ResourceId}}.
 
+
+%%--------------------------------------------------------------------
+%% @doc Deletes a client token.
+%% Throws exception when call to the datastore fails, or token doesn't exist in db.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(Macaroon :: macaroon:macaroon()) -> ok.
+delete(M) ->
+    Identifier = macaroon:identifier(M),
+    ok = token:delete(Identifier).

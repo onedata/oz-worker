@@ -40,49 +40,49 @@
 ]).
 
 
-create(Issuer, Name, ProxyEndpoint, ServiceProperties) ->
-    create(Issuer, #{
+create(Client, Name, ProxyEndpoint, ServiceProperties) ->
+    create(Client, #{
         <<"name">> => Name,
         <<"proxyEndpoint">> => ProxyEndpoint,
         <<"serviceProperties">> => ServiceProperties
     }).
-create(Issuer, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
+create(Client, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
-add_user(Issuer, HandleServiceId, UserId) when is_binary(UserId) ->
-    add_user(Issuer, HandleServiceId, #{<<"userId">> => UserId});
-add_user(Issuer, HandleServiceId, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, HandleServiceId, users, Data).
+add_user(Client, HandleServiceId, UserId) when is_binary(UserId) ->
+    add_user(Client, HandleServiceId, #{<<"userId">> => UserId});
+add_user(Client, HandleServiceId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, HandleServiceId, users, Data).
 
 
-add_group(Issuer, HandleServiceId, GroupId) when is_binary(GroupId) ->
-    add_group(Issuer, HandleServiceId, #{<<"groupId">> => GroupId});
-add_group(Issuer, HandleServiceId, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, HandleServiceId, groups, Data).
+add_group(Client, HandleServiceId, GroupId) when is_binary(GroupId) ->
+    add_group(Client, HandleServiceId, #{<<"groupId">> => GroupId});
+add_group(Client, HandleServiceId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, HandleServiceId, groups, Data).
 
 
-get(Issuer, HandleServiceId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, entity, HandleServiceId).
+get(Client, HandleServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, entity, HandleServiceId).
 
 
-list(Issuer) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
+list(Client) ->
+    n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
-%%add_relation(Issuer, {HandleServiceId, users}, od_user, UserId) ->
+%%add_relation(Client, {HandleServiceId, users}, od_user, UserId) ->
 %%    n_entity_logic:add_relation(
-%%        Issuer, ?PLUGIN, {HandleServiceId, users}, od_user, UserId
+%%        Client, ?PLUGIN, {HandleServiceId, users}, od_user, UserId
 %%    ).
 
 
 
 
-update(Issuer, HandleServiceId, Data) ->
-    n_entity_logic:update(Issuer, ?PLUGIN, HandleServiceId, entity, Data).
+update(Client, HandleServiceId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, HandleServiceId, entity, Data).
 
-delete(Issuer, HandleServiceId) ->
-    n_entity_logic:delete(Issuer, ?PLUGIN, HandleServiceId, entity).
+delete(Client, HandleServiceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, HandleServiceId, entity).
 
 
 has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->

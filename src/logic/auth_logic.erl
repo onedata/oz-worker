@@ -27,7 +27,8 @@
 
 %% API
 -export([start/0, stop/0, get_redirection_uri/2,
-    gen_token/1, gen_token/2, validate_token/5, invalidate_token/1,
+    gen_token/1, gen_token/2, validate_token/5,
+    invalidate_token/1, invalidate_user_tokens/1,
     authenticate_user/1]).
 
 %% Handling state tokens
@@ -194,19 +195,28 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, _Method, _RootResource)
             {error, unknown_macaroon}
     end.
 
+
 %%--------------------------------------------------------------------
-%% @doc Invalidates a given token or all of user's tokens.
+%% @doc Invalidates all auth tokens of given user.
 %% @end
 %%--------------------------------------------------------------------
--spec invalidate_token({user_id, binary()} | binary()) -> ok.
-invalidate_token({user_id, UserId}) ->
+-spec invalidate_user_tokens(UserId :: od_user:id()) -> ok.
+invalidate_user_tokens(UserId) ->
     {ok, AuthDocs} = onedata_auth:get_auth_by_user_id(UserId),
-    lists:foreach(fun(#document{key = AuthId}) ->
-        invalidate_token(AuthId) end, AuthDocs),
-    ok;
+    lists:foreach(
+        fun(#document{key = AuthId}) ->
+            invalidate_token(AuthId)
+        end, AuthDocs).
+
+
+%%--------------------------------------------------------------------
+%% @doc Invalidates a given auth token.
+%% @end
+%%--------------------------------------------------------------------
+-spec invalidate_token(binary()) -> ok.
 invalidate_token(Identifier) when is_binary(Identifier) ->
-    onedata_auth:delete(Identifier),
-    ok.
+    onedata_auth:delete(Identifier).
+
 
 %%--------------------------------------------------------------------
 %% @doc Generates a state token and retuns it. In the process, it stores the token

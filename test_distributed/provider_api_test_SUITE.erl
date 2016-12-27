@@ -11,12 +11,13 @@
 -module(provider_api_test_SUITE).
 -author("Lukasz Opiola").
 
--include("entity_logic.hrl").
 -include("errors.hrl").
+-include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
--include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
@@ -255,10 +256,12 @@ list_test(Config) ->
     % Create two users, grant one of them the privilege to list providers.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ct:print("sdfsdf ~p", [?OZ_PROVIDERS_LIST]),
     ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        list_providers
+        ?OZ_PROVIDERS_LIST
     ]),
 
+    timer:sleep(1000),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
@@ -305,7 +308,7 @@ get_test(Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        list_providers
+        ?OZ_PROVIDERS_LIST
     ]),
 
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
@@ -385,7 +388,7 @@ get_eff_users_test(Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        list_users_of_provider
+        ?OZ_PROVIDERS_LIST_USERS
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
@@ -564,7 +567,7 @@ get_eff_groups_test(Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        list_groups_of_provider
+        ?OZ_PROVIDERS_LIST_GROUPS
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
@@ -690,7 +693,7 @@ get_spaces_test(Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        list_spaces_of_provider
+        ?OZ_PROVIDERS_LIST_SPACES
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
@@ -935,7 +938,7 @@ delete_test(Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        remove_provider
+        ?OZ_PROVIDERS_DELETE
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpec2 = #api_test_spec{

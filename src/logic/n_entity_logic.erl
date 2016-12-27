@@ -60,7 +60,7 @@ value_rule() -> [
     {exists, fun(Id) -> true end},
     {not_exists, fun(Id) -> true end},
     token_type, % compatible only with token
-    {custom, fun(Value) -> ok end, returned_error}
+    alias
 ].
 
 -define(PROXY_URL, <<"172.17.0.9:8080/api/v1">>).
@@ -637,15 +637,7 @@ call_authorize(Request) ->
         throw:Error ->
             throw(Error);
         _:_ ->
-            case Client of
-                ?NOBODY ->
-                    % The client was not authenticated -> unauthorized
-                    throw(?ERROR_UNAUTHORIZED);
-                _ ->
-                    % The client was authenticated but cannot access the
-                    % resource -> forbidden
-                    throw(?ERROR_FORBIDDEN)
-            end
+            [false]
     end.
 
 
@@ -691,6 +683,8 @@ check_authorization(#request{client = Client} = Request) ->
         Verificators = call_authorize(Request),
         check_authorization(Verificators, Request)
     catch
+        throw:Error ->
+            throw(Error);
         Type:Message ->
             ?error_stacktrace("Error in entity_logic:check_authorization - ~p:~p", [
                 Type, Message
@@ -973,12 +967,18 @@ check_value(token, TokenType, Key, Macaroon) ->
         bad_type ->
             throw(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key))
     end;
-check_value(_, {custom, VerifyFun, ErrorToReport}, _Key, Val) when is_function(VerifyFun, 1) ->
-    case VerifyFun(Val) of
-        true ->
-            ok;
-        false ->
-            throw(ErrorToReport)
+check_value(_, alias, Key, Value) ->
+    RegExpValidation = (match =:= re:run(
+        Value, ?ALIAS_VALIDATION_REGEXP, [{capture, none}]
+    )),
+    case {Value, RegExpValidation} of
+        {?EMPTY_ALIAS, _} ->
+            throw(?ERROR_BAD_VALUE_EMPTY(Key));
+        {<<?NO_ALIAS_UUID_PREFIX, _/binary>>, _} ->
+            throw(?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(Key));
+        {_, false} ->
+            throw(?ERROR_BAD_VALUE_ALIAS(Key));
+        {_, true} -> ok
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [

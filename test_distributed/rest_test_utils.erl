@@ -99,7 +99,7 @@ check_rest_call(Config, ArgsMap) ->
                 % Cache user auth tokens, if none in cache create a new one.
                 Macaroon = case get({macaroon, UserId}) of
                     undefined ->
-                        Mac = oz_test_utils:create_client_token(
+                        {ok, Mac} = oz_test_utils:create_client_token(
                             Config, UserId
                         ),
                         put({macaroon, UserId}, Mac),

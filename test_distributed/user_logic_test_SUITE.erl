@@ -24,9 +24,6 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
 -export([
-    set_space_name_mapping_test/1,
-    clean_space_name_mapping_test/1,
-    remove_space_test/1,
     basic_auth_login_test/1,
     automatic_group_membership_test/1,
     change_password_test/1
@@ -34,9 +31,6 @@
 
 all() ->
     ?ALL([
-        set_space_name_mapping_test,
-        clean_space_name_mapping_test,
-        remove_space_test,
         basic_auth_login_test,
         automatic_group_membership_test,
         change_password_test
@@ -45,87 +39,6 @@ all() ->
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
-
-set_space_name_mapping_test(Config) ->
-    [Node | _] = Nodes = ?config(oz_worker_nodes, Config),
-
-    {ok, UserId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_user(Config, #od_user{})
-    ),
-
-    SpaceName1 = <<"space_name">>,
-    {ok, SpaceId1} = ?assertMatch({ok, _},
-        oz_test_utils:create_space(Config, {user, UserId}, SpaceName1)),
-    ?assertEqual(SpaceName1, get_space_name_mapping(Node, UserId, SpaceId1)),
-
-    SpaceName2 = <<"different_space_name">>,
-    {ok, SpaceId2} = ?assertMatch({ok, _},
-        oz_test_utils:create_space(Config, {user, UserId}, SpaceName2)),
-    ?assertEqual(SpaceName2, get_space_name_mapping(Node, UserId, SpaceId2)),
-
-    SpaceName3 = <<"space_name">>,
-    {ok, SpaceId3} = ?assertMatch({ok, _},
-        oz_test_utils:create_space(Config, {user, UserId}, SpaceName3)),
-    ?assertEqual(<<SpaceName3/binary, "#", SpaceId3:6/binary>>,
-        get_space_name_mapping(Node, UserId, SpaceId3)),
-
-    SpaceName4 = <<"space_name">>,
-    SpaceId4 = <<SpaceId3:6/binary, "$random">>,
-    space_save_mock(Nodes, SpaceId4),
-    {ok, SpaceId4} = ?assertMatch({ok, _},
-        oz_test_utils:create_space(Config, {user, UserId}, SpaceName4)),
-    ?assertEqual(<<SpaceName4/binary, "#", SpaceId4:7/binary>>,
-        get_space_name_mapping(Node, UserId, SpaceId4)),
-
-    SpaceName5 = <<"modified_space_name">>,
-    ?assertEqual(ok, oz_test_utils:modify_space(
-        Config, SpaceId4, {user, UserId}, SpaceName5)),
-    ?assertEqual(SpaceName5, get_space_name_mapping(Node, UserId, SpaceId4)).
-
-clean_space_name_mapping_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-
-    SpaceName = <<"space_name">>,
-    {ok, UserId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_user(Config, #od_user{})
-    ),
-    {ok, GroupId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_group(Config, UserId, <<"group">>)
-    ),
-    {ok, SpaceId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_space(Config, {group, GroupId}, SpaceName)
-    ),
-    ?assertMatch({ok, _},
-        oz_test_utils:add_user_to_space(Config, {user, UserId}, SpaceId)),
-
-    ?assertNot(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
-
-    ?assert(oz_test_utils:leave_space(Config, {group, GroupId}, SpaceId)),
-    ?assertNot(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
-
-    ?assert(oz_test_utils:leave_space(Config, {user, UserId}, SpaceId)),
-    ?assert(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertMatch({ok, #document{value = #od_user{space_aliases = #{}}}},
-        rpc:call(Node, od_user, get, [UserId])).
-
-remove_space_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-
-    SpaceName = <<"space_name">>,
-    {ok, UserId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_user(Config, #od_user{})
-    ),
-    {ok, SpaceId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_space(Config, {user, UserId}, SpaceName)
-    ),
-
-    ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
-    oz_test_utils:delete_space(Config, SpaceId),
-    ?assertMatch({ok, #document{value = #od_user{
-        spaces = [], space_aliases = #{}
-    }}}, rpc:call(Node, od_user, get, [UserId])).
 
 % Check if basic auth login endpoint works.
 basic_auth_login_test(Config) ->
@@ -259,9 +172,7 @@ change_password_test(Config) ->
 init_per_suite(Config) ->
     application:start(etls),
     hackney:start(),
-    NewConfig = ?TEST_INIT(
-        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
-    ),
+    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
     NewConfig.
 
 end_per_suite(Config) ->

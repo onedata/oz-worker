@@ -65,14 +65,14 @@ create(Client, SpaceId, invite_provider_token, _) ->
     {ok, Token} = token_logic:create(
         Client,
         space_support_token,
-        {space, SpaceId}
+        {od_space, SpaceId}
     ),
     {ok, Token};
 create(Client, SpaceId, invite_user_token, _) ->
     {ok, Token} = token_logic:create(
         Client,
         space_invite_user_token,
-        {space, SpaceId}
+        {od_space, SpaceId}
     ),
     {ok, Token}.
 

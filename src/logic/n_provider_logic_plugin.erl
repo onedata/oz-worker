@@ -20,6 +20,14 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
+-type resource() :: entity | entity_dev | list | support |
+eff_users | {eff_user, od_user:id()} |
+eff_groups | {eff_group, od_group:id()} |
+spaces | {space, od_space:id()} |
+check_my_ports | check_my_ip.
+
+-export_type([resource/0]).
+
 -export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
 
@@ -84,7 +92,7 @@ create(_, _, entity_dev, Data) ->
     od_provider:create(#document{key = ProviderId, value = Provider}),
     {ok, {ProviderId, ProviderCertPem}};
 
-create(?PROVIDER(ProviderId), ProviderId, support, Data) ->
+create(_, ProviderId, support, Data) ->
     SupportSize = maps:get(<<"size">>, Data),
     Macaroon = maps:get(<<"token">>, Data),
     {ok, {od_space, SpaceId}} = token_logic:consume(Macaroon),
@@ -192,14 +200,6 @@ authorize(get, _ProvId, entity, ?PROVIDER) ->
     true;
 authorize(get, _ProvId, entity, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
-authorize(get, ProvId, spaces, ?PROVIDER(ProvId)) ->
-    true;
-authorize(get, _ProvId, spaces, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
-authorize(get, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
-    true;
-authorize(get, _ProvId, {space, _}, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
 authorize(get, _ProvId, eff_users, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
 authorize(get, _ProvId, {eff_user, _}, ?USER(UserId)) ->
@@ -208,6 +208,14 @@ authorize(get, _ProvId, eff_groups, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
 authorize(get, _ProvId, {eff_group, _}, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
+authorize(get, ProvId, spaces, ?PROVIDER(ProvId)) ->
+    true;
+authorize(get, _ProvId, spaces, ?USER(UserId)) ->
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
+authorize(get, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
+    true;
+authorize(get, _ProvId, {space, _}, ?USER(UserId)) ->
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
 
 authorize(update, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;

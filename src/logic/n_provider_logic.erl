@@ -27,9 +27,9 @@
 -export([
     get/2,
     list/1,
-    get_spaces/2, get_space/3,
     get_eff_users/2, get_eff_user/3,
-    get_eff_groups/2, get_eff_group/3
+    get_eff_groups/2, get_eff_group/3,
+    get_spaces/2, get_space/3
 ]).
 -export([
     update/3
@@ -82,10 +82,6 @@ get(Client, ProviderId) ->
     n_entity_logic:get(Client, ?PLUGIN, ProviderId, entity).
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
-get_spaces(Client, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, spaces).
-get_space(Client, ProviderId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
 get_eff_users(Client, ProviderId) ->
     n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_users).
 get_eff_user(Client, ProviderId, UserId) ->
@@ -94,6 +90,10 @@ get_eff_groups(Client, ProviderId) ->
     n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_groups).
 get_eff_group(Client, ProviderId, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_group, GroupId}).
+get_spaces(Client, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, spaces).
+get_space(Client, ProviderId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
 
 
 

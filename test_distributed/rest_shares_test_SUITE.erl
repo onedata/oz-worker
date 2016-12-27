@@ -157,7 +157,7 @@ create_share_test(Config) ->
     })),
     % Take the space_manages_shares privilege from user and try to create
     % another share, it should fail.
-    ok = oz_test_utils:set_space_privileges(
+    ok = oz_test_utils:space_set_user_privileges(
         Config, {user, User}, Space, [space_view_data]
     ),
     ?assert(check_create_share(403, User, Space, <<"anotherShareId">>, #{
@@ -168,7 +168,7 @@ create_share_test(Config) ->
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
     {ok, _} = oz_test_utils:add_user_to_space(Config, {group, Group}, Space),
-    ok = oz_test_utils:set_space_privileges(
+    ok = oz_test_utils:space_set_user_privileges(
         Config, {group, Group}, Space, [space_manage_shares]
     ),
     % Now the user should be able to create a share
@@ -241,7 +241,7 @@ view_shares_test(Config) ->
     ])),
     % Remove the user from Space, he should no longer be able to view the shares
     % of the space nor each of the shares.
-    true = oz_test_utils:leave_space(Config, {user, User}, Space),
+    true = oz_test_utils:user_leave_space(Config, {user, User}, Space),
     ?assert(check_get_share(403, User, Share1Id, undefined)),
     ?assert(check_get_share(403, User, Share2Id, undefined)),
     ?assert(check_get_share(403, User, Share3Id, undefined)),
@@ -299,7 +299,7 @@ modify_share_test(Config) ->
     )),
     % Take the space_manage_shares privilege from user and makes sure he no
     % longer can modify shares.
-    ok = oz_test_utils:set_space_privileges(
+    ok = oz_test_utils:space_set_user_privileges(
         Config, {user, User}, Space, [space_view_data]
     ),
     EvenMoreNewName = <<"newest new name">>,
@@ -310,7 +310,7 @@ modify_share_test(Config) ->
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
     {ok, _} = oz_test_utils:add_user_to_space(Config, {group, Group}, Space),
-    ok = oz_test_utils:set_space_privileges(
+    ok = oz_test_utils:space_set_user_privileges(
         Config, {group, Group}, Space, [space_manage_shares]
     ),
     % Now the user should be able to rename the share
@@ -351,7 +351,7 @@ remove_share_test(Config) ->
     ?assert(check_get_shares_of_space(200, User, Space, [Share2Id])),
     % Take the space_manage_shares privilege from user and makes sure he no
     % longer can remove shares.
-    ok = oz_test_utils:set_space_privileges(
+    ok = oz_test_utils:space_set_user_privileges(
         Config, {user, User}, Space, [space_view_data]
     ),
     ?assert(check_remove_share(403, User, Share2Id)),
@@ -359,7 +359,7 @@ remove_share_test(Config) ->
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, User, <<"gr">>),
     {ok, _} = oz_test_utils:add_user_to_space(Config, {group, Group}, Space),
-    ok = oz_test_utils:set_space_privileges(
+    ok = oz_test_utils:space_set_user_privileges(
         Config, {group, Group}, Space, [space_manage_shares]
     ),
     % Now the user should be able to remove the share

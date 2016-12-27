@@ -146,6 +146,16 @@ translate(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" is of invalid type">>, [Key]}
     };
+translate(?ERROR_BAD_VALUE_ALIAS(Key)) ->
+    {?HTTP_400_BAD_REQUEST, {
+        <<"Bad value: provided \"~s\" must contain only digits or lowercase "
+        "letters and be at least 5 characters long.">>, [Key]
+    }};
+translate(?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(Key)) ->
+    {?HTTP_400_BAD_REQUEST, {
+        <<"Bad value: provided \"~s\" cannot start with '~s'">>,
+        [Key, ?NO_ALIAS_UUID_PREFIX]
+    }};
 % Errors connected with relations between entities
 translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of

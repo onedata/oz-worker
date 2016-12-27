@@ -398,8 +398,12 @@ binary_to_method(<<"DELETE">>) -> delete.
 call_entity_logic(Method, Req, #rest_req{client = Client, methods = Methods} = State, Data) ->
     Function = method_to_el_function(Method),
     {LogicPlugin, EntityIdVal, ResourceVal} = maps:get(Method, Methods),
+    ?dump(EntityIdVal),
+    ?dump(ResourceVal),
     EntityId = resolve_bindings(EntityIdVal, Client, Req),
     Resource = resolve_bindings(ResourceVal, Client, Req),
+    ?dump(EntityId),
+    ?dump(Resource),
     Args = el_function_args(Function, Client, LogicPlugin, EntityId, Resource, Data),
     Result = erlang:apply(n_entity_logic, Function, Args),
     #rest_resp{
@@ -440,15 +444,15 @@ el_function_args(delete, Client, DataLogicPlugin, EntityId, Resource, _Data) ->
     [Client, DataLogicPlugin, EntityId, Resource].
 
 
-resolve_bindings({Atom, ?BINDING(Key)}, Client, Req) when is_atom(Atom) ->
-    {Atom, resolve_bindings(?BINDING(Key), Client, Req)};
 resolve_bindings(?BINDING(Key), _Client, Req) ->
     {Binding, _} = cowboy_req:binding(Key, Req),
     Binding;
-resolve_bindings({Atom, ?CLIENT_ID}, Client, Req) ->
-    {Atom, resolve_bindings(?CLIENT_ID, Client, Req)};
 resolve_bindings(?CLIENT_ID, #client{id = Id}, _Req) ->
     Id;
+resolve_bindings(?COWBOY_REQ, _Client, Req) ->
+    Req;
+resolve_bindings({Atom, PossibleBinding}, Client, Req) when is_atom(Atom) ->
+    {Atom, resolve_bindings(PossibleBinding, Client, Req)};
 resolve_bindings(Other, _Client, _Req) ->
     Other.
 

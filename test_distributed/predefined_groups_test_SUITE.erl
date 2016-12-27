@@ -128,21 +128,21 @@ global_groups_test(Config) ->
     {ok, UserId} = oz_test_utils:create_user(
         Config, #od_user{name = <<"User with automatic groups">>}
     ),
-    {ok, #document{value = #od_user{
+    {ok, #od_user{
         groups = UserGroups
-    }}} = oz_test_utils:get_user(Config, UserId),
+    }} = oz_test_utils:get_user(Config, UserId),
     ExpectedGroups = [<<"all_users_group">>, <<"access_to_public_data">>],
     % Check if user belongs to correct groups
     ?assertEqual(lists:usort(UserGroups), lists:usort(ExpectedGroups)),
     % Check if privileges are set correctly
-    {ok, #document{value = #od_group{
+    {ok, #od_group{
         users = AllUsersGroupPrivs
-    }}} = oz_test_utils:get_group(Config, <<"all_users_group">>),
+    }} = oz_test_utils:get_group(Config, <<"all_users_group">>),
     ?assertEqual(
         proplists:get_value(UserId, AllUsersGroupPrivs), [group_view_data]),
-    {ok, #document{value = #od_group{
+    {ok, #od_group{
         users = PublicAccessGroupPrivs
-    }}} = oz_test_utils:get_group(Config, <<"access_to_public_data">>),
+    }} = oz_test_utils:get_group(Config, <<"access_to_public_data">>),
     ?assertEqual(
         proplists:get_value(UserId, PublicAccessGroupPrivs), []),
     % Make sure that disabling global groups has desired effects
@@ -150,9 +150,9 @@ global_groups_test(Config) ->
     {ok, UserNoGroupsId} = oz_test_utils:create_user(
         Config, #od_user{name = <<"User with NO automatic groups">>}
     ),
-    {ok, #document{value = #od_user{
+    {ok, #od_user{
         groups = ShouldBeEmptyList
-    }}} = oz_test_utils:get_user(Config, UserNoGroupsId),
+    }} = oz_test_utils:get_user(Config, UserNoGroupsId),
     ?assertEqual(ShouldBeEmptyList, []),
     ok.
 
@@ -185,10 +185,10 @@ automatic_space_membership_via_global_group_test(Config) ->
         Config, #od_user{name = <<"Dummy">>}
     ),
     {ok, OpenSpaceId} = oz_test_utils:create_space(
-        Config, {user, DummyUser}, <<"OpenSpace">>
+        Config, ?USER(DummyUser), <<"OpenSpace">>
     ),
-    {ok, OpenSpaceId} = oz_test_utils:add_user_to_space(
-        Config, {group, <<"all_users_group">>}, OpenSpaceId
+    {ok, OpenSpaceId} = oz_test_utils:add_group_to_space(
+        Config, ?ROOT, OpenSpaceId, <<"all_users_group">>
     ),
     % Now, every created user should belong to the All Users group and thus
     % have access to the OpenSpace.
@@ -218,7 +218,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     )),
     % Make sure that removing the first user from global group will cause him
     % to lose access to OpenSpace.
-    true = oz_test_utils:group_delete_user(
+    true = oz_test_utils:group_remove_user(
         Config, <<"all_users_group">>, UserId
     ),
     {ok, #document{value = #od_user{
