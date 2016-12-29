@@ -351,7 +351,7 @@ get_test(Config) ->
                     RedPoint =:= <<"https://hostname.com">> andalso
                     Latitude =:= 14.78 andalso
                     Longitude =:= -106.12 andalso
-                    Spaces =:= []
+                    Spaces =:= #{}
             end)
         }
     },

@@ -1262,7 +1262,7 @@ create_handle(Config, User, HandleServiceId, ResourceId, Metadata) ->
     HId.
 
 modify_handle(Config, HandleId, Metadata) ->
-    ok = oz_test_utils:modify_handle(Config, HandleId, undefined, undefined, Metadata).
+    ok = oz_test_utils:update_handle(Config, HandleId, undefined, undefined, Metadata).
 
 mock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),

@@ -22,6 +22,9 @@
 -type id() :: binary().
 -export_type([doc/0, info/0, id/0]).
 
+-type name() :: binary().
+-export_type([name/0]).
+
 
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
