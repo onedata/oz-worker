@@ -114,18 +114,27 @@ user_routes() ->
             post => {P, ?CLIENT_ID, authorize}
         }}},
         {<<"/user/privileges">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), oz_privileges},
-            patch => {P, ?BINDING(id), oz_privileges},
-            delete => {P, ?BINDING(id), oz_privileges}
+            get => {P, ?CLIENT_ID, oz_privileges},
+            patch => {P, ?CLIENT_ID, oz_privileges},
+            delete => {P, ?CLIENT_ID, oz_privileges}
         }}},
         {<<"/user/effective_privileges">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), eff_oz_privileges}
+            get => {P, ?CLIENT_ID, eff_oz_privileges}
+        }}},
+        {<<"/user/default_space">>, #rest_req{methods = #{
+            get => {P, ?CLIENT_ID, default_space},
+            put => {P, ?CLIENT_ID, default_space},
+            delete => {P, ?CLIENT_ID, default_space}
+        }}},
+        {<<"/user/default_provider">>, #rest_req{methods = #{
+            get => {P, ?CLIENT_ID, default_provider},
+            put => {P, ?CLIENT_ID, default_provider},
+            delete => {P, ?CLIENT_ID, default_provider}
         }}},
 
         {<<"/user/client_tokens">>, #rest_req{methods = #{
             get => {P, ?CLIENT_ID, client_tokens},
-            post => {P, ?CLIENT_ID, client_tokens},
-            delete => {P, ?CLIENT_ID, client_tokens}
+            post => {P, ?CLIENT_ID, client_tokens}
         }}},
         {<<"/user/client_tokens/:tid">>, #rest_req{methods = #{
             delete => {P, ?CLIENT_ID, {client_token, ?BINDING(tid)}}
@@ -152,11 +161,6 @@ user_routes() ->
         {<<"/user/spaces">>, #rest_req{methods = #{
             get => {P, ?CLIENT_ID, spaces},
             post => {n_space_logic_plugin, undefined, entity}
-        }}},
-        {<<"/user/spaces/default">>, #rest_req{methods = #{
-            get => {P, ?CLIENT_ID, default_space},
-            put => {P, ?CLIENT_ID, default_space},
-            delete => {P, ?CLIENT_ID, default_space}
         }}},
         {<<"/user/spaces/join">>, #rest_req{methods = #{
             post => {P, ?CLIENT_ID, join_space}

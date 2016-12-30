@@ -234,6 +234,10 @@ delete(UserId, {space_alias, SpaceId}) ->
     end),
     ok;
 
+delete(UserId, default_provider) ->
+    {ok, _} = od_user:update(UserId, #{default_provider => undefined}),
+    ok;
+
 delete(UserId, {groups, GroupId}) ->
     entity_graph:remove_relation(od_user, UserId, od_group, GroupId);
 

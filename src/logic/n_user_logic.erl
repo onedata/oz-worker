@@ -46,11 +46,12 @@
     delete_oz_privileges/2,
     delete_client_token/3,
     unset_default_space/2,
-    delete_space_alias/3
+    delete_space_alias/3,
+    unset_default_provider/2
 ]).
 -export([
     join_group/3,
-     join_space/3,
+    join_space/3,
     get_groups/2, get_eff_groups/2,
     get_group/3, get_eff_group/3,
     get_spaces/2, get_eff_spaces/2,
@@ -189,6 +190,11 @@ unset_default_space(Client, UserId) ->
 
 delete_space_alias(Client, UserId, SpaceId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, {space_alias, SpaceId}).
+
+
+unset_default_provider(Client, UserId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, default_provider).
+
 
 
 join_group(Client, UserId, Data) when is_map(Data) ->
