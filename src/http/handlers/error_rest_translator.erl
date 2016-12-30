@@ -162,31 +162,29 @@ translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
         {od_space, od_provider} -> <<"is not supported by">>;
         {_, _} -> <<"is not a member of">>
     end,
-    {?HTTP_400_BAD_REQUEST, {
-        <<"Bad value: ~s ~s ~s">>, [
-            ?ENTITY_TO_READABLE(ChType, ChId),
-            RelationToString,
-            ?ENTITY_TO_READABLE(ParType, ParId)
-        ]
-    }};
+    {?HTTP_400_BAD_REQUEST, {<<"Bad value: ~s ~s ~s">>, [
+        ChType:to_string(ChId),
+        RelationToString,
+        ParType:to_string(ParId)
+    ]}};
 translate(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of
         {od_space, od_provider} -> <<"is alraedy supported by">>;
         {_, _} -> <<"is already a member of">>
     end,
     {?HTTP_400_BAD_REQUEST, {<<"Bad value: ~s ~s ~s">>, [
-        ?ENTITY_TO_READABLE(ChType, ChId),
+        ChType:to_string(ChId),
         RelationToString,
-        ?ENTITY_TO_READABLE(ParType, ParId)]
-    }};
+        ParType:to_string(ParId)
+    ]}};
 translate(?ERROR_ALIAS_OCCUPIED) ->
     {?HTTP_400_BAD_REQUEST,
         <<"Provided alias is already occupied, please choose other alias.">>
     };
-translate(?ERROR_CANNOT_DELETE_ENTITY(EntityModel, EntityId)) ->
+translate(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)) ->
     {?HTTP_500_INTERNAL_SERVER_ERROR, {
         <<"Cannot delete ~s, failed to delete some dependent relations">>,
-        [?ENTITY_TO_READABLE(EntityModel, EntityId)]
+        [EntityType:to_string(EntityId)]
     }};
 % Wildcard match
 translate({error, Reason}) ->

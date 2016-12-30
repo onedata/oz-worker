@@ -37,12 +37,9 @@ handles | eff_handles | {handle, od_handle:id()} | {eff_handle, od_handle:id()}.
 -export_type([resource/0]).
 
 
--export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
+-export([get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
-
-
-entity_type() ->
-    od_user.
+-export([entity_to_string/1]).
 
 
 get_entity(UserId) ->
@@ -100,41 +97,41 @@ get(_, _UserId, #od_user{groups = Groups}, groups) ->
 get(_, _UserId, #od_user{eff_groups = Groups}, eff_groups) ->
     {ok, Groups};
 get(_, _UserId, #od_user{}, {group, GroupId}) ->
-    ?assert_success(n_group_logic_plugin:get_entity(GroupId));
+    ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId));
 get(_, _UserId, #od_user{}, {eff_group, GroupId}) ->
-    ?assert_success(n_group_logic_plugin:get_entity(GroupId));
+    ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId));
 
 get(_, _UserId, #od_user{spaces = Spaces}, spaces) ->
     {ok, Spaces};
 get(_, _UserId, #od_user{eff_spaces = Spaces}, eff_spaces) ->
     {ok, Spaces};
 get(_, _UserId, #od_user{}, {space, SpaceId}) ->
-    ?assert_success(n_space_logic_plugin:get_entity(SpaceId));
+    ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId));
 get(_, _UserId, #od_user{}, {eff_space, SpaceId}) ->
-    ?assert_success(n_space_logic_plugin:get_entity(SpaceId));
+    ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId));
 
 get(_, _UserId, #od_user{eff_providers = Providers}, eff_providers) ->
     {ok, Providers};
 get(_, _UserId, #od_user{}, {eff_provider, ProviderId}) ->
-    ?assert_success(n_provider_logic_plugin:get_entity(ProviderId));
+    ?throw_on_failure(n_provider_logic_plugin:get_entity(ProviderId));
 
 get(_, _UserId, #od_user{handle_services = HandleServices}, handle_services) ->
     {ok, HandleServices};
 get(_, _UserId, #od_user{eff_handle_services = HandleServices}, eff_handle_services) ->
     {ok, HandleServices};
 get(_, _UserId, #od_user{}, {handle_service, HServiceId}) ->
-    ?assert_success(n_handle_service_logic_plugin:get_entity(HServiceId));
+    ?throw_on_failure(n_handle_service_logic_plugin:get_entity(HServiceId));
 get(_, _UserId, #od_user{}, {eff_handle_service, HServiceId}) ->
-    ?assert_success(n_handle_service_logic_plugin:get_entity(HServiceId));
+    ?throw_on_failure(n_handle_service_logic_plugin:get_entity(HServiceId));
 
 get(_, _UserId, #od_user{handles = Handles}, handles) ->
     {ok, Handles};
 get(_, _UserId, #od_user{eff_handles = Handles}, eff_handles) ->
     {ok, Handles};
 get(_, _UserId, #od_user{}, {handle, HandleId}) ->
-    ?assert_success(n_handle_logic_plugin:get_entity(HandleId));
+    ?throw_on_failure(n_handle_logic_plugin:get_entity(HandleId));
 get(_, _UserId, #od_user{}, {eff_handle, HandleId}) ->
-    ?assert_success(n_handle_logic_plugin:get_entity(HandleId)).
+    ?throw_on_failure(n_handle_logic_plugin:get_entity(HandleId)).
 
 
 update(UserId, entity, Data) when is_binary(UserId) ->
@@ -202,7 +199,8 @@ delete(UserId, entity) ->
         }}} = od_user:get(UserId),
     lists:foreach(
         fun(Token) ->
-            ok = token_logic:delete(token_logic:deserialize(Token))
+            {ok, Macaroon} = token_logic:deserialize(Token),
+            ok = token_logic:delete(Macaroon)
         end, Tokens),
     entity_graph:delete_with_relations(od_user, UserId);
 
@@ -349,6 +347,10 @@ validate(update, default_provider) -> #{
         end}}
     }
 }.
+
+
+entity_to_string(UserId) ->
+    od_user:to_string(UserId).
 
 
 auth_by_oz_privilege(_UserId, Privilege) ->

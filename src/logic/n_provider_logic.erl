@@ -26,10 +26,7 @@
 ]).
 -export([
     get/2,
-    list/1,
-    get_eff_users/2, get_eff_user/3,
-    get_eff_groups/2, get_eff_group/3,
-    get_spaces/2, get_space/3
+    list/1
 ]).
 -export([
     update/3
@@ -38,13 +35,16 @@
     delete/2
 ]).
 -export([
+    get_eff_users/2, get_eff_user/3,
+    get_eff_groups/2, get_eff_group/3,
+    get_spaces/2, get_space/3,
     support_space/4, support_space/3,
     update_support_size/4,
     revoke_support/3
 ]).
 -export([
     check_my_ports/2,
-    check_my_ip/1
+    check_my_ip/2
 ]).
 -export([
     exists/1
@@ -129,8 +129,8 @@ check_my_ports(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, check_my_ports, Data).
 
 
-check_my_ip(Client) ->
-    n_entity_logic:get(Client, ?PLUGIN, undefined, check_my_ip).
+check_my_ip(Client, CowboyReq) ->
+    n_entity_logic:get(Client, ?PLUGIN, undefined, {check_my_ip, CowboyReq}).
 
 
 %%--------------------------------------------------------------------

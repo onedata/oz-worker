@@ -19,7 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([create/5, get/4, update/5, delete/4]).
--export([ahaha/0]).
+-export([client_to_string/1]).
 
 % TODO HINT JAK JEST BAD VALUE TYPU ZA MALY SUPPORT SIZE
 
@@ -62,351 +62,6 @@ value_rule() -> [
     token_type, % compatible only with token
     alias
 ].
-
--define(PROXY_URL, <<"172.17.0.9:8080/api/v1">>).
--define(METADATA, <<"<?xml version=\"1.0\"?>",
-    "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
-    "<dc:title>Test dataset<\/dc:title>",
-    "<dc:creator>John Johnson<\/dc:creator>",
-    "<dc:creator>Jane Doe<\/dc:creator>",
-    "<dc:subject>Test of datacite<\/dc:subject>",
-    "<dc:description>Lorem ipsum lorem ipusm<\/dc:description>",
-    "<dc:publisher>Onedata<\/dc:publisher>",
-    "<dc:publisher>EGI<\/dc:publisher>",
-    "<dc:date>2016<\/dc:date>",
-    "<dc:format>application\/pdf<\/dc:format>",
-    "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
-    "<dc:language>eng<\/dc:language>",
-    "<dc:rights>CC-0<\/dc:rights>",
-    "<\/metadata>">>).
-
--define(SERVICE_PROPERTIES, #{
-    <<"allowTemplateOverride">> => false,
-    <<"doiEndpoint">> => <<"/doi">>,
-    <<"host">> => <<"https://mds.test.datacite.org">>,
-    <<"mediaEndpoint">> => <<"/media">>,
-    <<"metadataEndpoint">> => <<"/metadata">>,
-    <<"password">> => <<"eg1Test40DP">>,
-    <<"prefix">> => <<"10.5072">>,
-    <<"type">> => <<"DOI">>,
-    <<"username">> => <<"DATACITE.EGI">>
-}).
-
-
--define(TEMP_DIR, "/tmp").
-
--define(CREATE_PROVIDER_DATA, begin
-    {_, __CSRFile, _} = generate_cert_files(),
-    {ok, __CSR} = file:read_file(__CSRFile),
-    #{
-        <<"name">> => <<"P1">>,
-        <<"urls">> => [<<"127.0.0.1">>],
-        <<"redirectionPoint">> => <<"https://127.0.0.1">>,
-        <<"csr">> => __CSR,
-        <<"latitude">> => 50.0,
-        <<"longitude">> => -24.8
-    }
-end).
-
-
-generate_cert_files() ->
-    Prefix = "provider" ++ integer_to_list(erlang:system_time(micro_seconds)),
-    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
-    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
-    CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
-    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
-    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
-    {KeyFile, CSRFile, CertFile}.
-
-
-ahaha() ->
-    {ok, U1} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U1">>}]),
-    ok = n_user_logic:update_oz_privileges(?ROOT, U1, set, [set_privileges]),
-    {ok, U2} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U2">>}]),
-    {ok, U3} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U3">>}]),
-    {ok, G1} = rpc:call(node(), n_group_logic, create, [?USER(U1), <<"G1">>]),
-    entity_graph:ensure_up_to_date(),
-    ok = n_group_logic:modify_oz_privileges(?USER(U1), G1, set, privileges:oz_admin()),
-    entity_graph:ensure_up_to_date(),
-    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [?USER(U1), G1, U2]),
-    {ok, G1} = rpc:call(node(), n_group_logic, add_user, [?USER(U1), G1, U3]),
-
-    {ok, U4} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U4">>}]),
-    {ok, G2} = rpc:call(node(), n_group_logic, create, [?USER(U4), <<"G2">>]),
-    ok = n_group_logic:modify_oz_privileges(?USER(U1), G2, grant, privileges:oz_admin()),
-    ok = n_group_logic:modify_oz_privileges(?USER(U1), G2, revoke, privileges:oz_viewer()),
-    entity_graph:ensure_up_to_date(),
-    {ok, G2} = rpc:call(node(), n_group_logic, add_group, [?USER(U4), G2, G1]),
-
-    {ok, U5} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U5">>}]),
-    {ok, S1} = rpc:call(node(), n_space_logic, create, [?USER(U5), <<"S1">>]),
-    entity_graph:ensure_up_to_date(),
-    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [?USER(U1), S1, G2]),
-    ProviderData = ?CREATE_PROVIDER_DATA,
-    {ok, {P1, _}} = rpc:call(node(), n_provider_logic, create, [?NOBODY, ProviderData]),
-    {ok, Token} = rpc:call(node(), n_space_logic, create_provider_invite_token, [?USER(U5), S1]),
-    {ok, S1} = rpc:call(node(), n_provider_logic, support_space, [?PROVIDER(P1), P1, Token, 1000000000]),
-
-    {ok, {P2, _}} = rpc:call(node(), n_provider_logic, create, [?NOBODY, ProviderData#{<<"name">> => <<"P2">>}]),
-    {ok, Token2} = rpc:call(node(), n_space_logic, create_provider_invite_token, [?USER(U5), S1]),
-    {ok, S1} = rpc:call(node(), n_provider_logic, support_space, [?PROVIDER(P2), P2, Token2, 1000000000]),
-
-    {ok, G3} = rpc:call(node(), n_group_logic, create, [?USER(U1), <<"G3">>]),
-    entity_graph:ensure_up_to_date(),
-    {ok, G3} = rpc:call(node(), n_group_logic, add_user, [?USER(U1), G3, U3]),
-    {ok, S1} = rpc:call(node(), n_space_logic, add_group, [?USER(U5), S1, G3]),
-
-    {ok, U6} = rpc:call(node(), n_user_logic, create, [#od_user{name = <<"U6">>}]),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, create, [
-        ?USER(U6), <<"HS1">>, ?PROXY_URL, ?SERVICE_PROPERTIES, <<"tajp">>
-    ]),
-    entity_graph:ensure_up_to_date(),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [?USER(U6), HS1, G2]),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_group, [?USER(U6), HS1, G3]),
-    {ok, HS1} = rpc:call(node(), n_handle_service_logic, add_user, [?USER(U6), HS1, U5]),
-    entity_graph:ensure_up_to_date(),
-
-        catch share_logic:remove(<<"Sh1ID">>),
-    {ok, Sh1} = rpc:call(node(), n_share_logic, create, [
-        ?USER(U5), <<"Sh1ID">>, <<"Sh1">>, <<"fileId">>, S1]),
-
-    % TODO TRICK
-    {ok, _} = od_share:update(Sh1, #{public_url => <<"https://onedata.org/share/Sh1ID">>}),
-
-    {ok, H1} = rpc:call(node(), n_handle_logic, create, [
-        ?USER(U1), HS1, <<"Share">>, Sh1, ?METADATA
-    ]),
-    entity_graph:ensure_up_to_date(),
-    {ok, H1} = rpc:call(node(), n_handle_logic, add_group, [?USER(U1), H1, G1]),
-    entity_graph:ensure_up_to_date(),
-    timer:sleep(1500),
-
-    print(od_user, U1),
-    print(od_user, U2),
-    print(od_user, U3),
-    print(od_user, U4),
-    print(od_user, U5),
-    print(od_user, U6),
-    print(od_group, G1),
-    print(od_group, G2),
-    print(od_group, G3),
-    print(od_space, S1),
-    print(od_share, Sh1),
-    print(od_provider, P1),
-    print(od_provider, P2),
-    print(od_handle_service, HS1),
-    print(od_handle, H1),
-    ok.
-
-
-
-
-print(ModelType, Id) when is_atom(ModelType) ->
-    {ok, #document{value = Entity}} = ModelType:get(Id),
-    print(Entity, Id);
-print(#od_user{} = User, Id) ->
-    #od_user{
-        name = Name,
-        groups = Groups, eff_groups = EffGroups,
-        spaces = Spaces, eff_spaces = EffSpaces,
-        handle_services = HServices, eff_handle_services = EffHServices,
-        handles = Handles, eff_handles = EffHandles,
-        eff_providers = EffProviders,
-        oz_privileges = OzPrivileges, eff_oz_privileges = EffOzPrivileges
-    } = User,
-    print(od_user, Id, [
-        {name, Name},
-        {groups, prepare_relation_to_print(Groups, false, false, [])},
-        {eff_groups, prepare_relation_to_print(EffGroups, true, false, [])},
-        {spaces, prepare_relation_to_print(Spaces, false, false, [])},
-        {eff_spaces, prepare_relation_to_print(EffSpaces, true, false, [])},
-        {eff_providers, prepare_relation_to_print(EffProviders, true, false, [])},
-        {handle_services, prepare_relation_to_print(HServices, false, false, [])},
-        {eff_handle_services, prepare_relation_to_print(EffHServices, true, false, [])},
-        {handles, prepare_relation_to_print(Handles, false, false, [])},
-        {eff_handles, prepare_relation_to_print(EffHandles, true, false, [])},
-        {oz_privileges, privs_to_str(OzPrivileges, privileges:oz_privileges())},
-        {eff_oz_privileges, privs_to_str(EffOzPrivileges, privileges:oz_privileges())}
-    ]);
-print(#od_group{} = Group, Id) ->
-    AllPrivs = privileges:group_privileges(),
-    #od_group{
-        name = Name,
-        children = Children,
-        eff_children = EffChildren,
-        parents = Parents, eff_parents = EffParents,
-        users = Users, eff_users = EffUsers,
-        spaces = Spaces, eff_spaces = EffSpaces,
-        eff_providers = EffProviders,
-        handle_services = HServices, eff_handle_services = EffHServices,
-        handles = Handles, eff_handles = EffHandles,
-        oz_privileges = OzPrivileges, eff_oz_privileges = EffOzPrivileges
-    } = Group,
-    print(od_group, Id, [
-        {name, Name},
-        {children, prepare_relation_to_print(Children, false, true, AllPrivs)},
-        {eff_children, prepare_relation_to_print(EffChildren, true, true, AllPrivs)},
-        {parents, prepare_relation_to_print(Parents, false, false, AllPrivs)},
-        {eff_parents, prepare_relation_to_print(EffParents, true, false, AllPrivs)},
-        {users, prepare_relation_to_print(Users, false, true, AllPrivs)},
-        {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
-        {spaces, prepare_relation_to_print(Spaces, false, false, AllPrivs)},
-        {eff_spaces, prepare_relation_to_print(EffSpaces, true, false, AllPrivs)},
-        {eff_providers, prepare_relation_to_print(EffProviders, true, false, [])},
-        {handle_services, prepare_relation_to_print(HServices, false, false, [])},
-        {eff_handle_services, prepare_relation_to_print(EffHServices, true, false, [])},
-        {handles, prepare_relation_to_print(Handles, false, false, [])},
-        {eff_handles, prepare_relation_to_print(EffHandles, true, false, [])},
-        {oz_privileges, privs_to_str(OzPrivileges, privileges:oz_privileges())},
-        {eff_oz_privileges, privs_to_str(EffOzPrivileges, privileges:oz_privileges())}
-    ]);
-print(#od_space{} = Space, Id) ->
-    AllPrivs = privileges:space_privileges(),
-    #od_space{
-        name = Name,
-        users = Users, eff_users = EffUsers,
-        groups = Groups, eff_groups = EffGroups,
-        shares = Shares,
-        providers = Providers
-    } = Space,
-    print(od_space, Id, [
-        {name, Name},
-        {users, prepare_relation_to_print(Users, false, true, AllPrivs)},
-        {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
-        {groups, prepare_relation_to_print(Groups, false, true, AllPrivs)},
-        {eff_groups, prepare_relation_to_print(EffGroups, true, true, AllPrivs)},
-        {shares, prepare_relation_to_print(Shares, false, false, [])},
-        {providers, maps:fold(
-            fun(Id, SupportSize, AccMap) ->
-                AccMap#{id_to_str(Id) => SupportSize}
-            end, #{}, Providers)}
-    ]);
-print(#od_share{} = Share, Id) ->
-    #od_share{
-        name = Name,
-        space = Space,
-        handle = Handle,
-        public_url = PublicUrl
-    } = Share,
-    print(od_share, Id, [
-        {name, Name},
-        {public_url, PublicUrl},
-        {space, str_utils:format_bin("~s#~s", [model_to_str(od_space), id_to_str(Space)])},
-        {handle, str_utils:format_bin("~s#~s", [model_to_str(od_handle), id_to_str(Handle)])}
-    ]);
-print(#od_provider{} = Provider, Id) ->
-    #od_provider{
-        name = Name,
-        eff_users = EffUsers,
-        eff_groups = EffGroups,
-        spaces = Spaces
-    } = Provider,
-    print(od_provider, Id, [
-        {name, Name},
-        {eff_users, prepare_relation_to_print(EffUsers, true, false, [])},
-        {eff_groups, prepare_relation_to_print(EffGroups, true, false, [])},
-        {spaces, prepare_relation_to_print(Spaces, false, false, [])}
-    ]);
-print(#od_handle_service{} = HandleService, Id) ->
-    AllPrivs = privileges:handle_service_privileges(),
-    #od_handle_service{
-        name = Name,
-        users = Users, eff_users = EffUsers,
-        groups = Groups, eff_groups = EffGroups
-    } = HandleService,
-    print(od_handle_service, Id, [
-        {name, Name},
-        {users, prepare_relation_to_print(Users, false, true, AllPrivs)},
-        {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
-        {groups, prepare_relation_to_print(Groups, false, true, AllPrivs)},
-        {eff_groups, prepare_relation_to_print(EffGroups, true, true, AllPrivs)}
-    ]);
-print(#od_handle{} = Handle, Id) ->
-    AllPrivs = privileges:handle_privileges(),
-    #od_handle{
-        handle_service = HandleServiceId,
-        resource_id = ShareId,
-        public_handle = PublicHandle,
-        users = Users, eff_users = EffUsers,
-        groups = Groups, eff_groups = EffGroups
-    } = Handle,
-    print(od_handle, Id, [
-        {name, id_to_str(HandleServiceId)},
-        {public_handle, PublicHandle},
-        {share, str_utils:format_bin("~s#~s", [model_to_str(od_share), id_to_str(ShareId)])},
-        {users, prepare_relation_to_print(Users, false, true, AllPrivs)},
-        {eff_users, prepare_relation_to_print(EffUsers, true, true, AllPrivs)},
-        {groups, prepare_relation_to_print(Groups, false, true, AllPrivs)},
-        {eff_groups, prepare_relation_to_print(EffGroups, true, true, AllPrivs)}
-    ]).
-
-print(ModelType, Id, Attrs) ->
-    io:format("~s#~s~n", [model_to_str(ModelType), id_to_str(Id)]),
-    lists:foreach(
-        fun({K, V}) ->
-            case V of
-                B when is_binary(B) ->
-                    io:format("   ~p: ~s~n", [K, V]);
-                _ ->
-                    io:format("   ~p: ~p~n", [K, V])
-            end
-        end, Attrs),
-    io:format("~n").
-
-
-prepare_relation_to_print(Map, false = _IsEff, true = _HasPrivs, AllPrivs) ->
-    maps:fold(
-        fun(Id, Privs, AccMap) ->
-            AccMap#{id_to_str(Id) => privs_to_str(Privs, AllPrivs)}
-        end, #{}, Map);
-prepare_relation_to_print(Map, true = _IsEff, true = _HasPrivs, AllPrivs) ->
-    maps:fold(
-        fun(Id, {Privs, Intermediaries}, AccMap) ->
-            AccMap#{id_to_str(Id) => privs_to_str(Privs, AllPrivs) ++ "  " ++ intermediaries_to_str(Intermediaries)}
-        end, #{}, Map);
-prepare_relation_to_print(List, false = _IsEff, false = _HasPrivs, _) ->
-    lists:map(
-        fun(Id) ->
-            id_to_str(Id)
-        end, List);
-prepare_relation_to_print(Map, true = _IsEff, false = _HasPrivs, _) ->
-    maps:fold(
-        fun(Id, Intermediaries, AccMap) ->
-            AccMap#{id_to_str(Id) => intermediaries_to_str(Intermediaries)}
-        end, #{}, Map).
-
-
-privs_to_str(Privs, AllPrivs) ->
-    lists:map(
-        fun(Priv) ->
-            case lists:member(Priv, Privs) of
-                true -> $x;
-                false -> $-
-            end
-        end, AllPrivs).
-
-
-intermediaries_to_str(Intermediaries) ->
-    Str = intermediaries_to_str(Intermediaries, "["),
-    string:sub_string(Str, 1, length(Str) - 3) ++ "]".
-intermediaries_to_str([], Acc) ->
-    Acc;
-intermediaries_to_str([{Model, Id} | Tail], Acc) ->
-    intermediaries_to_str(Tail,
-        Acc ++ str_utils:format("~s#~s,  ", [model_to_str(Model), id_to_str(Id)])).
-
-model_to_str(od_user) -> "usr";
-model_to_str(od_group) -> "grp";
-model_to_str(od_space) -> "spc";
-model_to_str(od_share) -> "shr";
-model_to_str(od_provider) -> "prv";
-model_to_str(od_handle_service) -> "hsr";
-model_to_str(od_handle) -> "hnl".
-
-
-id_to_str(Id) ->
-    str_utils:to_list(binary:part(Id, {0, min(7, byte_size(Id))})).
-
 
 
 create(Client, ELPlugin, EntityId, Resource, Data) ->
@@ -499,8 +154,8 @@ delete(Client, ELPlugin, EntityId, Resource) ->
                 % If an entity is deleted, log an information about it
                 % (it's a serious operation and this information might be useful).
                 ?info("~s has been deleted by client: ~s", [
-                    ?ENTITY_TO_READABLE(EntityId, ELPlugin:entity_type()),
-                    ?CLIENT_TO_READABLE(Client)
+                    ELPlugin:entity_to_string(EntityId),
+                    client_to_string(Client)
                 ]),
                 ok;
             _ ->
@@ -517,9 +172,14 @@ delete(Client, ELPlugin, EntityId, Resource) ->
     end.
 
 
+client_to_string(?NOBODY) -> "nobody (unauthenticated user)";
+client_to_string(?ROOT) -> "root";
+client_to_string(?USER(UId)) -> str_utils:format("user:~s", [UId]);
+client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).
+
+
 call_get_entity(Request) ->
     #request{el_plugin = ELPlugin, entity_id = EntityId} = Request,
-    io:format("> call_get_entity: ~p~n", [EntityId]),
     case ELPlugin:get_entity(EntityId) of
         {ok, Entity} ->
             Entity;
@@ -540,7 +200,6 @@ call_get_resource(Request) ->
     Result = case {EntityId, Entity, Resource} of
         {undefined, _, _} ->
             % EntityId is not defined, do not fetch entity.
-            io:format("> get: ~p~n", [{Client, EntityId, undefined_entity, Resource}]),
             ELPlugin:get(Client, undefined, undefined, Resource);
         {_EntityId, undefined, entity} ->
             % EntityId is defined and asking for entity -> entity resource.
@@ -554,12 +213,10 @@ call_get_resource(Request) ->
             % EntityId is defined and some resource -> internal resource.
             % The Entity is already fetched, reuse it.
             FetchedEntity = call_get_entity(Request),
-            io:format("> get: ~p~n", [{Client, EntityId, freshly_fetched_entity, Resource}]),
             ELPlugin:get(Client, EntityId, FetchedEntity, Resource);
         {_EntityId, Entity, _} ->
             % EntityId is defined and some resource -> internal resource.
             % The Entity was not fetched yet, fetch and use it.
-            io:format("> get: ~p~n", [{Client, EntityId, prefetched_entity, Resource}]),
             ELPlugin:get(Client, EntityId, Entity, Resource)
     end,
     case Result of
@@ -636,7 +293,7 @@ call_authorize(Request) ->
     catch
         throw:Error ->
             throw(Error);
-        _:_ ->
+        T:M ->
             [false]
     end.
 
@@ -985,3 +642,4 @@ check_value(TypeRule, ValueRule, Key, _) ->
         TypeRule, ValueRule, Key
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
+

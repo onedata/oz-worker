@@ -5,12 +5,14 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This file contains tests for automatic creation of predefined groups.
+%%% @doc
+%%% This file contains tests concerning provider API (REST + logic).
 %%% @end
 %%%-------------------------------------------------------------------
 -module(provider_api_test_SUITE).
 -author("Lukasz Opiola").
 
+-include("rest.hrl").
 -include("errors.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
@@ -25,30 +27,42 @@
 
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([
+    all/0,
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
+]).
 -export([
     create_test/1,
-    support_space_test/1,
-    list_test/1,
     get_test/1,
+    list_test/1,
+    update_test/1,
+    delete_test/1,
     get_eff_users_test/1,
     get_eff_groups_test/1,
     get_spaces_test/1,
-    update_test/1,
-    delete_test/1
+    support_space_test/1,
+    update_support_size_test/1,
+    revoke_support_test/1,
+    check_my_ports_test/1,
+    check_my_ip_test/1
 ]).
 
 all() ->
     ?ALL([
         create_test,
-        support_space_test,
-        list_test,
         get_test,
-        get_users_test,
+        list_test,
+        support_space_test,
+        get_eff_users_test,
         get_eff_groups_test,
         get_spaces_test,
         update_test,
-        delete_test
+        delete_test,
+        update_support_size_test,
+        revoke_support_test,
+        check_my_ports_test,
+        check_my_ip_test
     ]).
 
 %%%===================================================================
@@ -65,7 +79,7 @@ create_test(Config) ->
         rest_spec = #rest_spec{
             method = post,
             path = <<"/provider">>,
-            expected_code = 200,
+            expected_code = ?HTTP_200_OK,
             expected_body = #{
                 <<"providerId">> => {check_type, binary},
                 <<"certificate">> => {check_type, binary}
@@ -118,11 +132,821 @@ create_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+get_test(Config) ->
+    % Create a provider manually
+    {KeyFile1, CSRFile1, CertFile1} = oz_test_utils:generate_provider_cert_files(),
+    {ok, CSR} = file:read_file(CSRFile1),
+    {ok, {P1, Certificate}} = oz_test_utils:create_provider(Config, #{
+        <<"name">> => <<"Provider 1">>,
+        <<"urls">> => [<<"172.16.0.10">>, <<"172.16.0.11">>],
+        <<"redirectionPoint">> => <<"https://hostname.com">>,
+        <<"csr">> => CSR,
+        <<"latitude">> => 14.78,
+        <<"longitude">> => -106.12
+    }),
+    ok = file:write_file(CertFile1, Certificate),
+    % Create a second provider
+    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P2">>
+    ),
+    % Create two users, grant one of them the privilege to list providers.
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST
+    ]),
+
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, Admin},
+                {provider, P1, KeyFile1, CertFile1},
+                {provider, P2, KeyFile2, CertFile2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [{user, NonAdmin}]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/providers/">>, P1],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{
+                <<"providerId">> => P1,
+                <<"name">> => <<"Provider 1">>,
+                <<"urls">> => [<<"172.16.0.10">>, <<"172.16.0.11">>],
+                <<"redirectionPoint">> => <<"https://hostname.com">>,
+                <<"latitude">> => 14.78,
+                <<"longitude">> => -106.12
+            }
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_provider_logic,
+            function = get,
+            args = [client, P1],
+            expected_result = ?OK_TERM(fun(Entity) ->
+                #od_provider{name = Name, urls = Urls,
+                    redirection_point = RedPoint, latitude = Latitude,
+                    longitude = Longitude, spaces = Spaces} = Entity,
+                Name =:= <<"Provider 1">> andalso
+                    Urls =:= [<<"172.16.0.10">>, <<"172.16.0.11">>] andalso
+                    RedPoint =:= <<"https://hostname.com">> andalso
+                    Latitude =:= 14.78 andalso
+                    Longitude =:= -106.12 andalso
+                    Spaces =:= #{}
+            end)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    % Provider should be also able to retrieve this info using another path,
+    % without id (id is deduced from authorization)
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, KeyFile1, CertFile1}]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/provider">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{
+                <<"providerId">> => P1,
+                <<"name">> => <<"Provider 1">>,
+                <<"urls">> => [<<"172.16.0.10">>, <<"172.16.0.11">>],
+                <<"redirectionPoint">> => <<"https://hostname.com">>,
+                <<"latitude">> => 14.78,
+                <<"longitude">> => -106.12
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
+
+list_test(Config) ->
+    % Make sure that providers created in other tests are deleted.
+    ok = oz_test_utils:delete_all_entities(Config),
+    % Register some providers
+    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    {ok, {P2, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
+    {ok, {P3, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P3">>),
+    {ok, {P4, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P4">>),
+    {ok, {P5, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P5">>),
+    ExpProviders = [P1, P2, P3, P4, P5],
+    % Create two users, grant one of them the privilege to list providers.
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST
+    ]),
+
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {user, Admin}],
+            unauthorized = [nobody],
+            forbidden = [{user, NonAdmin}, {provider, P1, KeyFile, CertFile}]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/providers">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"providers">> => ExpProviders}
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_provider_logic,
+            function = list,
+            args = [client],
+            expected_result = ?OK_LIST(ExpProviders)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+update_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {provider, P1, KeyFile1, CertFile1}]
+            % No need to check other clients - this endpoint is dedicated to the
+            % provider that presents it certs.
+            % root client is only checked in logic tests
+        },
+        rest_spec = #rest_spec{
+            method = patch,
+            path = <<"/provider">>,
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            operation = update,
+            module = n_provider_logic,
+            function = update,
+            args = [client, P1, data],
+            expected_result = ?OK
+        },
+        data_spec = #data_spec{
+            required = [<<"name">>, <<"urls">>, <<"redirectionPoint">>],
+            optional = [<<"latitude">>, <<"longitude">>],
+            correct_values = #{
+                <<"name">> => <<"New Prov name">>,
+                <<"urls">> => [<<"new.url">>],
+                <<"redirectionPoint">> => <<"https://new.url">>,
+                <<"latitude">> => -12.87645,
+                <<"longitude">> => -4.44
+            },
+            bad_values = [
+                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
+                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
+                {<<"urls">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"urls">>)},
+                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
+                {<<"urls">>, 1234, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
+                {<<"redirectionPoint">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"redirectionPoint">>)},
+                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
+                {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
+                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"longitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"longitude">>)},
+                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+delete_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    % Check REST endpoint (logic endpoint will be check in later tests)
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, KeyFile1, CertFile1}]
+            % No need to check other clients - this endpoint is dedicated to the
+            % provider that presents it certs.
+            % root client is only checked in logic tests
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = <<"/provider">>,
+            expected_code = ?HTTP_202_ACCEPTED
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % There is also an admin endpoint for deleting providers, same provider
+    % should also be able to use it, but other providers should not.
+    % Correct clients must be checked one by one, as an entity cannot be
+    % deleted multiple times.
+    % Create two users, grant one of them the privilege to remove providers.
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_DELETE
+    ]),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+
+    % Create one provider per every correct client to check all of them (REST)
+    {ok, {P3, _KeyFile3, _CertFile3}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P3">>
+    ),
+    {ok, {P4, KeyFile4, CertFile4}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P4">>
+    ),
+    RestProvidersAndClients = [
+        {P3, {user, Admin}},
+        {P4, {provider, P4, KeyFile4, CertFile4}}
+    ],
+    lists:foreach(
+        fun({Provider, CorrectClient}) ->
+            ApiTestSpec2 = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [CorrectClient]
+                },
+                rest_spec = #rest_spec{
+                    method = delete,
+                    path = [<<"/providers/">>, Provider],
+                    expected_code = ?HTTP_202_ACCEPTED
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+        end, RestProvidersAndClients),
+
+    % Create one provider per every correct client to check all of them (logic)
+    {ok, {P5, _KeyFile5, _CertFile5}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P5">>
+    ),
+    {ok, {P6, _KeyFile6, _CertFile6}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P6">>
+    ),
+    {ok, {P7, KeyFile7, CertFile7}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P7">>
+    ),
+    LogicProvidersAndClients = [
+        {P5, root},
+        {P6, {user, Admin}},
+        {P7, {provider, P7, KeyFile7, CertFile7}}
+    ],
+    lists:foreach(
+        fun({Provider, CorrectClient}) ->
+            ApiTestSpec2 = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [CorrectClient]
+                },
+                logic_spec = #logic_spec{
+                    operation = delete,
+                    module = n_provider_logic,
+                    function = delete,
+                    args = [client, Provider],
+                    expected_result = ?OK
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+        end, LogicProvidersAndClients),
+
+    % Make sure that unauthorized and forbidden clients cannot delete providers
+    {ok, {P8, KeyFile8, CertFile8}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P5">>
+    ),
+    ApiTestSpec3 = #api_test_spec{
+        client_spec = #client_spec{
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {provider, P1, KeyFile1, CertFile1}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/providers/">>, P8]
+        },
+        logic_spec = #logic_spec{
+            operation = delete,
+            module = n_provider_logic,
+            function = delete,
+            args = [client, P8]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+
+    % Make sure that provider cannot be deleted twice (P1 is already deleted)
+    ApiTestSpec4 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                nobody,
+                {user, Admin},
+                {user, NonAdmin},
+                {provider, P8, KeyFile8, CertFile8}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/providers/">>, P8],
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = #logic_spec{
+            operation = delete,
+            module = n_provider_logic,
+            function = delete,
+            args = [client, P1],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
+
+
+get_eff_users_test(Config) ->
+    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+
+    % Create two users, grant one of them the privilege to list users.
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST_USERS
+    ]),
+
+    % There are no users yet
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    ApiTestSpec = #api_test_spec{
+        client_spec = ClientSpec = #client_spec{
+            correct = [root, {user, Admin}],
+            unauthorized = [nobody],
+            forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = get,
+            path = [<<"/providers/">>, P1, <<"/effective_users">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"users">> => []}
+        },
+        logic_spec = LogicSpec = #logic_spec{
+            operation = get,
+            module = n_provider_logic,
+            function = get_eff_users,
+            args = [client, P1],
+            expected_result = ?OK_LIST([])
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Create some spaces and support them
+    [{S1, _}, {S2, _}, {S3, _}] = create_and_support_3_spaces(Config, P1),
+    % Add some users to the spaces (9 users, 3 in each space)
+    ExpUsers = lists:map(
+        fun({Counter, Space}) ->
+            UserName = str_utils:format_bin("u~B", [Counter]),
+            {ok, User} = oz_test_utils:create_user(
+                Config, #od_user{name = UserName}
+            ),
+            {ok, User} = oz_test_utils:add_user_to_space(Config, Space, User),
+            {User, UserName}
+        end, lists:zip(lists:seq(1, 9), [S1, S2, S3, S1, S2, S3, S1, S2, S3])),
+    {ExpUserIds, _} = lists:unzip(ExpUsers),
+
+    % Ensure user list is correct.
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = ClientSpec#client_spec{
+            forbidden = [
+                {user, lists:nth(1, ExpUserIds)},
+                {user, NonAdmin},
+                {provider, P1, KeyFile, CertFile}
+            ]
+        },
+        rest_spec = RestSpec#rest_spec{
+            expected_body = #{<<"users">> => ExpUserIds}
+        },
+        logic_spec = LogicSpec#logic_spec{
+            expected_result = ?OK_LIST(ExpUserIds)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % Create some more spaces and support them
+    [{S4, _}, {S5, _}, {S6, _}] = create_and_support_3_spaces(Config, P1),
+    % Create two groups for every space and three users for every group
+    ExpGroupUsers = lists:flatmap(
+        fun({Counter, Space}) ->
+            UserName1 = str_utils:format_bin("u1@g~B", [Counter]),
+            {ok, User1} = oz_test_utils:create_user(
+                Config, #od_user{name = UserName1}
+            ),
+            UserName2 = str_utils:format_bin("u2@g~B", [Counter]),
+            {ok, User2} = oz_test_utils:create_user(
+                Config, #od_user{name = UserName2}
+            ),
+            GroupName = str_utils:format_bin("g~B", [Counter]),
+            {ok, Group} = oz_test_utils:create_group(
+                Config, ?USER(User1), GroupName
+            ),
+            {ok, User2} = oz_test_utils:add_user_to_group(Config, Group, User2),
+            {ok, Group} = oz_test_utils:add_group_to_space(Config, Space, Group),
+            [{User1, UserName1}, {User2, UserName2}]
+        end, lists:zip(lists:seq(1, 6), [S4, S5, S6, S4, S5, S6])),
+    {ExpGroupUserIds, _} = lists:unzip(ExpGroupUsers),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    % Ensure user list is correct.
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            forbidden = [
+                {user, lists:nth(1, ExpGroupUserIds)},
+                {user, NonAdmin},
+                {provider, P1, KeyFile, CertFile}
+            ]
+        },
+        rest_spec = RestSpec#rest_spec{
+            expected_body = #{<<"users">> => ExpUserIds ++ ExpGroupUserIds}
+        },
+        logic_spec = LogicSpec#logic_spec{
+            expected_result = ?OK_LIST(ExpUserIds ++ ExpGroupUserIds)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+
+    % Check every user one by one.
+    lists:foreach(
+        fun({UserId, UserName}) ->
+            ApiTestSpec4 = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [root, {user, Admin}],
+                    unauthorized = [nobody],
+                    forbidden = [
+                        {user, lists:nth(1, ExpUserIds)},
+                        {user, lists:nth(1, ExpGroupUserIds)},
+                        {user, NonAdmin},
+                        {provider, P1, KeyFile, CertFile}
+                    ]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [<<"/providers/">>, P1, <<"/effective_users/">>, UserId],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = {contains, #{
+                        <<"userId">> => UserId,
+                        <<"name">> => UserName
+                    }}
+                },
+                logic_spec = #logic_spec{
+                    operation = get,
+                    module = n_provider_logic,
+                    function = get_eff_user,
+                    args = [client, P1, UserId],
+                    expected_result = ?OK_TERM(fun(#od_user{name = Name}) ->
+                        Name =:= UserName
+                    end)
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec4))
+        end, ExpUsers ++ ExpGroupUsers),
+
+    % Make sure that other users cannot be reached this way.
+    {ok, OtherUser} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    ApiTestSpec5 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                % All clients should receive 404 when asking for non-existent
+                % resource.
+                nobody,
+                root,
+                {user, Admin},
+                {user, lists:nth(1, ExpUserIds)},
+                {user, lists:nth(1, ExpGroupUserIds)},
+                {user, NonAdmin},
+                {provider, P1, KeyFile, CertFile}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/providers/">>, P1, <<"/effective_users/">>, OtherUser],
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_provider_logic,
+            function = get_eff_user,
+            args = [client, P1, OtherUser],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
+
+
+get_eff_groups_test(Config) ->
+    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    % Create two users, grant one of them the privilege to list groups.
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST_GROUPS
+    ]),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+
+    % There are no groups yet
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {user, Admin}],
+            unauthorized = [nobody],
+            forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = get,
+            path = [<<"/providers/">>, P1, <<"/effective_groups">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"groups">> => []}
+        },
+        logic_spec = LogicSpec = #logic_spec{
+            operation = get,
+            module = n_provider_logic,
+            function = get_eff_groups,
+            args = [client, P1],
+            expected_result = ?OK_LIST([])
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Create some spaces and support them
+    [{S1, _}, {S2, _}, {S3, _}] = create_and_support_3_spaces(Config, P1),
+    [{S4, _}, {S5, _}, {S6, _}] = create_and_support_3_spaces(Config, P1),
+    % Create two groups for every space
+    ExpGroups = lists:map(
+        fun({Counter, Space}) ->
+            GroupName = str_utils:format_bin("g~B", [Counter]),
+            {ok, Group} = oz_test_utils:create_group(
+                Config, ?ROOT, GroupName
+            ),
+            {ok, Group} = oz_test_utils:add_group_to_space(Config, Space, Group),
+            {Group, GroupName}
+        end, lists:zip(lists:seq(1, 6), [S1, S2, S3, S4, S5, S6])),
+    {ExpGroupIds, _} = lists:unzip(ExpGroups),
+
+    % Check if correct groups are returned
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            expected_body = #{<<"groups">> => ExpGroupIds}
+        },
+        logic_spec = LogicSpec#logic_spec{
+            expected_result = ?OK_LIST(ExpGroupIds)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % Check every group one by one.
+    lists:foreach(
+        fun({GroupId, GroupName}) ->
+            ApiTestSpec3 = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [root, {user, Admin}],
+                    unauthorized = [nobody],
+                    forbidden = [
+                        {provider, P1, KeyFile, CertFile},
+                        {user, NonAdmin}
+                    ]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [<<"/providers/">>, P1, <<"/effective_groups/">>, GroupId],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = {contains, #{
+                        <<"groupId">> => GroupId,
+                        <<"name">> => GroupName
+                    }}
+                },
+                logic_spec = #logic_spec{
+                    operation = get,
+                    module = n_provider_logic,
+                    function = get_eff_group,
+                    args = [client, P1, GroupId],
+                    expected_result = ?OK_TERM(fun(#od_group{name = Name}) ->
+                        Name =:= GroupName
+                    end)
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec3))
+        end, ExpGroups),
+
+    % Make sure that other groups cannot be reached this way.
+    {ok, OtherGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"other">>),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    ApiTestSpec4 = #api_test_spec{
+        client_spec = #client_spec{
+            % All clients should receive 404 when asking for non-existent
+            % resource.
+            correct = [
+                nobody,
+                root,
+                {user, Admin},
+                {provider, P1, KeyFile, CertFile},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/providers/">>, P1, <<"/effective_groups/">>, OtherGroup],
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_provider_logic,
+            function = get_eff_group,
+            args = [client, P1, OtherGroup],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
+
+
+get_spaces_test(Config) ->
+    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    % Create two users, grant one of them the privilege to list spaces.
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST_SPACES
+    ]),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+
+    % There are no spaces yet
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {user, Admin}, {provider, P1, KeyFile, CertFile}],
+            unauthorized = [nobody],
+            forbidden = [{user, NonAdmin}]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = get,
+            path = [<<"/providers/">>, P1, <<"/spaces">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"spaces">> => []}
+        },
+        logic_spec = LogicSpec = #logic_spec{
+            operation = get,
+            module = n_provider_logic,
+            function = get_spaces,
+            args = [client, P1],
+            expected_result = ?OK_LIST([])
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    % Also check the endpoint dedicated for provider
+    ApiTestSpecForProvider = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, KeyFile, CertFile}]
+        },
+        rest_spec = RestSpecForProvider = #rest_spec{
+            method = get,
+            path = <<"/provider/spaces">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"spaces">> => []}
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider)),
+
+    % Create some spaces
+    ExpSpaces = create_and_support_3_spaces(Config, P1),
+    {ExpSpaceIds, _} = lists:unzip(ExpSpaces),
+    % Get spaces
+
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    % Check if correct spaces are returned
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            expected_body = #{<<"spaces">> => ExpSpaceIds}
+        },
+        logic_spec = LogicSpec#logic_spec{
+            expected_result = ?OK_LIST(ExpSpaceIds)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+    % Also check the endpoint dedicated for provider
+    ApiTestSpecForProvider2 = ApiTestSpecForProvider#api_test_spec{
+        rest_spec = RestSpecForProvider#rest_spec{
+            expected_body = #{<<"spaces">> => ExpSpaceIds}
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider2)),
+
+    % Check every space one by one.
+    lists:foreach(
+        fun({SpaceId, SpaceName}) ->
+            ApiTestSpec3 = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [
+                        root,
+                        {user, Admin},
+                        {provider, P1, KeyFile, CertFile}
+                    ],
+                    unauthorized = [nobody],
+                    forbidden = [{user, NonAdmin}]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = {contains, #{
+                        <<"spaceId">> => SpaceId,
+                        <<"name">> => SpaceName
+                    }}
+                },
+                logic_spec = #logic_spec{
+                    operation = get,
+                    module = n_provider_logic,
+                    function = get_space,
+                    args = [client, P1, SpaceId],
+                    expected_result = ?OK_TERM(fun(#od_space{name = Name}) ->
+                        Name =:= SpaceName
+                    end)
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+            % Also check the endpoint dedicated for provider
+            ApiTestSpecForProvider3 = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [{provider, P1, KeyFile, CertFile}]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [<<"/provider/spaces/">>, SpaceId],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = {contains, #{
+                        <<"spaceId">> => SpaceId,
+                        <<"name">> => SpaceName
+                    }}
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider3))
+        end, ExpSpaces),
+
+    % Make sure that other spaces cannot be reached this way.
+    {ok, OtherSpace} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    ApiTestSpec4 = #api_test_spec{
+        client_spec = #client_spec{
+            % All clients should receive 404 when asking for non-existent
+            % resource.
+            correct = [
+                root,
+                {user, Admin},
+                {provider, P1, KeyFile, CertFile},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/providers/">>, P1, <<"/spaces/">>, OtherSpace],
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_provider_logic,
+            function = get_space,
+            args = [client, P1, OtherSpace],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)),
+    % Also check the endpoint dedicated for provider
+    ApiTestSpecForProvider4 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, KeyFile, CertFile}]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/provider/spaces/">>, OtherSpace],
+            expected_code = ?HTTP_404_NOT_FOUND
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider4)).
+
+
 support_space_test(Config) ->
     RestPrefix = rest_test_utils:get_rest_api_prefix(Config),
     MinSupportSize = min_support_size(Config),
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(Config, <<"P1">>),
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P2">>
+    ),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"S1">>),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
@@ -135,7 +959,7 @@ support_space_test(Config) ->
         {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
         {<<"token">>, BadTokenType1, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)},
         {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
-        {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">> , MinSupportSize)},
+        {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
         {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
         {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
     ],
@@ -154,7 +978,7 @@ support_space_test(Config) ->
         rest_spec = #rest_spec{
             method = post,
             path = <<"/provider/spaces/support">>,
-            expected_code = 201,
+            expected_code = ?HTTP_201_CREATED,
             expected_headers = {contains, #{
                 <<"location">> => {match, <<RestPrefix/binary, "/provider/spaces/.*">>}
             }}
@@ -202,7 +1026,7 @@ support_space_test(Config) ->
                 % Should return space id of the newly supported space
                 {ok, #od_space{
                     providers = Providers
-                }} = oz_test_utils:get_space(Config, ?ROOT, SpaceId),
+                }} = oz_test_utils:get_space(Config, SpaceId),
                 maps:is_key(P1, Providers)
             end)
         },
@@ -212,7 +1036,9 @@ support_space_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
     % provider_logic should also allow using non-serialized macaroons, check it
-    {ok, BadMacaroon3} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
+    {ok, BadMacaroon3} = oz_test_utils:space_invite_user_token(
+        Config, ?USER(U1), S1
+    ),
     ApiTestSpec3 = ApiTestSpec2#api_test_spec{
         % client_spec and logic_spec are inherited from ApiTestSpec
         data_spec = #data_spec{
@@ -241,733 +1067,249 @@ support_space_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 
-list_test(Config) ->
-    % Make sure that providers created in other tests are deleted.
-    ok = oz_test_utils:delete_all_entities(Config),
-    % Register some providers
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
-    ),
-    {ok, {P2, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
-    {ok, {P3, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P3">>),
-    {ok, {P4, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P4">>),
-    {ok, {P5, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P5">>),
-    ExpProviders = [P1, P2, P3, P4, P5],
-    % Create two users, grant one of them the privilege to list providers.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ct:print("sdfsdf ~p", [?OZ_PROVIDERS_LIST]),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
 
-    timer:sleep(1000),
+
+update_support_size_test(Config) ->
+    MinSupportSize = min_support_size(Config),
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(Config, <<"P1">>),
+    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"space">>),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
+        Config, ?USER(U1), S1
+    ),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, ?PROVIDER(P1), P1, Macaroon, MinSupportSize
+    ),
 
+    % Reused in all specs
+    BadValues = [
+        {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
+        {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
+    ],
+
+    % Check only REST first
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {user, Admin}],
-            unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}, {provider, P1, KeyFile, CertFile}]
+            % This is an endpoint dedicated for the provider that presents
+            % its certs, no need to check other providers
+            correct = [root, {provider, P1, KeyFile1, CertFile1}]
         },
         rest_spec = #rest_spec{
-            method = get,
-            path = <<"/providers">>,
-            expected_code = 200,
-            expected_body = #{<<"providers">> => ExpProviders}
+            method = patch,
+            path = [<<"/provider/spaces/">>, S1],
+            expected_code = ?HTTP_204_NO_CONTENT
         },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = list,
-            args = [client],
-            expected_result = ?OK_LIST(ExpProviders)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
-get_test(Config) ->
-    % Create a provider manually
-    {KeyFile1, CSRFile1, CertFile1} = oz_test_utils:generate_provider_cert_files(),
-    {ok, CSR} = file:read_file(CSRFile1),
-    {ok, {P1, Certificate}} = oz_test_utils:create_provider(Config, #{
-        <<"name">> => <<"Provider 1">>,
-        <<"urls">> => [<<"172.16.0.10">>, <<"172.16.0.11">>],
-        <<"redirectionPoint">> => <<"https://hostname.com">>,
-        <<"csr">> => CSR,
-        <<"latitude">> => 14.78,
-        <<"longitude">> => -106.12
-    }),
-    ok = file:write_file(CertFile1, Certificate),
-    % Create a second provider
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P2">>
-    ),
-    % Create two users, grant one of them the privilege to list providers.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
-
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, Admin},
-                {provider, P1, KeyFile1, CertFile1},
-                {provider, P2, KeyFile2, CertFile2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1],
-            expected_code = 200,
-            expected_body = #{
-                <<"providerId">> => P1,
-                <<"name">> => <<"Provider 1">>,
-                <<"urls">> => [<<"172.16.0.10">>, <<"172.16.0.11">>],
-                <<"redirectionPoint">> => <<"https://hostname.com">>,
-                <<"latitude">> => 14.78,
-                <<"longitude">> => -106.12
-            }
-        },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get,
-            args = [client, P1],
-            expected_result = ?OK_TERM(fun(Entity) ->
-                #od_provider{name = Name, urls = Urls,
-                    redirection_point = RedPoint, latitude = Latitude,
-                    longitude = Longitude, spaces = Spaces} = Entity,
-                Name =:= <<"Provider 1">> andalso
-                    Urls =:= [<<"172.16.0.10">>, <<"172.16.0.11">>] andalso
-                    RedPoint =:= <<"https://hostname.com">> andalso
-                    Latitude =:= 14.78 andalso
-                    Longitude =:= -106.12 andalso
-                    Spaces =:= #{}
-            end)
+        data_spec = #data_spec{
+            required = [<<"size">>],
+            correct_values = #{
+                <<"size">> => MinSupportSize
+            },
+            bad_values = BadValues
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    % Provider should be also able to retrieve this info using another path,
-    % without id (id is deduced from authorization)
-    ApiTestSpec2 = #api_test_spec{
+
+    % Check logic endpoints - here we have to specify provider Id, so
+    % different clients will be authorized.
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [{provider, P1, KeyFile1, CertFile1}]
+            % Only provider 1 is authorized to perform change support size
+            % operation on behalf of provider 1.
+            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            unauthorized = [nobody],
+            forbidden = [{user, U1}, {provider, P2, KeyFile2, CertFile2}]
         },
-        rest_spec = #rest_spec{
-            method = get,
-            path = <<"/provider">>,
-            expected_code = 200,
-            expected_body = #{
-                <<"providerId">> => P1,
-                <<"name">> => <<"Provider 1">>,
-                <<"urls">> => [<<"172.16.0.10">>, <<"172.16.0.11">>],
-                <<"redirectionPoint">> => <<"https://hostname.com">>,
-                <<"latitude">> => 14.78,
-                <<"longitude">> => -106.12
-            }
-        }
+        logic_spec = #logic_spec{
+            operation = update,
+            module = n_provider_logic,
+            function = update_support_size,
+            args = [client, P1, S1, data],
+            expected_result = ?OK
+        },
+        rest_spec = undefined
+        % data_spec is inherited from ApiTestSpec
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
-get_eff_users_test(Config) ->
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+revoke_support_test(Config) ->
+    MinSupportSize = min_support_size(Config),
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
     ),
-
-    % Create two users, grant one of them the privilege to list users.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_USERS
-    ]),
+    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P2">>
+    ),
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"space">>),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
+        Config, ?USER(U1), S1
+    ),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, ?PROVIDER(P1), P1, Macaroon, MinSupportSize
+    ),
 
-    % There are no users yet
+    % Check only REST first, and only one correct client at once as a space
+    % can only be unsupported once.
     ApiTestSpec = #api_test_spec{
-        client_spec = ClientSpec = #client_spec{
-            correct = [root, {user, Admin}],
-            unauthorized = [nobody],
-            forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
+        client_spec = #client_spec{
+            % This is an endpoint dedicated for the provider that presents
+            % its certs, no need to check other providers
+            correct = [{provider, P1, KeyFile1, CertFile1}]
         },
         rest_spec = RestSpec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/users">>],
-            expected_code = 200,
-            expected_body = #{<<"users">> => []}
-        },
-        logic_spec = LogicSpec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_eff_users,
-            args = [client, P1],
-            expected_result = ?OK_LIST([])
+            method = delete,
+            path = [<<"/provider/spaces/">>, S1],
+            expected_code = ?HTTP_202_ACCEPTED
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    % Create some spaces and support them
-    {{S1, _}, {S2, _}, {S3, _}} = create_and_support_3_spaces(Config, P1),
-    % Add some users to the spaces (9 users, 3 in each space)
-    ExpUsers = lists:map(
-        fun({Counter, Space}) ->
-            UserName = str_utils:format_bin("u~B", [Counter]),
-            {ok, User} = oz_test_utils:create_user(
-                Config, #od_user{name = UserName}
-            ),
-            {ok, User} = oz_test_utils:add_user_to_space(
-                Config, ?ROOT, Space, User
-            ),
-            {User, UserName}
-        end, lists:zip(lists:seq(1, 9), [S1, S2, S3, S1, S2, S3, S1, S2, S3])),
-    {ExpUserIds, _} = lists:unzip(ExpUsers),
-    % Ensure user list is correct.
+    % Second attempt to unsupport the same space should return 404
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        client_spec = ClientSpec#client_spec{
-            forbidden = [
-                {user, lists:nth(1, ExpUserIds)},
-                {user, NonAdmin},
-                {provider, P1, KeyFile, CertFile}
-            ]
-        },
         rest_spec = RestSpec#rest_spec{
-            expected_body = #{<<"users">> => ExpUserIds}
-        },
-        logic_spec = LogicSpec#logic_spec{
-            expected_result = ?OK_LIST(ExpUserIds)
+            expected_code = ?HTTP_404_NOT_FOUND
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
-    % Create some more spaces and support them
-    {{S4, _}, {S5, _}, {S6, _}} = create_and_support_3_spaces(Config, P1),
-    % Create two groups for every space and three users for every group
-    ExpGroupUsers = lists:flatmap(
-        fun({Counter, Space}) ->
-            UserName1 = str_utils:format_bin("u1@g~B", [Counter]),
-            {ok, User1} = oz_test_utils:create_user(
-                Config, #od_user{name = UserName1}
-            ),
-            UserName2 = str_utils:format_bin("u2@g~B", [Counter]),
-            {ok, User2} = oz_test_utils:create_user(
-                Config, #od_user{name = UserName2}
-            ),
-            GroupName = str_utils:format_bin("g~B", [Counter]),
-            {ok, Group} = oz_test_utils:create_group(
-                Config, ?USER(User1), GroupName
-            ),
-            {ok, User2} = oz_test_utils:add_user_to_group(
-                Config, ?ROOT, Group, User2
-            ),
-            {ok, Group} = oz_test_utils:add_group_to_space(
-                Config, ?ROOT, Space, Group
-            ),
-            [{User1, UserName1}, {User2, UserName2}]
-        end, lists:zip(lists:seq(1, 6), [S4, S5, S6, S4, S5, S6])),
-    {ExpGroupUserIds, _} = lists:unzip(ExpGroupUsers),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    % Ensure user list is correct.
-    ApiTestSpec3 = ApiTestSpec#api_test_spec{
-        client_spec = #client_spec{
-            forbidden = [
-                {user, lists:nth(1, ExpGroupUserIds)},
-                {user, NonAdmin},
-                {provider, P1, KeyFile, CertFile}
-            ]
-        },
-        rest_spec = RestSpec#rest_spec{
-            expected_body = #{<<"users">> => ExpUserIds ++ ExpGroupUserIds}
-        },
-        logic_spec = LogicSpec#logic_spec{
-            expected_result = ?OK_LIST(ExpUserIds ++ ExpGroupUserIds)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
-
-    % Check every user one by one.
+    % Check logic endpoint (here provider id must be provided)
+    % Check all correct clients one by one
+    CorrectClients = [root, {provider, P1, KeyFile1, CertFile1}],
     lists:foreach(
-        fun(UserId, UserName) ->
-            ApiTestSpec4 = #api_test_spec{
+        fun(CorrectClient) ->
+            % Support the space again
+            {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(
+                Config, ?USER(U1), S1
+            ),
+            {ok, S1} = oz_test_utils:support_space(
+                Config, ?PROVIDER(P1), P1, Macaroon2, MinSupportSize
+            ),
+            % First check clients that should fail
+            ApiTestSpec3 = ApiTestSpec#api_test_spec{
                 client_spec = #client_spec{
-                    correct = [root, {user, Admin}],
                     unauthorized = [nobody],
                     forbidden = [
-                        {user, lists:nth(1, ExpUserIds)},
-                        {user, lists:nth(1, ExpGroupUserIds)},
-                        {user, NonAdmin},
-                        {provider, P1, KeyFile, CertFile}
+                        {user, U1},
+                        {provider, P2, KeyFile2, CertFile2}
                     ]
                 },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/providers/">>, P1, <<"/users/">>, UserId],
-                    expected_code = 200,
-                    expected_body = {contains, #{
-                        <<"userId">> => UserId,
-                        <<"name">> => UserName
-                    }}
-                },
+                rest_spec = undefined,
                 logic_spec = #logic_spec{
-                    operation = get,
+                    operation = delete,
                     module = n_provider_logic,
-                    function = get_eff_user,
-                    args = [client, P1, UserId],
-                    expected_result = ?OK_TERM(fun(#od_user{name = Name}) ->
-                        Name =:= UserName
-                    end)
+                    function = revoke_support,
+                    args = [client, P1, S1],
+                    expected_result = ?OK
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+            % Now clients that should succeed
+            ApiTestSpec4 = ApiTestSpec3#api_test_spec{
+                client_spec = #client_spec{
+                    correct = [CorrectClient]
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec4))
-        end, ExpUserIds ++ ExpGroupUserIds),
+        end, CorrectClients),
 
-    % Make sure that other users cannot be reached this way.
-    {ok, OtherUser} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    ApiTestSpec5 = #api_test_spec{
+    % Check if unsupporting the space again via logic returns not found error.
+    ApiTestSpec5 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {user, Admin}],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, lists:nth(1, ExpUserIds)},
-                {user, lists:nth(1, ExpGroupUserIds)},
-                {user, NonAdmin},
-                {provider, P1, KeyFile, CertFile}
+            correct = [
+                nobody,
+                root,
+                {user, U1},
+                {provider, P1, KeyFile1, CertFile1},
+                {provider, P2, KeyFile2, CertFile2}
             ]
         },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/users/">>, OtherUser],
-            expected_code = 404
-        },
+        rest_spec = undefined,
         logic_spec = #logic_spec{
-            operation = get,
+            operation = delete,
             module = n_provider_logic,
-            function = get_eff_user,
-            args = [client, P1, OtherUser],
+            function = revoke_support,
+            args = [client, P1, S1],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
 
 
-get_eff_groups_test(Config) ->
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
-    ),
-    % Create two users, grant one of them the privilege to list groups.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_GROUPS
-    ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-
-    % There are no groups yet
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {user, Admin}],
-            unauthorized = [nobody],
-            forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
-        },
-        rest_spec = RestSpec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/groups">>],
-            expected_code = 200,
-            expected_body = #{<<"groups">> => []}
-        },
-        logic_spec = LogicSpec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_eff_groups,
-            args = [client, P1],
-            expected_result = ?OK_LIST([])
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Create some spaces and support them
-    {{S1, _}, {S2, _}, {S3, _}} = create_and_support_3_spaces(Config, P1),
-    {{S4, _}, {S5, _}, {S6, _}} = create_and_support_3_spaces(Config, P1),
-    % Create two groups for every space
-    ExpGroups = lists:map(
-        fun({Counter, Space}) ->
-            GroupName = str_utils:format_bin("g~B", [Counter]),
-            {ok, Group} = oz_test_utils:create_group(
-                Config, ?ROOT, GroupName
-            ),
-            {ok, Group} = oz_test_utils:add_group_to_space(
-                Config, ?ROOT, Space, Group
-            ),
-            {Group, GroupName}
-        end, lists:zip(lists:seq(1, 6), [S1, S2, S3, S4, S5, S6])),
-    ExpGroupIds = lists:unzip(ExpGroups),
-
-    % Check if correct groups are returned
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    ApiTestSpec2 = #api_test_spec{
-        rest_spec = RestSpec#rest_spec{
-            expected_body = #{<<"groups">> => ExpGroupIds}
-        },
-        logic_spec = LogicSpec#logic_spec{
-            expected_result = ?OK_LIST(ExpGroupIds)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-
-    % Check every group one by one.
-    lists:foreach(
-        fun(GroupId, GroupName) ->
-            ApiTestSpec3 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [root, {user, Admin}],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {provider, P1, KeyFile, CertFile},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/providers/">>, P1, <<"/groups/">>, GroupId],
-                    expected_code = 200,
-                    expected_body = {contains, #{
-                        <<"groupId">> => GroupId,
-                        <<"name">> => GroupName
-                    }}
-                },
-                logic_spec = #logic_spec{
-                    operation = get,
-                    module = n_provider_logic,
-                    function = get_eff_group,
-                    args = [client, P1, GroupId],
-                    expected_result = ?OK_TERM(fun(#od_group{name = Name}) ->
-                        Name =:= GroupName
-                    end)
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec3))
-        end, ExpGroups),
-
-    % Make sure that other groups cannot be reached this way.
-    {ok, OtherGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"other">>),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    ApiTestSpec4 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {user, Admin}],
-            unauthorized = [nobody],
-            forbidden = [
-                {provider, P1, KeyFile, CertFile},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/groups/">>, OtherGroup],
-            expected_code = 404
-        },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_eff_group,
-            args = [client, P1, OtherGroup],
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
-
-
-get_spaces_test(Config) ->
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
-    ),
-    % Create two users, grant one of them the privilege to list spaces.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_SPACES
-    ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-
-    % There are no spaces yet
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {user, Admin}, {provider, P1, KeyFile, CertFile}],
-            unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}]
-        },
-        rest_spec = RestSpec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/spaces">>],
-            expected_code = 200,
-            expected_body = #{<<"spaces">> => []}
-        },
-        logic_spec = LogicSpec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_eff_spaces,
-            args = [client, P1],
-            expected_result = ?OK_LIST([])
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    % Also check the endpoint dedicated for provider
-    ApiTestSpecForProvider = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [{provider, P1, KeyFile, CertFile}]
-        },
-        rest_spec = RestSpecForProvider = #rest_spec{
-            method = get,
-            path = <<"/provider/spaces">>,
-            expected_code = 200,
-            expected_body = #{<<"spaces">> => []}
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider)),
-
-    % Create some spaces
-    ExpSpaces = create_and_support_3_spaces(Config, P1),
-    {ExpSpaceIds, _} = lists:unzip(ExpSpaces),
-    % Get spaces
-
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    % Check if correct spaces are returned
-    ApiTestSpec2 = #api_test_spec{
-        rest_spec = RestSpec#rest_spec{
-            expected_body = #{<<"spaces">> => ExpSpaceIds}
-        },
-        logic_spec = LogicSpec#logic_spec{
-            expected_result = ?OK_LIST(ExpSpaceIds)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-    % Also check the endpoint dedicated for provider
-    ApiTestSpecForProvider2 = ApiTestSpecForProvider#api_test_spec{
-        rest_spec = RestSpecForProvider#rest_spec{
-            expected_body = #{<<"spaces">> => ExpSpaceIds}
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider2)),
-
-    % Check every space one by one.
-    lists:foreach(
-        fun(SpaceId, SpaceName) ->
-            ApiTestSpec2 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [root, {user, Admin}],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {provider, P1, KeyFile, CertFile},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
-                    expected_code = 200,
-                    expected_body = {contains, #{
-                        <<"spaceId">> => SpaceId,
-                        <<"name">> => SpaceName
-                    }}
-                },
-                logic_spec = #logic_spec{
-                    operation = get,
-                    module = n_provider_logic,
-                    function = get_eff_space,
-                    args = [client, P1, SpaceId],
-                    expected_result = ?OK_TERM(fun(#od_space{name = Name}) ->
-                        Name =:= SpaceName
-                    end)
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-            % Also check the endpoint dedicated for provider
-            ApiTestSpecForProvider3 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [{provider, P1, KeyFile, CertFile}]
-                },
-                rest_spec = RestSpecForProvider = #rest_spec{
-                    method = get,
-                    path = [<<"/provider/spaces/">>, SpaceId],
-                    expected_code = 200,
-                    expected_body = {contains, #{
-                        <<"spaceId">> => SpaceId,
-                        <<"name">> => SpaceName
-                    }}
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider3))
-        end, ExpSpaces),
-
-    % Make sure that other spaces cannot be reached this way.
-    {ok, OtherSpace} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    ApiTestSpec4 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {user, Admin}],
-            unauthorized = [nobody],
-            forbidden = [
-                {provider, P1, KeyFile, CertFile},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/spaces/">>, OtherSpace],
-            expected_code = 404
-        },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_eff_space,
-            args = [client, P1, OtherSpace],
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)),
-    % Also check the endpoint dedicated for provider
-    ApiTestSpecForProvider4 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [{provider, P1, KeyFile, CertFile}]
-        },
-        rest_spec = RestSpecForProvider = #rest_spec{
-            method = get,
-            path = [<<"/provider/spaces/">>, OtherSpace],
-            expected_code = 404
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider4)).
-
-
-update_test(Config) ->
+check_my_ports_test(Config) ->
     {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
     ),
+    CorrectData = #{
+        <<"undefined">> => <<"http://url1.com">>,
+        <<"service1">> => <<"http://service1.com">>,
+        <<"service2">> => <<"http://service2.com">>,
+        <<"service3">> => <<"http://service3.com">>
+    },
+    RequiredKeys = maps:keys(CorrectData),
+    ExpectedBody = #{
+        <<"http://url1.com">> => ok,
+        <<"http://service1.com">> => ok,
+        <<"http://service2.com">> => error,
+        <<"http://service3.com">> => error
+    },
+
+    % http_client is mocked in init_per_testcase to return proper values.
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {provider, P1, KeyFile1, CertFile1}]
-            % No need to check other clients - this endpoint is dedicated to the
-            % provider that presents it certs.
-            % root client is only checked in logic tests
+            correct = [root, nobody, {provider, P1, KeyFile1, CertFile1}]
         },
         rest_spec = #rest_spec{
-            method = patch,
-            path = <<"/provider">>,
-            expected_code = 204
+            method = post,
+            path = <<"/provider/test/check_my_ports">>,
+            expected_code = ?HTTP_200_OK,
+            % Convert atoms to binaries in expected body for REST
+            expected_body = maps:map(fun(_, ValAtom) ->
+                atom_to_binary(ValAtom, utf8)
+            end, ExpectedBody)
         },
         logic_spec = #logic_spec{
-            operation = update,
+            operation = create,
             module = n_provider_logic,
-            function = update,
-            args = [client, P1, data],
-            expected_result = ?OK
+            function = check_my_ports,
+            args = [client, data],
+            expected_result = ?OK_TERM(fun(Result) ->
+                Result =:= ExpectedBody
+            end)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"urls">>, <<"redirectionPoint">>],
-            optional = [<<"latitude">>, <<"longitude">>],
-            correct_values = #{
-                <<"name">> => <<"New Prov name">>,
-                <<"urls">> => [<<"new.url">>],
-                <<"redirectionPoint">> => <<"https://new.url">>,
-                <<"latitude">> => -12.87645,
-                <<"longitude">> => -4.44
-            },
-            bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
-                {<<"urls">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"urls">>)},
-                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
-                {<<"urls">>, 1234, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
-                {<<"redirectionPoint">>, <<"">>, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
-                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
-                {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
-                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"longitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"longitude">>)},
-                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)}
-            ]
+            required = RequiredKeys,
+            correct_values = CorrectData
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-delete_test(Config) ->
+check_my_ip_test(Config) ->
     {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
     ),
+    ClientIP = list_to_binary(os:cmd("hostname -i") -- "\n"),
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {provider, P1, KeyFile1, CertFile1}]
-            % No need to check other clients - this endpoint is dedicated to the
-            % provider that presents it certs.
-            % root client is only checked in logic tests
+            correct = [root, nobody, {provider, P1, KeyFile1, CertFile1}]
         },
+        % This endpoint makes sense only via REST
         rest_spec = #rest_spec{
-            method = delete,
-            path = <<"/provider">>,
-            expected_code = 202
-        },
-        logic_spec = #logic_spec{
-            operation = delete,
-            module = n_provider_logic,
-            function = delete,
-            args = [client, P1],
-            expected_result = ?OK
+            method = get,
+            path = <<"/provider/test/check_my_ip">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = ClientIP
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    % There is also an admin endpoint for deleting providers, provider 1
-    % should also be able to use it, but other providers should not.
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
-    ),
-    % Create two users, grant one of them the privilege to remove providers.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_DELETE
-    ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, Admin},
-                {provider, P1, KeyFile1, CertFile1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {provider, P2, KeyFile2, CertFile2}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = delete,
-            path = [<<"/providers/">>, P1],
-            expected_code = 202
-        },
-        logic_spec = #logic_spec{
-            operation = delete,
-            module = n_provider_logic,
-            function = delete,
-            args = [client, P1],
-            expected_result = ?OK
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 %%%===================================================================
@@ -988,6 +1330,37 @@ end_per_suite(Config) ->
     application:stop(etls),
     ok.
 %%    test_node_starter:clean_environment(Config).
+
+
+init_per_testcase(check_my_ports_test, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, http_client, get,
+        fun(Url, Headers, Body, Options) ->
+            case Url of
+                <<"http://url1.com">> ->
+                    {ok, 200, [], <<"whatever body">>};
+                <<"http://service1.com">> ->
+                    {ok, 200, [], <<"service1">>};
+                <<"http://service2.com">> ->
+                    {ok, 200, [], <<"body not matching service name">>};
+                <<"http://service3.com">> ->
+                    {ok, 304, [], <<"">>};
+                _ ->
+                    meck:passthrough([Url, Headers, Body, Options])
+            end
+        end),
+    Config;
+init_per_testcase(_, Config) ->
+    Config.
+
+
+end_per_testcase(check_my_ports_test, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, http_client),
+    ok;
+end_per_testcase(_, _Config) ->
+    ok.
 
 
 %%%===================================================================
@@ -1027,3 +1400,4 @@ create_and_support_3_spaces(Config, ProvId) ->
         {S2, S2Name},
         {S3, S3Name}
     ].
+

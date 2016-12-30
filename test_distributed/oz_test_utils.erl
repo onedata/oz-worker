@@ -35,8 +35,8 @@
     set_group_oz_privileges/4,
     delete_group/2,
 
-    add_user_to_group/4,
-    add_group_to_group/4,
+    add_user_to_group/3,
+    add_group_to_group/3,
     group_remove_user/3,
     group_leave_space/3
 ]).
@@ -48,8 +48,8 @@
     update_space/3,
     delete_space/2,
 
-    add_user_to_space/4,
-    add_group_to_space/4,
+    add_user_to_space/3,
+    add_group_to_space/3,
     space_set_user_privileges/5,
     space_set_group_privileges/5,
     space_invite_user_token/3,
@@ -77,8 +77,8 @@
     create_handle_service/5, create_handle_service/3,
     list_handle_services/1,
     delete_handle_service/2,
-    add_user_to_handle_service/4,
-    add_group_to_handle_service/4
+    add_user_to_handle_service/3,
+    add_group_to_handle_service/3
 ]).
 
 -export([
@@ -86,8 +86,8 @@
     list_handles/1,
     update_handle/5,
     delete_handle/2,
-    add_user_to_handle/4,
-    add_group_to_handle/4
+    add_user_to_handle/3,
+    add_group_to_handle/3
 ]).
 
 -export([
@@ -261,12 +261,11 @@ delete_group(Config, GroupId) ->
 %% Adds a user a to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user_to_group(Config :: term(), Client :: n_entity_logic:client(),
-    GroupId :: od_group:id(), UserId :: od_user:id()) ->
-    {ok, UserId :: od_user:id()}.
-add_user_to_group(Config, Client, GroupId, UserId) ->
+-spec add_user_to_group(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, UserId :: od_user:id()}.
+add_user_to_group(Config, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_group_logic, add_user, [Client, GroupId, UserId]
+        Config, n_group_logic, add_user, [?ROOT, GroupId, UserId]
     )).
 
 
@@ -275,12 +274,11 @@ add_user_to_group(Config, Client, GroupId, UserId) ->
 %% Adds a group a to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group_to_group(Config :: term(), Client :: n_entity_logic:client(),
-    GroupId :: od_group:id(), ChildGroupId :: od_group:id()) ->
-    {ok, ChildGroupId :: od_group:id()}.
-add_group_to_group(Config, Client, GroupId, ChildGroupId) ->
+-spec add_group_to_group(Config :: term(), GroupId :: od_group:id(),
+    ChildGroupId :: od_group:id()) -> {ok, ChildGroupId :: od_group:id()}.
+add_group_to_group(Config, GroupId, ChildGroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_group_logic, add_group, [Client, GroupId, ChildGroupId]
+        Config, n_group_logic, add_group, [?ROOT, GroupId, ChildGroupId]
     )).
 
 
@@ -376,11 +374,11 @@ delete_space(Config, SpaceId) ->
 %% Adds a user to a space.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user_to_space(Config :: term(), Client :: n_entity_logic:client(),
-    SpaceId :: od_space:id(), UserId :: od_user:id()) -> {ok, od_user:id()}.
-add_user_to_space(Config, Client, SpaceId, UserId) ->
+-spec add_user_to_space(Config :: term(), SpaceId :: od_space:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+add_user_to_space(Config, SpaceId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, add_user, [Client, SpaceId, UserId]
+        Config, n_space_logic, add_user, [?ROOT, SpaceId, UserId]
     )).
 
 
@@ -389,11 +387,11 @@ add_user_to_space(Config, Client, SpaceId, UserId) ->
 %% Adds a group to a space.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group_to_space(Config :: term(), Client :: n_entity_logic:client(),
-    SpaceId :: od_space:id(), GroupId :: od_group:id()) -> {ok, od_group:id()}.
-add_group_to_space(Config, Client, SpaceId, GroupId) ->
+-spec add_group_to_space(Config :: term(), SpaceId :: od_space:id(),
+    GroupId :: od_group:id()) -> {ok, od_group:id()}.
+add_group_to_space(Config, SpaceId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, add_group, [Client, SpaceId, GroupId]
+        Config, n_space_logic, add_group, [?ROOT, SpaceId, GroupId]
     )).
 
 
@@ -594,7 +592,7 @@ delete_provider(Config, ProviderId) ->
     Size :: non_neg_integer()) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
 support_space(Config, Client, ProviderId, Token, Size) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, support_space, [
+    ?assertMatch({ok, _}, call_oz(Config, n_provider_logic, support_space, [
         Client, ProviderId, Token, Size
     ])).
 
@@ -659,11 +657,11 @@ delete_handle_service(Config, HandleServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec add_user_to_handle_service(Config :: term(),
-    Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id()) -> {ok, od_user:id()}.
-add_user_to_handle_service(Config, Client, HServiceId, UserId) ->
+    HServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
+    {ok, od_user:id()}.
+add_user_to_handle_service(Config, HServiceId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, add_user, [
-        Client, HServiceId, UserId
+        ?ROOT, HServiceId, UserId
     ])).
 
 
@@ -673,11 +671,11 @@ add_user_to_handle_service(Config, Client, HServiceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec add_group_to_handle_service(Config :: term(),
-    Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_group:id()) -> {ok, od_group:id()}.
-add_group_to_handle_service(Config, Client, HServiceId, GroupId) ->
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
+    {ok, od_group:id()}.
+add_group_to_handle_service(Config, HServiceId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, add_group, [
-        Client, HServiceId, GroupId
+        ?ROOT, HServiceId, GroupId
     ])).
 
 
@@ -732,11 +730,11 @@ list_handles(Config) ->
     NewResourceId :: od_handle:resource_id(),
     NewMetadata :: od_handle:metadata()) -> ok.
 update_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
-    call_oz(Config, n_handle_logic, update, [?ROOT, HandleId, #{
+    ?assertMatch(ok, call_oz(Config, n_handle_logic, update, [?ROOT, HandleId, #{
         <<"resourceType">> => NewResourceType,
         <<"resourceId">> => NewResourceId,
         <<"metadata">> => NewMetadata
-    }]).
+    }])).
 
 
 %%--------------------------------------------------------------------
@@ -746,7 +744,7 @@ update_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
 %%--------------------------------------------------------------------
 -spec delete_handle(Config :: term(), HandleId :: od_handle:id()) -> ok.
 delete_handle(Config, HandleId) ->
-    call_oz(Config, n_handle_logic, delete, [?ROOT, HandleId]).
+    ?assertMatch(ok, call_oz(Config, n_handle_logic, delete, [?ROOT, HandleId])).
 
 
 %%--------------------------------------------------------------------
@@ -754,11 +752,11 @@ delete_handle(Config, HandleId) ->
 %% Adds a user to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user_to_handle(Config :: term(), Client :: n_entity_logic:client(),
-    HServiceId :: od_handle:id(), UserId :: od_user:id()) -> {ok, od_user:id()}.
-add_user_to_handle(Config, Client, HandleId, UserId) ->
+-spec add_user_to_handle(Config :: term(), HServiceId :: od_handle:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+add_user_to_handle(Config, HandleId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, add_user, [
-        Client, HandleId, UserId
+        ?ROOT, HandleId, UserId
     ])).
 
 
@@ -767,17 +765,17 @@ add_user_to_handle(Config, Client, HandleId, UserId) ->
 %% Adds a group to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group_to_handle(Config :: term(), Client :: n_entity_logic:client(),
-    HServiceId :: od_handle:id(), GroupId :: od_group:id()) ->
-    {ok, od_group:id()}.
-add_group_to_handle(Config, Client, HandleId, GroupId) ->
+-spec add_group_to_handle(Config :: term(), HServiceId :: od_handle:id(),
+    GroupId :: od_group:id()) -> {ok, od_group:id()}.
+add_group_to_handle(Config, HandleId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, add_group, [
-        Client, HandleId, GroupId
+        ?ROOT, HandleId, GroupId
     ])).
 
 
 %%--------------------------------------------------------------------
-%% @doc Deletes all entities from onezone
+%% @doc
+%% Deletes all entities from onezone
 %% (users, groups, spaces, shares, providers).
 %% NOTE: Does not remove predefined groups! Use remove_all_entities/2 for that.
 %% @end
@@ -788,7 +786,8 @@ delete_all_entities(Config) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Deletes all entities from onezone
+%% @doc
+%% Deletes all entities from onezone
 %% (users, groups, spaces, shares, providers).
 %% RemovePredefinedGroups decides if predefined groups should be removed too.
 %% @end
@@ -803,11 +802,11 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, HServices} = list_handle_services(Config),
     {ok, Groups} = list_groups(Config),
     {ok, Users} = list_users(Config),
-    [true = delete_provider(Config, PId) || PId <- Providers],
-    [true = delete_share(Config, ShId) || ShId <- Shares],
-    [true = delete_space(Config, SpId) || SpId <- Spaces],
-    [true = delete_handle(Config, HId) || HId <- Handles],
-    [true = delete_handle_service(Config, HSId) || HSId <- HServices],
+    [?assertMatch(ok, delete_provider(Config, PId)) || PId <- Providers],
+    [?assertMatch(ok, delete_share(Config, ShId)) || ShId <- Shares],
+    [?assertMatch(ok, delete_space(Config, SpId)) || SpId <- Spaces],
+    [?assertMatch(ok, delete_handle(Config, HId)) || HId <- Handles],
+    [?assertMatch(ok, delete_handle_service(Config, HSId)) || HSId <- HServices],
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of
         true ->
@@ -824,8 +823,8 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
                     not lists:member(GroupId, PredefinedGroups)
                 end, Groups)
     end,
-    [true = delete_group(Config, GId) || GId <- GroupsToDelete],
-    [true = delete_user(Config, UId) || UId <- Users],
+    [?assertMatch(ok, delete_group(Config, GId)) || GId <- GroupsToDelete],
+    [?assertMatch(ok, delete_user(Config, UId)) || UId <- Users],
     ok.
 
 

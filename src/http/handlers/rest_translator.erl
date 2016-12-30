@@ -18,17 +18,35 @@
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-% TODO definy dla codow
 
 -export([response/5]).
--export([created_reply/1, updated_reply/0]).
+-export([created_reply/1, updated_reply/0, deleted_reply/0]).
 
 -define(PROVIDER_PLUGIN, n_provider_logic_plugin).
 
 
-response(_, _, _, _, {error, Type}) ->
+response(Function, Plugin, EntityId, Resource, Result) ->
+    try
+        produce_response(Function, Plugin, EntityId, Resource, Result)
+    catch
+        Type:Message ->
+            ?error("Cannot translate REST result for:~n"
+            "Plugin: ~p~n"
+            "Function: ~p~n"
+            "EntityId: ~p~n"
+            "Resource: ~p~n"
+            "Result: ~p~n"
+            "---------~n"
+            "Error was: ~p:~p", [
+                Plugin, Function, EntityId, Resource, Result, Type, Message
+            ]),
+            error_rest_translator:response(?ERROR_INTERNAL_SERVER_ERROR)
+    end.
+
+
+produce_response(_, _, _, _, {error, Type}) ->
     error_rest_translator:response({error, Type});
-response(Function, ?PROVIDER_PLUGIN, EntityId, Resource, Result) ->
+produce_response(Function, ?PROVIDER_PLUGIN, EntityId, Resource, Result) ->
     provider_rest_translator:response(Function, EntityId, Resource, Result).
 
 
@@ -42,5 +60,10 @@ created_reply(PathTokens) ->
     },
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
+
 updated_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
+
+
+deleted_reply() ->
+    #rest_resp{code = ?HTTP_202_ACCEPTED}.

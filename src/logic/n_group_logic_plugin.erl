@@ -19,12 +19,9 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
+-export([get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
-
-
-entity_type() ->
-    od_group.
+-export([entity_to_string/1]).
 
 
 get_entity(GroupId) ->
@@ -225,6 +222,10 @@ validate(update, oz_privileges) -> #{
         <<"operation">> => {atom, [set, grant, revoke]}
     }
 }.
+
+
+entity_to_string(GroupId) ->
+    od_group:to_string(GroupId).
 
 
 auth_by_privilege(UserId, Privilege) ->

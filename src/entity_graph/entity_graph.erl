@@ -105,10 +105,10 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
 #{entity_type() => [eff_relation(entity_id()) | privileges:oz_privilege()]}.
 -type map_of_eff_relations_with_attrs() ::
 #{entity_type() => [eff_relation_with_attrs(entity_id(), attributes())]}.
--type map_of_any_eff_relations() ::
-#{entity_type() =>
-eff_relation(entity_id()) | eff_relation_with_attrs(entity_id(), attributes()) | [privileges:oz_privilege()]
-}.
+
+-type any_eff_relations() ::
+eff_relation(entity_id()) | eff_relation_with_attrs(entity_id(), attributes()) | [privileges:oz_privilege()].
+-type map_of_any_eff_relations() :: #{entity_type() => any_eff_relations()}.
 
 %% API
 -export([init_state/0]).
@@ -326,7 +326,7 @@ update_relation(od_group, GroupId, od_handle, HandleId, NewPrivs) ->
     update_relation(od_group, GroupId, NewPrivs, od_handle, HandleId, undefined);
 
 update_relation(od_space, SpaceId, od_provider, ProviderId, NewSupportSize) ->
-    update_relation(od_group, SpaceId, NewSupportSize, od_provider, ProviderId, NewSupportSize).
+    update_relation(od_space, SpaceId, NewSupportSize, od_provider, ProviderId, NewSupportSize).
 
 
 %%--------------------------------------------------------------------
@@ -469,7 +469,8 @@ delete_with_relations(EntityType, EntityId) ->
                         ok = ChType:delete(ChId)
                     end, ChIds)
             end, DependentChildren),
-        ok
+        % Remove the entity itself
+        ok = EntityType:delete(EntityId)
     catch
         Type:Message ->
             ?error_stacktrace(
@@ -489,7 +490,7 @@ delete_with_relations(EntityType, EntityId) ->
     Operation :: privileges_operation(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
 update_oz_privileges(EntityType, EntityId, Operation, Privileges) ->
-    {ok, _} = EntityType:update(EntityId, fun(Entity) ->
+    ok = update_entity_sync(EntityType, EntityId, fun(Entity) ->
         OzPrivileges = get_oz_privileges(Entity),
         NewOzPrivileges = case Operation of
             set ->
@@ -1487,8 +1488,11 @@ update_privileges(EntityId, Relation, Operation, Privileges) ->
 %% merged as a union of two sets.
 %% @end
 %%--------------------------------------------------------------------
--spec merge_eff_relations(EffMap1 :: map_of_any_eff_relations(),
-    EffMap2 :: map_of_any_eff_relations()) -> map_of_any_eff_relations().
+-spec merge_eff_relations(Rel1 :: any_eff_relations(),
+    Rel2 :: any_eff_relations()) -> any_eff_relations().
+merge_eff_relations(List1, List2) when is_list(List1) andalso is_list(List2) ->
+    % Covers lists of atoms (effective oz privileges)
+    ordsets_union(List1, List2);
 merge_eff_relations(EffMap1, EffMap2) when is_map(EffMap1) andalso is_map(EffMap2) ->
     lists:foldl(
         fun({EntityId, EffRelation1}, MapAcc) ->
@@ -1501,8 +1505,7 @@ merge_eff_relations(EffMap1, EffMap2) when is_map(EffMap1) andalso is_map(EffMap
                             % Covers eff_relation_with_attrs() type
                             {privileges:union(Privs1, Privs2), ordsets_union(Int1, Int2)};
                         {List1, List2} ->
-                            % Covers eff_relation() type and lists of atoms
-                            % (effective oz privileges)
+                            % Covers eff_relation() type
                             ordsets_union(List1, List2)
                     end
             end,

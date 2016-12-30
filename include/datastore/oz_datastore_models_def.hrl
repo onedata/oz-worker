@@ -80,11 +80,11 @@
 -record(od_user, {
     name = <<"">> :: od_user:name(),
     login = <<"">> :: binary(),
+    alias = ?EMPTY_ALIAS :: binary(),
+    email_list = [] :: [binary()],
     % Decides if this user can login via login:password, only users created in
     % onepanel are currently allowed to do that.
     basic_auth_enabled = false :: boolean(),
-    alias = ?EMPTY_ALIAS :: binary(),
-    email_list = [] :: [binary()],
     connected_accounts = [] :: [#oauth_account{}],
     default_space = undefined :: binary() | undefined,
     % This allows to remember the provider which was selected for user,

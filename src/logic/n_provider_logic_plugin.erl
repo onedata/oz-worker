@@ -24,7 +24,7 @@
 eff_users | {eff_user, od_user:id()} |
 eff_groups | {eff_group, od_group:id()} |
 spaces | {space, od_space:id()} |
-check_my_ports | check_my_ip.
+check_my_ports | {check_my_ip, cowboy_req:req()}.
 
 -export_type([resource/0]).
 
@@ -111,15 +111,15 @@ get(_, undefined, undefined, list) ->
 get(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
     {ok, Spaces};
 get(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
-    ?assert_success(n_space_logic_plugin:get_entity(SpaceId));
+    ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId));
 get(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
     {ok, maps:keys(EffUsers)};
 get(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
-    ?assert_success(n_user_logic_plugin:get_entity(UserId));
+    ?throw_on_failure(n_user_logic_plugin:get_entity(UserId));
 get(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
     {ok, maps:keys(EffGroups)};
 get(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
-    ?assert_success(n_group_logic_plugin:get_entity(GroupId));
+    ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId));
 get(_, undefined, undefined, {check_my_ip, Req}) ->
     {{Ip, _Port}, _} = cowboy_req:peer(Req),
     {ok, list_to_binary(inet_parse:ntoa(Ip))}.
@@ -191,7 +191,7 @@ authorize(create, undefined, entity_dev, _) ->
 authorize(create, ProvId, support, ?PROVIDER(ProvId)) ->
     true;
 
-authorize(get, undefined, check_my_ip, _) ->
+authorize(get, undefined, {check_my_ip, _}, _) ->
     true;
 authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);

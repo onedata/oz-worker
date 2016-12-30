@@ -22,7 +22,7 @@
 -define(PLUGIN, n_user_logic_plugin).
 
 -export([
-    create/1,
+    create/1, create/2,
     create_client_token/2
 ]).
 -export([
@@ -281,8 +281,12 @@ exists(UserId) ->
 
 
 has_eff_oz_privilege(UserId, Privilege) when is_binary(UserId) ->
-    {ok, #document{value = User}} = od_user:get(UserId),
-    has_eff_oz_privilege(User, Privilege);
+    case od_user:get(UserId) of
+        {ok, #document{value = User}} ->
+            has_eff_oz_privilege(User, Privilege);
+        _ ->
+            false
+    end;
 has_eff_oz_privilege(#od_user{eff_oz_privileges = UserPrivileges}, Privilege) ->
     lists:member(Privilege, UserPrivileges).
 

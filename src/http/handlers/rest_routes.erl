@@ -37,17 +37,17 @@ provider_routes() ->
             get => {P, ?BINDING(id), entity},  % DONE
             delete => {P, ?BINDING(id), entity} % DONE
         }}},
-        {<<"/providers/:id/users">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), users}  % DONE
+        {<<"/providers/:id/effective_users">>, #rest_req{methods = #{
+            get => {P, ?BINDING(id), eff_users}  % DONE
         }}},
-        {<<"/providers/:id/users/:uid">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), {user, ?BINDING(uid)}}  % DONE
+        {<<"/providers/:id/effective_users/:uid">>, #rest_req{methods = #{
+            get => {P, ?BINDING(id), {eff_user, ?BINDING(uid)}}  % DONE
         }}},
-        {<<"/providers/:id/groups">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), groups}  % DONE
+        {<<"/providers/:id/effective_groups">>, #rest_req{methods = #{
+            get => {P, ?BINDING(id), eff_groups}  % DONE
         }}},
-        {<<"/providers/:id/groups/:gid">>, #rest_req{methods = #{
-            get => {P, ?BINDING(id), {group, ?BINDING(gid)}}  % DONE
+        {<<"/providers/:id/effective_groups/:gid">>, #rest_req{methods = #{
+            get => {P, ?BINDING(id), {eff_group, ?BINDING(gid)}}  % DONE
         }}},
         {<<"/providers/:id/spaces">>, #rest_req{methods = #{
             get => {P, ?BINDING(id), spaces}  % DONE
@@ -65,14 +65,14 @@ provider_routes() ->
             post => {P, undefined, entity}  % DONE
         }}},
         {<<"/provider/spaces">>, #rest_req{methods = #{
-            get => {P, ?CLIENT_ID, spaces},
-            post => {P, ?CLIENT_ID, spaces}
+            get => {P, ?CLIENT_ID, spaces}
         }}},
         {<<"/provider/spaces/support">>, #rest_req{methods = #{
             post => {P, ?CLIENT_ID, support}
         }}},
         {<<"/provider/spaces/:sid">>, #rest_req{methods = #{
             get => {P, ?CLIENT_ID, {space, ?BINDING(sid)}},
+            patch => {P, ?CLIENT_ID, {space, ?BINDING(sid)}},
             delete => {P, ?CLIENT_ID, {space, ?BINDING(sid)}}
         }}},
         {<<"/provider/test/check_my_ip">>, #rest_req{methods = #{

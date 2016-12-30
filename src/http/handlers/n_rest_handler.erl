@@ -398,12 +398,8 @@ binary_to_method(<<"DELETE">>) -> delete.
 call_entity_logic(Method, Req, #rest_req{client = Client, methods = Methods} = State, Data) ->
     Function = method_to_el_function(Method),
     {LogicPlugin, EntityIdVal, ResourceVal} = maps:get(Method, Methods),
-    ?dump(EntityIdVal),
-    ?dump(ResourceVal),
     EntityId = resolve_bindings(EntityIdVal, Client, Req),
     Resource = resolve_bindings(ResourceVal, Client, Req),
-    ?dump(EntityId),
-    ?dump(Resource),
     Args = el_function_args(Function, Client, LogicPlugin, EntityId, Resource, Data),
     Result = erlang:apply(n_entity_logic, Function, Args),
     #rest_resp{

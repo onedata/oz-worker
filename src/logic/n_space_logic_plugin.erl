@@ -13,18 +13,16 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("entity_logic.hrl").
 -include("errors.hrl").
+-include("entity_logic.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 
--export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
+-export([get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
-
-
-entity_type() ->
-    od_space.
+-export([entity_to_string/1]).
 
 
 get_entity(SpaceId) ->
@@ -142,44 +140,44 @@ exists(SpaceId, _) when is_binary(SpaceId) ->
 authorize(create, undefined, entity, ?USER) ->
     true;
 authorize(create, _SpaceId, users, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, add_member_to_space);
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_ADD_MEMBERS);
 authorize(create, _SpaceId, groups, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, add_member_to_space);
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_ADD_MEMBERS);
 authorize(create, _SpaceId, invite_provider_token, ?USER(UserId)) ->
-    auth_by_privilege(UserId, space_add_provider);
+    auth_by_privilege(UserId, ?SPACE_INVITE_PROVIDER);
 authorize(create, _SpaceId, invite_user_token, ?USER(UserId)) ->
-    auth_by_privilege(UserId, space_invite_user);
+    auth_by_privilege(UserId, ?SPACE_INVITE_USER);
 
 
 authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_spaces);
 authorize(get, _SpaceId, users, ?USER(UserId)) ->
-    auth_by_privilege(UserId, space_view_data);
+    auth_by_privilege(UserId, ?SPACE_VIEW);
 authorize(get, _SpaceId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, space_view_data);
+    auth_by_privilege(UserId, ?SPACE_VIEW);
 
 
 authorize(update, _SpaceId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, space_change_data);
+    auth_by_privilege(UserId, ?SPACE_UPDATE);
 
 authorize(update, _SpaceId, {user, _UserId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, space_set_privileges);
+    auth_by_privilege(UserId, ?SPACE_SET_PRIVILEGES);
 
 authorize(update, _SpaceId, {group, _GroupId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, space_set_privileges);
+    auth_by_privilege(UserId, ?SPACE_SET_PRIVILEGES);
 
 
 authorize(delete, _SpaceId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, space_remove);
+    auth_by_privilege(UserId, ?SPACE_DELETE);
 
 authorize(delete, _SpaceId, {user, _UserId}, ?USER(UserId)) -> [
-    auth_by_privilege(UserId, space_remove_user),
-    auth_by_oz_privilege(UserId, remove_member_from_space)
+    auth_by_privilege(UserId, ?SPACE_REMOVE_USER),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_REMOVE_MEMBERS)
 ];
 
 authorize(delete, _SpaceId, {group, _UserId}, ?USER(UserId)) -> [
-    auth_by_privilege(UserId, space_remove_group),
-    auth_by_oz_privilege(UserId, remove_member_from_space)
+    auth_by_privilege(UserId, ?SPACE_REMOVE_GROUP),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_REMOVE_MEMBERS)
 ].
 
 
@@ -219,6 +217,10 @@ validate(update, Member) when Member =:= user orelse Member =:= group -> #{
         <<"operation">> => {atom, [set, grant, revoke]}
     }
 }.
+
+
+entity_to_string(SpaceId) ->
+    od_space:to_string(SpaceId).
 
 
 

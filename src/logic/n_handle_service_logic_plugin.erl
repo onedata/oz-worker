@@ -19,12 +19,9 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
+-export([get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
-
-
-entity_type() ->
-    od_handle_service.
+-export([entity_to_string/1]).
 
 
 get_entity(HServiceId) ->
@@ -158,6 +155,10 @@ validate(update, entity) -> #{
         <<"serviceProperties">> => {json, non_empty}
     }
 }.
+
+
+entity_to_string(HServiceId) ->
+    od_handle_service:to_string(HServiceId).
 
 
 

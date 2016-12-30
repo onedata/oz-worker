@@ -32,6 +32,7 @@
 
 %% API
 -export([get_by_criterion/1]).
+-export([to_string/1]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -43,9 +44,9 @@ record_struct(1) ->
     {record, [
         {name, string},
         {login, string},
-        {basic_auth_enabled, boolean},
         {alias, string},
         {email_list, [string]},
+        {basic_auth_enabled, boolean},
         {connected_accounts, [{record, 1, [
             {provider_id, atom},
             {user_id, string},
@@ -242,3 +243,9 @@ get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
     end,
     {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
     {ok, Result}.
+
+
+
+
+to_string(UserId) ->
+    <<"user:", UserId/binary>>.
