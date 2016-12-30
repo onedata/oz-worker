@@ -8,7 +8,7 @@
 %%% @doc This file contains tests for automatic creation of predefined groups.
 %%% @end
 %%%-------------------------------------------------------------------
--module(predefined_groups_test_SUITE).
+-module(entities_setup_test_SUITE).
 -author("Lukasz Opiola").
 
 -include("registered_names.hrl").
@@ -22,12 +22,14 @@
 -export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([predefined_groups_test/1, global_groups_test/1]).
 -export([automatic_space_membership_via_global_group_test/1]).
+-export([automatic_first_space_test/1]).
 
 all() ->
     ?ALL([
         predefined_groups_test,
         global_groups_test,
-        automatic_space_membership_via_global_group_test
+        automatic_space_membership_via_global_group_test,
+        automatic_first_space_test
     ]).
 
 %%%===================================================================
@@ -188,7 +190,7 @@ automatic_space_membership_via_global_group_test(Config) ->
         Config, ?USER(DummyUser), <<"OpenSpace">>
     ),
     {ok, OpenSpaceId} = oz_test_utils:add_group_to_space(
-        Config, ?ROOT, OpenSpaceId, <<"all_users_group">>
+        Config, OpenSpaceId, <<"all_users_group">>
     ),
     % Now, every created user should belong to the All Users group and thus
     % have access to the OpenSpace.
@@ -229,6 +231,34 @@ automatic_space_membership_via_global_group_test(Config) ->
         Config, OpenSpaceId, UserId
     )),
     ok.
+
+
+% This test checks if automatic first space mechanism works as expected.
+automatic_first_space_test(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    test_utils:set_env(Node, oz_worker, enable_automatic_first_space, false),
+    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserRecord} = oz_test_utils:get_user(Config, UserId),
+    #od_user{
+        default_space = DefaultSpace,
+        spaces = Spaces
+    } = UserRecord,
+    ?assertEqual(DefaultSpace, undefined),
+    ?assertEqual(Spaces, #{}),
+    % Enable automatic first space and check again
+    test_utils:set_env(Node, oz_worker, enable_automatic_first_space, true),
+    {ok, UserId2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserRecord2} = oz_test_utils:get_user(Config, UserId2),
+    #od_user{
+        default_space = DefaultSpace2,
+        spaces = Spaces2
+    } = UserRecord2,
+    ?assertEqual(maps:size(Spaces2), 1),
+    [SpaceId2] = maps:keys(Spaces2),
+    ?assertEqual(DefaultSpace2, SpaceId2),
+    {ok, #od_space{users = Users}} = oz_test_utils:get_space(Config, SpaceId2),
+    ?assert(maps:is_key(UserId2, Users)).
+
 
 %%%===================================================================
 %%% Setup/teardown functions

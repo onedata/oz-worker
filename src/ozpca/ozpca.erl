@@ -74,11 +74,13 @@ stop() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec sign_provider_req(ProviderId :: binary(), CSRPem :: binary()) ->
-    {ok, {CertPem :: binary(), Serial :: binary()}}.
+    {ok, {CertPem :: binary(), Serial :: binary()}} | {error, bad_csr}.
 sign_provider_req(ProviderId, CSRPem) ->
     case delegate(fun sign_provider_req_imp/3, [ProviderId, CSRPem]) of
         {ok, CertPem, Serial} when is_binary(CertPem), is_integer(Serial) ->
-            {ok, {CertPem, integer_to_binary(Serial, 16)}}
+            {ok, {CertPem, integer_to_binary(Serial, 16)}};
+        {error, bad_csr} ->
+            {error, bad_csr}
     end.
 
 %%--------------------------------------------------------------------
@@ -175,7 +177,8 @@ revoke_imp(Serial, CaDir) ->
 %% @doc The underlying implementation of {@link ozpca:sign_provider_req/2}.
 %%--------------------------------------------------------------------
 -spec sign_provider_req_imp(ProviderId :: binary(), CSRPem :: binary(),
-    CaDir :: string()) -> {ok, Pem :: binary(), Serial :: integer()}.
+    CaDir :: string()) ->
+    {ok, Pem :: binary(), Serial :: integer()} | {error, bad_csr}.
 sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
     TmpDir = utils:mkdtemp(),
     CSRFile = random_filename(TmpDir),
@@ -193,12 +196,19 @@ sign_provider_req_imp(ProviderId, CSRPem, CaDir) ->
         " -out ", CertFile]),
 
     {ok, Pem} = file:read_file(CertFile),
-    [{'Certificate', CertDer, not_encrypted}] = public_key:pem_decode(Pem),
-    Cert = public_key:pkix_decode_cert(CertDer, otp),
-    #'OTPCertificate'{tbsCertificate = #'OTPTBSCertificate'{serialNumber = Serial}} = Cert,
-    utils:rmtempdir(TmpDir),
-
-    {ok, Pem, Serial}.
+    case public_key:pem_decode(Pem) of
+        [] ->
+            % Cert was not written, which implies openssl error (bad CSR)
+            {error, bad_csr};
+        [{'Certificate', CertDer, not_encrypted}] ->
+            Cert = public_key:pkix_decode_cert(CertDer, otp),
+            #'OTPCertificate'{
+                tbsCertificate = #'OTPTBSCertificate'{
+                    serialNumber = Serial
+                }} = Cert,
+            utils:rmtempdir(TmpDir),
+            {ok, Pem, Serial}
+    end.
 
 %%--------------------------------------------------------------------
 %% @private

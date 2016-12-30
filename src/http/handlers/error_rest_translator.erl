@@ -63,7 +63,7 @@ translate(?ERROR_MISSING_AT_LEAST_ONE_VALUE(Keys)) ->
     };
 translate(?ERROR_BAD_DATA(Key)) ->
     {?HTTP_400_BAD_REQUEST,
-        {<<"Bad value: provided \"~s\" could not be understood">>, [Key]}
+        {<<"Bad value: provided \"~s\" could not be understood by the server">>, [Key]}
     };
 translate(?ERROR_BAD_VALUE_EMPTY(Key)) ->
     {?HTTP_400_BAD_REQUEST,
@@ -155,6 +155,10 @@ translate(?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" cannot start with '~s'">>,
         [Key, ?NO_ALIAS_UUID_PREFIX]
+    }};
+translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
+    {?HTTP_400_BAD_REQUEST, {
+        <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]
     }};
 % Errors connected with relations between entities
 translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->

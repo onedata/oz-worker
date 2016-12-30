@@ -51,19 +51,16 @@ create(_, _, entity, Data) ->
     Longitude = maps:get(<<"longitude">>, Data, undefined),
 
     ProviderId = datastore_utils:gen_uuid(),
-    {ok, {ProviderCertPem, Serial}} = try
-        {ok, {_, _}} = worker_proxy:call(
-            ozpca_worker, {sign_provider_req, ProviderId, CSR}
-        )
-    catch
-        _:_ ->
-            throw(?ERROR_BAD_DATA(<<"csr">>))
-    end,
-    Provider = #od_provider{name = Name, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial,
-        latitude = Latitude, longitude = Longitude},
-    od_provider:create(#document{key = ProviderId, value = Provider}),
-    {ok, {ProviderId, ProviderCertPem}};
+    case worker_proxy:call(ozpca_worker, {sign_provider_req, ProviderId, CSR}) of
+        {error, bad_csr} ->
+            ?ERROR_BAD_DATA(<<"csr">>);
+        {ok, {ProviderCertPem, Serial}} ->
+            Provider = #od_provider{name = Name, urls = URLs,
+                redirection_point = RedirectionPoint, serial = Serial,
+                latitude = Latitude, longitude = Longitude},
+            od_provider:create(#document{key = ProviderId, value = Provider}),
+            {ok, {ProviderId, ProviderCertPem}}
+    end;
 
 create(_, _, entity_dev, Data) ->
     Name = maps:get(<<"name">>, Data),
@@ -75,19 +72,16 @@ create(_, _, entity_dev, Data) ->
     UUID = maps:get(<<"uuid">>, Data, undefined),
 
     ProviderId = UUID,
-    {ok, {ProviderCertPem, Serial}} = try
-        {ok, {_, _}} = worker_proxy:call(
-            ozpca_worker, {sign_provider_req, ProviderId, CSR}
-        )
-    catch
-        _:_ ->
-            throw(?ERROR_BAD_DATA(<<"csr">>))
-    end,
-    Provider = #od_provider{name = Name, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial,
-        latitude = Latitude, longitude = Longitude},
-    od_provider:create(#document{key = ProviderId, value = Provider}),
-    {ok, {ProviderId, ProviderCertPem}};
+    case worker_proxy:call(ozpca_worker, {sign_provider_req, ProviderId, CSR}) of
+        {error, bad_csr} ->
+            ?ERROR_BAD_DATA(<<"csr">>);
+        {ok, {ProviderCertPem, Serial}} ->
+            Provider = #od_provider{name = Name, urls = URLs,
+                redirection_point = RedirectionPoint, serial = Serial,
+                latitude = Latitude, longitude = Longitude},
+            od_provider:create(#document{key = ProviderId, value = Provider}),
+            {ok, {ProviderId, ProviderCertPem}}
+    end;
 
 create(_, ProviderId, support, Data) ->
     SupportSize = maps:get(<<"size">>, Data),
@@ -108,15 +102,15 @@ get(_, undefined, undefined, list) ->
 get(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
     {ok, maps:keys(Spaces)};
 get(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
-    ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId));
+    n_space_logic_plugin:get_entity(SpaceId);
 get(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
     {ok, maps:keys(EffUsers)};
 get(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
-    ?throw_on_failure(n_user_logic_plugin:get_entity(UserId));
+    n_user_logic_plugin:get_entity(UserId);
 get(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
     {ok, maps:keys(EffGroups)};
 get(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
-    ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId));
+    n_group_logic_plugin:get_entity(GroupId);
 get(_, undefined, undefined, {check_my_ip, Req}) ->
     {{Ip, _Port}, _} = cowboy_req:peer(Req),
     {ok, list_to_binary(inet_parse:ntoa(Ip))}.

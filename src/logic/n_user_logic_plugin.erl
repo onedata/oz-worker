@@ -51,6 +51,15 @@ get_entity(UserId) ->
     end.
 
 
+create(_, _UserId, authorize, Data) ->
+    Identifier = maps:get(<<"identifier">>, Data),
+    case auth_logic:authenticate_user(Identifier) of
+        {ok, DischargeMacaroonToken} ->
+            {ok, DischargeMacaroonToken};
+        _ ->
+            ?ERROR_BAD_VALUE_IDENTIFIER(<<"identifier">>)
+    end;
+
 create(_, UserId, client_tokens, _Data) ->
     Token = auth_logic:gen_token(UserId),
     {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens} = User) ->
@@ -215,17 +224,27 @@ delete(UserId, {client_token, TokenId}) ->
     end),
     ok;
 
+delete(UserId, default_space) ->
+    {ok, _} = od_user:update(UserId, #{default_space => undefined}),
+    ok;
+
 delete(UserId, {space_alias, SpaceId}) ->
     {ok, _} = od_user:update(UserId, fun(#od_user{space_aliases = Aliases} = User) ->
         {ok, User#od_user{client_tokens = maps:remove(SpaceId, Aliases)}}
     end),
     ok;
 
+delete(UserId, {groups, GroupId}) ->
+    entity_graph:remove_relation(od_user, UserId, od_group, GroupId);
+
 delete(UserId, {spaces, SpaceId}) ->
     entity_graph:remove_relation(od_user, UserId, od_space, SpaceId);
 
-delete(UserId, {groups, GroupId}) ->
-    entity_graph:remove_relation(od_user, UserId, od_group, GroupId).
+delete(UserId, {handle_services, HServiceId}) ->
+    entity_graph:remove_relation(od_user, UserId, od_handle_service, HServiceId);
+
+delete(UserId, {handles, HandleId}) ->
+    entity_graph:remove_relation(od_user, UserId, od_handle, HandleId).
 
 
 exists(undefined, _) ->
@@ -290,6 +309,8 @@ exists(_UserId, _) ->
     end}.
 
 
+authorize(create, _UserId, authorize, _Client) ->
+    true;
 authorize(get, _UserId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_VIEW_PRIVILEGES);
 authorize(update, _UserId, oz_privileges, ?USER(UserId)) ->
@@ -302,6 +323,11 @@ authorize(_, UserId, _, ?USER(UserId)) when is_binary(UserId) ->
 
 
 
+validate(create, authorize) -> #{
+    required => #{
+        <<"identifier">> => {binary, non_empty}
+    }
+};
 validate(create, client_tokens) -> #{
 };
 validate(create, join_group) -> #{

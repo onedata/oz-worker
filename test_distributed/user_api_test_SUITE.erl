@@ -54,7 +54,7 @@ create_test(Config) ->
     {ok, User} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
         Config, n_user_logic, get, [?USER(UserId), UserId]
     )),
-    #document{value = #od_user{name = Name, login = Login}} = User,
+    #od_user{name = Name, login = Login} = User,
     ?assertEqual(Name, <<"Name">>),
     ?assertEqual(Login, <<"login">>),
     % Try to create a user with given Id
@@ -65,71 +65,65 @@ create_test(Config) ->
     {ok, User2} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
         Config, n_user_logic, get, [?USER(PredefinedUserId), PredefinedUserId]
     )),
-    #document{value = #od_user{name = Name, login = Login}} = User2,
+    #od_user{name = Name, login = Login} = User2,
     ?assertEqual(Name, <<"Name">>),
     ?assertEqual(Login, <<"login">>),
     % Second try should fail (such id exists)
-    ?assertMatch(?ERROR_BAD_VALUE_ID_OCCUPIED(user_id), oz_test_utils:call_oz(
+    ?assertMatch(?ERROR_BAD_VALUE_ID_OCCUPIED(<<"userId">>), oz_test_utils:call_oz(
         Config, n_user_logic, create, [UserRecord, PredefinedUserId]
     )).
 
 
+
 get_test(Config) ->
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    % Create two users, grant one of them the privilege to list users.
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        ?OZ_USERS_LIST
+    ]),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, nobody]
+            correct = [
+                root,
+                {user, User},
+                {user, Admin}
+            ],
+            unauthorized = [nobody],
+            forbidden = [{user, NonAdmin}]
         },
         rest_spec = #rest_spec{
-            method = post,
-            path = <<"/provider">>,
+            method = get,
+            path = [<<"/user/">>, User],
             expected_code = ?HTTP_200_OK,
             expected_body = #{
-                <<"providerId">> => {check_type, binary},
-                <<"certificate">> => {check_type, binary}
+                <<"providerId">> => User,
+                <<"name">> => <<"Provider 1">>,
+                <<"urls">> => [<<"172.16.0.10">>, <<"172.16.0.11">>],
+                <<"redirectionPoint">> => <<"https://hostname.com">>,
+                <<"latitude">> => 14.78,
+                <<"longitude">> => -106.12
             }
         },
         logic_spec = #logic_spec{
-            operation = create,
+            operation = get,
             module = n_provider_logic,
-            function = create,
-            args = [client, data],
-            expected_result = ?OK_TERM(fun({B1, B2}) ->
-                is_binary(B1) andalso is_binary(B2)
+            function = get,
+            args = [client, P1],
+            expected_result = ?OK_TERM(fun(Entity) ->
+                #od_provider{name = Name, urls = Urls,
+                    redirection_point = RedPoint, latitude = Latitude,
+                    longitude = Longitude, spaces = Spaces} = Entity,
+                Name =:= <<"Provider 1">> andalso
+                    Urls =:= [<<"172.16.0.10">>, <<"172.16.0.11">>] andalso
+                    RedPoint =:= <<"https://hostname.com">> andalso
+                    Latitude =:= 14.78 andalso
+                    Longitude =:= -106.12 andalso
+                    Spaces =:= #{}
             end)
-        },
-        data_spec = #data_spec{
-            required = [<<"name">>, <<"urls">>, <<"redirectionPoint">>, <<"csr">>],
-            optional = [<<"latitude">>, <<"longitude">>],
-            correct_values = #{
-                <<"name">> => <<"ProvName">>,
-                <<"urls">> => [<<"127.0.0.1">>],
-                <<"redirectionPoint">> => <<"https://127.0.0.1">>,
-                <<"csr">> => CSR,
-                <<"latitude">> => 50.0,
-                <<"longitude">> => -24.8
-            },
-            bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
-                {<<"urls">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"urls">>)},
-                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
-                {<<"urls">>, 1234, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
-                {<<"redirectionPoint">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"redirectionPoint">>)},
-                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
-                {<<"csr">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"csr">>)},
-                {<<"csr">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"csr">>)},
-                {<<"csr">>, <<"wrong-csr">>, ?ERROR_BAD_DATA(<<"csr">>)},
-                {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
-                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"longitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"longitude">>)},
-                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)}
-            ]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
