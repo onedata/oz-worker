@@ -18,12 +18,19 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--type method() :: atom(). % TODO
+-type method() :: get | post | put | patch | delete.
 
 -type entity_logic_function() :: atom(). % TODO
 
 -type rest_req() :: #rest_req{}.
--export_type([rest_req/0]).
+-export_type([method/0, rest_req/0]).
+
+-record(state, {
+    rest_req :: rest_req(),
+    allowed_methods :: [method()]
+}).
+-type opts() :: #{method() => rest_req()}.
+-type state() :: #state{}.
 
 %% API
 -export([
@@ -63,10 +70,13 @@ init({_, http}, _Req, _Opts) ->
 %% Initialize the state for this request.
 %% @end
 %%--------------------------------------------------------------------
--spec rest_init(Req :: cowboy_req:req(), Opts :: rest_req()) ->
-    {ok, cowboy_req:req(), rest_req()}.
+-spec rest_init(Req :: cowboy_req:req(), Opts :: opts()) ->
+    {ok, cowboy_req:req(), state()}.
 rest_init(Req, Opts) ->
-    {ok, Req, Opts}.
+    Method = binary_to_method(cowboy_req:method(Req)),
+    RestReq = #rest_req{method = Method},
+    AllowedMethods = maps:keys(Opts),
+    {ok, Req, #state{rest_req = RestReq, allowed_methods = AllowedMethods}}.
 
 
 %%--------------------------------------------------------------------
@@ -74,10 +84,10 @@ rest_init(Req, Opts) ->
 %% Return the list of allowed methods.
 %% @end
 %%--------------------------------------------------------------------
--spec allowed_methods(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {[binary()], cowboy_req:req(), rest_req()}.
-allowed_methods(Req, #rest_req{methods = Methods} = State) ->
-    BinMethods = [method_to_binary(M) || M <- maps:keys(Methods)],
+-spec allowed_methods(Req :: cowboy_req:req(), State :: state()) ->
+    {[binary()], cowboy_req:req(), state()}.
+allowed_methods(Req, #state{allowed_methods = AllowedMethods} = State) ->
+    BinMethods = [method_to_binary(M) || M <- AllowedMethods],
     {BinMethods, Req, State}.
 
 
@@ -86,8 +96,8 @@ allowed_methods(Req, #rest_req{methods = Methods} = State) ->
 %% Return the list of content-types the resource accepts.
 %% @end
 %%--------------------------------------------------------------------
--spec content_types_accepted(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {Value, cowboy_req:req(), rest_req()} when
+-spec content_types_accepted(Req :: cowboy_req:req(), State :: state()) ->
+    {Value, cowboy_req:req(), state()} when
     Value :: [{binary() | {Type, SubType, Params}, AcceptResource}],
     Type :: binary(),
     SubType :: binary(),
@@ -102,8 +112,8 @@ content_types_accepted(Req, State) ->
 %% Return the list of content-types the resource provides.
 %% @end
 %%--------------------------------------------------------------------
--spec content_types_provided(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {Value, cowboy_req:req(), rest_req()} when
+-spec content_types_provided(Req :: cowboy_req:req(), State :: state()) ->
+    {Value, cowboy_req:req(), state()} when
     Value :: [{binary() | {Type, SubType, Params}, ProvideResource}],
     Type :: binary(),
     SubType :: binary(),
@@ -118,8 +128,8 @@ content_types_provided(Req, State) ->
 %% Return whether the resource exists.
 %% @end
 %%--------------------------------------------------------------------
--spec resource_exists(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {boolean(), cowboy_req:req(), rest_req()}.
+-spec resource_exists(Req :: cowboy_req:req(), State :: state()) ->
+    {boolean(), cowboy_req:req(), state()}.
 resource_exists(Req, State) ->
     % Always return true - this is checked by entity_logic later.
     {true, Req, State}.
@@ -134,8 +144,8 @@ resource_exists(Req, State) ->
 %% is unauthorized to perform an operation.
 %% @end
 %%--------------------------------------------------------------------
--spec is_authorized(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {true | {false, binary()}, cowboy_req:req(), rest_req()}.
+-spec is_authorized(Req :: cowboy_req:req(), State :: state()) ->
+    {true | {false, binary()}, cowboy_req:req(), state()}.
 is_authorized(Req, State) ->
     % Check if the request carries any authorization
     try
@@ -195,15 +205,9 @@ is_authorized(Req, State) ->
 %% @see is_authorized/2
 %% @end
 %%--------------------------------------------------------------------
--spec forbidden(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {boolean(), cowboy_req:req(), rest_req()}.
-forbidden(Req, #rest_req{} = State) ->
-    % TODO
-%%    % State is initialized here, as this callback finalizes the checkup of
-%%    % rest request. This way, we are sure that chosen method is allowed,
-%%    % content-type is correct etc. and it's safe to proceed with the request.
-%%    NewState = call_entity_logic(Req, State),
-    % Always return false - this is checked by entity_logic later.
+-spec forbidden(Req :: cowboy_req:req(), State :: state()) ->
+    {boolean(), cowboy_req:req(), state()}.
+forbidden(Req, State) ->
     {false, Req, State}.
 
 
@@ -212,8 +216,8 @@ forbidden(Req, #rest_req{} = State) ->
 %% Process the request body of application/json content type.
 %% @end
 %%--------------------------------------------------------------------
--spec accept_resource_json(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {{true, URL :: binary()} | boolean(), cowboy_req:req(), rest_req()}.
+-spec accept_resource_json(Req :: cowboy_req:req(), State :: state()) ->
+    {{true, URL :: binary()} | boolean(), cowboy_req:req(), state()}.
 accept_resource_json(Req, State) ->
     try
         {ok, Body, Req2} = cowboy_req:body(Req),
@@ -222,10 +226,7 @@ accept_resource_json(Req, State) ->
         catch _:_ ->
             throw(?ERROR_MALFORMED_DATA)
         end,
-        % Method might be POST, PUT, PATCH
-        {MethodBin, _} = cowboy_req:method(Req),
-        Method = binary_to_method(MethodBin),
-        call_entity_logic(Method, Req2, State, Data)
+        call_entity_logic(Req2, State, Data)
     catch
         Type:Message ->
             handle_error(Type, Message, erlang:get_stacktrace(), Req, State)
@@ -237,11 +238,11 @@ accept_resource_json(Req, State) ->
 %% Process the request body.
 %% @end
 %%--------------------------------------------------------------------
--spec provide_resource(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {iodata(), cowboy_req:req(), rest_req()}.
+-spec provide_resource(Req :: cowboy_req:req(), State :: state()) ->
+    {iodata(), cowboy_req:req(), state()}.
 provide_resource(Req, State) ->
     try
-        call_entity_logic(get, Req, State, undefined)
+        call_entity_logic(Req, State, undefined)
     catch
         Type:Message ->
             handle_error(Type, Message, erlang:get_stacktrace(), Req, State)
@@ -253,11 +254,11 @@ provide_resource(Req, State) ->
 %% Delete the resource.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_resource(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {boolean(), cowboy_req:req(), rest_req()}.
+-spec delete_resource(Req :: cowboy_req:req(), State :: state()) ->
+    {boolean(), cowboy_req:req(), state()}.
 delete_resource(Req, State) ->
     try
-        call_entity_logic(delete, Req, State, undefined)
+        call_entity_logic(Req, State, undefined)
     catch
         Type:Message ->
             handle_error(Type, Message, erlang:get_stacktrace(), Req, State)
@@ -270,8 +271,8 @@ delete_resource(Req, State) ->
 %% from the system.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_completed(Req :: cowboy_req:req(), State :: rest_req()) ->
-    {boolean(), cowboy_req:req(), rest_req()}.
+-spec delete_completed(Req :: cowboy_req:req(), State :: state()) ->
+    {boolean(), cowboy_req:req(), state()}.
 delete_completed(Req, State) ->
     {false, Req, State}.
 
@@ -395,9 +396,16 @@ binary_to_method(<<"PUT">>) -> put;
 binary_to_method(<<"DELETE">>) -> delete.
 
 
-call_entity_logic(Method, Req, #rest_req{client = Client, methods = Methods} = State, Data) ->
+call_entity_logic(Req, State, Data) ->
+    #state{
+        rest_req = #rest_req{
+            method = Method,
+            client = Client,
+            el_plugin = LogicPlugin,
+            entity_id = EntityIdVal,
+            resource = ResourceVal
+        }} = State,
     Function = method_to_el_function(Method),
-    {LogicPlugin, EntityIdVal, ResourceVal} = maps:get(Method, Methods),
     EntityId = resolve_bindings(EntityIdVal, Client, Req),
     Resource = resolve_bindings(ResourceVal, Client, Req),
     Args = el_function_args(Function, Client, LogicPlugin, EntityId, Resource, Data),

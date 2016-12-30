@@ -29,6 +29,8 @@ all() ->
 
 
 provider_routes() ->
+    % TODO naprawic to a potem dodac w rest_req pole translator, ktore bedzie
+    % TODO wybieralo translatora
     P = n_provider_logic_plugin,
     [
         {<<"/providers">>, #rest_req{methods = #{

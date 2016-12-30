@@ -19,9 +19,11 @@
 
 %% Record containing the state of REST request.
 -record(rest_req, {
+    method = get :: n_rest_handler:method(),
     client = #client{} :: n_entity_logic:client(),
-    % tODO strict typy
-    methods = #{} :: #{Method :: get => {data_plugin, entityid, resource}}
+    el_plugin = undefined :: module(),
+    entity_id = undefined :: undefined | binary(),
+    resource = undefined :: undefined | atom() | {atom(), term()}
 }).
 % Convenience macros user in rest_req
 -define(BINDING(__KEY), {binding, __KEY}).
