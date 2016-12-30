@@ -22,8 +22,6 @@
     client = #client{} :: n_entity_logic:client(),
     % tODO strict typy
     methods = #{} :: #{Method :: get => {data_plugin, entityid, resource}}
-    % To jest wywnioskowane z methods
-%%    handler = {module, function, [args]}
 }).
 % Convenience macros user in rest_req
 -define(BINDING(__KEY), {binding, __KEY}).

@@ -19,6 +19,16 @@
 
 -export([response/4]).
 
+response(create, _UserId, authorize, {ok, DischargeMacaroon}) ->
+    #rest_resp{code = ?HTTP_200_OK, body = DischargeMacaroon};
+
+response(create, _UserId, client_tokens, {ok, Token}) ->
+    #rest_resp{code = ?HTTP_200_OK, body = #{<<"token">> => Token}};
+
+response(create, _UserId, client_tokens, {ok, Token}) ->
+    #rest_resp{code = ?HTTP_200_OK, body = #{<<"token">> => Token}};
+
+
 response(get, UserId, entity, {ok, User}) ->
     #od_user{
         name = Name,

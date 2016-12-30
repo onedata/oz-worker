@@ -50,6 +50,10 @@
     unset_default_provider/2
 ]).
 -export([
+    create_group/3,
+    create_space/3,
+    create_handle_service/3,
+    create_handle/3,
     join_group/3,
     join_space/3,
     get_groups/2, get_eff_groups/2,
@@ -194,6 +198,14 @@ delete_space_alias(Client, UserId, SpaceId) ->
 
 unset_default_provider(Client, UserId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, default_provider).
+
+
+create_group(Client, Name) when is_binary(Name) ->
+    create_group(Client, #{<<"name">> => Name});
+create_group(?USER(UserId), Data) ->
+    n_entity_logic:create(?USER(UserId), ?PLUGIN, UserId, groups, Data).
+
+
 
 
 
