@@ -28,12 +28,9 @@ check_my_ports | {check_my_ip, cowboy_req:req()}.
 
 -export_type([resource/0]).
 
--export([entity_type/0, get_entity/1, create/4, get/4, update/3, delete/2]).
+-export([get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/2, authorize/4, validate/2]).
-
-
-entity_type() ->
-    od_provider.
+-export([entity_to_string/1]).
 
 
 get_entity(ProviderId) ->
@@ -109,7 +106,7 @@ get(_, undefined, undefined, list) ->
     {ok, ProviderDocs} = od_provider:list(),
     {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]};
 get(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
-    {ok, Spaces};
+    {ok, maps:keys(Spaces)};
 get(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
     ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId));
 get(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
@@ -162,7 +159,7 @@ exists(undefined, _) ->
 exists(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{spaces = Spaces}) ->
-        lists:member(SpaceId, Spaces)
+        maps:is_key(SpaceId, Spaces)
     end};
 exists(ProviderId, {eff_user, UserId}) when is_binary(ProviderId) ->
     % No matter the resource, return true if it belongs to a provider
@@ -271,7 +268,16 @@ validate(update, entity) -> #{
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
     }
+};
+validate(update, {space, _SpaceId}) -> #{
+    required => #{
+        <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
+    }
 }.
+
+
+entity_to_string(SpaceId) ->
+    od_provider:to_string(SpaceId).
 
 
 %%--------------------------------------------------------------------
@@ -284,7 +290,7 @@ validate(update, entity) -> #{
 -spec test_connection(#{ServiceName :: binary() => Url :: binary()}) ->
     {ok, #{ServiceName :: binary() => Status :: ok | error}}.
 test_connection(Map) ->
-    test_connection(maps:to_list(Map), []).
+    test_connection(maps:to_list(Map), #{}).
 
 
 %%--------------------------------------------------------------------
@@ -295,7 +301,7 @@ test_connection(Map) ->
 %%--------------------------------------------------------------------
 -spec test_connection([{ServiceName :: binary(), Url :: binary()}], Result) ->
     {ok, Result}
-    when Result :: #{ServiceName :: binary() => Status :: ok | error}.
+    when Result :: #{Url :: binary() => Status :: ok | error}.
 test_connection([], Acc) ->
     {ok, Acc};
 test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->

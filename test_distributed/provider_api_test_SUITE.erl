@@ -453,7 +453,7 @@ delete_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/providers/">>, P8],
+            path = [<<"/providers/">>, P1],
             expected_code = ?HTTP_404_NOT_FOUND
         },
         logic_spec = #logic_spec{
