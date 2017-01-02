@@ -83,21 +83,10 @@ handle(<<"unsupportSpace">>, Props) ->
     case Authorized of
         true ->
             true = space_logic:remove_provider(SpaceId, ProviderId),
-            % Push the modified space and provider to the client
-            gui_async:push_created(
-                <<"space">>, space_data_backend:space_record(SpaceId, UserId)
+            % Push user record with a new spaces and providers list.
+            gui_async:push_updated(
+                <<"user">>, user_data_backend:user_record(UserId)
             ),
-            ProviderRecord = provider_data_backend:provider_record(
-                ProviderId, UserId
-            ),
-            % If the provider no longer supports any of user's spaces, delete
-            % the record in ember cache.
-            case proplists:get_value(<<"spaces">>, ProviderRecord) of
-                [] ->
-                    gui_async:push_deleted(<<"provider">>, ProviderId);
-                _ ->
-                    gui_async:push_updated(<<"provider">>, ProviderRecord)
-            end,
             ok;
         false ->
             gui_error:report_warning(
@@ -114,9 +103,9 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
             gui_error:report_warning(<<"Invalid token value.">>);
         {true, Macaroon} ->
             {ok, SpaceId} = space_logic:join({user, UserId}, Macaroon),
-            % Push the newly joined space to the client's model
-            gui_async:push_created(
-                <<"space">>, space_data_backend:space_record(SpaceId, UserId)
+            % Push user record with a new space list.
+            gui_async:push_updated(
+                <<"user">>, user_data_backend:user_record(UserId)
             ),
             {ok, [{<<"spaceId">>, SpaceId}]}
     end;
@@ -124,6 +113,10 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
 handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     UserId = gui_session:get_user_id(),
     space_logic:remove_user(SpaceId, UserId),
+    % Push user record with a new space list.
+    gui_async:push_updated(
+        <<"user">>, user_data_backend:user_record(UserId)
+    ),
     ok;
 
 handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
@@ -133,15 +126,10 @@ handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
             gui_error:report_warning(<<"Invalid token value.">>);
         {true, Macaroon} ->
             {ok, GroupId} = group_logic:join(UserId, Macaroon),
-            % Check if that group belongs to any spaces, if so push them
-            {ok, [{spaces, Spaces}]} = group_logic:get_spaces(GroupId),
-            lists:foreach(
-                fun(SpaceId) ->
-                    % Push the modified space and provider to the client
-                    gui_async:push_created(
-                        <<"space">>,
-                        space_data_backend:space_record(SpaceId, UserId)
-                    )
-                end, Spaces),
+            % Push user record - space list might have changed due to
+            % joining a new group.
+            gui_async:push_updated(
+                <<"user">>, user_data_backend:user_record(UserId)
+            ),
             {ok, [{<<"groupId">>, GroupId}]}
     end.
