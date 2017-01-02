@@ -107,7 +107,6 @@ handle(<<"unsupportSpace">>, Props) ->
             )
     end;
 
-
 handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
     UserId = gui_session:get_user_id(),
     case token_logic:validate(Token, space_invite_user_token) of
@@ -120,4 +119,29 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
                 <<"space">>, space_data_backend:space_record(SpaceId, UserId)
             ),
             {ok, [{<<"spaceId">>, SpaceId}]}
+    end;
+
+handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
+    UserId = gui_session:get_user_id(),
+    space_logic:remove_user(SpaceId, UserId),
+    ok;
+
+handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
+    UserId = gui_session:get_user_id(),
+    case token_logic:validate(Token, group_invite_token) of
+        false ->
+            gui_error:report_warning(<<"Invalid token value.">>);
+        {true, Macaroon} ->
+            {ok, GroupId} = group_logic:join(UserId, Macaroon),
+            % Check if that group belongs to any spaces, if so push them
+            {ok, [{spaces, Spaces}]} = group_logic:get_spaces(GroupId),
+            lists:foreach(
+                fun(SpaceId) ->
+                    % Push the modified space and provider to the client
+                    gui_async:push_created(
+                        <<"space">>,
+                        space_data_backend:space_record(SpaceId, UserId)
+                    )
+                end, Spaces),
+            {ok, [{<<"groupId">>, GroupId}]}
     end.

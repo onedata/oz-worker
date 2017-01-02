@@ -122,8 +122,12 @@ create_record(<<"space">>, Data) ->
 -spec update_record(RsrcType :: binary(), Id :: binary(),
     Data :: proplists:proplist()) ->
     ok | gui_error:error_result().
+update_record(<<"space">>, SpaceId, [{<<"name">>, NewName}]) ->
+    UserId = gui_session:get_user_id(),
+    space_logic:modify(SpaceId, {user, UserId}, NewName);
 update_record(<<"space">>, _SpaceId, _Data) ->
     gui_error:report_error(<<"Not implemented">>).
+
 
 
 %%--------------------------------------------------------------------
