@@ -173,10 +173,10 @@ user_record(UserId) ->
             #oauth_account{
                 provider_id = Provider,
                 email_list = Emails,
-                user_id = UserId} = OAuthAccount,
+                user_id = SubId} = OAuthAccount,
             ProviderBin = str_utils:to_binary(Provider),
-            UserIdBin = str_utils:to_binary(UserId),
-            AccId = <<ProviderBin/binary, "#", UserIdBin/binary>>,
+            SubIdBin = str_utils:to_binary(SubId),
+            AccId = <<ProviderBin/binary, "#", SubIdBin/binary>>,
             Accounts = lists:map(
                 fun(Email) ->
                     [
