@@ -341,6 +341,10 @@ verify_logic_result({ok, Bin}, ?OK_BINARY) when is_binary(Bin) ->
     true;
 verify_logic_result({ok, Value}, ?OK_BINARY(Value)) when is_binary(Value) ->
     true;
+verify_logic_result({ok, Got}, ?OK_MAP(Expected)) when is_map(Got) ->
+    Got =:= Expected;
+verify_logic_result({ok, Got}, ?OK_MAP_CONTAINS(Expected)) when is_map(Got) ->
+    rest_test_utils:contains_map(Got, Expected);
 verify_logic_result({ok, GotList}, ?OK_LIST(ExpList)) ->
     lists:sort(ExpList) =:= lists:sort(GotList);
 verify_logic_result({error, Error}, ?ERROR_REASON({error, Error})) ->
@@ -404,7 +408,6 @@ log_failed_rest_test(TestDesc, Method, Path, Client, UnmetExp, Got, Expected, Re
         n_entity_logic:client_to_string(client_to_logic_client(Client)),
         UnmetExp, Got, Expected, Code, Headers, Body
     ]).
-
 
 
 % Wszystkie erquired z po jednym at least one i z wszystkimi na raz

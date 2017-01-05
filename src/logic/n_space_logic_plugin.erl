@@ -78,8 +78,10 @@ create(Client, SpaceId, invite_user_token, _) ->
 get(_, undefined, undefined, list) ->
     {ok, SpaceDocs} = od_space:list(),
     {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
-get(?USER, _SpaceId, Space, users) ->
-    {ok, Space#od_space.users}.
+get(_, _SpaceId, #od_space{name = Name}, data) ->
+    {ok, #{<<"name">> => Name}};
+get(_, _SpaceId, #od_space{users = Users}, users) ->
+    {ok, Users}.
 
 
 
@@ -151,9 +153,13 @@ authorize(create, _SpaceId, invite_user_token, ?USER(UserId)) ->
 
 authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, list_spaces);
-authorize(get, _SpaceId, users, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?SPACE_VIEW);
 authorize(get, _SpaceId, entity, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_VIEW);
+authorize(get, _SpaceId, data, ?USER(UserId)) ->
+    auth_by_membership(UserId);
+authorize(get, _SpaceId, data, ?PROVIDER(ProviderId)) ->
+    auth_by_support(ProviderId);
+authorize(get, _SpaceId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_VIEW);
 
 
@@ -222,6 +228,17 @@ validate(update, Member) when Member =:= user orelse Member =:= group -> #{
 entity_to_string(SpaceId) ->
     od_space:to_string(SpaceId).
 
+
+auth_by_membership(UserId) ->
+    {internal, fun(#od_space{eff_users = EffUsers}) ->
+        maps:is_key(UserId, EffUsers)
+    end}.
+
+
+auth_by_support(ProviderId) ->
+    {internal, fun(#od_space{providers = Providers}) ->
+        maps:is_key(ProviderId, Providers)
+    end}.
 
 
 auth_by_privilege(UserId, Privilege) ->

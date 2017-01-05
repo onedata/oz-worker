@@ -21,61 +21,41 @@
 
 
 response(create, undefined, entity, {ok, {ProvId, Certificate}}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = #{
+    n_rest_handler:ok_body_reply(#{
         <<"providerId">> => ProvId,
         <<"certificate">> => Certificate
-    }};
+    });
 response(create, undefined, entity_dev, {ok, {ProvId, Certificate}}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = #{
+    n_rest_handler:ok_body_reply(#{
         <<"providerId">> => ProvId,
         <<"certificate">> => Certificate
-    }};
+    });
 response(create, _ProvId, support, {ok, SpaceId}) ->
-    rest_translator:created_reply([<<"provider/spaces/">>, SpaceId]);
+    n_rest_handler:created_reply([<<"provider/spaces/">>, SpaceId]);
 response(create, _ProvId, check_my_ports, {ok, Body}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = Body};
+    n_rest_handler:ok_body_reply(Body);
 
 response(get, undefined, list, {ok, ProviderIds}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = #{<<"providers">> => ProviderIds}};
-response(get, EntityId, entity, {ok, Provider}) ->
-    #od_provider{
-        name = ClientName,
-        urls = URLs,
-        redirection_point = RedirectionPoint,
-        latitude = Latitude,
-        longitude = Longitude
-    } = Provider,
-    #rest_resp{code = ?HTTP_200_OK, body = #{
-        <<"providerId">> => EntityId,
-        <<"name">> => ClientName,
-        <<"urls">> => URLs,
-        <<"redirectionPoint">> => RedirectionPoint,
-        <<"latitude">> => Latitude,
-        <<"longitude">> => Longitude
-    }};
+    n_rest_handler:ok_body_reply(#{<<"providers">> => ProviderIds});
+response(get, EntityId, data, {ok, ProviderData}) ->
+    n_rest_handler:ok_body_reply(ProviderData#{<<"providerId">> => EntityId});
 response(get, _ProvId, eff_users, {ok, UserIds}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = #{<<"users">> => UserIds}};
-response(get, _ProvId, {eff_user, UserId}, {ok, User}) ->
-    user_rest_translator:response(get, UserId, entity, {ok, User});
+    n_rest_handler:ok_body_reply(#{<<"users">> => UserIds});
+response(get, _ProvId, {eff_user, UserId}, {ok, UserData}) ->
+    user_rest_translator:response(get, UserId, entity, {ok, UserData});
 response(get, _ProvId, eff_groups, {ok, GroupIds}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = #{<<"groups">> => GroupIds}};
-response(get, _ProvId, {eff_group, GroupId}, {ok, Group}) ->
-    group_rest_translator:response(get, GroupId, entity, {ok, Group});
+    n_rest_handler:ok_body_reply(#{<<"groups">> => GroupIds});
+response(get, _ProvId, {eff_group, GroupId}, {ok, GroupData}) ->
+    group_rest_translator:response(get, GroupId, entity, {ok, GroupData});
 response(get, _ProvId, spaces, {ok, SpaceIds}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = #{<<"spaces">> => SpaceIds}};
-response(get, _ProvId, {space, SpaceId}, {ok, Space}) ->
-    space_rest_translator:response(get, SpaceId, entity, {ok, Space});
+    n_rest_handler:ok_body_reply(#{<<"spaces">> => SpaceIds});
+response(get, _ProvId, {space, SpaceId}, {ok, SpaceData}) ->
+    space_rest_translator:response(get, SpaceId, entity, {ok, SpaceData});
 response(get, _ProvId, {check_my_ip, _}, {ok, IP}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = IP};
+    n_rest_handler:ok_body_reply(IP);
 
-response(update, _ProvId, entity, ok) ->
-    rest_translator:updated_reply();
+response(update, _ProvId, _, ok) ->
+    n_rest_handler:updated_reply();
 
-response(update, _ProvId, {space, _SpaceId}, ok) ->
-    rest_translator:updated_reply();
-
-response(delete, _ProvId, entity, ok) ->
-    rest_translator:deleted_reply();
-
-response(delete, _ProvId, {space, _SpaceId}, ok) ->
-    rest_translator:deleted_reply().
+response(delete, _ProvId, _, ok) ->
+    n_rest_handler:deleted_reply().

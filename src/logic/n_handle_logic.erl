@@ -67,6 +67,9 @@ add_group(Client, HandleId, Data) ->
 get(Client, HandleId) ->
     n_entity_logic:get(Client, ?PLUGIN, entity, HandleId).
 
+
+
+
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 

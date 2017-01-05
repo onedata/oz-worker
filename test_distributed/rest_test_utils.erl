@@ -20,6 +20,7 @@
 
 %% API
 -export([get_rest_api_prefix/1, check_rest_call/2]).
+-export([compare_maps/2, contains_map/2]).
 
 
 get_rest_api_prefix(Config) ->
@@ -179,7 +180,16 @@ check_rest_call(Config, ArgsMap) ->
         case ExpBody of
             undefined ->
                 ok;
-            Bin4 when is_binary(Bin4) ->
+            {check_type, binary} ->
+                case RespBody of
+                    Bin4 when is_binary(Bin4) ->
+                        ok;
+                    _ ->
+                        throw({body, RespBody, ExpBody, {
+                            RespCode, RespHeaders, RespBody
+                        }})
+                end;
+            Bin5 when is_binary(Bin5) ->
                 case RespBody of
                     ExpBody ->
                         ok;

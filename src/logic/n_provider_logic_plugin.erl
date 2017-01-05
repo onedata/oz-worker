@@ -99,18 +99,31 @@ create(_, undefined, check_my_ports, Data) ->
 get(_, undefined, undefined, list) ->
     {ok, ProviderDocs} = od_provider:list(),
     {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]};
+get(_, _ProviderId, #od_provider{} = Provider, data) ->
+    #od_provider{
+        name = Name, urls = Urls, redirection_point = RedirectionPoint,
+        latitude = Latitude, longitude = Longitude
+    } = Provider,
+    {ok, #{
+        <<"name">> => Name, <<"urls">> => Urls,
+        <<"redirectionPoint">> => RedirectionPoint,
+        <<"latitude">> => Latitude, <<"longitude">> => Longitude
+    }};
 get(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
     {ok, maps:keys(Spaces)};
 get(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
-    n_space_logic_plugin:get_entity(SpaceId);
+    {ok, Space} = ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId)),
+    n_space_logic_plugin:get(?ROOT, SpaceId, Space, data);
 get(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
     {ok, maps:keys(EffUsers)};
 get(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
-    n_user_logic_plugin:get_entity(UserId);
+    {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
+    n_user_logic_plugin:get(?ROOT, UserId, User, data);
 get(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
     {ok, maps:keys(EffGroups)};
 get(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
-    n_group_logic_plugin:get_entity(GroupId);
+    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
+    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
 get(_, undefined, undefined, {check_my_ip, Req}) ->
     {{Ip, _Port}, _} = cowboy_req:peer(Req),
     {ok, list_to_binary(inet_parse:ntoa(Ip))}.
@@ -186,9 +199,15 @@ authorize(get, undefined, {check_my_ip, _}, _) ->
     true;
 authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
-authorize(get, _ProvId, entity, ?PROVIDER) ->
-    % Any provider can get info about other providers
+authorize(get, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;
+authorize(get, _ProvId, data, ?PROVIDER) ->
+    % Any provider can get data about other providers
+    true;
+authorize(get, _ProvId, data, ?USER(UserId)) -> [
+    auth_by_membership(UserId),
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST)
+];
 authorize(get, _ProvId, entity, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
 authorize(get, _ProvId, eff_users, ?USER(UserId)) ->
@@ -272,6 +291,12 @@ validate(update, {space, _SpaceId}) -> #{
 
 entity_to_string(SpaceId) ->
     od_provider:to_string(SpaceId).
+
+
+auth_by_membership(UserId) ->
+    {internal, fun(#od_provider{eff_users = EffUsers}) ->
+        maps:is_key(UserId, EffUsers)
+    end}.
 
 
 %%--------------------------------------------------------------------

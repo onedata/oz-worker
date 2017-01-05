@@ -71,7 +71,12 @@ create(_Client, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
 get(_, undefined, undefined, list) ->
     {ok, GroupDocs} = od_group:list(),
     {ok, [GroupId || #document{key = GroupId} <- GroupDocs]};
-get(?USER, _GroupId, #od_group{users = Users}, users) ->
+get(_, _GroupId, #od_group{name = Name, type = Type}, data) ->
+    {ok, #{
+        <<"name">> => Name,
+        <<"type">> => Type
+    }};
+get(_, _GroupId, #od_group{users = Users}, users) ->
     {ok, Users}.
 
 
@@ -145,6 +150,10 @@ authorize(create, _GroupId, groups, ?USER(UserId)) ->
 
 authorize(get, undefined, list, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, list_groups);
+authorize(get, _GroupId, entity, ?USER(UserId)) ->
+    auth_by_privilege(UserId, group_view_data);
+authorize(get, _GroupId, data, ?USER(UserId)) ->
+    auth_by_membership(UserId);
 authorize(get, _GroupId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_view_data);
 authorize(get, _GroupId, entity, ?USER(UserId)) ->
@@ -228,6 +237,12 @@ entity_to_string(GroupId) ->
     od_group:to_string(GroupId).
 
 
+auth_by_membership(UserId) ->
+    {internal, fun(#od_group{eff_users = EffUsers}) ->
+        maps:is_key(UserId, EffUsers)
+    end}.
+
+
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_group{} = Group) ->
         n_group_logic:has_eff_privilege(Group, UserId, Privilege)
@@ -236,5 +251,5 @@ auth_by_privilege(UserId, Privilege) ->
 
 auth_by_oz_privilege(UserId, Privilege) ->
     {external, fun() ->
-        auth_by_oz_privilege(UserId, Privilege)
+        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
     end}.

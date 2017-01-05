@@ -19,13 +19,5 @@
 
 -export([response/4]).
 
-response(get, GroupId, entity, {ok, Group}) ->
-    #od_group{
-        name = Name,
-        type = Type
-    } = Group,
-    #rest_resp{code = ?HTTP_200_OK, body = #{
-        <<"groupId">> => GroupId,
-        <<"name">> => Name,
-        <<"type">> => Type
-    }}.
+response(get, GroupId, entity, {ok, GroupData}) ->
+    n_rest_handler:ok_body_reply(GroupData#{<<"groupId">> => GroupId}).

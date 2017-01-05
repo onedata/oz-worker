@@ -13,20 +13,20 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("entity_logic.hrl").
 -include("errors.hrl").
+-include("entity_logic.hrl").
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -type method() :: get | post | put | patch | delete.
 
--type entity_logic_function() :: atom(). % TODO
-
 -type rest_req() :: #rest_req{}.
 -export_type([method/0, rest_req/0]).
 
 -record(state, {
-    rest_req :: rest_req(),
+    client = #client{} :: n_entity_logic:client(),
+    rest_req = undefined :: rest_req() | undefined,
     allowed_methods :: [method()]
 }).
 -type opts() :: #{method() => rest_req()}.
@@ -42,11 +42,12 @@
     resource_exists/2,
     forbidden/2,
     is_authorized/2,
-    accept_resource_json/2,
+    accept_resource/2,
     provide_resource/2,
-    delete_resource/2,
-    delete_completed/2
+    delete_resource/2
 ]).
+%% Convenience functions for rest translators
+-export([created_reply/1, ok_body_reply/1, updated_reply/0, deleted_reply/0]).
 
 
 %%%===================================================================
@@ -73,8 +74,12 @@ init({_, http}, _Req, _Opts) ->
 -spec rest_init(Req :: cowboy_req:req(), Opts :: opts()) ->
     {ok, cowboy_req:req(), state()}.
 rest_init(Req, Opts) ->
-    Method = binary_to_method(cowboy_req:method(Req)),
-    RestReq = #rest_req{method = Method},
+    {MethodBin, _} = cowboy_req:method(Req),
+    Method = binary_to_method(MethodBin),
+    % If given method is not allowed, it in not in the map. Such request
+    % will stop execution on allowed_methods/2 callback. Use undefined if
+    % the method does not exist.
+    RestReq = maps:get(Method, Opts, undefined),
     AllowedMethods = maps:keys(Opts),
     {ok, Req, #state{rest_req = RestReq, allowed_methods = AllowedMethods}}.
 
@@ -104,7 +109,7 @@ allowed_methods(Req, #state{allowed_methods = AllowedMethods} = State) ->
     Params :: '*' | [{binary(), binary()}],
     AcceptResource :: atom().
 content_types_accepted(Req, State) ->
-    {[{<<"application/json">>, accept_resource_json}], Req, State}.
+    {[{<<"application/json">>, accept_resource}], Req, State}.
 
 
 %%--------------------------------------------------------------------
@@ -171,7 +176,7 @@ is_authorized(Req, State) ->
                 end
         end,
         % Always return true - this is checked by entity_logic later.
-        {true, Req, State#rest_req{client = Client}}
+        {true, Req, State#state{client = Client}}
     catch
         {silent_error, ReqX} -> %% As per RFC 6750 section 3.1
             {{false, <<"">>}, ReqX, State};
@@ -208,6 +213,7 @@ is_authorized(Req, State) ->
 -spec forbidden(Req :: cowboy_req:req(), State :: state()) ->
     {boolean(), cowboy_req:req(), state()}.
 forbidden(Req, State) ->
+    % Always return false - this is checked by entity_logic later.
     {false, Req, State}.
 
 
@@ -216,21 +222,10 @@ forbidden(Req, State) ->
 %% Process the request body of application/json content type.
 %% @end
 %%--------------------------------------------------------------------
--spec accept_resource_json(Req :: cowboy_req:req(), State :: state()) ->
-    {{true, URL :: binary()} | boolean(), cowboy_req:req(), state()}.
-accept_resource_json(Req, State) ->
-    try
-        {ok, Body, Req2} = cowboy_req:body(Req),
-        Data = try
-            json_utils:decode_map(Body)
-        catch _:_ ->
-            throw(?ERROR_MALFORMED_DATA)
-        end,
-        call_entity_logic(Req2, State, Data)
-    catch
-        Type:Message ->
-            handle_error(Type, Message, erlang:get_stacktrace(), Req, State)
-    end.
+-spec accept_resource(Req :: cowboy_req:req(), State :: state()) ->
+    {halt, cowboy_req:req(), state()}.
+accept_resource(Req, State) ->
+    process_request(Req, State).
 
 
 %%--------------------------------------------------------------------
@@ -239,14 +234,9 @@ accept_resource_json(Req, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec provide_resource(Req :: cowboy_req:req(), State :: state()) ->
-    {iodata(), cowboy_req:req(), state()}.
+    {halt, cowboy_req:req(), state()}.
 provide_resource(Req, State) ->
-    try
-        call_entity_logic(Req, State, undefined)
-    catch
-        Type:Message ->
-            handle_error(Type, Message, erlang:get_stacktrace(), Req, State)
-    end.
+    process_request(Req, State).
 
 
 %%--------------------------------------------------------------------
@@ -255,36 +245,128 @@ provide_resource(Req, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_resource(Req :: cowboy_req:req(), State :: state()) ->
-    {boolean(), cowboy_req:req(), state()}.
+    {halt, cowboy_req:req(), state()}.
 delete_resource(Req, State) ->
-    try
-        call_entity_logic(Req, State, undefined)
-    catch
-        Type:Message ->
-            handle_error(Type, Message, erlang:get_stacktrace(), Req, State)
-    end.
+    process_request(Req, State).
 
 
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Returns if there is a guarantee that the resource gets deleted immediately
-%% from the system.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_completed(Req :: cowboy_req:req(), State :: state()) ->
-    {boolean(), cowboy_req:req(), state()}.
-delete_completed(Req, State) ->
-    {false, Req, State}.
+% Make sure there is no leading slash (so filename can be used for joining path)
+created_reply([<<"/", Path/binary>> | Tail]) ->
+    created_reply([Path | Tail]);
+created_reply(PathTokens) ->
+    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
+    LocationHeader = #{
+        <<"location">> => filename:join([RestPrefix | PathTokens])
+    },
+    #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
+
+
+ok_body_reply(Body) ->
+    #rest_resp{code = ?HTTP_200_OK, body = Body}.
+
+
+
+
+updated_reply() ->
+    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
+
+
+deleted_reply() ->
+    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-handle_error(Type, Message, Stacktrace, Req, State) ->
-    % TODO
-    ?dump({Type, Message, Stacktrace}),
-    {halt, State, Req}.
+process_request(Req, State) ->
+    try
+        #state{client = Client, rest_req = #rest_req{
+            method = Method,
+            el_plugin = LogicPlugin,
+            entity_id = EntityIdVal,
+            resource = ResourceVal,
+            translator = TranslatorModule
+        }} = State,
+        Operation = method_to_operation(Method),
+        EntityId = resolve_bindings(EntityIdVal, Client, Req),
+        Resource = resolve_bindings(ResourceVal, Client, Req),
+        {Data, Req2} = case Operation of
+            create -> get_data(Req);
+            get -> {#{}, Req};
+            update -> get_data(Req);
+            delete -> {#{}, Req}
+        end,
+        Result = call_entity_logic(
+            Operation, Client, LogicPlugin, EntityId, Resource, Data
+        ),
+        RestResp = translate_response(
+            TranslatorModule, Operation, EntityId, Resource, Result
+        ),
+        #rest_resp{code = Code, headers = Headers, body = Body} = RestResp,
+        HeadersList = maps:to_list(Headers),
+        BodyBinary = case Body of
+            Bin when is_binary(Bin) -> Bin;
+            Map when is_map(Map) -> json_utils:encode_map(Map)
+        end,
+        {ok, Req3} = cowboy_req:reply(Code, HeadersList, BodyBinary, Req2),
+        {halt, Req3, State}
+    catch
+        Type:Message ->
+            ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
+                ?MODULE, Type, Message
+            ]),
+            {halt, State, Req}
+    end.
+
+
+resolve_bindings(?BINDING(Key), _Client, Req) ->
+    {Binding, _} = cowboy_req:binding(Key, Req),
+    Binding;
+resolve_bindings(?CLIENT_ID, #client{id = Id}, _Req) ->
+    Id;
+resolve_bindings(?COWBOY_REQ, _Client, Req) ->
+    Req;
+resolve_bindings({Atom, PossibleBinding}, Client, Req) when is_atom(Atom) ->
+    {Atom, resolve_bindings(PossibleBinding, Client, Req)};
+resolve_bindings(Other, _Client, _Req) ->
+    Other.
+
+
+call_entity_logic(create, Client, LogicPlugin, EntityId, Resource, Data) ->
+    n_entity_logic:create(Client, LogicPlugin, EntityId, Resource, Data);
+call_entity_logic(get, Client, LogicPlugin, EntityId, Resource, _Data) ->
+    n_entity_logic:get(Client, LogicPlugin, EntityId, Resource);
+call_entity_logic(update, Client, LogicPlugin, EntityId, Resource, Data) ->
+    n_entity_logic:update(Client, LogicPlugin, EntityId, Resource, Data);
+call_entity_logic(delete, Client, LogicPlugin, EntityId, Resource, _Data) ->
+    n_entity_logic:delete(Client, LogicPlugin, EntityId, Resource).
+
+
+translate_response(TranslatorModule, Operation, EntityId, Resource, Result) ->
+    try
+        case Result of
+            {error, Reason} ->
+                error_rest_translator:response({error, Reason});
+            _ ->
+                TranslatorModule:response(Operation, EntityId, Resource, Result)
+        end
+    catch
+        Type:Message ->
+            ?error("Cannot translate REST result for:~n"
+            "TranslatorModule: ~p~n"
+            "Operation: ~p~n"
+            "EntityId: ~p~n"
+            "Resource: ~p~n"
+            "Result: ~p~n"
+            "---------~n"
+            "Error was: ~p:~p~n"
+            "Stacktrace: ~p", [
+                TranslatorModule, Operation, EntityId,
+                Resource, Result, Type, Message, erlang:get_stacktrace()
+            ]),
+            error_rest_translator:response(?ERROR_INTERNAL_SERVER_ERROR)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -370,100 +452,8 @@ authenticate_by_provider_certs(Req) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Converts an atom representing a REST method to a binary representing
-%% the method.
-%% @end
-%%--------------------------------------------------------------------
--spec method_to_binary(Method :: method()) -> binary().
-method_to_binary(post) -> <<"POST">>;
-method_to_binary(patch) -> <<"PATCH">>;
-method_to_binary(get) -> <<"GET">>;
-method_to_binary(put) -> <<"PUT">>;
-method_to_binary(delete) -> <<"DELETE">>.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Converts a binary representing a REST method to an atom representing
-%% the method.
-%% @end
-%%--------------------------------------------------------------------
--spec binary_to_method(BinMethod :: binary()) -> method().
-binary_to_method(<<"POST">>) -> post;
-binary_to_method(<<"PATCH">>) -> patch;
-binary_to_method(<<"GET">>) -> get;
-binary_to_method(<<"PUT">>) -> put;
-binary_to_method(<<"DELETE">>) -> delete.
-
-
-call_entity_logic(Req, State, Data) ->
-    #state{
-        rest_req = #rest_req{
-            method = Method,
-            client = Client,
-            el_plugin = LogicPlugin,
-            entity_id = EntityIdVal,
-            resource = ResourceVal
-        }} = State,
-    Function = method_to_el_function(Method),
-    EntityId = resolve_bindings(EntityIdVal, Client, Req),
-    Resource = resolve_bindings(ResourceVal, Client, Req),
-    Args = el_function_args(Function, Client, LogicPlugin, EntityId, Resource, Data),
-    Result = erlang:apply(n_entity_logic, Function, Args),
-    #rest_resp{
-        code = Code,
-        headers = Headers,
-        body = Body
-    } = rest_translator:response(Function, LogicPlugin, EntityId, Resource, Result),
-    HeadersList = maps:to_list(Headers),
-    BodyBinary = case Body of
-        Bin when is_binary(Bin) -> Bin;
-        Map when is_map(Map) -> json_utils:encode_map(Map)
-    end,
-    {ok, Req2} = cowboy_req:reply(Code, HeadersList, BodyBinary, Req),
-    {halt, Req2, State}.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Converts a an atom representing a REST method into function name of
-%% entity logic that should be called to handle it.
-%% @end
-%%--------------------------------------------------------------------
--spec method_to_el_function(method()) -> entity_logic_function().
-method_to_el_function(post) -> create;
-method_to_el_function(put) -> create;
-method_to_el_function(get) -> get;
-method_to_el_function(patch) -> update;
-method_to_el_function(delete) -> delete.
-
-
-el_function_args(create, Client, DataLogicPlugin, EntityId, Resource, Data) ->
-    [Client, DataLogicPlugin, EntityId, Resource, Data];
-el_function_args(get, Client, DataLogicPlugin, EntityId, Resource, _Data) ->
-    [Client, DataLogicPlugin, EntityId, Resource];
-el_function_args(update, Client, DataLogicPlugin, EntityId, Resource, Data) ->
-    [Client, DataLogicPlugin, EntityId, Resource, Data];
-el_function_args(delete, Client, DataLogicPlugin, EntityId, Resource, _Data) ->
-    [Client, DataLogicPlugin, EntityId, Resource].
-
-
-resolve_bindings(?BINDING(Key), _Client, Req) ->
-    {Binding, _} = cowboy_req:binding(Key, Req),
-    Binding;
-resolve_bindings(?CLIENT_ID, #client{id = Id}, _Req) ->
-    Id;
-resolve_bindings(?COWBOY_REQ, _Client, Req) ->
-    Req;
-resolve_bindings({Atom, PossibleBinding}, Client, Req) when is_atom(Atom) ->
-    {Atom, resolve_bindings(PossibleBinding, Client, Req)};
-resolve_bindings(Other, _Client, _Req) ->
-    Other.
-
-
-%%--------------------------------------------------------------------
-%% @doc Parses macaroon and discharge macaroons out of request's
-%% headers.
+%% @doc
+%% Parses macaroon and discharge macaroons out of request's headers.
 %% @end
 %%--------------------------------------------------------------------
 -spec parse_macaroons_from_headers(Req :: cowboy_req:req()) ->
@@ -500,8 +490,11 @@ parse_macaroons_from_headers(Req) ->
 
     {Macaroon, DischargeMacaroons, Req}.
 
+
 %%--------------------------------------------------------------------
-%% @doc Deserializes a macaroon and throws on error.
+%% @private
+%% @doc
+%% Deserializes a macaroon, throws on error.
 %% @end
 %%--------------------------------------------------------------------
 -spec deserialize_macaroon(Data :: binary(), Req :: cowboy_req:req()) ->
@@ -512,3 +505,66 @@ deserialize_macaroon(Data, Req) ->
         {error, Reason} ->
             throw({invalid_token, atom_to_binary(Reason, latin1), Req})
     end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns body that was sent in HTTP request.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_data(Req :: cowboy_req:req()) ->
+    {Data :: n_entity_logic:data(), cowboy_req:req()}.
+get_data(Req) ->
+    {ok, Body, Req2} = cowboy_req:body(Req),
+    Data = try
+        json_utils:decode_map(Body)
+    catch _:_ ->
+        throw(?ERROR_MALFORMED_DATA)
+    end,
+    {Data, Req2}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts a binary representing a REST method to an atom representing
+%% the method.
+%% @end
+%%--------------------------------------------------------------------
+-spec binary_to_method(BinMethod :: binary()) -> method().
+binary_to_method(<<"POST">>) -> post;
+binary_to_method(<<"PUT">>) -> put;
+binary_to_method(<<"GET">>) -> get;
+binary_to_method(<<"PATCH">>) -> patch;
+binary_to_method(<<"DELETE">>) -> delete.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts an atom representing a REST method to a binary representing
+%% the method.
+%% @end
+%%--------------------------------------------------------------------
+-spec method_to_binary(Method :: method()) -> binary().
+method_to_binary(post) -> <<"POST">>;
+method_to_binary(put) -> <<"PUT">>;
+method_to_binary(get) -> <<"GET">>;
+method_to_binary(patch) -> <<"PATCH">>;
+method_to_binary(delete) -> <<"DELETE">>.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts an atom representing a REST method into entity logic operation
+%% that should be called to handle it.
+%% @end
+%%--------------------------------------------------------------------
+-spec method_to_operation(method()) -> n_entity_logic:operation().
+method_to_operation(post) -> create;
+method_to_operation(put) -> create;
+method_to_operation(get) -> get;
+method_to_operation(patch) -> update;
+method_to_operation(delete) -> delete.

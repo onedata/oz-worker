@@ -23,6 +23,7 @@
 ]).
 -export([
     get/2,
+    get_data/2,
     list/1
 ]).
 -export([
@@ -50,34 +51,37 @@
 ]).
 
 
-create(Issuer, Name) when is_binary(Name) ->
-    create(Issuer, #{<<"name">> => Name});
-create(Issuer, Data) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, undefined, entity, Data).
+create(Client, Name) when is_binary(Name) ->
+    create(Client, #{<<"name">> => Name});
+create(Client, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
-create_provider_invite_token(Issuer, SpaceId) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_provider_token, #{}).
+create_provider_invite_token(Client, SpaceId) ->
+    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_provider_token, #{}).
 
 
-create_user_invite_token(Issuer, SpaceId) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_user_token, #{}).
+create_user_invite_token(Client, SpaceId) ->
+    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_user_token, #{}).
 
 
-create_group_invite_token(Issuer, SpaceId) ->
-    n_entity_logic:create(Issuer, ?PLUGIN, SpaceId, invite_group_token, #{}).
+create_group_invite_token(Client, SpaceId) ->
+    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_group_token, #{}).
 
 
-get(Issuer, SpaceId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, SpaceId, entity).
+get(Client, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, entity).
+
+get_data(Client, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, data).
 
 
-list(Issuer) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, undefined, list).
+list(Client) ->
+    n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
-get_users(Issuer, SpaceId) ->
-    n_entity_logic:get(Issuer, ?PLUGIN, SpaceId, users).
+get_users(Client, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, users).
 
 
 add_user(Client, SpaceId, UserId, Privileges) when is_binary(UserId) ->
@@ -85,11 +89,11 @@ add_user(Client, SpaceId, UserId, Privileges) when is_binary(UserId) ->
         <<"userId">> => UserId,
         <<"privileges">> => Privileges
     }).
-add_user(Issuer, SpaceId, UserId) when is_binary(UserId) ->
-    add_user(Issuer, SpaceId, #{<<"userId">> => UserId});
-add_user(Issuer, SpaceId, Data) ->
+add_user(Client, SpaceId, UserId) when is_binary(UserId) ->
+    add_user(Client, SpaceId, #{<<"userId">> => UserId});
+add_user(Client, SpaceId, Data) ->
     n_entity_logic:create(
-        Issuer, ?PLUGIN, SpaceId, users, Data
+        Client, ?PLUGIN, SpaceId, users, Data
     ).
 
 
@@ -111,11 +115,11 @@ add_group(Client, SpaceId, GroupId, Privileges) when is_binary(GroupId) ->
         <<"groupId">> => GroupId,
         <<"privileges">> => Privileges
     }).
-add_group(Issuer, SpaceId, GroupId) when is_binary(GroupId) ->
-    add_group(Issuer, SpaceId, #{<<"groupId">> => GroupId});
-add_group(Issuer, SpaceId, Data) ->
+add_group(Client, SpaceId, GroupId) when is_binary(GroupId) ->
+    add_group(Client, SpaceId, #{<<"groupId">> => GroupId});
+add_group(Client, SpaceId, Data) ->
     n_entity_logic:create(
-        Issuer, ?PLUGIN, SpaceId, groups, Data
+        Client, ?PLUGIN, SpaceId, groups, Data
     ).
 
 
@@ -132,14 +136,14 @@ remove_group(Client, SpaceId, GroupId) ->
     n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {group, GroupId}).
 
 
-update(Issuer, SpaceId, NewName) when is_binary(NewName) ->
-    update(Issuer, SpaceId, #{<<"name">> => NewName});
-update(Issuer, SpaceId, Data) ->
-    n_entity_logic:update(Issuer, ?PLUGIN, SpaceId, entity, Data).
+update(Client, SpaceId, NewName) when is_binary(NewName) ->
+    update(Client, SpaceId, #{<<"name">> => NewName});
+update(Client, SpaceId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, SpaceId, entity, Data).
 
 
-delete(Issuer, SpaceId) ->
-    n_entity_logic:delete(Issuer, ?PLUGIN, SpaceId, entity).
+delete(Client, SpaceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, entity).
 
 
 %%--------------------------------------------------------------------

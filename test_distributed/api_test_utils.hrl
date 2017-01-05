@@ -66,6 +66,8 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 -define(OK, ok).
 -define(OK_BINARY, ok_binary).
 -define(OK_BINARY(__ExactValue), {ok_binary, __ExactValue}).
+-define(OK_MAP(__ExactValue), {ok_map, __ExactValue}).
+-define(OK_MAP_CONTAINS(__Contains), {ok_map_contains, __Contains}).
 -define(OK_LIST(__ExpectedList), {ok_list, __ExpectedList}).
 -define(OK_TERM(__VerifyFun), {ok_term, __VerifyFun}).
 -define(ERROR_REASON(__ExpectedError), {error_reason, __ExpectedError}).

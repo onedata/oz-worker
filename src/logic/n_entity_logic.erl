@@ -21,20 +21,20 @@
 -export([create/5, get/4, update/5, delete/4]).
 -export([client_to_string/1]).
 
-% TODO HINT JAK JEST BAD VALUE TYPU ZA MALY SUPPORT SIZE
+-type client() :: #client{}.
+-type operation() :: create | get | update | delete.
+-type data() :: maps:map() | binary().
+-export_type([client/0, operation/0, data/0]).
 
 -record(request, {
-    client = #client{} :: #client{},
-    el_plugin = undefined :: undefined | atom(),
-    entity_id = undefined :: undefined | binary(),
-    entity = undefined :: undefined | term(),
-    operation = create :: atom(), % TODO
-    resource = undefined :: undefined | term(),
-    data = #{} :: maps:map()
+    client = #client{} :: client(),
+    el_plugin = undefined :: undefined | atom(), %TODO
+    entity_id = undefined :: undefined | binary(), %TODO
+    entity = undefined :: undefined | term(), %TODO
+    operation = create :: operation(),
+    resource = undefined :: undefined | term(), %TODO
+    data = #{} :: data()
 }).
-
--type client() :: #client{}.
--export_type([client/0]).
 
 
 % TODO do typu

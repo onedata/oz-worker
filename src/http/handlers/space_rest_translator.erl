@@ -19,17 +19,9 @@
 
 -export([response/4]).
 
-response(get, SpaceId, entity, {ok, Space}) ->
-    #od_space{
-        name = Name,
-        providers = Providers,
-        shares = Shares
-    } = Space,
-    #rest_resp{code = ?HTTP_200_OK, body = #{
+response(get, SpaceId, entity, {ok, SpaceData}) ->
+    n_rest_handler:ok_body_reply(SpaceData#{
         <<"spaceId">> => SpaceId,
-        <<"name">> => Name,
         % TODO VFS-2918
-        <<"canonicalName">> => Name,
-        <<"providersSupports">> => Providers,
-        <<"shares">> => Shares
-    }}.
+        <<"canonicalName">> => maps:get(<<"name">>, SpaceData)
+    }).

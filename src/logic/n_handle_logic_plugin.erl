@@ -83,7 +83,7 @@ create(?USER, HandleId, groups, #{<<"groupId">> := GroupId}) ->
 get(_, undefined, undefined, list) ->
     {ok, HandleDocs} = od_handle:list(),
     {ok, [HandleId || #document{key = HandleId} <- HandleDocs]};
-get(?USER, _HandleId, #od_handle{users = Users}, users) ->
+get(_, _HandleId, #od_handle{users = Users}, users) ->
     {ok, Users}.
 
 

@@ -158,6 +158,13 @@ get_test(Config) ->
 
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
+    ExpBody = #{
+        <<"name">> => <<"Provider 1">>,
+        <<"urls">> => [<<"172.16.0.10">>, <<"172.16.0.11">>],
+        <<"redirectionPoint">> => <<"https://hostname.com">>,
+        <<"latitude">> => 14.78,
+        <<"longitude">> => -106.12
+    },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -173,31 +180,14 @@ get_test(Config) ->
             method = get,
             path = [<<"/providers/">>, P1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"providerId">> => P1,
-                <<"name">> => <<"Provider 1">>,
-                <<"urls">> => [<<"172.16.0.10">>, <<"172.16.0.11">>],
-                <<"redirectionPoint">> => <<"https://hostname.com">>,
-                <<"latitude">> => 14.78,
-                <<"longitude">> => -106.12
-            }
+            expected_body = ExpBody#{<<"providerId">> => P1}
         },
         logic_spec = #logic_spec{
             operation = get,
             module = n_provider_logic,
-            function = get,
+            function = get_data,
             args = [client, P1],
-            expected_result = ?OK_TERM(fun(Entity) ->
-                #od_provider{name = Name, urls = Urls,
-                    redirection_point = RedPoint, latitude = Latitude,
-                    longitude = Longitude, spaces = Spaces} = Entity,
-                Name =:= <<"Provider 1">> andalso
-                    Urls =:= [<<"172.16.0.10">>, <<"172.16.0.11">>] andalso
-                    RedPoint =:= <<"https://hostname.com">> andalso
-                    Latitude =:= 14.78 andalso
-                    Longitude =:= -106.12 andalso
-                    Spaces =:= #{}
-            end)
+            expected_result = ?OK_MAP(ExpBody)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -340,7 +330,7 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = <<"/provider">>,
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -377,7 +367,7 @@ delete_test(Config) ->
                 rest_spec = #rest_spec{
                     method = delete,
                     path = [<<"/providers/">>, Provider],
-                    expected_code = ?HTTP_202_ACCEPTED
+                    expected_code = ?HTTP_204_NO_CONTENT
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
@@ -580,6 +570,9 @@ get_eff_users_test(Config) ->
     % Check every user one by one.
     lists:foreach(
         fun({UserId, UserName}) ->
+            ExpBodyContains = #{
+                <<"name">> => UserName
+            },
             ApiTestSpec4 = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [root, {user, Admin}],
@@ -595,9 +588,8 @@ get_eff_users_test(Config) ->
                     method = get,
                     path = [<<"/providers/">>, P1, <<"/effective_users/">>, UserId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = {contains, #{
-                        <<"userId">> => UserId,
-                        <<"name">> => UserName
+                    expected_body = {contains, ExpBodyContains#{
+                        <<"userId">> => UserId
                     }}
                 },
                 logic_spec = #logic_spec{
@@ -605,9 +597,7 @@ get_eff_users_test(Config) ->
                     module = n_provider_logic,
                     function = get_eff_user,
                     args = [client, P1, UserId],
-                    expected_result = ?OK_TERM(fun(#od_user{name = Name}) ->
-                        Name =:= UserName
-                    end)
+                    expected_result = ?OK_MAP_CONTAINS(ExpBodyContains)
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec4))
@@ -711,6 +701,7 @@ get_eff_groups_test(Config) ->
     % Check every group one by one.
     lists:foreach(
         fun({GroupId, GroupName}) ->
+            ExpBodyContains = #{<<"name">> => GroupName},
             ApiTestSpec3 = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [root, {user, Admin}],
@@ -724,9 +715,8 @@ get_eff_groups_test(Config) ->
                     method = get,
                     path = [<<"/providers/">>, P1, <<"/effective_groups/">>, GroupId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = {contains, #{
-                        <<"groupId">> => GroupId,
-                        <<"name">> => GroupName
+                    expected_body = {contains, ExpBodyContains#{
+                        <<"groupId">> => GroupId
                     }}
                 },
                 logic_spec = #logic_spec{
@@ -734,9 +724,7 @@ get_eff_groups_test(Config) ->
                     module = n_provider_logic,
                     function = get_eff_group,
                     args = [client, P1, GroupId],
-                    expected_result = ?OK_TERM(fun(#od_group{name = Name}) ->
-                        Name =:= GroupName
-                    end)
+                    expected_result = ?OK_MAP_CONTAINS(ExpBodyContains)
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec3))
@@ -848,6 +836,7 @@ get_spaces_test(Config) ->
     % Check every space one by one.
     lists:foreach(
         fun({SpaceId, SpaceName}) ->
+            ExpBodyContains = #{<<"name">> => SpaceName},
             ApiTestSpec3 = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -862,9 +851,8 @@ get_spaces_test(Config) ->
                     method = get,
                     path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = {contains, #{
-                        <<"spaceId">> => SpaceId,
-                        <<"name">> => SpaceName
+                    expected_body = {contains, ExpBodyContains#{
+                        <<"spaceId">> => SpaceId
                     }}
                 },
                 logic_spec = #logic_spec{
@@ -872,9 +860,7 @@ get_spaces_test(Config) ->
                     module = n_provider_logic,
                     function = get_space,
                     args = [client, P1, SpaceId],
-                    expected_result = ?OK_TERM(fun(#od_space{name = Name}) ->
-                        Name =:= SpaceName
-                    end)
+                    expected_result = ?OK_MAP_CONTAINS(ExpBodyContains)
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
@@ -887,9 +873,8 @@ get_spaces_test(Config) ->
                     method = get,
                     path = [<<"/provider/spaces/">>, SpaceId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = {contains, #{
-                        <<"spaceId">> => SpaceId,
-                        <<"name">> => SpaceName
+                    expected_body = {contains, ExpBodyContains#{
+                        <<"spaceId">> => SpaceId
                     }}
                 }
             },
@@ -1166,7 +1151,7 @@ revoke_support_test(Config) ->
         rest_spec = RestSpec = #rest_spec{
             method = delete,
             path = [<<"/provider/spaces/">>, S1],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),

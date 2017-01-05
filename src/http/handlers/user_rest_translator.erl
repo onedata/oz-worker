@@ -20,26 +20,86 @@
 -export([response/4]).
 
 response(create, _UserId, authorize, {ok, DischargeMacaroon}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = DischargeMacaroon};
+    n_rest_handler:ok_body_reply(DischargeMacaroon);
 
 response(create, _UserId, client_tokens, {ok, Token}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = #{<<"token">> => Token}};
+    n_rest_handler:ok_body_reply(#{<<"token">> => Token});
 
 response(create, _UserId, client_tokens, {ok, Token}) ->
-    #rest_resp{code = ?HTTP_200_OK, body = #{<<"token">> => Token}};
+    n_rest_handler:ok_body_reply(#{<<"token">> => Token});
+
+response(create, _UserId, join_group, {ok, GroupId}) ->
+    n_rest_handler:created_reply([<<"user/groups/">>, GroupId]);
+
+response(create, _UserId, join_space, {ok, SpaceId}) ->
+    n_rest_handler:created_reply([<<"user/spaces/">>, SpaceId]);
 
 
+response(get, UserId, data, {ok, UserData}) ->
+    n_rest_handler:ok_body_reply(UserData#{<<"userId">> => UserId});
+
+response(get, undefined, list, {ok, Users}) ->
+    n_rest_handler:ok_body_reply(#{<<"users">> => Users});
+
+response(get, _UserId, oz_privileges, {ok, Privileges}) ->
+    n_rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+
+response(get, _UserId, eff_oz_privileges, {ok, Privileges}) ->
+    n_rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+
+response(get, _UserId, default_space, {ok, DefaultSpace}) ->
+    n_rest_handler:ok_body_reply(#{<<"spaceId">> => DefaultSpace});
+
+response(get, _UserId, {space_alias, _SpaceId}, {ok, SpaceAlias}) ->
+    n_rest_handler:ok_body_reply(#{<<"alias">> => SpaceAlias});
+
+response(get, _UserId, default_provider, {ok, DefaultProvider}) ->
+    n_rest_handler:ok_body_reply(#{<<"providerId">> => DefaultProvider});
+
+response(get, _UserId, client_tokens, {ok, Tokens}) ->
+    n_rest_handler:ok_body_reply(#{<<"tokens">> => Tokens});
+
+response(get, _UserId, groups, {ok, Groups}) ->
+    n_rest_handler:ok_body_reply(#{<<"groups">> => Groups});
+
+response(get, _UserId, eff_groups, {ok, Groups}) ->
+    n_rest_handler:ok_body_reply(#{<<"groups">> => Groups});
+
+response(get, _UserId, {group, GroupId}, {ok, Group}) ->
+    group_rest_translator:response(get, GroupId, entity, {ok, Group});
+
+response(get, _UserId, {eff_group, GroupId}, {ok, Group}) ->
+    group_rest_translator:response(get, GroupId, entity, {ok, Group});
+
+response(get, _UserId, spaces, {ok, Spaces}) ->
+    n_rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});
+
+response(get, _UserId, eff_spaces, {ok, Spaces}) ->
+    n_rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});
+
+response(get, _UserId, {space, SpaceId}, {ok, Space}) ->
+    space_rest_translator:response(get, SpaceId, entity, {ok, Space});
+
+response(get, _UserId, {eff_space, SpaceId}, {ok, Space}) ->
+    space_rest_translator:response(get, SpaceId, entity, {ok, Space});
+
+response(get, _UserId, eff_providers, {ok, Providers}) ->
+    n_rest_handler:ok_body_reply(#{<<"providers">> => Providers});
+
+response(get, _UserId, {eff_provider, ProviderId}, {ok, Provider}) ->
+    provider_rest_translator:response(get, ProviderId, entity, {ok, Provider});
+
+
+
+
+response(update, _UserId, _, ok) ->
+    n_rest_handler:updated_reply();
+
+
+response(delete, _UserId, _, ok) ->
+    n_rest_handler:deleted_reply();
+
+
+% TODO usun
 response(get, UserId, entity, {ok, User}) ->
-    #od_user{
-        name = Name,
-        login = Login,
-        alias = Alias,
-        email_list = EmailList
-    } = User,
-    #rest_resp{code = ?HTTP_200_OK, body = #{
-        <<"userId">> => UserId,
-        <<"name">> => Name,
-        <<"login">> => Login,
-        <<"alias">> => Alias,
-        <<"emailList">> => EmailList
-    }}.
+    ok.

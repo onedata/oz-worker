@@ -23,6 +23,7 @@
 ]).
 -export([
     get/2,
+    get_data/2,
     list/1
 ]).
 -export([
@@ -55,6 +56,10 @@ create(Client, Data) ->
 
 get(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, entity, GroupId).
+
+
+get_data(Client, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, data, GroupId).
 
 
 list(Client) ->

@@ -68,6 +68,7 @@
 -export([
     create_provider_and_certs/2,
     create_provider/2,
+get_provider/2,
     list_providers/1,
     delete_provider/2,
     support_space/5
@@ -557,6 +558,19 @@ create_provider_and_certs(Config, Name) ->
 create_provider(Config, Data) ->
     ?assertMatch({ok, _}, call_oz(
         Config, n_provider_logic, create, [?NOBODY, Data]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves provider data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_provider(Config :: term(), ProviderId :: od_provider:id()) ->
+    {ok, #od_provider{}}.
+get_provider(Config, ProviderId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, n_provider_logic, get, [?ROOT, ProviderId]
     )).
 
 

@@ -26,6 +26,7 @@
 ]).
 -export([
     get/2,
+    get_data/2,
     list/1
 ]).
 -export([
@@ -80,6 +81,12 @@ create_dev(Client, Data) ->
 
 get(Client, ProviderId) ->
     n_entity_logic:get(Client, ?PLUGIN, ProviderId, entity).
+
+
+get_data(Client, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, data).
+
+
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 get_eff_users(Client, ProviderId) ->

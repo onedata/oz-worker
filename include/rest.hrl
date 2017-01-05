@@ -20,10 +20,10 @@
 %% Record containing the state of REST request.
 -record(rest_req, {
     method = get :: n_rest_handler:method(),
-    client = #client{} :: n_entity_logic:client(),
     el_plugin = undefined :: module(),
     entity_id = undefined :: undefined | binary(),
-    resource = undefined :: undefined | atom() | {atom(), term()}
+    resource = undefined :: undefined | atom() | {atom(), term()},
+    translator = undefined :: module()
 }).
 % Convenience macros user in rest_req
 -define(BINDING(__KEY), {binding, __KEY}).

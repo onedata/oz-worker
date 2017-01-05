@@ -88,6 +88,14 @@ get(_, undefined, undefined, list) ->
     {ok, UserDocs} = od_user:list(),
     {ok, [UserId || #document{key = UserId} <- UserDocs]};
 
+get(_, _UserId, #od_user{} = User, data) ->
+    #od_user{
+        name = Name, login = Login, alias = Alias, email_list = EmailList
+    } = User,
+    {ok, #{
+        <<"name">> => Name, <<"login">> => Login,
+        <<"alias">> => Alias, <<"emailList">> => EmailList
+    }};
 get(_, _UserId, #od_user{oz_privileges = OzPrivileges}, oz_privileges) ->
     {ok, OzPrivileges};
 get(_, _UserId, #od_user{eff_oz_privileges = OzPrivileges}, eff_oz_privileges) ->
@@ -315,15 +323,35 @@ exists(_UserId, _) ->
 
 authorize(create, _UserId, authorize, _Client) ->
     true;
+
+% User trying to access its own oz_privileges
+authorize(get, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
+    auth_self_by_oz_privilege(?OZ_VIEW_PRIVILEGES);
+authorize(update, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
+    auth_self_by_oz_privilege(?OZ_SET_PRIVILEGES);
+authorize(delete, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
+    auth_self_by_oz_privilege(?OZ_SET_PRIVILEGES);
+
+% User trying to access someone else's oz_privileges
 authorize(get, _UserId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_VIEW_PRIVILEGES);
 authorize(update, _UserId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_SET_PRIVILEGES);
 authorize(delete, _UserId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_SET_PRIVILEGES);
+
+% User can create/get/update/delete any information about himself
+% (except oz_privileges)
 authorize(_, UserId, _, ?USER(UserId)) when is_binary(UserId) ->
-    % User can create/get/update/delete any information about himself
-    true.
+    true;
+
+% Other admin endpoints
+authorize(get, undefined, list, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_USERS_LIST);
+authorize(get, _UserId, data, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_USERS_LIST);
+authorize(get, _UserId, entity, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_USERS_LIST).
 
 
 
@@ -383,7 +411,13 @@ entity_to_string(UserId) ->
     od_user:to_string(UserId).
 
 
-auth_by_oz_privilege(_UserId, Privilege) ->
+auth_by_oz_privilege(UserId, Privilege) ->
+    {external, fun() ->
+        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
+    end}.
+
+
+auth_self_by_oz_privilege(Privilege) ->
     {internal, fun(User) ->
         n_user_logic:has_eff_oz_privilege(User, Privilege)
     end}.
