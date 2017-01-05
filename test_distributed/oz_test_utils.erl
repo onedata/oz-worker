@@ -18,6 +18,10 @@
 
 %% API
 -export([
+    call_oz/4
+]).
+% Operations corresponding to logic modules
+-export([
     create_user/2,
     create_client_token/2,
     get_user/2,
@@ -27,7 +31,6 @@
 
     user_leave_space/3
 ]).
-
 -export([
     create_group/3,
     get_group/2,
@@ -40,7 +43,6 @@
     group_remove_user/3,
     group_leave_space/3
 ]).
-
 -export([
     create_space/3,
     get_space/2,
@@ -57,23 +59,20 @@
     space_invite_provider_token/3,
     space_has_effective_user/3
 ]).
-
 -export([
     create_share/6,
     create_share/3,
     list_shares/1,
     delete_share/2
 ]).
-
 -export([
     create_provider_and_certs/2,
     create_provider/2,
-get_provider/2,
+    get_provider/2,
     list_providers/1,
     delete_provider/2,
     support_space/5
 ]).
-
 -export([
     create_handle_service/5, create_handle_service/3,
     list_handle_services/1,
@@ -81,7 +80,6 @@ get_provider/2,
     add_user_to_handle_service/3,
     add_group_to_handle_service/3
 ]).
-
 -export([
     create_handle/6, create_handle/3,
     list_handles/1,
@@ -90,14 +88,13 @@ get_provider/2,
     add_user_to_handle/3,
     add_group_to_handle/3
 ]).
-
 -export([
     delete_all_entities/1,
     delete_all_entities/2
 ]).
-
+% Convenience functions
 -export([
-    call_oz/4,
+    create_3_nested_groups/2, create_3_nested_groups/5,
     generate_provider_cert_files/0,
     ensure_eff_graph_up_to_date/1,
     mock_handle_proxy/1,
@@ -107,6 +104,43 @@ get_provider/2,
 %%%===================================================================
 %%% API functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Works like an rpc:call, but automatically retrieves oz_worker node to call
+%% from config and wraps the call in a try-catch, so better error reporting
+%% can be done.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_oz(Config :: term(), Module :: atom(), Function :: atom(),
+    Args :: [term()]) -> term() | {error, term()}.
+call_oz(Config, Module, Function, Args) ->
+    FunWrapper = fun() ->
+        try
+            erlang:apply(Module, Function, Args)
+        catch Type:Reason ->
+            {crash, Type, Reason, erlang:get_stacktrace()}
+        end
+    end,
+    Nodes = ?config(oz_worker_nodes, Config),
+    Node = lists:nth(rand:uniform(length(Nodes)), Nodes),
+    case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
+        {crash, Type, Reason, Stacktrace} ->
+            % Log a bad rpc - very useful when debugging tests.
+            ct:print(
+                "RPC call in oz_test_utils crashed!~n"
+                "Module: ~p~n"
+                "Function: ~p~n"
+                "Args: ~p~n"
+                "Error: ~p:~p~n"
+                "Stacktrace: ~p",
+                [Module, Function, Args, Type, Reason, Stacktrace]
+            ),
+            {error, {badrpc, Reason}};
+        Result ->
+            Result
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -844,39 +878,43 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Works like an rpc:call, but automatically retrieves oz_worker node to call
-%% from config and wraps the call in a try-catch, so better error reporting
-%% can be done.
+% Creates a group for user which belongs to a group, which belongs to
+% another group.
+% The structure looks as follows: User -> G1 -> G2 -> G3
 %% @end
 %%--------------------------------------------------------------------
--spec call_oz(Config :: term(), Module :: atom(), Function :: atom(),
-    Args :: [term()]) -> term() | {error, term()}.
-call_oz(Config, Module, Function, Args) ->
-    FunWrapper = fun() ->
-        try
-            erlang:apply(Module, Function, Args)
-        catch Type:Reason ->
-            {crash, Type, Reason, erlang:get_stacktrace()}
-        end
-    end,
-    Nodes = ?config(oz_worker_nodes, Config),
-    Node = lists:nth(rand:uniform(length(Nodes)), Nodes),
-    case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
-        {crash, Type, Reason, Stacktrace} ->
-            % Log a bad rpc - very useful when debugging tests.
-            ct:print(
-                "RPC call in oz_test_utils crashed!~n"
-                "Module: ~p~n"
-                "Function: ~p~n"
-                "Args: ~p~n"
-                "Error: ~p:~p~n"
-                "Stacktrace: ~p",
-                [Module, Function, Args, Type, Reason, Stacktrace]
-            ),
-            {error, {badrpc, Reason}};
-        Result ->
-            Result
-    end.
+-spec create_3_nested_groups(Config :: term(), TestUser :: od_user:id()) -> ok.
+create_3_nested_groups(Config, TestUser) ->
+    create_3_nested_groups(Config, TestUser, <<"gr">>, <<"gr">>, <<"gr">>).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+% Creates a group for user which belongs to a group, which belongs to
+% another group. Allows to specify group names.
+% The structure looks as follows: User -> G1 -> G2 -> G3
+%% @end
+%%--------------------------------------------------------------------
+-spec create_3_nested_groups(Config :: term(), TestUser :: od_user:id(),
+    BotGrName :: binary(), MidGrName :: binary(), TopGrName :: binary()) -> ok.
+create_3_nested_groups(Config, TestUser, BotGrName, MidGrName, TopGrName) ->
+    {ok, BottomGroup} = oz_test_utils:create_group(
+        Config, ?USER(TestUser), BotGrName
+    ),
+    % Dummy user will be used only to create groups
+    {ok, MiddleGroup} = oz_test_utils:create_group(
+        Config, ?ROOT, MidGrName
+    ),
+    {ok, TopGroup} = oz_test_utils:create_group(
+        Config, ?ROOT, TopGrName
+    ),
+    {ok, BottomGroup} = oz_test_utils:add_group_to_group(
+        Config, MiddleGroup, BottomGroup
+    ),
+    {ok, MiddleGroup} = oz_test_utils:add_group_to_group(
+        Config, TopGroup, MiddleGroup
+    ),
+    {BottomGroup, MiddleGroup, TopGroup}.
 
 
 %%--------------------------------------------------------------------

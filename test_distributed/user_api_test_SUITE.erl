@@ -39,12 +39,13 @@
     get_test/1,
     list_test/1,
     get_oz_privileges_test/1,
+    get_eff_oz_privileges_test/1,
     get_default_space_test/1,
     get_space_alias_test/1,
     get_default_provider_test/1,
 
     update_test/1,
-    update_oz_test/1,
+    update_oz_privileges_test/1,
     set_default_space_test/1,
     set_space_alias_test/1,
     set_default_provider_test/1,
@@ -243,7 +244,7 @@ get_test(Config) ->
     % Create two users, grant one of them the privilege to list users.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_USERS_LIST
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
@@ -307,7 +308,7 @@ list_test(Config) ->
     % Create two users, grant one of them the privilege to list users.
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_USERS_LIST
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
@@ -373,12 +374,44 @@ get_oz_privileges_test(Config) ->
     % Create two users, grant one of them the privilege to view OZ privileges.
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_VIEW_PRIVILEGES
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    % By default, a new user should not have any oz privileges
+
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    % A new user should not be able to view his oz_privileges
+    NotAuthorizedApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, User}]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = get,
+            path = [<<"/users/">>, User, <<"/privileges">>],
+            expected_code = ?HTTP_403_FORBIDDEN,
+            expected_body = #{<<"privileges">> => []}
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_user_logic,
+            function = get_oz_privileges,
+            args = [client, User],
+            expected_result = ?ERROR_REASON(?ERROR_FORBIDDEN)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, NotAuthorizedApiTestSpec)),
+    % Also, check path dedicated for user that presents auth
+    NotAuthorizedApiTestSpecForUser = NotAuthorizedApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/privileges">>
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, NotAuthorizedApiTestSpecForUser)),
+
+    % By default, a new user should not have any oz privileges
+    InitialPrivs = [],
+    % Do not include user in clients as his privileges will be changing, which
+    % means that he will be sometimes authorized, sometimes not.
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -387,8 +420,7 @@ get_oz_privileges_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin},
-                {user, User}
+                {user, NonAdmin}
             ]
         },
         rest_spec = RestSpec = #rest_spec{
@@ -400,21 +432,150 @@ get_oz_privileges_test(Config) ->
         logic_spec = #logic_spec{
             operation = get,
             module = n_user_logic,
-            function = get_data,
+            function = get_oz_privileges,
             args = [client, User],
             expected_result = ?OK_LIST([])
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    SetPrivsFun = fun(Operation, Privs) ->
+        oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
+    end,
+    ?assert(api_test_scenarios:run_scenario(get_privileges, [
+        Config, ApiTestSpec, SetPrivsFun, InitialPrivs, AllPrivs
+    ])),
     % Also, check path dedicated for user that presents auth
+    oz_test_utils:set_user_oz_privileges(Config, User, set, []),
     ApiTestSpecForUser = ApiTestSpec#api_test_spec{
         rest_spec = RestSpec#rest_spec{
             path = <<"/user/privileges">>
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForUser)),
+    ?assert(api_test_scenarios:run_scenario(get_privileges, [
+        Config, ApiTestSpecForUser, SetPrivsFun, InitialPrivs, AllPrivs
+    ])).
+
+
+get_eff_oz_privileges_test(Config) ->
+    % Create two users, grant one of them the privilege to view OZ privileges.
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        ?OZ_VIEW_PRIVILEGES
+    ]),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    % A new user should not be able to view his oz_privileges
+    NotAuthorizedApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, User}]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = get,
+            path = [<<"/users/">>, User, <<"/privileges">>],
+            expected_code = ?HTTP_403_FORBIDDEN,
+            expected_body = #{<<"privileges">> => []}
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_user_logic,
+            function = get_oz_privileges,
+            args = [client, User],
+            expected_result = ?ERROR_REASON(?ERROR_FORBIDDEN)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, NotAuthorizedApiTestSpec)),
+    % Also, check path dedicated for user that presents auth
+    NotAuthorizedApiTestSpecForUser = NotAuthorizedApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/privileges">>
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, NotAuthorizedApiTestSpecForUser)),
+
+    % Create some groups hierarchy for the user
+    {BottomGroup, MiddleGroup, TopGroup} = oz_test_utils:create_3_nested_groups(
+        Config, User
+    ),
+    % By default, a new user should not have any effective oz privileges
+    InitialPrivs = [],
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, Admin}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = get,
+            path = [<<"/users/">>, User, <<"/effective_privileges">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"privileges">> => []}
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_user_logic,
+            function = get_eff_oz_privileges,
+            args = [client, User],
+            expected_result = ?OK_LIST([])
+        }
+    },
+    AllPrivilegesAtoms = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = [atom_to_binary(P, utf8) || P <- AllPrivilegesAtoms],
+    SetPrivsFun = fun(Operation, Privs) ->
+        % In case of SET and GRANT, randomly split privileges into four parts
+        % and update the user and his groups with the privileges. His
+        % eff_privileges should contain the sum of those. In case of revoke, the
+        % privileges must be revoked for all 4 entities.
+        case Operation of
+            revoke ->
+                oz_test_utils:set_user_oz_privileges(
+                    Config, User, revoke, Privs
+                ),
+                oz_test_utils:set_group_oz_privileges(
+                    Config, BottomGroup, revoke, Privs
+                ),
+                oz_test_utils:set_group_oz_privileges(
+                    Config, MiddleGroup, revoke, Privs
+                ),
+                oz_test_utils:set_group_oz_privileges(
+                    Config, TopGroup, revoke, Privs
+                );
+            _ -> % Covers (set|grant)
+                Parts = lists:foldl(
+                    fun(Privilege, AccMap) ->
+                        Index = rand:uniform(4),
+                        AccMap#{Index => [Privilege | maps:get(Index, AccMap)]}
+                    end, #{1=>[], 2=>[], 3=>[], 4=>[]}, Privs),
+                ct:print("parts: ~p", [Parts]),
+                oz_test_utils:set_user_oz_privileges(
+                    Config, User, Operation, maps:get(1, Parts)
+                ),
+                oz_test_utils:set_group_oz_privileges(
+                    Config, BottomGroup, Operation, maps:get(2, Parts)
+                ),
+                oz_test_utils:set_group_oz_privileges(
+                    Config, MiddleGroup, Operation, maps:get(3, Parts)
+                ),
+                oz_test_utils:set_group_oz_privileges(
+                    Config, TopGroup, Operation, maps:get(4, Parts)
+                )
+        end,
+        oz_test_utils:ensure_eff_graph_up_to_date(Config)
+    end,
+    ?assert(api_test_scenarios:run_scenario(get_privileges, [
+        Config, ApiTestSpec, SetPrivsFun, InitialPrivs, AllPrivs
+    ])),
+
 
     ok.
+
+
 
 
 get_default_space_test(Config) ->
@@ -434,7 +595,7 @@ update_test(Config) ->
     ok.
 
 
-update_oz_test(Config) ->
+update_oz_privileges_test(Config) ->
     ok.
 
 

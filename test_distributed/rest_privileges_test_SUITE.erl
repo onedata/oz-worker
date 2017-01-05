@@ -578,8 +578,7 @@ set_privileges_test(Config) ->
     AllPrivilegesAtoms = rpc:call(Node, privileges, oz_privileges, []),
     AllPrivs = [atom_to_binary(P, utf8) || P <- AllPrivilegesAtoms],
     % Try to set all sublists of privileges, both for User2 and Group2.
-    Sublists =
-        [lists:sublist(AllPrivs, I) || I <- lists:seq(1, length(AllPrivs))],
+    Sublists = [lists:sublist(AllPrivs, I) || I <- lists:seq(1, length(AllPrivs))],
     lists:foreach(
         fun(Privileges) ->
             % Set the privileges

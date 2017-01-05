@@ -333,6 +333,10 @@ compare_maps(ActualMapInput, ExpectedMapInput) ->
                     case {ExpValue, ActualValue} of
                         {{check_type, binary}, ActualValue} ->
                             is_binary(ActualValue);
+                        {{list_contains, ExpContains}, ActualValue} ->
+                                ExpContains -- ActualValue =:= [];
+                        {{list_doesnt_contain, ExpContains}, ActualValue} ->
+                                ActualValue -- ExpContains =:= ActualValue;
                         {_, _} ->
                             ExpValue =:= ActualValue
                     end

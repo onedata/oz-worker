@@ -152,7 +152,7 @@ get_test(Config) ->
     % Create two users, grant one of them the privilege to list providers.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST
     ]),
 
@@ -229,7 +229,7 @@ list_test(Config) ->
     % Create two users, grant one of them the privilege to list providers.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST
     ]),
 
@@ -342,7 +342,7 @@ delete_test(Config) ->
     % Create two users, grant one of them the privilege to remove providers.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_DELETE
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
@@ -465,7 +465,7 @@ get_eff_users_test(Config) ->
     % Create two users, grant one of them the privilege to list users.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_USERS
     ]),
 
@@ -643,7 +643,7 @@ get_eff_groups_test(Config) ->
     % Create two users, grant one of them the privilege to list groups.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_GROUPS
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
@@ -768,7 +768,7 @@ get_spaces_test(Config) ->
     % Create two users, grant one of them the privilege to list spaces.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    ok = oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_SPACES
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),

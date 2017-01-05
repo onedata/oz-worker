@@ -21,6 +21,7 @@
 %% API
 -export([run_tests/2]).
 
+
 run_tests(Config, ApiTestSpec) ->
     #api_test_spec{
         client_spec = ClientSpec,
@@ -347,6 +348,10 @@ verify_logic_result({ok, Got}, ?OK_MAP_CONTAINS(Expected)) when is_map(Got) ->
     rest_test_utils:contains_map(Got, Expected);
 verify_logic_result({ok, GotList}, ?OK_LIST(ExpList)) ->
     lists:sort(ExpList) =:= lists:sort(GotList);
+verify_logic_result({ok, GotList}, ?OK_LIST_CONTAINS(ExpList)) ->
+        ExpList -- GotList =:= [];
+verify_logic_result({ok, GotList}, ?OK_LIST_DOESNT_CONTAIN(ExpList)) ->
+        GotList -- ExpList =:= GotList;
 verify_logic_result({error, Error}, ?ERROR_REASON({error, Error})) ->
     true;
 verify_logic_result({ok, Result}, ?OK_TERM(VerifyFun)) ->

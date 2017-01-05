@@ -69,6 +69,9 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 -define(OK_MAP(__ExactValue), {ok_map, __ExactValue}).
 -define(OK_MAP_CONTAINS(__Contains), {ok_map_contains, __Contains}).
 -define(OK_LIST(__ExpectedList), {ok_list, __ExpectedList}).
+-define(OK_LIST_CONTAINS(__ExpectedList), {ok_list_contains, __ExpectedList}).
+-define(OK_LIST_DOESNT_CONTAIN(__ExpectedList),
+    {ok_list_doesnt_contain, __ExpectedList}).
 -define(OK_TERM(__VerifyFun), {ok_term, __VerifyFun}).
 -define(ERROR_REASON(__ExpectedError), {error_reason, __ExpectedError}).
 
