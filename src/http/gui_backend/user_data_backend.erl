@@ -199,7 +199,7 @@ user_record(UserId) ->
         undefined -> null;
         _ -> DefaultProviderValue
     end,
-    Groups = user_logic:get_effective_groups(UserId),
+    {ok, [{effective_groups, Groups}]} = user_logic:get_effective_groups(UserId),
     {ok, UserSpaces} = user_logic:get_spaces(UserId),
     Spaces = proplists:get_value(spaces, UserSpaces),
     {ok, [{providers, Providers}]} = user_logic:get_providers(UserId),
