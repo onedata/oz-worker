@@ -209,7 +209,7 @@ user_record(UserId) ->
         {<<"alias">>, Alias},
         {<<"basicAuthEnabled">>, BasicAuthEnabled},
         {<<"authorizers">>, Authorizers},
-        {<<"clientTokens">>, ClientTokens},
+        {<<"clienttokens">>, ClientTokens},
         {<<"defaultSpace">>, DefaultSpace},
         {<<"defaultProvider">>, DefaultProvider},
         {<<"groups">>, Groups},
