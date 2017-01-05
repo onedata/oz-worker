@@ -112,6 +112,7 @@ route(_) -> ?INDEX.
 data_backend(true, <<"user">>) -> user_data_backend;
 data_backend(true, <<"clienttoken">>) -> client_token_data_backend;
 data_backend(true, <<"space">>) -> space_data_backend;
+data_backend(true, <<"group">>) -> group_data_backend;
 data_backend(true, <<"provider">>) -> provider_data_backend.
 
 
