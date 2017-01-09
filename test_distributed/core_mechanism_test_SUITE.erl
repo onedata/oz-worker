@@ -8,7 +8,7 @@
 %%% @doc Basic tests that check dns answers.
 %%% @end
 %%%-------------------------------------------------------------------
--module(oz_dns_test_SUITE).
+-module(core_mechanism_test_SUITE).
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
@@ -17,18 +17,59 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("kernel/src/inet_dns.hrl").
+-include_lib("cluster_worker/include/modules/datastore/datastore_common_internal.hrl").
+-include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
+
+-define(TIMEOUT, timer:minutes(5)).
+-define(call_store(N, F, A), ?call(N, datastore, F, A)).
+-define(call(N, M, F, A), ?call(N, M, F, A, ?TIMEOUT)).
+-define(call(N, M, F, A, T), rpc:call(N, M, F, A, T)).
 
 %% API
 -export([all/0]).
--export([get_all_ips_test/1]).
+-export([dns_get_all_ips_test/1, test_models/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
-all() -> ?ALL([get_all_ips_test]).
+all() -> ?ALL([dns_get_all_ips_test, test_models]).
 
-get_all_ips_test(Config) ->
+test_models(Config) ->
+    [Worker | _] = ?config(oz_worker_nodes, Config),
+    Models = ?call(Worker, datastore_config, models, []),
+
+    lists:foreach(fun(ModelName) ->
+%%        ct:print("Module ~p", [ModelName]),
+
+        #model_config{store_level = SL} = MC = ?call(Worker, ModelName, model_init, []),
+        Cache = case SL of
+            ?GLOBALLY_CACHED_LEVEL -> true;
+            ?LOCALLY_CACHED_LEVEL -> true;
+            _ -> false
+        end,
+
+        Key = list_to_binary("key_tm_" ++ atom_to_list(ModelName)),
+        Doc =  #document{
+            key = Key,
+            value = MC#model_config.defaults
+        },
+        ?assertMatch({ok, _}, ?call_store(Worker, save, [SL, Doc])),
+        ?assertMatch({ok, true}, ?call_store(Worker, exists, [SL, ModelName, Key])),
+
+%%        ct:print("Module ok ~p", [ModelName]),
+
+        case Cache of
+            true ->
+                PModule = ?call_store(Worker, driver_to_module, [persistence_driver_module]),
+                ?assertMatch({ok, true}, ?call(Worker, PModule, exists, [MC, Key]), 10);
+%%                ct:print("Module caching ok ~p", [ModelName]);
+            _ ->
+                ok
+        end
+    end, Models).
+
+dns_get_all_ips_test(Config) ->
     [Node1, Node2] = ?config(oz_worker_nodes, Config),
     DnsPort = get_dns_port(Node1),
     Node1Ip = get_dns_ip(Node1),
