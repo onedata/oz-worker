@@ -77,7 +77,7 @@ create(Client, ELPlugin, EntityId, Resource, Data) ->
         call_create(
             check_validity(
                 check_authorization(
-                    check_existence(Request))))
+                    check_existence_of_entity(Request))))
     catch
         throw:Error ->
             Error;
@@ -293,7 +293,7 @@ call_authorize(Request) ->
     catch
         throw:Error ->
             throw(Error);
-        T:M ->
+        _:_ ->
             [false]
     end.
 
@@ -305,6 +305,18 @@ call_validate(Request) ->
         el_plugin = ELPlugin
     } = Request,
     ELPlugin:validate(Operation, Resource).
+
+
+
+check_existence_of_entity(#request{entity_id = undefined} = Request) ->
+    % Undefined entity always exists (resource is not correlated with any entity).
+    Request;
+check_existence_of_entity(#request{entity = undefined} = Request) ->
+    % This will throw NOT_FOUND if the entity cannot be retrieved.
+    Request#request{entity = call_get_entity(Request)};
+check_existence_of_entity(Request) ->
+    % Entity is defined and fetched
+    Request.
 
 
 check_existence(Request) ->

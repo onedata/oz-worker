@@ -853,7 +853,7 @@ add_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, Privs) ->
 update_child(#od_group{users = Users} = Group, od_user, UserId, {Operation, Privs}) ->
     Group#od_group{users = update_privileges(UserId, Users, Operation, Privs)};
 update_child(#od_group{children = Children} = Group, od_group, GroupId, {Operation, Privs}) ->
-    Group#od_group{users = update_privileges(GroupId, Children, Operation, Privs)};
+    Group#od_group{children = update_privileges(GroupId, Children, Operation, Privs)};
 
 update_child(#od_space{users = Users} = Space, od_user, UserId, {Operation, Privs}) ->
     Space#od_space{users = update_privileges(UserId, Users, Operation, Privs)};
@@ -1103,8 +1103,11 @@ gather_eff_from_itself(top_down, EntityId, #od_group{} = Group) ->
         od_handle => relation_to_eff_relation(od_group, EntityId, Handles),
         oz_privileges => OzPrivileges
     };
-gather_eff_from_itself(top_down, _EntityId, #od_space{}) ->
-    #{}.
+gather_eff_from_itself(top_down, EntityId, #od_space{} = Space) ->
+    #od_space{providers = Providers} = Space,
+    #{od_provider => relation_to_eff_relation(
+        od_space, EntityId, relation_with_attrs_to_relation(Providers)
+    )}.
 
 
 %%--------------------------------------------------------------------
@@ -1169,19 +1172,19 @@ gather_eff_from_neighbours(top_down, #od_user{} = User) ->
         end, Spaces),
     FromGroups ++ FromSpaces;
 gather_eff_from_neighbours(top_down, #od_group{} = Group) ->
-    #od_group{children = Groups, spaces = Spaces} = Group,
+    #od_group{parents = Groups, spaces = Spaces} = Group,
     FromGroups = lists:map(
         fun(GroupId) ->
             get_eff_relations(top_down, od_group, GroupId)
-        end, maps:keys(Groups)),
+        end, Groups),
     FromSpaces = lists:map(
         fun(SpaceId) ->
             {ok, #document{
                 value = #od_space{
                     providers = Providers
                 }}} = od_space:get(SpaceId),
-            #{od_provider => relation_to_eff_relation(od_space, SpaceId,
-                relation_with_attrs_to_relation(Providers)
+            #{od_provider => relation_to_eff_relation(
+                od_space, SpaceId, relation_with_attrs_to_relation(Providers)
             )}
         end, Spaces),
     FromGroups ++ FromSpaces;
@@ -1252,8 +1255,9 @@ get_eff_relations(top_down, #od_group{} = Group) ->
         od_handle_service => EffHServices, od_handle => EffHandles,
         oz_privileges => EffOzPrivileges
     };
-get_eff_relations(top_down, #od_space{}) ->
-    #{}.
+get_eff_relations(top_down, #od_space{} = Space) ->
+    #od_space{eff_providers = EffProviders} = Space,
+    #{od_provider => EffProviders}.
 
 
 %%--------------------------------------------------------------------
@@ -1309,8 +1313,10 @@ update_eff_relations(top_down, #od_group{} = Group, EffNeighbours) ->
         eff_handles = maps:get(od_handle, EffNeighbours, #{}),
         eff_oz_privileges = maps:get(oz_privileges, EffNeighbours, #{})
     };
-update_eff_relations(top_down, #od_space{} = Space, _) ->
-    Space.
+update_eff_relations(top_down, #od_space{} = Space, EffNeighbours) ->
+    Space#od_space{
+        eff_providers = maps:get(od_provider, EffNeighbours, #{})
+    }.
 
 
 %%--------------------------------------------------------------------

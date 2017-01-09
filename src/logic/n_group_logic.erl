@@ -24,11 +24,12 @@
 -export([
     get/2,
     get_data/2,
-    list/1
+    list/1,
+    get_oz_privileges/2, get_eff_oz_privileges/2
 ]).
 -export([
     update/3,
-    modify_oz_privileges/4, modify_oz_privileges/3
+    update_oz_privileges/4, update_oz_privileges/3
 ]).
 -export([
     delete/2
@@ -66,16 +67,24 @@ list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
+get_oz_privileges(Client, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, GroupId, oz_privileges).
+
+
+get_eff_oz_privileges(Client, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_oz_privileges).
+
+
 update(Client, GroupId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, GroupId, entity, Data).
 
 
-modify_oz_privileges(Client, GroupId, Operation, Privs) when is_list(Privs) ->
-    modify_oz_privileges(Client, GroupId, #{
+update_oz_privileges(Client, GroupId, Operation, Privs) when is_list(Privs) ->
+    update_oz_privileges(Client, GroupId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
-modify_oz_privileges(Client, GroupId, Data) ->
+update_oz_privileges(Client, GroupId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, GroupId, oz_privileges, Data).
 
 

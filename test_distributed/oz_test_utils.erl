@@ -25,8 +25,14 @@
     create_user/2,
     create_client_token/2,
     get_user/2,
+    get_user_oz_privileges/2,
+    get_user_eff_oz_privileges/2,
     list_users/1,
     set_user_oz_privileges/4,
+    set_user_default_space/3,
+    unset_user_default_space/2,
+    set_user_default_provider/3,
+    unset_user_default_provider/2,
     delete_user/2,
 
     user_leave_space/3
@@ -34,6 +40,8 @@
 -export([
     create_group/3,
     get_group/2,
+    get_group_oz_privileges/2,
+    get_group_eff_oz_privileges/2,
     list_groups/1,
     set_group_oz_privileges/4,
     delete_group/2,
@@ -95,6 +103,7 @@
 % Convenience functions
 -export([
     create_3_nested_groups/2, create_3_nested_groups/5,
+    minimum_support_size/1,
     generate_provider_cert_files/0,
     ensure_eff_graph_up_to_date/1,
     mock_handle_proxy/1,
@@ -181,6 +190,32 @@ get_user(Config, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns OZ privileges of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_oz_privileges(Config :: term(), UserId :: od_user:id()) ->
+    {ok, [privileges:oz_privilege()]}.
+get_user_oz_privileges(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, n_user_logic, get_oz_privileges, [
+        ?ROOT, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns effective OZ privileges of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_eff_oz_privileges(Config :: term(), UserId :: od_user:id()) ->
+    {ok, [privileges:oz_privilege()]}.
+get_user_eff_oz_privileges(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, n_user_logic, get_eff_oz_privileges, [
+        ?ROOT, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns list of all users in onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -189,6 +224,7 @@ list_users(Config) ->
     ?assertMatch({ok, _}, call_oz(
         Config, n_user_logic, list, [?ROOT]
     )).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -201,6 +237,57 @@ list_users(Config) ->
 set_user_oz_privileges(Config, UserId, Operation, Privileges) ->
     ?assertMatch(ok, call_oz(Config, n_user_logic, update_oz_privileges, [
         ?ROOT, UserId, Operation, Privileges
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets default space of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_user_default_space(Config :: term(), UserId :: od_user:id(),
+    SpaceId :: od_space:id()) -> ok.
+set_user_default_space(Config, UserId, SpaceId) ->
+    ?assertMatch(ok, call_oz(Config, n_user_logic, set_default_space, [
+        ?ROOT, UserId, SpaceId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Unsets default space of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec unset_user_default_space(Config :: term(), UserId :: od_user:id()) -> ok.
+unset_user_default_space(Config, UserId) ->
+    ?assertMatch(ok, call_oz(Config, n_user_logic, unset_default_space, [
+        ?ROOT, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets default provider of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_user_default_provider(Config :: term(), UserId :: od_user:id(),
+    ProviderId :: od_provider:id()) -> ok.
+set_user_default_provider(Config, UserId, ProviderId) ->
+    ?assertMatch(ok, call_oz(Config, n_user_logic, set_default_provider, [
+        ?ROOT, UserId, ProviderId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Unsets default provider of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec unset_user_default_provider(Config :: term(), UserId :: od_user:id()) ->
+    ok.
+unset_user_default_provider(Config, UserId) ->
+    ?assertMatch(ok, call_oz(Config, n_user_logic, unset_default_provider, [
+        ?ROOT, UserId
     ])).
 
 
@@ -257,6 +344,32 @@ get_group(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns OZ privileges of a group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_oz_privileges(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [privileges:oz_privilege()]}.
+get_group_oz_privileges(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, get_oz_privileges, [
+        ?ROOT, GroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns effective OZ privileges of a group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_eff_oz_privileges(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [privileges:oz_privilege()]}.
+get_group_eff_oz_privileges(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, get_eff_oz_privileges, [
+        ?ROOT, GroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns list of all groups in onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -274,7 +387,7 @@ list_groups(Config) ->
     Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
 set_group_oz_privileges(Config, GroupId, Operation, Privileges) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, update_oz_privileges, [
+    ?assertMatch(ok, call_oz(Config, n_group_logic, update_oz_privileges, [
         ?ROOT, GroupId, Operation, Privileges
     ])).
 
@@ -878,9 +991,9 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-% Creates a group for user which belongs to a group, which belongs to
-% another group.
-% The structure looks as follows: User -> G1 -> G2 -> G3
+%% Creates a group for user which belongs to a group, which belongs to
+%% another group.
+%% The structure looks as follows: User -> G1 -> G2 -> G3
 %% @end
 %%--------------------------------------------------------------------
 -spec create_3_nested_groups(Config :: term(), TestUser :: od_user:id()) -> ok.
@@ -890,9 +1003,9 @@ create_3_nested_groups(Config, TestUser) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-% Creates a group for user which belongs to a group, which belongs to
-% another group. Allows to specify group names.
-% The structure looks as follows: User -> G1 -> G2 -> G3
+%% Creates a group for user which belongs to a group, which belongs to
+%% another group. Allows to specify group names.
+%% The structure looks as follows: User -> G1 -> G2 -> G3
 %% @end
 %%--------------------------------------------------------------------
 -spec create_3_nested_groups(Config :: term(), TestUser :: od_user:id(),
@@ -915,6 +1028,19 @@ create_3_nested_groups(Config, TestUser, BotGrName, MidGrName, TopGrName) ->
         Config, TopGroup, MiddleGroup
     ),
     {BottomGroup, MiddleGroup, TopGroup}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Return minimum support size for space, as specified in oz_worker env.
+%% @end
+%%--------------------------------------------------------------------
+-spec minimum_support_size(Config :: term()) -> integer().
+minimum_support_size(Config) ->
+    {ok, MinimumSupportSize} = oz_test_utils:call_oz(
+        Config, application, get_env, [oz_worker, minimum_space_support_size]
+    ),
+    MinimumSupportSize.
 
 
 %%--------------------------------------------------------------------

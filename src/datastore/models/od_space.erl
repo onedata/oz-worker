@@ -46,6 +46,7 @@ record_struct(1) ->
         {shares, [string]},
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}},
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
     ]}.

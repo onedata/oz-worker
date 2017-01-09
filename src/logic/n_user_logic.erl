@@ -69,7 +69,9 @@
 ]).
 -export([
     exists/1,
-    has_eff_oz_privilege/2
+    has_eff_oz_privilege/2,
+    has_eff_space/2,
+    has_eff_provider/2
 ]).
 -export([
     add_oauth_account/2,
@@ -150,19 +152,19 @@ update_oz_privileges(Client, UserId, Data) ->
 set_default_space(Client, UserId, SpaceId) when is_binary(SpaceId) ->
     set_default_space(Client, UserId, #{<<"spaceId">> => SpaceId});
 set_default_space(Client, UserId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, UserId, default_space, Data).
+    n_entity_logic:create(Client, ?PLUGIN, UserId, default_space, Data).
 
 
 set_space_alias(Client, UserId, SpaceId, Alias) when is_binary(Alias) ->
     set_space_alias(Client, UserId, SpaceId, #{<<"alias">> => Alias});
 set_space_alias(Client, UserId, SpaceId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, UserId, {space_alias, SpaceId}, Data).
+    n_entity_logic:create(Client, ?PLUGIN, UserId, {space_alias, SpaceId}, Data).
 
 
 set_default_provider(Client, UserId, ProviderId) when is_binary(ProviderId) ->
     set_default_provider(Client, UserId, #{<<"providerId">> => ProviderId});
 set_default_provider(Client, UserId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, UserId, default_provider, Data).
+    n_entity_logic:create(Client, ?PLUGIN, UserId, default_provider, Data).
 
 
 update_name(Client, UserId, NewName) ->
@@ -320,6 +322,28 @@ has_eff_oz_privilege(UserId, Privilege) when is_binary(UserId) ->
     end;
 has_eff_oz_privilege(#od_user{eff_oz_privileges = UserPrivileges}, Privilege) ->
     lists:member(Privilege, UserPrivileges).
+
+
+has_eff_space(UserId, SpaceId) when is_binary(UserId) ->
+    case od_user:get(UserId) of
+        {ok, #document{value = User}} ->
+            has_eff_space(User, SpaceId);
+        _ ->
+            false
+    end;
+has_eff_space(#od_user{eff_spaces = EffSpaces}, SpaceId) ->
+    maps:is_key(SpaceId, EffSpaces).
+
+
+has_eff_provider(UserId, ProviderId) when is_binary(UserId) ->
+    case od_user:get(UserId) of
+        {ok, #document{value = User}} ->
+            has_eff_provider(User, ProviderId);
+        _ ->
+            false
+    end;
+has_eff_provider(#od_user{eff_providers = EffProviders}, ProviderId) ->
+    maps:is_key(ProviderId, EffProviders).
 
 
 %%--------------------------------------------------------------------

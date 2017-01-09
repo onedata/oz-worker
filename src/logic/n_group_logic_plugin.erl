@@ -17,6 +17,7 @@
 -include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
@@ -71,6 +72,10 @@ create(_Client, GroupId, groups, #{<<"groupId">> := ChildGroupId}) ->
 get(_, undefined, undefined, list) ->
     {ok, GroupDocs} = od_group:list(),
     {ok, [GroupId || #document{key = GroupId} <- GroupDocs]};
+get(_, _GroupId, #od_group{oz_privileges = OzPrivileges}, oz_privileges) ->
+    {ok, OzPrivileges};
+get(_, _GroupId, #od_group{eff_oz_privileges = OzPrivileges}, eff_oz_privileges) ->
+    {ok, OzPrivileges};
 get(_, _GroupId, #od_group{name = Name, type = Type}, data) ->
     {ok, #{
         <<"name">> => Name,
@@ -115,6 +120,12 @@ update(GroupId, oz_privileges, Data) ->
     entity_graph:update_oz_privileges(od_group, GroupId, Operation, Privileges).
 
 
+
+delete(UserId, oz_privileges) ->
+    update(UserId, oz_privileges, #{
+        <<"operation">> => set, <<"privileges">> => []}
+    );
+
 delete(GroupId, entity) when is_binary(GroupId) ->
     entity_graph:delete_with_relations(od_group, GroupId);
 
@@ -154,6 +165,10 @@ authorize(get, _GroupId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_view_data);
 authorize(get, _GroupId, data, ?USER(UserId)) ->
     auth_by_membership(UserId);
+authorize(get, _GroupId, oz_privileges, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_VIEW_PRIVILEGES);
+authorize(get, _GroupId, eff_oz_privileges, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_VIEW_PRIVILEGES);
 authorize(get, _GroupId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_view_data);
 authorize(get, _GroupId, entity, ?USER(UserId)) ->
@@ -162,6 +177,9 @@ authorize(get, _GroupId, entity, ?USER(UserId)) ->
 
 authorize(update, _GroupId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_change_data);
+
+authorize(update, _GroupId, oz_privileges, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_SET_PRIVILEGES);
 
 authorize(update, _GroupId, {user, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_set_privileges);
@@ -175,6 +193,9 @@ authorize(update, _GroupId, oz_privileges, ?USER(UserId)) ->
 
 authorize(delete, _GroupId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, group_remove);
+
+authorize(delete, _GroupId, oz_privileges, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_SET_PRIVILEGES);
 
 authorize(delete, _GroupId, {user, _UserId}, ?USER(UserId)) -> [
     auth_by_privilege(UserId, group_remove_user),

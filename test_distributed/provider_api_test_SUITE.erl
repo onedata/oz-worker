@@ -925,7 +925,7 @@ get_spaces_test(Config) ->
 
 support_space_test(Config) ->
     RestPrefix = rest_test_utils:get_rest_api_prefix(Config),
-    MinSupportSize = min_support_size(Config),
+    MinSupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
     ),
@@ -1055,7 +1055,7 @@ support_space_test(Config) ->
 
 
 update_support_size_test(Config) ->
-    MinSupportSize = min_support_size(Config),
+    MinSupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(Config, <<"P1">>),
     {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
@@ -1122,7 +1122,7 @@ update_support_size_test(Config) ->
 
 
 revoke_support_test(Config) ->
-    MinSupportSize = min_support_size(Config),
+    MinSupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
     ),
@@ -1352,15 +1352,9 @@ end_per_testcase(_, _Config) ->
 %%% Helper functions
 %%%===================================================================
 
-min_support_size(Config) ->
-    {ok, MinimumSupportSize} = oz_test_utils:call_oz(
-        Config, application, get_env, [oz_worker, minimum_space_support_size]
-    ),
-    MinimumSupportSize.
-
 
 create_and_support_3_spaces(Config, ProvId) ->
-    MinimumSupportSize = min_support_size(Config),
+    MinimumSupportSize = oz_test_utils:minimum_support_size(Config),
     S1Name = <<"Space 1">>,
     S2Name = <<"Space 2">>,
     S3Name = <<"Space 3">>,

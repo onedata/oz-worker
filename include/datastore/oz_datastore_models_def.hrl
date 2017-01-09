@@ -78,7 +78,7 @@
 
 %% This record defines a user and is handled as a database document
 -record(od_user, {
-    name = <<"">> :: od_user:name(),
+    name = <<"New User">> :: od_user:name(),
     login = <<"">> :: binary(),
     alias = ?EMPTY_ALIAS :: binary(),
     email_list = [] :: [binary()],
@@ -168,6 +168,9 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relation_with_attrs(od_user:id(), [privileges:space_privilege()]), % TODO currently always empty
     eff_groups = #{} :: entity_graph:eff_relation_with_attrs(od_group:id(), [privileges:space_privilege()]), % TODO currently always empty
+    % Effective providers contain only direct providers, but this is needed to
+    % track changes in spaces and propagate them top-down.
+    eff_providers = #{} :: entity_graph:eff_relation(od_provider:id()), % TODO currently always empty
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.

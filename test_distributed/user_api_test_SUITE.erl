@@ -79,12 +79,13 @@ all() ->
         get_test,
         list_test,
         get_oz_privileges_test,
+        get_eff_oz_privileges_test,
         get_default_space_test,
         get_space_alias_test,
         get_default_provider_test,
 
         update_test,
-        update_oz_test,
+        update_oz_privileges_test,
         set_default_space_test,
         set_space_alias_test,
         set_default_provider_test,
@@ -385,11 +386,10 @@ get_oz_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [{user, User}]
         },
-        rest_spec = RestSpec = #rest_spec{
+        rest_spec = NotAuthorizedRestSpec = #rest_spec{
             method = get,
             path = [<<"/users/">>, User, <<"/privileges">>],
-            expected_code = ?HTTP_403_FORBIDDEN,
-            expected_body = #{<<"privileges">> => []}
+            expected_code = ?HTTP_403_FORBIDDEN
         },
         logic_spec = #logic_spec{
             operation = get,
@@ -402,7 +402,7 @@ get_oz_privileges_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, NotAuthorizedApiTestSpec)),
     % Also, check path dedicated for user that presents auth
     NotAuthorizedApiTestSpecForUser = NotAuthorizedApiTestSpec#api_test_spec{
-        rest_spec = RestSpec#rest_spec{
+        rest_spec = NotAuthorizedRestSpec#rest_spec{
             path = <<"/user/privileges">>
         }
     },
@@ -442,17 +442,24 @@ get_oz_privileges_test(Config) ->
         oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
     end,
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
-        Config, ApiTestSpec, SetPrivsFun, InitialPrivs, AllPrivs
+        Config, ApiTestSpec, SetPrivsFun, AllPrivs, InitialPrivs, []
     ])),
     % Also, check path dedicated for user that presents auth
-    oz_test_utils:set_user_oz_privileges(Config, User, set, []),
+    oz_test_utils:set_user_oz_privileges(Config, User, set, [?OZ_VIEW_PRIVILEGES]),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpecForUser = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, User}]
+        },
         rest_spec = RestSpec#rest_spec{
             path = <<"/user/privileges">>
         }
     },
+    % ?OZ_VIEW_PRIVILEGES will be granted in every test so the user has
+    % rights to view his privileges.
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
-        Config, ApiTestSpecForUser, SetPrivsFun, InitialPrivs, AllPrivs
+        Config, ApiTestSpecForUser, SetPrivsFun, AllPrivs,
+        [?OZ_VIEW_PRIVILEGES], [?OZ_VIEW_PRIVILEGES]
     ])).
 
 
@@ -466,21 +473,20 @@ get_eff_oz_privileges_test(Config) ->
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    % A new user should not be able to view his oz_privileges
+    % A new user should not be able to view his eff_oz_privileges
     NotAuthorizedApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [{user, User}]
         },
-        rest_spec = RestSpec = #rest_spec{
+        rest_spec = NotAuthorizedRestSpec = #rest_spec{
             method = get,
-            path = [<<"/users/">>, User, <<"/privileges">>],
-            expected_code = ?HTTP_403_FORBIDDEN,
-            expected_body = #{<<"privileges">> => []}
+            path = [<<"/users/">>, User, <<"/effective_privileges">>],
+            expected_code = ?HTTP_403_FORBIDDEN
         },
         logic_spec = #logic_spec{
             operation = get,
             module = n_user_logic,
-            function = get_oz_privileges,
+            function = get_eff_oz_privileges,
             args = [client, User],
             expected_result = ?ERROR_REASON(?ERROR_FORBIDDEN)
         }
@@ -488,7 +494,7 @@ get_eff_oz_privileges_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, NotAuthorizedApiTestSpec)),
     % Also, check path dedicated for user that presents auth
     NotAuthorizedApiTestSpecForUser = NotAuthorizedApiTestSpec#api_test_spec{
-        rest_spec = RestSpec#rest_spec{
+        rest_spec = NotAuthorizedRestSpec#rest_spec{
             path = <<"/user/privileges">>
         }
     },
@@ -525,8 +531,7 @@ get_eff_oz_privileges_test(Config) ->
             expected_result = ?OK_LIST([])
         }
     },
-    AllPrivilegesAtoms = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
-    AllPrivs = [atom_to_binary(P, utf8) || P <- AllPrivilegesAtoms],
+    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
     SetPrivsFun = fun(Operation, Privs) ->
         % In case of SET and GRANT, randomly split privileges into four parts
         % and update the user and his groups with the privileges. His
@@ -552,7 +557,6 @@ get_eff_oz_privileges_test(Config) ->
                         Index = rand:uniform(4),
                         AccMap#{Index => [Privilege | maps:get(Index, AccMap)]}
                     end, #{1=>[], 2=>[], 3=>[], 4=>[]}, Privs),
-                ct:print("parts: ~p", [Parts]),
                 oz_test_utils:set_user_oz_privileges(
                     Config, User, Operation, maps:get(1, Parts)
                 ),
@@ -569,25 +573,176 @@ get_eff_oz_privileges_test(Config) ->
         oz_test_utils:ensure_eff_graph_up_to_date(Config)
     end,
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
-        Config, ApiTestSpec, SetPrivsFun, InitialPrivs, AllPrivs
+        Config, ApiTestSpec, SetPrivsFun, AllPrivs, InitialPrivs, []
     ])),
-
-
-    ok.
-
-
+    % Also, check path dedicated for user that presents auth
+    oz_test_utils:set_user_oz_privileges(Config, User, set, [?OZ_VIEW_PRIVILEGES]),
+    oz_test_utils:set_group_oz_privileges(Config, BottomGroup, set, []),
+    oz_test_utils:set_group_oz_privileges(Config, MiddleGroup, set, []),
+    oz_test_utils:set_group_oz_privileges(Config, TopGroup, set, []),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    ApiTestSpecForUser = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, User}]
+        },
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/effective_privileges">>
+        }
+    },
+    % ?OZ_VIEW_PRIVILEGES will be granted in every test so the user has
+    % rights to view his privileges.
+    ?assert(api_test_scenarios:run_scenario(get_privileges, [
+        Config, ApiTestSpecForUser, SetPrivsFun, AllPrivs,
+        [?OZ_VIEW_PRIVILEGES], [?OZ_VIEW_PRIVILEGES]
+    ])).
 
 
 get_default_space_test(Config) ->
-    ok.
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    % Newly created user should not have a default space
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, User}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/user/default_space">>,
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_user_logic,
+            function = get_default_space,
+            args = [client, User],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    % Set a default space for user
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(User), <<"sp">>),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    oz_test_utils:set_user_default_space(Config, User, Space),
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, User}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/user/default_space">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"spaceId">> => Space}
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_user_logic,
+            function = get_default_space,
+            args = [client, User],
+            expected_result = ?OK_BINARY(Space)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+    % Unset the default space and check if it's not present again
+    oz_test_utils:unset_user_default_space(Config, User),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
 
 
 get_space_alias_test(Config) ->
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(User), <<"sp">>),
+    % Newly created space should not have an alias
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, User}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/user/spaces/">>, Space, <<"/alias">>],
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_user_logic,
+            function = get_default_space,
+            args = [client, User],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+
+
     ok.
 
 
 get_default_provider_test(Config) ->
-    ok.
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    % Newly created user should not have a default provider
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, User}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/user/default_provider">>,
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_user_logic,
+            function = get_default_provider,
+            args = [client, User],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    % Set a default provider for user
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(User), <<"sp">>),
+    {ok, {Provider, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P1">>),
+    {ok, Macaroon} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, Space),
+    {ok, Space} = oz_test_utils:support_space(
+        Config, ?PROVIDER(Provider), Provider,
+        Macaroon, oz_test_utils:minimum_support_size(Config)
+    ),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    oz_test_utils:set_user_default_provider(Config, User, Provider),
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, User}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/user/default_provider">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"providerId">> => Provider}
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = n_user_logic,
+            function = get_default_provider,
+            args = [client, User],
+            expected_result = ?OK_BINARY(Provider)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+    % Unset the default provider and check if it's not present again
+    oz_test_utils:unset_user_default_provider(Config, User),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 

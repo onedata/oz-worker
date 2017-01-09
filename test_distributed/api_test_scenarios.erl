@@ -19,7 +19,8 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 
 -export([run_scenario/2]).
--export([get_privileges/5]).
+-export([get_privileges/5, get_privileges/6]).
+-export([update_privileges/5]).
 
 run_scenario(Function, Args) ->
     try
@@ -32,12 +33,46 @@ run_scenario(Function, Args) ->
             ct:print(
                 "Unexpected error in ~p:run_scenario - ~p:~p~nStacktrace: ~p",
                 [?MODULE, Type, Message, erlang:get_stacktrace()]
-            )
+            ),
+            false
     end.
 
 
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, InitialPrivs) ->
+    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, InitialPrivs, []).
+
+
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, InitialPrivs, ConstantPrivs) ->
+    ExpectPrivileges = fun(PrivilegesAtoms) ->
+        PrivilegesBin = [atom_to_binary(P, utf8) || P <- PrivilegesAtoms],
+        #api_test_spec{
+            rest_spec = RestSpec, logic_spec = LogicSpec
+        } = ApiTestSpec,
+        ApiTestSpec#api_test_spec{
+            rest_spec = RestSpec#rest_spec{
+                expected_body = #{<<"privileges">> => PrivilegesBin}
+            },
+            logic_spec = LogicSpec#logic_spec{
+                expected_result = ?OK_LIST(PrivilegesAtoms)
+            }
+        }
+    end,
+    % Check if endpoint returns InitialPrivileges as expected.
+    assert(api_test_utils:run_tests(Config, ExpectPrivileges(InitialPrivs))),
+    % Try setting all possible sublists of privileges and check if they are
+    % correctly returned.
+    Sublists = [lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))],
+    lists:foreach(
+        fun(PrivsSublist) ->
+            SetPrivsFun(set, lists:usort(PrivsSublist ++ ConstantPrivs)),
+            assert(api_test_utils:run_tests(
+                Config, ExpectPrivileges(lists:usort(PrivsSublist ++ ConstantPrivs))
+            ))
+        end, Sublists).
+
+% TODO
 %% AllPrivs :: [atom()].
-get_privileges(Config, ApiTestSpec, SetPrivsFun, InitialPrivs, AllPrivs) ->
+update_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, InitialPrivs) ->
     % Function that returns api_test_spec with given expected privileges.
     ExpectPrivileges = fun(TypeOfExpectation, PrivilegesAtoms) ->
         PrivilegesBin = [atom_to_binary(P, utf8) || P <- PrivilegesAtoms],
@@ -73,7 +108,7 @@ get_privileges(Config, ApiTestSpec, SetPrivsFun, InitialPrivs, AllPrivs) ->
     ),
     % Try SETing all possible sublists of privileges and check if they are
     % correctly returned.
-    Sublists = [lists:sublist(AllPrivs, I) || I <- lists:seq(1, length(AllPrivs))],
+    Sublists = [lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))],
     lists:foreach(
         fun(PrivsSublist) ->
             SetPrivsFun(set, PrivsSublist),

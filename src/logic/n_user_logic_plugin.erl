@@ -67,6 +67,33 @@ create(_, UserId, client_tokens, _Data) ->
     end),
     {ok, Token};
 
+create(_, UserId, default_space, Data) ->
+    SpaceId = maps:get(<<"spaceId">>, Data),
+    case n_user_logic:has_eff_space(UserId, SpaceId) of
+        true ->
+            {ok, _} = od_user:update(UserId, #{default_space => SpaceId}),
+            ok;
+        false ->
+            ?ERROR_RELATION_DOES_NOT_EXIST(od_user, UserId, od_space, SpaceId)
+    end;
+
+create(_, UserId, {space_alias, SpaceId}, Data) ->
+    Alias = maps:get(<<"alias">>, Data),
+    {ok, _} = od_user:update(UserId, fun(#od_user{space_aliases = Aliases} = User) ->
+        {ok, User#od_user{space_aliases = maps:put(SpaceId, Alias, Aliases)}}
+    end),
+    ok;
+
+create(_, UserId, default_provider, Data) ->
+    ProviderId = maps:get(<<"providerId">>, Data),
+    case n_user_logic:has_eff_provider(UserId, ProviderId) of
+        true ->
+            {ok, _} = od_user:update(UserId, #{default_provider => ProviderId}),
+            ok;
+        false ->
+            ?ERROR_RELATION_DOES_NOT_EXIST(od_user, UserId, od_provider, ProviderId)
+    end;
+
 create(?USER(UserId), UserId, join_group, Data) ->
     Macaroon = maps:get(<<"token">>, Data),
     {ok, {od_group, GroupId}} = token_logic:consume(Macaroon),
@@ -186,24 +213,7 @@ update(UserId, entity, Data) when is_binary(UserId) ->
 update(UserId, oz_privileges, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_oz_privileges(od_user, UserId, Operation, Privileges);
-
-update(UserId, default_space, Data) ->
-    SpaceId = maps:get(<<"spaceId">>, Data),
-    {ok, _} = od_user:update(UserId, #{default_space => SpaceId}),
-    ok;
-
-update(UserId, {space_alias, SpaceId}, Data) ->
-    Alias = maps:get(<<"alias">>, Data),
-    {ok, _} = od_user:update(UserId, fun(#od_user{space_aliases = Aliases} = User) ->
-        {ok, User#od_user{space_aliases = maps:put(SpaceId, Alias, Aliases)}}
-    end),
-    ok;
-
-update(UserId, default_provider, Data) ->
-    ProviderId = maps:get(<<"providerId">>, Data),
-    {ok, _} = od_user:update(UserId, #{default_provider => ProviderId}),
-    ok.
+    entity_graph:update_oz_privileges(od_user, UserId, Operation, Privileges).
 
 
 delete(UserId, entity) ->
@@ -327,6 +337,8 @@ authorize(create, _UserId, authorize, _Client) ->
 % User trying to access its own oz_privileges
 authorize(get, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
     auth_self_by_oz_privilege(?OZ_VIEW_PRIVILEGES);
+authorize(get, UserId, eff_oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
+    auth_self_by_oz_privilege(?OZ_VIEW_PRIVILEGES);
 authorize(update, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
     auth_self_by_oz_privilege(?OZ_SET_PRIVILEGES);
 authorize(delete, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
@@ -334,6 +346,8 @@ authorize(delete, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) -
 
 % User trying to access someone else's oz_privileges
 authorize(get, _UserId, oz_privileges, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_VIEW_PRIVILEGES);
+authorize(get, _UserId, eff_oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_VIEW_PRIVILEGES);
 authorize(update, _UserId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_SET_PRIVILEGES);
@@ -362,6 +376,25 @@ validate(create, authorize) -> #{
 };
 validate(create, client_tokens) -> #{
 };
+validate(create, default_space) -> #{
+    required => #{
+        <<"spaceId">> => {binary, {exists, fun(Value) ->
+            n_space_logic:exists(Value)
+        end}}
+    }
+};
+validate(create, {space_alias, _SpaceId}) -> #{
+    required => #{
+        <<"alias">> => {binary, non_empty}
+    }
+};
+validate(create, default_provider) -> #{
+    required => #{
+        <<"providerId">> => {binary, {exists, fun(Value) ->
+            n_provider_logic:exists(Value)
+        end}}
+    }
+};
 validate(create, join_group) -> #{
     required => #{
         <<"token">> => {token, ?GROUP_INVITE_USER_TOKEN}
@@ -384,25 +417,6 @@ validate(update, oz_privileges) -> #{
     },
     optional => #{
         <<"operation">> => {atom, [set, grant, revoke]}
-    }
-};
-validate(update, default_space) -> #{
-    required => #{
-        <<"spaceId">> => {binary, {exists, fun(Value) ->
-            n_space_logic:exists(Value)
-        end}}
-    }
-};
-validate(update, {space_alias, _SpaceId}) -> #{
-    required => #{
-        <<"alias">> => {binary, non_empty}
-    }
-};
-validate(update, default_provider) -> #{
-    required => #{
-        <<"providerId">> => {binary, {exists, fun(Value) ->
-            n_provider_logic:exists(Value)
-        end}}
     }
 }.
 
