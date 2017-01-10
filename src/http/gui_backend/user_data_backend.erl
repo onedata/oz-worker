@@ -23,8 +23,6 @@
 -export([create_record/2, update_record/3, delete_record/2]).
 -export([user_record/1]).
 
--define(CURRENT_USER_ID, <<"0">>).
-
 %%%===================================================================
 %%% data_backend_behaviour callbacks
 %%%===================================================================
@@ -56,11 +54,13 @@ terminate() ->
 %%--------------------------------------------------------------------
 -spec find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find(<<"user">>, ?CURRENT_USER_ID) ->
-    UserId = gui_session:get_user_id(),
-    {ok, user_record(UserId)};
-find(<<"user">>, _) ->
-    gui_error:unauthorized().
+find(<<"user">>, UserId) ->
+    case gui_session:get_user_id() of
+        UserId ->
+            {ok, user_record(UserId)};
+        _ ->
+            gui_error:unauthorized()
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -102,10 +102,8 @@ create_record(<<"user">>, _Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_record(RsrcType :: binary(), Id :: binary(),
-    Data :: proplists:proplist()) ->
-    ok | gui_error:error_result().
-update_record(<<"user">>, ?CURRENT_USER_ID, [{<<"alias">>, NewAlias}]) ->
-    UserId = gui_session:get_user_id(),
+    Data :: proplists:proplist()) -> ok | gui_error:error_result().
+update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
     case user_logic:set_alias(UserId, NewAlias) of
         ok ->
             ok;
@@ -121,14 +119,14 @@ update_record(<<"user">>, ?CURRENT_USER_ID, [{<<"alias">>, NewAlias}]) ->
                 <<"This alias is occupied by someone else. "
                 "Please choose other alias.">>)
     end;
-update_record(<<"user">>, ?CURRENT_USER_ID, Data) ->
+update_record(<<"user">>, UserId, Data) ->
     UserUpdateDiff = case Data of
         [{<<"defaultSpace">>, DefaultSpace}] ->
             #{default_space => DefaultSpace};
         [{<<"defaultProvider">>, DefaultProvider}] ->
             #{default_provider => DefaultProvider}
     end,
-    {ok, _} = od_user:update(gui_session:get_user_id(), UserUpdateDiff),
+    {ok, _} = od_user:update(UserId, UserUpdateDiff),
     ok.
 
 

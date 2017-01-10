@@ -142,6 +142,7 @@ public_rpc_backend() -> public_rpc_backend.
 session_details() ->
     FirstLogin = gui_session:get_value(firstLogin, false),
     Res = [
+        {<<"userId">>, gui_session:get_user_id()},
         {<<"firstLogin">>, FirstLogin}
     ],
     {ok, Res}.
