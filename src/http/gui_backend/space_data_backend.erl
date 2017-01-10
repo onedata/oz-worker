@@ -108,7 +108,7 @@ create_record(<<"space">>, Data) ->
             gui_async:push_updated(
                 <<"user">>, user_data_backend:user_record(UserId)
             ),
-            space_record(SpaceId, UserId);
+            {ok, space_record(SpaceId, UserId)};
         _ ->
             gui_error:report_error(<<"Invalid space name">>)
     end.
