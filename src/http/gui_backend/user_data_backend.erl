@@ -120,13 +120,17 @@ update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
                 "Please choose other alias.">>)
     end;
 update_record(<<"user">>, UserId, Data) ->
-    UserUpdateDiff = case Data of
+    {DiffKey, DiffValue} = case Data of
         [{<<"defaultSpace">>, DefaultSpace}] ->
-            #{default_space => DefaultSpace};
+            {default_space, DefaultSpace};
         [{<<"defaultProvider">>, DefaultProvider}] ->
-            #{default_provider => DefaultProvider}
+            {default_provider, DefaultProvider}
     end,
-    {ok, _} = od_user:update(UserId, UserUpdateDiff),
+    DiffValueOrUndefined = case DiffValue of
+        null -> undefined;
+        _ -> DiffValue
+    end,
+    {ok, _} = od_user:update(UserId, #{DiffKey => DiffValueOrUndefined}),
     ok.
 
 
@@ -208,8 +212,8 @@ user_record(UserId) ->
         {<<"basicAuthEnabled">>, BasicAuthEnabled},
         {<<"authorizers">>, Authorizers},
         {<<"clienttokens">>, ClientTokens},
-        {<<"defaultSpace">>, DefaultSpace},
-        {<<"defaultProvider">>, DefaultProvider},
+        {<<"defaultSpaceId">>, DefaultSpace},
+        {<<"defaultProviderId">>, DefaultProvider},
         {<<"groups">>, Groups},
         {<<"spaces">>, Spaces},
         {<<"providers">>, Providers}
