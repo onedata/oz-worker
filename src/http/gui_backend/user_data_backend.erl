@@ -121,9 +121,9 @@ update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
     end;
 update_record(<<"user">>, UserId, Data) ->
     {DiffKey, DiffValue} = case Data of
-        [{<<"defaultSpace">>, DefaultSpace}] ->
+        [{<<"defaultSpaceId">>, DefaultSpace}] ->
             {default_space, DefaultSpace};
-        [{<<"defaultProvider">>, DefaultProvider}] ->
+        [{<<"defaultProviderId">>, DefaultProvider}] ->
             {default_provider, DefaultProvider}
     end,
     DiffValueOrUndefined = case DiffValue of
