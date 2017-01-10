@@ -47,7 +47,13 @@
     delete_resource/2
 ]).
 %% Convenience functions for rest translators
--export([created_reply/1, ok_body_reply/1, updated_reply/0, deleted_reply/0]).
+-export([
+    created_reply/1,
+    ok_no_content_reply/0,
+    ok_body_reply/1,
+    updated_reply/0,
+    deleted_reply/0
+]).
 
 
 %%%===================================================================
@@ -261,10 +267,12 @@ created_reply(PathTokens) ->
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
 
+ok_no_content_reply() ->
+    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
+
+
 ok_body_reply(Body) ->
     #rest_resp{code = ?HTTP_200_OK, body = Body}.
-
-
 
 
 updated_reply() ->

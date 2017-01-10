@@ -607,12 +607,12 @@ get_default_space_test(Config) ->
                 {user, User}
             ]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = get,
             path = <<"/user/default_space">>,
             expected_code = ?HTTP_404_NOT_FOUND
         },
-        logic_spec = #logic_spec{
+        logic_spec = LogicSpec = #logic_spec{
             operation = get,
             module = n_user_logic,
             function = get_default_space,
@@ -625,24 +625,12 @@ get_default_space_test(Config) ->
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(User), <<"sp">>),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     oz_test_utils:set_user_default_space(Config, User, Space),
-    ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, User}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = <<"/user/default_space">>,
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"spaceId">> => Space}
         },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_user_logic,
-            function = get_default_space,
-            args = [client, User],
+        logic_spec = LogicSpec#logic_spec{
             expected_result = ?OK_BINARY(Space)
         }
     },
@@ -664,24 +652,35 @@ get_space_alias_test(Config) ->
                 {user, User}
             ]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = get,
             path = [<<"/user/spaces/">>, Space, <<"/alias">>],
             expected_code = ?HTTP_404_NOT_FOUND
         },
-        logic_spec = #logic_spec{
+        logic_spec = LogicSpec = #logic_spec{
             operation = get,
             module = n_user_logic,
-            function = get_default_space,
-            args = [client, User],
+            function = get_space_alias,
+            args = [client, User, Space],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-
-
-    ok.
+    % Set an alias for given space
+    Alias = <<"Alias">>,
+    ok = oz_test_utils:set_user_space_alias(Config, User, Space, Alias),
+    ApiTestSpec = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"alias">> =>Alias}
+        },
+        logic_spec = LogicSpec#logic_spec{
+            expected_result = ?OK_BINARY(Alias)
+        }
+    },
+    % Unset the space alias and check if it's not present again
+    ok = oz_test_utils:unset_user_space_alias(Config, User, Space),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_default_provider_test(Config) ->
@@ -694,12 +693,12 @@ get_default_provider_test(Config) ->
                 {user, User}
             ]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = get,
             path = <<"/user/default_provider">>,
             expected_code = ?HTTP_404_NOT_FOUND
         },
-        logic_spec = #logic_spec{
+        logic_spec = LogicSpec = #logic_spec{
             operation = get,
             module = n_user_logic,
             function = get_default_provider,
@@ -718,24 +717,12 @@ get_default_provider_test(Config) ->
     ),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     oz_test_utils:set_user_default_provider(Config, User, Provider),
-    ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, User}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = <<"/user/default_provider">>,
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"providerId">> => Provider}
         },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_user_logic,
-            function = get_default_provider,
-            args = [client, User],
+        logic_spec = LogicSpec#logic_spec{
             expected_result = ?OK_BINARY(Provider)
         }
     },

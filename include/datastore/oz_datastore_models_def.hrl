@@ -198,8 +198,8 @@
     redirection_point :: undefined | binary(),
     urls :: undefined | [binary()],
     serial :: undefined | binary(),
-    latitude :: undefined | float(),
-    longitude :: undefined | float(),
+    latitude = 0.0 :: float(),
+    longitude = 0.0 :: float(),
 
     % Direct relations to other entities
     spaces = #{} :: entity_graph:relation_with_attrs(od_space:id(), Size :: pos_integer()),

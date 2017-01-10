@@ -19,5 +19,5 @@
 
 -export([response/4]).
 
-response(get, GroupId, entity, {ok, GroupData}) ->
+response(get, GroupId, data, {ok, GroupData}) ->
     n_rest_handler:ok_body_reply(GroupData#{<<"groupId">> => GroupId}).

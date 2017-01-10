@@ -47,8 +47,8 @@ create(_, _, entity, Data) ->
     URLs = maps:get(<<"urls">>, Data),
     RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
     CSR = maps:get(<<"csr">>, Data),
-    Latitude = maps:get(<<"latitude">>, Data, undefined),
-    Longitude = maps:get(<<"longitude">>, Data, undefined),
+    Latitude = maps:get(<<"latitude">>, Data, 0.0),
+    Longitude = maps:get(<<"longitude">>, Data, 0.0),
 
     ProviderId = datastore_utils:gen_uuid(),
     case worker_proxy:call(ozpca_worker, {sign_provider_req, ProviderId, CSR}) of

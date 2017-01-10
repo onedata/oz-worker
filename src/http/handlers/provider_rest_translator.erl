@@ -42,15 +42,15 @@ response(get, EntityId, data, {ok, ProviderData}) ->
 response(get, _ProvId, eff_users, {ok, UserIds}) ->
     n_rest_handler:ok_body_reply(#{<<"users">> => UserIds});
 response(get, _ProvId, {eff_user, UserId}, {ok, UserData}) ->
-    user_rest_translator:response(get, UserId, entity, {ok, UserData});
+    user_rest_translator:response(get, UserId, data, {ok, UserData});
 response(get, _ProvId, eff_groups, {ok, GroupIds}) ->
     n_rest_handler:ok_body_reply(#{<<"groups">> => GroupIds});
 response(get, _ProvId, {eff_group, GroupId}, {ok, GroupData}) ->
-    group_rest_translator:response(get, GroupId, entity, {ok, GroupData});
+    group_rest_translator:response(get, GroupId, data, {ok, GroupData});
 response(get, _ProvId, spaces, {ok, SpaceIds}) ->
     n_rest_handler:ok_body_reply(#{<<"spaces">> => SpaceIds});
 response(get, _ProvId, {space, SpaceId}, {ok, SpaceData}) ->
-    space_rest_translator:response(get, SpaceId, entity, {ok, SpaceData});
+    space_rest_translator:response(get, SpaceId, data, {ok, SpaceData});
 response(get, _ProvId, {check_my_ip, _}, {ok, IP}) ->
     n_rest_handler:ok_body_reply(IP);
 

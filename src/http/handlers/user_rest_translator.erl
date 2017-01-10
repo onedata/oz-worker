@@ -25,8 +25,14 @@ response(create, _UserId, authorize, {ok, DischargeMacaroon}) ->
 response(create, _UserId, client_tokens, {ok, Token}) ->
     n_rest_handler:ok_body_reply(#{<<"token">> => Token});
 
-response(create, _UserId, client_tokens, {ok, Token}) ->
-    n_rest_handler:ok_body_reply(#{<<"token">> => Token});
+response(create, _UserId, default_space, ok) ->
+    n_rest_handler:ok_no_content_reply();
+
+response(create, _UserId, space_alias, ok) ->
+    n_rest_handler:ok_no_content_reply();
+
+response(create, _UserId, default_provider, ok) ->
+    n_rest_handler:ok_no_content_reply();
 
 response(create, _UserId, join_group, {ok, GroupId}) ->
     n_rest_handler:created_reply([<<"user/groups/">>, GroupId]);
@@ -97,9 +103,4 @@ response(update, _UserId, _, ok) ->
 
 
 response(delete, _UserId, _, ok) ->
-    n_rest_handler:deleted_reply();
-
-
-% TODO usun
-response(get, UserId, entity, {ok, User}) ->
-    ok.
+    n_rest_handler:deleted_reply().

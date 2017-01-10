@@ -19,9 +19,9 @@
 
 -export([response/4]).
 
-response(get, SpaceId, entity, {ok, SpaceData}) ->
+response(get, SpaceId, data, {ok, SpaceData}) ->
     n_rest_handler:ok_body_reply(SpaceData#{
         <<"spaceId">> => SpaceId,
-        % TODO VFS-2918
+        % TODO Deprecated, VFS-2918
         <<"canonicalName">> => maps:get(<<"name">>, SpaceData)
     }).

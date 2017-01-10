@@ -180,6 +180,26 @@ check_rest_call(Config, ArgsMap) ->
         case ExpBody of
             undefined ->
                 ok;
+            Fun when is_function(Fun, 1) ->
+                ActualBodyMap = json_utils:decode_map(RespBody),
+                Result = try
+                    Fun(ActualBodyMap)
+                catch
+                    T:M ->
+                        ct:print(
+                            "Body verification function crashed - ~p:~p~nStacktrace: ", [
+                                T, M, erlang:get_stacktrace()
+                            ]),
+                        false
+                end,
+                case Result of
+                    true ->
+                        ok;
+                    false ->
+                        throw({body, RespBody, ExpBody, {
+                            RespCode, RespHeaders, RespBody
+                        }})
+                end;
             {check_type, binary} ->
                 case RespBody of
                     Bin4 when is_binary(Bin4) ->
