@@ -14,6 +14,7 @@
 -behaviour(entity_logic_plugin_behaviour).
 
 -include("errors.hrl").
+-include("tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -34,17 +35,45 @@ get_entity(SpaceId) ->
     end.
 
 
-create(?ROOT, _, entity, #{<<"name">> := Name}) ->
-    od_space:create(#document{value = #od_space{name = Name}});
-create(?USER(UserId), _, entity, #{<<"name">> := Name}) ->
+create(Client, _, entity, #{<<"name">> := Name}) ->
     {ok, SpaceId} = od_space:create(#document{value = #od_space{name = Name}}),
-    entity_graph:add_relation(
-        od_user, UserId,
-        od_space, SpaceId,
-        privileges:space_admin()
-    ),
+    case Client of
+        ?USER(UserId) ->
+            entity_graph:add_relation(
+                od_user, UserId,
+                od_space, SpaceId,
+                privileges:space_admin()
+            );
+        _ ->
+            ok
+    end,
 %% TODO user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     {ok, SpaceId};
+
+create(Client, SpaceId, invite_user_token, _) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?SPACE_INVITE_USER_TOKEN,
+        {od_space, SpaceId}
+    ),
+    {ok, Token};
+
+create(Client, SpaceId, invite_group_token, _) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?SPACE_INVITE_GROUP_TOKEN,
+        {od_space, SpaceId}
+    ),
+    {ok, Token};
+
+create(Client, SpaceId, invite_provider_token, _) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?SPACE_SUPPORT_TOKEN,
+        {od_space, SpaceId}
+    ),
+    {ok, Token};
+
 create(_Client, SpaceId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
         od_user, UserId,
@@ -52,27 +81,14 @@ create(_Client, SpaceId, users, #{<<"userId">> := UserId}) ->
         privileges:space_user()
     ),
     {ok, UserId};
+
 create(_Client, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
     entity_graph:add_relation(
         od_group, GroupId,
         od_space, SpaceId,
         privileges:space_user()
     ),
-    {ok, GroupId};
-create(Client, SpaceId, invite_provider_token, _) ->
-    {ok, Token} = token_logic:create(
-        Client,
-        space_support_token,
-        {od_space, SpaceId}
-    ),
-    {ok, Token};
-create(Client, SpaceId, invite_user_token, _) ->
-    {ok, Token} = token_logic:create(
-        Client,
-        space_invite_user_token,
-        {od_space, SpaceId}
-    ),
-    {ok, Token}.
+    {ok, GroupId}.
 
 
 get(_, undefined, undefined, list) ->
@@ -85,12 +101,8 @@ get(_, _SpaceId, #od_space{users = Users}, users) ->
 
 
 
-update(SpaceId, entity, Data) when is_binary(SpaceId) ->
-    {ok, _} = od_space:update(SpaceId, fun(Space) ->
-        #od_space{name = OldName} = Space,
-        NewName = maps:get(<<"name">>, Data, OldName),
-        {ok, Space#od_space{name = NewName}}
-    end),
+update(SpaceId, entity, #{<<"name">> => NewName}) ->
+    {ok, _} = od_space:update(SpaceId, #{name => NewName}),
     ok;
 
 update(SpaceId, {user, UserId}, Data) ->
@@ -112,16 +124,16 @@ update(SpaceId, {group, GroupId}, Data) ->
     ).
 
 
-delete(SpaceId, entity) when is_binary(SpaceId) ->
+delete(SpaceId, entity) ->
     entity_graph:delete_with_relations(od_space, SpaceId);
 
-delete(SpaceId, {user, UserId}) when is_binary(SpaceId) ->
+delete(SpaceId, {user, UserId}) ->
     entity_graph:remove_relation(
         od_user, UserId,
         od_space, SpaceId
     );
 
-delete(SpaceId, {group, ChildGroupId}) when is_binary(SpaceId) ->
+delete(SpaceId, {group, ChildGroupId}) ->
     entity_graph:remove_relation(
         od_group, ChildGroupId,
         od_space, SpaceId
@@ -130,7 +142,52 @@ delete(SpaceId, {group, ChildGroupId}) when is_binary(SpaceId) ->
 
 exists(undefined, _) ->
     true;
-exists(SpaceId, _) when is_binary(SpaceId) ->
+
+exists(_GroupId, {user, UserId}) ->
+    {internal, fun(#od_space{users = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_GroupId, {eff_user, UserId}) ->
+    {internal, fun(#od_space{eff_users = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_GroupId, {user_privileges, UserId}) ->
+    {internal, fun(#od_space{users = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_GroupId, {eff_user_privileges, UserId}) ->
+    {internal, fun(#od_space{eff_users = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+
+exists(_GroupId, {group, UserId}) ->
+    {internal, fun(#od_space{groups = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_GroupId, {eff_group, UserId}) ->
+    {internal, fun(#od_space{eff_groups = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_GroupId, {group_privileges, UserId}) ->
+    {internal, fun(#od_space{groups = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_GroupId, {eff_group_privileges, UserId}) ->
+    {internal, fun(#od_space{eff_groups = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+
+exists(_UserId, {share, ProviderId}) ->
+    {internal, fun(#od_space{shares = Providers}) ->
+        maps:is_key(ProviderId, Providers)
+    end};
+
+exists(_UserId, {provider, ProviderId}) ->
+    {internal, fun(#od_space{providers = Providers}) ->
+        maps:is_key(ProviderId, Providers)
+    end};
+
+exists(_SpaceId, _) ->
     % No matter the resource, return true if it belongs to a space
     {internal, fun(#od_space{}) ->
         % If the space with SpaceId can be found, it exists. If not, the
@@ -141,25 +198,49 @@ exists(SpaceId, _) when is_binary(SpaceId) ->
 
 authorize(create, undefined, entity, ?USER) ->
     true;
-authorize(create, _SpaceId, users, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?OZ_SPACES_ADD_MEMBERS);
-authorize(create, _SpaceId, groups, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?OZ_SPACES_ADD_MEMBERS);
-authorize(create, _SpaceId, invite_provider_token, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?SPACE_INVITE_PROVIDER);
+
 authorize(create, _SpaceId, invite_user_token, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_INVITE_USER);
 
+authorize(create, _SpaceId, invite_group_token, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_INVITE_GROUP);
+
+authorize(create, _SpaceId, invite_provider_token, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_INVITE_PROVIDER);
+
+authorize(create, _SpaceId, users, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_ADD_MEMBERS);
+
+authorize(create, _SpaceId, groups, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_ADD_MEMBERS);
+
 
 authorize(get, undefined, list, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, list_spaces);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_LIST);
+
 authorize(get, _SpaceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_VIEW);
+
 authorize(get, _SpaceId, data, ?USER(UserId)) ->
     auth_by_membership(UserId);
+
 authorize(get, _SpaceId, data, ?PROVIDER(ProviderId)) ->
     auth_by_support(ProviderId);
-authorize(get, _SpaceId, users, ?USER(UserId)) ->
+
+authorize(get, _SpaceId, shares, ?USER(UserId)) ->
+    auth_by_membership(UserId);
+
+authorize(get, _SpaceId, shares, ?PROVIDER(ProviderId)) ->
+    auth_by_support(ProviderId);
+
+authorize(get, _SpaceId, {share, _ShareId}, ?USER(UserId)) ->
+    auth_by_membership(UserId);
+
+authorize(get, _SpaceId, {share, _ShareId}, ?PROVIDER(ProviderId)) ->
+    auth_by_support(ProviderId);
+
+authorize(get, _SpaceId, _, ?USER(UserId)) ->
+    % All other resources can be accessed with view privileges
     auth_by_privilege(UserId, ?SPACE_VIEW);
 
 
@@ -184,13 +265,22 @@ authorize(delete, _SpaceId, {user, _UserId}, ?USER(UserId)) -> [
 authorize(delete, _SpaceId, {group, _UserId}, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?SPACE_REMOVE_GROUP),
     auth_by_oz_privilege(UserId, ?OZ_SPACES_REMOVE_MEMBERS)
-].
+];
+
+authorize(delete, _SpaceId, {provider, _ProviderId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_REMOVE_PROVIDER).
 
 
 validate(create, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
     }
+};
+validate(create, invite_user_token) -> #{
+};
+validate(create, invite_group_token) -> #{
+};
+validate(create, invite_provider_token) -> #{
 };
 validate(create, users) -> #{
     required => #{
@@ -206,10 +296,7 @@ validate(create, groups) -> #{
         end}}
     }
 };
-validate(create, invite_provider_token) -> #{
-};
-validate(create, invite_user_token) -> #{
-};
+
 validate(update, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}

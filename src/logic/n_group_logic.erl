@@ -13,13 +13,14 @@
 -author("Lukasz Opiola").
 -behaviour(data_logic_behaviour).
 
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, n_group_logic_plugin).
 
 -export([
-    create/2
+    create/2, create/3
 ]).
 -export([
     get/2,
@@ -32,15 +33,45 @@
     update_oz_privileges/4, update_oz_privileges/3
 ]).
 -export([
-    delete/2
+    delete/2,
+    delete_oz_privileges/2
 ]).
 -export([
     join_group/3,
     join_space/3,
     add_user/4, add_user/3,
     add_group/4, add_group/3,
+
+    get_users/2, get_eff_users/2,
+    get_user/3, get_eff_user/3,
+    get_user_privileges/3, get_eff_user_privileges/3,
+
+    get_parents/2, get_eff_parents/2,
+    get_parent/3, get_eff_parent/3,
+
+    get_children/2, get_eff_children/2,
+    get_child/3, get_eff_child/3,
+    get_child_privileges/3, get_eff_child_privileges/3,
+
+    get_spaces/2, get_eff_spaces/2,
+    get_space/3, get_eff_space/3,
+
+    get_eff_providers/2, get_eff_provider/3,
+
+    get_handle_services/2, get_eff_handle_services/2,
+    get_handle_service/3, get_eff_handle_service/3,
+
+    get_handles/2, get_eff_handles/2,
+    get_handle/3, get_eff_handle/3,
+
     update_user_privileges/5, update_user_privileges/4,
-    update_group_privileges/5, update_group_privileges/4,
+    update_child_privileges/5, update_child_privileges/4,
+
+    leave_group/3,
+    leave_space/3,
+    leave_handle_service/3,
+    leave_handle/3,
+
     remove_user/3,
     remove_group/3
 ]).
@@ -48,7 +79,13 @@
     exists/1,
     has_eff_privilege/3
 ]).
+-export([
+    create_predefined_groups/0
+]).
 
+
+create(Client, Name, Type) ->
+    create(Client, #{<<"name">> => Name, <<"type">> => Type}).
 create(Client, Name) when is_binary(Name) ->
     create(Client, #{<<"name">> => Name});
 create(Client, Data) ->
@@ -92,6 +129,10 @@ delete(Client, GroupId) ->
     n_entity_logic:delete(Client, ?PLUGIN, GroupId, entity).
 
 
+delete_oz_privileges(Client, UserId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, oz_privileges).
+
+
 join_group(Client, UserId, Data) when is_map(Data) ->
     n_entity_logic:create(Client, ?PLUGIN, UserId, join_group, Data);
 join_group(Client, UserId, Token) ->
@@ -115,6 +156,137 @@ add_user(Client, GroupId, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, GroupId, users, Data).
 
 
+add_group(Client, GroupId, ChildGroupId, Privileges) when is_binary(ChildGroupId) ->
+    add_group(Client, GroupId, #{
+        <<"userId">> => ChildGroupId,
+        <<"privileges">> => Privileges
+    }).
+add_group(Client, GroupId, ChildGroupId) when is_binary(ChildGroupId) ->
+    add_group(Client, GroupId, #{<<"groupId">> => ChildGroupId});
+add_group(Client, GroupId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, children, Data).
+
+
+get_users(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, users).
+
+
+get_eff_users(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_users).
+
+
+get_user(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {user, GroupId}).
+
+
+get_eff_user(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_user, GroupId}).
+
+
+get_user_privileges(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {user_privileges, GroupId}).
+
+
+get_eff_user_privileges(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_user_privileges, GroupId}).
+
+
+get_parents(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, parents).
+
+
+get_eff_parents(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_parents).
+
+
+get_parent(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {parent, GroupId}).
+
+
+get_eff_parent(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_parent, GroupId}).
+
+
+get_children(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, children).
+
+
+get_eff_children(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_children).
+
+
+get_child(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {child, GroupId}).
+
+
+get_eff_child(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_child, GroupId}).
+
+
+get_child_privileges(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {child_privileges, GroupId}).
+
+
+get_eff_child_privileges(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_child_privileges, GroupId}).
+
+
+get_spaces(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, spaces).
+
+
+get_eff_spaces(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_spaces).
+
+
+get_space(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {space, GroupId}).
+
+
+get_eff_space(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_space, GroupId}).
+
+
+get_eff_providers(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_providers).
+
+
+get_eff_provider(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_provider, SpaceId}).
+
+
+get_handle_services(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, handle_services).
+
+
+get_eff_handle_services(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_handle_services).
+
+
+get_handle_service(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {handle_service, SpaceId}).
+
+
+get_eff_handle_service(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_handle_service, SpaceId}).
+
+
+get_handles(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, handles).
+
+
+get_eff_handles(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_handles).
+
+
+get_handle(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {handle, SpaceId}).
+
+
+get_eff_handle(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_handle, SpaceId}).
+
+
 update_user_privileges(Client, GroupId, UserId, Operation, Privs) when is_list(Privs) ->
     update_user_privileges(Client, GroupId, UserId, #{
         <<"operation">> => Operation,
@@ -124,32 +296,37 @@ update_user_privileges(Client, GroupId, UserId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, GroupId, {user, UserId}, Data).
 
 
+update_child_privileges(Client, ParentId, ChildId, Operation, Privs) when is_list(Privs) ->
+    update_child_privileges(Client, ParentId, ChildId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+update_child_privileges(Client, ParentId, ChildId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, ParentId, {child, ChildId}, Data).
+
+
+leave_group(Client, UserId, GroupId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {parent, GroupId}).
+
+
+leave_space(Client, UserId, SpaceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {space, SpaceId}).
+
+
+leave_handle_service(Client, UserId, HServiceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {handle_service, HServiceId}).
+
+
+leave_handle(Client, UserId, HandleId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {handle, HandleId}).
+
+
 remove_user(Client, GroupId, UserId) ->
     n_entity_logic:delete(Client, ?PLUGIN, GroupId, {user, UserId}).
 
 
-add_group(Client, GroupId, ChildGroupId, Privileges) when is_binary(ChildGroupId) ->
-    add_group(Client, GroupId, #{
-        <<"userId">> => ChildGroupId,
-        <<"privileges">> => Privileges
-    }).
-add_group(Client, GroupId, ChildGroupId) when is_binary(ChildGroupId) ->
-    add_group(Client, GroupId, #{<<"groupId">> => ChildGroupId});
-add_group(Client, GroupId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, GroupId, groups, Data).
-
-
-update_group_privileges(Client, ParentId, ChildId, Operation, Privs) when is_list(Privs) ->
-    update_group_privileges(Client, ParentId, ChildId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
-    }).
-update_group_privileges(Client, ParentId, ChildId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, ParentId, {group, ChildId}, Data).
-
-
 remove_group(Client, ParentId, ChildId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, ParentId, {group, ChildId}).
+    n_entity_logic:delete(Client, ?PLUGIN, ParentId, {child, ChildId}).
 
 
 %%--------------------------------------------------------------------
@@ -172,3 +349,70 @@ has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
 has_eff_privilege(#od_group{eff_users = UsersPrivileges}, UserId, Privilege) ->
     {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates predefined groups in the system based on settings in app.config.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_predefined_groups() -> ok.
+create_predefined_groups() ->
+    {ok, PredefinedGroups} =
+        application:get_env(?APP_NAME, predefined_groups),
+    lists:foreach(
+        fun(GroupMap) ->
+            Id = maps:get(id, GroupMap),
+            Name = maps:get(name, GroupMap),
+            % Privileges can be either a list of privileges or a module and
+            % function to call that will return such list.
+            Privs = case maps:get(oz_privileges, GroupMap) of
+                List when is_list(List) ->
+                    List;
+                {Module, Function} ->
+                    Module:Function()
+            end,
+            create_predefined_group(Id, Name, Privs)
+        end, PredefinedGroups).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Creates a predefined group in the system, if it does not exist, and grants
+%% given privileges to it.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_predefined_group(Id :: binary(), Name :: binary(),
+    Privileges :: [privileges:oz_privilege()]) -> ok | error.
+create_predefined_group(GroupId, Name, Privileges) ->
+    case od_group:exists(GroupId) of
+        true ->
+            ?info("Predefined group '~s' already exists, "
+            "skipping.", [Name]),
+            ok;
+        false ->
+            NewGroup = #document{
+                key = GroupId,
+                value = #od_group{
+                    name = Name,
+                    type = role
+                }},
+            case od_group:create(NewGroup) of
+                {ok, GroupId} ->
+                    ok = update_oz_privileges(?ROOT, GroupId, set, Privileges),
+                    ?info("Created predefined group '~s'", [Name]),
+                    ok;
+                Other ->
+                    ?error("Cannot create predefined group '~s' - ~p",
+                        [GroupId, Other]),
+                    error
+            end
+    end.
+
+
+
+

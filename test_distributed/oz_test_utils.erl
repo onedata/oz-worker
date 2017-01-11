@@ -105,6 +105,7 @@
 % Convenience functions
 -export([
     create_3_nested_groups/2, create_3_nested_groups/5,
+    create_and_support_3_spaces/2,
     minimum_support_size/1,
     generate_provider_cert_files/0,
     ensure_eff_graph_up_to_date/1,
@@ -293,14 +294,13 @@ unset_user_space_alias(Config, UserId, SpaceId) ->
     ])).
 
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Sets default provider of a user.
 %% @end
 %%--------------------------------------------------------------------
-    -spec set_user_default_provider(Config :: term(), UserId :: od_user:id(),
-ProviderId :: od_provider:id()) -> ok.
+-spec set_user_default_provider(Config :: term(), UserId :: od_user:id(),
+    ProviderId :: od_provider:id()) -> ok.
 set_user_default_provider(Config, UserId, ProviderId) ->
     ?assertMatch(ok, call_oz(Config, n_user_logic, set_default_provider, [
         ?ROOT, UserId, ProviderId
@@ -1057,6 +1057,42 @@ create_3_nested_groups(Config, TestUser, BotGrName, MidGrName, TopGrName) ->
         Config, TopGroup, MiddleGroup
     ),
     {BottomGroup, MiddleGroup, TopGroup}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates three spaces and grant support for them on behalf of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_and_support_3_spaces(Config :: term(),
+    ProviderId :: od_provider:id()) ->
+    [{SpaceId :: od_space:id(), SpaceName :: od_space:name()}].
+create_and_support_3_spaces(Config, ProviderId) ->
+    MinimumSupportSize = minimum_support_size(Config),
+    S1Name = <<"Space 1">>,
+    S2Name = <<"Space 2">>,
+    S3Name = <<"Space 3">>,
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, S1Name),
+    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, S2Name),
+    {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, S3Name),
+    % Support them by the provider
+    {ok, Macaroon1} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
+    {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S2),
+    {ok, Macaroon3} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S3),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, ?PROVIDER(ProviderId), ProviderId, Macaroon1, MinimumSupportSize
+    ),
+    {ok, S2} = oz_test_utils:support_space(
+        Config, ?PROVIDER(ProviderId), ProviderId, Macaroon2, MinimumSupportSize
+    ),
+    {ok, S3} = oz_test_utils:support_space(
+        Config, ?PROVIDER(ProviderId), ProviderId, Macaroon3, MinimumSupportSize
+    ),
+    [
+        {S1, S1Name},
+        {S2, S2Name},
+        {S3, S3Name}
+    ].
 
 
 %%--------------------------------------------------------------------

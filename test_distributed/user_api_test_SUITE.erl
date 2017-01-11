@@ -672,7 +672,7 @@ get_space_alias_test(Config) ->
     ApiTestSpec = ApiTestSpec#api_test_spec{
         rest_spec = RestSpec#rest_spec{
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"alias">> =>Alias}
+            expected_body = #{<<"alias">> => Alias}
         },
         logic_spec = LogicSpec#logic_spec{
             expected_result = ?OK_BINARY(Alias)
@@ -734,6 +734,7 @@ get_default_provider_test(Config) ->
 
 
 update_test(Config) ->
+
     ok.
 
 

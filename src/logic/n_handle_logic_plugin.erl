@@ -87,7 +87,7 @@ get(_, _HandleId, #od_handle{users = Users}, users) ->
     {ok, Users}.
 
 
-update(HandleId, entity, Data) when is_binary(HandleId) ->
+update(HandleId, entity, Data) ->
     {ok, _} = od_handle:update(HandleId, fun(Handle) ->
         % TODO czy cos sie da update?
         {ok, Handle#od_handle{}}
@@ -95,25 +95,25 @@ update(HandleId, entity, Data) when is_binary(HandleId) ->
     ok.
 
 
-delete(HandleId, entity) when is_binary(HandleId) ->
+delete(HandleId, entity) ->
     entity_graph:delete_with_relations(od_handle, HandleId).
 
 
 exists(undefined, _) ->
     true;
-exists(HandleId, entity) when is_binary(HandleId) ->
+exists(HandleId, entity) ->
     {internal, fun(#od_handle{}) ->
         % If the handle with HandleId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists(HandleId, users) when is_binary(HandleId) ->
+exists(HandleId, users) ->
     {internal, fun(#od_handle{}) ->
         % If the handle with HandleId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists(HandleId, groups) when is_binary(HandleId) ->
+exists(HandleId, groups) ->
     {internal, fun(#od_handle{}) ->
         % If the handle with HandleId can be found, it exists. If not, the
         % verification will fail before this function is called.

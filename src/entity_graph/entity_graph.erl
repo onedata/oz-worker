@@ -458,7 +458,12 @@ delete_with_relations(EntityType, EntityId) ->
                 lists:foreach(
                     fun(ParId) ->
                         ok = remove_relation(EntityType, EntityId, ParType, ParId),
-                        ok = ParType:delete(ParId)
+                        ok = ParType:delete(ParId),
+                        ?info("~s has been deleted because it depended on ~s "
+                        "(that is being deleted)", [
+                            ParType:to_string(ParId),
+                            EntityType:to_string(EntityId)
+                        ])
                     end, ParentIds)
             end, DependentParents),
         maps:map(
@@ -466,7 +471,12 @@ delete_with_relations(EntityType, EntityId) ->
                 lists:foreach(
                     fun(ChId) ->
                         ok = remove_relation(ChType, ChId, EntityType, EntityId),
-                        ok = ChType:delete(ChId)
+                        ok = ChType:delete(ChId),
+                        ?info("~s has been deleted because it depended on ~s "
+                        "(that is being deleted)", [
+                            ChType:to_string(ChId),
+                            EntityType:to_string(EntityId)
+                        ])
                     end, ChIds)
             end, DependentChildren),
         % Remove the entity itself

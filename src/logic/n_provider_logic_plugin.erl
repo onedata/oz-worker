@@ -129,7 +129,7 @@ get(_, undefined, undefined, {check_my_ip, Req}) ->
     {ok, list_to_binary(inet_parse:ntoa(Ip))}.
 
 
-update(ProviderId, entity, Data) when is_binary(ProviderId) ->
+update(ProviderId, entity, Data) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
         #od_provider{
             name = Name, urls = URLs, redirection_point = RedPoint,
@@ -145,17 +145,17 @@ update(ProviderId, entity, Data) when is_binary(ProviderId) ->
     end),
     ok;
 
-update(ProviderId, {space, SpaceId}, Data) when is_binary(ProviderId) ->
+update(ProviderId, {space, SpaceId}, Data) ->
     NewSupportSize = maps:get(<<"size">>, Data),
     entity_graph:update_relation(
         od_space, SpaceId, od_provider, ProviderId, NewSupportSize
     ).
 
 
-delete(ProviderId, entity) when is_binary(ProviderId) ->
+delete(ProviderId, entity) ->
     entity_graph:delete_with_relations(od_provider, ProviderId);
 
-delete(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
+delete(ProviderId, {space, SpaceId}) ->
     entity_graph:remove_relation(
         od_space, SpaceId, od_provider, ProviderId
     ).
@@ -163,22 +163,22 @@ delete(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
 
 exists(undefined, _) ->
     true;
-exists(ProviderId, {space, SpaceId}) when is_binary(ProviderId) ->
+exists(_ProviderId, {space, SpaceId}) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{spaces = Spaces}) ->
         maps:is_key(SpaceId, Spaces)
     end};
-exists(ProviderId, {eff_user, UserId}) when is_binary(ProviderId) ->
+exists(_ProviderId, {eff_user, UserId}) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{eff_users = EffUsers}) ->
         maps:is_key(UserId, EffUsers)
     end};
-exists(ProviderId, {eff_group, GroupId}) when is_binary(ProviderId) ->
+exists(_ProviderId, {eff_group, GroupId}) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{eff_groups = EffGroups}) ->
         maps:is_key(GroupId, EffGroups)
     end};
-exists(ProviderId, _) when is_binary(ProviderId) ->
+exists(_ProviderId, _) ->
     {internal, fun(#od_provider{}) ->
         % If the provider with ProviderId can be found, it exists. If not, the
         % verification will fail before this function is called.

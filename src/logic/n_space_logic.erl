@@ -36,11 +36,27 @@
     create_user_invite_token/2,
     create_group_invite_token/2,
     create_provider_invite_token/2,
+
     add_user/4, add_user/3,
     add_group/4, add_group/3,
-    get_users/2,
+
+    get_users/2, get_eff_users/2,
+    get_user/3, get_eff_user/3,
+    get_user_privileges/3, get_eff_user_privileges/3,
+
+    get_groups/2, get_eff_groups/2,
+    get_group/3, get_eff_group/3,
+    get_group_privileges/3, get_eff_group_privileges/3,
+
+    get_shares/2, get_share/3,
+
+    get_providers/2, get_provider/3,
+
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
+
+    leave_provider/3,
+
     remove_user/3,
     remove_group/3
 ]).
@@ -57,18 +73,6 @@ create(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
-create_provider_invite_token(Client, SpaceId) ->
-    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_provider_token, #{}).
-
-
-create_user_invite_token(Client, SpaceId) ->
-    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_user_token, #{}).
-
-
-create_group_invite_token(Client, SpaceId) ->
-    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_group_token, #{}).
-
-
 get(Client, SpaceId) ->
     n_entity_logic:get(Client, ?PLUGIN, SpaceId, entity).
 
@@ -80,8 +84,26 @@ list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
-get_users(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, users).
+update(Client, SpaceId, NewName) when is_binary(NewName) ->
+    update(Client, SpaceId, #{<<"name">> => NewName});
+update(Client, SpaceId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, SpaceId, entity, Data).
+
+
+delete(Client, SpaceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, entity).
+
+
+create_user_invite_token(Client, SpaceId) ->
+    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_user_token, #{}).
+
+
+create_group_invite_token(Client, SpaceId) ->
+    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_group_token, #{}).
+
+
+create_provider_invite_token(Client, SpaceId) ->
+    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_provider_token, #{}).
 
 
 add_user(Client, SpaceId, UserId, Privileges) when is_binary(UserId) ->
@@ -97,19 +119,6 @@ add_user(Client, SpaceId, Data) ->
     ).
 
 
-update_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(Privs) ->
-    update_user_privileges(Client, SpaceId, UserId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
-    }).
-update_user_privileges(Client, SpaceId, UserId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {user, UserId}, Data).
-
-
-remove_user(Client, SpaceId, UserId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {user, UserId}).
-
-
 add_group(Client, SpaceId, GroupId, Privileges) when is_binary(GroupId) ->
     add_group(Client, SpaceId, #{
         <<"groupId">> => GroupId,
@@ -123,6 +132,81 @@ add_group(Client, SpaceId, Data) ->
     ).
 
 
+get_users(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, users).
+
+
+get_eff_users(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_users).
+
+
+get_user(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {user, GroupId}).
+
+
+get_eff_user(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_user, GroupId}).
+
+
+get_user_privileges(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {user_privileges, GroupId}).
+
+
+get_eff_user_privileges(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_user_privileges, GroupId}).
+
+
+get_groups(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, groups).
+
+
+get_eff_groups(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_groups).
+
+
+get_group(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {group, GroupId}).
+
+
+get_eff_group(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_group, GroupId}).
+
+
+get_group_privileges(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {group_privileges, GroupId}).
+
+
+get_eff_group_privileges(Client, UserId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_group_privileges, GroupId}).
+
+
+get_shares(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, shares).
+
+
+get_share(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {share, SpaceId}).
+
+
+get_providers(Client, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, providers).
+
+
+get_provider(Client, UserId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {provider, SpaceId}).
+
+
+
+
+update_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(Privs) ->
+    update_user_privileges(Client, SpaceId, UserId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+update_user_privileges(Client, SpaceId, UserId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {user, UserId}, Data).
+
+
 update_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list(Privs) ->
     update_group_privileges(Client, SpaceId, GroupId, #{
         <<"operation">> => Operation,
@@ -132,18 +216,16 @@ update_group_privileges(Client, SpaceId, GroupId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, SpaceId, {group, GroupId}, Data).
 
 
+leave_provider(Client, SpaceId, ProviderId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {provider, ProviderId}).
+
+
+remove_user(Client, SpaceId, UserId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {user, UserId}).
+
+
 remove_group(Client, SpaceId, GroupId) ->
     n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {group, GroupId}).
-
-
-update(Client, SpaceId, NewName) when is_binary(NewName) ->
-    update(Client, SpaceId, #{<<"name">> => NewName});
-update(Client, SpaceId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, SpaceId, entity, Data).
-
-
-delete(Client, SpaceId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, entity).
 
 
 %%--------------------------------------------------------------------

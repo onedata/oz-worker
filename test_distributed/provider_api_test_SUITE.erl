@@ -573,7 +573,8 @@ get_eff_users_test(Config) ->
     end,
     CreateRelationFuns = [
         fun() ->
-            [{S1, _}, {S2, _}, {S3, _}] = create_and_support_3_spaces(Config, P1),
+            [{S1, _}, {S2, _}, {S3, _}] =
+                oz_test_utils:create_and_support_3_spaces(Config, P1),
             % Create two users for every space
             {include, lists:foldl(
                 fun({Counter, Space}, AccMap) ->
@@ -587,7 +588,8 @@ get_eff_users_test(Config) ->
             )}
         end,
         fun() ->
-            [{S4, _}, {S5, _}, {S6, _}] = create_and_support_3_spaces(Config, P1),
+            [{S4, _}, {S5, _}, {S6, _}] =
+                oz_test_utils:create_and_support_3_spaces(Config, P1),
             % Create two groups for every space and three users for every group
             {include, lists:foldl(
                 fun({Counter, Space}, AccMap) ->
@@ -610,14 +612,14 @@ get_eff_users_test(Config) ->
             )}
         end,
         fun() ->
-            % User via groups
+            % User via nested groups
             {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, <<"space">>),
             {ok, Macaroon1} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
             {ok, S1} = oz_test_utils:support_space(
                 Config, ?PROVIDER(P1), P1, Macaroon1,
                 oz_test_utils:minimum_support_size(Config)
             ),
-            {ok, TopGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"gr">>            ),
+            {ok, TopGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"gr">>),
             {ok, TopGroup} = oz_test_utils:add_group_to_space(Config, S1, TopGroup),
             {ok, BottomGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"gr">>),
             {ok, BottomGroup} = oz_test_utils:add_group_to_group(
@@ -628,7 +630,7 @@ get_eff_users_test(Config) ->
                 Config, #od_user{name = UserName}
             ),
             {ok, User} = oz_test_utils:add_user_to_group(Config, BottomGroup, User),
-            #{User => UserName}
+            {include, #{User => UserName}}
         end,
         fun() ->
             % Make sure that other users cannot be reached this way
@@ -731,8 +733,10 @@ get_eff_groups_test(Config) ->
     end,
     CreateRelationFuns = [
         fun() ->
-            [{S1, _}, {S2, _}, {S3, _}] = create_and_support_3_spaces(Config, P1),
-            [{S4, _}, {S5, _}, {S6, _}] = create_and_support_3_spaces(Config, P1),
+            [{S1, _}, {S2, _}, {S3, _}] =
+                oz_test_utils:create_and_support_3_spaces(Config, P1),
+            [{S4, _}, {S5, _}, {S6, _}] =
+                oz_test_utils:create_and_support_3_spaces(Config, P1),
             % Create two groups for every space
             {include, lists:foldl(
                 fun({Counter, Space}, AccMap) ->
@@ -765,7 +769,7 @@ get_eff_groups_test(Config) ->
             {ok, BottomGroup} = oz_test_utils:add_group_to_group(
                 Config, TopGroup, BottomGroup
             ),
-            #{TopGroup => TopGroupName, BottomGroup => BottomGroupName}
+            {include, #{TopGroup => TopGroupName, BottomGroup => BottomGroupName}}
         end,
         fun() ->
             % Make sure that other users cannot be reached this way
@@ -782,7 +786,7 @@ get_eff_groups_test(Config) ->
 
 
 get_spaces_test(Config) ->
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
     ),
     % Create two users, grant one of them the privilege to list spaces.
@@ -795,7 +799,7 @@ get_spaces_test(Config) ->
 
     ListApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {user, Admin}, {provider, P1, KeyFile, CertFile}],
+            correct = [root, {user, Admin}, {provider, P1, KeyFile1, CertFile1}],
             unauthorized = [nobody],
             forbidden = [{user, NonAdmin}]
         },
@@ -820,7 +824,7 @@ get_spaces_test(Config) ->
                     correct = [
                         root,
                         {user, Admin},
-                        {provider, P1, KeyFile, CertFile}
+                        {provider, P1, KeyFile1, CertFile1}
                     ],
                     unauthorized = [nobody],
                     forbidden = [{user, NonAdmin}]
@@ -832,7 +836,7 @@ get_spaces_test(Config) ->
                     correct = [
                         root,
                         {user, Admin},
-                        {provider, P1, KeyFile, CertFile},
+                        {provider, P1, KeyFile1, CertFile1},
                         {user, NonAdmin}
                     ]
                 }
@@ -871,7 +875,7 @@ get_spaces_test(Config) ->
     end,
     CreateRelationFuns = [
         fun() ->
-            ExpSpaces = create_and_support_3_spaces(Config, P1),
+            ExpSpaces = oz_test_utils:create_and_support_3_spaces(Config, P1),
             {include, maps:from_list(ExpSpaces)}
         end,
         fun() ->
@@ -885,175 +889,68 @@ get_spaces_test(Config) ->
     ],
     ?assert(api_test_scenarios:run_scenario(get_relations, [
         Config, ListApiTestSpec, GetApiTestSpecGenerator, CreateRelationFuns
-    ])).
+    ])),
 
-
-
-
-
-
-
-
-get_spaces_test_old(Config) ->
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    % Check endpoint dedicated for providers
+    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P2">>
     ),
-    % Create two users, grant one of them the privilege to list spaces.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_SPACES
-    ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-
-    % There are no spaces yet
-    ApiTestSpec = #api_test_spec{
+    ListApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {user, Admin}, {provider, P1, KeyFile, CertFile}],
-            unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}]
+            correct = [{provider, P2, KeyFile2, CertFile2}]
         },
-        rest_spec = RestSpec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/spaces">>],
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"spaces">> => []}
-        },
-        logic_spec = LogicSpec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_spaces,
-            args = [client, P1],
-            expected_result = ?OK_LIST([])
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    % Also check the endpoint dedicated for provider
-    ApiTestSpecForProvider = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [{provider, P1, KeyFile, CertFile}]
-        },
-        rest_spec = RestSpecForProvider = #rest_spec{
+        rest_spec = #rest_spec{
             method = get,
             path = <<"/provider/spaces">>,
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"spaces">> => []}
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider)),
-
-    % Create some spaces
-    ExpSpaces = create_and_support_3_spaces(Config, P1),
-    {ExpSpaceIds, _} = lists:unzip(ExpSpaces),
-    % Get spaces
-
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    % Check if correct spaces are returned
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        rest_spec = RestSpec#rest_spec{
-            expected_body = #{<<"spaces">> => ExpSpaceIds}
+    GetApiTestSpecGenerator2 = fun(ExcludeOrInclude, SpaceId, SpaceName) ->
+        ExpBodyContains = #{
+            <<"name">> => SpaceName
         },
-        logic_spec = LogicSpec#logic_spec{
-            expected_result = ?OK_LIST(ExpSpaceIds)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-    % Also check the endpoint dedicated for provider
-    ApiTestSpecForProvider2 = ApiTestSpecForProvider#api_test_spec{
-        rest_spec = RestSpecForProvider#rest_spec{
-            expected_body = #{<<"spaces">> => ExpSpaceIds}
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider2)),
-
-    % Check every space one by one.
-    lists:foreach(
-        fun({SpaceId, SpaceName}) ->
-            ExpBodyContains = #{<<"name">> => SpaceName},
-            ApiTestSpec3 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {user, Admin},
-                        {provider, P1, KeyFile, CertFile}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [{user, NonAdmin}]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = {contains, ExpBodyContains#{
-                        <<"spaceId">> => SpaceId
-                    }}
-                },
-                logic_spec = #logic_spec{
-                    operation = get,
-                    module = n_provider_logic,
-                    function = get_space,
-                    args = [client, P1, SpaceId],
-                    expected_result = ?OK_MAP_CONTAINS(ExpBodyContains)
-                }
+        {ExpectedRestCode, ExpectedRestBody} = case ExcludeOrInclude of
+            include ->
+                {?HTTP_200_OK, {contains, ExpBodyContains#{<<"spaceId">> => SpaceId}}};
+            exclude ->
+                {?HTTP_404_NOT_FOUND, undefined}
+        end,
+        ExpectedLogicResult = case ExcludeOrInclude of
+            include ->
+                ?OK_MAP_CONTAINS(ExpBodyContains);
+            exclude ->
+                ?ERROR_REASON(?ERROR_NOT_FOUND)
+        end,
+        #api_test_spec{
+            client_spec = #client_spec{
+                correct = [{provider, P2, KeyFile2, CertFile2}]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
-            % Also check the endpoint dedicated for provider
-            ApiTestSpecForProvider3 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [{provider, P1, KeyFile, CertFile}]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/provider/spaces/">>, SpaceId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = {contains, ExpBodyContains#{
-                        <<"spaceId">> => SpaceId
-                    }}
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider3))
-        end, ExpSpaces),
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/provider/spaces/">>, SpaceId],
+                expected_code = ExpectedRestCode,
+                expected_body = ExpectedRestBody
+            }
+        }
+    end,
+    CreateRelationFuns2 = [
+        fun() ->
+            ExpSpaces = oz_test_utils:create_and_support_3_spaces(Config, P2),
+            {include, maps:from_list(ExpSpaces)}
+        end,
+        fun() ->
+            % Make sure that other users cannot be reached this way
+            {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
+            {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
+            {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
+            {exclude, #{S1 => [], S2 => [], S3 => []}}
+        end
 
-    % Make sure that other spaces cannot be reached this way.
-    {ok, OtherSpace} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    ApiTestSpec4 = #api_test_spec{
-        client_spec = #client_spec{
-            % All clients should receive 404 when asking for non-existent
-            % resource.
-            correct = [
-                root,
-                {user, Admin},
-                {provider, P1, KeyFile, CertFile},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/providers/">>, P1, <<"/spaces/">>, OtherSpace],
-            expected_code = ?HTTP_404_NOT_FOUND
-        },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = n_provider_logic,
-            function = get_space,
-            args = [client, P1, OtherSpace],
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)),
-    % Also check the endpoint dedicated for provider
-    ApiTestSpecForProvider4 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [{provider, P1, KeyFile, CertFile}]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/provider/spaces/">>, OtherSpace],
-            expected_code = ?HTTP_404_NOT_FOUND
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForProvider4)).
+    ],
+    ?assert(api_test_scenarios:run_scenario(get_relations, [
+        Config, ListApiTestSpec2, GetApiTestSpecGenerator2, CreateRelationFuns2
+    ])).
 
 
 support_space_test(Config) ->
@@ -1082,6 +979,14 @@ support_space_test(Config) ->
         {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
     ],
 
+    VerifyFun = fun(SpaceId) ->
+        % Should return space id of the newly supported space
+        {ok, #od_space{
+            providers = Providers
+        }} = oz_test_utils:get_space(Config, SpaceId),
+        maps:is_key(P1, Providers) orelse maps:is_key(P2, Providers)
+    end,
+
     % Check only REST first
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -1097,9 +1002,12 @@ support_space_test(Config) ->
             method = post,
             path = <<"/provider/spaces/support">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = {contains, #{
-                <<"location">> => {match, <<RestPrefix/binary, "/provider/spaces/.*">>}
-            }}
+            expected_headers = fun(Headers) ->
+                PrefLen = size(RestPrefix),
+                <<RestPrefix:PrefLen/binary, "/provider/spaces/", SpaceId/binary>> =
+                    maps:get(<<"location">>, Headers),
+                VerifyFun(SpaceId)
+                end
         },
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
@@ -1140,13 +1048,7 @@ support_space_test(Config) ->
             module = n_provider_logic,
             function = support_space,
             args = [client, P1, data],
-            expected_result = ?OK_TERM(fun(SpaceId) ->
-                % Should return space id of the newly supported space
-                {ok, #od_space{
-                    providers = Providers
-                }} = oz_test_utils:get_space(Config, SpaceId),
-                maps:is_key(P1, Providers)
-            end)
+            expected_result = ?OK_TERM(VerifyFun)
         },
         rest_spec = undefined
         % data_spec is inherited from ApiTestSpec
@@ -1482,32 +1384,4 @@ end_per_testcase(_, _Config) ->
 %%%===================================================================
 %%% Helper functions
 %%%===================================================================
-
-
-create_and_support_3_spaces(Config, ProvId) ->
-    MinimumSupportSize = oz_test_utils:minimum_support_size(Config),
-    S1Name = <<"Space 1">>,
-    S2Name = <<"Space 2">>,
-    S3Name = <<"Space 3">>,
-    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, S1Name),
-    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, S2Name),
-    {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, S3Name),
-    % Support them by the provider
-    {ok, Macaroon1} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
-    {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S2),
-    {ok, Macaroon3} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S3),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, ?PROVIDER(ProvId), ProvId, Macaroon1, MinimumSupportSize
-    ),
-    {ok, S2} = oz_test_utils:support_space(
-        Config, ?PROVIDER(ProvId), ProvId, Macaroon2, MinimumSupportSize
-    ),
-    {ok, S3} = oz_test_utils:support_space(
-        Config, ?PROVIDER(ProvId), ProvId, Macaroon3, MinimumSupportSize
-    ),
-    [
-        {S1, S1Name},
-        {S2, S2Name},
-        {S3, S3Name}
-    ].
 

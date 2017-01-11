@@ -13,10 +13,11 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("entity_logic.hrl").
 -include("errors.hrl").
+-include("entity_logic.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
@@ -33,7 +34,7 @@ get_entity(ShareId) ->
     end.
 
 
-create(?USER, _, entity, Data) ->
+create(_Client, _, entity, Data) ->
     ShareId = maps:get(<<"shareId">>, Data),
     Name = maps:get(<<"name">>, Data),
     SpaceId = maps:get(<<"spaceId">>, Data),
@@ -60,25 +61,31 @@ create(?USER, _, entity, Data) ->
 get(_, undefined, undefined, list) ->
     {ok, ShareDocs} = od_share:list(),
     {ok, [ShareId || #document{key = ShareId} <- ShareDocs]};
-get(?USER, _ShareId, _, _) ->
+
+get(_, _ShareId, #od_share{} = Share, data) ->
+    #od_share{
+        name = Name, public_url = PublicUrl, space = SpaceId,
+        root_file = RootFileId, handle = HandleId
+    } = Share,
+    {ok, #{
+        <<"name">> => Name, <<"publicUrl">> => PublicUrl,
+        <<"spaceId">> => SpaceId, <<"rootFileId">> => RootFileId,
+        <<"handleId">> => HandleId
+    }}.
+
+
+update(ShareId, entity, #{<<"name">> => NewName}) ->
+    {ok, _} = od_share:update(ShareId, #{name => NewName}),
     ok.
 
 
-update(ShareId, entity, Data) when is_binary(ShareId) ->
-    {ok, _} = od_share:update(ShareId, fun(Share) ->
-        % TODO czy cos sie da update?
-        {ok, Share#od_share{}}
-    end),
-    ok.
-
-
-delete(ShareId, entity) when is_binary(ShareId) ->
+delete(ShareId, entity) ->
     entity_graph:delete_with_relations(od_share, ShareId).
 
 
 exists(undefined, _) ->
     true;
-exists(ShareId, entity) when is_binary(ShareId) ->
+exists(_ShareId, entity) ->
     {internal, fun(#od_share{}) ->
         % If the share with ShareId can be found, it exists. If not, the
         % verification will fail before this function is called.
@@ -90,7 +97,7 @@ authorize(create, undefined, entity, ?USER(UserId)) ->
     {data_dependent, fun(Data) ->
         SpaceId = maps:get(<<"spaceId">>, Data, <<"">>),
         n_space_logic:has_eff_privilege(
-            SpaceId, UserId, space_manage_shares
+            SpaceId, UserId, ?SPACE_MANAGE_SHARES
         )
     end};
 authorize(get, _ShareId, entity, ?USER(UserId)) ->
@@ -101,12 +108,12 @@ authorize(get, _ShareId, entity, ?USER(UserId)) ->
 
 authorize(update, _ShareId, entity, ?USER(UserId)) ->
     {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic:has_eff_privilege(SpaceId, UserId, space_manage_shares)
+        n_space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES)
     end};
 
 authorize(delete, _ShareId, entity, ?USER(UserId)) ->
     {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic:has_eff_privilege(SpaceId, UserId, space_manage_shares)
+        n_space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES)
     end}.
 
 

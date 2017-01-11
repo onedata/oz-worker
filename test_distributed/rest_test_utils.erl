@@ -156,6 +156,25 @@ check_rest_call(Config, ArgsMap) ->
         case ExpHeaders of
             undefined ->
                 ok;
+            Fun when is_function(Fun, 1) ->
+                Result = try
+                    Fun(RespHeaders)
+                catch
+                    Type1:Message1 ->
+                        ct:print(
+                            "Headers verification function crashed - ~p:~p~nStacktrace: ", [
+                                Type1, Message1, erlang:get_stacktrace()
+                            ]),
+                        false
+                end,
+                case Result of
+                    true ->
+                        ok;
+                    false ->
+                        throw({headers, RespHeaders, ExpHeaders, {
+                            RespCode, RespHeaders, RespBody
+                        }})
+                end;
             {contains, ExpContainsHeaders} ->
                 case contains_headers(RespHeaders, ExpContainsHeaders) of
                     true ->
@@ -180,19 +199,19 @@ check_rest_call(Config, ArgsMap) ->
         case ExpBody of
             undefined ->
                 ok;
-            Fun when is_function(Fun, 1) ->
+            Fun2 when is_function(Fun2, 1) ->
                 ActualBodyMap = json_utils:decode_map(RespBody),
-                Result = try
-                    Fun(ActualBodyMap)
+                Result2 = try
+                    Fun2(ActualBodyMap)
                 catch
-                    T:M ->
+                    Type2:Message2 ->
                         ct:print(
                             "Body verification function crashed - ~p:~p~nStacktrace: ", [
-                                T, M, erlang:get_stacktrace()
+                                Type2, Message2, erlang:get_stacktrace()
                             ]),
                         false
                 end,
-                case Result of
+                case Result2 of
                     true ->
                         ok;
                     false ->

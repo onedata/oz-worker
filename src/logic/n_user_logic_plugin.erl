@@ -51,7 +51,7 @@ get_entity(UserId) ->
     end.
 
 
-create(_, _UserId, authorize, Data) ->
+create(_Client, _UserId, authorize, Data) ->
     Identifier = maps:get(<<"identifier">>, Data),
     case auth_logic:authenticate_user(Identifier) of
         {ok, DischargeMacaroonToken} ->
@@ -60,14 +60,14 @@ create(_, _UserId, authorize, Data) ->
             ?ERROR_BAD_VALUE_IDENTIFIER(<<"identifier">>)
     end;
 
-create(_, UserId, client_tokens, _Data) ->
+create(_Client, UserId, client_tokens, _Data) ->
     Token = auth_logic:gen_token(UserId),
     {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens} = User) ->
         {ok, User#od_user{client_tokens = [Token | Tokens]}}
     end),
     {ok, Token};
 
-create(_, UserId, default_space, Data) ->
+create(_Client, UserId, default_space, Data) ->
     SpaceId = maps:get(<<"spaceId">>, Data),
     case n_user_logic:has_eff_space(UserId, SpaceId) of
         true ->
@@ -77,14 +77,14 @@ create(_, UserId, default_space, Data) ->
             ?ERROR_RELATION_DOES_NOT_EXIST(od_user, UserId, od_space, SpaceId)
     end;
 
-create(_, UserId, {space_alias, SpaceId}, Data) ->
+create(_Client, UserId, {space_alias, SpaceId}, Data) ->
     Alias = maps:get(<<"alias">>, Data),
     {ok, _} = od_user:update(UserId, fun(#od_user{space_aliases = Aliases} = User) ->
         {ok, User#od_user{space_aliases = maps:put(SpaceId, Alias, Aliases)}}
     end),
     ok;
 
-create(_, UserId, default_provider, Data) ->
+create(_Client, UserId, default_provider, Data) ->
     ProviderId = maps:get(<<"providerId">>, Data),
     case n_user_logic:has_eff_provider(UserId, ProviderId) of
         true ->
@@ -94,19 +94,23 @@ create(_, UserId, default_provider, Data) ->
             ?ERROR_RELATION_DOES_NOT_EXIST(od_user, UserId, od_provider, ProviderId)
     end;
 
-create(?USER(UserId), UserId, join_group, Data) ->
+create(_Client, UserId, join_group, Data) ->
     Macaroon = maps:get(<<"token">>, Data),
     {ok, {od_group, GroupId}} = token_logic:consume(Macaroon),
     entity_graph:add_relation(
-        od_user, UserId, od_group, GroupId, privileges:group_user()
+        od_user, UserId,
+        od_group, GroupId,
+        privileges:group_user()
     ),
     {ok, GroupId};
 
-create(?USER(UserId), UserId, join_space, Data) ->
+create(_Client, UserId, join_space, Data) ->
     Macaroon = maps:get(<<"token">>, Data),
     {ok, {od_space, SpaceId}} = token_logic:consume(Macaroon),
     entity_graph:add_relation(
-        od_user, UserId, od_space, SpaceId, privileges:space_user()
+        od_user, UserId,
+        od_space, SpaceId,
+        privileges:space_user()
     ),
     {ok, SpaceId}.
 
@@ -141,44 +145,53 @@ get(_, _UserId, #od_user{groups = Groups}, groups) ->
 get(_, _UserId, #od_user{eff_groups = Groups}, eff_groups) ->
     {ok, Groups};
 get(_, _UserId, #od_user{}, {group, GroupId}) ->
-    ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId));
+    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
+    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
 get(_, _UserId, #od_user{}, {eff_group, GroupId}) ->
-    ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId));
+    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
+    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
 
 get(_, _UserId, #od_user{spaces = Spaces}, spaces) ->
     {ok, Spaces};
 get(_, _UserId, #od_user{eff_spaces = Spaces}, eff_spaces) ->
     {ok, Spaces};
 get(_, _UserId, #od_user{}, {space, SpaceId}) ->
-    ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId));
+    {ok, Space} = ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId)),
+    n_space_logic_plugin:get(?ROOT, SpaceId, Space, data);
 get(_, _UserId, #od_user{}, {eff_space, SpaceId}) ->
-    ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId));
+    {ok, Space} = ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId)),
+    n_space_logic_plugin:get(?ROOT, SpaceId, Space, data);
 
 get(_, _UserId, #od_user{eff_providers = Providers}, eff_providers) ->
     {ok, Providers};
 get(_, _UserId, #od_user{}, {eff_provider, ProviderId}) ->
-    ?throw_on_failure(n_provider_logic_plugin:get_entity(ProviderId));
+    {ok, Provider} = ?throw_on_failure(n_provider_logic_plugin:get_entity(ProviderId)),
+    n_provider_logic_plugin:get(?ROOT, ProviderId, Provider, data);
 
 get(_, _UserId, #od_user{handle_services = HandleServices}, handle_services) ->
     {ok, HandleServices};
 get(_, _UserId, #od_user{eff_handle_services = HandleServices}, eff_handle_services) ->
     {ok, HandleServices};
 get(_, _UserId, #od_user{}, {handle_service, HServiceId}) ->
-    ?throw_on_failure(n_handle_service_logic_plugin:get_entity(HServiceId));
+    {ok, HService} = ?throw_on_failure(n_handle_service_logic_plugin:get_entity(HServiceId)),
+    n_handle_service_logic_plugin:get(?ROOT, HServiceId, HService, data);
 get(_, _UserId, #od_user{}, {eff_handle_service, HServiceId}) ->
-    ?throw_on_failure(n_handle_service_logic_plugin:get_entity(HServiceId));
+    {ok, HService} = ?throw_on_failure(n_handle_service_logic_plugin:get_entity(HServiceId)),
+    n_handle_service_logic_plugin:get(?ROOT, HServiceId, HService, data);
 
 get(_, _UserId, #od_user{handles = Handles}, handles) ->
     {ok, Handles};
 get(_, _UserId, #od_user{eff_handles = Handles}, eff_handles) ->
     {ok, Handles};
 get(_, _UserId, #od_user{}, {handle, HandleId}) ->
-    ?throw_on_failure(n_handle_logic_plugin:get_entity(HandleId));
+    {ok, Handle} = ?throw_on_failure(n_handle_logic_plugin:get_entity(HandleId)),
+    n_handle_logic_plugin:get(?ROOT, HandleId, Handle, data);
 get(_, _UserId, #od_user{}, {eff_handle, HandleId}) ->
-    ?throw_on_failure(n_handle_logic_plugin:get_entity(HandleId)).
+    {ok, Handle} = ?throw_on_failure(n_handle_logic_plugin:get_entity(HandleId)),
+    n_handle_logic_plugin:get(?ROOT, HandleId, Handle, data).
 
 
-update(UserId, entity, Data) when is_binary(UserId) ->
+update(UserId, entity, Data) ->
     UserUpdateFun = fun(#od_user{name = OldName, alias = OldAlias} = User) ->
         {ok, User#od_user{
             name = maps:get(<<"name">>, Data, OldName),
@@ -210,6 +223,7 @@ update(UserId, entity, Data) when is_binary(UserId) ->
                 end
             end)
     end;
+
 update(UserId, oz_privileges, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
@@ -256,25 +270,35 @@ delete(UserId, default_provider) ->
     {ok, _} = od_user:update(UserId, #{default_provider => undefined}),
     ok;
 
-delete(UserId, {groups, GroupId}) ->
-    entity_graph:remove_relation(od_user, UserId, od_group, GroupId);
+delete(UserId, {group, GroupId}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_group, GroupId);
 
-delete(UserId, {spaces, SpaceId}) ->
-    entity_graph:remove_relation(od_user, UserId, od_space, SpaceId);
+delete(UserId, {space, SpaceId}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_space, SpaceId);
 
-delete(UserId, {handle_services, HServiceId}) ->
-    entity_graph:remove_relation(od_user, UserId, od_handle_service, HServiceId);
+delete(UserId, {handle_service, HServiceId}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_handle_service, HServiceId);
 
-delete(UserId, {handles, HandleId}) ->
-    entity_graph:remove_relation(od_user, UserId, od_handle, HandleId).
+delete(UserId, {handle, HandleId}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_handle, HandleId).
 
 
 exists(undefined, _) ->
     true;
+
 exists(_UserId, {client_token, TokenId}) ->
     {internal, fun(#od_user{client_tokens = Tokens}) ->
         lists:member(TokenId, Tokens)
     end};
+
 exists(_UserId, default_space) ->
     {internal, fun(#od_user{default_space = DefaultSpace}) ->
         undefined =/= DefaultSpace
@@ -283,10 +307,12 @@ exists(_UserId, {space_alias, SpaceId}) ->
     {internal, fun(#od_user{space_aliases = Aliases}) ->
         maps:is_key(SpaceId, Aliases)
     end};
+
 exists(_UserId, default_provider) ->
     {internal, fun(#od_user{default_provider = DefaultProvider}) ->
         undefined =/= DefaultProvider
     end};
+
 exists(_UserId, {group, GroupId}) ->
     {internal, fun(#od_user{groups = Groups}) ->
         lists:member(GroupId, Groups)
@@ -295,6 +321,7 @@ exists(_UserId, {eff_group, GroupId}) ->
     {internal, fun(#od_user{eff_groups = Groups}) ->
         maps:is_key(GroupId, Groups)
     end};
+
 exists(_UserId, {space, SpaceId}) ->
     {internal, fun(#od_user{spaces = Spaces}) ->
         lists:member(SpaceId, Spaces)
@@ -303,10 +330,12 @@ exists(_UserId, {eff_space, SpaceId}) ->
     {internal, fun(#od_user{eff_spaces = Spaces}) ->
         maps:is_key(SpaceId, Spaces)
     end};
+
 exists(_UserId, {eff_provider, ProviderId}) ->
     {internal, fun(#od_user{eff_providers = Providers}) ->
         maps:is_key(ProviderId, Providers)
     end};
+
 exists(_UserId, {handle_service, HServiceId}) ->
     {internal, fun(#od_user{handle_services = HServices}) ->
         lists:member(HServiceId, HServices)
@@ -315,6 +344,7 @@ exists(_UserId, {eff_handle_service, HServiceId}) ->
     {internal, fun(#od_user{eff_handle_services = HServices}) ->
         maps:is_key(HServiceId, HServices)
     end};
+
 exists(_UserId, {handle, HandleId}) ->
     {internal, fun(#od_user{handles = Handles}) ->
         lists:member(HandleId, Handles)
@@ -323,6 +353,7 @@ exists(_UserId, {eff_handle, HandleId}) ->
     {internal, fun(#od_user{eff_handles = Handles}) ->
         maps:is_key(HandleId, Handles)
     end};
+
 exists(_UserId, _) ->
     {internal, fun(#od_user{}) ->
         % If the user with UserId can be found, it exists. If not, the
@@ -335,13 +366,13 @@ authorize(create, _UserId, authorize, _Client) ->
     true;
 
 % User trying to access its own oz_privileges
-authorize(get, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
+authorize(get, UserId, oz_privileges, ?USER(UserId)) ->
     auth_self_by_oz_privilege(?OZ_VIEW_PRIVILEGES);
-authorize(get, UserId, eff_oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
+authorize(get, UserId, eff_oz_privileges, ?USER(UserId)) ->
     auth_self_by_oz_privilege(?OZ_VIEW_PRIVILEGES);
-authorize(update, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
+authorize(update, UserId, oz_privileges, ?USER(UserId)) ->
     auth_self_by_oz_privilege(?OZ_SET_PRIVILEGES);
-authorize(delete, UserId, oz_privileges, ?USER(UserId)) when is_binary(UserId) ->
+authorize(delete, UserId, oz_privileges, ?USER(UserId)) ->
     auth_self_by_oz_privilege(?OZ_SET_PRIVILEGES);
 
 % User trying to access someone else's oz_privileges
@@ -356,7 +387,7 @@ authorize(delete, _UserId, oz_privileges, ?USER(UserId)) ->
 
 % User can create/get/update/delete any information about himself
 % (except oz_privileges)
-authorize(_, UserId, _, ?USER(UserId)) when is_binary(UserId) ->
+authorize(_, UserId, _, ?USER(UserId)) ->
     true;
 
 % Other admin endpoints

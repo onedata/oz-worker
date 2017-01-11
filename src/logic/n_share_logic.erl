@@ -19,25 +19,27 @@
 
 -define(PLUGIN, n_share_logic_plugin).
 
--export([create/5, create/2]).
-
 -export([
-    add_user/3,
-    add_group/3
+    create/5, create/2
 ]).
-
 -export([
     get/2,
+    get_data/2,
     list/1
 ]).
-
--export([update/3]).
-
--export([delete/2]).
-
--export([exists/1]).
-
--export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
+-export([
+    update/3
+]).
+-export([
+    delete/2
+]).
+-export([
+    exists/1
+]).
+-export([
+    share_id_to_public_url/1,
+    share_id_to_redirect_url/1
+]).
 
 
 
@@ -52,26 +54,16 @@ create(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
-add_user(Client, ShareId, UserId) when is_binary(UserId) ->
-    add_user(Client, ShareId, #{<<"userId">> => UserId});
-add_user(Client, ShareId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, ShareId, users, Data).
-
-
-add_group(Client, ShareId, GroupId) when is_binary(GroupId) ->
-    add_group(Client, ShareId, #{<<"groupId">> => GroupId});
-add_group(Client, ShareId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, ShareId, groups, Data).
-
-
 get(Client, ShareId) ->
     n_entity_logic:get(Client, ?PLUGIN, entity, ShareId).
 
 
+get_data(Client, ShareId) ->
+    n_entity_logic:get(Client, ?PLUGIN, data, ShareId).
+
+
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
-
-
 
 
 update(Client, ShareId, Data) ->

@@ -44,16 +44,29 @@ get_relations(Config, ListApiTestSpec, GetApiTestSpecGenerator, CreateRelationFu
         #api_test_spec{
             rest_spec = RestSpec, logic_spec = LogicSpec
         } = ListApiTestSpec,
-        RestExpBody = maps:map(fun(_Key, _OldIds) ->
-            Ids
-        end, RestSpec#rest_spec.expected_body),
+        NewRestSpec = case RestSpec of
+            undefined ->
+                undefined;
+            _ ->
+                RestExpBody = maps:map(
+                    fun(_Key, _OldIds) ->
+                        Ids
+                    end, RestSpec#rest_spec.expected_body),
+                RestSpec#rest_spec{
+                    expected_body = RestExpBody
+                }
+        end,
+        NewLogicSpec = case LogicSpec of
+            undefined ->
+                undefined;
+            _ ->
+                LogicSpec#logic_spec{
+                    expected_result = ?OK_LIST(Ids)
+                }
+        end,
         ListApiTestSpec#api_test_spec{
-            rest_spec = RestSpec#rest_spec{
-                expected_body = RestExpBody
-            },
-            logic_spec = LogicSpec#logic_spec{
-                expected_result = ?OK_LIST(Ids)
-            }
+            rest_spec = NewRestSpec,
+            logic_spec = NewLogicSpec
         }
     end,
     % Start with empty list of relations
@@ -99,13 +112,25 @@ get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, InitialPrivs, Constan
         #api_test_spec{
             rest_spec = RestSpec, logic_spec = LogicSpec
         } = ApiTestSpec,
+        NewRestSpec = case RestSpec of
+            undefined ->
+                undefined;
+            _ ->
+                RestSpec#rest_spec{
+                    expected_body = #{<<"privileges">> => PrivilegesBin}
+                }
+        end,
+        NewLogicSpec = case LogicSpec of
+            undefined ->
+                undefined;
+            _ ->
+                LogicSpec#logic_spec{
+                    expected_result = ?OK_LIST(PrivilegesAtoms)
+                }
+        end,
         ApiTestSpec#api_test_spec{
-            rest_spec = RestSpec#rest_spec{
-                expected_body = #{<<"privileges">> => PrivilegesBin}
-            },
-            logic_spec = LogicSpec#logic_spec{
-                expected_result = ?OK_LIST(PrivilegesAtoms)
-            }
+            rest_spec = NewRestSpec,
+            logic_spec = NewLogicSpec
         }
     end,
     % Check if endpoint returns InitialPrivileges as expected.

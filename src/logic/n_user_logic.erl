@@ -53,15 +53,21 @@
 -export([
     join_group/3,
     join_space/3,
+
     get_groups/2, get_eff_groups/2,
     get_group/3, get_eff_group/3,
+
     get_spaces/2, get_eff_spaces/2,
     get_space/3, get_eff_space/3,
+
     get_eff_providers/2, get_eff_provider/3,
+
     get_handle_services/2, get_eff_handle_services/2,
     get_handle_service/3, get_eff_handle_service/3,
+
     get_handles/2, get_eff_handles/2,
     get_handle/3, get_eff_handle/3,
+
     leave_group/3,
     leave_space/3,
     leave_handle_service/3,

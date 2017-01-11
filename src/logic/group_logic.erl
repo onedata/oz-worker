@@ -19,13 +19,20 @@
 %% API
 -export([exists/1, has_user/2, has_effective_user/2, has_effective_privilege/3,
     has_nested_group/2, has_effective_group/2, can_view_public_data/2]).
+
 -export([create/3, modify/2, add_user/2, add_group/2, join/2, join_group/2,
     set_privileges/3]).
+
 -export([get_data/1, get_public_data/1, get_users/1, get_effective_users/1,
+
     get_effective_children/1, get_spaces/1, get_providers/1,
+
     get_user/2, get_privileges/2, get_effective_privileges/2,
+
     get_nested_groups/1, get_nested_group/2, get_nested_group_privileges/2,
+
     set_nested_group_privileges/3, get_parent_groups/1, get_parent_group/2,
+
     get_effective_user/2]).
 -export([remove/1, remove_user/2, cleanup/1, remove_nested_group/2]).
 -export([create_predefined_groups/0]).

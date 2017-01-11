@@ -74,7 +74,7 @@ get(?USER, _HServiceId, #od_handle_service{users = Users}, users) ->
 
 
 
-update(HServiceId, entity, Data) when is_binary(HServiceId) ->
+update(HServiceId, entity, Data) ->
     {ok, _} = od_handle_service:update(HServiceId, fun(HService) ->
         % TODO czy cos sie da update?
         {ok, HService#od_handle_service{}}
@@ -82,25 +82,25 @@ update(HServiceId, entity, Data) when is_binary(HServiceId) ->
     ok.
 
 
-delete(HServiceId, entity) when is_binary(HServiceId) ->
+delete(HServiceId, entity) ->
     entity_graph:delete_with_relations(od_handle_service, HServiceId).
 
 
 exists(undefined, _) ->
     true;
-exists(HServiceId, entity) when is_binary(HServiceId) ->
+exists(HServiceId, entity) ->
     {internal, fun(#od_handle_service{}) ->
         % If the handle service with HServiceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists(HServiceId, users) when is_binary(HServiceId) ->
+exists(HServiceId, users) ->
     {internal, fun(#od_handle_service{}) ->
         % If the handle service with HServiceId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end};
-exists(HServiceId, groups) when is_binary(HServiceId) ->
+exists(HServiceId, groups) ->
     {internal, fun(#od_handle_service{}) ->
         % If the handle service with HServiceId can be found, it exists. If not, the
         % verification will fail before this function is called.
