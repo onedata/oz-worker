@@ -188,54 +188,76 @@ exists(_ProviderId, _) ->
 
 authorize(create, undefined, check_my_ports, _) ->
     true;
+
 authorize(create, undefined, entity, _) ->
     true;
+
 authorize(create, undefined, entity_dev, _) ->
     true;
+
 authorize(create, ProvId, support, ?PROVIDER(ProvId)) ->
     true;
 
+
 authorize(get, undefined, {check_my_ip, _}, _) ->
     true;
-authorize(get, undefined, list, ?USER(UserId)) ->
+
+authorize(get, _ProvId, entity, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
+
 authorize(get, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;
+
 authorize(get, _ProvId, data, ?PROVIDER) ->
     % Any provider can get data about other providers
     true;
+
 authorize(get, _ProvId, data, ?USER(UserId)) -> [
     auth_by_membership(UserId),
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST)
 ];
-authorize(get, _ProvId, entity, ?USER(UserId)) ->
+
+authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
+
 authorize(get, _ProvId, eff_users, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
+
 authorize(get, _ProvId, {eff_user, _}, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
+
 authorize(get, _ProvId, eff_groups, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
+
 authorize(get, _ProvId, {eff_group, _}, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
+
 authorize(get, ProvId, spaces, ?PROVIDER(ProvId)) ->
     true;
+
 authorize(get, _ProvId, spaces, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
+
 authorize(get, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true;
+
 authorize(get, _ProvId, {space, _}, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
 
+
 authorize(update, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;
+
 authorize(update, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true;
 
+
 authorize(delete, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;
+
 authorize(delete, _ProvId, entity, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_DELETE);
+
 authorize(delete, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true.
 

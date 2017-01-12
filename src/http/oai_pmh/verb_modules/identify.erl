@@ -13,6 +13,7 @@
 
 -include("http/handlers/oai.hrl").
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -121,12 +122,12 @@ get_response(<<"description">>, _Args) -> [].
 %%%-------------------------------------------------------------------
 -spec get_earliest_datestamp() -> erlang:datetime().
 get_earliest_datestamp() ->
-    {ok, Ids} = handle_logic:list(),
+    {ok, Ids} = oai_utils:list_handles(),
     Datestamps = lists:flatmap(fun(Id) ->
-        {ok, Metadata} = handle_logic:get_metadata(Id),
-        case proplists:get_value(timestamp, Metadata) of
+        #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
+        case Timestamp of
             undefined -> [];
-            Timestamp -> [Timestamp]
+            _ -> [Timestamp]
         end
     end, Ids),
     case Datestamps of

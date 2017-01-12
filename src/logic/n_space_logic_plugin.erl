@@ -96,12 +96,42 @@ get(_, undefined, undefined, list) ->
     {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
 get(_, _SpaceId, #od_space{name = Name}, data) ->
     {ok, #{<<"name">> => Name}};
+
 get(_, _SpaceId, #od_space{users = Users}, users) ->
-    {ok, Users}.
+    {ok, Users};
+get(_, _SpaceId, #od_space{eff_users = Users}, eff_users) ->
+    {ok, Users};
+get(_, _SpaceId, #od_space{}, {user, UserId}) ->
+    {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
+    n_user_logic_plugin:get(?ROOT, UserId, User, data);
+get(_, _SpaceId, #od_space{}, {eff_user, UserId}) ->
+    {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
+    n_user_logic_plugin:get(?ROOT, UserId, User, data);
+get(_, _SpaceId, #od_space{users = Users}, {user_privileges, UserId}) ->
+    {ok, maps:get(UserId, Users)};
+get(_, _SpaceId, #od_space{eff_users = Users}, {eff_user_privileges, UserId}) ->
+    {Privileges, _} = maps:get(UserId, Users),
+    {ok, Privileges};
+
+get(_, _SpaceId, #od_space{groups = Groups}, groups) ->
+    {ok, Groups};
+get(_, _SpaceId, #od_space{eff_groups = Groups}, eff_groups) ->
+    {ok, Groups};
+get(_, _SpaceId, #od_space{}, {group, GroupId}) ->
+    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
+    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
+get(_, _SpaceId, #od_space{}, {eff_group, GroupId}) ->
+    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
+    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
+get(_, _SpaceId, #od_space{groups = Groups}, {group_privileges, GroupId}) ->
+    {ok, maps:get(GroupId, Groups)};
+get(_, _SpaceId, #od_space{eff_groups = Groups}, {eff_group_privileges, GroupId}) ->
+    {Privileges, _} = maps:get(GroupId, Groups),
+    {ok, Privileges}.
 
 
 
-update(SpaceId, entity, #{<<"name">> => NewName}) ->
+update(SpaceId, entity, #{<<"name">> := NewName}) ->
     {ok, _} = od_space:update(SpaceId, #{name => NewName}),
     ok;
 
@@ -133,9 +163,9 @@ delete(SpaceId, {user, UserId}) ->
         od_space, SpaceId
     );
 
-delete(SpaceId, {group, ChildGroupId}) ->
+delete(SpaceId, {group, GroupId}) ->
     entity_graph:remove_relation(
-        od_group, ChildGroupId,
+        od_group, GroupId,
         od_space, SpaceId
     ).
 
@@ -143,46 +173,46 @@ delete(SpaceId, {group, ChildGroupId}) ->
 exists(undefined, _) ->
     true;
 
-exists(_GroupId, {user, UserId}) ->
+exists(_SpaceId, {user, UserId}) ->
     {internal, fun(#od_space{users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_GroupId, {eff_user, UserId}) ->
+exists(_SpaceId, {eff_user, UserId}) ->
     {internal, fun(#od_space{eff_users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_GroupId, {user_privileges, UserId}) ->
+exists(_SpaceId, {user_privileges, UserId}) ->
     {internal, fun(#od_space{users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_GroupId, {eff_user_privileges, UserId}) ->
+exists(_SpaceId, {eff_user_privileges, UserId}) ->
     {internal, fun(#od_space{eff_users = Users}) ->
         maps:is_key(UserId, Users)
     end};
 
-exists(_GroupId, {group, UserId}) ->
+exists(_SpaceId, {group, UserId}) ->
     {internal, fun(#od_space{groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_GroupId, {eff_group, UserId}) ->
+exists(_SpaceId, {eff_group, UserId}) ->
     {internal, fun(#od_space{eff_groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_GroupId, {group_privileges, UserId}) ->
+exists(_SpaceId, {group_privileges, UserId}) ->
     {internal, fun(#od_space{groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_GroupId, {eff_group_privileges, UserId}) ->
+exists(_SpaceId, {eff_group_privileges, UserId}) ->
     {internal, fun(#od_space{eff_groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
 
-exists(_UserId, {share, ProviderId}) ->
+exists(_SpaceId, {share, ProviderId}) ->
     {internal, fun(#od_space{shares = Providers}) ->
         maps:is_key(ProviderId, Providers)
     end};
 
-exists(_UserId, {provider, ProviderId}) ->
+exists(_SpaceId, {provider, ProviderId}) ->
     {internal, fun(#od_space{providers = Providers}) ->
         maps:is_key(ProviderId, Providers)
     end};
@@ -262,7 +292,7 @@ authorize(delete, _SpaceId, {user, _UserId}, ?USER(UserId)) -> [
     auth_by_oz_privilege(UserId, ?OZ_SPACES_REMOVE_MEMBERS)
 ];
 
-authorize(delete, _SpaceId, {group, _UserId}, ?USER(UserId)) -> [
+authorize(delete, _SpaceId, {group, _GroupId}, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?SPACE_REMOVE_GROUP),
     auth_by_oz_privilege(UserId, ?OZ_SPACES_REMOVE_MEMBERS)
 ];
