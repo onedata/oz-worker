@@ -17,6 +17,7 @@
 -include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
@@ -34,7 +35,7 @@ get_entity(HServiceId) ->
 
 
 
-create(?USER(UserId), _, entity, Data) ->
+create(Client, _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
     ProxyEndpoint = maps:get(<<"proxyEndpoint">>, Data),
     ServiceProperties = maps:get(<<"serviceProperties">>, Data),
@@ -44,11 +45,16 @@ create(?USER(UserId), _, entity, Data) ->
         service_properties = ServiceProperties
     }},
     {ok, HServiceId} = od_handle_service:create(HandleService),
-    entity_graph:add_relation(
-        od_user, UserId,
-        od_handle_service, HServiceId,
-        privileges:handle_service_admin()
-    ),
+    case Client of
+        ?USER(UserId) ->
+            entity_graph:add_relation(
+                od_user, UserId,
+                od_handle_service, HServiceId,
+                privileges:handle_service_admin()
+            );
+        _ ->
+            ok
+    end,
     {ok, HServiceId};
 create(?USER, HServiceId, users, #{<<"userId">> := UserId}) ->
     entity_graph:add_relation(
@@ -69,40 +75,154 @@ create(?USER, HServiceId, groups, #{<<"groupId">> := GroupId}) ->
 get(_, undefined, undefined, list) ->
     {ok, HServiceDocs} = od_handle_service:list(),
     {ok, [HServiceId || #document{key = HServiceId} <- HServiceDocs]};
-get(?USER, _HServiceId, #od_handle_service{users = Users}, users) ->
-    {ok, Users}.
+
+get(_, _HServiceId, #od_handle_service{} = HService, data) ->
+    #od_handle_service{
+        name = Name, proxy_endpoint = Proxy, service_properties = ServiceProps
+    } = HService,
+    {ok, #{
+        <<"name">> => Name,
+        <<"proxyEndpoint">> => Proxy,
+        <<"serviceProperties">> => ServiceProps
+    }};
+
+get(_, _HServiceId, #od_handle_service{users = Users}, users) ->
+    {ok, Users};
+get(_, _HServiceId, #od_handle_service{eff_users = Users}, eff_users) ->
+    {ok, Users};
+get(_, _HServiceId, #od_handle_service{}, {user, UserId}) ->
+    {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
+    n_user_logic_plugin:get(?ROOT, UserId, User, data);
+get(_, _HServiceId, #od_handle_service{}, {eff_user, UserId}) ->
+    {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
+    n_user_logic_plugin:get(?ROOT, UserId, User, data);
+get(_, _HServiceId, #od_handle_service{users = Users}, {user_privileges, UserId}) ->
+    {ok, maps:get(UserId, Users)};
+get(_, _HServiceId, #od_handle_service{eff_users = Users}, {eff_user_privileges, UserId}) ->
+    {Privileges, _} = maps:get(UserId, Users),
+    {ok, Privileges};
+
+get(_, _HServiceId, #od_handle_service{groups = Groups}, groups) ->
+    {ok, Groups};
+get(_, _HServiceId, #od_handle_service{eff_groups = Groups}, eff_groups) ->
+    {ok, Groups};
+get(_, _HServiceId, #od_handle_service{}, {group, GroupId}) ->
+    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
+    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
+get(_, _HServiceId, #od_handle_service{}, {eff_group, GroupId}) ->
+    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
+    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
+get(_, _HServiceId, #od_handle_service{groups = Groups}, {group_privileges, GroupId}) ->
+    {ok, maps:get(GroupId, Groups)};
+get(_, _HServiceId, #od_handle_service{eff_groups = Groups}, {eff_group_privileges, GroupId}) ->
+    {Privileges, _} = maps:get(GroupId, Groups),
+    {ok, Privileges};
+
+get(_, _HServiceId, #od_handle_service{handles = Handles}, handles) ->
+    {ok, Handles};
+get(_, _HServiceId, #od_handle_service{}, {handle, HandleId}) ->
+    {ok, Handle} = ?throw_on_failure(n_handle_logic_plugin:get_entity(HandleId)),
+    n_handle_logic_plugin:get(?ROOT, HandleId, Handle, data).
 
 
 
 update(HServiceId, entity, Data) ->
     {ok, _} = od_handle_service:update(HServiceId, fun(HService) ->
-        % TODO czy cos sie da update?
-        {ok, HService#od_handle_service{}}
+        #od_handle_service{
+            name = OldName, proxy_endpoint = OldProxy,
+            service_properties = OldServiceProps
+        } = HService,
+        NewName = maps:get(<<"name">>, Data, OldName),
+        NewProxy = maps:get(<<"proxyEndpoint">>, Data, OldProxy),
+        NewServiceProps = maps:get(<<"serviceProperties">>, Data, OldServiceProps),
+        {ok, HService#od_handle_service{
+            name = NewName, proxy_endpoint = NewProxy,
+            service_properties = NewServiceProps
+        }}
     end),
-    ok.
+    ok;
+
+update(HServiceId, {user, UserId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_user, UserId,
+        od_handle_service, HServiceId,
+        {Operation, Privileges}
+    );
+
+update(HServiceId, {group, GroupId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_group, GroupId,
+        od_handle_service, HServiceId,
+        {Operation, Privileges}
+    ).
 
 
 delete(HServiceId, entity) ->
-    entity_graph:delete_with_relations(od_handle_service, HServiceId).
+    entity_graph:delete_with_relations(od_handle_service, HServiceId);
+
+delete(HServiceId, {user, UserId}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_handle_service, HServiceId
+    );
+
+delete(HServiceId, {group, GroupId}) ->
+    entity_graph:remove_relation(
+        od_group, GroupId,
+        od_handle_service, HServiceId
+    ).
 
 
 exists(undefined, _) ->
     true;
-exists(HServiceId, entity) ->
-    {internal, fun(#od_handle_service{}) ->
-        % If the handle service with HServiceId can be found, it exists. If not, the
-        % verification will fail before this function is called.
-        true
+
+exists(_HServiceId, {user, UserId}) ->
+    {internal, fun(#od_handle_service{users = Users}) ->
+        maps:is_key(UserId, Users)
     end};
-exists(HServiceId, users) ->
-    {internal, fun(#od_handle_service{}) ->
-        % If the handle service with HServiceId can be found, it exists. If not, the
-        % verification will fail before this function is called.
-        true
+exists(_HServiceId, {eff_user, UserId}) ->
+    {internal, fun(#od_handle_service{eff_users = Users}) ->
+        maps:is_key(UserId, Users)
     end};
-exists(HServiceId, groups) ->
+exists(_HServiceId, {user_privileges, UserId}) ->
+    {internal, fun(#od_handle_service{users = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_HServiceId, {eff_user_privileges, UserId}) ->
+    {internal, fun(#od_handle_service{eff_users = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+
+exists(_HServiceId, {group, UserId}) ->
+    {internal, fun(#od_handle_service{groups = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_HServiceId, {eff_group, UserId}) ->
+    {internal, fun(#od_handle_service{eff_groups = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_HServiceId, {group_privileges, UserId}) ->
+    {internal, fun(#od_handle_service{groups = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+exists(_HServiceId, {eff_group_privileges, UserId}) ->
+    {internal, fun(#od_handle_service{eff_groups = Users}) ->
+        maps:is_key(UserId, Users)
+    end};
+
+exists(_HServiceId, {handle, HandleId}) ->
+    {internal, fun(#od_handle_service{handles = Handles}) ->
+        maps:is_key(HandleId, Handles)
+    end};
+
+exists(_HServiceId, _) ->
+    % No matter the resource, return true if it belongs to a handle
     {internal, fun(#od_handle_service{}) ->
-        % If the handle service with HServiceId can be found, it exists. If not, the
+        % If the handle with HandleId can be found, it exists. If not, the
         % verification will fail before this function is called.
         true
     end}.
@@ -110,21 +230,48 @@ exists(HServiceId, groups) ->
 
 authorize(create, undefined, entity, ?USER) ->
     true;
+
 authorize(create, _HServiceId, users, ?USER(UserId)) ->
-    auth_by_privilege(UserId, modify_handle_service);
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
+
 authorize(create, _HServiceId, groups, ?USER(UserId)) ->
-    auth_by_privilege(UserId, modify_handle_service);
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 
-authorize(get, _HServiceId, users, ?USER(UserId)) ->
-    auth_by_privilege(UserId, view_handle_service);
+
 authorize(get, _HServiceId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, view_handle_service);
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_VIEW);
 
-authorize(update, _HServiceId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, modify_handle_service);
+authorize(get, _HServiceId, data, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_VIEW);
 
-authorize(delete, _HServiceId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, delete_handle_service).
+authorize(get, undefined, list, ?USER(UserId)) ->
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_LIST);
+
+authorize(get, _HServiceId, _, ?USER(UserId)) ->
+    % All other resources can be accessed with view privileges
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_VIEW);
+
+
+authorize(update, _HandleId, entity, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
+
+authorize(update, _HandleId, {user, _UserId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
+
+authorize(update, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
+
+
+authorize(delete, _HandleId, entity, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_DELETE);
+
+authorize(delete, _HandleId, {user, _UserId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
+
+authorize(delete, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE).
+
+
 
 
 validate(create, entity) -> #{

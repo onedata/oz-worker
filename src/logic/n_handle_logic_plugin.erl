@@ -34,7 +34,7 @@ get_entity(HandleId) ->
     end.
 
 
-create(?USER(UserId), _, entity, Data) ->
+create(Client, _, entity, Data) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Data),
     ResourceType = maps:get(<<"resourceType">>, Data),
     ResourceId = maps:get(<<"resourceId">>, Data),
@@ -51,10 +51,20 @@ create(?USER(UserId), _, entity, Data) ->
     }},
     {ok, HandleId} = od_handle:create(Handle),
     entity_graph:add_relation(
-        od_user, UserId,
         od_handle, HandleId,
+        od_handle_service, HandleServiceId,
         privileges:handle_admin()
     ),
+    case Client of
+        ?USER(UserId) ->
+            entity_graph:add_relation(
+                od_user, UserId,
+                od_handle, HandleId,
+                privileges:handle_admin()
+            );
+        _ ->
+            ok
+    end,
     case ResourceType of
         <<"Share">> ->
             entity_graph:add_relation(
@@ -243,10 +253,10 @@ authorize(create, _HandleId, groups, ?USER(UserId)) ->
 
 
 authorize(get, _HandleId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?SPACE_VIEW);
+    auth_by_privilege(UserId, ?HANDLE_VIEW);
 
 authorize(get, _HandleId, data, ?USER(UserId)) ->
-    auth_by_membership(UserId);
+    auth_by_privilege(UserId, ?HANDLE_VIEW);
 
 authorize(get, _HandleId, public_data, _Client) ->
     % Public data is available to whomever has handle id.
@@ -273,13 +283,11 @@ authorize(update, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
 authorize(delete, _HandleId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_DELETE);
 
-authorize(delete, _HandleId, {user, _UserId}, ?USER(UserId)) -> [
-    auth_by_privilege(UserId, ?HANDLE_UPDATE)
-];
+authorize(delete, _HandleId, {user, _UserId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_UPDATE);
 
-authorize(delete, _HandleId, {group, _GroupId}, ?USER(UserId)) -> [
-    auth_by_privilege(UserId, ?HANDLE_UPDATE)
-].
+authorize(delete, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_UPDATE).
 
 
 validate(create, entity) -> #{
@@ -323,10 +331,4 @@ entity_to_string(HandleId) ->
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_handle{} = Handle) ->
         n_handle_logic:has_eff_privilege(Handle, UserId, Privilege)
-    end}.
-
-
-auth_by_membership(UserId) ->
-    {internal, fun(#od_handle{eff_users = EffUsers}) ->
-        maps:is_key(UserId, EffUsers)
     end}.

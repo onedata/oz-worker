@@ -55,9 +55,9 @@
 
 
 
-create(Client, HandleServiceId, ResourceType, ResourceId, Metadata) ->
+create(Client, HServiceId, ResourceType, ResourceId, Metadata) ->
     create(Client, #{
-        <<"handleServiceId">> => HandleServiceId,
+        <<"handleServiceId">> => HServiceId,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata
@@ -69,19 +69,22 @@ create(Client, Data) ->
 get(Client, HandleId) ->
     n_entity_logic:get(Client, ?PLUGIN, entity, HandleId).
 
-get_data(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, data).
+
+get_data(Client, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, data).
 
 
-get_public_data(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, public_data).
+get_public_data(Client, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, public_data).
 
 
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
+
 update(Client, HandleId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, HandleId, entity, Data).
+
 
 delete(Client, HandleId) ->
     n_entity_logic:delete(Client, ?PLUGIN, HandleId, entity).
@@ -113,60 +116,60 @@ add_group(Client, HandleId, Data) ->
     ).
 
 
-get_users(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, users).
+get_users(Client, HandleId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, users).
 
 
-get_eff_users(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_users).
+get_eff_users(Client, HandleId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, eff_users).
 
 
-get_user(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {user, GroupId}).
+get_user(Client, HandleId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, {user, UserId}).
 
 
-get_eff_user(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_user, GroupId}).
+get_eff_user(Client, HandleId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, {eff_user, UserId}).
 
 
-get_user_privileges(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {user_privileges, GroupId}).
+get_user_privileges(Client, HandleId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, {user_privileges, UserId}).
 
 
-get_eff_user_privileges(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_user_privileges, GroupId}).
+get_eff_user_privileges(Client, HandleId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, {eff_user_privileges, UserId}).
 
 
-get_groups(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, groups).
+get_groups(Client, HandleId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, groups).
 
 
-get_eff_groups(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_groups).
+get_eff_groups(Client, HandleId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, eff_groups).
 
 
-get_group(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {group, GroupId}).
+get_group(Client, HandleId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, {group, GroupId}).
 
 
-get_eff_group(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_group, GroupId}).
+get_eff_group(Client, HandleId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, {eff_group, GroupId}).
 
 
-get_group_privileges(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {group_privileges, GroupId}).
+get_group_privileges(Client, HandleId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, {group_privileges, GroupId}).
 
 
-get_eff_group_privileges(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_group_privileges, GroupId}).
+get_eff_group_privileges(Client, HandleId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HandleId, {eff_group_privileges, GroupId}).
 
 
-remove_user(Client, SpaceId, UserId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {user, UserId}).
+remove_user(Client, HandleId, UserId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, HandleId, {user, UserId}).
 
 
-remove_group(Client, SpaceId, GroupId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {group, GroupId}).
+remove_group(Client, HandleId, GroupId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, HandleId, {group, GroupId}).
 
 
 %%--------------------------------------------------------------------

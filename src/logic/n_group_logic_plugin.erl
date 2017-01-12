@@ -53,7 +53,7 @@ create(Client, _, entity, Data) ->
     end,
     {ok, GroupId};
 
-create(_Client, GroupId, join_group, #{<<"token">> => Macaroon}) ->
+create(_Client, GroupId, join_group, #{<<"token">> := Macaroon}) ->
     {ok, {od_group, ParentGroupId}} = token_logic:consume(Macaroon),
     entity_graph:add_relation(
         od_group, GroupId,
@@ -62,7 +62,7 @@ create(_Client, GroupId, join_group, #{<<"token">> => Macaroon}) ->
     ),
     {ok, ParentGroupId};
 
-create(_Client, GroupId, join_space, #{<<"token">> => Macaroon}) ->
+create(_Client, GroupId, join_space, #{<<"token">> := Macaroon}) ->
     {ok, {od_space, SpaceId}} = token_logic:consume(Macaroon),
     entity_graph:add_relation(
         od_group, GroupId,

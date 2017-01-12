@@ -257,8 +257,8 @@ get_eff_providers(Client, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, UserId, eff_providers).
 
 
-get_eff_provider(Client, UserId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_provider, SpaceId}).
+get_eff_provider(Client, UserId, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_provider, ProviderId}).
 
 
 get_handle_services(Client, UserId) ->
@@ -269,12 +269,12 @@ get_eff_handle_services(Client, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, UserId, eff_handle_services).
 
 
-get_handle_service(Client, UserId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {handle_service, SpaceId}).
+get_handle_service(Client, UserId, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {handle_service, HServiceId}).
 
 
-get_eff_handle_service(Client, UserId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_handle_service, SpaceId}).
+get_eff_handle_service(Client, UserId, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_handle_service, HServiceId}).
 
 
 get_handles(Client, UserId) ->
@@ -285,12 +285,12 @@ get_eff_handles(Client, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, UserId, eff_handles).
 
 
-get_handle(Client, UserId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {handle, SpaceId}).
+get_handle(Client, UserId, HandleId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {handle, HandleId}).
 
 
-get_eff_handle(Client, UserId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_handle, SpaceId}).
+get_eff_handle(Client, UserId, HandleId) ->
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_handle, HandleId}).
 
 
 leave_group(Client, UserId, GroupId) ->

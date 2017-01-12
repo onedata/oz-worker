@@ -74,7 +74,7 @@ get(_, _ShareId, #od_share{} = Share, data) ->
     }}.
 
 
-update(ShareId, entity, #{<<"name">> => NewName}) ->
+update(ShareId, entity, #{<<"name">> := NewName}) ->
     {ok, _} = od_share:update(ShareId, #{name => NewName}),
     ok.
 

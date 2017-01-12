@@ -132,68 +132,68 @@ add_group(Client, SpaceId, Data) ->
     ).
 
 
-get_users(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, users).
+get_users(Client, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, users).
 
 
-get_eff_users(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_users).
+get_eff_users(Client, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, eff_users).
 
 
-get_user(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {user, GroupId}).
+get_user(Client, SpaceId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {user, UserId}).
 
 
-get_eff_user(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_user, GroupId}).
+get_eff_user(Client, SpaceId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_user, UserId}).
 
 
-get_user_privileges(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {user_privileges, GroupId}).
+get_user_privileges(Client, SpaceId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {user_privileges, UserId}).
 
 
-get_eff_user_privileges(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_user_privileges, GroupId}).
+get_eff_user_privileges(Client, SpaceId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_user_privileges, UserId}).
 
 
-get_groups(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, groups).
+get_groups(Client, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, groups).
 
 
-get_eff_groups(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, eff_groups).
+get_eff_groups(Client, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, eff_groups).
 
 
-get_group(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {group, GroupId}).
+get_group(Client, SpaceId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {group, GroupId}).
 
 
-get_eff_group(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_group, GroupId}).
+get_eff_group(Client, SpaceId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_group, GroupId}).
 
 
-get_group_privileges(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {group_privileges, GroupId}).
+get_group_privileges(Client, SpaceId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {group_privileges, GroupId}).
 
 
-get_eff_group_privileges(Client, UserId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {eff_group_privileges, GroupId}).
+get_eff_group_privileges(Client, SpaceId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_group_privileges, GroupId}).
 
 
-get_shares(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, shares).
+get_shares(Client, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, shares).
 
 
-get_share(Client, UserId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {share, SpaceId}).
+get_share(Client, SpaceId, ShareId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {share, ShareId}).
 
 
-get_providers(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, providers).
+get_providers(Client, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, providers).
 
 
-get_provider(Client, UserId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, {provider, SpaceId}).
+get_provider(Client, SpaceId, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {provider, ProviderId}).
 
 
 

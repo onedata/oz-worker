@@ -18,22 +18,37 @@
 
 -define(PLUGIN, n_handle_service_logic_plugin).
 
--export([create/4, create/2]).
-
 -export([
-    add_user/3,
-    add_group/3
+    create/4, create/2
 ]).
-
 -export([
     get/2,
+    get_data/2,
     list/1
 ]).
+-export([
+    update/3
+]).
+-export([
+    delete/2
+]).
+-export([
+    add_user/4, add_user/3,
+    add_group/4, add_group/3,
 
--export([update/3]).
+    get_users/2, get_eff_users/2,
+    get_user/3, get_eff_user/3,
+    get_user_privileges/3, get_eff_user_privileges/3,
 
--export([delete/2]).
+    get_groups/2, get_eff_groups/2,
+    get_group/3, get_eff_group/3,
+    get_group_privileges/3, get_eff_group_privileges/3,
 
+    get_handles/2, get_handle/3,
+
+    remove_user/3,
+    remove_group/3
+]).
 -export([
     exists/1,
     has_eff_privilege/3
@@ -50,39 +65,114 @@ create(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
-add_user(Client, HandleServiceId, UserId) when is_binary(UserId) ->
-    add_user(Client, HandleServiceId, #{<<"userId">> => UserId});
-add_user(Client, HandleServiceId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, HandleServiceId, users, Data).
+get(Client, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, entity, HServiceId).
 
 
-add_group(Client, HandleServiceId, GroupId) when is_binary(GroupId) ->
-    add_group(Client, HandleServiceId, #{<<"groupId">> => GroupId});
-add_group(Client, HandleServiceId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, HandleServiceId, groups, Data).
-
-
-get(Client, HandleServiceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, entity, HandleServiceId).
+get_data(Client, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, data).
 
 
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
-%%add_relation(Client, {HandleServiceId, users}, od_user, UserId) ->
-%%    n_entity_logic:add_relation(
-%%        Client, ?PLUGIN, {HandleServiceId, users}, od_user, UserId
-%%    ).
+update(Client, HServiceId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, HServiceId, entity, Data).
 
 
+delete(Client, HServiceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, HServiceId, entity).
 
 
-update(Client, HandleServiceId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, HandleServiceId, entity, Data).
+add_user(Client, HServiceId, UserId, Privileges) when is_binary(UserId) ->
+    add_user(Client, HServiceId, #{
+        <<"userId">> => UserId,
+        <<"privileges">> => Privileges
+    }).
+add_user(Client, HServiceId, UserId) when is_binary(UserId) ->
+    add_user(Client, HServiceId, #{<<"userId">> => UserId});
+add_user(Client, HServiceId, Data) ->
+    n_entity_logic:create(
+        Client, ?PLUGIN, HServiceId, users, Data
+    ).
 
-delete(Client, HandleServiceId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, HandleServiceId, entity).
+
+add_group(Client, HServiceId, GroupId, Privileges) when is_binary(GroupId) ->
+    add_group(Client, HServiceId, #{
+        <<"groupId">> => GroupId,
+        <<"privileges">> => Privileges
+    }).
+add_group(Client, HServiceId, GroupId) when is_binary(GroupId) ->
+    add_group(Client, HServiceId, #{<<"groupId">> => GroupId});
+add_group(Client, HServiceId, Data) ->
+    n_entity_logic:create(
+        Client, ?PLUGIN, HServiceId, groups, Data
+    ).
+
+
+get_users(Client, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, users).
+
+
+get_eff_users(Client, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, eff_users).
+
+
+get_user(Client, HServiceId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {user, UserId}).
+
+
+get_eff_user(Client, HServiceId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_user, UserId}).
+
+
+get_user_privileges(Client, HServiceId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {user_privileges, UserId}).
+
+
+get_eff_user_privileges(Client, HServiceId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_user_privileges, UserId}).
+
+
+get_groups(Client, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, groups).
+
+
+get_eff_groups(Client, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, eff_groups).
+
+
+get_group(Client, HServiceId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {group, GroupId}).
+
+
+get_eff_group(Client, HServiceId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_group, GroupId}).
+
+
+get_group_privileges(Client, HServiceId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {group_privileges, GroupId}).
+
+
+get_eff_group_privileges(Client, HServiceId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_group_privileges, GroupId}).
+
+
+get_handles(Client, HServiceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, handles).
+
+
+get_handle(Client, HServiceId, HandleId) ->
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {handle, HandleId}).
+
+
+remove_user(Client, HServiceId, UserId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, HServiceId, {user, UserId}).
+
+
+remove_group(Client, HServiceId, GroupId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, HServiceId, {group, GroupId}).
 
 
 has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->
@@ -102,8 +192,8 @@ has_eff_privilege(#od_handle_service{eff_users = UsersPrivileges}, UserId, Privi
 %% Returns whether a handle service exists.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(HandleServiceId :: od_handle_service:id()) -> boolean().
-exists(HandleServiceId) ->
-    od_handle_service:exists(HandleServiceId).
+-spec exists(HServiceId :: od_handle_service:id()) -> boolean().
+exists(HServiceId) ->
+    od_handle_service:exists(HServiceId).
 
 
