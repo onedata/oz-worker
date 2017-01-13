@@ -516,6 +516,10 @@ validate(create, entity) -> #{
 };
 validate(create, create_space) ->
     n_space_logic_plugin:validate(create, entity);
+validate(create, create_handle_service) ->
+    n_handle_service_logic_plugin:validate(create, entity);
+validate(create, create_handle) ->
+    n_handle_logic_plugin:validate(create, entity);
 validate(create, join_group) -> #{
     required => #{
         <<"token">> => {token, ?GROUP_INVITE_GROUP_TOKEN}
