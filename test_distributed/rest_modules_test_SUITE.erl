@@ -1880,15 +1880,18 @@ bad_request_test(Config) ->
 init_per_suite(Config) ->
     application:start(etls),
     hackney:start(),
-    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
-    [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
-    OZ_IP_1 = test_utils:get_docker_ip(Node1),
-    OZ_IP_2 = test_utils:get_docker_ip(Node2),
-    RestPort = get_rest_port(Node1),
-    RestAPIPrefix = get_rest_api_prefix(Node1),
-    RestAddress = str_utils:format("https://~s:~B~s", [OZ_IP_1, RestPort, RestAPIPrefix]),
-    OtherRestAddress = str_utils:format("https://~s:~B~s", [OZ_IP_2, RestPort, RestAPIPrefix]),
-    [{otherRestAddress, OtherRestAddress} | [{restAddress, RestAddress} | NewConfig]].
+    Posthook = fun(NewConfig) ->
+        [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
+        OZ_IP_1 = test_utils:get_docker_ip(Node1),
+        OZ_IP_2 = test_utils:get_docker_ip(Node2),
+        RestPort = get_rest_port(Node1),
+        RestAPIPrefix = get_rest_api_prefix(Node1),
+        RestAddress = str_utils:format("https://~s:~B~s", [OZ_IP_1, RestPort, RestAPIPrefix]),
+        OtherRestAddress = str_utils:format("https://~s:~B~s", [OZ_IP_2, RestPort, RestAPIPrefix]),
+        [{otherRestAddress, OtherRestAddress} | [{restAddress, RestAddress} | NewConfig]]
+    end,
+    [{env_up_posthook, Posthook} | Config].
+
 
 init_per_testcase(create_provider_test, Config) ->
     init_per_testcase(non_register, Config);
@@ -1961,10 +1964,9 @@ end_per_testcase(_, Config) ->
     file:delete(CSRFile),
     file:delete(CertFile).
 
-end_per_suite(Config) ->
+end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls),
-    test_node_starter:clean_environment(Config).
+    application:stop(etls).
 
 %%%===================================================================
 %%% Internal functions

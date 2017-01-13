@@ -19,8 +19,7 @@
 -include_lib("kernel/src/inet_dns.hrl").
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
--export([init_per_testcase/2, end_per_testcase/2]).
+-export([all/0]).
 -export([get_all_ips_test/1]).
 
 %%%===================================================================
@@ -59,22 +58,6 @@ get_all_ips_test(Config) ->
     Expected = lists:sort([Node1Ip, Node2Ip]),
     ?assertMatch(Expected, lists:sort(IpsFromDNS)).
 
-%%%===================================================================
-%%% Setup/teardown functions
-%%%===================================================================
-
-init_per_suite(Config) ->
-    NewConfig = ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")),
-    NewConfig.
-
-init_per_testcase(_, Config) ->
-    Config.
-
-end_per_testcase(_, _Config) ->
-    ok.
-
-end_per_suite(Config) ->
-    test_node_starter:clean_environment(Config).
 
 %%%===================================================================
 %%% Helper functions

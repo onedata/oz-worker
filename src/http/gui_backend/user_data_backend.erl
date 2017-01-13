@@ -1,29 +1,27 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2015-2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module implements data_backend_behaviour and is used to synchronize
-%%% the `provider` model used in Ember application.
+%%% the data-space model used in Ember application.
 %%% @end
 %%%-------------------------------------------------------------------
--module(provider_data_backend).
+-module(user_data_backend).
+-behavior(data_backend_behaviour).
 -author("Lukasz Opiola").
--behaviour(data_backend_behaviour).
+
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-%% data_backend_behaviour callbacks
 -export([init/0, terminate/0]).
--export([find_record/2, find_all/1, query/2, query_record/2]).
+-export([find_record/2, find_all/1, query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
-%% API
--export([provider_record/2]).
-
+-export([user_record/1]).
 
 %%%===================================================================
 %%% data_backend_behaviour callbacks
@@ -56,10 +54,13 @@ terminate() ->
 %%--------------------------------------------------------------------
 -spec find_record(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find_record(<<"provider">>, ProviderId) ->
-    UserId = gui_session:get_user_id(),
-    Res = provider_record(ProviderId, UserId),
-    {ok, Res}.
+find_record(<<"user">>, UserId) ->
+    case gui_session:get_user_id() of
+        UserId ->
+            {ok, user_record(UserId)};
+        _ ->
+            gui_error:unauthorized()
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -69,7 +70,7 @@ find_record(<<"provider">>, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec find_all(ResourceType :: binary()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
-find_all(<<"provider">>) ->
+find_all(<<"user">>) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
@@ -80,7 +81,7 @@ find_all(<<"provider">>) ->
 %%--------------------------------------------------------------------
 -spec query(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
-query(<<"provider">>, _Data) ->
+query(<<"user">>, _Data) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
@@ -91,7 +92,7 @@ query(<<"provider">>, _Data) ->
 %%--------------------------------------------------------------------
 -spec query_record(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-query_record(<<"provider">>, _Data) ->
+query_record(<<"user">>, _Data) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
@@ -102,7 +103,7 @@ query_record(<<"provider">>, _Data) ->
 %%--------------------------------------------------------------------
 -spec create_record(RsrcType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-create_record(<<"provider">>, _Data) ->
+create_record(<<"user">>, _Data) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
@@ -112,10 +113,36 @@ create_record(<<"provider">>, _Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_record(RsrcType :: binary(), Id :: binary(),
-    Data :: proplists:proplist()) ->
-    ok | gui_error:error_result().
-update_record(<<"provider">>, _ProviderId, _Data) ->
-    gui_error:report_error(<<"Not implemented">>).
+    Data :: proplists:proplist()) -> ok | gui_error:error_result().
+update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
+    case user_logic:set_alias(UserId, NewAlias) of
+        ok ->
+            ok;
+        {error, disallowed_alias_prefix} ->
+            gui_error:report_warning(
+                <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
+        {error, invalid_alias} ->
+            gui_error:report_warning(
+                <<"Alias can contain only lowercase letters and digits, and "
+                "must be at least 5 characters long.">>);
+        {error, alias_occupied} ->
+            gui_error:report_warning(
+                <<"This alias is occupied by someone else. "
+                "Please choose other alias.">>)
+    end;
+update_record(<<"user">>, UserId, Data) ->
+    {DiffKey, DiffValue} = case Data of
+        [{<<"defaultSpaceId">>, DefaultSpace}] ->
+            {default_space, DefaultSpace};
+        [{<<"defaultProviderId">>, DefaultProvider}] ->
+            {default_provider, DefaultProvider}
+    end,
+    DiffValueOrUndefined = case DiffValue of
+        null -> undefined;
+        _ -> DiffValue
+    end,
+    {ok, _} = od_user:update(UserId, #{DiffKey => DiffValueOrUndefined}),
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -125,42 +152,80 @@ update_record(<<"provider">>, _ProviderId, _Data) ->
 %%--------------------------------------------------------------------
 -spec delete_record(RsrcType :: binary(), Id :: binary()) ->
     ok | gui_error:error_result().
-delete_record(<<"provider">>, _Id) ->
+delete_record(<<"user">>, _Id) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
 %%%===================================================================
-%%% API functions
+%%% Internal functions
 %%%===================================================================
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
-%% Returns a client-compliant provider record.
+%% Returns a client-compliant user record based on space id.
 %% @end
 %%--------------------------------------------------------------------
--spec provider_record(ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
-    proplists:proplist().
-provider_record(ProviderId, UserId) ->
+-spec user_record(UserId :: od_user:id()) -> proplists:proplist().
+user_record(UserId) ->
+    {ok, #document{value = #od_user{
+        name = Name,
+        alias = UserAlias,
+        basic_auth_enabled = BasicAuthEnabled,
+        connected_accounts = OAuthAccounts,
+        client_tokens = ClientTokenIds,
+        default_space = DefaultSpaceValue,
+        default_provider = DefaultProviderValue
+    }}} = od_user:get(UserId),
+    Alias = case str_utils:to_binary(UserAlias) of
+        <<"">> -> null;
+        Bin -> Bin
+    end,
+    Authorizers = lists:foldl(
+        fun(OAuthAccount, Acc) ->
+            #oauth_account{
+                provider_id = Provider,
+                email_list = Emails,
+                user_id = SubId} = OAuthAccount,
+            ProviderBin = str_utils:to_binary(Provider),
+            SubIdBin = str_utils:to_binary(SubId),
+            AccId = <<ProviderBin/binary, "#", SubIdBin/binary>>,
+            Accounts = lists:map(
+                fun(Email) ->
+                    [
+                        {<<"id">>, AccId},
+                        {<<"type">>, ProviderBin},
+                        {<<"email">>, Email}
+                    ]
+                end, Emails),
+            Accounts ++ Acc
+        end, [], OAuthAccounts),
+    ClientTokens = lists:map(
+        fun(Id) ->
+            [{<<"id">>, Id}]
+        end, ClientTokenIds),
+    DefaultSpace = case DefaultSpaceValue of
+        undefined -> null;
+        _ -> DefaultSpaceValue
+    end,
+    DefaultProvider = case DefaultProviderValue of
+        undefined -> null;
+        _ -> DefaultProviderValue
+    end,
+    {ok, [{effective_groups, Groups}]} = user_logic:get_effective_groups(UserId),
     {ok, UserSpaces} = user_logic:get_spaces(UserId),
-    UserSpaceIds = proplists:get_value(spaces, UserSpaces),
-    {ok, ProviderData} = provider_logic:get_data(ProviderId),
-    Name = proplists:get_value(clientName, ProviderData),
-    Latitude = proplists:get_value(latitude, ProviderData, 0.0),
-    Longitude = proplists:get_value(longitude, ProviderData, 0.0),
-    RedPoint = proplists:get_value(redirectionPoint, ProviderData),
-    #{host := Host} = url_utils:parse(RedPoint),
-    IsWorking = provider_logic:check_provider_connectivity(ProviderId),
-    {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
-    SpacesToDisplay = lists:filter(
-        fun(Space) ->
-            lists:member(Space, UserSpaceIds)
-        end, Spaces),
+    Spaces = proplists:get_value(spaces, UserSpaces),
+    {ok, [{providers, Providers}]} = user_logic:get_providers(UserId),
     [
-        {<<"id">>, ProviderId},
+        {<<"id">>, UserId},
         {<<"name">>, Name},
-        {<<"isWorking">>, IsWorking},
-        {<<"host">>, Host},
-        {<<"spaces">>, SpacesToDisplay},
-        {<<"latitude">>, Latitude},
-        {<<"longitude">>, Longitude}
+        {<<"alias">>, Alias},
+        {<<"basicAuthEnabled">>, BasicAuthEnabled},
+        {<<"authorizers">>, Authorizers},
+        {<<"clienttokens">>, ClientTokens},
+        {<<"defaultSpaceId">>, DefaultSpace},
+        {<<"defaultProviderId">>, DefaultProvider},
+        {<<"groups">>, Groups},
+        {<<"spaces">>, Spaces},
+        {<<"providers">>, Providers}
     ].

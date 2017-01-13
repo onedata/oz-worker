@@ -22,7 +22,7 @@
 -include_lib("ctool/include/global_definitions.hrl").
 
 %% node_manager_plugin_behaviour callbacks
--export([before_init/1, after_init/1, on_terminate/2, on_code_change/3,
+-export([before_init/1, after_init/1, on_terminate/2, on_code_change/3, renamed_models/0,
     handle_call_extension/3, handle_cast_extension/2, handle_info_extension/2,
     modules_with_args/0, listeners/0, cm_nodes/0, db_nodes/0,
     check_node_ip_address/0, app_name/0, clear_memory/1]).
@@ -59,6 +59,17 @@ db_nodes() ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Maps old model name to new one.
+%% @end
+%%--------------------------------------------------------------------
+-spec renamed_models() ->
+    #{OldName :: model_behaviour:model_type() =>
+    {RenameVersion :: datastore_json:record_version(), NewName :: model_behaviour:model_type()}}.
+renamed_models() ->
+    #{}.
+
+%%--------------------------------------------------------------------
+%% @doc
 %% {@link node_manager_plugin_behaviour} callback listeners/0.
 %% @end
 %%--------------------------------------------------------------------
@@ -80,7 +91,10 @@ listeners() -> [
 modules_with_args() ->
     Base = node_manager:cluster_worker_modules() ++ [
         {changes_worker, []},
-        {ozpca_worker, []},
+        {singleton, ozpca_worker, [
+            {supervisor_spec, ozpca_worker:supervisor_spec()},
+            {supervisor_child_spec, [ozpca_worker:supervisor_child_spec()]}
+        ]},
         {subscriptions_worker, []}
     ],
     case application:get_env(?APP_NAME, location_service_enabled) of

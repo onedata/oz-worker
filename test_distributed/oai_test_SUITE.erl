@@ -951,13 +951,16 @@ list_records_no_set_error_test_base(Config, Method) ->
 init_per_suite(Config) ->
     application:start(etls),
     hackney:start(),
-    NewConfig = ?TEST_INIT(
-        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
-    ),
-    [Node1 | _] = ?config(oz_worker_nodes, NewConfig),
+    Posthook = fun(NewConfig) ->
+        [Node1 | _] = ?config(oz_worker_nodes, NewConfig),
+        [
+            {oai_pmh_url, get_oai_pmh_URL(Node1)},
+            {oai_pmh_path, get_oai_pmh_api_path(Node1)} | NewConfig
+        ]
+    end,
     [
-        {oai_pmh_url, get_oai_pmh_URL(Node1)},
-        {oai_pmh_path, get_oai_pmh_api_path(Node1)} | NewConfig
+        {?ENV_UP_POSTHOOK, Posthook},
+        {?LOAD_MODULES, [oz_test_utils]}| Config
     ].
 
 init_per_testcase(_, Config) ->
@@ -969,10 +972,9 @@ end_per_testcase(_, Config) ->
     unmock_handle_proxy(Config),
     ok.
 
-end_per_suite(Config) ->
+end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls),
-    test_node_starter:clean_environment(Config).
+    application:stop(etls).
 
 %%%===================================================================
 %%% Functions used to validate REST calls

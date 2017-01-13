@@ -1884,15 +1884,12 @@ create_3_nested_groups(Config, TestUser, BotGrName, MidGrName, TopGrName) ->
 init_per_suite(Config) ->
     application:start(etls),
     hackney:start(),
-    NewConfig = ?TEST_INIT(
-        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
-    ),
-    NewConfig.
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
-end_per_suite(Config) ->
+
+end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls),
-    test_node_starter:clean_environment(Config).
+    application:stop(etls).
 
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
