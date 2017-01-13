@@ -8,7 +8,7 @@
 %%% @doc This module handles translation of system errors into REST responses.
 %%% @end
 %%%-------------------------------------------------------------------
--module(space_rest_translator).
+-module(handle_service_rest_translator).
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
@@ -18,28 +18,6 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([response/4]).
-
-% TODO VFS-2918
-response(create, _SpaceId, {deprecated_user_privileges, _UserId}, ok) ->
-    n_rest_handler:ok_no_content_reply();
-% TODO VFS-2918
-response(create, _SpaceId, {deprecated_child_privileges, _GroupId}, ok) ->
-    n_rest_handler:ok_no_content_reply();
-
-response(create, undefined, entity, {ok, SpaceId}) ->
-    n_rest_handler:created_reply([<<"spaces/">>, SpaceId]);
-
-response(create, _SpaceId, invite_user_token, {ok, Token}) ->
-    n_rest_handler:ok_body_reply(#{<<"token">> => Token});
-
-response(create, _SpaceId, invite_group_token, {ok, Token}) ->
-    n_rest_handler:ok_body_reply(#{<<"token">> => Token});
-
-response(create, _SpaceId, invite_provider_token, {ok, Token}) ->
-    n_rest_handler:ok_body_reply(#{<<"token">> => Token});
-
-
-
 
 response(get, SpaceId, data, {ok, SpaceData}) ->
     n_rest_handler:ok_body_reply(SpaceData#{

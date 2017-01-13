@@ -96,15 +96,6 @@ create(_Client, GroupId, create_space, Data) ->
     ),
     {ok, SpaceId};
 
-create(_Client, GroupId, create_handle, Data) ->
-    {ok, HandleId} = n_handle_logic:create(?ROOT, Data),
-    entity_graph:add_relation(
-        od_group, GroupId,
-        od_handle, HandleId,
-        privileges:handle_admin()
-    ),
-    {ok, HandleId};
-
 create(_Client, GroupId, create_handle_service, Data) ->
     {ok, HServiceId} = n_handle_service_logic:create(?ROOT, Data),
     entity_graph:add_relation(
@@ -113,6 +104,15 @@ create(_Client, GroupId, create_handle_service, Data) ->
         privileges:handle_service_admin()
     ),
     {ok, HServiceId};
+
+create(_Client, GroupId, create_handle, Data) ->
+    {ok, HandleId} = n_handle_logic:create(?ROOT, Data),
+    entity_graph:add_relation(
+        od_group, GroupId,
+        od_handle, HandleId,
+        privileges:handle_admin()
+    ),
+    {ok, HandleId};
 
 create(_Client, GroupId, join_group, #{<<"token">> := Macaroon}) ->
     {ok, {od_group, ParentGroupId}} = token_logic:consume(Macaroon),
@@ -168,14 +168,14 @@ get(Client, GroupId, _, deprecated_invite_group_token) ->
     ),
     {ok, Token};
 
-get(_, undefined, undefined, list) ->
-    {ok, GroupDocs} = od_group:list(),
-    {ok, [GroupId || #document{key = GroupId} <- GroupDocs]};
 get(_, _GroupId, #od_group{name = Name, type = Type}, data) ->
     {ok, #{
         <<"name">> => Name,
         <<"type">> => Type
     }};
+get(_, undefined, undefined, list) ->
+    {ok, GroupDocs} = od_group:list(),
+    {ok, [GroupId || #document{key = GroupId} <- GroupDocs]};
 get(_, _GroupId, #od_group{oz_privileges = OzPrivileges}, oz_privileges) ->
     {ok, OzPrivileges};
 get(_, _GroupId, #od_group{eff_oz_privileges = OzPrivileges}, eff_oz_privileges) ->

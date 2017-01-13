@@ -72,10 +72,10 @@ response(get, _UserId, eff_groups, {ok, Groups}) ->
     n_rest_handler:ok_body_reply(#{<<"groups">> => Groups});
 
 response(get, _UserId, {group, GroupId}, {ok, Group}) ->
-    group_rest_translator:response(get, GroupId, entity, {ok, Group});
+    group_rest_translator:response(get, GroupId, data, {ok, Group});
 
 response(get, _UserId, {eff_group, GroupId}, {ok, Group}) ->
-    group_rest_translator:response(get, GroupId, entity, {ok, Group});
+    group_rest_translator:response(get, GroupId, data, {ok, Group});
 
 response(get, _UserId, spaces, {ok, Spaces}) ->
     n_rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});
@@ -84,18 +84,40 @@ response(get, _UserId, eff_spaces, {ok, Spaces}) ->
     n_rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});
 
 response(get, _UserId, {space, SpaceId}, {ok, Space}) ->
-    space_rest_translator:response(get, SpaceId, entity, {ok, Space});
+    space_rest_translator:response(get, SpaceId, data, {ok, Space});
 
 response(get, _UserId, {eff_space, SpaceId}, {ok, Space}) ->
-    space_rest_translator:response(get, SpaceId, entity, {ok, Space});
+    space_rest_translator:response(get, SpaceId, data, {ok, Space});
 
 response(get, _UserId, eff_providers, {ok, Providers}) ->
     n_rest_handler:ok_body_reply(#{<<"providers">> => Providers});
 
 response(get, _UserId, {eff_provider, ProviderId}, {ok, Provider}) ->
-    provider_rest_translator:response(get, ProviderId, entity, {ok, Provider});
+    provider_rest_translator:response(get, ProviderId, data, {ok, Provider});
 
+response(get, _UserId, handle_services, {ok, HServices}) ->
+    n_rest_handler:ok_body_reply(#{<<"handle_services">> => HServices});
 
+response(get, _UserId, eff_handle_services, {ok, HServices}) ->
+    n_rest_handler:ok_body_reply(#{<<"handle_services">> => HServices});
+
+response(get, _UserId, {handle_service, HServiceId}, {ok, HService}) ->
+    handle_service_rest_translator:response(get, HServiceId, data, {ok, HService});
+
+response(get, _UserId, {eff_handle_service, HServiceId}, {ok, HService}) ->
+    handle_service_rest_translator:response(get, HServiceId, data, {ok, HService});
+
+response(get, _UserId, handles, {ok, Handles}) ->
+    n_rest_handler:ok_body_reply(#{<<"handles">> => Handles});
+
+response(get, _UserId, eff_handles, {ok, Handles}) ->
+    n_rest_handler:ok_body_reply(#{<<"handles">> => Handles});
+
+response(get, _UserId, {handle, HandleId}, {ok, Handle}) ->
+    handle_rest_translator:response(get, HandleId, data, {ok, Handle});
+
+response(get, _UserId, {eff_handle, HandleId}, {ok, Handle}) ->
+    handle_rest_translator:response(get, HandleId, data, {ok, Handle});
 
 
 response(update, _UserId, _, ok) ->
