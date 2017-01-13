@@ -19,5 +19,16 @@
 
 -export([response/4]).
 
+
+response(create, undefined, entity, {ok, GroupId}) ->
+    n_rest_handler:created_reply([<<"groups/">>, GroupId]);
+
+response(create, _GroupId, join_group, {ok, GroupId}) ->
+    n_rest_handler:created_reply([<<"groups/parents/">>, GroupId]);
+
+response(create, _GroupId, join_space, {ok, SpaceId}) ->
+    n_rest_handler:created_reply([<<"groups/spaces/">>, SpaceId]);
+
+
 response(get, GroupId, data, {ok, GroupData}) ->
     n_rest_handler:ok_body_reply(GroupData#{<<"groupId">> => GroupId}).

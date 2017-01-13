@@ -19,6 +19,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/utils/utils.hrl").
 
 -type resource() :: entity | list |
 client_tokens | {client_token, binary()} |
@@ -50,6 +51,11 @@ get_entity(UserId) ->
             ?ERROR_NOT_FOUND
     end.
 
+
+% TODO VFS-2918
+create(_Client, UserId, deprecated_default_space, #{<<"spaceId">> := SpaceId}) ->
+    {ok, _} = od_user:update(UserId, #{default_space => SpaceId}),
+    ok;
 
 create(_Client, _UserId, authorize, Data) ->
     Identifier = maps:get(<<"identifier">>, Data),
@@ -115,17 +121,27 @@ create(_Client, UserId, join_space, Data) ->
     {ok, SpaceId}.
 
 
+% TODO VFS-2918
+get(_, _UserId, #od_user{default_space = DefaultSpace}, deprecated_default_space) ->
+    {ok, DefaultSpace};
+
 get(_, undefined, undefined, list) ->
     {ok, UserDocs} = od_user:list(),
     {ok, [UserId || #document{key = UserId} <- UserDocs]};
 
 get(_, _UserId, #od_user{} = User, data) ->
     #od_user{
-        name = Name, login = Login, alias = Alias, email_list = EmailList
+        name = Name, login = Login, alias = Alias, email_list = EmailList,
+        connected_accounts = ConnectedAccounts
     } = User,
+    % TODO VFS-2918 do we need connected accounts?
+    ConnectedAccountsMaps = lists:map(fun(Account) ->
+        ?record_to_list(oauth_account, Account) end, ConnectedAccounts
+    ),
     {ok, #{
         <<"name">> => Name, <<"login">> => Login,
-        <<"alias">> => Alias, <<"emailList">> => EmailList
+        <<"alias">> => Alias, <<"emailList">> => EmailList,
+        <<"connectedAccounts">> => ConnectedAccountsMaps
     }};
 get(_, _UserId, #od_user{oz_privileges = OzPrivileges}, oz_privileges) ->
     {ok, OzPrivileges};
@@ -291,6 +307,10 @@ delete(UserId, {handle, HandleId}) ->
         od_handle, HandleId).
 
 
+% TODO VFS-2918
+exists(_UserId, deprecated_default_space) ->
+    true;
+
 exists(undefined, _) ->
     true;
 
@@ -362,6 +382,13 @@ exists(_UserId, _) ->
     end}.
 
 
+% TODO VFS-2918
+authorize(create, UserId, deprecated_default_space, ?USER(UserId)) ->
+    true;
+% TODO VFS-2918
+authorize(get, UserId, deprecated_default_space, ?USER(UserId)) ->
+    true;
+
 authorize(create, _UserId, authorize, _Client) ->
     true;
 
@@ -399,6 +426,15 @@ authorize(get, _UserId, entity, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_USERS_LIST).
 
 
+
+% TODO VFS-2918
+validate(create, deprecated_default_space) -> #{
+    required => #{
+        <<"spaceId">> => {binary, {exists, fun(Value) ->
+            n_space_logic:exists(Value)
+        end}}
+    }
+};
 
 validate(create, authorize) -> #{
     required => #{

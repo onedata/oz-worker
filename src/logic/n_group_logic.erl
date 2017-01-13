@@ -37,8 +37,12 @@
     delete_oz_privileges/2
 ]).
 -export([
+    create_user_invite_token/2,
+    create_group_invite_token/2,
+
     join_group/3,
     join_space/3,
+
     add_user/4, add_user/3,
     add_group/4, add_group/3,
 
@@ -129,20 +133,28 @@ delete(Client, GroupId) ->
     n_entity_logic:delete(Client, ?PLUGIN, GroupId, entity).
 
 
-delete_oz_privileges(Client, UserId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, UserId, oz_privileges).
+delete_oz_privileges(Client, GroupId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, GroupId, oz_privileges).
 
 
-join_group(Client, UserId, Data) when is_map(Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, UserId, join_group, Data);
-join_group(Client, UserId, Token) ->
-    join_group(Client, UserId, #{<<"token">> => Token}).
+create_user_invite_token(Client, GroupId) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, invite_user_token, #{}).
 
 
-join_space(Client, UserId, Data) when is_map(Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, UserId, join_space, Data);
-join_space(Client, UserId, Token) ->
-    join_space(Client, UserId, #{<<"token">> => Token}).
+create_group_invite_token(Client, GroupId) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, invite_group_token, #{}).
+
+
+join_group(Client, GroupId, Data) when is_map(Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, join_group, Data);
+join_group(Client, GroupId, Token) ->
+    join_group(Client, GroupId, #{<<"token">> => Token}).
+
+
+join_space(Client, GroupId, Data) when is_map(Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, join_space, Data);
+join_space(Client, GroupId, Token) ->
+    join_space(Client, GroupId, #{<<"token">> => Token}).
 
 
 add_user(Client, GroupId, UserId, Privileges) when is_binary(UserId) ->
@@ -175,20 +187,20 @@ get_eff_users(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_users).
 
 
-get_user(Client, GroupId, YYYId) ->
-    n_entity_logic:get(Client, ?PLUGIN, GroupId, {user, YYYId}).
+get_user(Client, GroupId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, GroupId, {user, UserId}).
 
 
-get_eff_user(Client, GroupId, YYYId) ->
-    n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_user, YYYId}).
+get_eff_user(Client, GroupId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_user, UserId}).
 
 
-get_user_privileges(Client, GroupId, YYYId) ->
-    n_entity_logic:get(Client, ?PLUGIN, GroupId, {user_privileges, YYYId}).
+get_user_privileges(Client, GroupId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, GroupId, {user_privileges, UserId}).
 
 
-get_eff_user_privileges(Client, GroupId, YYYId) ->
-    n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_user_privileges, YYYId}).
+get_eff_user_privileges(Client, GroupId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_user_privileges, UserId}).
 
 
 get_parents(Client, GroupId) ->
@@ -293,7 +305,7 @@ update_user_privileges(Client, GroupId, UserId, Operation, Privs) when is_list(P
         <<"privileges">> => Privs
     }).
 update_user_privileges(Client, GroupId, UserId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, GroupId, {user, UserId}, Data).
+    n_entity_logic:update(Client, ?PLUGIN, GroupId, {user_privileges, UserId}, Data).
 
 
 update_child_privileges(Client, ParentId, ChildId, Operation, Privs) when is_list(Privs) ->
@@ -302,7 +314,7 @@ update_child_privileges(Client, ParentId, ChildId, Operation, Privs) when is_lis
         <<"privileges">> => Privs
     }).
 update_child_privileges(Client, ParentId, ChildId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, ParentId, {child, ChildId}, Data).
+    n_entity_logic:update(Client, ?PLUGIN, ParentId, {child_privileges, ChildId}, Data).
 
 
 leave_group(Client, UserId, GroupId) ->

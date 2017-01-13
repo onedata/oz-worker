@@ -260,7 +260,9 @@ delete_resource(Req, State) ->
 created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
 created_reply(PathTokens) ->
-    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
+    % TODO VFS-2918 do not add rest prefix for now
+%%    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
+    RestPrefix = "/",
     LocationHeader = #{
         <<"location">> => filename:join([RestPrefix | PathTokens])
     },

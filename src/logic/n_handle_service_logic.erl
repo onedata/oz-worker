@@ -51,7 +51,8 @@
 ]).
 -export([
     exists/1,
-    has_eff_privilege/3
+    user_has_eff_privilege/3,
+    group_has_eff_privilege/3
 ]).
 
 
@@ -175,16 +176,28 @@ remove_group(Client, HServiceId, GroupId) ->
     n_entity_logic:delete(Client, ?PLUGIN, HServiceId, {group, GroupId}).
 
 
-has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->
+user_has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->
     case od_handle_service:get(HServiceId) of
         {ok, #document{value = HService}} ->
-            has_eff_privilege(HService, UserId, Privilege);
+            user_has_eff_privilege(HService, UserId, Privilege);
         _ ->
             false
     end;
-has_eff_privilege(#od_handle_service{eff_users = UsersPrivileges}, UserId, Privilege) ->
+user_has_eff_privilege(#od_handle_service{eff_users = UsersPrivileges}, UserId, Privilege) ->
     {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
+
+
+group_has_eff_privilege(HServiceId, GroupId, Privilege) when is_binary(HServiceId) ->
+    case od_handle_service:get(HServiceId) of
+        {ok, #document{value = HService}} ->
+            group_has_eff_privilege(HService, GroupId, Privilege);
+        _ ->
+            false
+    end;
+group_has_eff_privilege(#od_handle_service{eff_groups = GroupsPrivileges}, GroupId, Privilege) ->
+    {GroupPrivileges, _} = maps:get(GroupId, GroupsPrivileges, {[], []}),
+    lists:member(Privilege, GroupPrivileges).
 
 
 %%--------------------------------------------------------------------

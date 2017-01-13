@@ -240,7 +240,7 @@ exists(_HandleId, _) ->
 authorize(create, undefined, entity, ?USER(UserId)) ->
     {data_dependent, fun(Data) ->
         HServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
-        n_handle_service_logic:has_eff_privilege(
+        n_handle_service_logic:user_has_eff_privilege(
             HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE
         )
     end};
@@ -330,5 +330,5 @@ entity_to_string(HandleId) ->
 
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_handle{} = Handle) ->
-        n_handle_logic:has_eff_privilege(Handle, UserId, Privilege)
+        n_handle_logic:user_has_eff_privilege(Handle, UserId, Privilege)
     end}.

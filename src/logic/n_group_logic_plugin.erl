@@ -34,6 +34,24 @@ get_entity(GroupId) ->
             ?ERROR_NOT_FOUND
     end.
 
+% TODO VFS-2918
+create(_Client, GroupId, {deprecated_user_privileges, UserId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_user, UserId,
+        od_group, GroupId,
+        {Operation, Privileges}
+    );
+% TODO VFS-2918
+create(_Client, ParentGroupId, {deprecated_child_privileges, ChildGroupId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_group, ChildGroupId,
+        od_group, ParentGroupId,
+        {Operation, Privileges}
+    );
 
 create(Client, _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
@@ -52,6 +70,49 @@ create(Client, _, entity, Data) ->
             ok
     end,
     {ok, GroupId};
+
+create(Client, GroupId, invite_user_token, _) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?GROUP_INVITE_USER_TOKEN,
+        {od_group, GroupId}
+    ),
+    {ok, Token};
+
+create(Client, GroupId, invite_group_token, _) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?GROUP_INVITE_GROUP_TOKEN,
+        {od_group, GroupId}
+    ),
+    {ok, Token};
+
+create(_Client, GroupId, create_space, Data) ->
+    {ok, SpaceId} = n_space_logic:create(?ROOT, Data),
+    entity_graph:add_relation(
+        od_group, GroupId,
+        od_space, SpaceId,
+        privileges:space_admin()
+    ),
+    {ok, SpaceId};
+
+create(_Client, GroupId, create_handle, Data) ->
+    {ok, HandleId} = n_handle_logic:create(?ROOT, Data),
+    entity_graph:add_relation(
+        od_group, GroupId,
+        od_handle, HandleId,
+        privileges:handle_admin()
+    ),
+    {ok, HandleId};
+
+create(_Client, GroupId, create_handle_service, Data) ->
+    {ok, HServiceId} = n_handle_service_logic:create(?ROOT, Data),
+    entity_graph:add_relation(
+        od_group, GroupId,
+        od_handle_service, HServiceId,
+        privileges:handle_service_admin()
+    ),
+    {ok, HServiceId};
 
 create(_Client, GroupId, join_group, #{<<"token">> := Macaroon}) ->
     {ok, {od_group, ParentGroupId}} = token_logic:consume(Macaroon),
@@ -199,7 +260,7 @@ update(GroupId, oz_privileges, Data) ->
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_oz_privileges(od_group, GroupId, Operation, Privileges);
 
-update(GroupId, {user, UserId}, Data) ->
+update(GroupId, {user_privileges, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_relation(
@@ -208,7 +269,7 @@ update(GroupId, {user, UserId}, Data) ->
         {Operation, Privileges}
     );
 
-update(ParentGroupId, {child, ChildGroupId}, Data) ->
+update(ParentGroupId, {child_privileges, ChildGroupId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_relation(
@@ -346,14 +407,36 @@ exists(_GroupId, _) ->
     end}.
 
 
+% TODO VFS-2918
+authorize(get, _GroupId, deprecated_invite_user_token, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?GROUP_INVITE_USER);
+% TODO VFS-2918
+authorize(get, _GroupId, deprecated_invite_group_token, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?GROUP_INVITE_GROUP);
+% TODO VFS-2918
+authorize(update, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?GROUP_SET_PRIVILEGES);
+% TODO VFS-2918
+authorize(update, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?GROUP_SET_PRIVILEGES);
+
 authorize(create, undefined, entity, ?USER) ->
     true;
 
+authorize(create, _GroupId, create_space, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?GROUP_CREATE_SPACE);
+
+authorize(create, _GroupId, create_handle_service, ?USER(UserId)) ->
+    n_handle_service_logic_plugin:authorize(create, undefined, entity, ?USER(UserId));
+
+authorize(create, _GroupId, create_handle, ?USER(UserId)) ->
+    n_handle_logic_plugin:authorize(create, undefined, entity, ?USER(UserId));
+
 authorize(create, _GroupId, join_group, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?GROUP_JOIN_GROUP);
+    auth_by_privilege(UserId, ?GROUP_JOIN_GROUP);
 
 authorize(create, _GroupId, join_space, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?GROUP_JOIN_SPACE);
+    auth_by_privilege(UserId, ?GROUP_JOIN_SPACE);
 
 authorize(create, _GroupId, users, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_GROUPS_ADD_MEMBERS);
@@ -387,10 +470,10 @@ authorize(update, _GroupId, entity, ?USER(UserId)) ->
 authorize(update, _GroupId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_SET_PRIVILEGES);
 
-authorize(update, _GroupId, {user, _UserId}, ?USER(UserId)) ->
+authorize(update, _GroupId, {user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_SET_PRIVILEGES);
 
-authorize(update, _GroupId, {child, _ChildGroupId}, ?USER(UserId)) ->
+authorize(update, _GroupId, {child_privileges, _ChildGroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_SET_PRIVILEGES);
 
 
@@ -401,16 +484,16 @@ authorize(delete, _GroupId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_SET_PRIVILEGES);
 
 authorize(delete, _GroupId, {parent, _ParentId}, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?GROUP_LEAVE_GROUP);
+    auth_by_privilege(UserId, ?GROUP_LEAVE_GROUP);
 
 authorize(delete, _GroupId, {space, _SpaceId}, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?GROUP_LEAVE_SPACE);
+    auth_by_privilege(UserId, ?GROUP_LEAVE_SPACE);
 
 authorize(delete, _GroupId, {handle_service, _HServiceId}, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?GROUP_LEAVE_HANDLE_SERVICE);
+    auth_by_privilege(UserId, ?GROUP_LEAVE_HANDLE_SERVICE);
 
 authorize(delete, _GroupId, {handle, _HandleId}, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?GROUP_LEAVE_HANDLE);
+    auth_by_privilege(UserId, ?GROUP_LEAVE_HANDLE);
 
 authorize(delete, _GroupId, {user, _UserId}, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?GROUP_REMOVE_USER),
@@ -431,6 +514,8 @@ validate(create, entity) -> #{
         <<"type">> => {atom, [organization, unit, team, role]}
     }
 };
+validate(create, create_space) ->
+    n_space_logic_plugin:validate(create, entity);
 validate(create, join_group) -> #{
     required => #{
         <<"token">> => {token, ?GROUP_INVITE_GROUP_TOKEN}
@@ -438,7 +523,7 @@ validate(create, join_group) -> #{
 };
 validate(create, join_space) -> #{
     required => #{
-        <<"token">> => {token, ?SPACE_INVITE_USER_TOKEN}
+        <<"token">> => {token, ?SPACE_INVITE_GROUP_TOKEN}
     }
 };
 validate(create, users) -> #{

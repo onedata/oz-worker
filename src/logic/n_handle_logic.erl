@@ -50,7 +50,8 @@
 ]).
 -export([
     exists/1,
-    has_eff_privilege/3
+    user_has_eff_privilege/3,
+    group_has_eff_privilege/3
 ]).
 
 
@@ -182,14 +183,26 @@ exists(HandleId) ->
     od_handle:exists(HandleId).
 
 
-has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
+user_has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
     case od_handle:get(HandleId) of
         {ok, #document{value = Handle}} ->
-            has_eff_privilege(Handle, UserId, Privilege);
+            user_has_eff_privilege(Handle, UserId, Privilege);
         _ ->
             false
     end;
-has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
+user_has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
     {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
+
+
+group_has_eff_privilege(HandleId, GroupId, Privilege) when is_binary(HandleId) ->
+    case od_handle:get(HandleId) of
+        {ok, #document{value = Handle}} ->
+            group_has_eff_privilege(Handle, GroupId, Privilege);
+        _ ->
+            false
+    end;
+group_has_eff_privilege(#od_handle{eff_groups = GroupsPrivileges}, GroupId, Privilege) ->
+    {GroupPrivileges, _} = maps:get(GroupId, GroupsPrivileges, {[], []}),
+    lists:member(Privilege, GroupPrivileges).
 

@@ -228,8 +228,8 @@ exists(_HServiceId, _) ->
     end}.
 
 
-authorize(create, undefined, entity, ?USER) ->
-    true;
+authorize(create, undefined, entity, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_CREATE);
 
 authorize(create, _HServiceId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
@@ -311,5 +311,5 @@ entity_to_string(HServiceId) ->
 
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_handle_service{} = HService) ->
-        n_handle_service_logic:has_eff_privilege(HService, UserId, Privilege)
+        n_handle_service_logic:user_has_eff_privilege(HService, UserId, Privilege)
     end}.
