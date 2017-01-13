@@ -141,20 +141,23 @@ delete_record(<<"provider">>, _Id) ->
 -spec provider_record(ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
     proplists:proplist().
 provider_record(ProviderId, UserId) ->
-    {ok, UserSpaces} = user_logic:get_spaces(UserId),
-    UserSpaceIds = proplists:get_value(spaces, UserSpaces),
-    {ok, ProviderData} = provider_logic:get_data(ProviderId),
-    Name = proplists:get_value(clientName, ProviderData),
-    Latitude = proplists:get_value(latitude, ProviderData, 0.0),
-    Longitude = proplists:get_value(longitude, ProviderData, 0.0),
-    RedPoint = proplists:get_value(redirectionPoint, ProviderData),
+    Client = ?USER(gui_session:get_user_id()),
+    {ok, #od_user{eff_spaces = EffUserSpaces}} = n_user_logic:get(Client, UserId),
+    {ok, #od_provider{
+        name = Name,
+        redirection_point = RedPoint,
+        latitude = Latitude,
+        longitude = Longitude,
+        spaces = ProvSpaces
+    }} = n_provider_logic:get(?ROOT, ProviderId),
+
     #{host := Host} = url_utils:parse(RedPoint),
-    IsWorking = provider_logic:check_provider_connectivity(ProviderId),
-    {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
+    IsWorking = n_provider_logic:check_provider_connectivity(ProviderId),
+
     SpacesToDisplay = lists:filter(
         fun(Space) ->
-            lists:member(Space, UserSpaceIds)
-        end, Spaces),
+            lists:member(Space, maps:keys(EffUserSpaces))
+        end, ProvSpaces),
     [
         {<<"id">>, ProviderId},
         {<<"name">>, Name},

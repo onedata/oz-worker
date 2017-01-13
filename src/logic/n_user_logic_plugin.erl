@@ -278,6 +278,9 @@ delete(UserId, oz_privileges) ->
     );
 
 delete(UserId, {client_token, TokenId}) ->
+    {ok, Macaroon} = token_utils:deserialize(TokenId),
+    Identifier = macaroon:identifier(Macaroon),
+    onedata_auth:delete(Identifier),
     {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens} = User) ->
         {ok, User#od_user{client_tokens = Tokens -- [TokenId]}}
     end),

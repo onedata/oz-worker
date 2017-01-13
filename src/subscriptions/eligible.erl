@@ -79,15 +79,13 @@ providers(Doc, od_user) ->
 providers(Doc, od_provider) ->
     [Doc#document.key];
 
-providers(Doc, od_handle) ->
-    {ok, [{users, Users}]} = handle_logic:get_effective_users(Doc#document.key),
-    through_users(Users);
-
 providers(Doc, od_handle_service) ->
-    {ok, [{users, Users}]} = handle_service_logic:get_effective_users(
-        Doc#document.key
-    ),
-    through_users(Users);
+    #document{value = #od_handle_service{eff_users = EffUsers}} = Doc,
+    through_users(EffUsers);
+
+providers(Doc, od_handle) ->
+    #document{value = #od_handle{eff_users = EffUsers}} = Doc,
+    through_users(EffUsers);
 
 providers(_Doc, _Type) ->
     [].

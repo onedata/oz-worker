@@ -1055,7 +1055,7 @@ support_space_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
-    % provider_logic should also allow using non-serialized macaroons, check it
+    % n_provider_logic should also allow using non-serialized macaroons, check it
     {ok, BadMacaroon3} = oz_test_utils:space_invite_user_token(
         Config, ?USER(U1), S1
     ),

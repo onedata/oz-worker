@@ -66,25 +66,27 @@ predefined_groups_test(Config) ->
     test_utils:set_env(Node, oz_worker, predefined_groups, PredefinedGroups),
     % Call the group creation procedure. The function reads from env and
     % creates the predefined groups
-    ?assertEqual(ok, rpc:call(Node, group_logic, create_predefined_groups, [])),
+    ?assertEqual(ok, oz_test_utils:call_oz(
+        Config, n_group_logic, create_predefined_groups, []
+    )),
     % Now, lets check if the groups are present in the system and have desired
     % privileges.
     CheckGroup = fun(ExpId, ExpName, ExpPrivileges) ->
-        GroupResult = rpc:call(Node, od_group, get, [ExpId]),
+        GroupResult = oz_test_utils:call_oz(Config, od_group, get, [ExpId]),
         % Check if group was found by ID
         ?assertMatch({ok, _}, GroupResult),
         % Check if the name is correct
         {ok, #document{value = #od_group{name = ActualName}}} = GroupResult,
         ?assertEqual(ExpName, ActualName),
         % Check if OZ API privileges are correct
-        PrivsResult = rpc:call(Node, group_logic, get_oz_privileges, [ExpId]),
+        {ok, PrivsResult} = oz_test_utils:get_group_oz_privileges(Config, ExpId),
         % Check if privileges were found by group ID
         ?assertMatch({ok, _}, PrivsResult),
         % Check if the privileges are correct
         {ok, [{privileges, ActualPrivileges}]} = PrivsResult,
         ?assertEqual(ExpPrivileges, ActualPrivileges)
     end,
-    AllPrivs = rpc:call(Node, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
     CheckGroup(<<"group1">>, <<"Group 1">>, AllPrivs),
     CheckGroup(<<"group2">>, <<"Group 2">>, [view_privileges, set_privileges]),
     CheckGroup(<<"group3">>, <<"Group 3">>, []),
@@ -116,7 +118,9 @@ global_groups_test(Config) ->
     ],
     test_utils:set_env(Node, oz_worker, predefined_groups, PredefinedGroups),
     % Make sure predefined groups are created
-    ?assertEqual(ok, rpc:call(Node, group_logic, create_predefined_groups, [])),
+    ?assertEqual(ok, oz_test_utils:call_oz(
+        Config, n_group_logic, create_predefined_groups, []
+    )),
     % Enable global groups
     test_utils:set_env(Node, oz_worker, enable_global_groups, true),
     % Set automatic global groups
@@ -173,7 +177,9 @@ automatic_space_membership_via_global_group_test(Config) ->
     ],
     test_utils:set_env(Node, oz_worker, predefined_groups, PredefinedGroups),
     % Make sure predefined groups are created
-    ?assertEqual(ok, rpc:call(Node, group_logic, create_predefined_groups, [])),
+    ?assertEqual(ok, oz_test_utils:call_oz(
+        Config, n_group_logic, create_predefined_groups, []
+    )),
     % Enable global groups
     test_utils:set_env(Node, oz_worker, enable_global_groups, true),
     % Set automatic global groups

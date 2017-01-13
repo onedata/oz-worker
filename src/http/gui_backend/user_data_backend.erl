@@ -15,6 +15,7 @@
 -author("Lukasz Opiola").
 
 
+-include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -110,17 +111,18 @@ create_record(<<"user">>, _Data) ->
 -spec update_record(RsrcType :: binary(), Id :: binary(),
     Data :: proplists:proplist()) -> ok | gui_error:error_result().
 update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
-    case user_logic:set_alias(UserId, NewAlias) of
+    Client = ?USER(gui_session:get_user_id()),
+    case n_user_logic:update_alias(Client, UserId, NewAlias) of
         ok ->
             ok;
-        {error, disallowed_alias_prefix} ->
+        ?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(_) ->
             gui_error:report_warning(
                 <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
-        {error, invalid_alias} ->
+        ?ERROR_BAD_VALUE_ALIAS(_) ->
             gui_error:report_warning(
                 <<"Alias can contain only lowercase letters and digits, and "
                 "must be at least 5 characters long.">>);
-        {error, alias_occupied} ->
+        ?ERROR_ALIAS_OCCUPIED ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
                 "Please choose other alias.">>)
@@ -172,8 +174,8 @@ user_record(Client, UserId) ->
         client_tokens = ClientTokenIds,
         default_space = DefaultSpaceValue,
         default_provider = DefaultProviderValue,
-        eff_groups = Groups,
-        eff_spaces = Spaces,
+        eff_groups = EffGroups,
+        eff_spaces = EffSpaces,
         eff_providers = Providers
     }} = n_user_logic:get(Client, UserId),
     Alias = case str_utils:to_binary(UserAlias) of
@@ -220,7 +222,7 @@ user_record(Client, UserId) ->
         {<<"clienttokens">>, ClientTokens},
         {<<"defaultSpaceId">>, DefaultSpace},
         {<<"defaultProviderId">>, DefaultProvider},
-        {<<"groups">>, Groups},
-        {<<"spaces">>, Spaces},
+        {<<"groups">>, maps:keys(EffGroups)},
+        {<<"spaces">>, maps:keys(EffSpaces)},
         {<<"providers">>, Providers}
     ].

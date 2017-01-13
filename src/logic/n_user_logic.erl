@@ -506,19 +506,20 @@ authenticate_by_basic_credentials(Login, Password) ->
             end,
             % Check if user's role entitles him to belong to any groups
             {ok, GroupMapping} = application:get_env(
-                ?APP_NAME, onepanel_role_to_group_mapping),
+                ?APP_NAME, onepanel_role_to_group_mapping
+            ),
             Groups = maps:get(UserRole, GroupMapping, []),
             lists:foreach(
                 fun(GroupId) ->
-                    case group_logic:has_user(GroupId, UserId) of
-                        true ->
-                            ok;
-                        false ->
-                            {ok, GroupData} = group_logic:get_data(GroupId),
-                            GroupName = proplists:get_value(name, GroupData),
-                            {ok, _} = group_logic:add_user(GroupId, UserId),
+                    case n_group_logic:add_user(?ROOT, GroupId, UserId) of
+                        {ok, UserId} ->
+                            {ok, #od_group{
+                                name = GroupName
+                            }} = n_group_logic:get(?ROOT, GroupId),
                             ?info("Added user '~s' to group '~s' based on "
-                            "role '~s'", [Login, GroupName, UserRole])
+                            "role '~s'", [Login, GroupName, UserRole]);
+                        ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
+                            ok
                     end
                 end, Groups),
             {ok, UserDocument, FirstLogin}

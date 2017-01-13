@@ -101,11 +101,11 @@ share_id_to_public_url(ShareId) ->
 -spec share_id_to_redirect_url(ShareId :: binary()) -> binary().
 share_id_to_redirect_url(ShareId) ->
     {ok, #document{
-        value = #od_share{
-            space = ParentSpaceId
-        }}} = od_share:get(ShareId),
-    {ok, [{providers, Providers}]} =
-        space_logic:get_providers(ParentSpaceId, provider),
+        value = #od_share{space = ParentSpaceId}
+    }} = od_share:get(ShareId),
+    {ok, #document{
+        value = #od_space{providers = Providers}
+    }} = od_space:get(ParentSpaceId),
     % Prefer online providers
     {Online, Offline} = lists:partition(
         fun(ProviderId) ->
@@ -117,5 +117,5 @@ share_id_to_redirect_url(ShareId) ->
         _ -> Online
     end,
     ChosenProvider = lists:nth(rand:uniform(length(Choice)), Choice),
-    {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
+    {ok, ProviderURL} = n_provider_logic:get_url(ChosenProvider),
     str_utils:format_bin("~s/#/public/shares/~s", [ProviderURL, ShareId]).

@@ -64,8 +64,8 @@ create_provider(Node, Name, Spaces) ->
 create_provider(Node, Name, Spaces, URLs) ->
     {_, CSRFile, _} = generate_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
-    Params = [Name, URLs, <<"https://127.0.0.1:443">>, CSR],
-    {ok, Id, _} = rpc:call(Node, provider_logic, create, Params),
+    Params = [?NOBODY, Name, URLs, <<"https://127.0.0.1:443">>, CSR],
+    {ok, Id, _} = rpc:call(Node, n_provider_logic, create, Params),
     {ok, Id} = rpc:call(Node, od_provider, update, [Id, #{spaces => Spaces}]),
     Id.
 

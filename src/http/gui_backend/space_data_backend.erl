@@ -14,8 +14,10 @@
 -author("Lukasz Opiola").
 -behaviour(data_backend_behaviour).
 
+-include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% data_backend_behaviour callbacks
 -export([init/0, terminate/0]).
@@ -59,7 +61,7 @@ terminate() ->
 find_record(<<"space">>, SpaceId) ->
     UserId = gui_session:get_user_id(),
     % Check if the user belongs to this space
-    case space_logic:has_effective_user(SpaceId, UserId) of
+    case n_space_logic:has_eff_user(SpaceId, UserId) of
         false ->
             gui_error:unauthorized();
         true ->
@@ -114,10 +116,10 @@ create_record(<<"space">>, Data) ->
             gui_error:report_error(<<"Empty space names are not allowed">>);
         Bin when is_binary(Bin) ->
             UserId = gui_session:get_user_id(),
-            {ok, SpaceId} = space_logic:create({user, UserId}, Name),
+            {ok, SpaceId} = n_space_logic:create(?USER(UserId), Name),
             % Push user record with a new space list.
             gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(UserId)
+                <<"user">>, user_data_backend:user_record(?USER(UserId), UserId)
             ),
             {ok, space_record(SpaceId, UserId)};
         _ ->
@@ -135,10 +137,16 @@ create_record(<<"space">>, Data) ->
     ok | gui_error:error_result().
 update_record(<<"space">>, SpaceId, [{<<"name">>, NewName}]) ->
     UserId = gui_session:get_user_id(),
-    space_logic:modify(SpaceId, {user, UserId}, NewName);
+    case n_space_logic:update(?USER(UserId), SpaceId, NewName) of
+        ok ->
+            ok;
+        ?ERROR_UNAUTHORIZED ->
+            <<"You do not have permissions to update this space.">>;
+        _ ->
+            <<"Cannot update space name.">>
+    end;
 update_record(<<"space">>, _SpaceId, _Data) ->
     gui_error:report_error(<<"Not implemented">>).
-
 
 
 %%--------------------------------------------------------------------
@@ -166,9 +174,7 @@ delete_record(<<"space">>, _Id) ->
     proplists:proplist().
 space_record(SpaceId, UserId) ->
     % Check if that user has view privileges in that space
-    HasViewPrivs = space_logic:has_effective_privilege(
-        SpaceId, UserId, space_view_data
-    ),
+    HasViewPrivs = n_space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_VIEW),
     space_record(SpaceId, UserId, HasViewPrivs).
 
 
