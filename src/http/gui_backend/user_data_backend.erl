@@ -21,7 +21,7 @@
 -export([init/0, terminate/0]).
 -export([find_record/2, find_all/1, query/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
--export([user_record/1]).
+-export([user_record/2]).
 
 %%%===================================================================
 %%% data_backend_behaviour callbacks
@@ -55,12 +55,7 @@ terminate() ->
 -spec find_record(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_record(<<"user">>, UserId) ->
-    case gui_session:get_user_id() of
-        UserId ->
-            {ok, user_record(UserId)};
-        _ ->
-            gui_error:unauthorized()
-    end.
+    {ok, user_record(?USER(gui_session:get_user_id()), UserId)}.
 
 
 %%--------------------------------------------------------------------
@@ -163,20 +158,24 @@ delete_record(<<"user">>, _Id) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns a client-compliant user record based on space id.
+%% Returns a client-compliant user record based on user id.
 %% @end
 %%--------------------------------------------------------------------
--spec user_record(UserId :: od_user:id()) -> proplists:proplist().
-user_record(UserId) ->
-    {ok, #document{value = #od_user{
+-spec user_record(Client :: n_entity_logic:client(), UserId :: od_user:id()) ->
+    proplists:proplist().
+user_record(Client, UserId) ->
+    {ok,#od_user{
         name = Name,
         alias = UserAlias,
         basic_auth_enabled = BasicAuthEnabled,
         connected_accounts = OAuthAccounts,
         client_tokens = ClientTokenIds,
         default_space = DefaultSpaceValue,
-        default_provider = DefaultProviderValue
-    }}} = od_user:get(UserId),
+        default_provider = DefaultProviderValue,
+        eff_groups = Groups,
+        eff_spaces = Spaces,
+        eff_providers = Providers
+    }} = n_user_logic:get(Client, UserId),
     Alias = case str_utils:to_binary(UserAlias) of
         <<"">> -> null;
         Bin -> Bin
@@ -212,10 +211,6 @@ user_record(UserId) ->
         undefined -> null;
         _ -> DefaultProviderValue
     end,
-    {ok, [{effective_groups, Groups}]} = user_logic:get_effective_groups(UserId),
-    {ok, UserSpaces} = user_logic:get_spaces(UserId),
-    Spaces = proplists:get_value(spaces, UserSpaces),
-    {ok, [{providers, Providers}]} = user_logic:get_providers(UserId),
     [
         {<<"id">>, UserId},
         {<<"name">>, Name},
