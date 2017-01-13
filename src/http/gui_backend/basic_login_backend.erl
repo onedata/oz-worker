@@ -38,7 +38,7 @@ page_init() ->
         {<<"Basic ", UserAndPassword/binary>>, _} =
             cowboy_req:header(<<"authorization">>, Req),
         [User, Passwd] = binary:split(base64:decode(UserAndPassword), <<":">>),
-        case user_logic:authenticate_by_basic_credentials(User, Passwd) of
+        case n_user_logic:authenticate_by_basic_credentials(User, Passwd) of
             {ok, UserDoc, FirstLogin} ->
                 #document{
                     key = UserId,

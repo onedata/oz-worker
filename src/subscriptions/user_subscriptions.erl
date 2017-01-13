@@ -175,7 +175,7 @@ get_shares(ProviderID, SpaceChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_handle_services(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        HandleServices = user_logic:get_all_handle_services(UserDoc),
+        #od_user{eff_handle_services = HandleServices} = UserDoc,
         lists:filtermap(fun(HandleServiceId) ->
             case get_with_revs(od_handle_service, HandleServiceId) of
                 {ok, Doc} -> {true, {-1, Doc, od_handle_service}};
@@ -197,7 +197,7 @@ get_handle_services(ProviderID, UserChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_handles(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        Handles = user_logic:get_all_handles(UserDoc),
+        #od_user{eff_handles = Handles} = UserDoc,
         lists:filtermap(fun(HandleId) ->
             case get_with_revs(od_handle, HandleId) of
                 {ok, Doc} -> {true, {-1, Doc, od_handle}};

@@ -77,7 +77,6 @@ create(Client, _, entity, #{<<"name">> := Name}) ->
         _ ->
             ok
     end,
-%% TODO user_logic:set_space_name_mapping(UserId, SpaceId, Name, true),
     {ok, SpaceId};
 
 create(Client, SpaceId, invite_user_token, _) ->

@@ -393,7 +393,7 @@ authenticate_by_basic_auth(Req) ->
         <<"Basic ", UserPasswdB64/binary>> ->
             UserPasswd = base64:decode(UserPasswdB64),
             [User, Passwd] = binary:split(UserPasswd, <<":">>),
-            case user_logic:authenticate_by_basic_credentials(User, Passwd) of
+            case n_user_logic:authenticate_by_basic_credentials(User, Passwd) of
                 {ok, #document{key = UserId}, _} ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};

@@ -18,6 +18,9 @@
 
 -export([get_ignore_msg/1, as_msg/3]).
 
+% TODO VFS-2918
+-define(MIN_SUFFIX_HASH_LEN, 6).
+
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% Translates documents to structures required by the provider.
@@ -71,6 +74,7 @@ get_msg(Seq, Doc, od_user = Model) ->
         space_aliases = SpaceAliases,
 
         groups = Groups,
+        spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
 
@@ -82,7 +86,7 @@ get_msg(Seq, Doc, od_user = Model) ->
         {email_list, []}, % TODO currently always empty
         {connected_accounts, []}, % TODO currently always empty
         {default_space, DefaultSpace},
-        {space_aliases, maps:to_list(SpaceAliases)},
+        {space_aliases, maps:to_list(calculate_space_aliases(Spaces, SpaceAliases))},
 
         % Direct relations to other entities
         {groups, Groups},
@@ -322,3 +326,52 @@ message_model(od_user) -> od_user;
 message_model(od_group) -> od_group;
 message_model(od_handle) -> od_handle;
 message_model(od_handle_service) -> od_handle_service.
+
+
+% TODO VFS-2918
+calculate_space_aliases(SpaceIds, SpaceAliases) ->
+    SpaceNames = maps:from_list(lists:map(
+        fun(SpaceId) ->
+            {ok, #document{
+                value = #od_space{name = Name}
+            }} = od_space:get(SpaceId),
+            {SpaceId, Name}
+        end, SpaceIds)),
+    % Overwrite names with existing aliases
+    SpaceNamesMerged = maps:merge(SpaceNames, SpaceAliases),
+    R = maps:fold(
+        fun(SpId, SpName, AccMap) ->
+            case maps:is_key(SpId, AccMap) of
+                false ->
+                    AccMap;
+                true ->
+                    SpaceNameLen = size(SpName),
+                    UniqueSpaceName = <<SpName/binary, "#", SpId/binary>>,
+                    {ShortestUniquePfxLen, FilteredSpaces} = maps:fold(fun
+                        (Id, _, {UniquePrefLen, SpacesAcc}) when Id == SpId ->
+                            {UniquePrefLen, SpacesAcc};
+                        (Id, Name, {UniquePrefLen, SpacesAcc}) ->
+                            PrefLen = binary:longest_common_prefix(
+                                [UniqueSpaceName, Name]),
+                            {
+                                max(PrefLen + 1, UniquePrefLen),
+                                maps:put(Id, Name, SpacesAcc)
+                            }
+                    end, {SpaceNameLen, #{}}, AccMap),
+
+                    ValidUniquePrefLen = case ShortestUniquePfxLen > SpaceNameLen of
+                        true ->
+                            min(max(ShortestUniquePfxLen,
+                                SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
+                                size(UniqueSpaceName));
+                        false ->
+                            ShortestUniquePfxLen
+                    end,
+
+                    ShortestUniqueSpaceName =
+                        <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
+                    maps:put(SpId, ShortestUniqueSpaceName, FilteredSpaces)
+            end
+        end, #{}, SpaceNamesMerged),
+    ?dump(R),
+    R.

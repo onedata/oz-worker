@@ -17,6 +17,7 @@
 
 -include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([page_init/0]).
@@ -36,7 +37,10 @@ page_init() ->
         {redirect, URL} ->
             UserId = gui_session:get_user_id(),
             ?info("User ~p logged in", [UserId]),
-            case user_logic:get_default_provider(UserId) of
+            {ok, #od_user{
+                default_provider = DefaultProvider
+            }} = n_user_logic:get(?USER(UserId), UserId),
+            case DefaultProvider of
                 {ok, undefined} ->
                     {redirect_relative, URL};
                 {ok, ProvId} ->

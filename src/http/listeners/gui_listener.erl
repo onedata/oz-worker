@@ -61,7 +61,7 @@ start() ->
         % Initialize auth handler
         auth_config:load_auth_config(),
 
-        {ok, Hostname} = application:get_env(oz_worker, http_domain),
+%%        {ok, Hostname} = application:get_env(oz_worker, http_domain),
         Dispatch = cowboy_router:compile([
             % Matching requests will be redirected to the same address without
             % leading 'www.'. Cowboy does not have a mechanism to match every
@@ -71,8 +71,9 @@ start() ->
                 % redirector_handler is defined in cluster_worker
                 {'_', redirector_handler, []}
             ]},
+            % TODO VFS-2873 Currently unused
             % Redirect requests in form: alias.onedata.org
-            {":alias." ++ Hostname, [{'_', client_redirect_handler, [GuiPort]}]},
+%%            {":alias." ++ Hostname, [{'_', client_redirect_handler, [GuiPort]}]},
             {'_', lists:flatten([
                 {"/nagios/[...]", nagios_handler, []},
                 {"/share/:share_id", public_share_handler, []},

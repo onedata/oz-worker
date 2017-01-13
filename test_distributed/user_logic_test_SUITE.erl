@@ -104,7 +104,7 @@ automatic_group_membership_test(Config) ->
         Node, oz_worker, predefined_groups, PredefinedGroups
     ),
     % Call the group creation procedure
-    ok = rpc:call(Node, group_logic, create_predefined_groups, []),
+    ok = rpc:call(Node, n_group_logic, create_predefined_groups, []),
     % Now, prepare config entry for onepanel role to groups mapping. We want
     % everyone with role "user2Role" to belong to both groups 1 and 2.
     RoleToGroupMapping = #{
@@ -133,10 +133,7 @@ automatic_group_membership_test(Config) ->
         BasicAuthEndpoint, BasicAuthHeaders, [], [insecure]
     )),
     % now for the groups check
-    {ok, [{groups, GroupIds}]} = ?assertMatch(
-        {ok, [{groups, _}]},
-        rpc:call(Node, user_logic, get_groups, [<<"user2Id">>])
-    ),
+    {ok, #od_user{groups = GroupIds}} = oz_test_utils:get_user(Config, <<"user2Id">>),
     ?assertEqual([<<"group1">>, <<"group2">>], lists:sort(GroupIds)),
     ok.
 
@@ -153,13 +150,13 @@ change_password_test(Config) ->
     % accepts (user3:password3) credentials for user with id userId3
     % Try to change password of userId3. First, use wrong password.
     ?assertEqual({error, <<"Invalid password">>}, rpc:call(
-        Node, user_logic, change_user_password, [
+        Node, n_user_logic, change_user_password, [
             <<"user3">>, <<"bad_password">>, <<"new_password">>
         ]
     )),
     % Now with correct credentials
     ?assertEqual(ok, rpc:call(
-        Node, user_logic, change_user_password, [
+        Node, n_user_logic, change_user_password, [
             <<"user3">>, <<"password3">>, <<"new_password">>
         ]
     )),
@@ -189,20 +186,6 @@ end_per_testcase(_Config, _) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-space_save_mock(Nodes, SpaceId) ->
-    test_utils:mock_new(Nodes, od_space),
-    test_utils:mock_expect(Nodes, od_space, save, fun(Doc) ->
-        meck:passthrough([Doc#document{key = SpaceId}])
-    end).
-
-get_space_name_mapping(Node, UserId, SpaceId) ->
-    {ok, Data} = ?assertMatch({ok, _},
-        rpc:call(Node, space_logic, get_data, [SpaceId, {user, UserId}])),
-    proplists:get_value(name, Data).
-
-clean_space_name_mapping(Node, UserId, SpaceId) ->
-    rpc:call(Node, user_logic, clean_space_name_mapping, [UserId, SpaceId]).
 
 appmock_mocked_endpoint(Config) ->
     [AppmockNode] = ?config(appmock_nodes, Config),

@@ -410,10 +410,10 @@ parse_domain(DomainArg) ->
 handle_unknown_subdomain(QueryType, DomainNotNormalized, PrefixStr, DNSZone, LBAdvice) ->
     try
         Prefix = list_to_binary(PrefixStr),
-        case get_provider_data_by_alias(Prefix) of
-            {ok, DataProplist} ->
+        case get_redirection_point_by_alias(Prefix) of
+            {ok, RedPointBin} ->
                 GRDomain = get_canonical_hostname(),
-                RedPoint = binary_to_list(proplists:get_value(redirectionPoint, DataProplist)),
+                RedPoint = binary_to_list(RedPointBin),
                 % Check if provider is in the same domain - then return NS
                 % It not, return A or NS records of GR servers and then make a HTTP
                 % redirect.
@@ -434,7 +434,7 @@ handle_unknown_subdomain(QueryType, DomainNotNormalized, PrefixStr, DNSZone, LBA
                         end;
                     _ ->
                         #dns_zone{ttl_oneprovider_ns = TTL} = DNSZone,
-                        #hackney_url{host = Host} = hackney_url:parse_url(RedPoint),
+                        #{host := Host} = url_utils:parse(RedPoint),
                         HostStr = str_utils:to_list(Host),
                         {ok,
                             [dns_server:answer_record(DomainNotNormalized, TTL, ?S_NS, HostStr)]
@@ -491,36 +491,40 @@ account_lb(IPAddrList, LBAdvice) ->
 %% provider data or returns error when it is not possible.
 %% @end
 %%--------------------------------------------------------------------
--spec get_provider_data_by_alias(Alias :: binary()) -> {ok, proplists:proplist()} | error.
-get_provider_data_by_alias(Alias) ->
+-spec get_redirection_point_by_alias(Alias :: binary()) -> {ok, binary()} | error.
+get_redirection_point_by_alias(Alias) ->
     GetUserResult = case Alias of
         <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
-            user_logic:get_user_doc(UUID);
+            od_user:get(UUID);
         _ ->
-            case user_logic:get_user_doc({alias, Alias}) of
+            case od_user:get_by_criterion({alias, Alias}) of
                 {ok, Ans} ->
                     {ok, Ans};
                 _ ->
-                    user_logic:get_user_doc(Alias)
+                    od_user:get(Alias)
             end
     end,
     case GetUserResult of
         {ok, #document{key = UserId, value = #od_user{chosen_provider = ChosenProvider}}} ->
             % If default provider is not known, set it.
-            DataProplist =
+            RedirectionPoint =
                 try
-                    {ok, Data} = provider_logic:get_data(ChosenProvider),
-                    Data
+                    {ok, #od_provider{
+                        redirection_point = RedPoint
+                    }} = n_provider_logic:get(?ROOT, ChosenProvider),
+                    RedPoint
                 catch _:_ ->
                     {ok, NewChosenProv} =
-                        provider_logic:choose_provider_for_user(UserId),
+                        n_provider_logic:choose_provider_for_user(UserId),
                     {ok, _} = od_user:update(UserId, #{
                         chosen_provider => NewChosenProv
                     }),
-                    {ok, Data2} = provider_logic:get_data(NewChosenProv),
-                    Data2
+                    {ok, #od_provider{
+                        redirection_point = RedPoint2
+                    }} = n_provider_logic:get(?ROOT, NewChosenProv),
+                    RedPoint2
                 end,
-            {ok, DataProplist};
+            {ok, RedirectionPoint};
         _ ->
             error
     end.

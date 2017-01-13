@@ -65,10 +65,11 @@ start() ->
         ozpca:start(ZoneCADir, ZoneCertFile, ZoneKeyFile, ZoneCertDomain),
         auth_logic:start(),
 
-        {ok, Hostname} = application:get_env(oz_worker, http_domain),
+%%        {ok, Hostname} = application:get_env(oz_worker, http_domain),
         Dispatch = cowboy_router:compile([
+            % TODO VFS-2873 Currently unused
             % Redirect requests in form: alias.onedata.org
-            {":alias." ++ Hostname, [{'_', client_redirect_handler, [RestPort]}]},
+%%            {":alias." ++ Hostname, [{'_', client_redirect_handler, [RestPort]}]},
             {'_', routes()}
         ]),
         ?emergency("routes: ~p~n", [routes()]),

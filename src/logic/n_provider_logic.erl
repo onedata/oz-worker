@@ -154,16 +154,13 @@ exists(ProviderId) ->
 %% @doc Returns full provider URL.
 %% @end
 %%--------------------------------------------------------------------
--spec get_url(ProviderId :: binary()) ->
-    {ok, ProviderURL :: binary()}.
+-spec get_url(ProviderId :: od_provider:id()) -> {ok, ProviderURL :: binary()}.
 get_url(ProviderId) ->
-    {ok, #document{
-        value = #od_provider{
-            redirection_point = RedPoint
-        }}} = provider_logic:get_data(ProviderId),
-    #hackney_url{host = Host, port = Port} = hackney_url:parse_url(RedPoint),
-    URL = str_utils:format_bin("https://~s:~B", [Host, Port]),
-    {ok, URL}.
+    #od_provider{
+        redirection_point = RedPoint
+    } = get(?ROOT, ProviderId),
+    #{host := Host, port := Port} = url_utils:parse(RedPoint),
+    {ok, str_utils:format_bin("https://~s:~B", [Host, Port])}.
 
 
 %%--------------------------------------------------------------------
@@ -176,18 +173,18 @@ get_url(ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec choose_provider_for_user(Referer :: binary() | undefined) ->
-    {ok, ProviderId :: binary()} | {error, no_provider}.
+    {ok, ProviderId :: od_provider:id()} | {error, no_provider}.
 choose_provider_for_user(UserId) ->
-    error(unimplemented),
     % Check if the user has a default space and if it is supported.
-    {ok, [{spaces, Spaces}, {default, DefaultSpace}]} =
-        user_logic:get_spaces(UserId),
-    {ok, [{providers, DSProviders}]} =
+    #od_user{
+        spaces = Spaces, default_space = DefaultSpace
+    } = n_user_logic:get(?ROOT, UserId),
+    {ok, DSProviders} =
         case DefaultSpace of
             undefined ->
                 {ok, [{providers, []}]};
             _ ->
-                space_logic:get_providers(DefaultSpace, user)
+                n_space_logic:get_providers(?ROOT, DefaultSpace)
         end,
     case DSProviders of
         List when length(List) > 0 ->
@@ -195,19 +192,19 @@ choose_provider_for_user(UserId) ->
             {ok, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)};
         _ ->
             % Default space does not have a provider, look in other spaces
-            ProviderIDs = lists:foldl(
+            ProviderIds = lists:foldl(
                 fun(Space, Acc) ->
-                    {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
+                    {ok, Providers} = n_space_logic:get_providers(?ROOT, Space),
                     Providers ++ Acc
                 end, [], Spaces),
 
-            case ProviderIDs of
+            case ProviderIds of
                 [] ->
                     % No provider for other spaces = nowhere to redirect
                     {error, no_provider};
                 _ ->
                     % There are some providers for other spaces, random one
-                    {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
+                    {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIds) + 1), ProviderIds)}
             end
     end.
 
@@ -232,7 +229,7 @@ check_provider_connectivity(ProviderId) ->
                 {ok, #od_provider{
                     redirection_point = RedPoint
                 }} = get(?ROOT, ProviderId),
-                #hackney_url{host = Host} = hackney_url:parse_url(RedPoint),
+                #{host := Host} = url_utils:parse(RedPoint),
                 ConnCheckEndpoint = str_utils:format_bin("https://~s~s", [
                     Host, ?PROVIDER_ID_ENDPOINT
                 ]),
