@@ -139,9 +139,7 @@ user_routes() ->
             method = get, entity_id = ?CLIENT_ID, resource = groups
         }},
         {<<"/user/groups">>, R#rest_req{
-            method = post, entity_id = undefined, resource = entity,
-            % Alias for group_logic, but use user_rest_translator for reply
-            el_plugin = n_group_logic_plugin
+            method = post, entity_id = ?BINDING(id), resource = create_group
         }},
         {<<"/user/groups/join">>, R#rest_req{
             method = post, entity_id = ?CLIENT_ID, resource = join_group
@@ -163,9 +161,7 @@ user_routes() ->
             method = get, entity_id = ?CLIENT_ID, resource = spaces
         }},
         {<<"/user/spaces">>, R#rest_req{
-            method = post, entity_id = undefined, resource = entity,
-            % Alias for space_logic, but use user_rest_translator for reply
-            el_plugin = n_space_logic_plugin
+            method = post, entity_id = ?BINDING(id), resource = create_space
         }},
         % TODO VFS-2918
         {<<"/user/spaces/default">>, R#rest_req{
@@ -211,9 +207,7 @@ user_routes() ->
             method = get, entity_id = ?CLIENT_ID, resource = handle_services
         }},
         {<<"/user/handle_services">>, R#rest_req{
-            method = post, entity_id = undefined, resource = entity,
-            % Alias for handle_service_logic, but use user_rest_translator for reply
-            el_plugin = n_handle_service_logic_plugin
+            method = post, entity_id = ?BINDING(id), resource = create_handle_service
         }},
         {<<"/user/handle_services/:hsid">>, R#rest_req{
             method = get, entity_id = ?CLIENT_ID, resource = {handle_service, ?BINDING(hsid)}
@@ -232,9 +226,7 @@ user_routes() ->
             method = get, entity_id = ?CLIENT_ID, resource = handles
         }},
         {<<"/user/handles">>, R#rest_req{
-            method = post, entity_id = undefined, resource = entity,
-            % Alias for handle_logic, but use user_rest_translator for reply
-            el_plugin = n_handle_logic_plugin
+            method = post, entity_id = ?BINDING(id), resource = create_handle
         }},
         {<<"/user/handles/:hid">>, R#rest_req{
             method = get, entity_id = ?CLIENT_ID, resource = {handle, ?BINDING(hid)}
@@ -596,9 +588,7 @@ space_routes() ->
         }},
         % TODO VFS-2918
         {<<"/spaces/:id/shares/:pid">>, R#rest_req{
-            method = put, entity_id = undefined, resource = entity,
-            % Alias for share_logic, but use user_rest_translator for reply
-            el_plugin = n_share_logic_plugin
+            method = put, entity_id = ?BINDING(id), resource = {create_share, ?BINDING(shid)}
         }},
 
         {<<"/spaces/:id/providers">>, R#rest_req{

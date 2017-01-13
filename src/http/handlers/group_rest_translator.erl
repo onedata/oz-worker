@@ -29,7 +29,7 @@ response(create, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ok) ->
     n_rest_handler:ok_no_content_reply();
 
 response(create, undefined, entity, {ok, GroupId}) ->
-    n_rest_handler:created_reply([<<"groups/">>, GroupId]);
+    n_rest_handler:created_reply([<<"groups">>, GroupId]);
 
 response(create, _GroupId, invite_user_token, {ok, Token}) ->
     n_rest_handler:ok_body_reply(#{<<"token">> => Token});
@@ -39,39 +39,39 @@ response(create, _GroupId, invite_group_token, {ok, Token}) ->
 
 response(create, GroupId, create_space, {ok, SpaceId}) ->
     n_rest_handler:created_reply(
-        [<<"groups/">>, GroupId, <<"/spaces/">>, SpaceId]
+        [<<"groups">>, GroupId, <<"spaces">>, SpaceId]
     );
 
 response(create, GroupId, create_handle_service, {ok, HServiceId}) ->
     n_rest_handler:created_reply(
-        [<<"groups/">>, GroupId, <<"/handle_services/">>, HServiceId]
+        [<<"groups">>, GroupId, <<"handle_services">>, HServiceId]
     );
 
 response(create, GroupId, create_handle, {ok, HandleId}) ->
     n_rest_handler:created_reply(
-        [<<"groups/">>, GroupId, <<"/handles/">>, HandleId]
+        [<<"groups">>, GroupId, <<"handles">>, HandleId]
     );
 
 response(create, GroupId, join_group, {ok, ParentGroupId}) ->
     n_rest_handler:created_reply(
     % TODO VFS-2918
-%%        [<<"groups/">>, GroupId, <<"/parents/">>, ParentGroupId]
-        [<<"groups/">>, GroupId, <<"/nested/">>, ParentGroupId]
+%%        [<<"groups">>, GroupId, <<"parents">>, ParentGroupId]
+        [<<"groups">>, GroupId, <<"nested">>, ParentGroupId]
     );
 
 response(create, GroupId, join_space, {ok, SpaceId}) ->
     n_rest_handler:created_reply(
-        [<<"groups/">>, GroupId, <<"/spaces/">>, SpaceId]
+        [<<"groups">>, GroupId, <<"spaces">>, SpaceId]
     );
 
 response(create, GroupId, users, {ok, UserId}) ->
     n_rest_handler:created_reply(
-        [<<"groups/">>, GroupId, <<"/users/">>, UserId]
+        [<<"groups">>, GroupId, <<"users">>, UserId]
     );
 
 response(create, GroupId, children, {ok, ChildGroupId}) ->
     n_rest_handler:created_reply(
-        [<<"groups/">>, GroupId, <<"/children/">>, ChildGroupId]
+        [<<"groups">>, GroupId, <<"children">>, ChildGroupId]
     );
 
 
@@ -87,8 +87,8 @@ response(get, GroupId, data, {ok, GroupData}) ->
     n_rest_handler:ok_body_reply(GroupData#{<<"groupId">> => GroupId});
 
 
-response(get, undefined, list, {ok, Users}) ->
-    n_rest_handler:ok_body_reply(#{<<"groups">> => Users});
+response(get, undefined, list, {ok, Groups}) ->
+    n_rest_handler:ok_body_reply(#{<<"groups">> => Groups});
 
 response(get, _GroupId, oz_privileges, {ok, Privileges}) ->
     n_rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
@@ -162,34 +162,34 @@ response(get, _GroupId, eff_providers, {ok, Providers}) ->
 response(get, _GroupId, {eff_provider, ProviderId}, {ok, Provider}) ->
     provider_rest_translator:response(get, ProviderId, data, {ok, Provider});
 
-response(get, _UserId, handle_services, {ok, HServices}) ->
+response(get, _GroupId, handle_services, {ok, HServices}) ->
     n_rest_handler:ok_body_reply(#{<<"handle_services">> => HServices});
 
-response(get, _UserId, eff_handle_services, {ok, HServices}) ->
+response(get, _GroupId, eff_handle_services, {ok, HServices}) ->
     n_rest_handler:ok_body_reply(#{<<"handle_services">> => HServices});
 
-response(get, _UserId, {handle_service, HServiceId}, {ok, HService}) ->
+response(get, _GroupId, {handle_service, HServiceId}, {ok, HService}) ->
     handle_service_rest_translator:response(get, HServiceId, data, {ok, HService});
 
-response(get, _UserId, {eff_handle_service, HServiceId}, {ok, HService}) ->
+response(get, _GroupId, {eff_handle_service, HServiceId}, {ok, HService}) ->
     handle_service_rest_translator:response(get, HServiceId, data, {ok, HService});
 
-response(get, _UserId, handles, {ok, Handles}) ->
+response(get, _GroupId, handles, {ok, Handles}) ->
     n_rest_handler:ok_body_reply(#{<<"handles">> => Handles});
 
-response(get, _UserId, eff_handles, {ok, Handles}) ->
+response(get, _GroupId, eff_handles, {ok, Handles}) ->
     n_rest_handler:ok_body_reply(#{<<"handles">> => Handles});
 
-response(get, _UserId, {handle, HandleId}, {ok, Handle}) ->
+response(get, _GroupId, {handle, HandleId}, {ok, Handle}) ->
     handle_rest_translator:response(get, HandleId, data, {ok, Handle});
 
-response(get, _UserId, {eff_handle, HandleId}, {ok, Handle}) ->
+response(get, _GroupId, {eff_handle, HandleId}, {ok, Handle}) ->
     handle_rest_translator:response(get, HandleId, data, {ok, Handle});
 
 
-response(update, _UserId, _, ok) ->
+response(update, _GroupId, _, ok) ->
     n_rest_handler:updated_reply();
 
 
-response(delete, _UserId, _, ok) ->
+response(delete, _GroupId, _, ok) ->
     n_rest_handler:deleted_reply().

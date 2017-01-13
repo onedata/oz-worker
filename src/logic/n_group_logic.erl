@@ -37,6 +37,10 @@
     delete_oz_privileges/2
 ]).
 -export([
+    create_space/2,
+    create_handle_service/4, create_handle_service/2,
+    create_handle/5, create_handle/2,
+
     create_user_invite_token/2,
     create_group_invite_token/2,
 
@@ -135,6 +139,26 @@ delete(Client, GroupId) ->
 
 delete_oz_privileges(Client, GroupId) ->
     n_entity_logic:delete(Client, ?PLUGIN, GroupId, oz_privileges).
+
+
+create_space(Client, Data) ->
+    n_space_logic:create(Client, Data).
+
+
+create_handle_service(Client, Name, ProxyEndpoint, ServiceProperties) ->
+    n_handle_service_logic:create(Client, Name, ProxyEndpoint, ServiceProperties).
+
+
+create_handle_service(Client, Data) ->
+    n_handle_service_logic:create(Client, Data).
+
+
+create_handle(Client, HServiceId, ResourceType, ResourceId, Metadata) ->
+    n_handle_logic:create(Client, HServiceId, ResourceType, ResourceId, Metadata).
+
+
+create_handle(Client, Data) ->
+    n_handle_logic:create(Client, Data).
 
 
 create_user_invite_token(Client, GroupId) ->

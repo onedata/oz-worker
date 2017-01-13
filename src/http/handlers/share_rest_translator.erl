@@ -19,6 +19,10 @@
 
 -export([response/4]).
 
+
+response(create, undefined, entity, {ok, GroupId}) ->
+    n_rest_handler:created_reply([<<"groups">>, GroupId]);
+
 response(get, SpaceId, data, {ok, SpaceData}) ->
     n_rest_handler:ok_body_reply(SpaceData#{
         <<"spaceId">> => SpaceId,

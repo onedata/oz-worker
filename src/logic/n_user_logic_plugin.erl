@@ -100,6 +100,18 @@ create(_Client, UserId, default_provider, Data) ->
             ?ERROR_RELATION_DOES_NOT_EXIST(od_user, UserId, od_provider, ProviderId)
     end;
 
+create(_Client, UserId, create_group, Data) ->
+    n_group_logic_plugin:create(?USER(UserId), undefined, entity, Data);
+
+create(_Client, UserId, create_space, Data) ->
+    n_space_logic_plugin:create(?USER(UserId), undefined, entity, Data);
+
+create(_Client, UserId, create_handle_service, Data) ->
+    n_handle_service_logic_plugin:create(?USER(UserId), undefined, entity, Data);
+
+create(_Client, UserId, create_handle, Data) ->
+    n_handle_logic_plugin:create(?USER(UserId), undefined, entity, Data);
+
 create(_Client, UserId, join_group, Data) ->
     Macaroon = maps:get(<<"token">>, Data),
     {ok, {od_group, GroupId}} = token_logic:consume(Macaroon),
@@ -125,10 +137,6 @@ create(_Client, UserId, join_space, Data) ->
 get(_, _UserId, #od_user{default_space = DefaultSpace}, deprecated_default_space) ->
     {ok, DefaultSpace};
 
-get(_, undefined, undefined, list) ->
-    {ok, UserDocs} = od_user:list(),
-    {ok, [UserId || #document{key = UserId} <- UserDocs]};
-
 get(_, _UserId, #od_user{} = User, data) ->
     #od_user{
         name = Name, login = Login, alias = Alias, email_list = EmailList,
@@ -143,6 +151,9 @@ get(_, _UserId, #od_user{} = User, data) ->
         <<"alias">> => Alias, <<"emailList">> => EmailList,
         <<"connectedAccounts">> => ConnectedAccountsMaps
     }};
+get(_, undefined, undefined, list) ->
+    {ok, UserDocs} = od_user:list(),
+    {ok, [UserId || #document{key = UserId} <- UserDocs]};
 get(_, _UserId, #od_user{oz_privileges = OzPrivileges}, oz_privileges) ->
     {ok, OzPrivileges};
 get(_, _UserId, #od_user{eff_oz_privileges = OzPrivileges}, eff_oz_privileges) ->
@@ -392,6 +403,18 @@ authorize(get, UserId, deprecated_default_space, ?USER(UserId)) ->
 authorize(create, _UserId, authorize, _Client) ->
     true;
 
+authorize(create, UserId, create_group, ?USER(UserId)) ->
+    n_group_logic_plugin:authorize(create, undefined, entity, ?USER(UserId));
+
+authorize(create, UserId, create_space, ?USER(UserId)) ->
+    n_space_logic_plugin:authorize(create, undefined, entity, ?USER(UserId));
+
+authorize(create, UserId, create_handle_service, ?USER(UserId)) ->
+    n_handle_service_logic_plugin:authorize(create, undefined, entity, ?USER(UserId));
+
+authorize(create, UserId, create_handle, ?USER(UserId)) ->
+    n_handle_logic_plugin:authorize(create, undefined, entity, ?USER(UserId));
+
 % User trying to access its own oz_privileges
 authorize(get, UserId, oz_privileges, ?USER(UserId)) ->
     auth_self_by_oz_privilege(?OZ_VIEW_PRIVILEGES);
@@ -462,6 +485,14 @@ validate(create, default_provider) -> #{
         end}}
     }
 };
+validate(create, create_group) ->
+    n_group_logic_plugin:validate(create, entity);
+validate(create, create_space) ->
+    n_space_logic_plugin:validate(create, entity);
+validate(create, create_handle_service) ->
+    n_handle_service_logic_plugin:validate(create, entity);
+validate(create, create_handle) ->
+    n_handle_logic_plugin:validate(create, entity);
 validate(create, join_group) -> #{
     required => #{
         <<"token">> => {token, ?GROUP_INVITE_USER_TOKEN}

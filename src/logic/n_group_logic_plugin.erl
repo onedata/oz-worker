@@ -88,7 +88,7 @@ create(Client, GroupId, invite_group_token, _) ->
     {ok, Token};
 
 create(_Client, GroupId, create_space, Data) ->
-    {ok, SpaceId} = n_space_logic:create(?ROOT, Data),
+    {ok, SpaceId} = n_space_logic_plugin:create(?ROOT, undefined, entity, Data),
     entity_graph:add_relation(
         od_group, GroupId,
         od_space, SpaceId,
@@ -97,7 +97,7 @@ create(_Client, GroupId, create_space, Data) ->
     {ok, SpaceId};
 
 create(_Client, GroupId, create_handle_service, Data) ->
-    {ok, HServiceId} = n_handle_service_logic:create(?ROOT, Data),
+    {ok, HServiceId} = n_handle_service_logic_plugin:create(?ROOT, undefined, entity, Data),
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle_service, HServiceId,
@@ -106,7 +106,7 @@ create(_Client, GroupId, create_handle_service, Data) ->
     {ok, HServiceId};
 
 create(_Client, GroupId, create_handle, Data) ->
-    {ok, HandleId} = n_handle_logic:create(?ROOT, Data),
+    {ok, HandleId} = n_handle_logic_plugin:create(?ROOT, undefined, entity, Data),
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle, HandleId,
@@ -433,10 +433,10 @@ authorize(get, _GroupId, deprecated_invite_user_token, ?USER(UserId)) ->
 authorize(get, _GroupId, deprecated_invite_group_token, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_INVITE_GROUP);
 % TODO VFS-2918
-authorize(update, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
+authorize(create, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_SET_PRIVILEGES);
 % TODO VFS-2918
-authorize(update, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
+authorize(create, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_SET_PRIVILEGES);
 
 authorize(create, undefined, entity, ?USER) ->

@@ -51,6 +51,11 @@
     unset_default_provider/2
 ]).
 -export([
+    create_group/3, create_group/2,
+    create_space/2,
+    create_handle_service/4, create_handle_service/2,
+    create_handle/5, create_handle/2,
+
     join_group/3,
     join_space/3,
 
@@ -207,6 +212,35 @@ delete_space_alias(Client, UserId, SpaceId) ->
 
 unset_default_provider(Client, UserId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, default_provider).
+
+
+create_group(Client, Name, Type) ->
+    n_group_logic:create(Client, Name, Type).
+
+
+create_group(Client, Data) ->
+    n_group_logic:create(Client, Data).
+
+
+create_space(Client, Data) ->
+    n_space_logic:create(Client, Data).
+
+
+create_handle_service(Client, Name, ProxyEndpoint, ServiceProperties) ->
+    n_handle_service_logic:create(Client, Name, ProxyEndpoint, ServiceProperties).
+
+
+create_handle_service(Client, Data) ->
+    n_handle_service_logic:create(Client, Data).
+
+
+create_handle(Client, HServiceId, ResourceType, ResourceId, Metadata) ->
+    n_handle_logic:create(Client, HServiceId, ResourceType, ResourceId, Metadata).
+
+
+create_handle(Client, Data) ->
+    n_handle_logic:create(Client, Data).
+
 
 
 join_group(Client, UserId, Data) when is_map(Data) ->

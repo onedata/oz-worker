@@ -19,6 +19,9 @@
 
 -export([response/4]).
 
+response(create, _UserId, deprecated_default_space, ok) ->
+    n_rest_handler:ok_no_content_reply();
+
 response(create, _UserId, authorize, {ok, DischargeMacaroon}) ->
     n_rest_handler:ok_body_reply(DischargeMacaroon);
 
@@ -34,12 +37,35 @@ response(create, _UserId, space_alias, ok) ->
 response(create, _UserId, default_provider, ok) ->
     n_rest_handler:ok_no_content_reply();
 
+response(create, _UserId, create_group, {ok, GroupId}) ->
+    n_rest_handler:created_reply(
+        [<<"user">>, <<"groups">>, GroupId]
+    );
+
+response(create, _UserId, create_space, {ok, SpaceId}) ->
+    n_rest_handler:created_reply(
+        [<<"user">>, <<"spaces">>, SpaceId]
+    );
+
+response(create, _UserId, create_handle_service, {ok, HServiceId}) ->
+    n_rest_handler:created_reply(
+        [<<"user">>, <<"handle_services">>, HServiceId]
+    );
+
+response(create, _UserId, create_handle, {ok, HandleId}) ->
+    n_rest_handler:created_reply(
+        [<<"user">>, <<"handles">>, HandleId]
+    );
+
 response(create, _UserId, join_group, {ok, GroupId}) ->
-    n_rest_handler:created_reply([<<"user/groups/">>, GroupId]);
+    n_rest_handler:created_reply([<<"user">>, <<"groups">>, GroupId]);
 
 response(create, _UserId, join_space, {ok, SpaceId}) ->
-    n_rest_handler:created_reply([<<"user/spaces/">>, SpaceId]);
+    n_rest_handler:created_reply([<<"user">>, <<"spaces">>, SpaceId]);
 
+
+response(get, _UserId, deprecated_default_space, {ok, SpaceId}) ->
+    n_rest_handler:ok_body_reply(#{<<"spaceId">> => SpaceId});
 
 response(get, UserId, data, {ok, UserData}) ->
     n_rest_handler:ok_body_reply(UserData#{<<"userId">> => UserId});

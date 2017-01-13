@@ -259,10 +259,10 @@ exists(_HandleId, _) ->
 
 
 % TODO VFS-2918
-authorize(update, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
+authorize(create, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 % TODO VFS-2918
-authorize(update, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
+authorize(create, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 
 authorize(create, undefined, entity, ?USER(UserId)) ->

@@ -35,7 +35,6 @@ get_entity(SpaceId) ->
     end.
 
 
-
 % TODO VFS-2918
 create(_Client, SpaceId, {deprecated_user_privileges, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
@@ -54,6 +53,17 @@ create(_Client, SpaceId, {deprecated_child_privileges, GroupId}, Data) ->
         od_space, SpaceId,
         {Operation, Privileges}
     );
+% TODO VFS-2918
+create(Client, SpaceId, {create_share, ShareId}, Data) ->
+    case n_share_logic:exists(ShareId) of
+        true ->
+            ?ERROR_BAD_VALUE_ID_OCCUPIED(<<"shareId">>);
+        false ->
+            n_share_logic_plugin:create(Client, undefined, entity, Data#{
+                <<"spaceId">> => SpaceId,
+                <<"shareId">> => ShareId
+            })
+    end;
 
 create(Client, _, entity, #{<<"name">> := Name}) ->
     {ok, SpaceId} = od_space:create(#document{value = #od_space{name = Name}}),
@@ -173,7 +183,13 @@ get(_, _SpaceId, #od_space{groups = Groups}, {group_privileges, GroupId}) ->
     {ok, maps:get(GroupId, Groups)};
 get(_, _SpaceId, #od_space{eff_groups = Groups}, {eff_group_privileges, GroupId}) ->
     {Privileges, _} = maps:get(GroupId, Groups),
-    {ok, Privileges}.
+    {ok, Privileges};
+
+get(_, _SpaceId, #od_space{shares = Shares}, shares) ->
+    {ok, Shares};
+get(_, _SpaceId, #od_space{}, {share, ShareId}) ->
+    {ok, Share} = ?throw_on_failure(n_share_logic_plugin:get_entity(ShareId)),
+    n_share_logic_plugin:get(?ROOT, ShareId, Share, data).
 
 
 
@@ -272,7 +288,9 @@ exists(_SpaceId, _) ->
     end}.
 
 
-
+% TODO VFS-2918
+authorize(create, _GroupId, {create_share, _ShareId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_MANAGE_SHARES);
 % TODO VFS-2918
 authorize(get, _GroupId, deprecated_invite_user_token, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_INVITE_USER);
@@ -283,10 +301,10 @@ authorize(get, _GroupId, deprecated_invite_group_token, ?USER(UserId)) ->
 authorize(get, _GroupId, deprecated_invite_provider_token, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_INVITE_PROVIDER);
 % TODO VFS-2918
-authorize(update, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
+authorize(create, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_SET_PRIVILEGES);
 % TODO VFS-2918
-authorize(update, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
+authorize(create, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_SET_PRIVILEGES);
 
 authorize(create, undefined, entity, ?USER) ->
@@ -363,6 +381,14 @@ authorize(delete, _SpaceId, {group, _GroupId}, ?USER(UserId)) -> [
 authorize(delete, _SpaceId, {provider, _ProviderId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_REMOVE_PROVIDER).
 
+
+% TODO VFS-2918
+validate(create, {create_share, _ShareId}) -> #{
+    required => #{
+        <<"name">> => {binary, non_empty},
+        <<"rootFileId">> => {binary, non_empty}
+    }
+};
 
 validate(create, entity) -> #{
     required => #{

@@ -90,9 +90,6 @@ create(?USER, HServiceId, groups, #{<<"groupId">> := GroupId}) ->
     {ok, HServiceId}.
 
 
-get(_, undefined, undefined, list) ->
-    {ok, HServiceDocs} = od_handle_service:list(),
-    {ok, [HServiceId || #document{key = HServiceId} <- HServiceDocs]};
 
 get(_, _HServiceId, #od_handle_service{} = HService, data) ->
     #od_handle_service{
@@ -103,6 +100,10 @@ get(_, _HServiceId, #od_handle_service{} = HService, data) ->
         <<"proxyEndpoint">> => Proxy,
         <<"serviceProperties">> => ServiceProps
     }};
+
+get(_, undefined, undefined, list) ->
+    {ok, HServiceDocs} = od_handle_service:list(),
+    {ok, [HServiceId || #document{key = HServiceId} <- HServiceDocs]};
 
 get(_, _HServiceId, #od_handle_service{users = Users}, users) ->
     {ok, Users};
@@ -247,10 +248,10 @@ exists(_HServiceId, _) ->
 
 
 % TODO VFS-2918
-authorize(update, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
+authorize(create, _HServiceId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 % TODO VFS-2918
-authorize(update, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
+authorize(create, _HServiceId, {deprecated_child_privileges, _GroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 
 authorize(create, undefined, entity, ?USER(UserId)) ->
