@@ -831,14 +831,10 @@ leave_handle_test(Config) ->
 init_per_suite(Config) ->
     application:start(etls),
     hackney:start(),
-    NewConfig = ?TEST_INIT(
-        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
-    ),
-    NewConfig.
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
-end_per_suite(Config) ->
+end_per_suite(_Config) ->
+    timer:sleep(24 * 3600 * 1000),
     hackney:stop(),
-    application:stop(etls),
-    ok.
-%%    test_node_starter:clean_environment(Config).
+    application:stop(etls).
