@@ -34,6 +34,24 @@ get_entity(HServiceId) ->
     end.
 
 
+% TODO VFS-2918
+create(_Client, HServiceId, {deprecated_user_privileges, UserId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_user, UserId,
+        od_handle_service, HServiceId,
+        {Operation, Privileges}
+    );
+% TODO VFS-2918
+create(_Client, HServiceId, {deprecated_child_privileges, GroupId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_group, GroupId,
+        od_handle_service, HServiceId,
+        {Operation, Privileges}
+    );
 
 create(Client, _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
@@ -142,7 +160,7 @@ update(HServiceId, entity, Data) ->
     end),
     ok;
 
-update(HServiceId, {user, UserId}, Data) ->
+update(HServiceId, {user_privileges, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_relation(
@@ -151,7 +169,7 @@ update(HServiceId, {user, UserId}, Data) ->
         {Operation, Privileges}
     );
 
-update(HServiceId, {group, GroupId}, Data) ->
+update(HServiceId, {group_privileges, GroupId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_relation(
@@ -228,8 +246,15 @@ exists(_HServiceId, _) ->
     end}.
 
 
+% TODO VFS-2918
+authorize(update, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
+% TODO VFS-2918
+authorize(update, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
+
 authorize(create, undefined, entity, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_CREATE);
+    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_CREATE);
 
 authorize(create, _HServiceId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
@@ -255,10 +280,10 @@ authorize(get, _HServiceId, _, ?USER(UserId)) ->
 authorize(update, _HandleId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 
-authorize(update, _HandleId, {user, _UserId}, ?USER(UserId)) ->
+authorize(update, _HandleId, {user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 
-authorize(update, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
+authorize(update, _HandleId, {group_privileges, _GroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 
 

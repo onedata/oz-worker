@@ -46,6 +46,9 @@
 
     get_handles/2, get_handle/3,
 
+    update_user_privileges/5, update_user_privileges/4,
+    update_group_privileges/5, update_group_privileges/4,
+
     remove_user/3,
     remove_group/3
 ]).
@@ -166,6 +169,24 @@ get_handles(Client, HServiceId) ->
 
 get_handle(Client, HServiceId, HandleId) ->
     n_entity_logic:get(Client, ?PLUGIN, HServiceId, {handle, HandleId}).
+
+
+update_user_privileges(Client, HServiceId, UserId, Operation, Privs) when is_list(Privs) ->
+    update_user_privileges(Client, HServiceId, UserId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+update_user_privileges(Client, HServiceId, UserId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, HServiceId, {user_privileges, UserId}, Data).
+
+
+update_group_privileges(Client, HServiceId, GroupId, Operation, Privs) when is_list(Privs) ->
+    update_group_privileges(Client, HServiceId, GroupId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+update_group_privileges(Client, HServiceId, GroupId, Data) ->
+    n_entity_logic:update(Client, ?PLUGIN, HServiceId, {group_privileges, GroupId}, Data).
 
 
 remove_user(Client, HServiceId, UserId) ->

@@ -43,7 +43,12 @@ get_entity(ProviderId) ->
 
 
 create(_, _, entity, Data) ->
-    Name = maps:get(<<"name">>, Data),
+    Name = case maps:get(<<"name">>, Data, undefined) of
+        undefined ->
+            maps:get(<<"clientName">>, Data);
+        N ->
+            N
+    end,
     URLs = maps:get(<<"urls">>, Data),
     RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
     CSR = maps:get(<<"csr">>, Data),
@@ -63,7 +68,12 @@ create(_, _, entity, Data) ->
     end;
 
 create(_, _, entity_dev, Data) ->
-    Name = maps:get(<<"name">>, Data),
+    Name = case maps:get(<<"name">>, Data, undefined) of
+        undefined ->
+            maps:get(<<"clientName">>, Data);
+        N ->
+            N
+    end,
     URLs = maps:get(<<"urls">>, Data),
     RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
     CSR = maps:get(<<"csr">>, Data),
@@ -107,7 +117,9 @@ get(_, _ProviderId, #od_provider{} = Provider, data) ->
     {ok, #{
         <<"name">> => Name, <<"urls">> => Urls,
         <<"redirectionPoint">> => RedirectionPoint,
-        <<"latitude">> => Latitude, <<"longitude">> => Longitude
+        <<"latitude">> => Latitude, <<"longitude">> => Longitude,
+        % TODO VFS-2918
+        <<"clientName">> => Name
     }};
 get(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
     {ok, maps:keys(Spaces)};
@@ -136,7 +148,8 @@ update(ProviderId, entity, Data) ->
             latitude = Latitude, longitude = Longitude
         } = Provider,
         {ok, Provider#od_provider{
-            name = maps:get(<<"name">>, Data, Name),
+            % TODO VFS-2918
+            name = maps:get(<<"name">>, Data, maps:get(<<"clientName">>, Data, Name)),
             urls = maps:get(<<"urls">>, Data, URLs),
             redirection_point = maps:get(<<"redirectionPoint">>, Data, RedPoint),
             latitude = maps:get(<<"latitude">>, Data, Latitude),
@@ -264,7 +277,6 @@ authorize(delete, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
 
 validate(create, entity) -> #{
     required => #{
-        <<"name">> => {binary, non_empty},
         <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty},
         <<"csr">> => {binary, non_empty}
@@ -272,11 +284,15 @@ validate(create, entity) -> #{
     optional => #{
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
+    },
+    % TODO VFS-2918
+    at_least_one => #{
+        <<"name">> => {binary, non_empty},
+        <<"clientName">> => {binary, non_empty}
     }
 };
 validate(create, entity_dev) -> #{
     required => #{
-        <<"name">> => {binary, non_empty},
         <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty},
         <<"csr">> => {binary, non_empty},
@@ -285,6 +301,11 @@ validate(create, entity_dev) -> #{
     optional => #{
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
+    },
+    % TODO VFS-2918
+    at_least_one => #{
+        <<"name">> => {binary, non_empty},
+        <<"clientName">> => {binary, non_empty}
     }
 };
 validate(create, support) -> #{
@@ -298,6 +319,7 @@ validate(create, check_my_ports) -> #{
 validate(update, entity) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
+        <<"clientName">> => {binary, non_empty},
         <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty},
         <<"latitude">> => {float, {between, -90, 90}},

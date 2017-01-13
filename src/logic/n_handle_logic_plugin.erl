@@ -34,6 +34,26 @@ get_entity(HandleId) ->
     end.
 
 
+% TODO VFS-2918
+create(_Client, HandleId, {deprecated_user_privileges, UserId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_user, UserId,
+        od_handle, HandleId,
+        {Operation, Privileges}
+    );
+% TODO VFS-2918
+create(_Client, HandleId, {deprecated_child_privileges, GroupId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_group, GroupId,
+        od_handle, HandleId,
+        {Operation, Privileges}
+    );
+
+
 create(Client, _, entity, Data) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Data),
     ResourceType = maps:get(<<"resourceType">>, Data),
@@ -156,7 +176,7 @@ update(HandleId, entity, #{<<"metadata">> := NewMetadata}) ->
     {ok, _} = od_handle:update(HandleId, #{metadata => NewMetadata}),
     ok;
 
-update(HandleId, {user, UserId}, Data) ->
+update(HandleId, {user_privileges, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_relation(
@@ -165,7 +185,7 @@ update(HandleId, {user, UserId}, Data) ->
         {Operation, Privileges}
     );
 
-update(HandleId, {group, GroupId}, Data) ->
+update(HandleId, {group_privileges, GroupId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_relation(
@@ -237,6 +257,14 @@ exists(_HandleId, _) ->
     end}.
 
 
+
+% TODO VFS-2918
+authorize(update, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_UPDATE);
+% TODO VFS-2918
+authorize(update, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?HANDLE_UPDATE);
+
 authorize(create, undefined, entity, ?USER(UserId)) ->
     {data_dependent, fun(Data) ->
         HServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
@@ -273,10 +301,10 @@ authorize(get, _HandleId, _, ?USER(UserId)) ->
 authorize(update, _HandleId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 
-authorize(update, _HandleId, {user, _UserId}, ?USER(UserId)) ->
+authorize(update, _HandleId, {user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 
-authorize(update, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
+authorize(update, _HandleId, {group_privileges, _GroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 
 

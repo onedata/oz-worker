@@ -35,6 +35,26 @@ get_entity(SpaceId) ->
     end.
 
 
+
+% TODO VFS-2918
+create(_Client, SpaceId, {deprecated_user_privileges, UserId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_user, UserId,
+        od_space, SpaceId,
+        {Operation, Privileges}
+    );
+% TODO VFS-2918
+create(_Client, SpaceId, {deprecated_child_privileges, GroupId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data),
+    Operation = maps:get(<<"operation">>, Data, set),
+    entity_graph:update_relation(
+        od_group, GroupId,
+        od_space, SpaceId,
+        {Operation, Privileges}
+    );
+
 create(Client, _, entity, #{<<"name">> := Name}) ->
     {ok, SpaceId} = od_space:create(#document{value = #od_space{name = Name}}),
     case Client of
@@ -91,6 +111,32 @@ create(_Client, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
     {ok, GroupId}.
 
 
+% TODO VFS-2918 - remove Client from get when these are not needed
+% TODO VFS-2918
+get(Client, SpaceId, _, deprecated_invite_user_token) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?SPACE_INVITE_USER_TOKEN,
+        {od_space, SpaceId}
+    ),
+    {ok, Token};
+% TODO VFS-2918
+get(Client, SpaceId, _, deprecated_invite_group_token) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?SPACE_INVITE_GROUP_TOKEN,
+        {od_space, SpaceId}
+    ),
+    {ok, Token};
+% TODO VFS-2918
+get(Client, SpaceId, _, deprecated_invite_provider_token) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?SPACE_SUPPORT_TOKEN,
+        {od_space, SpaceId}
+    ),
+    {ok, Token};
+
 get(_, undefined, undefined, list) ->
     {ok, SpaceDocs} = od_space:list(),
     {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
@@ -135,7 +181,7 @@ update(SpaceId, entity, #{<<"name">> := NewName}) ->
     {ok, _} = od_space:update(SpaceId, #{name => NewName}),
     ok;
 
-update(SpaceId, {user, UserId}, Data) ->
+update(SpaceId, {user_privileges, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_relation(
@@ -144,7 +190,7 @@ update(SpaceId, {user, UserId}, Data) ->
         {Operation, Privileges}
     );
 
-update(SpaceId, {group, GroupId}, Data) ->
+update(SpaceId, {group_privileges, GroupId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_relation(
@@ -226,6 +272,23 @@ exists(_SpaceId, _) ->
     end}.
 
 
+
+% TODO VFS-2918
+authorize(get, _GroupId, deprecated_invite_user_token, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_INVITE_USER);
+% TODO VFS-2918
+authorize(get, _GroupId, deprecated_invite_group_token, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_INVITE_GROUP);
+% TODO VFS-2918
+authorize(get, _GroupId, deprecated_invite_provider_token, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_INVITE_PROVIDER);
+% TODO VFS-2918
+authorize(update, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_SET_PRIVILEGES);
+% TODO VFS-2918
+authorize(update, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?SPACE_SET_PRIVILEGES);
+
 authorize(create, undefined, entity, ?USER) ->
     true;
 
@@ -277,10 +340,10 @@ authorize(get, _SpaceId, _, ?USER(UserId)) ->
 authorize(update, _SpaceId, entity, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_UPDATE);
 
-authorize(update, _SpaceId, {user, _UserId}, ?USER(UserId)) ->
+authorize(update, _SpaceId, {user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_SET_PRIVILEGES);
 
-authorize(update, _SpaceId, {group, _GroupId}, ?USER(UserId)) ->
+authorize(update, _SpaceId, {group_privileges, _GroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_SET_PRIVILEGES);
 
 

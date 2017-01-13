@@ -149,6 +149,25 @@ create(_Client, GroupId, children, #{<<"groupId">> := ChildGroupId}) ->
     {ok, ChildGroupId}.
 
 
+
+
+% TODO VFS-2918
+get(Client, GroupId, _, deprecated_invite_user_token) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?GROUP_INVITE_USER_TOKEN,
+        {od_group, GroupId}
+    ),
+    {ok, Token};
+% TODO VFS-2918
+get(Client, GroupId, _, deprecated_invite_group_token) ->
+    {ok, Token} = token_logic:create(
+        Client,
+        ?GROUP_INVITE_GROUP_TOKEN,
+        {od_group, GroupId}
+    ),
+    {ok, Token};
+
 get(_, undefined, undefined, list) ->
     {ok, GroupDocs} = od_group:list(),
     {ok, [GroupId || #document{key = GroupId} <- GroupDocs]};

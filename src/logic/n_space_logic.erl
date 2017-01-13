@@ -196,15 +196,13 @@ get_provider(Client, SpaceId, ProviderId) ->
     n_entity_logic:get(Client, ?PLUGIN, SpaceId, {provider, ProviderId}).
 
 
-
-
 update_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(Privs) ->
     update_user_privileges(Client, SpaceId, UserId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
 update_user_privileges(Client, SpaceId, UserId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {user, UserId}, Data).
+    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {user_privileges, UserId}, Data).
 
 
 update_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list(Privs) ->
@@ -213,7 +211,7 @@ update_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list
         <<"privileges">> => Privs
     }).
 update_group_privileges(Client, SpaceId, GroupId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {group, GroupId}, Data).
+    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {group_privileges, GroupId}, Data).
 
 
 leave_provider(Client, SpaceId, ProviderId) ->

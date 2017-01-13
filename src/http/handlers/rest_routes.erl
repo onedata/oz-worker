@@ -21,7 +21,11 @@ all() ->
     AllRoutes = lists:flatten([
         user_routes(),
         group_routes(),
-        provider_routes()
+        space_routes(),
+        share_routes(),
+        provider_routes(),
+        handle_service_routes(),
+        handle_routes()
     ]),
     % Aggregate routes that share the same path
     AggregatedRoutes = lists:foldl(
@@ -285,6 +289,9 @@ group_routes() ->
         {<<"/groups/:id/users">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = users
         }},
+        {<<"/groups/:id/users">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = users
+        }},
         {<<"/groups/:id/users/token">>, R#rest_req{
             method = post, entity_id = ?BINDING(id), resource = invite_user_token
         }},
@@ -374,6 +381,9 @@ group_routes() ->
 
         {<<"/groups/:id/children">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = children
+        }},
+        {<<"/groups/:id/children">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = children
         }},
         {<<"/groups/:id/children/token">>, R#rest_req{
             method = post, entity_id = ?BINDING(id), resource = invite_group_token
@@ -478,6 +488,162 @@ group_routes() ->
     ].
 
 
+space_routes() ->
+    R = #rest_req{
+        el_plugin = n_space_logic_plugin,
+        translator = space_rest_translator
+    },
+    [
+        {<<"/spaces">>, R#rest_req{
+            method = get, entity_id = undefined, resource = list
+        }},
+        {<<"/spaces">>, R#rest_req{
+            method = post, entity_id = undefined, resource = entity
+        }},
+        {<<"/spaces/:id">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = data
+        }},
+        {<<"/spaces/:id">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = entity
+        }},
+        {<<"/spaces/:id">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = entity
+        }},
+
+        {<<"/spaces/:id/users">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = users
+        }},
+        {<<"/spaces/:id/users">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = users
+        }},
+        {<<"/spaces/:id/users/token">>, R#rest_req{
+            method = post, entity_id = ?BINDING(id), resource = invite_user_token
+        }},
+        % TODO VFS-2918
+        {<<"/spaces/:id/users/token">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = deprecated_invite_user_token
+        }},
+        {<<"/spaces/:id/users/:uid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
+        }},
+        {<<"/spaces/:id/users/:uid">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
+        }},
+        {<<"/spaces/:id/users/:uid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {user_privileges, ?BINDING(uid)}
+        }},
+        {<<"/spaces/:id/users/:uid/privileges">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = {user_privileges, ?BINDING(uid)}
+        }},
+        % TODO VFS-2918
+        {<<"/spaces/:id/users/:uid/privileges">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {deprecated_user_privileges, ?BINDING(uid)}
+        }},
+        {<<"/spaces/:id/effective_users">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = eff_users
+        }},
+        {<<"/spaces/:id/effective_users/:uid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_user, ?BINDING(uid)}
+        }},
+        {<<"/spaces/:id/effective_users/:uid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_user_privileges, ?BINDING(uid)}
+        }},
+
+        {<<"/spaces/:id/groups">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = groups
+        }},
+        {<<"/spaces/:id/groups">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = groups
+        }},
+        {<<"/spaces/:id/groups/token">>, R#rest_req{
+            method = post, entity_id = ?BINDING(id), resource = invite_group_token
+        }},
+        % TODO VFS-2918
+        {<<"/spaces/:id/groups/token">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = deprecated_invite_group_token
+        }},
+        {<<"/spaces/:id/groups/:gid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
+        }},
+        {<<"/spaces/:id/groups/:gid">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
+        }},
+        {<<"/spaces/:id/groups/:gid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {group_privileges, ?BINDING(gid)}
+        }},
+        {<<"/spaces/:id/groups/:gid/privileges">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = {group_privileges, ?BINDING(gid)}
+        }},
+        % TODO VFS-2918
+        {<<"/spaces/:id/groups/:gid/privileges">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {deprecated_group_privileges, ?BINDING(gid)}
+        }},
+        {<<"/spaces/:id/effective_groups">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = eff_groups
+        }},
+        {<<"/spaces/:id/effective_groups/:gid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_group, ?BINDING(gid)}
+        }},
+        {<<"/spaces/:id/effective_groups/:gid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_group_privileges, ?BINDING(gid)}
+        }},
+
+        {<<"/spaces/:id/shares">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = shares
+        }},
+        {<<"/spaces/:id/shares/:shid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {shares, ?BINDING(shid)}
+        }},
+        % TODO VFS-2918
+        {<<"/spaces/:id/shares/:pid">>, R#rest_req{
+            method = put, entity_id = undefined, resource = entity,
+            % Alias for share_logic, but use user_rest_translator for reply
+            el_plugin = n_share_logic_plugin
+        }},
+
+        {<<"/spaces/:id/providers">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = providers
+        }},
+        {<<"/spaces/:id/providers/token">>, R#rest_req{
+            method = post, entity_id = ?BINDING(id), resource = invite_user_token
+        }},
+        % TODO VFS-2918
+        {<<"/spaces/:id/providers/token">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = deprecated_invite_provider_token
+        }},
+        {<<"/spaces/:id/providers/:pid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {provider, ?BINDING(pid)}
+        }},
+        {<<"/spaces/:id/providers/:pid">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = {provider, ?BINDING(pid)}
+        }}
+    ].
+
+
+share_routes() ->
+    R = #rest_req{
+        el_plugin = n_share_logic_plugin,
+        translator = share_rest_translator
+    },
+    [
+        {<<"/shares">>, R#rest_req{
+            method = get, entity_id = undefined, resource = list
+        }},
+        {<<"/shares">>, R#rest_req{
+            method = post, entity_id = undefined, resource = entity
+        }},
+        {<<"/shares/:id">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = data
+        }},
+        {<<"/shares/:id">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = entity
+        }},
+        {<<"/shares/:id">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = entity
+        }}
+    ].
+
+
 provider_routes() ->
     R = #rest_req{
         el_plugin = n_provider_logic_plugin,
@@ -554,6 +720,189 @@ provider_routes() ->
         }},
         {<<"/provider/test/check_my_ports">>, R#rest_req{
             method = post, entity_id = undefined, resource = check_my_ports
+        }}
+    ].
+
+
+handle_service_routes() ->
+    R = #rest_req{
+        el_plugin = n_handle_service_logic_plugin,
+        translator = handle_service_rest_translator
+    },
+    [
+        {<<"/handle_services">>, R#rest_req{
+            method = get, entity_id = undefined, resource = list
+        }},
+        {<<"/handle_services">>, R#rest_req{
+            method = post, entity_id = undefined, resource = entity
+        }},
+        {<<"/handle_services/:id">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = data
+        }},
+        {<<"/handle_services/:id">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = entity
+        }},
+        {<<"/handle_services/:id">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = entity
+        }},
+
+        {<<"/handle_services/:id/users">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = users
+        }},
+        {<<"/handle_services/:id/users">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = users
+        }},
+        {<<"/handle_services/:id/users/:uid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
+        }},
+        {<<"/handle_services/:id/users/:uid">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
+        }},
+        {<<"/handle_services/:id/users/:uid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {user_privileges, ?BINDING(uid)}
+        }},
+        {<<"/handle_services/:id/users/:uid/privileges">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = {user_privileges, ?BINDING(uid)}
+        }},
+        % TODO VFS-2918
+        {<<"/handle_services/:id/users/:uid/privileges">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {deprecated_user_privileges, ?BINDING(uid)}
+        }},
+        {<<"/handle_services/:id/effective_users">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = eff_users
+        }},
+        {<<"/handle_services/:id/effective_users/:uid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_user, ?BINDING(uid)}
+        }},
+        {<<"/handle_services/:id/effective_users/:uid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_user_privileges, ?BINDING(uid)}
+        }},
+
+        {<<"/handle_services/:id/groups">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = groups
+        }},
+        {<<"/handle_services/:id/groups">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = groups
+        }},
+        {<<"/handle_services/:id/groups/:gid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
+        }},
+        {<<"/handle_services/:id/groups/:gid">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
+        }},
+        {<<"/handle_services/:id/groups/:gid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {group_privileges, ?BINDING(gid)}
+        }},
+        {<<"/handle_services/:id/groups/:gid/privileges">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = {group_privileges, ?BINDING(gid)}
+        }},
+        % TODO VFS-2918
+        {<<"/handle_services/:id/groups/:gid/privileges">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {deprecated_group_privileges, ?BINDING(gid)}
+        }},
+        {<<"/handle_services/:id/effective_groups">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = eff_groups
+        }},
+        {<<"/handle_services/:id/effective_groups/:gid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_group, ?BINDING(gid)}
+        }},
+        {<<"/handle_services/:id/effective_groups/:gid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_group_privileges, ?BINDING(gid)}
+        }},
+
+        {<<"/handle_services/:id/handles">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = handles
+        }},
+        {<<"/handle_services/:id/handles/:hid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {handle, ?BINDING(hid)}
+        }}
+    ].
+
+
+handle_routes() ->
+    R = #rest_req{
+        el_plugin = n_handle_logic_plugin,
+        translator = handle_rest_translator
+    },
+    [
+        {<<"/handles">>, R#rest_req{
+            method = get, entity_id = undefined, resource = list
+        }},
+        {<<"/handles">>, R#rest_req{
+            method = post, entity_id = undefined, resource = entity
+        }},
+        {<<"/handles/:id">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = data
+        }},
+        {<<"/handles/:id">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = entity
+        }},
+        {<<"/handles/:id">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = entity
+        }},
+
+        {<<"/handles/:id/users">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = users
+        }},
+        {<<"/handles/:id/users">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = users
+        }},
+        {<<"/handles/:id/users/:uid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
+        }},
+        {<<"/handles/:id/users/:uid">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
+        }},
+        {<<"/handles/:id/users/:uid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {user_privileges, ?BINDING(uid)}
+        }},
+        {<<"/handles/:id/users/:uid/privileges">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = {user_privileges, ?BINDING(uid)}
+        }},
+        % TODO VFS-2918
+        {<<"/handles/:id/users/:uid/privileges">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {deprecated_user_privileges, ?BINDING(uid)}
+        }},
+        {<<"/handles/:id/effective_users">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = eff_users
+        }},
+        {<<"/handles/:id/effective_users/:uid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_user, ?BINDING(uid)}
+        }},
+        {<<"/handles/:id/effective_users/:uid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_user_privileges, ?BINDING(uid)}
+        }},
+
+        {<<"/handles/:id/groups">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = groups
+        }},
+        {<<"/handles/:id/groups">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = groups
+        }},
+        {<<"/handles/:id/groups/:gid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
+        }},
+        {<<"/handles/:id/groups/:gid">>, R#rest_req{
+            method = delete, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
+        }},
+        {<<"/handles/:id/groups/:gid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {group_privileges, ?BINDING(gid)}
+        }},
+        {<<"/handles/:id/groups/:gid/privileges">>, R#rest_req{
+            method = patch, entity_id = ?BINDING(id), resource = {group_privileges, ?BINDING(gid)}
+        }},
+        % TODO VFS-2918
+        {<<"/handles/:id/groups/:gid/privileges">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {deprecated_group_privileges, ?BINDING(gid)}
+        }},
+        {<<"/handles/:id/effective_groups">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = eff_groups
+        }},
+        {<<"/handles/:id/effective_groups/:gid">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_group, ?BINDING(gid)}
+        }},
+        {<<"/handles/:id/effective_groups/:gid/privileges">>, R#rest_req{
+            method = get, entity_id = ?BINDING(id), resource = {eff_group_privileges, ?BINDING(gid)}
         }}
     ].
 
