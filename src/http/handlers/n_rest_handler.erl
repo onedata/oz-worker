@@ -20,10 +20,11 @@
 -include_lib("ctool/include/logging.hrl").
 
 -type method() :: get | post | put | patch | delete.
-
 -type rest_req() :: #rest_req{}.
--export_type([method/0, rest_req/0]).
+-type rest_resp() :: #rest_resp{}.
+-export_type([method/0, rest_req/0, rest_resp/0]).
 
+% State of REST handler
 -record(state, {
     client = #client{} :: n_entity_logic:client(),
     rest_req = undefined :: rest_req() | undefined,
@@ -32,7 +33,7 @@
 -type opts() :: #{method() => rest_req()}.
 -type state() :: #state{}.
 
-%% API
+%% cowboy rest handler API
 -export([
     init/3,
     rest_init/2,
@@ -45,6 +46,9 @@
     accept_resource/2,
     provide_resource/2,
     delete_resource/2
+]).
+-export([
+    rest_routes/0
 ]).
 %% Convenience functions for rest translators
 -export([
@@ -256,6 +260,72 @@ delete_resource(Req, State) ->
     process_request(Req, State).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all REST routes in the cowboy router format.
+%% @end
+%%--------------------------------------------------------------------
+-spec rest_routes() -> [{binary(), module(), maps:map()}].
+rest_routes() ->
+    AllRoutes = lists:flatten([
+        rest_routes:user_routes(),
+        rest_routes:group_routes(),
+        rest_routes:space_routes(),
+        rest_routes:share_routes(),
+        rest_routes:provider_routes(),
+        rest_routes:handle_service_routes(),
+        rest_routes:handle_routes()
+    ]),
+    % Aggregate routes that share the same path
+    AggregatedRoutes = lists:foldl(
+        fun({Path, RestReq}, AccProps) ->
+            #rest_req{method = Method} = RestReq,
+            RoutesForPath = proplists:get_value(Path, AccProps, #{}),
+            lists:keystore(
+                Path, 1, AccProps,
+                {Path, RoutesForPath#{Method => RestReq}}
+            )
+        end, [], AllRoutes),
+    % Convert all routes to cowboy-compliant routes
+    % - prepend REST prefix to every route
+    % - rest handler module must be added as second element to the tuples
+    % - RoutesForPath will serve as Opts to rest handler init.
+    {ok, PrefixStr} = application:get_env(?APP_NAME, rest_api_prefix),
+    Prefix = str_utils:to_binary(PrefixStr),
+    lists:map(fun({Path, RoutesForPath}) ->
+        {<<Prefix/binary, Path/binary>>, ?REST_HANDLER_MODULE, RoutesForPath}
+    end, AggregatedRoutes).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% REST reply that should be used for successful REST operations that send
+%% a body in response.
+%% @end
+%%--------------------------------------------------------------------
+-spec ok_body_reply(Body :: jiffy:json_value()) -> #rest_resp{}.
+ok_body_reply(Body) ->
+    #rest_resp{code = ?HTTP_200_OK, body = Body}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% REST reply that should be used for successful REST operations that do not
+%% send any body in response.
+%% @end
+%%--------------------------------------------------------------------
+-spec ok_no_content_reply() -> #rest_resp{}.
+ok_no_content_reply() ->
+    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% REST reply that should be used for successful create REST calls.
+%% Returns 201 CREATED with proper location headers.
+%% @end
+%%--------------------------------------------------------------------
+-spec created_reply(PathTokens :: [binary()]) -> #rest_resp{}.
 % Make sure there is no leading slash (so filename can be used for joining path)
 created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
@@ -264,23 +334,27 @@ created_reply(PathTokens) ->
 %%    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
     RestPrefix = "/",
     LocationHeader = #{
-        <<"location">> => filename:join([RestPrefix | PathTokens])
+        <<"Location">> => filename:join([RestPrefix | PathTokens])
     },
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
 
-ok_no_content_reply() ->
-    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
-
-
-ok_body_reply(Body) ->
-    #rest_resp{code = ?HTTP_200_OK, body = Body}.
-
-
+%%--------------------------------------------------------------------
+%% @doc
+%% REST reply that should be used for successful REST updates.
+%% @end
+%%--------------------------------------------------------------------
+-spec updated_reply() -> #rest_resp{}.
 updated_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% REST reply that should be used for successful REST deletions.
+%% @end
+%%--------------------------------------------------------------------
+-spec updated_reply() -> #rest_resp{}.
 deleted_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
@@ -289,6 +363,15 @@ deleted_reply() ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Processes a REST request (of any type) by calling entity logic.
+%% Return new Req and State (after setting cowboy response).
+%% @end
+%%--------------------------------------------------------------------
+-spec process_request(Req :: cowboy_req:req(), State :: state()) ->
+    {halt, NewReq :: cowboy_req:req(), NewState :: state()}.
 process_request(Req, State) ->
     try
         #state{client = Client, rest_req = #rest_req{
@@ -326,10 +409,22 @@ process_request(Req, State) ->
             ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
                 ?MODULE, Type, Message
             ]),
-            {halt, State, Req}
+            {ok, Req2} = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
+            {halt, Req2, State}
     end.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Transforms binding as specified in rest routes into actual data that was
+%% sent with the request.
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_bindings(Binding | {atom(), Binding},
+    Client :: n_entity_logic:client(), Req :: cowboy_req:req()) ->
+    binary() |  {atom(), binary()} | cowboy_req() when
+    Binding :: {binding, atom()} | client_id | cowboy_req,.
 resolve_bindings(?BINDING(Key), _Client, Req) ->
     {Binding, _} = cowboy_req:binding(Key, Req),
     Binding;
@@ -343,6 +438,15 @@ resolve_bindings(Other, _Client, _Req) ->
     Other.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Calls entity logic function to handle a request.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_entity_logic(method(), n_entity_logic:client(), n_entity_logic:el_plugin(),
+    n_entity_logic:entity_id(), n_entity_logic:resource(), n_entity_logic:data()) ->
+    ok | {ok, term()} | {error, term()}.
 call_entity_logic(create, Client, LogicPlugin, EntityId, Resource, Data) ->
     n_entity_logic:create(Client, LogicPlugin, EntityId, Resource, Data);
 call_entity_logic(get, Client, LogicPlugin, EntityId, Resource, _Data) ->
@@ -353,6 +457,12 @@ call_entity_logic(delete, Client, LogicPlugin, EntityId, Resource, _Data) ->
     n_entity_logic:delete(Client, LogicPlugin, EntityId, Resource).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Translates entity logic response into REST response using TranslatorModule.
+%% @end
+%%--------------------------------------------------------------------
 translate_response(TranslatorModule, Operation, EntityId, Resource, Result) ->
     try
         case Result of

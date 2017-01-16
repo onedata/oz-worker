@@ -22,17 +22,34 @@
 -export([client_to_string/1]).
 
 -type client() :: #client{}.
+-type el_plugin() :: module().
 -type operation() :: create | get | update | delete.
+-type entity_id() :: od_user:id() | od_group:id() | od_space:id() |
+od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id().
+-type entity_type() :: od_user | od_group | od_space |
+od_share | od_provider | od_handle_service | od_handle | oz_privileges.
+-type entity() :: #od_user{} | #od_group{} | #od_space{} |
+#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
+-type resource() :: atom() | {atom(), term()}.
 -type data() :: maps:map() | binary().
--export_type([client/0, operation/0, data/0]).
+-export_type([
+    client/0,
+    el_plugin/0,
+    operation/0,
+    entity_id/0,
+    entity_type/0,
+    entity/0,
+    resource/0,
+    data/0
+]).
 
 -record(request, {
     client = #client{} :: client(),
-    el_plugin = undefined :: undefined | atom(), %TODO
-    entity_id = undefined :: undefined | binary(), %TODO
-    entity = undefined :: undefined | term(), %TODO
+    el_plugin = undefined :: el_plugin(),
+    entity_id = undefined :: undefined | entity_id(),
+    entity = undefined :: undefined | entity(),
     operation = create :: operation(),
-    resource = undefined :: undefined | term(), %TODO
+    resource = undefined :: resource(),
     data = #{} :: data()
 }).
 

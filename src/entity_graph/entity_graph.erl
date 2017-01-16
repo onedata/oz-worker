@@ -83,17 +83,16 @@
     privileges_operation/0
 ]).
 
+% Types imported from entity_logic for shorter code
+-type entity_id() :: n_entity_logic:entity_id().
+% OZ privileges are treated differently, but the recalculation process is
+% in large part the same as other relations.
+-type entity_type() :: entity_type() | oz_privileges.
+-type entity() :: n_entity_logic:entity().
+
 % Internal types
 % Direction in effective graph
 -type direction() :: top_down | bottom_up.
--type entity_id() :: od_user:id() | od_group:id() | od_space:id() |
-od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id().
-% OZ privileges are treated differently, but the recalculation process is
-% in large part the same as other relations.
--type entity_type() :: od_user | od_group | od_space |
-od_share | od_provider | od_handle_service | od_handle | oz_privileges.
--type entity() :: #od_user{} | #od_group{} | #od_space{} |
-#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
 % Relation attributes
 -type attributes() :: term().
 % Possible values for attributes update - either new attributes or a pair

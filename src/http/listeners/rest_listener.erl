@@ -68,7 +68,6 @@ start() ->
 %%            {":alias." ++ Hostname, [{'_', client_redirect_handler, [RestPort]}]},
             {'_', routes()}
         ]),
-        ?emergency("routes: ~p~n", [routes()]),
 
         {ok, _} = ranch:start_listener(?REST_LISTENER, RestHttpsAcceptors,
             ranch_etls, [
@@ -131,13 +130,8 @@ healthcheck() ->
 %%--------------------------------------------------------------------
 -spec routes() -> [{Path :: binary(), Module :: module(), State :: term()}].
 routes() ->
-    {ok, PrefixStr} = application:get_env(?APP_NAME, rest_api_prefix),
-    Prefix = str_utils:to_binary(PrefixStr),
-    Routes = lists:map(fun({Path, Module, InitialState}) ->
-        {<<Prefix/binary, Path/binary>>, Module, InitialState}
-    end, rest_routes:all()),
     {ok, ZoneCADir} = application:get_env(?APP_NAME, ozpca_dir),
     [
         {<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}} |
-        Routes
+        n_rest_handler:rest_routes()
     ].

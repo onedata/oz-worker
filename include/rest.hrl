@@ -5,12 +5,13 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc Common definitions for REST
+%%% @doc
+%%% Common definitions for REST.
 %%% @end
 %%%-------------------------------------------------------------------
 
--ifndef(REST_CONFIG_HRL).
--define(REST_CONFIG_HRL, 1).
+-ifndef(REST_HRL).
+-define(REST_HRL, 1).
 
 -include("entity_logic.hrl").
 
@@ -20,21 +21,24 @@
 %% Record containing the state of REST request.
 -record(rest_req, {
     method = get :: n_rest_handler:method(),
+    % Entity logic plugin to handle the request
     el_plugin = undefined :: module(),
     entity_id = undefined :: undefined | binary(),
     resource = undefined :: undefined | atom() | {atom(), term()},
+    % Rest translator plugin to translate the response
     translator = undefined :: module()
 }).
-% Convenience macros user in rest_req
--define(BINDING(__KEY), {binding, __KEY}).
--define(CLIENT_ID, client_id).
--define(COWBOY_REQ, cowboy_req).
 %% Record representing REST response.
 -record(rest_resp, {
     code = 200 :: integer(),
     headers = #{} :: #{binary() => binary()},
-    body = <<"">> :: binary() | jiffy:json_value()
+    body = <<"">> :: jiffy:json_value()
 }).
+
+% Convenience macros user in rest_req
+-define(BINDING(__KEY), {binding, __KEY}).
+-define(CLIENT_ID, client_id).
+-define(COWBOY_REQ, cowboy_req).
 
 % Defines with HTTP codes
 -define(HTTP_200_OK, 200).

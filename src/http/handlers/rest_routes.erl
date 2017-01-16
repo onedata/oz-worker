@@ -5,50 +5,31 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module contains definitions of all REST operations, in a
-%%% format of cowboy router.
+%%% @doc This module contains definitions of all REST operations..
 %%% @end
 %%%-------------------------------------------------------------------
 -module(rest_routes).
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include_lib("ctool/include/logging.hrl").
 
--export([all/0]).
-
-all() ->
-    AllRoutes = lists:flatten([
-        user_routes(),
-        group_routes(),
-        space_routes(),
-        share_routes(),
-        provider_routes(),
-        handle_service_routes(),
-        handle_routes()
-    ]),
-    % Aggregate routes that share the same path
-    AggregatedRoutes = lists:foldl(
-        fun({Path, RestReq}, AccProps) ->
-            #rest_req{method = Method} = RestReq,
-            RoutesForPath = proplists:get_value(Path, AccProps, #{}),
-            lists:keystore(
-                Path, 1, AccProps,
-                {Path, RoutesForPath#{Method => RestReq}}
-            )
-        end, [], AllRoutes),
-    % Convert all routes to cowboy-compliant routes
-    % - rest handler module must be added as second element to the tuples
-    % - RoutesForPath will serve as Opts to rest handler init.
-    A = lists:map(fun({Path, RoutesForPath}) ->
-        {Path, ?REST_HANDLER_MODULE, RoutesForPath}
-    end, AggregatedRoutes),
-    ?dump(A),
-    lists:map(fun({Path, RoutesForPath}) ->
-        {Path, ?REST_HANDLER_MODULE, RoutesForPath}
-    end, AggregatedRoutes).
+-export([
+    user_routes/0,
+    group_routes/0,
+    space_routes/0,
+    share_routes/0,
+    provider_routes/0,
+    handle_service_routes/0,
+    handle_routes/0
+]).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Definitions of user REST paths.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_routes() -> [{binary(), #rest_req{}}].
 user_routes() ->
     R = #rest_req{
         el_plugin = n_user_logic_plugin,
@@ -243,6 +224,12 @@ user_routes() ->
     ].
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Definitions of group REST paths.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_routes() -> [{binary(), #rest_req{}}].
 group_routes() ->
     R = #rest_req{
         el_plugin = n_group_logic_plugin,
@@ -480,6 +467,12 @@ group_routes() ->
     ].
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Definitions of space REST paths.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_routes() -> [{binary(), #rest_req{}}].
 space_routes() ->
     R = #rest_req{
         el_plugin = n_space_logic_plugin,
@@ -610,6 +603,12 @@ space_routes() ->
     ].
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Definitions of share REST paths.
+%% @end
+%%--------------------------------------------------------------------
+-spec share_routes() -> [{binary(), #rest_req{}}].
 share_routes() ->
     R = #rest_req{
         el_plugin = n_share_logic_plugin,
@@ -634,6 +633,12 @@ share_routes() ->
     ].
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Definitions of provider REST paths.
+%% @end
+%%--------------------------------------------------------------------
+-spec provider_routes() -> [{binary(), #rest_req{}}].
 provider_routes() ->
     R = #rest_req{
         el_plugin = n_provider_logic_plugin,
@@ -714,6 +719,12 @@ provider_routes() ->
     ].
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Definitions of handle_service REST paths.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_routes() -> [{binary(), #rest_req{}}].
 handle_service_routes() ->
     R = #rest_req{
         el_plugin = n_handle_service_logic_plugin,
@@ -809,6 +820,12 @@ handle_service_routes() ->
     ].
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Definitions of handle REST paths.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_routes() -> [{binary(), #rest_req{}}].
 handle_routes() ->
     R = #rest_req{
         el_plugin = n_handle_logic_plugin,
