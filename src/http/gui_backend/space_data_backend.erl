@@ -199,5 +199,6 @@ space_record(SpaceId, UserId, HasViewPrivileges) ->
         {<<"hasViewPrivilege">>, HasViewPrivileges},
         {<<"totalSize">>, TotalSize},
         {<<"supportSizes">>, ProvidersSupports},
-        {<<"providers">>, Providers}
+        {<<"providers">>, Providers},
+        {<<"user">>, UserId}
     ].

@@ -145,8 +145,10 @@ delete_record(<<"group">>, _Id) ->
 %%--------------------------------------------------------------------
 -spec group_record(GroupId :: binary()) -> proplists:proplist().
 group_record(GroupId) ->
+    UserId = gui_session:get_user_id(),
     {ok, #document{value = #od_group{name = Name}}} = od_group:get(GroupId),
     [
         {<<"id">>, GroupId},
-        {<<"name">>, Name}
+        {<<"name">>, Name},
+        {<<"user">>, UserId}
     ].
