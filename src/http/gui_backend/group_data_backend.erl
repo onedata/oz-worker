@@ -143,5 +143,6 @@ group_record(Client, GroupId) ->
     {ok, #{<<"name">> := Name}} = n_group_logic:get_data(Client, GroupId),
     [
         {<<"id">>, GroupId},
-        {<<"name">>, Name}
+        {<<"name">>, Name},
+        {<<"user">>, UserId}
     ].

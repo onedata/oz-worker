@@ -166,5 +166,6 @@ provider_record(ProviderId, UserId) ->
         {<<"host">>, Host},
         {<<"spaces">>, SpacesToDisplay},
         {<<"latitude">>, Latitude},
-        {<<"longitude">>, Longitude}
+        {<<"longitude">>, Longitude},
+        {<<"user">>, UserId}
     ].
