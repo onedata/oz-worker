@@ -254,7 +254,7 @@ create_group_with_uuid(UserId, Name, UUId) ->
     #document{value = #od_user{groups = Groups} = User} = UserDoc,
 
     Privileges = privileges:group_admin(),
-    Group = #od_group{name = Name, users = [{UserId, Privileges}]},
+    Group = #od_group{name = Name, users = #{UserId => Privileges}},
     {ok, GroupId} = od_group:save(#document{key = UUId, value = Group}),
     UserNew = User#od_user{groups = [GroupId | Groups]},
     od_user:save(UserDoc#document{value = UserNew}),
@@ -270,7 +270,7 @@ create_group_with_uuid(UserId, Name, UUId) ->
 -spec create_space_with_uuid({user | group, Id :: binary()}, Name :: binary(), UUId :: binary()) ->
     {ok, SpaceId :: binary()} | no_return().
 create_space_with_uuid(Member, Name, UUId) ->
-    create_space_with_provider(Member, Name, [], UUId).
+    create_space_with_provider(Member, Name, #{}, UUId).
 
 
 %%--------------------------------------------------------------------
@@ -284,7 +284,7 @@ create_space_with_uuid(Member, Name, UUId) ->
 create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUId) ->
     {ok, Macaroon} = token_utils:deserialize(Token),
     {ok, Member} = token_logic:consume(Macaroon),
-    create_space_with_provider(Member, Name, [{ProviderId, Support}], UUId).
+    create_space_with_provider(Member, Name, #{ProviderId => Support}, UUId).
 
 
 %%--------------------------------------------------------------------
@@ -300,7 +300,7 @@ create_space_with_provider({user, UserId}, Name, Support, UUId) ->
     #document{value = #od_user{spaces = Spaces} = User} = UserDoc,
 
     Privileges = privileges:space_admin(),
-    Space = #od_space{name = Name, providers = Support, users = [{UserId, Privileges}]},
+    Space = #od_space{name = Name, providers = Support, users = #{UserId => Privileges}},
     {ok, SpaceId} = od_space:save(#document{key = UUId, value = Space}),
     UserNew = User#od_user{spaces = [SpaceId | Spaces]},
     od_user:save(UserDoc#document{value = UserNew}),
@@ -312,7 +312,7 @@ create_space_with_provider({group, GroupId}, Name, Support, UUId) ->
 
     Privileges = privileges:space_admin(),
     Space = #od_space{name = Name, providers = Support,
-        groups = [{GroupId, Privileges}]},
+        groups = #{GroupId => Privileges}},
     {ok, SpaceId} = od_space:save(#document{key = UUId, value = Space}),
     GroupNew = Group#od_group{spaces = [SpaceId | Spaces]},
     od_group:save(GroupDoc#document{value = GroupNew}),

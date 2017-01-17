@@ -52,11 +52,16 @@ page_init() ->
         default_provider = DefaultProvider
     }} = n_user_logic:get(?USER(UserId), UserId),
     case DefaultProvider of
-        {ok, undefined} ->
+        undefined ->
             {redirect_relative, <<"/">>};
-        {ok, ProvId} ->
-            ?debug("Automatically redirecting user `~s` "
-            "to default provider `~s`", [UserId, ProvId]),
-            {ok, ProvURL} = auth_logic:get_redirection_uri(UserId, ProvId),
-            {redirect_absolute, ProvURL}
+        ProvId ->
+            case n_provider_logic:check_provider_connectivity(ProvId) of
+                true ->
+                    ?debug("Automatically redirecting user `~s` "
+                    "to default provider `~s`", [UserId, ProvId]),
+                    {ok, ProvURL} = auth_logic:get_redirection_uri(UserId, ProvId),
+                    {redirect_absolute, ProvURL};
+                false ->
+                    {redirect_relative, <<"/">>}
+            end
     end.

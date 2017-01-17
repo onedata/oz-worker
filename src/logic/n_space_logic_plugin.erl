@@ -188,7 +188,13 @@ get(_, _SpaceId, #od_space{shares = Shares}, shares) ->
     {ok, Shares};
 get(_, _SpaceId, #od_space{}, {share, ShareId}) ->
     {ok, Share} = ?throw_on_failure(n_share_logic_plugin:get_entity(ShareId)),
-    n_share_logic_plugin:get(?ROOT, ShareId, Share, data).
+    n_share_logic_plugin:get(?ROOT, ShareId, Share, data);
+
+get(_, _SpaceId, #od_space{providers = Providers}, providers) ->
+    {ok, Providers};
+get(_, _SpaceId, #od_space{}, {provider, ProviderId}) ->
+    {ok, Provider} = ?throw_on_failure(n_provider_logic_plugin:get_entity(ProviderId)),
+    n_provider_logic_plugin:get(?ROOT, ProviderId, Provider, data).
 
 
 
@@ -347,6 +353,9 @@ authorize(get, _SpaceId, {share, _ShareId}, ?USER(UserId)) ->
     auth_by_membership(UserId);
 
 authorize(get, _SpaceId, {share, _ShareId}, ?PROVIDER(ProviderId)) ->
+    auth_by_support(ProviderId);
+
+authorize(get, _SpaceId, providers, ?PROVIDER(ProviderId)) ->
     auth_by_support(ProviderId);
 
 authorize(get, _SpaceId, _, ?USER(UserId)) ->

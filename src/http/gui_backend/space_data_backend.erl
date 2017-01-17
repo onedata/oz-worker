@@ -197,13 +197,13 @@ space_record(SpaceId, UserId, HasViewPrivileges) ->
     % Try to get space name from personal user's mapping, if not use its
     % default name.
     Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),
-    {Providers, SupportSizes} = lists:unzip(ProvidersSupports),
-    TotalSize = lists:sum(SupportSizes),
+    Providers = maps:keys(ProvidersSupports),
+    TotalSize = lists:sum(maps:values(ProvidersSupports)),
     [
         {<<"id">>, SpaceId},
         {<<"name">>, Name},
         {<<"hasViewPrivilege">>, HasViewPrivileges},
         {<<"totalSize">>, TotalSize},
-        {<<"supportSizes">>, ProvidersSupports},
+        {<<"supportSizes">>, maps:to_list(ProvidersSupports)},
         {<<"providers">>, Providers}
     ].

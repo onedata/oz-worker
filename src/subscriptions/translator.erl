@@ -95,7 +95,7 @@ get_msg(Seq, Doc, od_user = Model) ->
         {handles, Handles},
 
         % Effective relations to other entities
-        {eff_groups, EffGroups},
+        {eff_groups, eff_relation_to_proplist(EffGroups)},
         {eff_spaces, []}, % TODO currently always empty
         {eff_providers, []}, % TODO currently always empty
         {eff_handle_services, []}, % TODO currently always empty
@@ -125,18 +125,18 @@ get_msg(Seq, Doc, od_group = Model) ->
 
         % Group graph related entities (direct and effective)
         {parents, Parents},
-        {children, Children},
+        {children, relation_with_attrs_to_proplist(Children)},
         {eff_children, []}, % TODO currently always empty
         {eff_parents, []}, % TODO currently always empty
 
         % Direct relations to other entities
-        {users, Users},
+        {users, relation_with_attrs_to_proplist(Users)},
         {spaces, Spaces},
         {handle_services, HandleServices},
         {handles, Handles},
 
         % Effective relations to other entities
-        {eff_users, EUsers},
+        {eff_users, eff_relation_with_attrs_to_proplist(EUsers)},
         {eff_spaces, []}, % TODO currently always empty
         {eff_providers, []}, % TODO currently always empty
         {eff_handle_services, []}, % TODO currently always empty
@@ -157,9 +157,9 @@ get_msg(Seq, Doc, od_space = Model) ->
         {name, Name},
 
         % Direct relations to other entities
-        {providers, Supports},
-        {users, Users},
-        {groups, Groups},
+        {providers, relation_with_attrs_to_proplist(Supports)},
+        {users, relation_with_attrs_to_proplist(Users)},
+        {groups, relation_with_attrs_to_proplist(Groups)},
         {shares, Shares},
 
         % Effective relations to other entities
@@ -188,13 +188,13 @@ get_msg(Seq, Doc, od_share = Model) ->
     ]}];
 get_msg(Seq, Doc, od_provider = Model) ->
     #document{value = Value, key = Id} = Doc,
-    #od_provider{name = Name, urls = URLs, spaces = SpaceIds} = Value,
+    #od_provider{name = Name, urls = URLs, spaces = Spaces} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {name, Name},
         {urls, URLs},
 
         % Direct relations to other entities
-        {spaces, SpaceIds},
+        {spaces, relation_to_proplist(Spaces)},
 
         {public_only, false}
     ]}];
@@ -214,8 +214,8 @@ get_msg(Seq, Doc, od_handle_service = Model) ->
         {service_properties, ServiceProperties},
 
         % Direct relations to other entities
-        {users, Users},
-        {groups, Groups},
+        {users, relation_with_attrs_to_proplist(Users)},
+        {groups, relation_with_attrs_to_proplist(Groups)},
 
         % Effective relations to other entities
         {eff_users, []}, % TODO currently always empty
@@ -244,8 +244,8 @@ get_msg(Seq, Doc, od_handle = Model) ->
 
         % Direct relations to other entities
         {handle_service, HandleService},
-        {users, Users},
-        {groups, Groups},
+        {users, relation_with_attrs_to_proplist(Users)},
+        {groups, relation_with_attrs_to_proplist(Groups)},
 
         % Effective relations to other entities
         {eff_users, []}, % TODO currently always empty
@@ -375,3 +375,26 @@ calculate_space_aliases(SpaceIds, SpaceAliases) ->
         end, #{}, SpaceNamesMerged),
     ?dump(R),
     R.
+
+
+% TODO VFS-2918
+relation_to_proplist(Map) ->
+    maps:keys(Map).
+
+
+% TODO VFS-2918
+relation_with_attrs_to_proplist(Map) ->
+    maps:to_list(Map).
+
+
+% TODO VFS-2918
+eff_relation_to_proplist(Map) ->
+    maps:keys(Map).
+
+
+% TODO VFS-2918
+eff_relation_with_attrs_to_proplist(Map) ->
+    maps:to_list(maps:map(
+        fun(K, {Attrs, _}) ->
+            Attrs
+        end, Map)).

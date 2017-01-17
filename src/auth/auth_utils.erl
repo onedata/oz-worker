@@ -106,7 +106,7 @@ validate_login() ->
                             [Reason, ParamsProplist, gui_ctx:get_form_params()]),
                         {error, ?error_auth_invalid_request};
 
-                    {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderId, user_id = UserId, email_list = OriginalEmails, name = Name}} ->
+                    {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderId, user_id = OauthUserId, email_list = OriginalEmails, name = Name}} ->
                         Emails = lists:map(fun(Email) ->
                             http_utils:normalize_email(Email)
                         end, OriginalEmails),
@@ -120,7 +120,7 @@ validate_login() ->
                         case proplists:get_value(connect_account, Props) of
                             false ->
                                 % Standard login, check if there is an account belonging to the user
-                                case od_user:get({connected_account_user_id, {ProviderId, UserId}}) of
+                                case od_user:get({connected_account_user_id, {ProviderId, OauthUserId}}) of
                                     {ok, #document{key = UserId}} ->
                                         % The account already exists
                                         gui_session:log_in(UserId),
@@ -159,7 +159,7 @@ validate_login() ->
                             true ->
                                 % Account adding flow
                                 % Check if this account isn't connected to other profile
-                                case od_user:get({connected_account_user_id, {ProviderId, UserId}}) of
+                                case od_user:get({connected_account_user_id, {ProviderId, OauthUserId}}) of
                                     {ok, _} ->
                                         % The account is used on some other profile, cannot proceed
                                         {error, ?error_auth_account_already_connected};

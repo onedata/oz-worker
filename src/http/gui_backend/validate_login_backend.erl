@@ -41,21 +41,26 @@ page_init() ->
                 default_provider = DefaultProvider
             }} = n_user_logic:get(?USER(UserId), UserId),
             case DefaultProvider of
-                {ok, undefined} ->
+                undefined ->
                     {redirect_relative, URL};
-                {ok, ProvId} ->
-                    ?debug("Automatically redirecting user `~s` "
-                    "to default provider `~s`", [UserId, ProvId]),
-                    {ok, ProvURL} = auth_logic:get_redirection_uri(
-                        UserId, ProvId
-                    ),
-                    {redirect_absolute, ProvURL}
+                ProvId ->
+                    case n_provider_logic:check_provider_connectivity(ProvId) of
+                        true ->
+                            ?debug("Automatically redirecting user `~s` "
+                            "to default provider `~s`", [UserId, ProvId]),
+                            {ok, ProvURL} = auth_logic:get_redirection_uri(
+                                UserId, ProvId
+                            ),
+                            {redirect_absolute, ProvURL};
+                        false ->
+                            {redirect_relative, URL}
+                    end
             end;
         new_user ->
             UserId = gui_session:get_user_id(),
             ?info("User ~p logged in for the first time", [UserId]),
             {redirect_relative, <<?PAGE_AFTER_LOGIN>>};
         {error, ErrorId} ->
-            ?info("Error: ~p", [ErrorId]),
+            ?error("Error during login: ~p", [ErrorId]),
             {redirect_relative, <<"/">>}
     end.

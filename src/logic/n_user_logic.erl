@@ -618,7 +618,7 @@ setup_user(UserId, UserInfo) ->
             {ok, GlobalGroups} = application:get_env(?APP_NAME, global_groups),
             lists:foreach(
                 fun({GroupId, Privileges}) ->
-                    {ok, GroupId} = n_group_logic:add_user(
+                    {ok, UserId} = n_group_logic:add_user(
                         ?ROOT, GroupId, UserId, Privileges
                     )
                 end, GlobalGroups);

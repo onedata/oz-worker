@@ -15,6 +15,7 @@
 -author("Lukasz Opiola").
 -behaviour(page_backend_behaviour).
 
+-include("entity_logic.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -32,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
-    {ok, UserIds} = od_user:get_all_ids(),
+    {ok, UserIds} = n_user_logic:list(?ROOT),
     Buttons = lists:map(
         fun(UserId) ->
             Path = str_utils:format_bin("/validate_dev_login?user=~s",

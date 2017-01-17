@@ -90,7 +90,7 @@ validate_login() ->
         ProvUserInfo = #oauth_account{
             provider_id = ?PROVIDER_NAME,
             user_id = auth_utils:get_value_binary(<<"uid">>, JSONProplist),
-            email_list = auth_utils:extract_emails(JSONProplist),
+            email_list = auth_utils:extract_emails(UserInfoProplist),
             name = auth_utils:get_value_binary(<<"display_name">>, UserInfoProplist),
             login = auth_utils:get_value_binary(<<"login">>, UserInfoProplist)
         },

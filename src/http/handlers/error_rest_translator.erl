@@ -19,6 +19,13 @@
 
 -export([response/1]).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Translates an entity logic error into REST response.
+%% @end
+%%--------------------------------------------------------------------
+-spec response({error, term()}) -> #rest_resp{}.
 response({error, Type}) ->
     case translate({error, Type}) of
         Code when is_integer(Code) ->
@@ -31,6 +38,15 @@ response({error, Type}) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Translates an entity logic error into HTTP code, headers and body.
+%% @end
+%%--------------------------------------------------------------------
+-spec translate({error, term()}) -> Code |
+{Code, {MessageFormat :: binary(), FormatArgs :: [term()]}} |
+{Code, MessageBinary :: binary()} when Code :: integer().
 % General errors
 translate(?ERROR_INTERNAL_SERVER_ERROR) ->
     ?HTTP_500_INTERNAL_SERVER_ERROR;

@@ -203,8 +203,13 @@ get_by_criterion({email, Value}) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result};
+    case datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []) of
+        {ok, []} ->
+            {error, {not_found, od_user}};
+        {ok, [Result | _]} ->
+            {ok, Result}
+    end;
+
 
 get_by_criterion({alias, Value}) ->
     Filter = fun
@@ -218,8 +223,12 @@ get_by_criterion({alias, Value}) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result};
+    case datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []) of
+        {ok, []} ->
+            {error, {not_found, od_user}};
+        {ok, [Result | _]} ->
+            {ok, Result}
+    end;
 
 get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
     Filter = fun
@@ -241,8 +250,12 @@ get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result}.
+    case datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []) of
+        {ok, []} ->
+            {error, {not_found, od_user}};
+        {ok, [Result | _]} ->
+            {ok, Result}
+    end.
 
 
 

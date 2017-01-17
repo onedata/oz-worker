@@ -354,7 +354,7 @@ updated_reply() ->
 %% REST reply that should be used for successful REST deletions.
 %% @end
 %%--------------------------------------------------------------------
--spec updated_reply() -> #rest_resp{}.
+-spec deleted_reply() -> #rest_resp{}.
 deleted_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
@@ -398,19 +398,16 @@ process_request(Req, State) ->
         ),
         #rest_resp{code = Code, headers = Headers, body = Body} = RestResp,
         HeadersList = maps:to_list(Headers),
-        BodyBinary = case Body of
-            Bin when is_binary(Bin) -> Bin;
-            Map when is_map(Map) -> json_utils:encode_map(Map)
-        end,
-        {ok, Req3} = cowboy_req:reply(Code, HeadersList, BodyBinary, Req2),
+        BodyJSON = json_utils:encode_map(Body),
+        {ok, Req3} = cowboy_req:reply(Code, HeadersList, BodyJSON, Req2),
         {halt, Req3, State}
     catch
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
                 ?MODULE, Type, Message
             ]),
-            {ok, Req2} = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
-            {halt, Req2, State}
+            {ok, NewReq} = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
+            {halt, NewReq, State}
     end.
 
 
@@ -423,8 +420,8 @@ process_request(Req, State) ->
 %%--------------------------------------------------------------------
 -spec resolve_bindings(Binding | {atom(), Binding},
     Client :: n_entity_logic:client(), Req :: cowboy_req:req()) ->
-    binary() |  {atom(), binary()} | cowboy_req() when
-    Binding :: {binding, atom()} | client_id | cowboy_req,.
+    binary() |  {atom(), binary()} | cowboy_req:req() when
+    Binding :: {binding, atom()} | client_id | cowboy_req.
 resolve_bindings(?BINDING(Key), _Client, Req) ->
     {Binding, _} = cowboy_req:binding(Key, Req),
     Binding;
@@ -463,6 +460,9 @@ call_entity_logic(delete, Client, LogicPlugin, EntityId, Resource, _Data) ->
 %% Translates entity logic response into REST response using TranslatorModule.
 %% @end
 %%--------------------------------------------------------------------
+-spec translate_response(TranslatorModule :: module(), n_entity_logic:operation(),
+    n_entity_logic:entity_id(), n_entity_logic:resource(), n_entity_logic:result()) ->
+    #rest_resp{}.
 translate_response(TranslatorModule, Operation, EntityId, Resource, Result) ->
     try
         case Result of

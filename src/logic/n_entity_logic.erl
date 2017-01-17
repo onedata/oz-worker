@@ -32,6 +32,7 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
 -type resource() :: atom() | {atom(), term()}.
 -type data() :: maps:map() | binary().
+-type result() :: ok | {ok, term()} | {error, Reason :: term()}.
 -export_type([
     client/0,
     el_plugin/0,
@@ -40,7 +41,8 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
     entity_type/0,
     entity/0,
     resource/0,
-    data/0
+    data/0,
+    result/0
 ]).
 
 -record(request, {

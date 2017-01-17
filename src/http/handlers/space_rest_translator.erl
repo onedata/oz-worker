@@ -109,6 +109,12 @@ response(get, _SpaceId, shares, {ok, Shares}) ->
 response(get, _SpaceId, {share, ShareId}, {ok, Share}) ->
     share_rest_translator:response(get, ShareId, data, {ok, Share});
 
+response(get, _SpaceId, providers, {ok, Providers}) ->
+    n_rest_handler:ok_body_reply(#{<<"providers">> => Providers});
+
+response(get, _SpaceId, {provider, ProviderId}, {ok, Provider}) ->
+    provider_rest_translator:response(get, ProviderId, data, {ok, Provider});
+
 
 response(update, _SpaceId, _, ok) ->
     n_rest_handler:updated_reply();

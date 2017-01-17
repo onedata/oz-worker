@@ -148,8 +148,9 @@ provider_record(ProviderId, UserId) ->
         redirection_point = RedPoint,
         latitude = Latitude,
         longitude = Longitude,
-        spaces = ProvSpaces
+        spaces = SpacesWithSupports
     }} = n_provider_logic:get(?ROOT, ProviderId),
+    Spaces = maps:keys(SpacesWithSupports),
 
     #{host := Host} = url_utils:parse(RedPoint),
     IsWorking = n_provider_logic:check_provider_connectivity(ProviderId),
@@ -157,7 +158,7 @@ provider_record(ProviderId, UserId) ->
     SpacesToDisplay = lists:filter(
         fun(Space) ->
             lists:member(Space, maps:keys(EffUserSpaces))
-        end, ProvSpaces),
+        end, Spaces),
     [
         {<<"id">>, ProviderId},
         {<<"name">>, Name},

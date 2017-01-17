@@ -24,20 +24,19 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec providers(Doc :: datastore:document(), Model :: subscriptions:model())
-        -> [ProviderID :: binary()].
+        -> [ProviderId :: binary()].
 providers(Doc, od_space) ->
-    #document{value = #od_space{users = SpaceUserTuples, groups = GroupTuples,
+    #document{value = #od_space{users = UserPrivileges, groups = GroupPrivileges,
         providers = ProvidersSupports}} = Doc,
-    {SpaceProviders, _} = lists:unzip(ProvidersSupports),
+    SpaceProviders = maps:keys(ProvidersSupports),
 
     GroupUsersSets = lists:flatmap(fun({GroupId, _}) ->
         {ok, #document{value = #od_group{users = GroupUserTuples}}} =
             od_group:get(GroupId),
-        {GroupUsers, _} = lists:unzip(GroupUserTuples),
-        GroupUsers
-    end, GroupTuples),
+        maps:keys(GroupUserTuples)
+    end, maps:to_list(GroupPrivileges)),
 
-    {SpaceUsers, _} = lists:unzip(SpaceUserTuples),
+    SpaceUsers = maps:keys(UserPrivileges),
     SpaceUsersSet = ordsets:from_list(SpaceUsers),
 
     SpaceProviders ++ through_users(SpaceUsersSet ++ GroupUsersSets);
@@ -53,21 +52,21 @@ providers(Doc, od_group) ->
         value = #od_group{
             users = UsersWithPrivileges,
             eff_users = EUsersWithPrivileges,
-            eff_children = EGroupsWithPrivileges
+            eff_children = EChildrenWithPrivileges
         }} = Doc,
-    {EGroups, _} = lists:unzip(EGroupsWithPrivileges),
-    {Users, _} = lists:unzip(UsersWithPrivileges),
-    {EUsers, _} = lists:unzip(EUsersWithPrivileges),
+    EGroups = maps:keys(EChildrenWithPrivileges),
+    Users = maps:keys(UsersWithPrivileges),
+    EUsers = maps:keys(EUsersWithPrivileges),
     AncestorsUsers = lists:foldl(
-        fun(AncestorID, Acc) ->
-            case od_group:get(AncestorID) of
+        fun(AncestorId, Acc) ->
+            case od_group:get(AncestorId) of
                 {ok, #document{
                     value = #od_group{eff_users = AncUsersAndPerms}}} ->
-                    {AncestorUsers, _} = lists:unzip(AncUsersAndPerms),
+                    AncestorUsers = maps:keys(AncUsersAndPerms),
                     Acc ++ AncestorUsers;
                 {error, Reason} ->
                     ?warning("Referenced group ~p not found due to ~p",
-                        [AncestorID, Reason]),
+                        [AncestorId, Reason]),
                     Acc
             end
         end, [], EGroups -- [Doc#document.key]),
@@ -81,11 +80,11 @@ providers(Doc, od_provider) ->
 
 providers(Doc, od_handle_service) ->
     #document{value = #od_handle_service{eff_users = EffUsers}} = Doc,
-    through_users(EffUsers);
+    through_users(maps:keys(EffUsers));
 
 providers(Doc, od_handle) ->
     #document{value = #od_handle{eff_users = EffUsers}} = Doc,
-    through_users(EffUsers);
+    through_users((EffUsers));
 
 providers(_Doc, _Type) ->
     [].
@@ -101,15 +100,14 @@ providers(_Doc, _Type) ->
 %% current subscription.
 %% @end
 %%--------------------------------------------------------------------
--spec through_users(UserIDs :: [binary()]) -> ProviderIDs :: [binary()].
-through_users(UserIDs) ->
-    UsersSet = ordsets:from_list(UserIDs),
+-spec through_users(UserIds :: [binary()]) -> ProviderIds :: [binary()].
+through_users(UserIds) ->
+    UsersSet = ordsets:from_list(UserIds),
     lists:filtermap(fun(SubDoc) ->
         #document{value = #provider_subscription{users = Users,
-            provider = ProviderID}} = SubDoc,
+            provider = ProviderId}} = SubDoc,
         case ordsets:is_disjoint(UsersSet, ordsets:from_list(Users)) of
-            false -> {true, ProviderID};
+            false -> {true, ProviderId};
             true -> false
         end
     end, subscriptions:all()).
-

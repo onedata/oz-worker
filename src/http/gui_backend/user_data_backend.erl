@@ -176,7 +176,7 @@ user_record(Client, UserId) ->
         default_provider = DefaultProviderValue,
         eff_groups = EffGroups,
         eff_spaces = EffSpaces,
-        eff_providers = Providers
+        eff_providers = EffProviders
     }} = n_user_logic:get(Client, UserId),
     Alias = case str_utils:to_binary(UserAlias) of
         <<"">> -> null;
@@ -224,5 +224,5 @@ user_record(Client, UserId) ->
         {<<"defaultProviderId">>, DefaultProvider},
         {<<"groups">>, maps:keys(EffGroups)},
         {<<"spaces">>, maps:keys(EffSpaces)},
-        {<<"providers">>, Providers}
+        {<<"providers">>, maps:keys(EffProviders)}
     ].
