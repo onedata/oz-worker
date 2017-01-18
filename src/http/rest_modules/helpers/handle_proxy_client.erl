@@ -42,7 +42,7 @@ put(ProxyEndpoint, Path, Headers, Body) ->
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
 patch(ProxyEndpoint, Path, Headers, Body) ->
-    http_client:request(patch, <<ProxyEndpoint/binary, Path/binary>>, Headers, Body).
+    http_client:patch(<<ProxyEndpoint/binary, Path/binary>>, Headers, Body).
 
 %%--------------------------------------------------------------------
 %% @doc

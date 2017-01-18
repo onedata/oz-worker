@@ -73,7 +73,7 @@ get(ID) ->
     Reason :: request_failed | {error_code(), Message :: binary()}.
 set(ID, Data) ->
     Body = json_utils:encode({struct, [{?DATA_KEY, Data}]}),
-    Headers = [{<<"content-type">>, <<"application/json">>}],
+    Headers = #{<<"content-type">> => <<"application/json">>},
     case http_client:request(post, get_dht_endpoint(ID), Headers, Body) of
         {ok, 200, _, ResponseBody} ->
             Response = json_utils:decode(ResponseBody),

@@ -33,8 +33,8 @@ rest_api_connection_test(Config) ->
     {ok, RestPort} = rpc:call(Node1, application, get_env, [?APP_NAME, rest_port]),
     URL1 = str_utils:format("https://~s:~B/provider/test/check_my_ip", [utils:get_host(Node1), RestPort]),
     URL2 = str_utils:format("https://~s:~B/provider/test/check_my_ip", [utils:get_host(Node2), RestPort]),
-    ?assertMatch({ok, _, _, _}, http_client:get(URL1, [], <<>>, [insecure])),
-    ?assertMatch({ok, _, _, _}, http_client:get(URL2, [], <<>>, [insecure])).
+    ?assertMatch({ok, _, _, _}, http_client:get(URL1, #{}, <<>>, [insecure])),
+    ?assertMatch({ok, _, _, _}, http_client:get(URL2, #{}, <<>>, [insecure])).
 
 datastore_connection_test(Config) ->
     [Node1, Node2] = ?config(oz_worker_nodes, Config),

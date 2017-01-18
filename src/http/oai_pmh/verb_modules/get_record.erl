@@ -106,7 +106,7 @@ get_response(<<"record">>, Args) ->
 %%% If it fails, throws idDoesNotExist
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_handle_safe(oai_id()) -> od_handle:info().
+-spec get_handle_safe(oai_id()) -> #od_handle{}.
 get_handle_safe(OAIId) ->
     try
         Id = oai_utils:oai_identifier_decode(OAIId),

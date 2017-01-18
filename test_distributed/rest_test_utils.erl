@@ -128,14 +128,13 @@ check_rest_call(Config, ArgsMap) ->
                 ]} | ReqOpts]
         end,
         % Add insecure option - we do not want the OZ server cert to be checked.
-        {ok, RespCode, RespHeadersList, RespBody} = http_client:request(
+        {ok, RespCode, RespHeaders, RespBody} = http_client:request(
             ReqMethod,
             URL,
-            maps:to_list(HeadersPlusAuth),
+            HeadersPlusAuth,
             ReqBody,
             [insecure | ReqOptsPlusAuth]
         ),
-        RespHeaders = maps:from_list(RespHeadersList),
 
         % Check response code if specified
         case ExpCode of
@@ -163,7 +162,7 @@ check_rest_call(Config, ArgsMap) ->
                     Type1:Message1 ->
                         ct:print(
                             "Headers verification function crashed - ~p:~p~nStacktrace: ", [
-                                Type1, Message1, erlang:get_stacktrace()
+                                Type1, Message1, lager:pr_stacktrace(erlang:get_stacktrace())
                             ]),
                         false
                 end,
@@ -207,7 +206,7 @@ check_rest_call(Config, ArgsMap) ->
                     Type2:Message2 ->
                         ct:print(
                             "Body verification function crashed - ~p:~p~nStacktrace: ", [
-                                Type2, Message2, erlang:get_stacktrace()
+                                Type2, Message2, lager:pr_stacktrace(erlang:get_stacktrace())
                             ]),
                         false
                 end,
@@ -287,7 +286,7 @@ check_rest_call(Config, ArgsMap) ->
             ct:print(
                 "~p:check_rest_call failed with unexpected result - ~p:~p~n"
                 "Stacktrace: ~p", [
-                    ?MODULE, Type, Message, erlang:get_stacktrace()
+                    ?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
                 ]),
             false
     end.

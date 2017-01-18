@@ -33,7 +33,7 @@ run_scenario(Function, Args) ->
         Type:Message ->
             ct:print(
                 "Unexpected error in ~p:run_scenario - ~p:~p~nStacktrace: ~p",
-                [?MODULE, Type, Message, erlang:get_stacktrace()]
+                [?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())]
             ),
             false
     end.

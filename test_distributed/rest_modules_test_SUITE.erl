@@ -2059,7 +2059,7 @@ do_request(Endpoint, Headers, Method, Body) ->
     do_request(Endpoint, Headers, Method, Body, []).
 do_request(Endpoint, Headers, Method, Body, Options) ->
     % Add insecure option - we do not want the GR server cert to be checked.
-    http_client:request(Method, Endpoint, Headers, Body, [insecure | Options]).
+    http_client:request(Method, Endpoint, maps:from_list(Headers), Body, [insecure | Options]).
 
 get_macaroon_id(Token) ->
     {ok, Macaroon} = token_utils:deserialize(Token),

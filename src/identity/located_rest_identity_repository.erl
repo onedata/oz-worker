@@ -94,5 +94,5 @@ get_public_key_via_rest(OzDomain, ID) ->
     {ok, RestPort} = application:get_env(?APP_NAME, rest_port),
     URL = str_utils:format("https://~s:~B~s/publickey/~s", [
         OzDomain, RestPort, RESTAPIPrefixStr, http_utils:url_encode(ID)]),
-    {ok, 200, _, Body} = http_client:get(URL, [], <<>>, [insecure]),
+    {ok, 200, _, Body} = http_client:get(URL, #{}, <<>>, [insecure]),
     proplists:get_value(<<"publicKey">>, json_utils:decode(Body)).

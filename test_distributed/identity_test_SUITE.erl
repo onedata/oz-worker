@@ -180,7 +180,7 @@ get_public_key_rest(OzNode, ID) ->
     RestAddress = get_rest_address(OzNode),
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Endpoint = RestAddress ++ "/publickey/" ++ EncodedID,
-    Response = http_client:request(get, Endpoint, [], [], [insecure]),
+    Response = http_client:request(get, Endpoint, #{}, [], [insecure]),
 
     ?assertMatch({ok, 200, _ResponseHeaders, _}, Response),
     {_, _, _, ResponseBody} = Response,
@@ -194,7 +194,7 @@ update_public_key_rest(OzNode, ID, PublicKey) ->
     Endpoint = RestAddress ++ "/publickey/" ++ EncodedID,
     Encoded = identity_utils:encode(PublicKey),
     Body = json_utils:encode([{<<"publicKey">>, Encoded}]),
-    Headers = [{<<"content-type">>, <<"application/json">>}],
+    Headers = #{<<"content-type">> => <<"application/json">>},
     Response = http_client:request(patch, Endpoint, Headers, Body, [insecure]),
     ?assertMatch({ok, 204, _, _}, Response).
 
@@ -208,7 +208,7 @@ register_provider_rest(OzNode, ID, PublicKey) ->
         {<<"urls">>, [<<"127.0.0.1">>]},
         {<<"redirectionPoint">>, <<"127.0.0.1">>}
     ]),
-    Headers = [{<<"content-type">>, <<"application/json">>}],
+    Headers = #{<<"content-type">> => <<"application/json">>},
     Response = http_client:request(post, Endpoint, Headers, Body, [insecure]),
     ?assertMatch({ok, 204, _, _}, Response).
 

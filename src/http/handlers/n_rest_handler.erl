@@ -471,17 +471,16 @@ translate_response(TranslatorModule, Operation, EntityId, Resource, Result) ->
         end
     catch
         Type:Message ->
-            ?error("Cannot translate REST result for:~n"
+            ?error_stacktrace("Cannot translate REST result for:~n"
             "TranslatorModule: ~p~n"
             "Operation: ~p~n"
             "EntityId: ~p~n"
             "Resource: ~p~n"
             "Result: ~p~n"
             "---------~n"
-            "Error was: ~p:~p~n"
-            "Stacktrace: ~p", [
+            "Error was: ~p:~p", [
                 TranslatorModule, Operation, EntityId,
-                Resource, Result, Type, Message, erlang:get_stacktrace()
+                Resource, Result, Type, Message
             ]),
             error_rest_translator:response(?ERROR_INTERNAL_SERVER_ERROR)
     end.

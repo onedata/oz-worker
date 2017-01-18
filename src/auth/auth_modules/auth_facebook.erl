@@ -72,7 +72,7 @@ validate_login() ->
         URL = <<(access_token_endpoint())/binary, "?", Params/binary>>,
         % Send request to Facebook endpoint
         {ok, 200, _, Response} = http_client:get(URL,
-            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}]),
+            #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>}),
 
         % Parse out received access token
         AccessToken = proplists:get_value(<<"access_token">>, cow_qs:parse_qs(Response)),
@@ -83,7 +83,7 @@ validate_login() ->
             "&fields=email,name">>,
         % Send request to Facebook endpoint
         {ok, 200, _, JSON} = http_client:get(URL2,
-            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}]),
+            #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>}),
 
         % Parse received JSON
         JSONProplist = json_utils:decode(JSON),

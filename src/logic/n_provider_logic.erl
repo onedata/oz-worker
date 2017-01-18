@@ -232,7 +232,7 @@ check_provider_connectivity(ProviderId) ->
                     Host, ?PROVIDER_ID_ENDPOINT
                 ]),
                 {ok, _, _, ProviderId} =
-                    http_client:get(ConnCheckEndpoint, [], <<>>, [insecure]),
+                    http_client:get(ConnCheckEndpoint, #{}, <<>>, [insecure]),
                 true
             catch _:_ ->
                 false

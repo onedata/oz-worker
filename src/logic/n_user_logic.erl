@@ -453,7 +453,7 @@ is_email_occupied(UserId, Email) ->
     Password :: binary()) ->
     {ok, UserDoc :: #document{}, FirstLogin :: boolean()} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
-    Headers = [basic_auth_header(Login, Password)],
+    Headers = basic_auth_header(Login, Password),
     URL = get_onepanel_rest_user_url(Login),
     RestCallResult = case http_client:get(URL, Headers, <<"">>, [insecure]) of
         {ok, 200, _, JSON} ->
@@ -537,13 +537,12 @@ authenticate_by_basic_credentials(Login, Password) ->
 -spec change_user_password(Login :: binary(), OldPassword :: binary(),
     Password :: binary()) -> ok | {error, term()}.
 change_user_password(Login, OldPassword, NewPassword) ->
-    Headers = [
-        {<<"content-type">>, <<"application/json">>},
-        basic_auth_header(Login, OldPassword)
-    ],
+    Headers = basic_auth_header(Login, OldPassword)#{
+        <<"content-type">> => <<"application/json">>
+    },
     URL = get_onepanel_rest_user_url(Login),
     Body = json_utils:encode([{<<"password">>, NewPassword}]),
-    case http_client:request(patch, URL, Headers, Body, [insecure]) of
+    case http_client:patch(URL, Headers, Body, [insecure]) of
         {ok, 204, _, _} ->
             ok;
         {ok, 401, _, _} ->
@@ -575,10 +574,10 @@ change_user_password(Login, OldPassword, NewPassword) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec basic_auth_header(Login :: binary(), Password :: binary()) ->
-    {Key :: binary(), Value :: binary()}.
+    http_client:headers().
 basic_auth_header(Login, Password) ->
     UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
-    {<<"Authorization">>, <<"Basic ", UserAndPassword/binary>>}.
+    #{<<"Authorization">> => <<"Basic ", UserAndPassword/binary>>}.
 
 %%--------------------------------------------------------------------
 %% @private

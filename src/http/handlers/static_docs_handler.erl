@@ -60,7 +60,7 @@ handle(Req, State) ->
                 FileURL = <<DocsServer/binary, FilePath/binary>>,
                 {ReqHeaders, _} = cowboy_req:headers(Req),
                 {ok, Code, RespHeaders, Result} =
-                    http_client:get(FileURL, ReqHeaders),
+                    http_client:get(FileURL, maps:from_list(ReqHeaders)),
                 {ok, Req2} = cowboy_req:reply(Code, RespHeaders, Result, Req),
                 Req2
         end,

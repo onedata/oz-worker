@@ -116,8 +116,9 @@ validate_login(ProviderName, SecretSendMethod, Insecure) ->
                 [];
             secret_over_http_basic ->
                 B64 = base64:encode(
-                    <<ClientId/binary, ":", ClientSecret/binary>>),
-                [{<<"Authorization">>, <<"Basic ", B64/binary>>}]
+                    <<ClientId/binary, ":", ClientSecret/binary>>
+                ),
+                #{<<"Authorization">> => <<"Basic ", B64/binary>>}
         end,
         NewParamsProplist = SecretPostParams ++ [
             {<<"code">>, Code},
@@ -127,9 +128,9 @@ validate_login(ProviderName, SecretSendMethod, Insecure) ->
         % Convert proplist to params string
         Params = http_utils:proplist_to_url_params(NewParamsProplist),
         % Prepare headers
-        Headers = SecretHeaders ++ [
-            {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}
-        ],
+        Headers = SecretHeaders#{
+            <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+        },
         % Send request to access token endpoint
         XRDS = get_xrds(ProviderName, Insecure),
         {ok, 200, _, ResponseBinary} = http_client:post(
@@ -148,7 +149,7 @@ validate_login(ProviderName, SecretSendMethod, Insecure) ->
         % Send request to user info endpoint
         {ok, 200, _, Response2} = http_client:get(
             URL,
-            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}],
+            #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>},
             <<"">>,
             Opts
         ),
@@ -189,7 +190,7 @@ get_xrds(ProviderName, Insecure) ->
     end,
     ProviderConfig = auth_config:get_auth_config(ProviderName),
     XRDSEndpoint = proplists:get_value(xrds_endpoint, ProviderConfig),
-    {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, [], <<>>, Opts),
+    {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{}, <<>>, Opts),
     json_utils:decode(XRDS).
 
 %%--------------------------------------------------------------------

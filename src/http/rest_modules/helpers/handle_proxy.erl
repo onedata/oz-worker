@@ -42,7 +42,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
         <<"serviceProperties">> => ServiceProperties,
         <<"metadata">> => #{<<"onedata_dc">> => Metadata}
     },
-    Headers = [{<<"content-type">>, <<"application/json">>}, {<<"accept">>, <<"application/json">>}],
+    Headers = #{<<"content-type">> => <<"application/json">>, <<"accept">> => <<"application/json">>},
     Type = maps:get(<<"type">>, ServiceProperties),
     case Type of
         <<"DOI">> ->
@@ -74,7 +74,7 @@ unregister_handle(HandleId) ->
 %%        {<<"serviceProperties">>, ServiceProperties}
 %%    ],
     Body = ServiceProperties, %todo use above Body after fixing proxy
-    Headers = [{<<"content-type">>, <<"application/json">>}, {<<"accept">>, <<"application/json">>}],
+    Headers = #{<<"content-type">> => <<"application/json">>, <<"accept">> => <<"application/json">>},
     Type = maps:get(<<"type">>, ServiceProperties),
     {ok, 200, _, _} =
         case Type of
@@ -120,7 +120,7 @@ modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata) ->
                 <<"serviceProperties">> => ServiceProperties,
                 <<"metadata">> => #{<<"onedata_dc">> => FinalMetadata}
             },
-            Headers = [{<<"content-type">>, <<"application/json">>}, {<<"accept">>, <<"application/json">>}],
+            Headers = #{<<"content-type">> => <<"application/json">>, <<"accept">> => <<"application/json">>},
             Type = maps:get(<<"type">>, ServiceProperties),
             {ok, 204, _, _} =
                 case Type of

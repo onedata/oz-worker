@@ -273,7 +273,7 @@ list_handles() ->
 %%% Retrieves specified handle record.
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_handle(HandleId :: od_handle:id()) -> od_handle:info().
+-spec get_handle(HandleId :: od_handle:id()) -> #od_handle{}.
 get_handle(HandleId) ->
     {ok, Handle} = n_handle_logic:get(?ROOT, HandleId),
     Handle.

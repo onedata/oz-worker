@@ -58,9 +58,9 @@ basic_auth_login_test(Config) ->
         "https://~s/do_login", [OneZoneIP]
     ),
     UserPasswordB64 = base64:encode(<<"user1:password1">>),
-    BasicAuthHeaders = [
-        {<<"authorization">>, <<"Basic ", UserPasswordB64/binary>>}
-    ],
+    BasicAuthHeaders = #{
+        <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
+    },
     Response = http_client:post(
         BasicAuthEndpoint, BasicAuthHeaders, [], [insecure]
     ),
@@ -72,9 +72,9 @@ basic_auth_login_test(Config) ->
     ?assertMatch(<<"session_id=", _/binary>>, Cookie),
     % Try some inexistent user credentials if 401 is returned
     WrongUserPasswordB64 = base64:encode(<<"lol:wut">>),
-    WrongBasicAuthHeaders = [
-        {<<"authorization">>, <<"Basic ", WrongUserPasswordB64/binary>>}
-    ],
+    WrongBasicAuthHeaders = #{
+        <<"authorization">> => <<"Basic ", WrongUserPasswordB64/binary>>
+    },
     ?assertMatch({ok, 401, _, _}, http_client:post(
         BasicAuthEndpoint, WrongBasicAuthHeaders, [], [insecure]
     )),
@@ -126,9 +126,9 @@ automatic_group_membership_test(Config) ->
     ),
     % Appmock's app description contains mocked user (user2:password2)
     UserPasswordB64 = base64:encode(<<"user2:password2">>),
-    BasicAuthHeaders = [
-        {<<"authorization">>, <<"Basic ", UserPasswordB64/binary>>}
-    ],
+    BasicAuthHeaders = #{
+        <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
+    },
     ?assertMatch({ok, 200, _, _}, http_client:post(
         BasicAuthEndpoint, BasicAuthHeaders, [], [insecure]
     )),

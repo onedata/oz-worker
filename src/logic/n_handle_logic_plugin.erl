@@ -257,7 +257,6 @@ exists(_HandleId, _) ->
     end}.
 
 
-
 % TODO VFS-2918
 authorize(create, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
@@ -268,9 +267,15 @@ authorize(create, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(
 authorize(create, undefined, entity, ?USER(UserId)) ->
     {data_dependent, fun(Data) ->
         HServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
-        n_handle_service_logic:user_has_eff_privilege(
+        ShareId = maps:get(<<"resourceId">>, Data, <<"">>),
+        {ok, #od_share{space = SpaceId}} = od_share:get(ShareId),
+        CanManageShares = n_space_logic:has_eff_privilege(
+            SpaceId, UserId, ?SPACE_MANAGE_SHARES
+        ),
+        CanRegisterHandles = n_handle_service_logic:user_has_eff_privilege(
             HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE
-        )
+        ),
+        CanManageShares andalso CanRegisterHandles
     end};
 
 authorize(create, _HandleId, users, ?USER(UserId)) ->
