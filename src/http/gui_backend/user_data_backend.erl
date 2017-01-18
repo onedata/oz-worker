@@ -22,7 +22,7 @@
 -export([init/0, terminate/0]).
 -export([find_record/2, find_all/1, query/2, query_record/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
--export([user_record/2]).
+-export([user_record/2, push_user_record_when_synchronized/1]).
 
 %%%===================================================================
 %%% data_backend_behaviour callbacks
@@ -154,11 +154,10 @@ delete_record(<<"user">>, _Id) ->
 
 
 %%%===================================================================
-%%% Internal functions
+%%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Returns a client-compliant user record based on user id.
 %% @end
@@ -166,7 +165,7 @@ delete_record(<<"user">>, _Id) ->
 -spec user_record(Client :: n_entity_logic:client(), UserId :: od_user:id()) ->
     proplists:proplist().
 user_record(Client, UserId) ->
-    {ok,#od_user{
+    {ok, #od_user{
         name = Name,
         alias = UserAlias,
         basic_auth_enabled = BasicAuthEnabled,
@@ -226,3 +225,17 @@ user_record(Client, UserId) ->
         {<<"spaces">>, maps:keys(EffSpaces)},
         {<<"providers">>, maps:keys(EffProviders)}
     ].
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Schedules an asynchronous push when user record has been synchronized.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_user_record_when_synchronized(UserId :: od_user:id()) -> ok.
+push_user_record_when_synchronized(UserId) ->
+    {ok, _} = gui_async:spawn(true, fun() ->
+        entity_graph:ensure_up_to_date(),
+        gui_async:push_updated(<<"user">>, user_record(?USER(UserId), UserId))
+    end),
+    ok.

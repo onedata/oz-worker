@@ -81,6 +81,7 @@
     get_provider/2,
     list_providers/1,
     delete_provider/2,
+    support_space/4,
     support_space/5
 ]).
 -export([
@@ -93,7 +94,7 @@
 -export([
     create_handle/6, create_handle/3,
     list_handles/1,
-    update_handle/5,
+    update_handle/3, update_handle/5,
     delete_handle/2,
     add_user_to_handle/3,
     add_group_to_handle/3
@@ -774,7 +775,25 @@ delete_provider(Config, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Supports a space by a provider.
+%% Supports a space by a provider based on space id.
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Config :: term(), Client :: n_entity_logic:client(),
+    ProviderId :: od_provider:id(), Token :: binary() | macaroon:macaroon(),
+    Size :: non_neg_integer()) ->
+    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
+support_space(Config, ProviderId, SpaceId, Size) ->
+    {ok, Macaroon} = ?assertMatch({ok, _}, space_invite_provider_token(
+        Config, ?ROOT, SpaceId
+    )),
+    ?assertMatch({ok, _}, call_oz(Config, n_provider_logic, support_space, [
+        ?PROVIDER(ProviderId), ProviderId, Macaroon, Size
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space by a provider based on token.
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space(Config :: term(), Client :: n_entity_logic:client(),
@@ -907,6 +926,19 @@ create_handle(Config, Client, Data) ->
 list_handles(Config) ->
     ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, list, [
         ?ROOT
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a handle
+%% @end
+%%--------------------------------------------------------------------
+-spec update_handle(Config :: term(), HandleId :: od_handle:id(),
+    Data :: maps:map()) -> ok.
+update_handle(Config, HandleId, Data) ->
+    ?assertMatch(ok, call_oz(Config, n_handle_logic, update, [
+        ?ROOT, HandleId, Data
     ])).
 
 
@@ -1072,22 +1104,13 @@ create_and_support_3_spaces(Config, ProviderId) ->
     S1Name = <<"Space 1">>,
     S2Name = <<"Space 2">>,
     S3Name = <<"Space 3">>,
-    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, S1Name),
-    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, S2Name),
-    {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, S3Name),
+    {ok, S1} = create_space(Config, ?ROOT, S1Name),
+    {ok, S2} = create_space(Config, ?ROOT, S2Name),
+    {ok, S3} = create_space(Config, ?ROOT, S3Name),
     % Support them by the provider
-    {ok, Macaroon1} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
-    {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S2),
-    {ok, Macaroon3} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S3),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, ?PROVIDER(ProviderId), ProviderId, Macaroon1, MinimumSupportSize
-    ),
-    {ok, S2} = oz_test_utils:support_space(
-        Config, ?PROVIDER(ProviderId), ProviderId, Macaroon2, MinimumSupportSize
-    ),
-    {ok, S3} = oz_test_utils:support_space(
-        Config, ?PROVIDER(ProviderId), ProviderId, Macaroon3, MinimumSupportSize
-    ),
+    {ok, S1} = support_space(Config, ProviderId, S1, MinimumSupportSize),
+    {ok, S2} = support_space(Config, ProviderId, S2, MinimumSupportSize),
+    {ok, S3} = support_space(Config, ProviderId, S3, MinimumSupportSize),
     [
         {S1, S1Name},
         {S2, S2Name},
@@ -1102,7 +1125,7 @@ create_and_support_3_spaces(Config, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec minimum_support_size(Config :: term()) -> integer().
 minimum_support_size(Config) ->
-    {ok, MinimumSupportSize} = oz_test_utils:call_oz(
+    {ok, MinimumSupportSize} = call_oz(
         Config, application, get_env, [oz_worker, minimum_space_support_size]
     ),
     MinimumSupportSize.
@@ -1132,7 +1155,7 @@ generate_provider_cert_files() ->
 %%--------------------------------------------------------------------
 -spec ensure_eff_graph_up_to_date(Config :: term()) -> true.
 ensure_eff_graph_up_to_date(Config) ->
-    ?assert(oz_test_utils:call_oz(Config, entity_graph, ensure_up_to_date, [])).
+    ?assert(call_oz(Config, entity_graph, ensure_up_to_date, [])).
 
 
 %%--------------------------------------------------------------------

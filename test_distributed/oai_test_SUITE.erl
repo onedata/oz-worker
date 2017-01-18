@@ -436,7 +436,7 @@ identify_test_base(Config, Method) ->
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
+    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
@@ -464,7 +464,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    SpaceIds = create_spaces(Config, ?SPACE_NAMES(2), {user, User}),
+    SpaceIds = create_spaces(Config, ?SPACE_NAMES(2), ?USER(User)),
     [ShareId1, ShareId2] = create_shares(Config, SpaceIds),
     HSId = create_handle_service(Config, User),
     Timestamp1 = erlang:universaltime(),
@@ -503,7 +503,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
 get_record_test_base(Config, Method) ->
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
+    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
@@ -877,7 +877,7 @@ id_not_existing_test_base(Config, Method) ->
 cannot_disseminate_format_test_base(Config, Method) ->
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
+    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
@@ -896,7 +896,7 @@ no_set_hierarchy_test_base(Config, Method) ->
 
 list_metadata_formats_no_format_error_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Space1} = oz_test_utils:create_space(Config, {user, User}, ?SPACE_NAME1),
+    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
@@ -1191,9 +1191,9 @@ ensure_atom(Arg) when is_atom(Arg) -> Arg;
 ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
 ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 
-create_spaces(Config, SpacesNames, Member) ->
+create_spaces(Config, SpacesNames, Client) ->
     lists:map(fun(SpaceName) ->
-        {ok, SpaceId} = oz_test_utils:create_space(Config, Member, SpaceName),
+        {ok, SpaceId} = oz_test_utils:create_space(Config, Client, SpaceName),
         SpaceId
     end, SpacesNames).
 
@@ -1226,7 +1226,7 @@ modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
 
 setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    SpaceIds = create_spaces(Config, ?SPACE_NAMES(RecordsNum), {user, User}),
+    SpaceIds = create_spaces(Config, ?SPACE_NAMES(RecordsNum), ?USER(User)),
     ShareIds = create_shares(Config, SpaceIds),
     HSId = create_handle_service(Config, User),
     create_handles_with_mocked_timestamps(Config, User, HSId, ShareIds, BeginTime,
@@ -1264,7 +1264,9 @@ create_handle(Config, User, HandleServiceId, ResourceId, Metadata) ->
     HId.
 
 modify_handle(Config, HandleId, Metadata) ->
-    ok = oz_test_utils:update_handle(Config, HandleId, undefined, undefined, Metadata).
+    ok = oz_test_utils:update_handle(Config, HandleId, #{
+        <<"metadata">> => Metadata
+    }).
 
 mock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),

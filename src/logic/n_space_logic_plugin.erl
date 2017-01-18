@@ -429,14 +429,16 @@ validate(update, entity) -> #{
         <<"name">> => {binary, non_empty}
     }
 };
-validate(update, Member) when Member =:= user orelse Member =:= group -> #{
+validate(update, {user_privileges, _UserId}) ->#{
     required => #{
         <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
     },
     optional => #{
         <<"operation">> => {atom, [set, grant, revoke]}
     }
-}.
+};
+validate(update, {group_privileges, GroupId}) ->
+    validate(update, {user_privileges, GroupId}).
 
 
 entity_to_string(SpaceId) ->

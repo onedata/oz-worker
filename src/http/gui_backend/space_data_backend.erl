@@ -117,10 +117,7 @@ create_record(<<"space">>, Data) ->
         Bin when is_binary(Bin) ->
             UserId = gui_session:get_user_id(),
             {ok, SpaceId} = n_space_logic:create(?USER(UserId), Name),
-            % Push user record with a new space list.
-            gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(?USER(UserId), UserId)
-            ),
+            user_data_backend:push_user_record_when_synchronized(UserId),
             {ok, space_record(SpaceId, UserId)};
         _ ->
             gui_error:report_error(<<"Invalid space name">>)

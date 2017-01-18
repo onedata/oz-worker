@@ -413,6 +413,8 @@ authorize(create, UserId, create_group, ?USER(UserId)) ->
     n_group_logic_plugin:authorize(create, undefined, entity, ?USER(UserId));
 
 authorize(create, UserId, create_space, ?USER(UserId)) ->
+    ?dump({create, UserId, create_space, ?USER(UserId)}),
+    ?dump(n_space_logic_plugin:authorize(create, undefined, entity, ?USER(UserId))),
     n_space_logic_plugin:authorize(create, undefined, entity, ?USER(UserId));
 
 authorize(create, UserId, create_handle_service, ?USER(UserId)) ->

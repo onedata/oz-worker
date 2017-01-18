@@ -60,6 +60,8 @@
 
 -define(ENTITY_GRAPH_LOCK, entity_graph).
 -define(STATE_KEY, <<"entity_graph_state">>).
+% How often should effective graph state be checked during ensure_up_to_date.
+-define(UP_TO_DATE_CHECK_INTERVAL, 3000).
 
 % Data types that hold different types of relations.
 -type relation(EntityId) :: [EntityId].
@@ -117,6 +119,7 @@ eff_relation(entity_id()) | eff_relation_with_attrs(entity_id(), attributes()) |
 -export([remove_relation/4]).
 -export([delete_with_relations/2]).
 -export([update_oz_privileges/4]).
+-export([mark_dirty/2, mark_dirty/5]).
 
 %%%===================================================================
 %%% API
@@ -180,7 +183,7 @@ ensure_up_to_date(Retries) ->
             true;
         false ->
             schedule_refresh(),
-            timer:sleep(3000),
+            timer:sleep(?UP_TO_DATE_CHECK_INTERVAL),
             ensure_up_to_date(Retries - 1)
     end.
 
@@ -309,8 +312,8 @@ update_relation(od_user, UserId, od_group, GroupId, NewPrivs) ->
 update_relation(od_group, ChGroupId, od_group, ParGroupId, NewPrivs) ->
     update_relation(od_group, ChGroupId, NewPrivs, od_group, ParGroupId, undefined);
 
-update_relation(od_user, GroupId, od_space, SpaceId, NewPrivs) ->
-    update_relation(od_user, GroupId, NewPrivs, od_space, SpaceId, undefined);
+update_relation(od_user, UserId, od_space, SpaceId, NewPrivs) ->
+    update_relation(od_user, UserId, NewPrivs, od_space, SpaceId, undefined);
 update_relation(od_group, GroupId, od_space, SpaceId, NewPrivs) ->
     update_relation(od_group, GroupId, NewPrivs, od_space, SpaceId, undefined);
 
@@ -345,7 +348,7 @@ update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
                 ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
             true ->
                 {ok, mark_dirty(bottom_up, true, ParType, ParId, update_child(
-                    Parent, ChType, ChId, ParAttrs
+                    Parent, ChType, ChId, ChAttrs
                 ))}
         end
     end,
@@ -355,7 +358,7 @@ update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
                 ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
             true ->
                 {ok, mark_dirty(top_down, true, ChType, ChId, update_parent(
-                    Child, ParType, ParId, ChAttrs
+                    Child, ParType, ParId, ParAttrs
                 ))}
         end
     end,
@@ -657,9 +660,10 @@ refresh_entity(Direction, EntityType, EntityId) ->
     % Update the record marking it not dirty and setting newly calculated
     % effective relations.
     {ok, _} = EntityType:update(EntityId, fun(Ent) ->
-        {ok, mark_dirty(Direction, false, EntityType, EntityId, update_eff_relations(
+        NewRecord = mark_dirty(Direction, false, EntityType, EntityId, update_eff_relations(
             Direction, Ent, AggregatedEffRelations
-        ))}
+        )),
+        {ok, NewRecord}
     end),
     ok.
 
@@ -667,9 +671,38 @@ refresh_entity(Direction, EntityType, EntityId) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Marks given entity as dirty and returns update entity record (it still needs
-%% to be saved to datastore). If an entity is already marked as dirty, it's
-%% priority is updated.
+%% Marks given entity as dirty (in all directions) and returns updated entity
+%% record (it still needs to be saved to datastore).
+%% If an entity is already marked as dirty, it's priority is updated.
+%% @end
+%%--------------------------------------------------------------------
+-spec mark_dirty(Direction :: direction(), Flag :: boolean(),
+    EntityType :: entity_type(), EntityId :: entity_id(),
+    Entity :: entity()) -> entity().
+mark_dirty(EntityId, #od_user{} = User) ->
+    mark_dirty(top_down, true, od_user, EntityId, User);
+mark_dirty(EntityId, #od_group{} = Group) ->
+    mark_dirty(bottom_up, true, od_group, EntityId, Group),
+    mark_dirty(top_down, true, od_group, EntityId, Group);
+mark_dirty(EntityId, #od_space{} = Space) ->
+    mark_dirty(bottom_up, true, od_space, EntityId, Space),
+    mark_dirty(top_down, true, od_space, EntityId, Space);
+mark_dirty(_EntityId, #od_user{} = Share) ->
+    Share;
+mark_dirty(EntityId, #od_provider{} = Provider) ->
+    mark_dirty(bottom_up, true, od_provider, EntityId, Provider);
+mark_dirty(EntityId, #od_handle_service{} = HService) ->
+    mark_dirty(bottom_up, true, od_handle_service, EntityId, HService);
+mark_dirty(EntityId, #od_handle{} = Handle) ->
+    mark_dirty(bottom_up, true, od_handle, EntityId, Handle).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Marks given entity as dirty (in given direction) and returns updated entity
+%% record (it still needs to be saved to datastore).
+%% If an entity is already marked as dirty, it's priority is updated.
 %% @end
 %%--------------------------------------------------------------------
 -spec mark_dirty(Direction :: direction(), Flag :: boolean(),
@@ -880,7 +913,10 @@ update_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId, {Opera
 update_child(#od_handle{users = Users} = Handle, od_user, UserId, {Operation, Privs}) ->
     Handle#od_handle{users = update_privileges(UserId, Users, Operation, Privs)};
 update_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, {Operation, Privs}) ->
-    Handle#od_handle{groups = update_privileges(GroupId, Groups, Operation, Privs)}.
+    Handle#od_handle{groups = update_privileges(GroupId, Groups, Operation, Privs)};
+update_child(Entity, _, _, undefined) ->
+    % Other entities do not have updatable children relations.
+    Entity.
 
 
 %%--------------------------------------------------------------------
@@ -1009,7 +1045,10 @@ add_parent(#od_handle{} = Handle, od_handle_service, HServiceId, _) ->
 -spec update_parent(Entity :: entity(), ParentType :: entity_type(),
     ParentId :: entity_id(), NewAttributes :: attributes_update()) -> entity().
 update_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId, SupportSize) ->
-    Space#od_space{providers = maps:put(ProviderId, SupportSize, Providers)}.
+    Space#od_space{providers = maps:put(ProviderId, SupportSize, Providers)};
+update_parent(Entity, _, _, undefined) ->
+    % Other entities do not have updatable parent relations.
+    Entity.
 
 
 %%--------------------------------------------------------------------

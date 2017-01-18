@@ -101,10 +101,7 @@ query_record(<<"clienttoken">>, _Data) ->
 create_record(<<"clienttoken">>, _Data) ->
     UserId = gui_session:get_user_id(),
     {ok, Token} = n_user_logic:create_client_token(?USER(UserId), UserId),
-    % Push user record with a new client token list.
-    gui_async:push_updated(
-        <<"user">>, user_data_backend:user_record(?USER(UserId), UserId)
-    ),
+    user_data_backend:push_user_record_when_synchronized(UserId),
     {ok, [
         {<<"id">>, Token}
     ]}.
