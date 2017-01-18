@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module contains definitions of all REST operations..
+%%% @doc This module contains definitions of all REST methods.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(rest_routes).

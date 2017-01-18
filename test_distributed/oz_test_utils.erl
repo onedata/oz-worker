@@ -778,9 +778,8 @@ delete_provider(Config, ProviderId) ->
 %% Supports a space by a provider based on space id.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), Client :: n_entity_logic:client(),
-    ProviderId :: od_provider:id(), Token :: binary() | macaroon:macaroon(),
-    Size :: non_neg_integer()) ->
+-spec support_space(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id(), Size :: non_neg_integer()) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
 support_space(Config, ProviderId, SpaceId, Size) ->
     {ok, Macaroon} = ?assertMatch({ok, _}, space_invite_provider_token(
