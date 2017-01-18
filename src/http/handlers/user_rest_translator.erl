@@ -23,7 +23,7 @@ response(create, _UserId, deprecated_default_space, ok) ->
     n_rest_handler:ok_no_content_reply();
 
 response(create, _UserId, authorize, {ok, DischargeMacaroon}) ->
-    n_rest_handler:ok_body_reply(DischargeMacaroon);
+    n_rest_handler:ok_body_reply({binary, DischargeMacaroon});
 
 response(create, _UserId, client_tokens, {ok, Token}) ->
     n_rest_handler:ok_body_reply(#{<<"token">> => Token});

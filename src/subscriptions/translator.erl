@@ -157,7 +157,7 @@ get_msg(Seq, Doc, od_space = Model) ->
         {name, Name},
 
         % Direct relations to other entities
-        {providers, relation_with_attrs_to_proplist(Supports)},
+        {providers_supports, relation_with_attrs_to_proplist(Supports)},
         {users, relation_with_attrs_to_proplist(Users)},
         {groups, relation_with_attrs_to_proplist(Groups)},
         {shares, Shares},
@@ -190,7 +190,7 @@ get_msg(Seq, Doc, od_provider = Model) ->
     #document{value = Value, key = Id} = Doc,
     #od_provider{name = Name, urls = URLs, spaces = Spaces} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
-        {name, Name},
+        {client_name, Name},
         {urls, URLs},
 
         % Direct relations to other entities
@@ -296,7 +296,7 @@ get_public_msg(Seq, Doc, od_user = Model) ->
 get_public_msg(Seq, Doc, od_provider = Model) ->
     #document{key = Id, value = #od_provider{name = Name, urls = URLs}} = Doc,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
-        {name, Name},
+        {client_name, Name},
         {urls, URLs},
 
         {spaces, []},
@@ -343,7 +343,7 @@ calculate_space_aliases(SpaceIds, SpaceAliases) ->
         fun(SpId, SpName, AccMap) ->
             case maps:is_key(SpId, AccMap) of
                 false ->
-                    AccMap;
+                    AccMap#{SpId => SpName};
                 true ->
                     SpaceNameLen = size(SpName),
                     UniqueSpaceName = <<SpName/binary, "#", SpId/binary>>,
@@ -358,6 +358,7 @@ calculate_space_aliases(SpaceIds, SpaceAliases) ->
                                 maps:put(Id, Name, SpacesAcc)
                             }
                     end, {SpaceNameLen, #{}}, AccMap),
+                    ?dump(FilteredSpaces),
 
                     ValidUniquePrefLen = case ShortestUniquePfxLen > SpaceNameLen of
                         true ->

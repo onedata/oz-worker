@@ -24,7 +24,7 @@
 -export([
     create/1, create/2,
     create_client_token/2,
-    authorize/3
+    authorize/1
 ]).
 -export([
     get/2,
@@ -109,10 +109,10 @@ create_client_token(Client, UserId) ->
     n_entity_logic:create(Client, ?PLUGIN, UserId, client_tokens, #{}).
 
 
-authorize(Client, UserId, Identifier) when is_binary(Identifier) ->
-    authorize(Client, UserId, #{<<"identifier">> => Identifier});
-authorize(Client, UserId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, UserId, authorize, Data).
+authorize(Identifier) when is_binary(Identifier) ->
+    authorize(#{<<"identifier">> => Identifier});
+authorize(Data) ->
+    n_entity_logic:create(?NOBODY, ?PLUGIN, undefined, authorize, Data).
 
 
 get(Client, UserId) ->

@@ -143,13 +143,16 @@ get(_, _UserId, #od_user{} = User, data) ->
         connected_accounts = ConnectedAccounts
     } = User,
     % TODO VFS-2918 do we need connected accounts?
-    ConnectedAccountsMaps = lists:map(fun(Account) ->
-        ?record_to_list(oauth_account, Account) end, ConnectedAccounts
-    ),
+    ConnectedAccountProplists = lists:map(fun(Account) ->
+        ?record_to_list(oauth_account, Account)
+    end, ConnectedAccounts),
+    ConnectedAccountMaps = lists:map(fun(ConnectedAccountProplist) ->
+        maps:from_list(ConnectedAccountProplist)
+    end, ConnectedAccountProplists),
     {ok, #{
         <<"name">> => Name, <<"login">> => Login,
         <<"alias">> => Alias, <<"emailList">> => EmailList,
-        <<"connectedAccounts">> => ConnectedAccountsMaps
+        <<"connectedAccounts">> => ConnectedAccountMaps
     }};
 get(_, undefined, undefined, list) ->
     {ok, UserDocs} = od_user:list(),
@@ -450,7 +453,6 @@ authorize(get, _UserId, data, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_USERS_LIST);
 authorize(get, _UserId, entity, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_USERS_LIST).
-
 
 
 % TODO VFS-2918

@@ -156,9 +156,7 @@ exists(ProviderId) ->
 %%--------------------------------------------------------------------
 -spec get_url(ProviderId :: od_provider:id()) -> {ok, ProviderURL :: binary()}.
 get_url(ProviderId) ->
-    #od_provider{
-        redirection_point = RedPoint
-    } = get(?ROOT, ProviderId),
+    {ok, #od_provider{redirection_point = RedPoint}} = get(?ROOT, ProviderId),
     #{host := Host, port := Port} = url_utils:parse(RedPoint),
     {ok, str_utils:format_bin("https://~s:~B", [Host, Port])}.
 

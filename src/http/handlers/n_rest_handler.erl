@@ -20,18 +20,15 @@
 -include_lib("ctool/include/logging.hrl").
 
 -type method() :: get | post | put | patch | delete.
--type rest_req() :: #rest_req{}.
--type rest_resp() :: #rest_resp{}.
--export_type([method/0, rest_req/0, rest_resp/0]).
+-export_type([method/0]).
 
 % State of REST handler
 -record(state, {
     client = #client{} :: n_entity_logic:client(),
-    rest_req = undefined :: rest_req() | undefined,
+    rest_req = undefined :: #rest_req{} | undefined,
     allowed_methods :: [method()]
 }).
--type opts() :: #{method() => rest_req()}.
--type state() :: #state{}.
+-type opts() :: #{method() => #rest_req{}}.
 
 %% cowboy rest handler API
 -export([
@@ -82,7 +79,7 @@ init({_, http}, _Req, _Opts) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec rest_init(Req :: cowboy_req:req(), Opts :: opts()) ->
-    {ok, cowboy_req:req(), state()}.
+    {ok, cowboy_req:req(), #state{}}.
 rest_init(Req, Opts) ->
     {MethodBin, _} = cowboy_req:method(Req),
     Method = binary_to_method(MethodBin),
@@ -99,8 +96,8 @@ rest_init(Req, Opts) ->
 %% Return the list of allowed methods.
 %% @end
 %%--------------------------------------------------------------------
--spec allowed_methods(Req :: cowboy_req:req(), State :: state()) ->
-    {[binary()], cowboy_req:req(), state()}.
+-spec allowed_methods(Req :: cowboy_req:req(), State :: #state{}) ->
+    {[binary()], cowboy_req:req(), #state{}}.
 allowed_methods(Req, #state{allowed_methods = AllowedMethods} = State) ->
     BinMethods = [method_to_binary(M) || M <- AllowedMethods],
     {BinMethods, Req, State}.
@@ -111,8 +108,8 @@ allowed_methods(Req, #state{allowed_methods = AllowedMethods} = State) ->
 %% Return the list of content-types the resource accepts.
 %% @end
 %%--------------------------------------------------------------------
--spec content_types_accepted(Req :: cowboy_req:req(), State :: state()) ->
-    {Value, cowboy_req:req(), state()} when
+-spec content_types_accepted(Req :: cowboy_req:req(), State :: #state{}) ->
+    {Value, cowboy_req:req(), #state{}} when
     Value :: [{binary() | {Type, SubType, Params}, AcceptResource}],
     Type :: binary(),
     SubType :: binary(),
@@ -127,8 +124,8 @@ content_types_accepted(Req, State) ->
 %% Return the list of content-types the resource provides.
 %% @end
 %%--------------------------------------------------------------------
--spec content_types_provided(Req :: cowboy_req:req(), State :: state()) ->
-    {Value, cowboy_req:req(), state()} when
+-spec content_types_provided(Req :: cowboy_req:req(), State :: #state{}) ->
+    {Value, cowboy_req:req(), #state{}} when
     Value :: [{binary() | {Type, SubType, Params}, ProvideResource}],
     Type :: binary(),
     SubType :: binary(),
@@ -143,8 +140,8 @@ content_types_provided(Req, State) ->
 %% Return whether the resource exists.
 %% @end
 %%--------------------------------------------------------------------
--spec resource_exists(Req :: cowboy_req:req(), State :: state()) ->
-    {boolean(), cowboy_req:req(), state()}.
+-spec resource_exists(Req :: cowboy_req:req(), State :: #state{}) ->
+    {boolean(), cowboy_req:req(), #state{}}.
 resource_exists(Req, State) ->
     % Always return true - this is checked by entity_logic later.
     {true, Req, State}.
@@ -159,8 +156,8 @@ resource_exists(Req, State) ->
 %% is unauthorized to perform an operation.
 %% @end
 %%--------------------------------------------------------------------
--spec is_authorized(Req :: cowboy_req:req(), State :: state()) ->
-    {true | {false, binary()}, cowboy_req:req(), state()}.
+-spec is_authorized(Req :: cowboy_req:req(), State :: #state{}) ->
+    {true | {false, binary()}, cowboy_req:req(), #state{}}.
 is_authorized(Req, State) ->
     % Check if the request carries any authorization
     try
@@ -188,29 +185,15 @@ is_authorized(Req, State) ->
         % Always return true - this is checked by entity_logic later.
         {true, Req, State#state{client = Client}}
     catch
-        {silent_error, ReqX} -> %% As per RFC 6750 section 3.1
-            {{false, <<"">>}, ReqX, State};
-
-        {Error, Description1, ReqX} when is_atom(Error) ->
-            Body = json_utils:encode([
-                {error, Error},
-                {error_description, str_utils:to_binary(Description1)}
+        throw:Error ->
+            RestResp = error_rest_translator:response(Error),
+            {halt, send_response(RestResp, Req), State};
+        Type:Message ->
+            ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
+                Type, Message
             ]),
-
-            WWWAuthenticate =
-                <<"error=", (atom_to_binary(Error, latin1))/binary>>,
-
-            ReqY = cowboy_req:set_resp_body(Body, ReqX),
-            {{false, WWWAuthenticate}, ReqY, State};
-
-        {Error, StatusCode, Description1, ReqX} when is_atom(Error) ->
-            Body = json_utils:encode([
-                {error, Error},
-                {error_description, str_utils:to_binary(Description1)}
-            ]),
-
-            {ok, ReqY} = cowboy_req:reply(StatusCode, [], Body, ReqX),
-            {halt, ReqY, State}
+            RestResp = error_rest_translator:response(?ERROR_INTERNAL_SERVER_ERROR),
+            {halt, send_response(RestResp, Req), State}
     end.
 
 
@@ -220,8 +203,8 @@ is_authorized(Req, State) ->
 %% @see is_authorized/2
 %% @end
 %%--------------------------------------------------------------------
--spec forbidden(Req :: cowboy_req:req(), State :: state()) ->
-    {boolean(), cowboy_req:req(), state()}.
+-spec forbidden(Req :: cowboy_req:req(), State :: #state{}) ->
+    {boolean(), cowboy_req:req(), #state{}}.
 forbidden(Req, State) ->
     % Always return false - this is checked by entity_logic later.
     {false, Req, State}.
@@ -232,8 +215,8 @@ forbidden(Req, State) ->
 %% Process the request body of application/json content type.
 %% @end
 %%--------------------------------------------------------------------
--spec accept_resource(Req :: cowboy_req:req(), State :: state()) ->
-    {halt, cowboy_req:req(), state()}.
+-spec accept_resource(Req :: cowboy_req:req(), State :: #state{}) ->
+    {halt, cowboy_req:req(), #state{}}.
 accept_resource(Req, State) ->
     process_request(Req, State).
 
@@ -243,8 +226,8 @@ accept_resource(Req, State) ->
 %% Process the request body.
 %% @end
 %%--------------------------------------------------------------------
--spec provide_resource(Req :: cowboy_req:req(), State :: state()) ->
-    {halt, cowboy_req:req(), state()}.
+-spec provide_resource(Req :: cowboy_req:req(), State :: #state{}) ->
+    {halt, cowboy_req:req(), #state{}}.
 provide_resource(Req, State) ->
     process_request(Req, State).
 
@@ -254,8 +237,8 @@ provide_resource(Req, State) ->
 %% Delete the resource.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_resource(Req :: cowboy_req:req(), State :: state()) ->
-    {halt, cowboy_req:req(), state()}.
+-spec delete_resource(Req :: cowboy_req:req(), State :: #state{}) ->
+    {halt, cowboy_req:req(), #state{}}.
 delete_resource(Req, State) ->
     process_request(Req, State).
 
@@ -370,8 +353,8 @@ deleted_reply() ->
 %% Return new Req and State (after setting cowboy response).
 %% @end
 %%--------------------------------------------------------------------
--spec process_request(Req :: cowboy_req:req(), State :: state()) ->
-    {halt, NewReq :: cowboy_req:req(), NewState :: state()}.
+-spec process_request(Req :: cowboy_req:req(), State :: #state{}) ->
+    {halt, NewReq :: cowboy_req:req(), NewState :: #state{}}.
 process_request(Req, State) ->
     try
         #state{client = Client, rest_req = #rest_req{
@@ -396,11 +379,7 @@ process_request(Req, State) ->
         RestResp = translate_response(
             TranslatorModule, Operation, EntityId, Resource, Result
         ),
-        #rest_resp{code = Code, headers = Headers, body = Body} = RestResp,
-        HeadersList = maps:to_list(Headers),
-        BodyJSON = json_utils:encode_map(Body),
-        {ok, Req3} = cowboy_req:reply(Code, HeadersList, BodyJSON, Req2),
-        {halt, Req3, State}
+        {halt, send_response(RestResp, Req2), State}
     catch
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
@@ -409,6 +388,25 @@ process_request(Req, State) ->
             {ok, NewReq} = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
             {halt, NewReq, State}
     end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Sends given response (#rest_resp{}) and returns modified cowboy_req record.
+%% @end
+%%--------------------------------------------------------------------
+-spec send_response(RestResp :: #rest_resp{}, Req :: cowboy_req:req()) ->
+    NewReq :: cowboy_req:req().
+send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
+    HeadersList = maps:to_list(Headers),
+    RespBody = case Body of
+        {binary, Bin} ->
+            Bin;
+        Map ->
+            json_utils:encode_map(Map)
+    end,
+    {ok, Req2} = cowboy_req:reply(Code, HeadersList, RespBody, Req),
+    Req2.
 
 
 %%--------------------------------------------------------------------
@@ -538,8 +536,8 @@ authenticate_by_macaroons(Req) ->
                 {ok, UserId} ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};
-                {error, Error} ->
-                    throw({error, Error})
+                {error, _} ->
+                    throw(?ERROR_BAD_MACAROON)
             end
     end.
 
@@ -590,7 +588,7 @@ parse_macaroons_from_headers(Req) ->
         _ -> XAuthTokenHeader
     end,
     Macaroon = case SerializedMacaroon of
-        <<_/binary>> -> deserialize_macaroon(SerializedMacaroon, Req);
+        <<_/binary>> -> deserialize_macaroon(SerializedMacaroon);
         _ -> undefined
     end,
 
@@ -602,7 +600,7 @@ parse_macaroons_from_headers(Req) ->
 
         <<_/binary>> ->
             Split = binary:split(SerializedDischarges, <<" ">>, [global]),
-            [deserialize_macaroon(S, Req) || S <- Split];
+            [deserialize_macaroon(S) || S <- Split];
 
         _ ->
             []
@@ -617,13 +615,12 @@ parse_macaroons_from_headers(Req) ->
 %% Deserializes a macaroon, throws on error.
 %% @end
 %%--------------------------------------------------------------------
--spec deserialize_macaroon(Data :: binary(), Req :: cowboy_req:req()) ->
+-spec deserialize_macaroon(Data :: binary()) ->
     macaroon:macaroon() | no_return().
-deserialize_macaroon(Data, Req) ->
+deserialize_macaroon(Data) ->
     case token_utils:deserialize(Data) of
         {ok, M} -> M;
-        {error, Reason} ->
-            throw({invalid_token, atom_to_binary(Reason, latin1), Req})
+        {error, _} -> throw(?ERROR_BAD_MACAROON)
     end.
 
 

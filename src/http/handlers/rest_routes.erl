@@ -70,7 +70,7 @@ user_routes() ->
         }},
 
         {<<"/user/authorize">>, R#rest_req{
-            method = post, entity_id = ?CLIENT_ID, resource = authorize
+            method = post, entity_id = undefined, resource = authorize
         }},
 
         {<<"/user/privileges">>, R#rest_req{

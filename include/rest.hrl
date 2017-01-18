@@ -32,7 +32,7 @@
 -record(rest_resp, {
     code = 200 :: integer(),
     headers = #{} :: #{binary() => binary()},
-    body = <<"">> :: jiffy:json_value()
+    body = <<"">> :: jiffy:json_value() | {binary, binary()}
 }).
 
 % Convenience macros user in rest_req
