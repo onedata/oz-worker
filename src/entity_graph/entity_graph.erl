@@ -676,9 +676,7 @@ refresh_entity(Direction, EntityType, EntityId) ->
 %% If an entity is already marked as dirty, it's priority is updated.
 %% @end
 %%--------------------------------------------------------------------
--spec mark_dirty(Direction :: direction(), Flag :: boolean(),
-    EntityType :: entity_type(), EntityId :: entity_id(),
-    Entity :: entity()) -> entity().
+-spec mark_dirty(EntityId :: entity_id(), Entity :: entity()) -> entity().
 mark_dirty(EntityId, #od_user{} = User) ->
     mark_dirty(top_down, true, od_user, EntityId, User);
 mark_dirty(EntityId, #od_group{} = Group) ->
