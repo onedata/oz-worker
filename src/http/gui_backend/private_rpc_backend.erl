@@ -87,6 +87,9 @@ handle(<<"unsupportSpace">>, Props) ->
             gui_async:push_updated(
                 <<"user">>, user_data_backend:user_record(UserId)
             ),
+            gui_async:push_updated(
+                <<"space">>, space_data_backend:space_record(SpaceId, UserId)
+            ),
             ok;
         false ->
             gui_error:report_warning(
