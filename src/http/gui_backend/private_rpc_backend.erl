@@ -90,6 +90,9 @@ handle(<<"unsupportSpace">>, Props) ->
             gui_async:push_updated(
                 <<"space">>, space_data_backend:space_record(SpaceId, UserId)
             ),
+            gui_async:push_updated(
+                <<"provider">>, provider_data_backend:provider_record(ProviderId, UserId)
+            ),
             ok;
         false ->
             gui_error:report_warning(
