@@ -562,8 +562,7 @@ check_authorization([{internal, Fun} | Tail], #request{entity = Entity} = Req) -
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Ensures data specified in request is valid,  throws on error.
-
+%% Ensures data specified in request is valid, throws on error.
 %% @end
 %%--------------------------------------------------------------------
 -spec check_validity(Request :: #request{}) -> #request{}.
@@ -618,6 +617,16 @@ check_validity(#request{data = Data} = Request) ->
     Request#request{data = Data4}.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Performs single value conversion if possible and checks the type and value
+%% of value for Key in Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec transform_and_check_value(Key :: binary(), Data :: data(),
+    Validator :: {type_validator(), value_validator()}) ->
+    {true, NewData :: data()}.
 transform_and_check_value(Key, Data, Validator) ->
     case maps:get(Key, Data, undefined) of
         undefined ->
@@ -641,6 +650,14 @@ transform_and_check_value(Key, Data, Validator) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Performs single value conversion if possible and checks the type and value
+%% of value for Key in Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_type(type_validator(), Key :: binary(), Value :: term()) -> term().
 check_type(atom, _Key, Atom) when is_atom(Atom) ->
     Atom;
 check_type(atom, Key, Binary) when is_binary(Binary) ->

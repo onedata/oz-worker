@@ -119,7 +119,9 @@ response(get, _GroupId, {eff_user_privileges, _UserId}, {ok, Privileges}) ->
     n_rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
 
 response(get, _GroupId, parents, {ok, Parents}) ->
-    n_rest_handler:ok_body_reply(#{<<"parents">> => Parents});
+    % TODO VFS-2918
+%%    n_rest_handler:ok_body_reply(#{<<"parents">> => Parents});
+    n_rest_handler:ok_body_reply(#{<<"parent_groups">> => Parents});
 
 response(get, _GroupId, eff_parents, {ok, Parents}) ->
     n_rest_handler:ok_body_reply(#{<<"parents">> => Parents});
@@ -131,7 +133,9 @@ response(get, _GroupId, {eff_parent, ParentId}, {ok, Parent}) ->
     response(get, ParentId, data, {ok, Parent});
 
 response(get, _GroupId, children, {ok, Parents}) ->
-    n_rest_handler:ok_body_reply(#{<<"children">> => Parents});
+    % TODO VFS-2918
+%%    n_rest_handler:ok_body_reply(#{<<"children">> => Parents});
+    n_rest_handler:ok_body_reply(#{<<"nested_groups">> => Parents});
 
 response(get, _GroupId, eff_children, {ok, Parents}) ->
     n_rest_handler:ok_body_reply(#{<<"children">> => Parents});

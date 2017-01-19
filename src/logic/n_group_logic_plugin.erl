@@ -132,19 +132,23 @@ create(_Client, GroupId, join_space, #{<<"token">> := Macaroon}) ->
     ),
     {ok, SpaceId};
 
-create(_Client, GroupId, users, #{<<"userId">> := UserId}) ->
+create(_Client, GroupId, users, Data) ->
+    UserId = maps:get(<<"userId">>, Data),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
     entity_graph:add_relation(
         od_user, UserId,
         od_group, GroupId,
-        privileges:group_user()
+        Privileges
     ),
     {ok, UserId};
 
-create(_Client, GroupId, children, #{<<"groupId">> := ChildGroupId}) ->
+create(_Client, GroupId, children, Data) ->
+    ChildGroupId = maps:get(<<"groupId">>, Data),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
     entity_graph:add_relation(
         od_group, ChildGroupId,
         od_group, GroupId,
-        privileges:group_user()
+        Privileges
     ),
     {ok, ChildGroupId}.
 
@@ -530,7 +534,7 @@ authorize(delete, _GroupId, {child, _ChildGroupId}, ?USER(UserId)) -> [
 validate(create, {deprecated_user_privileges, UserId}) ->
     validate(update, {user_privileges, UserId});
 % TODO VFS-2918
-validate(create, {deprecated_group_privileges, GroupId}) ->
+validate(create, {deprecated_child_privileges, GroupId}) ->
     validate(update, {user_privileges, GroupId});
 
 validate(create, entity) -> #{
@@ -585,7 +589,7 @@ validate(update, {user_privileges, _UserId}) -> #{
         <<"operation">> => {atom, [set, grant, revoke]}
     }
 };
-validate(update, {group_privileges, GroupId}) ->
+validate(update, {child_privileges, GroupId}) ->
     validate(update, {user_privileges, GroupId});
 validate(update, oz_privileges) -> #{
     required => #{

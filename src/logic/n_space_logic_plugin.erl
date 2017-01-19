@@ -103,19 +103,23 @@ create(Client, SpaceId, invite_provider_token, _) ->
     ),
     {ok, Token};
 
-create(_Client, SpaceId, users, #{<<"userId">> := UserId}) ->
+create(_Client, SpaceId, users, Data) ->
+    UserId = maps:get(<<"userId">>, Data),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
     entity_graph:add_relation(
         od_user, UserId,
         od_space, SpaceId,
-        privileges:space_user()
+        Privileges
     ),
     {ok, UserId};
 
-create(_Client, SpaceId, groups, #{<<"groupId">> := GroupId}) ->
+create(_Client, SpaceId, groups, Data) ->
+    GroupId = maps:get(<<"groupId">>, Data),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_space, SpaceId,
-        privileges:space_user()
+        Privileges
     ),
     {ok, GroupId}.
 

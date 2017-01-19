@@ -341,7 +341,9 @@ updated_reply() ->
 %%--------------------------------------------------------------------
 -spec deleted_reply() -> #rest_resp{}.
 deleted_reply() ->
-    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
+    % TODO VFS-2918
+%%    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
+    #rest_resp{code = ?HTTP_202_ACCEPTED}.
 
 
 %%%===================================================================

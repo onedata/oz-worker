@@ -350,7 +350,7 @@ group_routes() ->
         }},
         % TODO VFS-2918
         {<<"/groups/:id/nested/:nid/privileges">>, R#rest_req{
-            method = get, entity_id = ?BINDING(id), resource = {eff_child_privileges, ?BINDING(nid)}
+            method = get, entity_id = ?BINDING(id), resource = {child_privileges, ?BINDING(nid)}
         }},
         % TODO VFS-2918
         {<<"/groups/:id/nested/:nid/privileges">>, R#rest_req{
