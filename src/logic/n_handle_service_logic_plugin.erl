@@ -106,9 +106,9 @@ get(_, undefined, undefined, list) ->
     {ok, [HServiceId || #document{key = HServiceId} <- HServiceDocs]};
 
 get(_, _HServiceId, #od_handle_service{users = Users}, users) ->
-    {ok, Users};
+    {ok, maps:keys(Users)};
 get(_, _HServiceId, #od_handle_service{eff_users = Users}, eff_users) ->
-    {ok, Users};
+    {ok, maps:keys(Users)};
 get(_, _HServiceId, #od_handle_service{}, {user, UserId}) ->
     {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
     n_user_logic_plugin:get(?ROOT, UserId, User, data);
@@ -122,9 +122,9 @@ get(_, _HServiceId, #od_handle_service{eff_users = Users}, {eff_user_privileges,
     {ok, Privileges};
 
 get(_, _HServiceId, #od_handle_service{groups = Groups}, groups) ->
-    {ok, Groups};
+    {ok, maps:keys(Groups)};
 get(_, _HServiceId, #od_handle_service{eff_groups = Groups}, eff_groups) ->
-    {ok, Groups};
+    {ok, maps:keys(Groups)};
 get(_, _HServiceId, #od_handle_service{}, {group, GroupId}) ->
     {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
     n_group_logic_plugin:get(?ROOT, GroupId, Group, data);

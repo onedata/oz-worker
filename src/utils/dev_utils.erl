@@ -108,7 +108,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 % Add all users to group
                 lists:foreach(
                     fun(UserId) ->
-                        {ok, UserId} = n_group_logic:add_user(?ROOT,GroupId, UserId )
+                        {ok, UserId} = n_group_logic:add_user(?ROOT, GroupId, UserId)
                     end, UsersToAdd),
                 maps:put(GroupId, GroupCreator, Acc)
             end, #{}, Groups),
@@ -119,8 +119,8 @@ set_up_test_entities(Users, Groups, Spaces) ->
             lists:foreach(fun(NestedGroupId) ->
                 {ok, NestedGroupId} = n_group_logic:add_group(?ROOT, GroupId, NestedGroupId)
             end, NestedGroups)
-            % Mark group changed as normally it is done asynchronously
-            % and it could occur after refreshing
+        % Mark group changed as normally it is done asynchronously
+        % and it could occur after refreshing
         end, Groups),
 
         % Create spaces
@@ -250,15 +250,12 @@ create_user_with_uuid(User, UUId) ->
 -spec create_group_with_uuid(UserId :: binary(), Name :: binary(), UUId :: binary()) ->
     {ok, GroupId :: binary()}.
 create_group_with_uuid(UserId, Name, UUId) ->
-    {ok, UserDoc} = od_user:get(UserId),
-    #document{value = #od_user{groups = Groups} = User} = UserDoc,
-
-    Privileges = privileges:group_admin(),
-    Group = #od_group{name = Name, users = #{UserId => Privileges}},
-    {ok, GroupId} = od_group:save(#document{key = UUId, value = Group}),
-    UserNew = User#od_user{groups = [GroupId | Groups]},
-    od_user:save(UserDoc#document{value = UserNew}),
-
+    {ok, GroupId} = od_group:save(
+        #document{key = UUId, value = #od_group{name = Name}}
+    ),
+    {ok, UserId} = n_group_logic:add_user(
+        ?ROOT, GroupId, UserId, privileges:group_admin()
+    ),
     {ok, GroupId}.
 
 
@@ -295,26 +292,20 @@ create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUId) ->
 -spec create_space_with_provider({user | group, Id :: binary()}, Name :: binary(),
     Support :: [{Provider :: binary(), ProvidedSize :: pos_integer()}], UUId :: binary()) ->
     {ok, SpaceId :: binary()}.
-create_space_with_provider({user, UserId}, Name, Support, UUId) ->
-    {ok, UserDoc} = od_user:get(UserId),
-    #document{value = #od_user{spaces = Spaces} = User} = UserDoc,
-
-    Privileges = privileges:space_admin(),
-    Space = #od_space{name = Name, providers = Support, users = #{UserId => Privileges}},
-    {ok, SpaceId} = od_space:save(#document{key = UUId, value = Space}),
-    UserNew = User#od_user{spaces = [SpaceId | Spaces]},
-    od_user:save(UserDoc#document{value = UserNew}),
-
-    {ok, SpaceId};
-create_space_with_provider({group, GroupId}, Name, Support, UUId) ->
-    {ok, GroupDoc} = od_group:get(GroupId),
-    #document{value = #od_group{spaces = Spaces} = Group} = GroupDoc,
-
-    Privileges = privileges:space_admin(),
-    Space = #od_space{name = Name, providers = Support,
-        groups = #{GroupId => Privileges}},
-    {ok, SpaceId} = od_space:save(#document{key = UUId, value = Space}),
-    GroupNew = Group#od_group{spaces = [SpaceId | Spaces]},
-    od_group:save(GroupDoc#document{value = GroupNew}),
-
+create_space_with_provider({MemberType, MemberId}, Name, Supports, UUId) ->
+    {ok, SpaceId} = od_space:save(
+        #document{key = UUId, value = #od_space{name = Name}}
+    ),
+    AddFun = case MemberType of
+        user -> add_user;
+        group -> add_group
+    end,
+    {ok, MemberId} = n_space_logic:AddFun(
+        ?ROOT, SpaceId, MemberId, privileges:space_admin()
+    ),
+    maps:map(
+        fun(ProviderId, SupportSize) ->
+            {ok, Macaroon} = n_space_logic:create_provider_invite_token(?ROOT, SpaceId),
+            {ok, SpaceId} = n_provider_logic:support_space(?ROOT, ProviderId, Macaroon, SupportSize)
+        end, Supports),
     {ok, SpaceId}.

@@ -140,9 +140,9 @@ get(_, _HandleId, #od_handle{} = Handle, public_data) ->
     }};
 
 get(_, _HandleId, #od_handle{users = Users}, users) ->
-    {ok, Users};
+    {ok, maps:keys(Users)};
 get(_, _HandleId, #od_handle{eff_users = Users}, eff_users) ->
-    {ok, Users};
+    {ok, maps:keys(Users)};
 get(_, _HandleId, #od_handle{}, {user, UserId}) ->
     {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
     n_user_logic_plugin:get(?ROOT, UserId, User, data);
@@ -156,9 +156,9 @@ get(_, _HandleId, #od_handle{eff_users = Users}, {eff_user_privileges, UserId}) 
     {ok, Privileges};
 
 get(_, _HandleId, #od_handle{groups = Groups}, groups) ->
-    {ok, Groups};
+    {ok, maps:keys(Groups)};
 get(_, _HandleId, #od_handle{eff_groups = Groups}, eff_groups) ->
-    {ok, Groups};
+    {ok, maps:keys(Groups)};
 get(_, _HandleId, #od_handle{}, {group, GroupId}) ->
     {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
     n_group_logic_plugin:get(?ROOT, GroupId, Group, data);

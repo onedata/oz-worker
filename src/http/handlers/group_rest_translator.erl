@@ -31,10 +31,12 @@ response(create, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ok) ->
 response(create, undefined, entity, {ok, GroupId}) ->
     n_rest_handler:created_reply([<<"groups">>, GroupId]);
 
-response(create, _GroupId, invite_user_token, {ok, Token}) ->
+response(create, _GroupId, invite_user_token, {ok, Macaroon}) ->
+    {ok, Token} = token_utils:serialize62(Macaroon),
     n_rest_handler:ok_body_reply(#{<<"token">> => Token});
 
-response(create, _GroupId, invite_group_token, {ok, Token}) ->
+response(create, _GroupId, invite_group_token, {ok, Macaroon}) ->
+    {ok, Token} = token_utils:serialize62(Macaroon),
     n_rest_handler:ok_body_reply(#{<<"token">> => Token});
 
 response(create, GroupId, create_space, {ok, SpaceId}) ->
@@ -76,10 +78,12 @@ response(create, GroupId, children, {ok, ChildGroupId}) ->
 
 
 % TODO VFS-2918
-response(get, _GroupId, deprecated_invite_user_token, {ok, Token}) ->
+response(get, _GroupId, deprecated_invite_user_token, {ok, Macaroon}) ->
+    {ok, Token} = token_utils:serialize62(Macaroon),
     n_rest_handler:ok_body_reply(#{<<"token">> => Token});
 % TODO VFS-2918
-response(get, _GroupId, deprecated_invite_group_token, {ok, Token}) ->
+response(get, _GroupId, deprecated_invite_group_token, {ok, Macaroon}) ->
+    {ok, Token} = token_utils:serialize62(Macaroon),
     n_rest_handler:ok_body_reply(#{<<"token">> => Token});
 
 

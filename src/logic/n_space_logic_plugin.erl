@@ -153,9 +153,9 @@ get(_, _SpaceId, #od_space{name = Name}, data) ->
     {ok, #{<<"name">> => Name}};
 
 get(_, _SpaceId, #od_space{users = Users}, users) ->
-    {ok, Users};
+    {ok, maps:keys(Users)};
 get(_, _SpaceId, #od_space{eff_users = Users}, eff_users) ->
-    {ok, Users};
+    {ok, maps:keys(Users)};
 get(_, _SpaceId, #od_space{}, {user, UserId}) ->
     {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
     n_user_logic_plugin:get(?ROOT, UserId, User, data);
@@ -169,9 +169,9 @@ get(_, _SpaceId, #od_space{eff_users = Users}, {eff_user_privileges, UserId}) ->
     {ok, Privileges};
 
 get(_, _SpaceId, #od_space{groups = Groups}, groups) ->
-    {ok, Groups};
+    {ok, maps:keys(Groups)};
 get(_, _SpaceId, #od_space{eff_groups = Groups}, eff_groups) ->
-    {ok, Groups};
+    {ok, maps:keys(Groups)};
 get(_, _SpaceId, #od_space{}, {group, GroupId}) ->
     {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
     n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
@@ -191,7 +191,7 @@ get(_, _SpaceId, #od_space{}, {share, ShareId}) ->
     n_share_logic_plugin:get(?ROOT, ShareId, Share, data);
 
 get(_, _SpaceId, #od_space{providers = Providers}, providers) ->
-    {ok, Providers};
+    {ok, maps:keys(Providers)};
 get(_, _SpaceId, #od_space{}, {provider, ProviderId}) ->
     {ok, Provider} = ?throw_on_failure(n_provider_logic_plugin:get_entity(ProviderId)),
     n_provider_logic_plugin:get(?ROOT, ProviderId, Provider, data).
@@ -397,6 +397,12 @@ validate(create, {create_share, _ShareId}) -> #{
         <<"rootFileId">> => {binary, non_empty}
     }
 };
+% TODO VFS-2918
+validate(create, {deprecated_user_privileges, UserId}) ->
+    validate(update, {user_privileges, UserId});
+% TODO VFS-2918
+validate(create, {deprecated_group_privileges, GroupId}) ->
+    validate(update, {user_privileges, GroupId});
 
 validate(create, entity) -> #{
     required => #{
@@ -446,8 +452,8 @@ entity_to_string(SpaceId) ->
 
 
 auth_by_membership(UserId) ->
-    {internal, fun(#od_space{eff_users = EffUsers}) ->
-        maps:is_key(UserId, EffUsers)
+    {internal, fun(#od_space{users = Users, eff_users = EffUsers}) ->
+        maps:is_key(UserId, EffUsers) orelse maps:is_key(UserId, Users)
     end}.
 
 

@@ -317,7 +317,9 @@ created_reply(PathTokens) ->
 %%    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
     RestPrefix = "/",
     LocationHeader = #{
-        <<"Location">> => filename:join([RestPrefix | PathTokens])
+        % TODO VFS-2918
+%%        <<"Location">> => filename:join([RestPrefix | PathTokens])
+        <<"location">> => filename:join([RestPrefix | PathTokens])
     },
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 

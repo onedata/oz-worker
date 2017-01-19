@@ -47,12 +47,12 @@ test_connection_test() ->
     meck:new(http_client),
     meck:expect(http_client, get,
         fun
-            (<<"https://172.16.67.194:443/test">>, [], <<>>, [insecure]) ->
+            (<<"https://172.16.67.194:443/test">>, #{}, <<>>, [insecure]) ->
                 {ok, 200, nothing_important, <<"gui">>};
-            (<<"https://172.16.67.194:8443/rest/latest/test">>, [], <<>>,
+            (<<"https://172.16.67.194:8443/rest/latest/test">>, #{}, <<>>,
                 [insecure]) ->
                 {ok, 200, nothing_important, <<"rest">>};
-            (<<"https://172.16.67.194:123/wrong_url">>, [], <<>>, [insecure]) ->
+            (<<"https://172.16.67.194:123/wrong_url">>, #{}, <<>>, [insecure]) ->
                 {error, {conn_failed, {error, econnrefused}}}
         end),
     Args = #{

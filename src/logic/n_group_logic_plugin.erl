@@ -182,9 +182,9 @@ get(_, _GroupId, #od_group{eff_oz_privileges = OzPrivileges}, eff_oz_privileges)
     {ok, OzPrivileges};
 
 get(_, _GroupId, #od_group{users = Users}, users) ->
-    {ok, Users};
+    {ok, maps:keys(Users)};
 get(_, _GroupId, #od_group{eff_users = Users}, eff_users) ->
-    {ok, Users};
+    {ok, maps:keys(Users)};
 get(_, _GroupId, #od_group{}, {user, UserId}) ->
     {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
     n_user_logic_plugin:get(?ROOT, UserId, User, data);
@@ -200,7 +200,7 @@ get(_, _GroupId, #od_group{eff_users = Users}, {eff_user_privileges, UserId}) ->
 get(_, _GroupId, #od_group{parents = Parents}, parents) ->
     {ok, Parents};
 get(_, _GroupId, #od_group{eff_parents = Parents}, eff_parents) ->
-    {ok, Parents};
+    {ok, maps:keys(Parents)};
 get(_, _GroupId, #od_group{}, {parent, ParentId}) ->
     {ok, Parent} = ?throw_on_failure(n_group_logic_plugin:get_entity(ParentId)),
     n_group_logic_plugin:get(?ROOT, ParentId, Parent, data);
@@ -209,9 +209,9 @@ get(_, _GroupId, #od_group{}, {eff_parent, ParentId}) ->
     n_group_logic_plugin:get(?ROOT, ParentId, Parent, data);
 
 get(_, _GroupId, #od_group{children = Children}, children) ->
-    {ok, Children};
+    {ok, maps:keys(Children)};
 get(_, _GroupId, #od_group{eff_children = Children}, eff_children) ->
-    {ok, Children};
+    {ok, maps:keys(Children)};
 get(_, _GroupId, #od_group{}, {child, ChildId}) ->
     {ok, Child} = ?throw_on_failure(n_group_logic_plugin:get_entity(ChildId)),
     n_group_logic_plugin:get(?ROOT, ChildId, Child, data);
@@ -227,7 +227,7 @@ get(_, _GroupId, #od_group{eff_children = Children}, {eff_child_privileges, Chil
 get(_, _GroupId, #od_group{spaces = Spaces}, spaces) ->
     {ok, Spaces};
 get(_, _GroupId, #od_group{eff_spaces = Spaces}, eff_spaces) ->
-    {ok, Spaces};
+    {ok, maps:keys(Spaces)};
 get(_, _GroupId, #od_group{}, {space, SpaceId}) ->
     {ok, Space} = ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId)),
     n_space_logic_plugin:get(?ROOT, SpaceId, Space, data);
@@ -236,7 +236,7 @@ get(_, _GroupId, #od_group{}, {eff_space, SpaceId}) ->
     n_space_logic_plugin:get(?ROOT, SpaceId, Space, data);
 
 get(_, _GroupId, #od_group{eff_providers = Providers}, eff_providers) ->
-    {ok, Providers};
+    {ok, maps:keys(Providers)};
 get(_, _GroupId, #od_group{}, {eff_provider, ProviderId}) ->
     {ok, Provider} = ?throw_on_failure(n_provider_logic_plugin:get_entity(ProviderId)),
     n_provider_logic_plugin:get(?ROOT, ProviderId, Provider, data);
@@ -244,7 +244,7 @@ get(_, _GroupId, #od_group{}, {eff_provider, ProviderId}) ->
 get(_, _GroupId, #od_group{handle_services = HandleServices}, handle_services) ->
     {ok, HandleServices};
 get(_, _GroupId, #od_group{eff_handle_services = HandleServices}, eff_handle_services) ->
-    {ok, HandleServices};
+    {ok, maps:keys(HandleServices)};
 get(_, _GroupId, #od_group{}, {handle_service, HServiceId}) ->
     {ok, HService} = ?throw_on_failure(n_handle_service_logic_plugin:get_entity(HServiceId)),
     n_handle_service_logic_plugin:get(?ROOT, HServiceId, HService, data);
@@ -255,7 +255,7 @@ get(_, _GroupId, #od_group{}, {eff_handle_service, HServiceId}) ->
 get(_, _GroupId, #od_group{handles = Handles}, handles) ->
     {ok, Handles};
 get(_, _GroupId, #od_group{eff_handles = Handles}, eff_handles) ->
-    {ok, Handles};
+    {ok, maps:keys(Handles)};
 get(_, _GroupId, #od_group{}, {handle, HandleId}) ->
     {ok, Handle} = ?throw_on_failure(n_handle_logic_plugin:get_entity(HandleId)),
     n_handle_logic_plugin:get(?ROOT, HandleId, Handle, data);
@@ -525,6 +525,13 @@ authorize(delete, _GroupId, {child, _ChildGroupId}, ?USER(UserId)) -> [
 ].
 
 
+% TODO VFS-2918
+validate(create, {deprecated_user_privileges, UserId}) ->
+    validate(update, {user_privileges, UserId});
+% TODO VFS-2918
+validate(create, {deprecated_group_privileges, GroupId}) ->
+    validate(update, {user_privileges, GroupId});
+
 validate(create, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
@@ -569,15 +576,16 @@ validate(update, entity) -> #{
         <<"type">> => {atom, [organization, unit, team, role]}
     }
 };
-validate(update, {Member, _Id}) when Member =:= user orelse Member =:= child ->
-    #{
-        required => #{
-            <<"privileges">> => {list_of_atoms, privileges:group_privileges()}
-        },
-        optional => #{
-            <<"operation">> => {atom, [set, grant, revoke]}
-        }
-    };
+validate(update, {user_privileges, _UserId}) ->#{
+    required => #{
+        <<"privileges">> => {list_of_atoms, privileges:group_privileges()}
+    },
+    optional => #{
+        <<"operation">> => {atom, [set, grant, revoke]}
+    }
+};
+validate(update, {group_privileges, GroupId}) ->
+    validate(update, {user_privileges, GroupId});
 validate(update, oz_privileges) -> #{
     required => #{
         <<"privileges">> => {list_of_atoms, privileges:oz_privileges()}
@@ -593,8 +601,8 @@ entity_to_string(GroupId) ->
 
 
 auth_by_membership(UserId) ->
-    {internal, fun(#od_group{eff_users = EffUsers}) ->
-        maps:is_key(UserId, EffUsers)
+    {internal, fun(#od_group{users = Users, eff_users = EffUsers}) ->
+        maps:is_key(UserId, EffUsers) orelse maps:is_key(UserId, Users)
     end}.
 
 

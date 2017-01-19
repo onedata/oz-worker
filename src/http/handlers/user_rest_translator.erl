@@ -44,7 +44,9 @@ response(create, _UserId, create_group, {ok, GroupId}) ->
 
 response(create, _UserId, create_space, {ok, SpaceId}) ->
     n_rest_handler:created_reply(
-        [<<"user">>, <<"spaces">>, SpaceId]
+        % TODO VFS-2918
+%%        [<<"user">>, <<"spaces">>, SpaceId]
+        [<<"spaces">>, SpaceId]
     );
 
 response(create, _UserId, create_handle_service, {ok, HServiceId}) ->
