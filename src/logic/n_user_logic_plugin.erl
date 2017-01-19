@@ -39,7 +39,7 @@ handles | eff_handles | {handle, od_handle:id()} | {eff_handle, od_handle:id()}.
 
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/2, authorize/4, validate/2]).
+-export([exists/1, authorize/4, validate/2]).
 -export([entity_to_string/1]).
 
 
@@ -173,7 +173,7 @@ get(_, _UserId, #od_user{client_tokens = ClientTokens}, client_tokens) ->
 get(_, _UserId, #od_user{groups = Groups}, groups) ->
     {ok, Groups};
 get(_, _UserId, #od_user{eff_groups = Groups}, eff_groups) ->
-    {ok, Groups};
+    {ok, maps:keys(Groups)};
 get(_, _UserId, #od_user{}, {group, GroupId}) ->
     {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
     n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
@@ -184,7 +184,7 @@ get(_, _UserId, #od_user{}, {eff_group, GroupId}) ->
 get(_, _UserId, #od_user{spaces = Spaces}, spaces) ->
     {ok, Spaces};
 get(_, _UserId, #od_user{eff_spaces = Spaces}, eff_spaces) ->
-    {ok, Spaces};
+    {ok, maps:keys(Spaces)};
 get(_, _UserId, #od_user{}, {space, SpaceId}) ->
     {ok, Space} = ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId)),
     n_space_logic_plugin:get(?ROOT, SpaceId, Space, data);
@@ -193,7 +193,7 @@ get(_, _UserId, #od_user{}, {eff_space, SpaceId}) ->
     n_space_logic_plugin:get(?ROOT, SpaceId, Space, data);
 
 get(_, _UserId, #od_user{eff_providers = Providers}, eff_providers) ->
-    {ok, Providers};
+    {ok, maps:keys(Providers)};
 get(_, _UserId, #od_user{}, {eff_provider, ProviderId}) ->
     {ok, Provider} = ?throw_on_failure(n_provider_logic_plugin:get_entity(ProviderId)),
     n_provider_logic_plugin:get(?ROOT, ProviderId, Provider, data);
@@ -201,7 +201,7 @@ get(_, _UserId, #od_user{}, {eff_provider, ProviderId}) ->
 get(_, _UserId, #od_user{handle_services = HandleServices}, handle_services) ->
     {ok, HandleServices};
 get(_, _UserId, #od_user{eff_handle_services = HandleServices}, eff_handle_services) ->
-    {ok, HandleServices};
+    {ok, maps:keys(HandleServices)};
 get(_, _UserId, #od_user{}, {handle_service, HServiceId}) ->
     {ok, HService} = ?throw_on_failure(n_handle_service_logic_plugin:get_entity(HServiceId)),
     n_handle_service_logic_plugin:get(?ROOT, HServiceId, HService, data);
@@ -212,7 +212,7 @@ get(_, _UserId, #od_user{}, {eff_handle_service, HServiceId}) ->
 get(_, _UserId, #od_user{handles = Handles}, handles) ->
     {ok, Handles};
 get(_, _UserId, #od_user{eff_handles = Handles}, eff_handles) ->
-    {ok, Handles};
+    {ok, maps:keys(Handles)};
 get(_, _UserId, #od_user{}, {handle, HandleId}) ->
     {ok, Handle} = ?throw_on_failure(n_handle_logic_plugin:get_entity(HandleId)),
     n_handle_logic_plugin:get(?ROOT, HandleId, Handle, data);
@@ -325,73 +325,70 @@ delete(UserId, {handle, HandleId}) ->
 
 
 % TODO VFS-2918
-exists(_UserId, deprecated_default_space) ->
+exists(deprecated_default_space) ->
     true;
 
-exists(undefined, _) ->
-    true;
-
-exists(_UserId, {client_token, TokenId}) ->
+exists({client_token, TokenId}) ->
     {internal, fun(#od_user{client_tokens = Tokens}) ->
         lists:member(TokenId, Tokens)
     end};
 
-exists(_UserId, default_space) ->
+exists(default_space) ->
     {internal, fun(#od_user{default_space = DefaultSpace}) ->
         undefined =/= DefaultSpace
     end};
-exists(_UserId, {space_alias, SpaceId}) ->
+exists({space_alias, SpaceId}) ->
     {internal, fun(#od_user{space_aliases = Aliases}) ->
         maps:is_key(SpaceId, Aliases)
     end};
 
-exists(_UserId, default_provider) ->
+exists(default_provider) ->
     {internal, fun(#od_user{default_provider = DefaultProvider}) ->
         undefined =/= DefaultProvider
     end};
 
-exists(_UserId, {group, GroupId}) ->
+exists({group, GroupId}) ->
     {internal, fun(#od_user{groups = Groups}) ->
         lists:member(GroupId, Groups)
     end};
-exists(_UserId, {eff_group, GroupId}) ->
+exists({eff_group, GroupId}) ->
     {internal, fun(#od_user{eff_groups = Groups}) ->
         maps:is_key(GroupId, Groups)
     end};
 
-exists(_UserId, {space, SpaceId}) ->
+exists({space, SpaceId}) ->
     {internal, fun(#od_user{spaces = Spaces}) ->
         lists:member(SpaceId, Spaces)
     end};
-exists(_UserId, {eff_space, SpaceId}) ->
+exists({eff_space, SpaceId}) ->
     {internal, fun(#od_user{eff_spaces = Spaces}) ->
         maps:is_key(SpaceId, Spaces)
     end};
 
-exists(_UserId, {eff_provider, ProviderId}) ->
+exists({eff_provider, ProviderId}) ->
     {internal, fun(#od_user{eff_providers = Providers}) ->
         maps:is_key(ProviderId, Providers)
     end};
 
-exists(_UserId, {handle_service, HServiceId}) ->
+exists({handle_service, HServiceId}) ->
     {internal, fun(#od_user{handle_services = HServices}) ->
         lists:member(HServiceId, HServices)
     end};
-exists(_UserId, {eff_handle_service, HServiceId}) ->
+exists({eff_handle_service, HServiceId}) ->
     {internal, fun(#od_user{eff_handle_services = HServices}) ->
         maps:is_key(HServiceId, HServices)
     end};
 
-exists(_UserId, {handle, HandleId}) ->
+exists({handle, HandleId}) ->
     {internal, fun(#od_user{handles = Handles}) ->
         lists:member(HandleId, Handles)
     end};
-exists(_UserId, {eff_handle, HandleId}) ->
+exists({eff_handle, HandleId}) ->
     {internal, fun(#od_user{eff_handles = Handles}) ->
         maps:is_key(HandleId, Handles)
     end};
 
-exists(_UserId, _) ->
+exists(_) ->
     {internal, fun(#od_user{}) ->
         % If the user with UserId can be found, it exists. If not, the
         % verification will fail before this function is called.

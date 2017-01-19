@@ -21,7 +21,7 @@
 
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/2, authorize/4, validate/2]).
+-export([exists/1, authorize/4, validate/2]).
 -export([entity_to_string/1]).
 
 
@@ -196,49 +196,46 @@ delete(HServiceId, {group, GroupId}) ->
     ).
 
 
-exists(undefined, _) ->
-    true;
-
-exists(_HServiceId, {user, UserId}) ->
+exists({user, UserId}) ->
     {internal, fun(#od_handle_service{users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_HServiceId, {eff_user, UserId}) ->
+exists({eff_user, UserId}) ->
     {internal, fun(#od_handle_service{eff_users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_HServiceId, {user_privileges, UserId}) ->
+exists({user_privileges, UserId}) ->
     {internal, fun(#od_handle_service{users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_HServiceId, {eff_user_privileges, UserId}) ->
+exists({eff_user_privileges, UserId}) ->
     {internal, fun(#od_handle_service{eff_users = Users}) ->
         maps:is_key(UserId, Users)
     end};
 
-exists(_HServiceId, {group, UserId}) ->
+exists({group, UserId}) ->
     {internal, fun(#od_handle_service{groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_HServiceId, {eff_group, UserId}) ->
+exists({eff_group, UserId}) ->
     {internal, fun(#od_handle_service{eff_groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_HServiceId, {group_privileges, UserId}) ->
+exists({group_privileges, UserId}) ->
     {internal, fun(#od_handle_service{groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_HServiceId, {eff_group_privileges, UserId}) ->
+exists({eff_group_privileges, UserId}) ->
     {internal, fun(#od_handle_service{eff_groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
 
-exists(_HServiceId, {handle, HandleId}) ->
+exists({handle, HandleId}) ->
     {internal, fun(#od_handle_service{handles = Handles}) ->
         maps:is_key(HandleId, Handles)
     end};
 
-exists(_HServiceId, _) ->
+exists(_) ->
     % No matter the resource, return true if it belongs to a handle
     {internal, fun(#od_handle_service{}) ->
         % If the handle with HandleId can be found, it exists. If not, the

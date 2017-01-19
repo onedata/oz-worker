@@ -21,7 +21,7 @@
 %% API
 -export([run_tests/2]).
 
-
+% Runs all possible combinations of tests on a given endpoint (logic + REST)
 run_tests(Config, ApiTestSpec) ->
     #api_test_spec{
         client_spec = ClientSpec,
@@ -171,7 +171,7 @@ run_rest_tests(Config, #rest_spec{method = Method} = RestSpec, ClientSpec, DataS
     run_rest_tests(Config, RestSpec, ClientSpec#client_spec{correct = Tail}, DataSpec).
 
 
-
+% Verifies if result returned from REST is correct
 verify_rest_result(Config, TestDesc, ArgsMap) ->
     Result = rest_test_utils:check_rest_call(Config, ArgsMap),
     case Result of
@@ -190,6 +190,7 @@ verify_rest_result(Config, TestDesc, ArgsMap) ->
     end.
 
 
+% Converts a predefined error to REST reply expectations
 error_to_rest_expectations(Config, ErrorType) ->
     #rest_resp{
         code = ExpCode,
@@ -319,6 +320,7 @@ run_logic_tests(Config, #logic_spec{operation = Operation} = LogicSpec, ClientSp
     run_logic_tests(Config, LogicSpec, ClientSpec#client_spec{correct = Tail}, DataSpec).
 
 
+% Converts placeholders in logic args into real data
 prepare_logic_args(Args, Client, Data) ->
     lists:map(
         fun(Arg) ->
@@ -330,12 +332,14 @@ prepare_logic_args(Args, Client, Data) ->
         end, Args).
 
 
+% Converts client used in tests into logic client
 client_to_logic_client(nobody) -> ?NOBODY;
 client_to_logic_client(root) -> ?ROOT;
 client_to_logic_client({user, UserId}) -> ?USER(UserId);
 client_to_logic_client({provider, ProviderId, _, _}) -> ?PROVIDER(ProviderId).
 
 
+% Verifies if logic result is as expected
 verify_logic_result(ok, ?OK) ->
     true;
 verify_logic_result({ok, Bin}, ?OK_BINARY) when is_binary(Bin) ->
@@ -369,6 +373,7 @@ verify_logic_result(_, _) ->
     false.
 
 
+% Displays an error when a logic test fails
 log_failed_logic_test(TestDesc, Module, Function, Args, Client, Expected, Got) ->
     TestDescString = case TestDesc of
         {Format, Args} ->
@@ -389,6 +394,7 @@ log_failed_logic_test(TestDesc, Module, Function, Args, Client, Expected, Got) -
     ]).
 
 
+% Displays an error when a REST test fails
 log_failed_rest_test(TestDesc, Method, Path, Client, UnmetExp, Got, Expected, Response) ->
     {Code, Headers, Body} = Response,
     TestDescString = case TestDesc of
@@ -415,7 +421,7 @@ log_failed_rest_test(TestDesc, Method, Path, Client, UnmetExp, Got, Expected, Re
     ]).
 
 
-% Wszystkie erquired z po jednym at least one i z wszystkimi na raz
+% Generates all combinations of "required" and "at_least_one" data
 required_data_sets(DataSpec) ->
     #data_spec{
         required = Required,
@@ -456,14 +462,15 @@ optional_data_sets(DataSpec) ->
     ),
     [RequiredWithAllOptional | RequiredWithOneOptional].
 
-% wszystkie poprawne
+% Returns all data sets that are correct
 correct_data_sets(DataSpec) ->
     RequiredDataSets = required_data_sets(DataSpec),
     OptionalDataSets = optional_data_sets(DataSpec),
     RequiredDataSets ++ OptionalDataSets.
 
 
-% bierze wszystko mozliwe i podstaiwa jeden zly
+% Generates all combinations of bad data sets by adding wrong values to
+% correct data sets.
 bad_data_sets(DataSpec) ->
     #data_spec{
         required = Required,
@@ -481,6 +488,7 @@ bad_data_sets(DataSpec) ->
         end, BadValues).
 
 
+% Converts correct value spec into a value
 get_correct_value(Key, #data_spec{correct_values = CorrectValues}) ->
     case maps:get(Key, CorrectValues) of
         Fun when is_function(Fun, 0) ->

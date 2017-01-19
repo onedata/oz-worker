@@ -11,7 +11,6 @@
 %%%-------------------------------------------------------------------
 -module(n_entity_logic).
 -author("Lukasz Opiola").
--behaviour(data_logic_behaviour).
 
 -include("entity_logic.hrl").
 -include("errors.hrl").
@@ -33,6 +32,33 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
 -type resource() :: atom() | {atom(), term()}.
 -type data() :: maps:map() | binary().
 -type result() :: ok | {ok, term()} | {error, Reason :: term()}.
+
+-type existence_verificator() :: true | false |
+{internal, fun((entity()) -> boolean())} |
+{external, fun(() -> boolean())}.
+
+-type authorization_verificator() :: true | false |
+{internal, fun((entity()) -> boolean())} |
+{external, fun(() -> boolean())}.
+
+-type type_validator() :: atom | list_of_atoms | binary | list_of_binaries |
+integer | float | json | token.
+
+-type value_validator() :: any | non_empty |
+{not_lower_than, integer()} | {not_greater_than, integer()} |
+{between, integer(), integer()} |
+[term()] | % A list of accepted values
+{exists, fun((entity_id()) -> boolean())} |
+{not_exists, fun((entity_id()) -> boolean())} |
+token_logic:token_type() | % Compatible only with 'token' type validator
+alias. % Compatible only with 'binary' type validator
+
+-type validity_verificator() :: #{
+required => #{Key :: binary() => {type_validator(), value_validator()}},
+at_least_one => #{Key :: binary() => {type_validator(), value_validator()}},
+optional => #{Key :: binary() => {type_validator(), value_validator()}}
+}.
+
 -export_type([
     client/0,
     el_plugin/0,
@@ -42,9 +68,15 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
     entity/0,
     resource/0,
     data/0,
-    result/0
+    result/0,
+    existence_verificator/0,
+    authorization_verificator/0,
+    type_validator/0,
+    value_validator/0,
+    validity_verificator/0
 ]).
 
+% Internal record containing the request data.
 -record(request, {
     client = #client{} :: client(),
     el_plugin = undefined :: el_plugin(),
@@ -55,34 +87,18 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
     data = #{} :: data()
 }).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
-% TODO do typu
-type_rule() -> [
-    atom,
-    list_of_atoms,
-    binary,
-    list_of_binaries,
-    integer,
-    float,
-    json,
-    token
-].
-
-value_rule() -> [
-    any,
-    non_empty,
-    {not_lower_than, threshold},
-    {not_greater_than, threshold},
-    {between, low, high},
-    [possible_values],
-    fun() -> true end,  % TODO czy to potrzebne?
-    {exists, fun(Id) -> true end},
-    {not_exists, fun(Id) -> true end},
-    token_type, % compatible only with token
-    alias
-].
-
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource using provided entity logic module.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: client(), ELPlugin :: el_plugin(),
+    EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
+    result().
 create(Client, ELPlugin, EntityId, Resource, Data) ->
     try
         Request = #request{
@@ -108,6 +124,13 @@ create(Client, ELPlugin, EntityId, Resource, Data) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a resource using provided entity logic module.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: client(), ELPlugin :: el_plugin(),
+    EntityId :: entity_id(), Resource :: resource()) -> result().
 get(Client, ELPlugin, EntityId, Resource) ->
     try
         Request = #request{
@@ -131,6 +154,14 @@ get(Client, ELPlugin, EntityId, Resource) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a resource using provided entity logic module.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(Client :: client(), ELPlugin :: el_plugin(),
+    EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
+    result().
 update(Client, ELPlugin, EntityId, Resource, Data) ->
     try
         Request = #request{
@@ -156,6 +187,13 @@ update(Client, ELPlugin, EntityId, Resource, Data) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes a resource using provided entity logic module.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(Client :: client(), ELPlugin :: el_plugin(),
+    EntityId :: entity_id(), Resource :: resource()) -> result().
 delete(Client, ELPlugin, EntityId, Resource) ->
     try
         Request = #request{
@@ -191,12 +229,30 @@ delete(Client, ELPlugin, EntityId, Resource) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a readable string representing provided client.
+%% @end
+%%--------------------------------------------------------------------
+-spec client_to_string(Client :: client()) -> string().
 client_to_string(?NOBODY) -> "nobody (unauthenticated user)";
 client_to_string(?ROOT) -> "root";
 client_to_string(?USER(UId)) -> str_utils:format("user:~s", [UId]);
 client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).
 
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Retrieves the entity specified in request by calling back
+%% proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_get_entity(Request :: #request{}) -> entity().
 call_get_entity(Request) ->
     #request{el_plugin = ELPlugin, entity_id = EntityId} = Request,
     case ELPlugin:get_entity(EntityId) of
@@ -207,6 +263,14 @@ call_get_entity(Request) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Retrieves a resource specified in request by calling back
+%% proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_get_resource(Request :: #request{}) -> {ok, term()}.
 call_get_resource(Request) ->
     #request{
         client = Client,
@@ -246,6 +310,14 @@ call_get_resource(Request) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Creates a resource specified in request by calling back
+%% proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_create(Request :: #request{}) -> result().
 call_create(Request) ->
     #request{
         client = Client,
@@ -257,6 +329,14 @@ call_create(Request) ->
     ELPlugin:create(Client, EntityId, Resource, Data).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates a resource specified in request by calling back
+%% proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_update(Request :: #request{}) -> result().
 call_update(Request) ->
     #request{
         el_plugin = ELPlugin,
@@ -267,6 +347,14 @@ call_update(Request) ->
     ELPlugin:update(EntityId, Resource, Data).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Deletes a resource specified in request by calling back
+%% proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_delete(Request :: #request{}) -> result().
 call_delete(Request) ->
     #request{
         el_plugin = ELPlugin,
@@ -276,15 +364,21 @@ call_delete(Request) ->
     ELPlugin:delete(EntityId, Resource).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Calls back entity logic plugin to retrieve the list of
+%% existence verificators for given resource.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_exists(Request :: #request{}) -> [existence_verificator()].
 call_exists(Request) ->
     #request{
-        entity_id = EntityId,
-        % TODO potrzeba operation??
         resource = Resource,
         el_plugin = ELPlugin
     } = Request,
     % Call the plugin to obtain auth verification procedures
-    case ELPlugin:exists(EntityId, Resource) of
+    case ELPlugin:exists(Resource) of
         List when is_list(List) ->
             List;
         Item ->
@@ -292,6 +386,14 @@ call_exists(Request) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Calls back entity logic plugin to retrieve the list of
+%% authorization verificators for given resource.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_authorize(Request :: #request{}) -> [authorization_verificator()].
 call_authorize(#request{client = ?ROOT}) ->
     % Root client type is allowed to do everything
     [true];
@@ -317,6 +419,14 @@ call_authorize(Request) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Calls back entity logic plugin to retrieve the list of
+%% validity verificators for given resource.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_validate(Request :: #request{}) -> [validity_verificator()].
 call_validate(Request) ->
     #request{
         operation = Operation,
@@ -326,7 +436,13 @@ call_validate(Request) ->
     ELPlugin:validate(Operation, Resource).
 
 
-
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Ensures entity specified in request exists, throws on error.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_existence_of_entity(Request :: #request{}) -> #request{}.
 check_existence_of_entity(#request{entity_id = undefined} = Request) ->
     % Undefined entity always exists (resource is not correlated with any entity).
     Request;
@@ -338,6 +454,16 @@ check_existence_of_entity(Request) ->
     Request.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Ensures resource specified in request exists, throws on error.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_existence(Request :: #request{}) -> #request{}.
+check_existence(#request{entity_id = undefined} = Request) ->
+    % Resources where entity id is undefined always exist.
+    Request;
 check_existence(Request) ->
     Verificators = call_exists(Request),
     check_existence(Verificators, Request).
@@ -366,6 +492,14 @@ check_existence([{internal, Fun} | Tail], #request{entity = Entity} = Req) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Ensures client specified in request is authorized to perform the request,
+%% throws on error.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_authorization(Request :: #request{}) -> #request{}.
 check_authorization(#request{client = Client} = Request) ->
     Result = try
         Verificators = call_authorize(Request),
@@ -425,7 +559,14 @@ check_authorization([{internal, Fun} | Tail], #request{entity = Entity} = Req) -
     end.
 
 
-% TODO jesli juz jest atom to ne trzeba konwersji
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Ensures data specified in request is valid,  throws on error.
+
+%% @end
+%%--------------------------------------------------------------------
+-spec check_validity(Request :: #request{}) -> #request{}.
 check_validity(#request{data = Data} = Request) ->
     ValidatorsMap = call_validate(Request),
     % Get all types of validators validators

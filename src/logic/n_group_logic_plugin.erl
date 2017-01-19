@@ -22,7 +22,7 @@
 
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/2, authorize/4, validate/2]).
+-export([exists/1, authorize/4, validate/2]).
 -export([entity_to_string/1]).
 
 
@@ -147,8 +147,6 @@ create(_Client, GroupId, children, #{<<"groupId">> := ChildGroupId}) ->
         privileges:group_user()
     ),
     {ok, ChildGroupId}.
-
-
 
 
 % TODO VFS-2918
@@ -340,85 +338,82 @@ delete(GroupId, {handle, HandleId}) ->
         od_handle, HandleId).
 
 
-exists(undefined, _) ->
-    true;
-
-exists(_GroupId, {user, UserId}) ->
+exists({user, UserId}) ->
     {internal, fun(#od_group{users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_GroupId, {eff_user, UserId}) ->
+exists({eff_user, UserId}) ->
     {internal, fun(#od_group{eff_users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_GroupId, {user_privileges, UserId}) ->
+exists({user_privileges, UserId}) ->
     {internal, fun(#od_group{users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_GroupId, {eff_user_privileges, UserId}) ->
+exists({eff_user_privileges, UserId}) ->
     {internal, fun(#od_group{eff_users = Users}) ->
         maps:is_key(UserId, Users)
     end};
 
-exists(_GroupId, {parent, ParentId}) ->
+exists({parent, ParentId}) ->
     {internal, fun(#od_group{parents = Parents}) ->
         lists:member(ParentId, Parents)
     end};
-exists(_GroupId, {eff_parent, ParentId}) ->
+exists({eff_parent, ParentId}) ->
     {internal, fun(#od_group{eff_parents = Parents}) ->
         maps:is_key(ParentId, Parents)
     end};
 
-exists(_GroupId, {child, ChildId}) ->
+exists({child, ChildId}) ->
     {internal, fun(#od_group{children = Children}) ->
         maps:is_key(ChildId, Children)
     end};
-exists(_GroupId, {eff_child, ChildId}) ->
+exists({eff_child, ChildId}) ->
     {internal, fun(#od_group{eff_children = Children}) ->
         maps:is_key(ChildId, Children)
     end};
-exists(_GroupId, {child_privileges, ChildId}) ->
+exists({child_privileges, ChildId}) ->
     {internal, fun(#od_group{children = Children}) ->
         maps:is_key(ChildId, Children)
     end};
-exists(_GroupId, {eff_child_privileges, ChildId}) ->
+exists({eff_child_privileges, ChildId}) ->
     {internal, fun(#od_group{eff_children = Children}) ->
         maps:is_key(ChildId, Children)
     end};
 
-exists(_UserId, {space, SpaceId}) ->
+exists({space, SpaceId}) ->
     {internal, fun(#od_group{spaces = Spaces}) ->
         lists:member(SpaceId, Spaces)
     end};
-exists(_UserId, {eff_space, SpaceId}) ->
+exists({eff_space, SpaceId}) ->
     {internal, fun(#od_group{eff_spaces = Spaces}) ->
         maps:is_key(SpaceId, Spaces)
     end};
 
-exists(_UserId, {eff_provider, ProviderId}) ->
+exists({eff_provider, ProviderId}) ->
     {internal, fun(#od_group{eff_providers = Providers}) ->
         maps:is_key(ProviderId, Providers)
     end};
 
-exists(_UserId, {handle_service, HServiceId}) ->
+exists({handle_service, HServiceId}) ->
     {internal, fun(#od_group{handle_services = HServices}) ->
         lists:member(HServiceId, HServices)
     end};
-exists(_UserId, {eff_handle_service, HServiceId}) ->
+exists({eff_handle_service, HServiceId}) ->
     {internal, fun(#od_group{eff_handle_services = HServices}) ->
         maps:is_key(HServiceId, HServices)
     end};
 
-exists(_UserId, {handle, HandleId}) ->
+exists({handle, HandleId}) ->
     {internal, fun(#od_group{handles = Handles}) ->
         lists:member(HandleId, Handles)
     end};
-exists(_UserId, {eff_handle, HandleId}) ->
+exists({eff_handle, HandleId}) ->
     {internal, fun(#od_group{eff_handles = Handles}) ->
         maps:is_key(HandleId, Handles)
     end};
 
-exists(_GroupId, _) ->
+exists(_) ->
     {internal, fun(#od_group{}) ->
         % If the group with GroupId can be found, it exists. If not, the
         % verification will fail before this function is called.
@@ -503,16 +498,22 @@ authorize(delete, _GroupId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_SET_PRIVILEGES);
 
 authorize(delete, _GroupId, {parent, _ParentId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?GROUP_LEAVE_GROUP);
+    auth_by_privilege(UserId, ?GROUP_UPDATE);
+% TODO VFS-2918
+%%    auth_by_privilege(UserId, ?GROUP_LEAVE_GROUP);
 
 authorize(delete, _GroupId, {space, _SpaceId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_LEAVE_SPACE);
 
 authorize(delete, _GroupId, {handle_service, _HServiceId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?GROUP_LEAVE_HANDLE_SERVICE);
+    auth_by_privilege(UserId, ?GROUP_UPDATE);
+% TODO VFS-2918
+%%    auth_by_privilege(UserId, ?GROUP_LEAVE_HANDLE_SERVICE);
 
 authorize(delete, _GroupId, {handle, _HandleId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?GROUP_LEAVE_HANDLE);
+    auth_by_privilege(UserId, ?GROUP_UPDATE);
+% TODO VFS-2918
+%%    auth_by_privilege(UserId, ?GROUP_LEAVE_HANDLE);
 
 authorize(delete, _GroupId, {user, _UserId}, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?GROUP_REMOVE_USER),
@@ -576,7 +577,7 @@ validate(update, entity) -> #{
         <<"type">> => {atom, [organization, unit, team, role]}
     }
 };
-validate(update, {user_privileges, _UserId}) ->#{
+validate(update, {user_privileges, _UserId}) -> #{
     required => #{
         <<"privileges">> => {list_of_atoms, privileges:group_privileges()}
     },

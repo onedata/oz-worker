@@ -111,7 +111,8 @@
     generate_provider_cert_files/0,
     ensure_eff_graph_up_to_date/1,
     mock_handle_proxy/1,
-    unmock_handle_proxy/1
+    unmock_handle_proxy/1,
+    contains_map/2
 ]).
 
 %%%===================================================================

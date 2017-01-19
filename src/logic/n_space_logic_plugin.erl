@@ -22,7 +22,7 @@
 
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/2, authorize/4, validate/2]).
+-export([exists/1, authorize/4, validate/2]).
 -export([entity_to_string/1]).
 
 
@@ -237,54 +237,51 @@ delete(SpaceId, {group, GroupId}) ->
     ).
 
 
-exists(undefined, _) ->
-    true;
-
-exists(_SpaceId, {user, UserId}) ->
+exists({user, UserId}) ->
     {internal, fun(#od_space{users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_SpaceId, {eff_user, UserId}) ->
+exists({eff_user, UserId}) ->
     {internal, fun(#od_space{eff_users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_SpaceId, {user_privileges, UserId}) ->
+exists({user_privileges, UserId}) ->
     {internal, fun(#od_space{users = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_SpaceId, {eff_user_privileges, UserId}) ->
+exists({eff_user_privileges, UserId}) ->
     {internal, fun(#od_space{eff_users = Users}) ->
         maps:is_key(UserId, Users)
     end};
 
-exists(_SpaceId, {group, UserId}) ->
+exists({group, UserId}) ->
     {internal, fun(#od_space{groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_SpaceId, {eff_group, UserId}) ->
+exists({eff_group, UserId}) ->
     {internal, fun(#od_space{eff_groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_SpaceId, {group_privileges, UserId}) ->
+exists({group_privileges, UserId}) ->
     {internal, fun(#od_space{groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
-exists(_SpaceId, {eff_group_privileges, UserId}) ->
+exists({eff_group_privileges, UserId}) ->
     {internal, fun(#od_space{eff_groups = Users}) ->
         maps:is_key(UserId, Users)
     end};
 
-exists(_SpaceId, {share, ProviderId}) ->
+exists({share, ProviderId}) ->
     {internal, fun(#od_space{shares = Providers}) ->
         maps:is_key(ProviderId, Providers)
     end};
 
-exists(_SpaceId, {provider, ProviderId}) ->
+exists({provider, ProviderId}) ->
     {internal, fun(#od_space{providers = Providers}) ->
         maps:is_key(ProviderId, Providers)
     end};
 
-exists(_SpaceId, _) ->
+exists(_) ->
     % No matter the resource, return true if it belongs to a space
     {internal, fun(#od_space{}) ->
         % If the space with SpaceId can be found, it exists. If not, the

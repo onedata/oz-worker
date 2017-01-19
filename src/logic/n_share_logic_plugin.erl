@@ -21,7 +21,7 @@
 
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/2, authorize/4, validate/2]).
+-export([exists/1, authorize/4, validate/2]).
 -export([entity_to_string/1]).
 
 
@@ -83,9 +83,8 @@ delete(ShareId, entity) ->
     entity_graph:delete_with_relations(od_share, ShareId).
 
 
-exists(undefined, _) ->
-    true;
-exists(_ShareId, entity) ->
+exists(_) ->
+    % No matter the resource, return true if it belongs to a share
     {internal, fun(#od_share{}) ->
         % If the share with ShareId can be found, it exists. If not, the
         % verification will fail before this function is called.

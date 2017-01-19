@@ -15,6 +15,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 -export([get_ignore_msg/1, as_msg/3]).
 
@@ -339,43 +340,18 @@ calculate_space_aliases(SpaceIds, SpaceAliases) ->
         end, SpaceIds)),
     % Overwrite names with existing aliases
     SpaceNamesMerged = maps:merge(SpaceNames, SpaceAliases),
-    R = maps:fold(
-        fun(SpId, SpName, AccMap) ->
-            case maps:is_key(SpId, AccMap) of
+    AllNames = maps:values(SpaceNamesMerged),
+    % Duplicated names should get the id of space concatenated
+    UniqueNames = maps:map(
+        fun(SpId, SpName) ->
+            case lists:member(SpName, AllNames -- [SpName]) of
                 false ->
-                    AccMap#{SpId => SpName};
+                    SpName;
                 true ->
-                    SpaceNameLen = size(SpName),
-                    UniqueSpaceName = <<SpName/binary, "#", SpId/binary>>,
-                    {ShortestUniquePfxLen, FilteredSpaces} = maps:fold(fun
-                        (Id, _, {UniquePrefLen, SpacesAcc}) when Id == SpId ->
-                            {UniquePrefLen, SpacesAcc};
-                        (Id, Name, {UniquePrefLen, SpacesAcc}) ->
-                            PrefLen = binary:longest_common_prefix(
-                                [UniqueSpaceName, Name]),
-                            {
-                                max(PrefLen + 1, UniquePrefLen),
-                                maps:put(Id, Name, SpacesAcc)
-                            }
-                    end, {SpaceNameLen, #{}}, AccMap),
-                    ?dump(FilteredSpaces),
-
-                    ValidUniquePrefLen = case ShortestUniquePfxLen > SpaceNameLen of
-                        true ->
-                            min(max(ShortestUniquePfxLen,
-                                SpaceNameLen + 1 + ?MIN_SUFFIX_HASH_LEN),
-                                size(UniqueSpaceName));
-                        false ->
-                            ShortestUniquePfxLen
-                    end,
-
-                    ShortestUniqueSpaceName =
-                        <<UniqueSpaceName:ValidUniquePrefLen/binary>>,
-                    maps:put(SpId, ShortestUniqueSpaceName, FilteredSpaces)
+                    <<SpName/binary, "#", (binary:part(SpId, 0, 8))/binary>>
             end
-        end, #{}, SpaceNamesMerged),
-    ?dump(R),
-    R.
+        end, SpaceNamesMerged),
+    UniqueNames.
 
 
 % TODO VFS-2918
@@ -396,6 +372,6 @@ eff_relation_to_proplist(Map) ->
 % TODO VFS-2918
 eff_relation_with_attrs_to_proplist(Map) ->
     maps:to_list(maps:map(
-        fun(K, {Attrs, _}) ->
+        fun(_K, {Attrs, _}) ->
             Attrs
         end, Map)).

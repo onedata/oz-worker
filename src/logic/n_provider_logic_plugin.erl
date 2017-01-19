@@ -29,7 +29,7 @@ check_my_ports | {check_my_ip, cowboy_req:req()}.
 -export_type([resource/0]).
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/2, authorize/4, validate/2]).
+-export([exists/1, authorize/4, validate/2]).
 -export([entity_to_string/1]).
 
 
@@ -174,24 +174,25 @@ delete(ProviderId, {space, SpaceId}) ->
     ).
 
 
-exists(undefined, _) ->
-    true;
-exists(_ProviderId, {space, SpaceId}) ->
+exists({space, SpaceId}) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{spaces = Spaces}) ->
         maps:is_key(SpaceId, Spaces)
     end};
-exists(_ProviderId, {eff_user, UserId}) ->
+
+exists({eff_user, UserId}) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{eff_users = EffUsers}) ->
         maps:is_key(UserId, EffUsers)
     end};
-exists(_ProviderId, {eff_group, GroupId}) ->
+
+exists({eff_group, GroupId}) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{eff_groups = EffGroups}) ->
         maps:is_key(GroupId, EffGroups)
     end};
-exists(_ProviderId, _) ->
+
+exists(_) ->
     {internal, fun(#od_provider{}) ->
         % If the provider with ProviderId can be found, it exists. If not, the
         % verification will fail before this function is called.

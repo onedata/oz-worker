@@ -39,7 +39,9 @@ response(create, _UserId, default_provider, ok) ->
 
 response(create, _UserId, create_group, {ok, GroupId}) ->
     n_rest_handler:created_reply(
-        [<<"user">>, <<"groups">>, GroupId]
+        % TODO VFS-2918
+%%        [<<"user">>, <<"groups">>, GroupId]
+        [<<"groups">>, GroupId]
     );
 
 response(create, _UserId, create_space, {ok, SpaceId}) ->
@@ -51,12 +53,16 @@ response(create, _UserId, create_space, {ok, SpaceId}) ->
 
 response(create, _UserId, create_handle_service, {ok, HServiceId}) ->
     n_rest_handler:created_reply(
-        [<<"user">>, <<"handle_services">>, HServiceId]
+        % TODO VFS-2918
+%%        [<<"user">>, <<"handle_services">>, HServiceId]
+        [<<"handle_services">>, HServiceId]
     );
 
 response(create, _UserId, create_handle, {ok, HandleId}) ->
     n_rest_handler:created_reply(
-        [<<"user">>, <<"handles">>, HandleId]
+        % TODO VFS-2918
+%%        [<<"user">>, <<"handles">>, HandleId]
+        [ <<"handles">>, HandleId]
     );
 
 response(create, _UserId, join_group, {ok, GroupId}) ->

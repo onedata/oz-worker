@@ -37,19 +37,41 @@ get_rest_api_prefix(Config) ->
 %% Args map looks like following:
 %% #{
 %%    request => #{
-%%      method => get, % Optional, default: get
-%%      path => [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>], % Mandatory
-%%      headers => [{<<"key">>, <<"value">>}], % Optional, default: ct=app/json
-%%      body => <<"body content">>, % Optional, default: <<"">>
-%%      auth => nobody | root | {user, <<"uid">>} | {provider, <<"id">>, "KeyFile", "CertFile"} orelse undefined, % Optional, default: undefined
-%%      opts => [http_client_option] % Optional, default: []
+%%      method => % Optional, default: get
+%%          get
+%%          post
+%%          put
+%%          patch
+%%          delete
+%%      path => % Mandatory
+%%          [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>],
+%%      headers => % Optional, default: content-type=app/json
+%%          [{<<"key">>, <<"value">>}]
+%%      body => % Optional, default: <<"">>
+%%          <<"body content">>,
+%%      auth => % Optional, default: undefined
+%%          nobody
+%%          root
+%%          {user, <<"uid">>}
+%%          {provider, <<"id">>, "KeyFile", "CertFile"}
+%%          undefined
+%%      opts => % Optional, default: []
+%%          [http_client_option]
 %%    },
 %%    expect => #{
-%%      code => 200, % Optional, by default not validated
-%%      headers => #{<<"key">> => <<"value">>}, % Optional, by def. not validated
-%%                 {contains, #{<<"key">> => <<"value">>}} % checks if given
-%%                      (key, value) pair is included in response headers
-%%      body => <<"binary">> orelse #{} % Optional, by default not validated
+%%      code => % Optional, by default not validated
+%%          200
+%%      headers => % Optional, by def. not validated
+%%          #{<<"key">> => <<"value">>}
+%%          fun(Headers) -> boolean() % Verification function
+%%          {contains, #{<<"key">> => <<"value">>}} % checks if given
+%%              (key, value) pair is included in response headers
+%%      body => % Optional, by default not validated
+%%          <<"binary">>
+%%          #{}
+%%          fun(Body) -> boolean() % Verification function
+%%          {check_type, binary}
+%%          {contains, #{}}
 %%      % Specifying a map here will cause validation of JSON content-wise
 %%      % (if the JSON object specified by map is equal to the one in reply)
 %%    }
@@ -320,8 +342,8 @@ compare_headers(ActualHeadersInput, ExpectedHeadersInput) ->
             lists:all(
                 fun({Key, ExpValue}) ->
                     ActualValue = maps:get(Key, ActualMap),
-                    case {ActualValue, ExpValue} of
-                        {_, {match, RegExp}} ->
+                    case {ExpValue, ActualValue} of
+                        {{match, RegExp}, _} ->
                             match =:= re:run(ActualValue, RegExp, [{capture, none}]);
                         {B1, B2} when is_binary(B1) andalso is_binary(B2) ->
                             B1 =:= B2
@@ -410,6 +432,7 @@ sort_map(OriginalMap) ->
             end
         end, OriginalMap, maps:keys(OriginalMap)).
 
+% Compares two XML terms
 compare_xml(_, []) -> true;
 compare_xml(#xmlText{value = V}, #xmlText{value = V}) -> true;
 compare_xml(#xmlText{value = _V1}, #xmlText{value = _V2}) -> false;

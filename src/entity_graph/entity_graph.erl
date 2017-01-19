@@ -112,14 +112,14 @@ eff_relation(entity_id()) | eff_relation_with_attrs(entity_id(), attributes()) |
 -type map_of_any_eff_relations() :: #{entity_type() => any_eff_relations()}.
 
 %% API
--export([init_state/0]).
+-export([init_state/0, verify_state_of_all_entities/0]).
 -export([schedule_refresh/0, ensure_up_to_date/0]).
 -export([add_relation/4, add_relation/5]).
 -export([update_relation/5]).
 -export([remove_relation/4]).
 -export([delete_with_relations/2]).
 -export([update_oz_privileges/4]).
--export([mark_dirty/2, mark_dirty/5]).
+-export([mark_dirty/2, mark_dirty/5, is_dirty/2]).
 
 %%%===================================================================
 %%% API
@@ -142,9 +142,46 @@ init_state() ->
                 {ok, ?STATE_KEY} = entity_graph_state:create(
                     #document{key = ?STATE_KEY, value = #entity_graph_state{}}
                 ),
+                verify_state_of_all_entities(),
                 ok
         end
     end).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks all entities in the system and looks for those which are marked as
+%% dirty. Schedule refreshes of such entities.
+%% @end
+%%--------------------------------------------------------------------
+-spec verify_state_of_all_entities() -> ok.
+verify_state_of_all_entities() ->
+    EntityTypes = [
+        od_user, od_group, od_space, od_provider, od_handle_service, od_handle
+    ],
+    lists:foreach(
+        fun(EntityType) ->
+            {ok, Entities} = EntityType:list(),
+            lists:foreach(
+                fun(#document{key = EntityId, value = Entity}) ->
+                    lists:foreach(
+                        fun(Direction) ->
+                            case is_dirty(Direction, Entity) of
+                                true ->
+                                    ?info("Scheduling ~p refresh of dirty entity: ~p", [
+                                        Direction, EntityType:to_string(EntityId)
+                                    ]),
+                                    update_state(
+                                        Direction, true, EntityType, EntityId,
+                                        get_priority(Direction, Entity)
+                                    );
+                                false ->
+                                    ok
+                            end
+                        end, [top_down, bottom_up])
+                end, Entities)
+        end, EntityTypes),
+    schedule_refresh().
 
 
 %%--------------------------------------------------------------------
@@ -519,6 +556,68 @@ update_oz_privileges(EntityType, EntityId, Operation, Privileges) ->
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Marks given entity as dirty (in all directions) and returns updated entity
+%% record (it still needs to be saved to datastore).
+%% If an entity is already marked as dirty, it's priority is updated.
+%% @end
+%%--------------------------------------------------------------------
+-spec mark_dirty(EntityId :: entity_id(), Entity :: entity()) -> entity().
+mark_dirty(EntityId, #od_user{} = User) ->
+    mark_dirty(top_down, true, od_user, EntityId, User);
+mark_dirty(EntityId, #od_group{} = Group) ->
+    mark_dirty(bottom_up, true, od_group, EntityId, Group),
+    mark_dirty(top_down, true, od_group, EntityId, Group);
+mark_dirty(EntityId, #od_space{} = Space) ->
+    mark_dirty(bottom_up, true, od_space, EntityId, Space),
+    mark_dirty(top_down, true, od_space, EntityId, Space);
+mark_dirty(_EntityId, #od_share{} = Share) ->
+    Share;
+mark_dirty(EntityId, #od_provider{} = Provider) ->
+    mark_dirty(bottom_up, true, od_provider, EntityId, Provider);
+mark_dirty(EntityId, #od_handle_service{} = HService) ->
+    mark_dirty(bottom_up, true, od_handle_service, EntityId, HService);
+mark_dirty(EntityId, #od_handle{} = Handle) ->
+    mark_dirty(bottom_up, true, od_handle, EntityId, Handle).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Marks given entity as dirty (in given direction) and returns updated entity
+%% record (it still needs to be saved to datastore).
+%% If an entity is already marked as dirty, it's priority is updated.
+%% @end
+%%--------------------------------------------------------------------
+-spec mark_dirty(Direction :: direction(), Flag :: boolean(),
+    EntityType :: entity_type(), EntityId :: entity_id(),
+    Entity :: entity()) -> entity().
+% Shares do not take part in eff graph recomputation
+mark_dirty(_, _, _, _, #od_share{} = Entity) ->
+    Entity;
+mark_dirty(Direction, Flag, EntityType, EntityId, Entity) ->
+    Priority = get_priority(Direction, Entity),
+    update_state(Direction, Flag, EntityType, EntityId, Priority),
+    set_dirty_flag(Direction, Flag, Entity).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate telling if given record is dirty in given direction.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_dirty(Direction :: direction(), Entity :: entity()) -> boolean().
+is_dirty(top_down, #od_user{top_down_dirty = Flag}) -> Flag;
+is_dirty(top_down, #od_group{top_down_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_group{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(top_down, #od_space{top_down_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_space{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_provider{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_handle_service{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_handle{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(_, _) -> false.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -543,12 +642,43 @@ get_state() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Updates effective graph state.
+%% Updates effective graph state by marking given entity dirty or not dirty in
+%% (direction-wise).
 %% @end
 %%--------------------------------------------------------------------
--spec update_state(fun((#entity_graph_state{}) -> #entity_graph_state{})) -> ok.
-update_state(UpdateFun) ->
-    {ok, _} = entity_graph_state:update(?STATE_KEY, UpdateFun),
+-spec update_state(Direction :: direction(), Flag :: boolean(),
+    EntityType :: entity_type(), EntityId :: entity_id(),
+    Priority :: integer()) -> ok.
+update_state(Direction, Flag, EntityType, EntityId, Priority) ->
+    {ok, _} = entity_graph_state:update(?STATE_KEY, fun(EffGraphState) ->
+        #entity_graph_state{
+            bottom_up_dirty = BottomUpDirty,
+            top_down_dirty = TopDownDirty
+        } = EffGraphState,
+        NewState = case {Direction, Flag} of
+            {bottom_up, true} ->
+                EffGraphState#entity_graph_state{
+                    bottom_up_dirty = lists:sort(lists:keystore(
+                        EntityId, 3, BottomUpDirty, {Priority, EntityType, EntityId}
+                    ))
+                };
+            {bottom_up, false} ->
+                EffGraphState#entity_graph_state{
+                    bottom_up_dirty = lists:keydelete(EntityId, 3, BottomUpDirty)
+                };
+            {top_down, true} ->
+                EffGraphState#entity_graph_state{
+                    top_down_dirty = lists:sort(lists:keystore(
+                        EntityId, 3, TopDownDirty, {Priority, EntityType, EntityId}
+                    ))
+                };
+            {top_down, false} ->
+                EffGraphState#entity_graph_state{
+                    top_down_dirty = lists:keydelete(EntityId, 3, TopDownDirty)
+                }
+        end,
+        {ok, NewState}
+    end),
     ok.
 
 
@@ -665,83 +795,8 @@ refresh_entity(Direction, EntityType, EntityId) ->
         )),
         {ok, NewRecord}
     end),
+    ?debug("Entity refreshed: ~p", [EntityType:to_string(EntityId)]),
     ok.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Marks given entity as dirty (in all directions) and returns updated entity
-%% record (it still needs to be saved to datastore).
-%% If an entity is already marked as dirty, it's priority is updated.
-%% @end
-%%--------------------------------------------------------------------
--spec mark_dirty(EntityId :: entity_id(), Entity :: entity()) -> entity().
-mark_dirty(EntityId, #od_user{} = User) ->
-    mark_dirty(top_down, true, od_user, EntityId, User);
-mark_dirty(EntityId, #od_group{} = Group) ->
-    mark_dirty(bottom_up, true, od_group, EntityId, Group),
-    mark_dirty(top_down, true, od_group, EntityId, Group);
-mark_dirty(EntityId, #od_space{} = Space) ->
-    mark_dirty(bottom_up, true, od_space, EntityId, Space),
-    mark_dirty(top_down, true, od_space, EntityId, Space);
-mark_dirty(_EntityId, #od_share{} = Share) ->
-    Share;
-mark_dirty(EntityId, #od_provider{} = Provider) ->
-    mark_dirty(bottom_up, true, od_provider, EntityId, Provider);
-mark_dirty(EntityId, #od_handle_service{} = HService) ->
-    mark_dirty(bottom_up, true, od_handle_service, EntityId, HService);
-mark_dirty(EntityId, #od_handle{} = Handle) ->
-    mark_dirty(bottom_up, true, od_handle, EntityId, Handle).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Marks given entity as dirty (in given direction) and returns updated entity
-%% record (it still needs to be saved to datastore).
-%% If an entity is already marked as dirty, it's priority is updated.
-%% @end
-%%--------------------------------------------------------------------
--spec mark_dirty(Direction :: direction(), Flag :: boolean(),
-    EntityType :: entity_type(), EntityId :: entity_id(),
-    Entity :: entity()) -> entity().
-% Shares do not take part in eff graph recomputation
-mark_dirty(_, _, _, _, #od_share{} = Entity) ->
-    Entity;
-mark_dirty(Direction, Flag, EntityType, EntityId, Entity) ->
-    Priority = get_priority(Direction, Entity),
-    update_state(
-        fun(EffGraphState) ->
-            #entity_graph_state{
-                bottom_up_dirty = BottomUpDirty,
-                top_down_dirty = TopDownDirty
-            } = EffGraphState,
-            NewState = case {Direction, Flag} of
-                {bottom_up, true} ->
-                    EffGraphState#entity_graph_state{
-                        bottom_up_dirty = lists:sort(lists:keystore(
-                            EntityId, 3, BottomUpDirty, {Priority, EntityType, EntityId}
-                        ))
-                    };
-                {bottom_up, false} ->
-                    EffGraphState#entity_graph_state{
-                        bottom_up_dirty = lists:keydelete(EntityId, 3, BottomUpDirty)
-                    };
-                {top_down, true} ->
-                    EffGraphState#entity_graph_state{
-                        top_down_dirty = lists:sort(lists:keystore(
-                            EntityId, 3, TopDownDirty, {Priority, EntityType, EntityId}
-                        ))
-                    };
-                {top_down, false} ->
-                    EffGraphState#entity_graph_state{
-                        top_down_dirty = lists:keydelete(EntityId, 3, TopDownDirty)
-                    }
-            end,
-            {ok, NewState}
-        end),
-    set_dirty_flag(Direction, Flag, Entity).
 
 
 %%--------------------------------------------------------------------
