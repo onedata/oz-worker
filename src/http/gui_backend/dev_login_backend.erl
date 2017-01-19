@@ -53,4 +53,4 @@ page_init() ->
 </body>
 </html>
     ", [ButtonsBin]),
-    {serve_body, Body, [{<<"content-type">>, <<"text/html">>}]}.
+    {serve_body, Body, #{<<"content-type">> => <<"text/html">>}}.
