@@ -685,7 +685,7 @@ mark_dirty(EntityId, #od_group{} = Group) ->
 mark_dirty(EntityId, #od_space{} = Space) ->
     mark_dirty(bottom_up, true, od_space, EntityId, Space),
     mark_dirty(top_down, true, od_space, EntityId, Space);
-mark_dirty(_EntityId, #od_user{} = Share) ->
+mark_dirty(_EntityId, #od_share{} = Share) ->
     Share;
 mark_dirty(EntityId, #od_provider{} = Provider) ->
     mark_dirty(bottom_up, true, od_provider, EntityId, Provider);

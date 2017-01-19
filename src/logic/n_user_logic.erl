@@ -537,7 +537,8 @@ authenticate_by_basic_credentials(Login, Password) ->
 -spec change_user_password(Login :: binary(), OldPassword :: binary(),
     Password :: binary()) -> ok | {error, term()}.
 change_user_password(Login, OldPassword, NewPassword) ->
-    Headers = basic_auth_header(Login, OldPassword)#{
+    BasicAuthHeader = basic_auth_header(Login, OldPassword),
+    Headers = BasicAuthHeader#{
         <<"content-type">> => <<"application/json">>
     },
     URL = get_onepanel_rest_user_url(Login),
