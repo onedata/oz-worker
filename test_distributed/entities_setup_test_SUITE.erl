@@ -80,11 +80,8 @@ predefined_groups_test(Config) ->
         ?assertEqual(ExpName, ActualName),
         % Check if OZ API privileges are correct
         {ok, PrivsResult} = oz_test_utils:get_group_oz_privileges(Config, ExpId),
-        % Check if privileges were found by group ID
-        ?assertMatch({ok, _}, PrivsResult),
         % Check if the privileges are correct
-        {ok, [{privileges, ActualPrivileges}]} = PrivsResult,
-        ?assertEqual(ExpPrivileges, ActualPrivileges)
+        ?assertEqual(ExpPrivileges, PrivsResult)
     end,
     AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
     CheckGroup(<<"group1">>, <<"Group 1">>, AllPrivs),

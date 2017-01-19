@@ -124,12 +124,12 @@ init_per_testcase(_, Config) ->
     hackney:start(),
 
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_new(Nodes, rest_handler),
-    test_utils:mock_expect(Nodes, rest_handler, is_authorized,
+    test_utils:mock_new(Nodes, n_rest_handler),
+    test_utils:mock_expect(Nodes, n_rest_handler, is_authorized,
         fun(Req, State) ->
             {Bindings, _} = cowboy_req:bindings(Req),
             ResId = proplists:get_value(id, Bindings),
-            {true, Req, State#rstate{client = #client{type = provider, id = ResId}}}
+            {true, Req, setelement(2, State, ?PROVIDER(ResId))}
         end),
 
     Config.

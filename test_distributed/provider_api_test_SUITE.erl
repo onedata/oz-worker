@@ -79,7 +79,7 @@ create_test(Config) ->
     ExpLongitude = -24.8,
 
     VerifyFun = fun(ProviderId, Certificate) ->
-        true =:= is_binary(Certificate),
+        true = is_binary(Certificate),
         {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
         ?assertEqual(ExpName, Provider#od_provider.name),
         ?assertEqual(ExpUrls, Provider#od_provider.urls),
@@ -931,6 +931,13 @@ get_spaces_test(Config) ->
                 path = [<<"/provider/spaces/">>, SpaceId],
                 expected_code = ExpectedRestCode,
                 expected_body = ExpectedRestBody
+            },
+            logic_spec = #logic_spec{
+                operation = get,
+                module = n_provider_logic,
+                function = get_spaces,
+                args = [client, P1],
+                expected_result = ExpectedLogicResult
             }
         }
     end,

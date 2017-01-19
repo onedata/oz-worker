@@ -96,12 +96,18 @@ create(UserInfo) ->
     create(UserInfo, undefined).
 
 create(UserInfo, ProposedUserId) ->
-    case od_user:create(#document{key = ProposedUserId, value = UserInfo}) of
-        {error, already_exists} ->
-            ?ERROR_BAD_VALUE_ID_OCCUPIED(<<"userId">>);
-        {ok, UserId} ->
-            setup_user(UserId, UserInfo),
-            {ok, UserId}
+    try
+        case od_user:create(#document{key = ProposedUserId, value = UserInfo}) of
+            {error, already_exists} ->
+                ?ERROR_BAD_VALUE_ID_OCCUPIED(<<"userId">>);
+            {ok, UserId} ->
+                setup_user(UserId, UserInfo),
+                {ok, UserId}
+        end
+    catch
+        Type:Message ->
+            ?error_stacktrace("Cannot create a new user - ~p:~p", [Type, Message]),
+            ?ERROR_INTERNAL_SERVER_ERROR
     end.
 
 

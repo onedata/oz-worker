@@ -206,17 +206,13 @@ eff_users_test(Config) ->
 
 
 init_per_suite(Config) ->
-    NewConfig = ?TEST_INIT(
-        Config, ?TEST_FILE(Config, "env_desc.json"), [oz_test_utils]
-    ),
-    oz_test_utils:mock_handle_proxy(NewConfig),
-    NewConfig.
+    oz_test_utils:mock_handle_proxy(Config),
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(Config) ->
-    oz_test_utils:unmock_handle_proxy(Config),
-    ok.
-%%    test_node_starter:clean_environment(Config).
+    timer:sleep(24 * 3600 * 1000),
+    oz_test_utils:unmock_handle_proxy(Config).
 
 min_support_size(Config) ->
     {ok, MinimumSupportSize} = oz_test_utils:call_oz(
