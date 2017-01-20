@@ -20,6 +20,9 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
+-type resource() :: entity | data | list.
+
+-export_type([resource/0]).
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/1, authorize/4, validate/2]).
@@ -46,6 +49,14 @@ get_entity(ShareId) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 create(_Client, _, entity, Data) ->
     ShareId = maps:get(<<"shareId">>, Data),
     Name = maps:get(<<"name">>, Data),
@@ -70,6 +81,14 @@ create(_Client, _, entity, Data) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
+    Entity :: n_entity_logic:entity(), Resource :: resource()) ->
+    n_entity_logic:result().
 get(_, undefined, undefined, list) ->
     {ok, ShareDocs} = od_share:list(),
     {ok, [ShareId || #document{key = ShareId} <- ShareDocs]};
@@ -86,15 +105,43 @@ get(_, _ShareId, #od_share{} = Share, data) ->
     }}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 update(ShareId, entity, #{<<"name">> := NewName}) ->
     {ok, _} = od_share:update(ShareId, #{name => NewName}),
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
+    n_entity_logic:result().
 delete(ShareId, entity) ->
     entity_graph:delete_with_relations(od_share, ShareId).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(Resource :: resource()) ->
+    n_entity_logic:existence_verificator()|
+    [n_entity_logic:existence_verificator()].
 exists(_) ->
     % No matter the resource, return true if it belongs to a share
     {internal, fun(#od_share{}) ->
@@ -104,6 +151,22 @@ exists(_) ->
     end}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize(Operation :: n_entity_logic:operation(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    Client :: n_entity_logic:client()) ->
+    n_entity_logic:authorization_verificator() |
+    [authorization_verificator:existence_verificator()].
 authorize(create, undefined, entity, ?USER(UserId)) ->
     {data_dependent, fun(Data) ->
         SpaceId = maps:get(<<"spaceId">>, Data, <<"">>),
@@ -128,6 +191,18 @@ authorize(delete, _ShareId, entity, ?USER(UserId)) ->
     end}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns validity verificators for given Operation and Resource identifier.
+%% Returns a map with 'required', 'optional' and 'at_least_one' keys.
+%% Under each of them, there is a map:
+%%      Key => {type_verificator, value_verificator}
+%% Which means how value of given Key should be validated.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate(Operation :: n_entity_logic:operation(),
+    Resource :: resource()) ->
+    n_entity_logic:validity_verificator().
 validate(create, entity) -> #{
     required => #{
         <<"shareId">> => {binary, {not_exists, fun(Value) ->
@@ -147,6 +222,12 @@ validate(update, entity) -> #{
 }.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the entity with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
 entity_to_string(ShareId) ->
     od_share:to_string(ShareId).
 

@@ -20,6 +20,15 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
+-type resource() :: {deprecated_user_privileges, od_user:id()} | % TODO VFS-2918
+{deprecated_group_privileges, od_group:id()} | % TODO VFS-2918
+entity | data | public_data | list |
+users | eff_users | {user, od_user:id()} | {eff_user, od_user:id()} |
+{user_privileges, od_user:id()} | {eff_user_privileges, od_user:id()} |
+groups | eff_groups | {group, od_group:id()} | {eff_group, od_group:id()} |
+{group_privileges, od_user:id()} | {eff_group_privileges, od_user:id()}.
+
+-export_type([resource/0]).
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/1, authorize/4, validate/2]).
@@ -46,6 +55,14 @@ get_entity(HandleId) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 % TODO VFS-2918
 create(_Client, HandleId, {deprecated_user_privileges, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
@@ -56,7 +73,7 @@ create(_Client, HandleId, {deprecated_user_privileges, UserId}, Data) ->
         {Operation, Privileges}
     );
 % TODO VFS-2918
-create(_Client, HandleId, {deprecated_child_privileges, GroupId}, Data) ->
+create(_Client, HandleId, {deprecated_group_privileges, GroupId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
     Operation = maps:get(<<"operation">>, Data, set),
     entity_graph:update_relation(
@@ -123,6 +140,14 @@ create(?USER, HandleId, groups, #{<<"groupId">> := GroupId}) ->
     {ok, HandleId}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
+    Entity :: n_entity_logic:entity(), Resource :: resource()) ->
+    n_entity_logic:result().
 get(_, undefined, undefined, list) ->
     {ok, HandleDocs} = od_handle:list(),
     {ok, [HandleId || #document{key = HandleId} <- HandleDocs]};
@@ -184,6 +209,13 @@ get(_, _HandleId, #od_handle{eff_groups = Groups}, {eff_group_privileges, GroupI
     {ok, Privileges}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 update(HandleId, entity, #{<<"metadata">> := NewMetadata}) ->
     {ok, _} = od_handle:update(HandleId, #{metadata => NewMetadata}),
     ok;
@@ -207,6 +239,13 @@ update(HandleId, {group_privileges, GroupId}, Data) ->
     ).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
+    n_entity_logic:result().
 delete(HandleId, entity) ->
     entity_graph:delete_with_relations(od_handle, HandleId);
 
@@ -223,6 +262,20 @@ delete(HandleId, {group, GroupId}) ->
     ).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(Resource :: resource()) ->
+    n_entity_logic:existence_verificator()|
+    [n_entity_logic:existence_verificator()].
 exists({user, UserId}) ->
     {internal, fun(#od_handle{users = Users}) ->
         maps:is_key(UserId, Users)
@@ -266,11 +319,27 @@ exists(_) ->
     end}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize(Operation :: n_entity_logic:operation(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    Client :: n_entity_logic:client()) ->
+    n_entity_logic:authorization_verificator() |
+    [authorization_verificator:existence_verificator()].
 % TODO VFS-2918
 authorize(create, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 % TODO VFS-2918
-authorize(create, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ?USER(UserId)) ->
+authorize(create, _GroupId, {deprecated_group_privileges, _ChildGroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 
 authorize(create, undefined, entity, ?USER(UserId)) ->
@@ -332,6 +401,18 @@ authorize(delete, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns validity verificators for given Operation and Resource identifier.
+%% Returns a map with 'required', 'optional' and 'at_least_one' keys.
+%% Under each of them, there is a map:
+%%      Key => {type_verificator, value_verificator}
+%% Which means how value of given Key should be validated.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate(Operation :: n_entity_logic:operation(),
+    Resource :: resource()) ->
+    n_entity_logic:validity_verificator().
 validate(create, entity) -> #{
     required => #{
         <<"handleServiceId">> => {binary, {exists, fun(Value) ->
@@ -365,11 +446,30 @@ validate(update, entity) -> #{
 }.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the entity with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
 entity_to_string(HandleId) ->
     od_handle:to_string(HandleId).
 
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if given user has specific
+%% effective privilege in the handle represented by entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_privilege(UserId :: od_user:id(),
+    Privilege :: privileges:handle_privilege()) ->
+    n_entity_logic:authorization_verificator().
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_handle{} = Handle) ->
         n_handle_logic:user_has_eff_privilege(Handle, UserId, Privilege)
