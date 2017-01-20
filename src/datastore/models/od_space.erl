@@ -152,5 +152,11 @@ before(_ModelName, _Method, _Level, _Context) ->
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the space with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(SpaceId :: id()) -> binary().
 to_string(SpaceId) ->
     <<"space:", SpaceId/binary>>.

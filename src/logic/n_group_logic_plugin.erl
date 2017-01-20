@@ -11,7 +11,7 @@
 %%%-------------------------------------------------------------------
 -module(n_group_logic_plugin).
 -author("Lukasz Opiola").
--behaviour(data_logicn_plugin_behaviour).
+-behaviour(entity_logic_plugin_behaviour).
 
 -include("errors.hrl").
 -include("tokens.hrl").

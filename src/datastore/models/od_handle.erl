@@ -172,6 +172,12 @@ before(_ModelName, _Method, _Level, _Context) ->
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the handle with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(HandleId :: id()) -> binary().
 to_string(HandleId) ->
     <<"handle:", HandleId/binary>>.
 

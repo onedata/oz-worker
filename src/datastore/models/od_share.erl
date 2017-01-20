@@ -148,5 +148,11 @@ before(_ModelName, _Method, _Level, _Context) ->
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the share with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(ShareId :: id()) -> binary().
 to_string(ShareId) ->
     <<"share:", ShareId/binary>>.

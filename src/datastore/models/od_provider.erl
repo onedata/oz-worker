@@ -151,5 +151,11 @@ before(_ModelName, _Method, _Level, _Context) ->
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the provider with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(ProviderId :: id()) -> binary().
 to_string(ProviderId) ->
     <<"provider:", ProviderId/binary>>.

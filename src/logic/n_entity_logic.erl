@@ -620,7 +620,7 @@ check_validity(#request{data = Data} = Request) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Performs single value conversion if possible and checks the type and value
+%% Performs simple value conversion (if possible) and checks the type and value
 %% of value for Key in Data.
 %% @end
 %%--------------------------------------------------------------------
@@ -653,7 +653,7 @@ transform_and_check_value(Key, Data, Validator) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Performs single value conversion if possible and checks the type and value
+%% Performs simple value conversion (if possible) and checks the type
 %% of value for Key in Data.
 %% @end
 %%--------------------------------------------------------------------
@@ -725,6 +725,15 @@ check_type(Rule, Key, _) ->
     throw(?ERROR_INTERNAL_SERVER_ERROR).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Performs simple value conversion (if possible) and checks the type
+%% of value for Key in Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_value(type_validator(), value_validator(), Key :: binary(),
+    Value :: term()) -> ok.
 check_value(_, any, _Key, _) ->
     ok;
 check_value(atom, non_empty, Key, '') ->

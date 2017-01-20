@@ -5,8 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc: This behaviour should be implemented by modules handling OpenID and OAuth requests.
-%%% It ensures the presence of required callbacks.
+%%% @doc
+%%% This behaviour should be implemented by modules handling OpenID and OAuth
+%%% requests. It ensures the presence of required callbacks.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(auth_module_behaviour).

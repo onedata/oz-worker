@@ -152,5 +152,11 @@ before(_ModelName, _Method, _Level, _Context) ->
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the handle service with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(HServiceId :: id()) -> binary().
 to_string(HServiceId) ->
     <<"handle_service:", HServiceId/binary>>.

@@ -167,5 +167,11 @@ before(_ModelName, _Method, _Level, _Context) ->
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the group with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(GroupId :: id()) -> binary().
 to_string(GroupId) ->
     <<"group:", GroupId/binary>>.

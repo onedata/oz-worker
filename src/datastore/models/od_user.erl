@@ -176,12 +176,11 @@ before(ModelName, Method, _Level, Context) ->
     record_location_hooks:handle_before(ModelName, Method, Context).
 
 %%%===================================================================
-%%% API callbacks
+%%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc 
-%% @private
 %% Gets first user matching given criterion.
 %% todo: change implementation to something fast (connected with VFS-1498)
 %% @end
@@ -258,7 +257,11 @@ get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
     end.
 
 
-
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the user with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(UserId :: id()) -> binary().
 to_string(UserId) ->
     <<"user:", UserId/binary>>.
