@@ -26,7 +26,7 @@ entity | data | public_data | list |
 users | eff_users | {user, od_user:id()} | {eff_user, od_user:id()} |
 {user_privileges, od_user:id()} | {eff_user_privileges, od_user:id()} |
 groups | eff_groups | {group, od_group:id()} | {eff_group, od_group:id()} |
-{group_privileges, od_user:id()} | {eff_group_privileges, od_user:id()}.
+{group_privileges, od_user:id()} | {eff_group_privileges, od_user:id()} |
 handles | {handle, od_handle:id()}.
 
 

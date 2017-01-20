@@ -919,8 +919,8 @@ delete_group_test(Config) ->
     GID = create_group(?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
 
     ?assertMatch(ok, check_status(delete_group(GID, UserParamsOtherAddress))),
-    ?assertMatch({request_error, ?FORBIDDEN}, get_group_info(GID, UserReqParams)),
-    ?assertMatch({request_error, ?FORBIDDEN}, get_group_info(GID, UserParamsOtherAddress)).
+    ?assertMatch({request_error, ?NOT_FOUND}, get_group_info(GID, UserReqParams)),
+    ?assertMatch({request_error, ?NOT_FOUND}, get_group_info(GID, UserParamsOtherAddress)).
 
 invite_user_to_group_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -1469,7 +1469,7 @@ delete_service_test(Config) ->
     Result = delete_handle_service(Id, UserReqParams),
 
     ?assertEqual(202, Result),
-    ?assertEqual({request_error, 403}, get_handle_service(Id, UserReqParams)). %todo change to 404
+    ?assertEqual({request_error, 404}, get_handle_service(Id, UserReqParams)). %todo change to 404
 
 add_user_to_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1509,7 +1509,7 @@ delete_user_from_service_test(Config) ->
     Result = delete_user_from_handle_service(Id, UserId, UserReqParams),
 
     ?assertEqual(202, Result),
-    ?assertEqual({request_error, 403}, list_users_of_handle_service(Id, UserReqParams)),
+    ?assertEqual({request_error, 404}, list_users_of_handle_service(Id, UserReqParams)),
     ?assertEqual(#{<<"users">> => [UserId2]}, list_users_of_handle_service(Id, UserReqParams2)).
 
 add_group_to_service_test(Config) ->
@@ -1679,7 +1679,7 @@ delete_handle_test(Config) ->
     Result = delete_handle(HId, UserReqParams),
 
     ?assertEqual(202, Result),
-    ?assertEqual({request_error, 403}, get_handle(HId, UserReqParams)), %todo change to 404
+    ?assertEqual({request_error, 404}, get_handle(HId, UserReqParams)), %todo change to 404
     test_utils:mock_assert_num_calls(Node1, handle_proxy_client, put, [?PROXY_ENDPOINT, '_', '_', '_'], 1).
 
 add_user_to_handle_test(Config) ->
@@ -1721,7 +1721,7 @@ delete_user_from_handle_test(Config) ->
     Result = delete_user_from_handle(HId, UserId, UserReqParams),
 
     ?assertEqual(202, Result),
-    ?assertEqual({request_error, 403}, list_users_of_handle(HId, UserReqParams)),
+    ?assertEqual({request_error, 404}, list_users_of_handle(HId, UserReqParams)),
     ?assertEqual(#{<<"users">> => [UserId2]}, list_users_of_handle(HId, UserReqParams2)).
 
 add_group_to_handle_test(Config) ->
