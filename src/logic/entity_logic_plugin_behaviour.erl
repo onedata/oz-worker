@@ -40,7 +40,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
-    Resource :: n_entity_logic:resource()) -> n_entity_logic:result().
+    Entity :: n_entity_logic:entity(), Resource :: n_entity_logic:resource()) ->
+    n_entity_logic:result().
 
 
 %%--------------------------------------------------------------------
@@ -48,7 +49,7 @@
 %% Updates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--callback create(EntityId :: n_entity_logic:entity_id(),
+-callback update(EntityId :: n_entity_logic:entity_id(),
     Resource :: n_entity_logic:resource(),
     n_entity_logic:data()) -> n_entity_logic:result().
 
