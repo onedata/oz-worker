@@ -34,17 +34,16 @@ provider_logic_test_() ->
 %%%===================================================================
 
 setup() ->
-    ok.
+    meck:new(http_client).
 
 teardown(_) ->
-    ok.
+    meck:unload(http_client).
 
 %%%===================================================================
 %%% Tests functions
 %%%===================================================================
 
 test_connection_test() ->
-    meck:new(http_client),
     meck:expect(http_client, get,
         fun
             (<<"https://172.16.67.194:443/test">>, #{}, <<>>, [insecure]) ->
@@ -68,8 +67,7 @@ test_connection_test() ->
         <<"https://172.16.67.194:123/wrong_url">> => error
     }},
 
-    ?assertEqual(Expected, Ans),
-    meck:unload(http_client).
+    ?assertEqual(Expected, Ans).
 
 %%%===================================================================
 %%% Internal functions
