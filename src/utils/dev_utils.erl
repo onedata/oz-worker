@@ -51,7 +51,6 @@
 -module(dev_utils).
 
 -include("entity_logic.hrl").
--include("http/handlers/rest_handler.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -129,7 +128,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 UserList = proplists:get_value(<<"users">>, Props),
                 GroupList = proplists:get_value(<<"groups">>, Props),
                 ProviderList = proplists:get_value(<<"providers">>, Props),
-                {{_, MemberId} = Member, UsersToAdd, GroupsToAdd} =
+                {Member, UsersToAdd, GroupsToAdd} =
                     case GroupList of
                         [] -> {{user, hd(UserList)}, tl(UserList), []};
                         _ -> {{group, hd(GroupList)}, UserList, tl(GroupList)}
