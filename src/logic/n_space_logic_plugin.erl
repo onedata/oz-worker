@@ -6,7 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-
+%%% This module implements entity logic plugin behaviour and handles
+%%% entity logic operations corresponding to od_space model.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(n_space_logic_plugin).
@@ -25,7 +26,18 @@
 -export([exists/1, authorize/4, validate/2]).
 -export([entity_to_string/1]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves an entity from datastore based on its EntityId.
+%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_entity(EntityId :: n_entity_logic:entity_id()) ->
+    {ok, n_entity_logic:entity()} | {error, Reason :: term()}.
 get_entity(SpaceId) ->
     case od_space:get(SpaceId) of
         {ok, #document{value = Space}} ->

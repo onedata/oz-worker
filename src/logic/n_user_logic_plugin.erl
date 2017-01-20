@@ -6,12 +6,13 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-
+%%% This module implements entity logic plugin behaviour and handles
+%%% entity logic operations corresponding to od_user model.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(n_user_logic_plugin).
 -author("Lukasz Opiola").
--behaviour(data_logic_plugin_behaviour).
+-behaviour(entity_logic_plugin_behaviour).
 
 -include("errors.hrl").
 -include("tokens.hrl").
@@ -21,11 +22,13 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/utils/utils.hrl").
 
--type resource() :: entity | list |
+-type resource() :: deprecated_default_space | % TODO VFS-2918
+authorize | entity | data | list |
 client_tokens | {client_token, binary()} |
 default_space | {space_alias, od_space:id()} |
 default_provider |
 oz_privileges | eff_oz_privileges |
+create_group | create_space | create_handle_service | create_handle |
 join_group | join_space |
 groups | eff_groups | {group, od_group:id()} | {eff_group, od_group:id()} |
 spaces | eff_spaces | {space, od_space:id()} | {eff_space, od_space:id()} |
@@ -42,7 +45,18 @@ handles | eff_handles | {handle, od_handle:id()} | {eff_handle, od_handle:id()}.
 -export([exists/1, authorize/4, validate/2]).
 -export([entity_to_string/1]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves an entity from datastore based on its EntityId.
+%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_entity(EntityId :: n_entity_logic:entity_id()) ->
+    {ok, n_entity_logic:entity()} | {error, Reason :: term()}.
 get_entity(UserId) ->
     case od_user:get(UserId) of
         {ok, #document{value = Group}} ->
@@ -52,6 +66,14 @@ get_entity(UserId) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 % TODO VFS-2918
 create(_Client, UserId, deprecated_default_space, #{<<"spaceId">> := SpaceId}) ->
     {ok, _} = od_user:update(UserId, #{default_space => SpaceId}),
@@ -133,6 +155,14 @@ create(_Client, UserId, join_space, Data) ->
     {ok, SpaceId}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
+    Entity :: n_entity_logic:entity(), Resource :: resource()) ->
+    n_entity_logic:result().
 % TODO VFS-2918
 get(_, _UserId, #od_user{default_space = DefaultSpace}, deprecated_default_space) ->
     {ok, DefaultSpace};
@@ -221,6 +251,13 @@ get(_, _UserId, #od_user{}, {eff_handle, HandleId}) ->
     n_handle_logic_plugin:get(?ROOT, HandleId, Handle, data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 update(UserId, entity, Data) ->
     UserUpdateFun = fun(#od_user{name = OldName, alias = OldAlias} = User) ->
         {ok, User#od_user{
@@ -260,6 +297,13 @@ update(UserId, oz_privileges, Data) ->
     entity_graph:update_oz_privileges(od_user, UserId, Operation, Privileges).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
+    n_entity_logic:result().
 delete(UserId, entity) ->
     % Invalidate auth tokens
     auth_logic:invalidate_user_tokens(UserId),
@@ -324,6 +368,20 @@ delete(UserId, {handle, HandleId}) ->
         od_handle, HandleId).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(Resource :: resource()) ->
+    n_entity_logic:existence_verificator()|
+    [n_entity_logic:existence_verificator()].
 % TODO VFS-2918
 exists(deprecated_default_space) ->
     true;
@@ -396,6 +454,22 @@ exists(_) ->
     end}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize(Operation :: n_entity_logic:operation(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    Client :: n_entity_logic:client()) ->
+    n_entity_logic:authorization_verificator() |
+    [authorization_verificator:existence_verificator()].
 % TODO VFS-2918
 authorize(create, UserId, deprecated_default_space, ?USER(UserId)) ->
     true;
@@ -452,6 +526,18 @@ authorize(get, _UserId, entity, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_USERS_LIST).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns validity verificators for given Operation and Resource identifier.
+%% Returns a map with 'required', 'optional' and 'at_least_one' keys.
+%% Under each of them, there is a map:
+%%      Key => {type_verificator, value_verificator}
+%% Which means how value of given Key should be validated.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate(Operation :: n_entity_logic:operation(),
+    Resource :: resource()) ->
+    n_entity_logic:validity_verificator().
 % TODO VFS-2918
 validate(create, deprecated_default_space) -> #{
     required => #{
@@ -521,16 +607,44 @@ validate(update, oz_privileges) -> #{
 }.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the entity with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
 entity_to_string(UserId) ->
     od_user:to_string(UserId).
 
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if given user has specified
+%% effective oz privilege.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_oz_privilege(UserId :: od_user:id(),
+    Privilege :: privileges:oz_privilege()) ->
+    n_entity_logic:authorization_verificator().
 auth_by_oz_privilege(UserId, Privilege) ->
     {external, fun() ->
         n_user_logic:has_eff_oz_privilege(UserId, Privilege)
     end}.
 
-
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if user represented
+%% by entity has specified effective oz privilege.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_self_by_oz_privilege(Privilege :: privileges:oz_privilege()) ->
+    n_entity_logic:authorization_verificator().
 auth_self_by_oz_privilege(Privilege) ->
     {internal, fun(User) ->
         n_user_logic:has_eff_oz_privilege(User, Privilege)
