@@ -8,7 +8,7 @@
 %%% @doc This module handles translation of system errors into REST responses.
 %%% @end
 %%%-------------------------------------------------------------------
--module(share_rest_translator).
+-module(identity_rest_translator).
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
@@ -19,11 +19,18 @@
 
 -export([response/4]).
 
+response(create, undefined, {provider, _Id}, ok) ->
+    n_rest_handler:ok_no_content_reply();
 
-response(create, undefined, entity, {ok, GroupId}) ->
-    n_rest_handler:created_reply([<<"groups">>, GroupId]);
 
-response(get, ShareId, data, {ok, ShareData}) ->
-    n_rest_handler:ok_body_reply(ShareData#{
-        <<"shareId">> => ShareId
-    }).
+response(get, undefined, {publickey, _Id}, {ok, EncodedPublicKey}) ->
+    n_rest_handler:ok_body_reply(#{<<"publicKey">> => EncodedPublicKey});
+
+
+response(update, undefined, _, ok) ->
+    n_rest_handler:updated_reply();
+
+
+response(delete, undefined, _, ok) ->
+    n_rest_handler:deleted_reply().
+

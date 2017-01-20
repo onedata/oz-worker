@@ -20,7 +20,8 @@
     share_routes/0,
     provider_routes/0,
     handle_service_routes/0,
-    handle_routes/0
+    handle_routes/0,
+    identity_routes/0
 ]).
 
 
@@ -914,7 +915,28 @@ handle_routes() ->
     ].
 
 
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Definitions of identity REST paths.
+%% @end
+%%--------------------------------------------------------------------
+-spec identity_routes() -> [{binary(), #rest_req{}}].
+identity_routes() ->
+    R = #rest_req{
+        el_plugin = n_identity_logic_plugin,
+        translator = identity_rest_translator
+    },
+    [
+        {<<"/publickey/:id">>, R#rest_req{
+            method = get, entity_id = undefined, resource = {publickey, ?BINDING(id)}
+        }},
+        {<<"/publickey/:id">>, R#rest_req{
+            method = patch, entity_id = undefined, resource = {publickey, ?BINDING(id)}
+        }},
+        {<<"/provider_data/:id">>, R#rest_req{
+            method = post, entity_id = undefined, resource = {provider, ?BINDING(id)}
+        }}
+    ].
 
 
 
