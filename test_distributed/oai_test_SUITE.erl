@@ -13,6 +13,7 @@
 
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/performance.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include("registered_names.hrl").
 -include("oai_test_SUITE.hrl").
@@ -1243,6 +1244,10 @@ create_handles_with_mocked_timestamps(Config, User, HSId, ResourceIds, BeginTime
     end, lists:zip(ResourceIds, TimeOffsets)).
 
 create_handle_service(Config, User) ->
+    ok = oz_test_utils:set_user_oz_privileges(Config, User, grant, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, HSId} = oz_test_utils:create_handle_service(Config, ?USER(User),
         ?DOI_NAME, ?PROXY_ENDPOINT, ?DOI_SERVICE_PROPERTIES
     ),
