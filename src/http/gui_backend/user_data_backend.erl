@@ -171,7 +171,7 @@ user_record(UserId) ->
         default_space = DefaultSpaceValue,
         default_provider = DefaultProviderValue
     }}} = od_user:get(UserId),
-    Alias = alias_db_to_client(UserAlias),,
+    Alias = alias_db_to_client(UserAlias),
     Authorizers = authorizers_db_to_client(OAuthAccounts),
     ClientTokens = client_tokens_db_to_client(ClientTokenIds),
     DefaultSpace = undefined_to_null(DefaultSpaceValue),
