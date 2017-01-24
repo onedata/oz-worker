@@ -215,8 +215,7 @@ push_user_record(UserId) ->
 %% Converts user alias in db format to client format.
 %% @end
 %%--------------------------------------------------------------------
--spec alias_db_to_client(UserAlias :: binary() | undefined) -> binary() | null.
-alias_db_to_client(undefined) -> null;
+-spec alias_db_to_client(UserAlias :: binary()) -> binary() | null.
 alias_db_to_client(?EMPTY_ALIAS) -> null;
 alias_db_to_client(Bin) when is_binary(Bin) -> Bin.
 
@@ -258,7 +257,7 @@ authorizers_db_to_client(OAuthAccounts) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec client_tokens_db_to_client(ClientTokenIds :: [token:id()]) ->
-    binary() | null.
+    [proplists:proplist()].
 client_tokens_db_to_client(ClientTokenIds) ->
     lists:map(
         fun(Id) ->
