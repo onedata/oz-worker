@@ -21,7 +21,7 @@
 -export([init/0, terminate/0]).
 -export([find_record/2, find_all/1, query/2, query_record/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
--export([user_record/1]).
+-export([user_record/1, push_user_record/1]).
 
 %%%===================================================================
 %%% data_backend_behaviour callbacks
@@ -155,13 +155,7 @@ update_record(<<"user">>, UserId, Data) ->
 delete_record(<<"user">>, _Id) ->
     gui_error:report_error(<<"Not implemented">>).
 
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Returns a client-compliant user record based on space id.
 %% @end
@@ -177,41 +171,11 @@ user_record(UserId) ->
         default_space = DefaultSpaceValue,
         default_provider = DefaultProviderValue
     }}} = od_user:get(UserId),
-    Alias = case str_utils:to_binary(UserAlias) of
-        <<"">> -> null;
-        Bin -> Bin
-    end,
-    Authorizers = lists:foldl(
-        fun(OAuthAccount, Acc) ->
-            #oauth_account{
-                provider_id = Provider,
-                email_list = Emails,
-                user_id = SubId} = OAuthAccount,
-            ProviderBin = str_utils:to_binary(Provider),
-            SubIdBin = str_utils:to_binary(SubId),
-            AccId = <<ProviderBin/binary, "#", SubIdBin/binary>>,
-            Accounts = lists:map(
-                fun(Email) ->
-                    [
-                        {<<"id">>, AccId},
-                        {<<"type">>, ProviderBin},
-                        {<<"email">>, Email}
-                    ]
-                end, Emails),
-            Accounts ++ Acc
-        end, [], OAuthAccounts),
-    ClientTokens = lists:map(
-        fun(Id) ->
-            [{<<"id">>, Id}]
-        end, ClientTokenIds),
-    DefaultSpace = case DefaultSpaceValue of
-        undefined -> null;
-        _ -> DefaultSpaceValue
-    end,
-    DefaultProvider = case DefaultProviderValue of
-        undefined -> null;
-        _ -> DefaultProviderValue
-    end,
+    Alias = alias_db_to_client(UserAlias),,
+    Authorizers = authorizers_db_to_client(OAuthAccounts),
+    ClientTokens = client_tokens_db_to_client(ClientTokenIds),
+    DefaultSpace = undefined_to_null(DefaultSpaceValue),
+    DefaultProvider = undefined_to_null(DefaultProviderValue),
     {ok, [{effective_groups, Groups}]} = user_logic:get_effective_groups(UserId),
     {ok, UserSpaces} = user_logic:get_spaces(UserId),
     Spaces = proplists:get_value(spaces, UserSpaces),
@@ -229,3 +193,87 @@ user_record(UserId) ->
         {<<"spaces">>, Spaces},
         {<<"providers">>, Providers}
     ].
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes newest user record to websocket client.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_user_record(UserId :: od_user:id()) -> ok.
+push_user_record(UserId) ->
+    gui_async:push_updated(<<"user">>, user_record(UserId)).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts user alias in db format to client format.
+%% @end
+%%--------------------------------------------------------------------
+-spec alias_db_to_client(UserAlias :: binary() | undefined) -> binary() | null.
+alias_db_to_client(undefined) -> null;
+alias_db_to_client(?EMPTY_ALIAS) -> null;
+alias_db_to_client(Bin) when is_binary(Bin) -> Bin.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts oauth accounts in db format to client format.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorizers_db_to_client(OAuthAccounts :: [#oauth_account{}]) ->
+    binary() | null.
+authorizers_db_to_client(OAuthAccounts) ->
+    lists:foldl(
+        fun(OAuthAccount, Acc) ->
+            #oauth_account{
+                provider_id = Provider,
+                email_list = Emails,
+                user_id = SubId} = OAuthAccount,
+            ProviderBin = str_utils:to_binary(Provider),
+            SubIdBin = str_utils:to_binary(SubId),
+            AccId = <<ProviderBin/binary, "#", SubIdBin/binary>>,
+            Accounts = lists:map(
+                fun(Email) ->
+                    [
+                        {<<"id">>, AccId},
+                        {<<"type">>, ProviderBin},
+                        {<<"email">>, Email}
+                    ]
+                end, Emails),
+            Accounts ++ Acc
+        end, [], OAuthAccounts).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts client tokens in db format to client format.
+%% @end
+%%--------------------------------------------------------------------
+-spec client_tokens_db_to_client(ClientTokenIds :: [token:id()]) ->
+    binary() | null.
+client_tokens_db_to_client(ClientTokenIds) ->
+    lists:map(
+        fun(Id) ->
+            [{<<"id">>, Id}]
+        end, ClientTokenIds).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts 'undefined' atom to 'null' atom or does nothing otherwise.
+%% @end
+%%--------------------------------------------------------------------
+-spec undefined_to_null(Value :: undefined | term()) -> null | term().
+undefined_to_null(undefined) -> null;
+undefined_to_null(Value) -> Value.
+
+

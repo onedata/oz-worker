@@ -84,9 +84,7 @@ handle(<<"unsupportSpace">>, Props) ->
         true ->
             true = space_logic:remove_provider(SpaceId, ProviderId),
             % Push user record with a new spaces and providers list.
-            gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(UserId)
-            ),
+            user_data_backend:push_user_record(UserId),
             gui_async:push_updated(
                 <<"space">>, space_data_backend:space_record(SpaceId, UserId)
             ),
@@ -110,9 +108,7 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
         {true, Macaroon} ->
             {ok, SpaceId} = space_logic:join({user, UserId}, Macaroon),
             % Push user record with a new space list.
-            gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(UserId)
-            ),
+            user_data_backend:push_user_record(UserId),
             {ok, [{<<"spaceId">>, SpaceId}]}
     end;
 
@@ -120,9 +116,7 @@ handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     UserId = gui_session:get_user_id(),
     space_logic:remove_user(SpaceId, UserId),
     % Push user record with a new space list.
-    gui_async:push_updated(
-        <<"user">>, user_data_backend:user_record(UserId)
-    ),
+    user_data_backend:push_user_record(UserId),
     ok;
 
 handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
@@ -134,8 +128,6 @@ handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
             {ok, GroupId} = group_logic:join(UserId, Macaroon),
             % Push user record - space list might have changed due to
             % joining a new group.
-            gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(UserId)
-            ),
+            user_data_backend:push_user_record(UserId),
             {ok, [{<<"groupId">>, GroupId}]}
     end.

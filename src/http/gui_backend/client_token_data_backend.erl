@@ -102,8 +102,7 @@ create_record(<<"clienttoken">>, _Data) ->
     UserId = gui_session:get_user_id(),
     Token = auth_logic:gen_token(UserId),
     user_logic:add_client_token(UserId, Token),
-    % Push user record with a new client token list.
-    gui_async:push_updated(<<"user">>, user_data_backend:user_record(UserId)),
+    user_data_backend:push_user_record(UserId),
     {ok, [
         {<<"id">>, Token}
     ]}.
@@ -134,6 +133,5 @@ delete_record(<<"clienttoken">>, Token) ->
     Identifier = macaroon:identifier(Macaroon),
     onedata_auth:delete(Identifier),
     user_logic:delete_client_token(UserId, Token),
-    % Push user record with a new client token list.
-    gui_async:push_updated(<<"user">>, user_data_backend:user_record(UserId)),
+    user_data_backend:push_user_record(UserId),
     ok.

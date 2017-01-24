@@ -115,10 +115,7 @@ create_record(<<"space">>, Data) ->
         Bin when is_binary(Bin) ->
             UserId = gui_session:get_user_id(),
             {ok, SpaceId} = space_logic:create({user, UserId}, Name),
-            % Push user record with a new space list.
-            gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(UserId)
-            ),
+            user_data_backend:push_user_record(UserId),
             {ok, space_record(SpaceId, UserId)};
         _ ->
             gui_error:report_error(<<"Invalid space name">>)
@@ -138,7 +135,6 @@ update_record(<<"space">>, SpaceId, [{<<"name">>, NewName}]) ->
     space_logic:modify(SpaceId, {user, UserId}, NewName);
 update_record(<<"space">>, _SpaceId, _Data) ->
     gui_error:report_error(<<"Not implemented">>).
-
 
 
 %%--------------------------------------------------------------------
@@ -162,7 +158,7 @@ delete_record(<<"space">>, _Id) ->
 %% check if the user has view privileges in that space and returns proper data.
 %% @end
 %%--------------------------------------------------------------------
--spec space_record(SpaceId :: binary(), UserId :: binary()) ->
+-spec space_record(SpaceId :: od_space:id(), UserId :: binary()) ->
     proplists:proplist().
 space_record(SpaceId, UserId) ->
     % Check if that user has view privileges in that space
@@ -178,19 +174,14 @@ space_record(SpaceId, UserId) ->
 %% override HasViewPrivileges.
 %% @end
 %%--------------------------------------------------------------------
--spec space_record(SpaceId :: binary(), UserId :: od_user:id(),
+-spec space_record(SpaceId :: od_space:id(), UserId :: od_user:id(),
     HasViewPrivileges :: boolean()) -> proplists:proplist().
 space_record(SpaceId, UserId, HasViewPrivileges) ->
     {ok, #document{value = #od_space{
         name = DefaultName,
         providers_supports = ProvidersSupports
     }}} = od_space:get(SpaceId),
-    {ok, #document{value = #od_user{
-        space_aliases = SpaceNamesMap
-    }}} = od_user:get(UserId),
-    % Try to get space name from personal user's mapping, if not use its
-    % default name.
-    Name = maps:get(SpaceId, SpaceNamesMap, DefaultName),
+    Name = get_displayed_space_name(SpaceId, DefaultName, UserId),
     {Providers, SupportSizes} = lists:unzip(ProvidersSupports),
     TotalSize = lists:sum(SupportSizes),
     [
@@ -202,3 +193,23 @@ space_record(SpaceId, UserId, HasViewPrivileges) ->
         {<<"providers">>, Providers},
         {<<"user">>, UserId}
     ].
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Try to get space name from personal user's mapping, if not uses its
+%% default name.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_displayed_space_name(SpaceId :: od_space:id(),
+    DefaultName :: binary(), UserId :: od_user:id()) -> binary().
+get_displayed_space_name(SpaceId, DefaultName, UserId) ->
+    {ok, #document{value = #od_user{
+        space_aliases = SpaceNamesMap
+    }}} = od_user:get(UserId),
+    maps:get(SpaceId, SpaceNamesMap, DefaultName).

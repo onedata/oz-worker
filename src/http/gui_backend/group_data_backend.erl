@@ -58,7 +58,6 @@ terminate() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_record(<<"group">>, GroupId) ->
     UserId = gui_session:get_user_id(),
-    % Check if the user belongs to this group
     case group_logic:has_effective_user(GroupId, UserId) of
         false ->
             gui_error:unauthorized();
