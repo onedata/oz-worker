@@ -32,19 +32,6 @@
 %%--------------------------------------------------------------------
 -spec handle(FunctionId :: binary(), RequestData :: term()) ->
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
-handle(<<"getUserAlias">>, _) ->
-    UserId = gui_session:get_user_id(),
-    {ok, #od_user{
-        alias = Alias
-    }} = user_logic:get_user(UserId),
-    UserAlias = case str_utils:to_binary(Alias) of
-        <<"">> -> null;
-        Bin -> Bin
-    end,
-    {ok, [
-        {<<"userAlias">>, UserAlias}
-    ]};
-
 handle(<<"changePassword">>, Props) ->
     UserId = gui_session:get_user_id(),
     {ok, #od_user{
@@ -60,26 +47,6 @@ handle(<<"changePassword">>, Props) ->
         _ ->
             gui_error:report_warning(
                 <<"Cannot change user password - old password incorrect.">>)
-    end;
-
-handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
-    UserId = gui_session:get_user_id(),
-    case user_logic:set_alias(UserId, NewAlias) of
-        ok ->
-            {ok, [
-                {<<"userAlias">>, NewAlias}
-            ]};
-        {error, disallowed_alias_prefix} ->
-            gui_error:report_warning(
-                <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
-        {error, invalid_alias} ->
-            gui_error:report_warning(
-                <<"Alias can contain only lowercase letters and digits, and "
-                "must be at least 5 characters long.">>);
-        {error, alias_occupied} ->
-            gui_error:report_warning(
-                <<"This alias is occupied by someone else. "
-                "Please choose other alias.">>)
     end;
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
@@ -116,31 +83,14 @@ handle(<<"unsupportSpace">>, Props) ->
     case Authorized of
         true ->
             true = space_logic:remove_provider(SpaceId, ProviderId),
-            {ok, [{providers, UserProviders}]} =
-                user_logic:get_providers(UserId),
-            {ok, #document{
-                value = #od_user{
-                    space_aliases = SpaceNamesMap,
-                    default_space = DefaultSpaceId,
-                    default_provider = DefaultProvider
-                }}} = od_user:get(UserId),
-            {ok, UserSpaces} = user_logic:get_spaces(UserId),
-            SpaceIds = proplists:get_value(spaces, UserSpaces),
-            SpaceRecord = space_data_backend:space_record(
-                SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders
+            % Push user record with a new spaces and providers list.
+            user_data_backend:push_user_record(UserId),
+            gui_async:push_updated(
+                <<"space">>, space_data_backend:space_record(SpaceId, UserId)
             ),
-            gui_async:push_updated(<<"space">>, SpaceRecord),
-            ProviderRecord = provider_data_backend:provider_record(
-                ProviderId, DefaultProvider, SpaceIds
+            gui_async:push_updated(
+                <<"provider">>, provider_data_backend:provider_record(ProviderId, UserId)
             ),
-            % If the provider no longer supports any of user's spaces, delete
-            % the record in ember cache.
-            case proplists:get_value(<<"spaces">>, ProviderRecord) of
-                [] ->
-                    gui_async:push_deleted(<<"provider">>, ProviderId);
-                _ ->
-                    gui_async:push_updated(<<"provider">>, ProviderRecord)
-            end,
             ok;
         false ->
             gui_error:report_warning(
@@ -157,23 +107,16 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
             gui_error:report_warning(<<"Invalid token value.">>);
         {true, Macaroon} ->
             {ok, SpaceId} = space_logic:join({user, UserId}, Macaroon),
-            % Push the newly joined space to the client's model
-            {ok, #document{
-                value = #od_user{
-                    space_aliases = SpaceNamesMap
-                }}} = od_user:get(UserId),
-            SpaceRecord = space_data_backend:space_record(
-                % DefaultSpaceId and UserProviders do not matter because this is
-                % a new space - it's not default and has no providers
-                SpaceId, SpaceNamesMap, <<"">>, []
-            ),
-            gui_async:push_created(<<"space">>, SpaceRecord),
+            % Push user record with a new space list.
+            user_data_backend:push_user_record(UserId),
             {ok, [{<<"spaceId">>, SpaceId}]}
     end;
 
 handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     UserId = gui_session:get_user_id(),
     space_logic:remove_user(SpaceId, UserId),
+    % Push user record with a new space list.
+    user_data_backend:push_user_record(UserId),
     ok;
 
 handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
@@ -183,23 +126,8 @@ handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
             gui_error:report_warning(<<"Invalid token value.">>);
         {true, Macaroon} ->
             {ok, GroupId} = group_logic:join(UserId, Macaroon),
-            % Check if that group belongs to any spaces, if so push them
-            {ok, [{spaces, Spaces}]} = group_logic:get_spaces(GroupId),
-            {ok, #document{
-                value = #od_user{
-                    space_aliases = SpaceNamesMap
-                }}} = od_user:get(UserId),
-            {ok, [{providers, UserProviders}]} = user_logic:get_providers(
-                UserId
-            ),
-            lists:foreach(
-                fun(SpaceId) ->
-                    SpaceRecord = space_data_backend:space_record(
-                        % DefaultSpaceId does not matter because this is
-                        % a new space - it's not default
-                        SpaceId, SpaceNamesMap, <<"">>, UserProviders
-                    ),
-                    gui_async:push_created(<<"space">>, SpaceRecord)
-                end, Spaces),
+            % Push user record - space list might have changed due to
+            % joining a new group.
+            user_data_backend:push_user_record(UserId),
             {ok, [{<<"groupId">>, GroupId}]}
     end.
