@@ -111,8 +111,10 @@ check_rest_call(Config, ArgsMap) ->
         ExpBody = maps:get(body, ExpectMap, undefined),
 
         URL = str_utils:join_binary([ReqURL | ReqPath], <<"">>),
-        ReqAuth = maps:get(auth, RequestMap, nobody),
+        ReqAuth = maps:get(auth, RequestMap, undefined),
         HeadersPlusAuth = case ReqAuth of
+            undefined ->
+                ReqHeaders;
             nobody ->
                 ReqHeaders;
             {provider, _, _, _} ->
@@ -139,6 +141,8 @@ check_rest_call(Config, ArgsMap) ->
                 ReqHeaders#{HeaderName => Macaroon}
         end,
         ReqOptsPlusAuth = case ReqAuth of
+            undefined ->
+                ReqOpts;
             nobody ->
                 ReqOpts;
             {user, _UserId} ->

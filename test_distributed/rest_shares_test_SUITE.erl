@@ -28,11 +28,6 @@
     remove_share_test/1
 ]).
 
-
-% Convenience macro to retry 10 times before failing
--define(assert_retry_10(_TestedValue), ?assertEqual(true, _TestedValue, 10)).
-
-
 %%%===================================================================
 %%% API functions
 %%%===================================================================
@@ -146,12 +141,12 @@ create_share_test(Config) ->
     ),
     % User should be able to create a share, as he has space_manages_shares
     % privilege by default in his space.
-    ?assert(check_create_share(Config, 204, User, Space, <<"someShareId">>, #{
+    ?assert(check_create_share(Config, 204, {user, User}, Space, <<"someShareId">>, #{
         <<"name">> => <<"whatever">>,
         <<"rootFileId">> => <<"whatever">>
     })),
     % Shares cannot be overwritten, so the same request should now fail
-    ?assert(check_create_share(Config, 400, User, Space, <<"someShareId">>, #{
+    ?assert(check_create_share(Config, 400, {user, User}, Space, <<"someShareId">>, #{
         <<"name">> => <<"whatever">>,
         <<"rootFileId">> => <<"whatever">>
     })),
@@ -160,7 +155,7 @@ create_share_test(Config) ->
     oz_test_utils:space_set_user_privileges(
         Config, Space, User, set, [?SPACE_VIEW]
     ),
-    ?assert(check_create_share(Config, 403, User, Space, <<"anotherShareId">>, #{
+    ?assert(check_create_share(Config, 403, {user, User}, Space, <<"anotherShareId">>, #{
         <<"name">> => <<"whatever">>,
         <<"rootFileId">> => <<"whatever">>
     })),
@@ -172,7 +167,7 @@ create_share_test(Config) ->
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
     % Now the user should be able to create a share
-    ?assert(check_create_share(Config, 204, User, Space, <<"anotherShareId">>, #{
+    ?assert(check_create_share(Config, 204, {user, User}, Space, <<"anotherShareId">>, #{
         <<"name">> => <<"whatever">>,
         <<"rootFileId">> => <<"whatever">>
     })),
@@ -187,7 +182,7 @@ view_shares_test(Config) ->
     ),
     % Create a share
     {Share1Id, Share1Name, Share1File} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
-    ?assert(check_create_share(Config, 204, User, Space, Share1Id, #{
+    ?assert(check_create_share(Config, 204, {user, User}, Space, Share1Id, #{
         <<"name">> => Share1Name,
         <<"rootFileId">> => Share1File
     })),
@@ -201,15 +196,15 @@ view_shares_test(Config) ->
         % but should be included in GET response
         <<"publicUrl">> => get_public_share_url(Config, Share1Id)
     },
-    ?assert(check_get_share(Config, 200, User, Share1Id, Share1ExpectedData)),
+    ?assert(check_get_share(Config, 200, {user, User}, Share1Id, Share1ExpectedData)),
     % Create some other shares
     {Share2Id, Share2Name, Share2File} = {<<"s2id">>, <<"s2nm">>, <<"s2rf">>},
     {Share3Id, Share3Name, Share3File} = {<<"s3id">>, <<"s3nm">>, <<"s3rf">>},
-    ?assert(check_create_share(Config, 204, User, Space, Share2Id, #{
+    ?assert(check_create_share(Config, 204, {user, User}, Space, Share2Id, #{
         <<"name">> => Share2Name,
         <<"rootFileId">> => Share2File
     })),
-    ?assert(check_create_share(Config, 204, User, Space, Share3Id, #{
+    ?assert(check_create_share(Config, 204, {user, User}, Space, Share3Id, #{
         <<"name">> => Share3Name,
         <<"rootFileId">> => Share3File
     })),
@@ -223,7 +218,7 @@ view_shares_test(Config) ->
         % but should be included in GET response
         <<"publicUrl">> => get_public_share_url(Config, Share2Id)
     },
-    ?assert(check_get_share(Config, 200, User, Share2Id, Share2ExpectedData)),
+    ?assert(check_get_share(Config, 200, {user, User}, Share2Id, Share2ExpectedData)),
     Share3ExpectedData = #{
         <<"shareId">> => Share3Id,
         <<"name">> => Share3Name,
@@ -233,27 +228,27 @@ view_shares_test(Config) ->
         % but should be included in GET response
         <<"publicUrl">> => get_public_share_url(Config, Share3Id)
     },
-    ?assert(check_get_share(Config, 200, User, Share3Id, Share3ExpectedData)),
+    ?assert(check_get_share(Config, 200, {user, User}, Share3Id, Share3ExpectedData)),
     % Retrieve all shares of Space and check if they all all there
-    ?assert(check_get_shares_of_space(Config, 200, User, Space, [
+    ?assert(check_get_shares_of_space(Config, 200, {user, User}, Space, [
         Share1Id, Share2Id, Share3Id
     ])),
     % Remove the user from Space, he should no longer be able to view the shares
     % of the space nor each of the shares.
     oz_test_utils:user_leave_space(Config, User, Space),
-    ?assert(check_get_share(Config, 403, User, Share1Id, undefined)),
-    ?assert(check_get_share(Config, 403, User, Share2Id, undefined)),
-    ?assert(check_get_share(Config, 403, User, Share3Id, undefined)),
-    ?assert(check_get_shares_of_space(Config, 403, User, Space, undefined)),
+    ?assert(check_get_share(Config, 403, {user, User}, Share1Id, undefined)),
+    ?assert(check_get_share(Config, 403, {user, User}, Share2Id, undefined)),
+    ?assert(check_get_share(Config, 403, {user, User}, Share3Id, undefined)),
+    ?assert(check_get_shares_of_space(Config, 403, {user, User}, Space, undefined)),
     % However, when we add him to a group and the group to the Space, it should
     % be possible again.
 
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"gr">>),
     oz_test_utils:add_group_to_space(Config, Space, Group),
-    ?assert(check_get_share(Config, 200, User, Share1Id, Share1ExpectedData)),
-    ?assert(check_get_share(Config, 200, User, Share2Id, Share2ExpectedData)),
-    ?assert(check_get_share(Config, 200, User, Share3Id, Share3ExpectedData)),
-    ?assert(check_get_shares_of_space(Config, 200, User, Space, [
+    ?assert(check_get_share(Config, 200, {user, User}, Share1Id, Share1ExpectedData)),
+    ?assert(check_get_share(Config, 200, {user, User}, Share2Id, Share2ExpectedData)),
+    ?assert(check_get_share(Config, 200, {user, User}, Share3Id, Share3ExpectedData)),
+    ?assert(check_get_shares_of_space(Config, 200, {user, User}, Space, [
         Share1Id, Share2Id, Share3Id
     ])),
     ok.
@@ -267,7 +262,7 @@ modify_share_test(Config) ->
     ),
     % Create a share
     {ShareId, ShareName, ShareFile} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
-    ?assert(check_create_share(Config, 204, User, Space, ShareId, #{
+    ?assert(check_create_share(Config, 204, {user, User}, Space, ShareId, #{
         <<"name">> => ShareName,
         <<"rootFileId">> => ShareFile
     })),
@@ -281,20 +276,20 @@ modify_share_test(Config) ->
         % but should be included in GET response
         <<"publicUrl">> => get_public_share_url(Config, ShareId)
     },
-    ?assert(check_get_share(Config, 200, User, ShareId, ShareExpectedData)),
+    ?assert(check_get_share(Config, 200, {user, User}, ShareId, ShareExpectedData)),
     % Try to modify share data (currently only rename is supported)
     NewName = <<"new name">>,
     % First, try wrong parameters
     ?assert(check_rename_share(
-        Config, 400, User, ShareId, #{<<"wrong">> => <<"params">>}
+        Config, 400, {user, User}, ShareId, #{<<"wrong">> => <<"params">>}
     )),
     % Now correct ones
     ?assert(check_rename_share(
-        Config, 204, User, ShareId, #{<<"name">> => NewName}
+        Config, 204, {user, User}, ShareId, #{<<"name">> => NewName}
     )),
     % Retrieve share data and check if the name was changed
     ?assert(check_get_share(Config,
-        200, User, ShareId, ShareExpectedData#{<<"name">> => NewName}
+        200, {user, User}, ShareId, ShareExpectedData#{<<"name">> => NewName}
     )),
     % Take the space_manage_shares privilege from user and makes sure he no
     % longer can modify shares.
@@ -303,7 +298,7 @@ modify_share_test(Config) ->
     ),
     EvenMoreNewName = <<"newest new name">>,
     ?assert(check_rename_share(
-        Config, 403, User, ShareId, #{<<"name">> => EvenMoreNewName}
+        Config, 403, {user, User}, ShareId, #{<<"name">> => EvenMoreNewName}
     )),
     % User should be able to rename shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
@@ -315,11 +310,11 @@ modify_share_test(Config) ->
     ),
     % Now the user should be able to rename the share
     ?assert(check_rename_share(
-        Config, 204, User, ShareId, #{<<"name">> => EvenMoreNewName}
+        Config, 204, {user, User}, ShareId, #{<<"name">> => EvenMoreNewName}
     )),
     % Check if the data was updated
     ?assert(check_get_share(Config,
-        200, User, ShareId, ShareExpectedData#{<<"name">> => EvenMoreNewName}
+        200, {user, User}, ShareId, ShareExpectedData#{<<"name">> => EvenMoreNewName}
     )),
     ok.
 
@@ -333,26 +328,26 @@ remove_share_test(Config) ->
     % Create two shares
     {Share1Id, Share1Name, Share1File} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
     {Share2Id, Share2Name, Share2File} = {<<"s2id">>, <<"s2nm">>, <<"s2rf">>},
-    ?assert(check_create_share(Config, 204, User, Space, Share1Id, #{
+    ?assert(check_create_share(Config, 204, {user, User}, Space, Share1Id, #{
         <<"name">> => Share1Name,
         <<"rootFileId">> => Share1File
     })),
-    ?assert(check_create_share(Config, 204, User, Space, Share2Id, #{
+    ?assert(check_create_share(Config, 204, {user, User}, Space, Share2Id, #{
         <<"name">> => Share2Name,
         <<"rootFileId">> => Share2File
     })),
     % Try to remove a share
-    ?assert(check_remove_share(Config, 202, User, Share1Id)),
+    ?assert(check_remove_share(Config, 202, {user, User}, Share1Id)),
     % Make sure the share 1 not longer exists (403 because the user is not
     % authorized to ask about non-existent share)
-    ?assert(check_get_share(Config, 403, User, Share1Id, undefined)),
-    ?assert(check_get_shares_of_space(Config, 200, User, Space, [Share2Id])),
+    ?assert(check_get_share(Config, 403, {user, User}, Share1Id, undefined)),
+    ?assert(check_get_shares_of_space(Config, 200, {user, User}, Space, [Share2Id])),
     % Take the space_manage_shares privilege from user and makes sure he no
     % longer can remove shares.
     oz_test_utils:space_set_user_privileges(
         Config, Space, User, set, [?SPACE_VIEW]
     ),
-    ?assert(check_remove_share(Config, 403, User, Share2Id)),
+    ?assert(check_remove_share(Config, 403, {user, User}, Share2Id)),
     % User should be able to remove shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
 
@@ -362,10 +357,10 @@ remove_share_test(Config) ->
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
     % Now the user should be able to remove the share
-    ?assert(check_remove_share(Config, 202, User, Share2Id)),
+    ?assert(check_remove_share(Config, 202, {user, User}, Share2Id)),
     % Make sure the share 2 not longer exists
-    ?assert(check_get_share(Config, 403, User, Share2Id, undefined)),
-    ?assert(check_get_shares_of_space(Config, 200, User, Space, [])),
+    ?assert(check_get_share(Config, 403, {user, User}, Share2Id, undefined)),
+    ?assert(check_get_shares_of_space(Config, 200, {user, User}, Space, [])),
     ok.
 
 

@@ -5,7 +5,8 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module handles translation of system errors into REST responses.
+%%% @doc This module handles translation of entity logic results concerning
+%%% identity records into REST responses.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(identity_rest_translator).
@@ -19,6 +20,19 @@
 
 -export([response/4]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Translates given entity logic result into REST response
+%% expressed by #rest_resp{} record.
+%% @end
+%%--------------------------------------------------------------------
+-spec response(Operation :: n_entity_logic:operation(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: n_entity_logic:resource(),
+    Result :: n_entity_logic:result()) -> #rest_resp{}.
 response(create, undefined, {provider, _Id}, ok) ->
     n_rest_handler:ok_no_content_reply();
 

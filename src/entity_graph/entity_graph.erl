@@ -745,15 +745,34 @@ refresh_entity_graph(#entity_graph_state{}) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
+%% Refreshes a single entity. First tries to retrieve the entity from DB.
+%% It might happen that the entity has been deleted since it was scheduled
+%% for refresh - in that case return 'ok' as no action is needed.
+%% If the entity exists, refresh_entity/4 is called.
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_entity(Direction :: direction(), EntityType :: entity_type(),
+    EntityId :: entity_id()) -> ok.
+refresh_entity(Direction, EntityType, EntityId) ->
+    case EntityType:get(EntityId) of
+        {ok, #document{value = Entity}} ->
+            refresh_entity(Direction, EntityType, EntityId, Entity);
+        {error, {not_found, EntityType}} ->
+            ok
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
 %% Refreshes a single entity. Gathers its effective relations from its own
 %% relations and from effective relations of neighbours. If anything changed,
 %% all successors (direction-wise) are marked as dirty.
 %% @end
 %%--------------------------------------------------------------------
 -spec refresh_entity(Direction :: direction(), EntityType :: entity_type(),
-    EntityId :: entity_id()) -> ok.
-refresh_entity(Direction, EntityType, EntityId) ->
-    {ok, #document{value = Entity}} = EntityType:get(EntityId),
+    EntityId :: entity_id(), Entity :: entity()) -> ok.
+refresh_entity(Direction, EntityType, EntityId, Entity) ->
     % Get effective relations from the entity itself
     EffOfItself = gather_eff_from_itself(Direction, EntityId, Entity),
     % Get effective relations from all neighbours

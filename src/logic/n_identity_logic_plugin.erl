@@ -19,16 +19,39 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
+-type resource() :: {provider, od_provider:id()} | {publickey, Id :: binary()}.
+
+-export_type([resource/0]).
+
 
 -export([get_entity/1, create/4, get/4, update/3, delete/2]).
 -export([exists/1, authorize/4, validate/2]).
 -export([entity_to_string/1]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves an entity from datastore based on its EntityId.
+%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_entity(EntityId :: n_entity_logic:entity_id()) ->
+    {ok, n_entity_logic:entity()} | {error, Reason :: term()}.
 get_entity(_) ->
     ?ERROR_NOT_FOUND.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 create(_Client, undefined, {provider, Id}, Data) ->
     EncodedPublicKey = maps:get(<<"publicKey">>, Data),
     URLs = maps:get(<<"urls">>, Data),
@@ -44,10 +67,25 @@ create(_Client, undefined, {provider, Id}, Data) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
+    Entity :: n_entity_logic:entity(), Resource :: resource()) ->
+    n_entity_logic:result().
 get(_, undefined, undefined, {publickey, Id}) ->
     plugins:apply(identity_repository, get, [Id]).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 update(undefined, {publickey, Id}, #{<<"publicKey">> := EncodedPublicKey}) ->
     case plugins:apply(identity_repository, publish, [Id, EncodedPublicKey]) of
         ok ->
@@ -58,10 +96,31 @@ update(undefined, {publickey, Id}, #{<<"publicKey">> := EncodedPublicKey}) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
+    n_entity_logic:result().
 delete(_, _) ->
     ?ERROR_NOT_IMPLEMENTED.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(Resource :: resource()) ->
+    n_entity_logic:existence_verificator()|
+    [n_entity_logic:existence_verificator()].
 exists({publickey, Id}) ->
     {external, fun() ->
         case plugins:apply(identity_repository, get, [Id]) of
@@ -71,6 +130,22 @@ exists({publickey, Id}) ->
     end}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize(Operation :: n_entity_logic:operation(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    Client :: n_entity_logic:client()) ->
+    n_entity_logic:authorization_verificator() |
+    [authorization_verificator:existence_verificator()].
 authorize(create, undefined, {provider, _Id}, _Client) ->
     true;
 
@@ -84,6 +159,18 @@ authorize(delete, undefined, _, _Client) ->
     false.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns validity verificators for given Operation and Resource identifier.
+%% Returns a map with 'required', 'optional' and 'at_least_one' keys.
+%% Under each of them, there is a map:
+%%      Key => {type_verificator, value_verificator}
+%% Which means how value of given Key should be validated.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate(Operation :: n_entity_logic:operation(),
+    Resource :: resource()) ->
+    n_entity_logic:validity_verificator().
 validate(create, {provider, _Id}) -> #{
     required => #{
         <<"publicKey">> => {binary, non_empty},
@@ -98,6 +185,12 @@ validate(update, {publickey, _Id}) -> #{
 }.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the entity with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
 entity_to_string(Id) ->
     <<"identity:", Id/binary>>.
 

@@ -20,7 +20,4 @@
 -define(SPACE_INVITE_GROUP_TOKEN, space_invite_group_token).
 -define(SPACE_SUPPORT_TOKEN, space_support_token).
 
-
-
-
 -endif.

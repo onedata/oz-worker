@@ -5,7 +5,8 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module handles translation of system errors into REST responses.
+%%% @doc This module handles translation of entity logic results concerning
+%%% share entities into REST responses.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(share_rest_translator).
@@ -19,7 +20,19 @@
 
 -export([response/4]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Translates given entity logic result into REST response
+%% expressed by #rest_resp{} record.
+%% @end
+%%--------------------------------------------------------------------
+-spec response(Operation :: n_entity_logic:operation(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: n_entity_logic:resource(),
+    Result :: n_entity_logic:result()) -> #rest_resp{}.
 response(create, undefined, entity, {ok, GroupId}) ->
     n_rest_handler:created_reply([<<"groups">>, GroupId]);
 

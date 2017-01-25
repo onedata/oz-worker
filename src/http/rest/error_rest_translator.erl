@@ -19,6 +19,9 @@
 
 -export([response/1]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -62,7 +65,6 @@ translate(?ERROR_FORBIDDEN) ->
 
 translate(?ERROR_NOT_FOUND) ->
     ?HTTP_404_NOT_FOUND;
-
 % Errors connected with bad data
 translate(?ERROR_MALFORMED_DATA) ->
     {?HTTP_400_BAD_REQUEST,

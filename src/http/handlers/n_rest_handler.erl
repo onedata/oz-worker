@@ -257,7 +257,8 @@ rest_routes() ->
         rest_routes:share_routes(),
         rest_routes:provider_routes(),
         rest_routes:handle_service_routes(),
-        rest_routes:handle_routes()
+        rest_routes:handle_routes(),
+        rest_routes:identity_routes()
     ]),
     % Aggregate routes that share the same path
     AggregatedRoutes = lists:foldl(
