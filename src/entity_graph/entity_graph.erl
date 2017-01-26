@@ -758,6 +758,8 @@ refresh_entity(Direction, EntityType, EntityId) ->
         {ok, #document{value = Entity}} ->
             refresh_entity(Direction, EntityType, EntityId, Entity);
         {error, {not_found, EntityType}} ->
+            % The entity no longer exists - remove it from the dirty queue.
+            update_state(Direction, false, EntityType, EntityId, 0),
             ok
     end.
 
