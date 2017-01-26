@@ -187,7 +187,8 @@ check_rest_call(Config, ArgsMap) ->
                 catch
                     Type1:Message1 ->
                         ct:print(
-                            "Headers verification function crashed - ~p:~p~nStacktrace: ", [
+                            "Headers verification function crashed - ~p:~p~n"
+                            "Stacktrace: ~s", [
                                 Type1, Message1, lager:pr_stacktrace(erlang:get_stacktrace())
                             ]),
                         false
@@ -231,7 +232,8 @@ check_rest_call(Config, ArgsMap) ->
                 catch
                     Type2:Message2 ->
                         ct:print(
-                            "Body verification function crashed - ~p:~p~nStacktrace: ", [
+                            "Body verification function crashed - ~p:~p~n"
+                            "Stacktrace: ~s", [
                                 Type2, Message2, lager:pr_stacktrace(erlang:get_stacktrace())
                             ]),
                         false
@@ -311,7 +313,7 @@ check_rest_call(Config, ArgsMap) ->
         Type:Message ->
             ct:print(
                 "~p:check_rest_call failed with unexpected result - ~p:~p~n"
-                "Stacktrace: ~p", [
+                "Stacktrace: ~s", [
                     ?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
                 ]),
             false

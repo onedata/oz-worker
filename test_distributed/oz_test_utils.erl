@@ -146,7 +146,7 @@ call_oz(Config, Module, Function, Args) ->
                 "Function: ~p~n"
                 "Args: ~p~n"
                 "Error: ~p:~p~n"
-                "Stacktrace: ~p",
+                "Stacktrace: ~s",
                 [Module, Function, Args, Type, Reason, Stacktrace]
             ),
             {error, {badrpc, Reason}};

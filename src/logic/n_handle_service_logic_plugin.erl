@@ -333,7 +333,7 @@ authorize(create, _HServiceId, {deprecated_group_privileges, _GroupId}, ?USER(Us
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 
 authorize(create, undefined, entity, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_CREATE);
+    auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_CREATE);
 
 authorize(create, _HServiceId, users, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
@@ -342,14 +342,18 @@ authorize(create, _HServiceId, groups, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 
 
-authorize(get, _HServiceId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_SERVICE_VIEW);
+authorize(get, _HServiceId, entity, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_LIST)
+];
 
-authorize(get, _HServiceId, data, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_SERVICE_VIEW);
+authorize(get, _HServiceId, data, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, ?HANDLE_SERVICE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_LIST)
+];
 
 authorize(get, undefined, list, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_LIST);
+    auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_LIST);
 
 authorize(get, _HServiceId, _, ?USER(UserId)) ->
     % All other resources can be accessed with view privileges
@@ -445,4 +449,20 @@ entity_to_string(HServiceId) ->
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_handle_service{} = HService) ->
         n_handle_service_logic:user_has_eff_privilege(HService, UserId, Privilege)
+    end}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if given user has specified
+%% effective oz privilege.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_oz_privilege(UserId :: od_user:id(),
+    Privilege :: privileges:oz_privilege()) ->
+    n_entity_logic:authorization_verificator().
+auth_by_oz_privilege(UserId, Privilege) ->
+    {external, fun() ->
+        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
     end}.

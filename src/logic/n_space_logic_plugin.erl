@@ -421,11 +421,15 @@ authorize(create, _SpaceId, groups, ?USER(UserId)) ->
 authorize(get, undefined, list, ?USER(UserId)) ->
     n_user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_LIST);
 
-authorize(get, _SpaceId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?SPACE_VIEW);
+authorize(get, _SpaceId, entity, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, ?SPACE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST)
+];
 
-authorize(get, _SpaceId, data, ?USER(UserId)) ->
-    auth_by_membership(UserId);
+authorize(get, _SpaceId, data, ?USER(UserId)) -> [
+    auth_by_membership(UserId),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST)
+];
 
 authorize(get, _SpaceId, data, ?PROVIDER(ProviderId)) ->
     auth_by_support(ProviderId);
@@ -444,6 +448,33 @@ authorize(get, _SpaceId, {share, _ShareId}, ?PROVIDER(ProviderId)) ->
 
 authorize(get, _SpaceId, providers, ?PROVIDER(ProviderId)) ->
     auth_by_support(ProviderId);
+
+authorize(get, _SpaceId, users, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, ?SPACE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST_USERS)];
+
+authorize(get, _SpaceId, {user, _ProviderId}, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, ?SPACE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST_USERS)
+];
+
+authorize(get, _SpaceId, groups, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, ?SPACE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST_GROUPS)];
+
+authorize(get, _SpaceId, {group, _ProviderId}, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, ?SPACE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST_GROUPS)
+];
+
+authorize(get, _SpaceId, providers, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, ?SPACE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST_PROVIDERS)];
+
+authorize(get, _SpaceId, {provider, _ProviderId}, ?USER(UserId)) -> [
+    auth_by_privilege(UserId, ?SPACE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST_PROVIDERS)
+];
 
 authorize(get, _SpaceId, _, ?USER(UserId)) ->
     % All other resources can be accessed with view privileges

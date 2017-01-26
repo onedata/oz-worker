@@ -559,11 +559,15 @@ authorize(create, _GroupId, children, ?USER(UserId)) ->
 authorize(get, undefined, list, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_GROUPS_LIST);
 
-authorize(get, _GroupId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?GROUP_VIEW);
+authorize(get, _GroupId, entity, ?USER(UserId)) ->[
+    auth_by_privilege(UserId, ?GROUP_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_GROUPS_LIST)
+];
 
-authorize(get, _GroupId, data, ?USER(UserId)) ->
-    auth_by_membership(UserId);
+authorize(get, _GroupId, data, ?USER(UserId)) -> [
+    auth_by_membership(UserId),
+    auth_by_oz_privilege(UserId, ?OZ_GROUPS_LIST)
+];
 
 authorize(get, _GroupId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_VIEW_PRIVILEGES);

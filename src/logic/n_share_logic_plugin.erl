@@ -174,21 +174,25 @@ authorize(create, undefined, entity, ?USER(UserId)) ->
             SpaceId, UserId, ?SPACE_MANAGE_SHARES
         )
     end};
-authorize(get, _ShareId, entity, ?USER(UserId)) ->
-    {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic:has_eff_user(SpaceId, UserId)
-    end};
 
+authorize(get, _ShareId, list, ?USER(UserId)) ->
+    auth_by_oz_privilege(UserId, ?OZ_SHARES_LIST);
+
+authorize(get, _ShareId, entity, ?USER(UserId)) -> [
+    auth_by_space_membership(UserId),
+    auth_by_oz_privilege(UserId, ?OZ_SHARES_LIST)
+];
+
+authorize(get, _ShareId, data, ?USER(UserId)) -> [
+    auth_by_space_membership(UserId),
+    auth_by_oz_privilege(UserId, ?OZ_SHARES_LIST)
+];
 
 authorize(update, _ShareId, entity, ?USER(UserId)) ->
-    {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES)
-    end};
+    auth_by_space_privilege(UserId, ?SPACE_MANAGE_SHARES);
 
 authorize(delete, _ShareId, entity, ?USER(UserId)) ->
-    {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES)
-    end}.
+    auth_by_space_privilege(UserId, ?SPACE_MANAGE_SHARES).
 
 
 %%--------------------------------------------------------------------
@@ -230,5 +234,57 @@ validate(update, entity) -> #{
 -spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
 entity_to_string(ShareId) ->
     od_share:to_string(ShareId).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if given user belongs
+%% to the space represented by entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_space_membership(UserId :: od_user:id()) ->
+    n_entity_logic:authorization_verificator().
+auth_by_space_membership(UserId) ->
+    {internal, fun(#od_share{space = SpaceId}) ->
+        n_space_logic:has_eff_user(SpaceId, UserId)
+    end}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if given user has specific
+%% effective privilege in the space to which the share represented by the entity
+%% belongs.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_space_privilege(UserId :: od_user:id(),
+    Privilege :: privileges:space_privilege()) ->
+    n_entity_logic:authorization_verificator().
+auth_by_space_privilege(UserId, Privilege) ->
+    {internal, fun(#od_share{space = SpaceId}) ->
+        n_space_logic:has_eff_privilege(SpaceId, UserId, Privilege)
+    end}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if given user has specified
+%% effective oz privilege.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_oz_privilege(UserId :: od_user:id(),
+    Privilege :: privileges:oz_privilege()) ->
+    n_entity_logic:authorization_verificator().
+auth_by_oz_privilege(UserId, Privilege) ->
+    {external, fun() ->
+        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
+    end}.
 
 

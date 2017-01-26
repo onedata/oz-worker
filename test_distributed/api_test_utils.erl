@@ -43,7 +43,7 @@ run_tests(Config, ApiTestSpec) ->
         % Unexpected error
         Type:Message ->
             ct:print("~p:run_tests failed with unexpected result - ~p:~p~n"
-            "Stacktrace: ~p", [
+            "Stacktrace: ~s", [
                 ?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
             ]),
             false
@@ -364,7 +364,7 @@ verify_logic_result({ok, Result}, ?OK_TERM(VerifyFun)) ->
     catch
         Type:Message ->
             ct:print("Logic result verification function crashed - ~p:~p~n"
-            "Stacktrace: ~p", [
+            "Stacktrace: ~s", [
                 Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
             ]),
             false

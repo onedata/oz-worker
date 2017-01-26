@@ -11,7 +11,6 @@
 %%%-------------------------------------------------------------------
 -module(n_share_logic).
 -author("Lukasz Opiola").
--behaviour(data_logic_behaviour).
 
 
 -include("datastore/oz_datastore_models_def.hrl").

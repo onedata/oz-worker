@@ -11,7 +11,6 @@
 %%%-------------------------------------------------------------------
 -module(n_handle_service_logic).
 -author("Lukasz Opiola").
--behaviour(data_logic_behaviour).
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").

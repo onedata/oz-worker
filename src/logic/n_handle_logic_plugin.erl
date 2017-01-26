@@ -363,18 +363,22 @@ authorize(create, _HandleId, groups, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 
 
-authorize(get, _HandleId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_VIEW);
+authorize(get, _HandleId, entity, ?USER(UserId)) ->[
+    auth_by_privilege(UserId, ?HANDLE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_HANDLES_LIST)
+];
 
-authorize(get, _HandleId, data, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_VIEW);
+authorize(get, _HandleId, data, ?USER(UserId)) ->[
+    auth_by_privilege(UserId, ?HANDLE_VIEW),
+    auth_by_oz_privilege(UserId, ?OZ_HANDLES_LIST)
+];
 
 authorize(get, _HandleId, public_data, _Client) ->
     % Public data is available to whomever has handle id.
     true;
 
 authorize(get, undefined, list, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_HANDLES_LIST);
+    auth_by_oz_privilege(UserId, ?OZ_HANDLES_LIST);
 
 authorize(get, _HandleId, _, ?USER(UserId)) ->
     % All other resources can be accessed with view privileges
@@ -473,4 +477,20 @@ entity_to_string(HandleId) ->
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_handle{} = Handle) ->
         n_handle_logic:user_has_eff_privilege(Handle, UserId, Privilege)
+    end}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if given user has specified
+%% effective oz privilege.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_oz_privilege(UserId :: od_user:id(),
+    Privilege :: privileges:oz_privilege()) ->
+    n_entity_logic:authorization_verificator().
+auth_by_oz_privilege(UserId, Privilege) ->
+    {external, fun() ->
+        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
     end}.

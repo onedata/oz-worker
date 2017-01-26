@@ -11,7 +11,6 @@
 %%%-------------------------------------------------------------------
 -module(n_identity_logic_plugin).
 -author("Lukasz Opiola").
--behaviour(entity_logic_plugin_behaviour).
 
 -include("errors.hrl").
 -include("entity_logic.hrl").

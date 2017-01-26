@@ -11,7 +11,6 @@
 %%%-------------------------------------------------------------------
 -module(n_provider_logic).
 -author("Lukasz Opiola").
--behaviour(data_logic_behaviour).
 
 -include("entity_logic.hrl").
 -include("gui/common.hrl").

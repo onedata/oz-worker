@@ -11,7 +11,6 @@
 %%%-------------------------------------------------------------------
 -module(n_group_logic).
 -author("Lukasz Opiola").
--behaviour(data_logic_behaviour).
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
