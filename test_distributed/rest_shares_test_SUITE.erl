@@ -139,6 +139,7 @@ create_share_test(Config) ->
     {ok, Space} = oz_test_utils:create_space(
         Config, ?USER(User), <<"sp">>
     ),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User should be able to create a share, as he has space_manages_shares
     % privilege by default in his space.
     ?assert(check_create_share(Config, 204, {user, User}, Space, <<"someShareId">>, #{
@@ -166,6 +167,7 @@ create_share_test(Config) ->
     oz_test_utils:space_set_group_privileges(
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now the user should be able to create a share
     ?assert(check_create_share(Config, 204, {user, User}, Space, <<"anotherShareId">>, #{
         <<"name">> => <<"whatever">>,
@@ -180,6 +182,7 @@ view_shares_test(Config) ->
     {ok, Space} = oz_test_utils:create_space(
         Config, ?USER(User), <<"sp">>
     ),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Create a share
     {Share1Id, Share1Name, Share1File} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
     ?assert(check_create_share(Config, 204, {user, User}, Space, Share1Id, #{
@@ -194,7 +197,8 @@ view_shares_test(Config) ->
         <<"rootFileId">> => Share1File,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
-        <<"publicUrl">> => get_public_share_url(Config, Share1Id)
+        <<"publicUrl">> => get_public_share_url(Config, Share1Id),
+        <<"handleId">> => <<"undefined">>
     },
     ?assert(check_get_share(Config, 200, {user, User}, Share1Id, Share1ExpectedData)),
     % Create some other shares
@@ -216,7 +220,8 @@ view_shares_test(Config) ->
         <<"rootFileId">> => Share2File,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
-        <<"publicUrl">> => get_public_share_url(Config, Share2Id)
+        <<"publicUrl">> => get_public_share_url(Config, Share2Id),
+        <<"handleId">> => <<"undefined">>
     },
     ?assert(check_get_share(Config, 200, {user, User}, Share2Id, Share2ExpectedData)),
     Share3ExpectedData = #{
@@ -226,7 +231,8 @@ view_shares_test(Config) ->
         <<"rootFileId">> => Share3File,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
-        <<"publicUrl">> => get_public_share_url(Config, Share3Id)
+        <<"publicUrl">> => get_public_share_url(Config, Share3Id),
+        <<"handleId">> => <<"undefined">>
     },
     ?assert(check_get_share(Config, 200, {user, User}, Share3Id, Share3ExpectedData)),
     % Retrieve all shares of Space and check if they all all there
@@ -245,6 +251,7 @@ view_shares_test(Config) ->
 
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"gr">>),
     oz_test_utils:add_group_to_space(Config, Space, Group),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_get_share(Config, 200, {user, User}, Share1Id, Share1ExpectedData)),
     ?assert(check_get_share(Config, 200, {user, User}, Share2Id, Share2ExpectedData)),
     ?assert(check_get_share(Config, 200, {user, User}, Share3Id, Share3ExpectedData)),
@@ -260,6 +267,7 @@ modify_share_test(Config) ->
     {ok, Space} = oz_test_utils:create_space(
         Config, ?USER(User), <<"sp">>
     ),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Create a share
     {ShareId, ShareName, ShareFile} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
     ?assert(check_create_share(Config, 204, {user, User}, Space, ShareId, #{
@@ -274,7 +282,8 @@ modify_share_test(Config) ->
         <<"rootFileId">> => ShareFile,
         % Public share URL is computed by OZ, so it is not provided in create,
         % but should be included in GET response
-        <<"publicUrl">> => get_public_share_url(Config, ShareId)
+        <<"publicUrl">> => get_public_share_url(Config, ShareId),
+        <<"handleId">> => <<"undefined">>
     },
     ?assert(check_get_share(Config, 200, {user, User}, ShareId, ShareExpectedData)),
     % Try to modify share data (currently only rename is supported)
@@ -308,6 +317,7 @@ modify_share_test(Config) ->
     oz_test_utils:space_set_group_privileges(
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now the user should be able to rename the share
     ?assert(check_rename_share(
         Config, 204, {user, User}, ShareId, #{<<"name">> => EvenMoreNewName}
@@ -325,6 +335,7 @@ remove_share_test(Config) ->
     {ok, Space} = oz_test_utils:create_space(
         Config, ?USER(User), <<"sp">>
     ),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Create two shares
     {Share1Id, Share1Name, Share1File} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
     {Share2Id, Share2Name, Share2File} = {<<"s2id">>, <<"s2nm">>, <<"s2rf">>},
@@ -338,9 +349,8 @@ remove_share_test(Config) ->
     })),
     % Try to remove a share
     ?assert(check_remove_share(Config, 202, {user, User}, Share1Id)),
-    % Make sure the share 1 not longer exists (403 because the user is not
-    % authorized to ask about non-existent share)
-    ?assert(check_get_share(Config, 403, {user, User}, Share1Id, undefined)),
+    % Make sure the share 1 not longer exists
+    ?assert(check_get_share(Config, 404, {user, User}, Share1Id, undefined)),
     ?assert(check_get_shares_of_space(Config, 200, {user, User}, Space, [Share2Id])),
     % Take the space_manage_shares privilege from user and makes sure he no
     % longer can remove shares.
@@ -356,10 +366,11 @@ remove_share_test(Config) ->
     oz_test_utils:space_set_group_privileges(
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now the user should be able to remove the share
     ?assert(check_remove_share(Config, 202, {user, User}, Share2Id)),
     % Make sure the share 2 not longer exists
-    ?assert(check_get_share(Config, 403, {user, User}, Share2Id, undefined)),
+    ?assert(check_get_share(Config, 404, {user, User}, Share2Id, undefined)),
     ?assert(check_get_shares_of_space(Config, 200, {user, User}, Space, [])),
     ok.
 
@@ -388,4 +399,3 @@ end_per_suite(_Config) ->
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
     ok = oz_test_utils:delete_all_entities(Config).
-

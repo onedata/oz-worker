@@ -34,8 +34,8 @@
     EntityId :: n_entity_logic:entity_id(), Resource :: n_entity_logic:resource(),
     Result :: n_entity_logic:result()) -> #rest_resp{}.
 % TODO VFS-2918
-response(create, _SpaceId, {create_share, ShareId}, {ok, ShareId}) ->
-    n_rest_handler:ok_body_reply(#{<<"shareId">> => ShareId});
+response(create, _SpaceId, {deprecated_create_share, ShareId}, {ok, ShareId}) ->
+    n_rest_handler:ok_no_content_reply();
 % TODO VFS-2918
 response(create, _SpaceId, {deprecated_user_privileges, _UserId}, ok) ->
     n_rest_handler:ok_no_content_reply();

@@ -6,7 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-
+%%% This module encapsulates all group logic functionalities.
+%%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(n_group_logic).
@@ -36,9 +37,9 @@
     delete_oz_privileges/2
 ]).
 -export([
-    create_space/2,
-    create_handle_service/4, create_handle_service/2,
-    create_handle/5, create_handle/2,
+    create_space/3,
+    create_handle_service/5, create_handle_service/3,
+    create_handle/6, create_handle/3,
 
     create_user_invite_token/2,
     create_group_invite_token/2,
@@ -90,101 +91,311 @@
     create_predefined_groups/0
 ]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new group document in database based on group name and type.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(), Name :: binary(),
+    Type :: od_group:type()) -> {ok, od_group:id()} | {error, term()}.
 create(Client, Name, Type) ->
     create(Client, #{<<"name">> => Name, <<"type">> => Type}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new group document in database. Has two variants:
+%% 1) Group Name is given explicitly (the new group will be of default type)
+%% 2) Group name is provided in a proper Data object, group type is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(), NameOrData :: binary() | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
 create(Client, Name) when is_binary(Name) ->
     create(Client, #{<<"name">> => Name});
 create(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a group record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, #od_group{}} | {error, term()}.
 get(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, entity, GroupId).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves information about a group record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_data(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, #{}} | {error, term()}.
 get_data(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, data, GroupId).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Lists all groups (their ids) in database.
+%% @end
+%%--------------------------------------------------------------------
+-spec list(Client :: n_entity_logic:client()) ->
+    {ok, [od_group:id()]} | {error, term()}.
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves oz privileges of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_oz_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [privileges:oz_privilege()]} | {error, term()}.
 get_oz_privileges(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, oz_privileges).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves effective oz privileges of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_oz_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [privileges:oz_privilege()]} | {error, term()}.
 get_eff_oz_privileges(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_oz_privileges).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates information of given group (name and alias).
+%% @end
+%%--------------------------------------------------------------------
+-spec update(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    Data :: #{}) -> ok | {error, term()}.
 update(Client, GroupId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, GroupId, entity, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates oz privileges of given group.
+%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_oz_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privs :: [privileges:oz_privilege()]) -> ok | {error, term()}.
 update_oz_privileges(Client, GroupId, Operation, Privs) when is_list(Privs) ->
     update_oz_privileges(Client, GroupId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates oz privileges of given group.
+%% Operation and privileges must be included in proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_oz_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    Data :: #{}) -> ok | {error, term()}.
 update_oz_privileges(Client, GroupId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, GroupId, oz_privileges, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given group from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    ok | {error, term()}.
 delete(Client, GroupId) ->
     n_entity_logic:delete(Client, ?PLUGIN, GroupId, entity).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes (sets to empty list) oz privileges of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_oz_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    ok | {error, term()}.
 delete_oz_privileges(Client, GroupId) ->
     n_entity_logic:delete(Client, ?PLUGIN, GroupId, oz_privileges).
 
 
-create_space(Client, Data) ->
-    n_space_logic:create(Client, Data).
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new space for given group. Has two variants:
+%% 1) Space name is given explicitly
+%% 2) Space name is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_space(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    NameOrData :: binary() | #{}) -> {ok, od_space:id()} | {error, term()}.
+create_space(Client, GroupId, Name) ->
+    create_space(Client, GroupId, #{<<"name">> => Name});
+create_space(Client, GroupId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, create_space, Data).
 
 
-create_handle_service(Client, Name, ProxyEndpoint, ServiceProperties) ->
-    n_handle_service_logic:create(Client, Name, ProxyEndpoint, ServiceProperties).
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new handle service for given group.
+%% Allows to specify the Name, ProxyEndpoint and ServiceProperties.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_handle_service(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    Name :: binary(), ProxyEndpoint :: od_handle_service:proxy_endpoint(),
+    ServiceProperties :: od_handle_service:service_properties()) ->
+    {ok, od_handle_service:id()} | {error, term()}.
+create_handle_service(Client, GroupId, Name, ProxyEndpoint, ServiceProperties) ->
+    create_handle_service(Client, GroupId, #{
+        <<"name">> => Name,
+        <<"proxyEndpoint">> => ProxyEndpoint,
+        <<"serviceProperties">> => ServiceProperties
+    }).
 
 
-create_handle_service(Client, Data) ->
-    n_handle_service_logic:create(Client, Data).
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new handle service for given group.
+%% Name, ProxyEndpoint and ServiceProperties must be given in proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_handle_service(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    Data :: #{}) -> {ok, od_handle_service:id()} | {error, term()}.
+create_handle_service(Client, GroupId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, create_handle_service, Data).
 
 
-create_handle(Client, HServiceId, ResourceType, ResourceId, Metadata) ->
-    n_handle_logic:create(Client, HServiceId, ResourceType, ResourceId, Metadata).
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new handle for given group.
+%% Allows to specify the HServiceId, ResourceType, ResourceId and Metadata.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_handle(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    HServiceId :: od_handle_service:id(), ResourceType :: od_handle:resource_type(),
+    ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata()) ->
+    {ok, od_handle:id()} | {error, term()}.
+create_handle(Client, GroupId, HServiceId, ResourceType, ResourceId, Metadata) ->
+    create_handle(Client, GroupId, #{
+        <<"handleServiceId">> => HServiceId,
+        <<"resourceType">> => ResourceType,
+        <<"resourceId">> => ResourceId,
+        <<"metadata">> => Metadata
+    }).
 
 
-create_handle(Client, Data) ->
-    n_handle_logic:create(Client, Data).
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new handle for given group.
+%% HServiceId, ResourceType, ResourceId and Metadata must be given in proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_handle(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    Data :: #{}) -> {ok, od_handle:id()} | {error, term()}.
+create_handle(Client, GroupId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, create_handle, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a user invite token, which can be used by any user to join
+%% given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_user_invite_token(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, macaroon:macaroon()} | {error, term()}.
 create_user_invite_token(Client, GroupId) ->
     n_entity_logic:create(Client, ?PLUGIN, GroupId, invite_user_token, #{}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group invite token, which can be used by any child group to join
+%% given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_group_invite_token(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, macaroon:macaroon()} | {error, term()}.
 create_group_invite_token(Client, GroupId) ->
     n_entity_logic:create(Client, ?PLUGIN, GroupId, invite_group_token, #{}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Joins a group on behalf of given user based on group_invite_user token.
+%% Has two variants:
+%% 1) Token is given explicitly (as binary() or macaroon())
+%% 2) Token is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec join_group(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
 join_group(Client, GroupId, Data) when is_map(Data) ->
     n_entity_logic:create(Client, ?PLUGIN, GroupId, join_group, Data);
 join_group(Client, GroupId, Token) ->
     join_group(Client, GroupId, #{<<"token">> => Token}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Joins a space on behalf of given user based on space_invite_user token.
+%% Has two variants:
+%% 1) Token is given explicitly (as binary() or macaroon())
+%% 2) Token is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec join_space(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    {ok, od_space:id()} | {error, term()}.
 join_space(Client, GroupId, Data) when is_map(Data) ->
     n_entity_logic:create(Client, ?PLUGIN, GroupId, join_space, Data);
 join_space(Client, GroupId, Token) ->
     join_space(Client, GroupId, #{<<"token">> => Token}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified user to the group. Allows to specify the privileges of the
+%% newly added user.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_user(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id(), Privileges :: [privileges:oz_privileges()]) ->
+    {ok, od_user:id()} | {error, term()}.
 add_user(Client, GroupId, UserId, Privileges) when is_binary(UserId) ->
     add_user(Client, GroupId, #{
         <<"userId">> => UserId,
         <<"privileges">> => Privileges
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified user to the group. Has two variants:
+%% 1) UserId is given explicitly
+%% 2) UserId is provided in a proper Data object, privileges are optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_user(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    UserIdOrData :: od_user:id() | #{}) -> {ok, od_user:id()} | {error, term()}.
 add_user(Client, GroupId, UserId) when is_binary(UserId) ->
     add_user(Client, GroupId, #{<<"userId">> => UserId});
 add_user(Client, GroupId, Data) ->
@@ -202,26 +413,70 @@ add_group(Client, GroupId, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, GroupId, children, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_users(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_user:id()]} | {error, term()}.
 get_users(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, users).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_users(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_user:id()]} | {error, term()}.
 get_eff_users(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_users).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific user among users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_user(Client, GroupId, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {user, UserId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective user among
+%% effective users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_eff_user(Client, GroupId, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_user, UserId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the privileges of specific user among users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_user_privileges(Client, GroupId, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {user_privileges, UserId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the effective privileges of specific effective user
+%% among effective users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_eff_user_privileges(Client, GroupId, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_user_privileges, UserId}).
 

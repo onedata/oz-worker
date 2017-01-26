@@ -584,7 +584,7 @@ space_routes() ->
             method = get, entity_id = ?BINDING(id), resource = {shares, ?BINDING(shid)}
         }},
         % TODO VFS-2918
-        {<<"/spaces/:id/shares/:pid">>, R#rest_req{
+        {<<"/spaces/:id/shares/:shid">>, R#rest_req{
             method = put, entity_id = ?BINDING(id), resource = {deprecated_create_share, ?BINDING(shid)}
         }},
 

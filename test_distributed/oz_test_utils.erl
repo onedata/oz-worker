@@ -583,7 +583,7 @@ add_group_to_space(Config, SpaceId, GroupId) ->
     Privileges :: [privileges:space_privilege()]) -> ok.
 space_set_user_privileges(Config, SpaceId, UserId, Operation, Privs) ->
     ?assertMatch(ok, call_oz(Config, n_space_logic, update_user_privileges, [
-        SpaceId, UserId, Operation, Privs
+        ?ROOT, SpaceId, UserId, Operation, Privs
     ])).
 
 
@@ -597,7 +597,7 @@ space_set_user_privileges(Config, SpaceId, UserId, Operation, Privs) ->
     Privileges :: [privileges:space_privilege()]) -> ok.
 space_set_group_privileges(Config, SpaceId, GroupId, Operation, Privs) ->
     ?assertMatch(ok, call_oz(Config, n_space_logic, update_group_privileges, [
-        SpaceId, GroupId, Operation, Privs
+        ?ROOT, SpaceId, GroupId, Operation, Privs
     ])).
 
 

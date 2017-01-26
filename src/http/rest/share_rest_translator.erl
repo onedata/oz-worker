@@ -36,7 +36,17 @@
 response(create, undefined, entity, {ok, GroupId}) ->
     n_rest_handler:created_reply([<<"groups">>, GroupId]);
 
+
 response(get, ShareId, data, {ok, ShareData}) ->
     n_rest_handler:ok_body_reply(ShareData#{
         <<"shareId">> => ShareId
-    }).
+    });
+
+
+response(update, _ShareId, _, ok) ->
+    n_rest_handler:updated_reply();
+
+
+response(delete, _ShareId, _, ok) ->
+    n_rest_handler:deleted_reply().
+
