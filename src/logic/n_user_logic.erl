@@ -312,7 +312,7 @@ update_oz_privileges(Client, UserId, Operation, Privs) when is_list(Privs) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given user.
-%% Operation and privileges must be included in proper Data object.
+%% Privileges must be included in proper Data object, operation is optional.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: n_entity_logic:client(), UserId :: od_user:id(),
@@ -792,7 +792,7 @@ leave_group(Client, UserId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec leave_space(Client :: n_entity_logic:client(), UserId :: od_user:id(),
-    GroupId :: od_space:id()) -> ok | {error, term()}.
+    SpaceId :: od_space:id()) -> ok | {error, term()}.
 leave_space(Client, UserId, SpaceId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, {space, SpaceId}).
 
@@ -803,7 +803,7 @@ leave_space(Client, UserId, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec leave_handle_service(Client :: n_entity_logic:client(), UserId :: od_user:id(),
-    GroupId :: od_handle_service:id()) -> ok | {error, term()}.
+    HServiceId :: od_handle_service:id()) -> ok | {error, term()}.
 leave_handle_service(Client, UserId, HServiceId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, {handle_service, HServiceId}).
 
@@ -814,7 +814,7 @@ leave_handle_service(Client, UserId, HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec leave_handle(Client :: n_entity_logic:client(), UserId :: od_user:id(),
-    GroupId :: od_handle:id()) -> ok | {error, term()}.
+    HandleId :: od_handle:id()) -> ok | {error, term()}.
 leave_handle(Client, UserId, HandleId) ->
     n_entity_logic:delete(Client, ?PLUGIN, UserId, {handle, HandleId}).
 

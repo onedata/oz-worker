@@ -58,12 +58,12 @@ response(create, _SpaceId, invite_provider_token, {ok, Macaroon}) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
     n_rest_handler:ok_body_reply(#{<<"token">> => Token});
 
-response(create, SpaceId, users, {ok, UserId}) ->
+response(create, SpaceId, {user, UserId}, {ok, UserId}) ->
     n_rest_handler:created_reply(
         [<<"spaces">>, SpaceId, <<"users">>, UserId]
     );
 
-response(create, SpaceId, groups, {ok, GroupId}) ->
+response(create, SpaceId, {group, GroupId}, {ok, GroupId}) ->
     n_rest_handler:created_reply(
         [<<"spaces">>, SpaceId, <<"groups">>, GroupId]
     );

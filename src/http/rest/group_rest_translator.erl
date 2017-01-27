@@ -78,12 +78,12 @@ response(create, GroupId, join_space, {ok, SpaceId}) ->
         [<<"groups">>, GroupId, <<"spaces">>, SpaceId]
     );
 
-response(create, GroupId, users, {ok, UserId}) ->
+response(create, GroupId, {user, UserId}, {ok, UserId}) ->
     n_rest_handler:created_reply(
         [<<"groups">>, GroupId, <<"users">>, UserId]
     );
 
-response(create, GroupId, children, {ok, ChildGroupId}) ->
+response(create, GroupId, {child, ChildGroupId}, {ok, ChildGroupId}) ->
     n_rest_handler:created_reply(
         [<<"groups">>, GroupId, <<"children">>, ChildGroupId]
     );

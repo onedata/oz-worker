@@ -61,10 +61,14 @@ handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
 
 handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     Client = ?USER(gui_session:get_user_id()),
-    {ok, Token} = n_space_logic:create_provider_invite_token(Client, SpaceId),
-    {ok, [
-        {<<"token">>, Token}
-    ]};
+    case n_space_logic:create_provider_invite_token(Client, SpaceId) of
+        {ok, Token} ->
+            {ok, [{<<"token">>, Token}]};
+        ?ERROR_UNAUTHORIZED ->
+            gui_error:report_warning(
+                <<"You do not have permissions to issue support tokens.">>
+            )
+    end;
 
 handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     UserId = gui_session:get_user_id(),
@@ -116,6 +120,19 @@ handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
         <<"user">>, user_data_backend:user_record(?USER(UserId), UserId)
     ),
     ok;
+
+handle(<<"getTokenUserJoinGroup">>, [{<<"groupId">>, GroupId}]) ->
+    UserId = gui_session:get_user_id(),
+    case n_group_logic:create_user_invite_token(?USER(UserId), GroupId) of
+        {ok, Token} ->
+            {ok, [{<<"token">>, Token}]};
+        ?ERROR_UNAUTHORIZED ->
+            gui_error:report_warning(
+                <<"You do not have permissions to issue invite tokens for users.">>
+            )
+    end;
+
+
 
 handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
     UserId = gui_session:get_user_id(),

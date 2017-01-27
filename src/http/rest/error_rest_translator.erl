@@ -207,6 +207,10 @@ translate(?ERROR_ALIAS_OCCUPIED) ->
     {?HTTP_400_BAD_REQUEST,
         <<"Provided alias is already occupied, please choose other alias.">>
     };
+translate(?ERROR_RESOURCE_DOES_NOT_EXIST(ReadableIdentifier)) ->
+    {?HTTP_400_BAD_REQUEST,
+        {<<"Bad value: ~s provided in path does not exist">>, [ReadableIdentifier]}
+    };
 translate(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)) ->
     {?HTTP_500_INTERNAL_SERVER_ERROR, {
         <<"Cannot delete ~s, failed to delete some dependent relations">>,

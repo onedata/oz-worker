@@ -72,11 +72,13 @@
 -define(ERROR_RELATION_ALREADY_EXISTS(__ChModel, __ChId, __ParModel, __ParId),
     {error, {relation_already_exists, __ChModel, __ChId, __ParModel, __ParId}}
 ).
--define(ERROR_ALIAS_OCCUPIED, {error, aliast_occupied}).
+-define(ERROR_ALIAS_OCCUPIED, {error, alias_occupied}).
+-define(ERROR_RESOURCE_DOES_NOT_EXIST(__ReadableIdentifier),
+    {error, resource_does_not_exist, __ReadableIdentifier}).
+
 -define(ERROR_CANNOT_DELETE_ENTITY(__EntityModel, __EntityId),
     {error, {cannot_delete_entity, __EntityModel, __EntityId}}
 ).
-
 
 
 -endif.

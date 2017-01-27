@@ -36,8 +36,8 @@
     create_group_invite_token/2,
     create_provider_invite_token/2,
 
-    add_user/4, add_user/3,
-    add_group/4, add_group/3,
+    add_user/3, add_user/4,
+    add_group/3, add_group/4,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -105,30 +105,68 @@ create_provider_invite_token(Client, SpaceId) ->
     n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_provider_token, #{}).
 
 
-add_user(Client, SpaceId, UserId, Privileges) when is_binary(UserId) ->
-    add_user(Client, SpaceId, #{
-        <<"userId">> => UserId,
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified user to given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_user(Client :: n_entity_logic:client(),
+    SpaceId :: od_space:id(), UserId :: od_user:id()) ->
+    {ok, od_user:id()} | {error, term()}.
+add_user(Client, SpaceId, UserId) ->
+    add_user(Client, SpaceId, UserId, #{}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified user to given space.
+%% Allows to specify the privileges of the newly added user. Has two variants:
+%% 1) Privileges are given explicitly
+%% 2) Privileges are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_user(Client :: n_entity_logic:client(),
+    SpaceId :: od_space:id(), UserId :: od_user:id(),
+    PrivilegesPrivilegesOrData :: [privileges:space_privileges()] | #{}) ->
+    {ok, od_user:id()} | {error, term()}.
+add_user(Client, SpaceId, UserId, Privileges) when is_list(Privileges) ->
+    add_user(Client, SpaceId, UserId, #{
         <<"privileges">> => Privileges
-    }).
-add_user(Client, SpaceId, UserId) when is_binary(UserId) ->
-    add_user(Client, SpaceId, #{<<"userId">> => UserId});
-add_user(Client, SpaceId, Data) ->
-    n_entity_logic:create(
-        Client, ?PLUGIN, SpaceId, users, Data
-    ).
+    });
+add_user(Client, SpaceId, UserId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, SpaceId, {user, UserId}, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified group to given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_group(Client :: n_entity_logic:client(),
+    SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
+    {ok, od_group:id()} | {error, term()}.
+add_group(Client, SpaceId, GroupId) ->
+    add_group(Client, SpaceId, GroupId, #{}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified group to given space.
+%% Allows to specify the privileges of the newly added group. Has two variants:
+%% 1) Privileges are given explicitly
+%% 2) Privileges are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_group(Client :: n_entity_logic:client(),
+    SpaceId :: od_space:id(), GroupId :: od_group:id(),
+    PrivilegesOrData :: [privileges:space_privileges()] | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
 add_group(Client, SpaceId, GroupId, Privileges) when is_binary(GroupId) ->
-    add_group(Client, SpaceId, #{
-        <<"groupId">> => GroupId,
+    add_group(Client, SpaceId, GroupId, #{
         <<"privileges">> => Privileges
-    }).
-add_group(Client, SpaceId, GroupId) when is_binary(GroupId) ->
-    add_group(Client, SpaceId, #{<<"groupId">> => GroupId});
-add_group(Client, SpaceId, Data) ->
-    n_entity_logic:create(
-        Client, ?PLUGIN, SpaceId, groups, Data
-    ).
+    });
+add_group(Client, SpaceId, GroupId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, SpaceId, {child, GroupId}, Data).
 
 
 get_users(Client, SpaceId) ->

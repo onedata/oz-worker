@@ -518,8 +518,11 @@ delete_with_relations(EntityType, EntityId) ->
                         ])
                     end, ChIds)
             end, DependentChildren),
-        % Remove the entity itself
-        ok = EntityType:delete(EntityId)
+        % Remove the entity itself (synchronize with other process which might
+        % be updating the entity)
+        ok = sync_on_entity(EntityType, EntityId, fun() ->
+            EntityType:delete(EntityId)
+        end)
     catch
         Type:Message ->
             ?error_stacktrace(

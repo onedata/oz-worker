@@ -386,6 +386,9 @@ process_request(Req, State) ->
         ),
         {halt, send_response(RestResp, Req2), State}
     catch
+        throw:Error ->
+            ErrorResp = error_rest_translator:response(Error),
+            {halt, send_response(ErrorResp, Req), State};
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
                 ?MODULE, Type, Message

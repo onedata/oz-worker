@@ -138,8 +138,7 @@ create(Client, SpaceId, invite_provider_token, _) ->
     ),
     {ok, Token};
 
-create(_Client, SpaceId, users, Data) ->
-    UserId = maps:get(<<"userId">>, Data),
+create(_Client, SpaceId, {user, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
     entity_graph:add_relation(
         od_user, UserId,
@@ -148,8 +147,7 @@ create(_Client, SpaceId, users, Data) ->
     ),
     {ok, UserId};
 
-create(_Client, SpaceId, groups, Data) ->
-    GroupId = maps:get(<<"groupId">>, Data),
+create(_Client, SpaceId, {group, GroupId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
     entity_graph:add_relation(
         od_group, GroupId,
@@ -196,8 +194,12 @@ get(Client, SpaceId, _, deprecated_invite_provider_token) ->
 get(_, undefined, undefined, list) ->
     {ok, SpaceDocs} = od_space:list(),
     {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
-get(_, _SpaceId, #od_space{name = Name}, data) ->
-    {ok, #{<<"name">> => Name}};
+get(_, _SpaceId, #od_space{name = Name, providers = Providers}, data) ->
+    {ok, #{
+        <<"name">> => Name,
+        % TODO VFS-2918
+        <<"providersSupports">> => Providers
+    }};
 
 get(_, _SpaceId, #od_space{users = Users}, users) ->
     {ok, maps:keys(Users)};
@@ -411,10 +413,10 @@ authorize(create, _SpaceId, invite_group_token, ?USER(UserId)) ->
 authorize(create, _SpaceId, invite_provider_token, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?SPACE_INVITE_PROVIDER);
 
-authorize(create, _SpaceId, users, ?USER(UserId)) ->
+authorize(create, _SpaceId, {user, _UserId}, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_SPACES_ADD_MEMBERS);
 
-authorize(create, _SpaceId, groups, ?USER(UserId)) ->
+authorize(create, _SpaceId, {group, _GroupId}, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_SPACES_ADD_MEMBERS);
 
 
@@ -545,21 +547,22 @@ validate(create, invite_group_token) -> #{
 };
 validate(create, invite_provider_token) -> #{
 };
-validate(create, users) -> #{
+validate(create, {user, _UserId}) -> #{
     required => #{
-        <<"userId">> => {binary, {exists, fun(Value) ->
-            n_user_logic:exists(Value)
-        end}}
+        resource => {any, {resource_exists, <<"User Id">>, fun({user, UserId}) ->
+            n_user_logic:exists(UserId) end}
+        },
+        <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
     }
 };
-validate(create, groups) -> #{
+validate(create, {group, _GroupId}) -> #{
     required => #{
-        <<"groupId">> => {binary, {exists, fun(Value) ->
-            n_group_logic:exists(Value)
-        end}}
+        resource => {any, {resource_exists, <<"Group Id">>, fun({child, GroupId}) ->
+            n_group_logic:exists(GroupId) end}
+        },
+        <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
     }
 };
-
 validate(update, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty}

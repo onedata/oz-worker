@@ -125,8 +125,18 @@ response(get, _UserId, {group, GroupId}, {ok, Group}) ->
 response(get, _UserId, {eff_group, GroupId}, {ok, Group}) ->
     group_rest_translator:response(get, GroupId, data, {ok, Group});
 
-response(get, _UserId, spaces, {ok, Spaces}) ->
-    n_rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});
+response(get, UserId, spaces, {ok, Spaces}) ->
+    % TODO VFS-2918
+    DefaultSpace = case n_user_logic:get_default_space(?ROOT, UserId) of
+        {ok, SpaceId} -> SpaceId;
+        ?ERROR_NOT_FOUND -> undefined
+    end,
+    n_rest_handler:ok_body_reply(
+        #{
+            <<"spaces">> => Spaces,
+            % TODO VFS-2918
+            <<"default">> => DefaultSpace
+        });
 
 response(get, _UserId, eff_spaces, {ok, Spaces}) ->
     n_rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});

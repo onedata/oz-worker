@@ -51,12 +51,15 @@ integer | float | json | token.
 {exists, fun((entity_id()) -> boolean())} |
 {not_exists, fun((entity_id()) -> boolean())} |
 token_logic:token_type() | % Compatible only with 'token' type validator
-alias. % Compatible only with 'binary' type validator
+alias |  % Compatible only with 'binary' type validator
+{resource_exists, ReadableIdentifier :: binary(), fun((entity_id()) -> boolean())}.
 
+% The 'resource' key word allows to validate the data provided in resource
+% identifier.
 -type validity_verificator() :: #{
-required => #{Key :: binary() => {type_validator(), value_validator()}},
-at_least_one => #{Key :: binary() => {type_validator(), value_validator()}},
-optional => #{Key :: binary() => {type_validator(), value_validator()}}
+required => #{Key :: binary() | resource => {type_validator(), value_validator()}},
+at_least_one => #{Key :: binary() | resource => {type_validator(), value_validator()}},
+optional => #{Key :: binary() | resource => {type_validator(), value_validator()}}
 }.
 
 -export_type([
@@ -566,12 +569,16 @@ check_authorization([{internal, Fun} | Tail], #request{entity = Entity} = Req) -
 %% @end
 %%--------------------------------------------------------------------
 -spec check_validity(Request :: #request{}) -> #request{}.
-check_validity(#request{data = Data} = Request) ->
+check_validity(#request{data = Data, resource = Resource} = Request) ->
     ValidatorsMap = call_validate(Request),
     % Get all types of validators validators
     Required = maps:get(required, ValidatorsMap, #{}),
     Optional = maps:get(optional, ValidatorsMap, #{}),
     AtLeastOne = maps:get(at_least_one, ValidatorsMap, #{}),
+    % Artificially add 'resource' key to Data to simplify validation code.
+    % This key word allows to verify if data provided in resource identifier
+    % is valid.
+    DataWithResource = Data#{resource => Resource},
     % Start with required parameters. Transform the data if needed, fail when
     % any key is missing or cannot be validated.
     Data2 = lists:foldl(
@@ -582,7 +589,7 @@ check_validity(#request{data = Data} = Request) ->
                 {true, NewData} ->
                     NewData
             end
-        end, Data, maps:keys(Required)),
+        end, DataWithResource, maps:keys(Required)),
     % Now, optional parameters. Transform the data if needed, fail when
     % any of the keys exists in the data but cannot be validated.
     Data3 = lists:foldl(
@@ -614,7 +621,8 @@ check_validity(#request{data = Data} = Request) ->
         {_, false} ->
             throw(?ERROR_MISSING_AT_LEAST_ONE_VALUE(maps:keys(AtLeastOne)))
     end,
-    Request#request{data = Data4}.
+    % Remove 'resource' key from data as it is no longer needed
+    Request#request{data = maps:remove(resource, Data4)}.
 
 
 %%--------------------------------------------------------------------
@@ -696,10 +704,28 @@ check_type(list_of_binaries, _Key, [Atom | _] = Atoms) when is_atom(Atom) ->
     [atom_to_binary(A, utf8) || A <- Atoms];
 check_type(list_of_binaries, Key, _) ->
     throw(?ERROR_BAD_VALUE_LIST_OF_BINARIES(Key));
+check_type(integer, Key, Bin) when is_binary(Bin) ->
+    try
+        binary_to_integer(Bin)
+    catch _:_ ->
+        throw(?ERROR_BAD_VALUE_INTEGER(Key))
+    end;
 check_type(integer, _Key, Int) when is_integer(Int) ->
     Int;
 check_type(integer, Key, _) ->
     throw(?ERROR_BAD_VALUE_INTEGER(Key));
+check_type(float, Key, Bin) when is_binary(Bin) ->
+    try
+        binary_to_float(Bin)
+    catch _:_ ->
+        try
+            % Erlang will crash if the binary does not have a
+            % floating point dot, but we still want to accept integers as floats.
+            float(binary_to_integer(Bin))
+        catch _:_ ->
+            throw(?ERROR_BAD_VALUE_FLOAT(Key))
+        end
+    end;
 check_type(float, _Key, Int) when is_integer(Int) ->
     float(Int);
 check_type(float, _Key, Float) when is_float(Float) ->
@@ -834,6 +860,13 @@ check_value(_, alias, Key, Value) ->
         {_, false} ->
             throw(?ERROR_BAD_VALUE_ALIAS(Key));
         {_, true} -> ok
+    end;
+check_value(_, {resource_exists, ReadableIdentifier, VerifyFun}, _Key, Val) when is_function(VerifyFun, 1) ->
+    case VerifyFun(Val) of
+        true ->
+            ok;
+        false ->
+            throw(?ERROR_RESOURCE_DOES_NOT_EXIST(ReadableIdentifier))
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [

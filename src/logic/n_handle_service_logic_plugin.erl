@@ -105,18 +105,20 @@ create(Client, _, entity, Data) ->
             ok
     end,
     {ok, HServiceId};
-create(?USER, HServiceId, users, #{<<"userId">> := UserId}) ->
+create(?USER, HServiceId, {user, UserId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
     entity_graph:add_relation(
         od_user, UserId,
         od_handle_service, HServiceId,
-        privileges:handle_service_user()
+        Privileges
     ),
     {ok, HServiceId};
-create(?USER, HServiceId, groups, #{<<"groupId">> := GroupId}) ->
+create(?USER, HServiceId, {group, GroupId}, Data) ->
+    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle_service, HServiceId,
-        privileges:handle_service_user()
+        Privileges
     ),
     {ok, HServiceId}.
 
@@ -335,10 +337,10 @@ authorize(create, _HServiceId, {deprecated_group_privileges, _GroupId}, ?USER(Us
 authorize(create, undefined, entity, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_CREATE);
 
-authorize(create, _HServiceId, users, ?USER(UserId)) ->
+authorize(create, _HServiceId, {user, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 
-authorize(create, _HServiceId, groups, ?USER(UserId)) ->
+authorize(create, _HServiceId, {group, _GroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_SERVICE_UPDATE);
 
 
@@ -399,18 +401,20 @@ validate(create, entity) -> #{
         <<"serviceProperties">> => {json, non_empty}
     }
 };
-validate(create, users) -> #{
+validate(create, {user, _UserId}) -> #{
     required => #{
-        <<"userId">> => {binary, {exists, fun(Value) ->
-            n_user_logic:exists(Value) end
-        }}
+        resource => {any, {resource_exists, <<"User Id">>, fun({user, UserId}) ->
+            n_user_logic:exists(UserId) end}
+        },
+        <<"privileges">> => {list_of_atoms, privileges:handle_service_privileges()}
     }
 };
-validate(create, groups) -> #{
+validate(create, {group, _GroupId}) -> #{
     required => #{
-        <<"groupId">> => {binary, {exists, fun(Value) ->
-            n_group_logic:exists(Value) end
-        }}
+        resource => {any, {resource_exists, <<"Group Id">>, fun({child, GroupId}) ->
+            n_group_logic:exists(GroupId) end}
+        },
+        <<"privileges">> => {list_of_atoms, privileges:handle_service_privileges()}
     }
 };
 validate(update, entity) -> #{

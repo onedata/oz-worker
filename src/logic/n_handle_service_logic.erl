@@ -32,8 +32,9 @@
     delete/2
 ]).
 -export([
-    add_user/4, add_user/3,
-    add_group/4, add_group/3,
+
+    add_user/3, add_user/4,
+    add_group/3, add_group/4,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -88,30 +89,68 @@ delete(Client, HServiceId) ->
     n_entity_logic:delete(Client, ?PLUGIN, HServiceId, entity).
 
 
-add_user(Client, HServiceId, UserId, Privileges) when is_binary(UserId) ->
-    add_user(Client, HServiceId, #{
-        <<"userId">> => UserId,
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified user to given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_user(Client :: n_entity_logic:client(),
+    HServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
+    {ok, od_user:id()} | {error, term()}.
+add_user(Client, HServiceId, UserId)  ->
+    add_user(Client, HServiceId, UserId, #{}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified user to given handle_service.
+%% Allows to specify the privileges of the newly added user. Has two variants:
+%% 1) Privileges are given explicitly
+%% 2) Privileges are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_user(Client :: n_entity_logic:client(),
+    HServiceId :: od_handle_service:id(), UserId :: od_user:id(),
+    PrivilegesPrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
+    {ok, od_user:id()} | {error, term()}.
+add_user(Client, HServiceId, UserId, Privileges) when is_list(Privileges) ->
+    add_user(Client, HServiceId, UserId, #{
         <<"privileges">> => Privileges
-    }).
-add_user(Client, HServiceId, UserId) when is_binary(UserId) ->
-    add_user(Client, HServiceId, #{<<"userId">> => UserId});
-add_user(Client, HServiceId, Data) ->
-    n_entity_logic:create(
-        Client, ?PLUGIN, HServiceId, users, Data
-    ).
+    });
+add_user(Client, HServiceId, UserId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, HServiceId, {user, UserId}, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified group to given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_group(Client :: n_entity_logic:client(),
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
+    {ok, od_group:id()} | {error, term()}.
+add_group(Client, HServiceId, GroupId)  ->
+    add_group(Client, HServiceId, GroupId, #{}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified group to given handle_service.
+%% Allows to specify the privileges of the newly added group. Has two variants:
+%% 1) Privileges are given explicitly
+%% 2) Privileges are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_group(Client :: n_entity_logic:client(),
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
+    PrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
 add_group(Client, HServiceId, GroupId, Privileges) when is_binary(GroupId) ->
-    add_group(Client, HServiceId, #{
-        <<"groupId">> => GroupId,
+    add_group(Client, HServiceId, GroupId, #{
         <<"privileges">> => Privileges
-    }).
-add_group(Client, HServiceId, GroupId) when is_binary(GroupId) ->
-    add_group(Client, HServiceId, #{<<"groupId">> => GroupId});
-add_group(Client, HServiceId, Data) ->
-    n_entity_logic:create(
-        Client, ?PLUGIN, HServiceId, groups, Data
-    ).
+    });
+add_group(Client, HServiceId, GroupId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, HServiceId, {child, GroupId}, Data).
 
 
 get_users(Client, HServiceId) ->

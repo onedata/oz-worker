@@ -47,8 +47,8 @@
     join_group/3,
     join_space/3,
 
-    add_user/4, add_user/3,
-    add_group/4, add_group/3,
+    add_user/3, add_user/4,
+    add_group/3, add_group/4,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -206,7 +206,7 @@ update_oz_privileges(Client, GroupId, Operation, Privs) when is_list(Privs) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given group.
-%% Operation and privileges must be included in proper Data object.
+%% Privileges must be included in proper Data object, operation is optional.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
@@ -373,44 +373,66 @@ join_space(Client, GroupId, Token) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds specified user to the group. Allows to specify the privileges of the
-%% newly added user.
+%% Adds specified user to given group.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
-    UserId :: od_user:id(), Privileges :: [privileges:oz_privileges()]) ->
+-spec add_user(Client :: n_entity_logic:client(),
+    GroupId :: od_group:id(), UserId :: od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
-add_user(Client, GroupId, UserId, Privileges) when is_binary(UserId) ->
-    add_user(Client, GroupId, #{
-        <<"userId">> => UserId,
-        <<"privileges">> => Privileges
-    }).
+add_user(Client, GroupId, UserId)  ->
+    add_user(Client, GroupId, UserId, #{}).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds specified user to the group. Has two variants:
-%% 1) UserId is given explicitly
-%% 2) UserId is provided in a proper Data object, privileges are optional.
+%% Adds specified user to given group.
+%% Allows to specify the privileges of the newly added user. Has two variants:
+%% 1) Privileges are given explicitly
+%% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
-    UserIdOrData :: od_user:id() | #{}) -> {ok, od_user:id()} | {error, term()}.
-add_user(Client, GroupId, UserId) when is_binary(UserId) ->
-    add_user(Client, GroupId, #{<<"userId">> => UserId});
-add_user(Client, GroupId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, GroupId, users, Data).
-
-
-add_group(Client, GroupId, ChildGroupId, Privileges) when is_binary(ChildGroupId) ->
-    add_group(Client, GroupId, #{
-        <<"userId">> => ChildGroupId,
+-spec add_user(Client :: n_entity_logic:client(),
+    GroupId :: od_group:id(), UserId :: od_user:id(),
+    PrivilegesPrivilegesOrData :: [privileges:group_privileges()] | #{}) ->
+    {ok, od_user:id()} | {error, term()}.
+add_user(Client, GroupId, UserId, Privileges) when is_list(Privileges) ->
+    add_user(Client, GroupId, UserId, #{
         <<"privileges">> => Privileges
-    }).
-add_group(Client, GroupId, ChildGroupId) when is_binary(ChildGroupId) ->
-    add_group(Client, GroupId, #{<<"groupId">> => ChildGroupId});
-add_group(Client, GroupId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, GroupId, children, Data).
+    });
+add_user(Client, GroupId, UserId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, {user, UserId}, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified child group to given parent group.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_group(Client :: n_entity_logic:client(),
+    GroupId :: od_group:id(), ChildGroupId :: od_group:id()) ->
+    {ok, od_group:id()} | {error, term()}.
+add_group(Client, GroupId, ChildGroupId)  ->
+    add_group(Client, GroupId, ChildGroupId, #{}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds specified child group to given parent group.
+%% Allows to specify the privileges of the newly added group. Has two variants:
+%% 1) Privileges are given explicitly
+%% 2) Privileges are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_group(Client :: n_entity_logic:client(),
+    GroupId :: od_group:id(), ChildGroupId :: od_group:id(),
+    PrivilegesOrData :: [privileges:group_privileges()] | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
+add_group(Client, GroupId, ChildGroupId, Privileges) when is_binary(ChildGroupId) ->
+    add_group(Client, GroupId, ChildGroupId, #{
+        <<"privileges">> => Privileges
+    });
+add_group(Client, GroupId, ChildGroupId, Data) ->
+    n_entity_logic:create(Client, ?PLUGIN, GroupId, {child, ChildGroupId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -481,140 +503,397 @@ get_eff_user_privileges(Client, GroupId, UserId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_user_privileges, UserId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of parents of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_parents(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_group:id()]} | {error, term()}.
 get_parents(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, parents).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective parents of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_parents(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_group:id()]} | {error, term()}.
 get_eff_parents(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_parents).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific parent among parents of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_parent(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    ParentId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_parent(Client, GroupId, ParentId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {parent, ParentId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective parent among
+%% effective parents of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_parent(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    ParentId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_eff_parent(Client, GroupId, ParentId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_parent, ParentId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of children of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_children(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_group:id()]} | {error, term()}.
 get_children(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, children).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective children of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_children(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_group:id()]} | {error, term()}.
 get_eff_children(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_children).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific child among children of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_child(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    ChildId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_child(Client, GroupId, ChildId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {child, ChildId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective child among
+%% effective children of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_child(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    ChildId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_eff_child(Client, GroupId, ChildId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_child, ChildId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the privileges of specific child among children of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_child_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    ChildId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_child_privileges(Client, GroupId, ChildId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {child_privileges, ChildId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the effective privileges of specific effective child
+%% among effective children of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_child_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    ChildId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_eff_child_privileges(Client, GroupId, ChildId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_child_privileges, ChildId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of spaces of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_space:id()]} | {error, term()}.
 get_spaces(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, spaces).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective spaces of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_spaces(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_space:id()]} | {error, term()}.
 get_eff_spaces(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_spaces).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific space among spaces of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
 get_space(Client, GroupId, SpaceId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {space, SpaceId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective space among
+%% effective spaces of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_space(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
 get_eff_space(Client, GroupId, SpaceId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_space, SpaceId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective providers of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_providers(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_provider:id()]} | {error, term()}.
 get_eff_providers(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_providers).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective provider among
+%% effective providers of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_provider(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
 get_eff_provider(Client, GroupId, ProviderId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_provider, ProviderId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of handle_services of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_services(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_handle_service:id()]} | {error, term()}.
 get_handle_services(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, handle_services).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective handle_services of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_handle_services(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_handle_service:id()]} | {error, term()}.
 get_eff_handle_services(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_handle_services).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific handle_service among
+%% handle_services of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_service(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    HServiceId :: od_handle_service:id()) -> {ok, #{}} | {error, term()}.
 get_handle_service(Client, GroupId, HServiceId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {handle_service, HServiceId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective handle_service among
+%% effective handle_services of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_handle_service(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    HServiceId :: od_handle_service:id()) -> {ok, #{}} | {error, term()}.
 get_eff_handle_service(Client, GroupId, HServiceId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_handle_service, HServiceId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of handles of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handles(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_handle:id()]} | {error, term()}.
 get_handles(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, handles).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective handles of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_handles(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_handle:id()]} | {error, term()}.
 get_eff_handles(Client, GroupId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, eff_handles).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific handle among
+%% handles of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    HandleId :: od_handle:id()) -> {ok, #{}} | {error, term()}.
 get_handle(Client, GroupId, HandleId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {handle, HandleId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective handle among
+%% effective handles of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_handle(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    HandleId :: od_handle:id()) -> {ok, #{}} | {error, term()}.
 get_eff_handle(Client, GroupId, HandleId) ->
     n_entity_logic:get(Client, ?PLUGIN, GroupId, {eff_handle, HandleId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates privileges of specified user of given group.
+%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_user_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
+    Privs :: [privileges:group_privilege()]) -> ok | {error, term()}.
 update_user_privileges(Client, GroupId, UserId, Operation, Privs) when is_list(Privs) ->
     update_user_privileges(Client, GroupId, UserId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates privileges of specified user of given group.
+%% Privileges must be included in proper Data object, operation is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_user_privileges(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
 update_user_privileges(Client, GroupId, UserId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, GroupId, {user_privileges, UserId}, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates privileges of specified child of given group.
+%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_child_privileges(Client :: n_entity_logic:client(), ParentId :: od_group:id(),
+    ChildId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
+    Privs :: [privileges:group_privilege()]) -> ok | {error, term()}.
 update_child_privileges(Client, ParentId, ChildId, Operation, Privs) when is_list(Privs) ->
     update_child_privileges(Client, ParentId, ChildId, #{
         <<"operation">> => Operation,
         <<"privileges">> => Privs
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates privileges of specified child of given group.
+%% Privileges must be included in proper Data object, operation is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_child_privileges(Client :: n_entity_logic:client(), ParentId :: od_group:id(),
+    ChildId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
 update_child_privileges(Client, ParentId, ChildId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, ParentId, {child_privileges, ChildId}, Data).
 
 
-leave_group(Client, UserId, GroupId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, UserId, {parent, GroupId}).
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified parent group on behalf of given child group.
+%% @end
+%%--------------------------------------------------------------------
+-spec leave_group(Client :: n_entity_logic:client(), ChildId :: od_user:id(),
+    ParentId :: od_group:id()) -> ok | {error, term()}.
+leave_group(Client, ChildId, ParentId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, ChildId, {parent, ParentId}).
 
 
-leave_space(Client, UserId, SpaceId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, UserId, {space, SpaceId}).
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified space on behalf of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec leave_space(Client :: n_entity_logic:client(), GroupId :: od_user:id(),
+    SpaceId :: od_space:id()) -> ok | {error, term()}.
+leave_space(Client, GroupId, SpaceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, GroupId, {space, SpaceId}).
 
 
-leave_handle_service(Client, UserId, HServiceId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, UserId, {handle_service, HServiceId}).
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified od_handle_service on behalf of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec leave_handle_service(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    HServiceId :: od_handle_service:id()) -> ok | {error, term()}.
+leave_handle_service(Client, GroupId, HServiceId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, GroupId, {handle_service, HServiceId}).
 
 
-leave_handle(Client, UserId, HandleId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, UserId, {handle, HandleId}).
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified handle on behalf of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec leave_handle(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    HandleId :: od_handle:id()) -> ok | {error, term()}.
+leave_handle(Client, GroupId, HandleId) ->
+    n_entity_logic:delete(Client, ?PLUGIN, GroupId, {handle, HandleId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes specified user from given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_user(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> ok | {error, term()}.
 remove_user(Client, GroupId, UserId) ->
     n_entity_logic:delete(Client, ?PLUGIN, GroupId, {user, UserId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes specified child group from given parent group.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_group(Client :: n_entity_logic:client(), ParentId :: od_group:id(),
+    ChildId :: od_group:id()) -> ok | {error, term()}.
 remove_group(Client, ParentId, ChildId) ->
     n_entity_logic:delete(Client, ?PLUGIN, ParentId, {child, ChildId}).
 
@@ -629,6 +908,15 @@ exists(GroupId) ->
     od_group:exists(GroupId).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified effective user has specified
+%% effective privilege in given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_privilege(GroupOrId :: od_group:id() | #od_group{},
+    UserId :: od_user:id(), Privilege :: privileges:group_privileges()) ->
+    boolean().
 has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
     case od_group:get(GroupId) of
         {ok, #document{value = Group}} ->
@@ -639,6 +927,7 @@ has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
 has_eff_privilege(#od_group{eff_users = UsersPrivileges}, UserId, Privilege) ->
     {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -702,7 +991,3 @@ create_predefined_group(GroupId, Name, Privileges) ->
                     error
             end
     end.
-
-
-
-

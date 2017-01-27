@@ -272,8 +272,8 @@ group_routes() ->
         {<<"/groups/:id/users">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = users
         }},
-        {<<"/groups/:id/users">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = users
+        {<<"/groups/:id/users/:uid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
         }},
         {<<"/groups/:id/users/token">>, R#rest_req{
             method = post, entity_id = ?BINDING(id), resource = invite_user_token
@@ -365,8 +365,8 @@ group_routes() ->
         {<<"/groups/:id/children">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = children
         }},
-        {<<"/groups/:id/children">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = children
+        {<<"/groups/:id/children/:chid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {child, ?BINDING(chid)}
         }},
         {<<"/groups/:id/children/token">>, R#rest_req{
             method = post, entity_id = ?BINDING(id), resource = invite_group_token
@@ -502,8 +502,8 @@ space_routes() ->
         {<<"/spaces/:id/users">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = users
         }},
-        {<<"/spaces/:id/users">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = users
+        {<<"/spaces/:id/users/:uid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
         }},
         {<<"/spaces/:id/users/token">>, R#rest_req{
             method = post, entity_id = ?BINDING(id), resource = invite_user_token
@@ -541,8 +541,8 @@ space_routes() ->
         {<<"/spaces/:id/groups">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = groups
         }},
-        {<<"/spaces/:id/groups">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = groups
+        {<<"/spaces/:id/groups/:gid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
         }},
         {<<"/spaces/:id/groups/token">>, R#rest_req{
             method = post, entity_id = ?BINDING(id), resource = invite_group_token
@@ -754,8 +754,8 @@ handle_service_routes() ->
         {<<"/handle_services/:id/users">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = users
         }},
-        {<<"/handle_services/:id/users">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = users
+        {<<"/handle_services/:id/users/:uid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
         }},
         {<<"/handle_services/:id/users/:uid">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
@@ -786,8 +786,8 @@ handle_service_routes() ->
         {<<"/handle_services/:id/groups">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = groups
         }},
-        {<<"/handle_services/:id/groups">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = groups
+        {<<"/handle_services/:id/groups/:gid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
         }},
         {<<"/handle_services/:id/groups/:gid">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
@@ -855,8 +855,8 @@ handle_routes() ->
         {<<"/handles/:id/users">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = users
         }},
-        {<<"/handles/:id/users">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = users
+        {<<"/handles/:id/users/:uid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
         }},
         {<<"/handles/:id/users/:uid">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
@@ -887,8 +887,8 @@ handle_routes() ->
         {<<"/handles/:id/groups">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = groups
         }},
-        {<<"/handles/:id/groups">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = groups
+        {<<"/handles/:id/groups/:gid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
         }},
         {<<"/handles/:id/groups/:gid">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}

@@ -175,8 +175,7 @@ create(_Client, GroupId, join_space, #{<<"token">> := Macaroon}) ->
     ),
     {ok, SpaceId};
 
-create(_Client, GroupId, users, Data) ->
-    UserId = maps:get(<<"userId">>, Data),
+create(_Client, GroupId, {user, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
     entity_graph:add_relation(
         od_user, UserId,
@@ -185,8 +184,7 @@ create(_Client, GroupId, users, Data) ->
     ),
     {ok, UserId};
 
-create(_Client, GroupId, children, Data) ->
-    ChildGroupId = maps:get(<<"groupId">>, Data),
+create(_Client, GroupId, {child, ChildGroupId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
     entity_graph:add_relation(
         od_group, ChildGroupId,
@@ -550,16 +548,16 @@ authorize(create, _GroupId, join_group, ?USER(UserId)) ->
 authorize(create, _GroupId, join_space, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_JOIN_SPACE);
 
-authorize(create, _GroupId, users, ?USER(UserId)) ->
+authorize(create, _GroupId, {user, _UserId}, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_GROUPS_ADD_MEMBERS);
 
-authorize(create, _GroupId, children, ?USER(UserId)) ->
+authorize(create, _GroupId, {child, _ChildId}, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_GROUPS_ADD_MEMBERS);
 
 authorize(get, undefined, list, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_GROUPS_LIST);
 
-authorize(get, _GroupId, entity, ?USER(UserId)) ->[
+authorize(get, _GroupId, entity, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?GROUP_VIEW),
     auth_by_oz_privilege(UserId, ?OZ_GROUPS_LIST)
 ];
@@ -671,18 +669,20 @@ validate(create, join_space) -> #{
         <<"token">> => {token, ?SPACE_INVITE_GROUP_TOKEN}
     }
 };
-validate(create, users) -> #{
+validate(create, {user, _UserId}) -> #{
     required => #{
-        <<"userId">> => {binary, {exists, fun(Value) ->
-            n_user_logic:exists(Value) end}
-        }
+        resource => {any, {resource_exists, <<"User Id">>, fun({user, UserId}) ->
+            n_user_logic:exists(UserId) end}
+        },
+        <<"privileges">> => {list_of_atoms, privileges:group_privileges()}
     }
 };
-validate(create, children) -> #{
+validate(create, {child, _ChildId}) -> #{
     required => #{
-        <<"groupId">> => {binary, {exists, fun(Value) ->
-            n_group_logic:exists(Value) end}
-        }
+        resource => {any, {resource_exists, <<"Group Id">>, fun({child, ChildId}) ->
+            n_group_logic:exists(ChildId) end}
+        },
+        <<"privileges">> => {list_of_atoms, privileges:group_privileges()}
     }
 };
 validate(update, entity) -> #{

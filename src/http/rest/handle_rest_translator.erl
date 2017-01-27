@@ -43,12 +43,12 @@ response(create, _HandleId, {deprecated_child_privileges, _GroupId}, ok) ->
 response(create, undefined, entity, {ok, HandleId}) ->
     n_rest_handler:created_reply([<<"handles">>, HandleId]);
 
-response(create, HandleId, users, {ok, UserId}) ->
+response(create, HandleId, {user, UserId}, {ok, UserId}) ->
     n_rest_handler:created_reply(
         [<<"handles">>, HandleId, <<"users">>, UserId]
     );
 
-response(create, HandleId, groups, {ok, GroupId}) ->
+response(create, HandleId, {group, GroupId}, {ok, GroupId}) ->
     n_rest_handler:created_reply(
         [<<"handles">>, HandleId, <<"groups">>, GroupId]
     );

@@ -126,21 +126,16 @@ check_set_privileges(Config, Code, Issuer, SubjectId, SubjectType, Privileges) -
 % Tries to add a user or group to a space and asserts if returned code
 % matches the expected.
 check_add_member_to_space(Config, Code, Issuer, SubjectId, SubjectType, SpaceId) ->
-    {ReqPath, ReqBody} = case SubjectType of
-        od_user -> {
-            [<<"/spaces/">>, SpaceId, <<"/users">>],
-            #{<<"userId">> => SubjectId}
-        };
-        od_group -> {
-            [<<"/spaces/">>, SpaceId, <<"/groups">>],
-            #{<<"groupId">> => SubjectId}
-        }
+    ReqPath = case SubjectType of
+        od_user ->
+            [<<"/spaces/">>, SpaceId, <<"/users/">>, SubjectId];
+        od_group ->
+            [<<"/spaces/">>, SpaceId, <<"/groups/">>, SubjectId]
     end,
     rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => put,
             path => ReqPath,
-            body => ReqBody,
             auth => Issuer
         },
         expect => #{
@@ -796,7 +791,7 @@ list_users_test(Config) ->
     [
         ?assert(check_get_user_data(
             Config, 403, {user, TestUser}, UId, undefined)
-        % (But should be able to get data about himself)
+            % (But should be able to get data about himself)
         ) || {UId, _UName} <- ExpectedUsers -- [{TestUser, <<"tu">>}]
     ],
     % Lets grant privileges to the user
@@ -1876,6 +1871,7 @@ init_per_suite(Config) ->
 
 
 end_per_suite(_Config) ->
+    timer:sleep(12312322),
     hackney:stop(),
     application:stop(etls).
 
