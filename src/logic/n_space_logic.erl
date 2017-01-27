@@ -161,12 +161,12 @@ add_group(Client, SpaceId, GroupId) ->
     SpaceId :: od_space:id(), GroupId :: od_group:id(),
     PrivilegesOrData :: [privileges:space_privileges()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, SpaceId, GroupId, Privileges) when is_binary(GroupId) ->
+add_group(Client, SpaceId, GroupId, Privileges) when is_list(Privileges) ->
     add_group(Client, SpaceId, GroupId, #{
         <<"privileges">> => Privileges
     });
 add_group(Client, SpaceId, GroupId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, SpaceId, {child, GroupId}, Data).
+    n_entity_logic:create(Client, ?PLUGIN, SpaceId, {group, GroupId}, Data).
 
 
 get_users(Client, SpaceId) ->

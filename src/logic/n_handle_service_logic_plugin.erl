@@ -112,7 +112,7 @@ create(?USER, HServiceId, {user, UserId}, Data) ->
         od_handle_service, HServiceId,
         Privileges
     ),
-    {ok, HServiceId};
+    {ok, UserId};
 create(?USER, HServiceId, {group, GroupId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
     entity_graph:add_relation(
@@ -120,7 +120,7 @@ create(?USER, HServiceId, {group, GroupId}, Data) ->
         od_handle_service, HServiceId,
         Privileges
     ),
-    {ok, HServiceId}.
+    {ok, GroupId}.
 
 
 %%--------------------------------------------------------------------
@@ -394,6 +394,12 @@ authorize(delete, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
 -spec validate(Operation :: n_entity_logic:operation(),
     Resource :: resource()) ->
     n_entity_logic:validity_verificator().
+% TODO VFS-2918
+validate(create, {deprecated_user_privileges, UserId}) ->
+    validate(update, {user_privileges, UserId});
+% TODO VFS-2918
+validate(create, {deprecated_group_privileges, GroupId}) ->
+    validate(update, {user_privileges, GroupId});
 validate(create, entity) -> #{
     required => #{
         <<"name">> => {binary, non_empty},
@@ -405,15 +411,19 @@ validate(create, {user, _UserId}) -> #{
     required => #{
         resource => {any, {resource_exists, <<"User Id">>, fun({user, UserId}) ->
             n_user_logic:exists(UserId) end}
-        },
+        }
+    },
+    optional => #{
         <<"privileges">> => {list_of_atoms, privileges:handle_service_privileges()}
     }
 };
 validate(create, {group, _GroupId}) -> #{
     required => #{
-        resource => {any, {resource_exists, <<"Group Id">>, fun({child, GroupId}) ->
+        resource => {any, {resource_exists, <<"Group Id">>, fun({group, GroupId}) ->
             n_group_logic:exists(GroupId) end}
-        },
+        }
+    },
+    optional => #{
         <<"privileges">> => {list_of_atoms, privileges:handle_service_privileges()}
     }
 };
@@ -423,7 +433,17 @@ validate(update, entity) -> #{
         <<"proxyEndpoint">> => {binary, non_empty},
         <<"serviceProperties">> => {json, non_empty}
     }
-}.
+};
+validate(update, {user_privileges, _UserId}) -> #{
+    required => #{
+        <<"privileges">> => {list_of_atoms, privileges:handle_service_privileges()}
+    },
+    optional => #{
+        <<"operation">> => {atom, [set, grant, revoke]}
+    }
+};
+validate(update, {group_privileges, GroupId}) ->
+    validate(update, {user_privileges, GroupId}).
 
 
 %%--------------------------------------------------------------------

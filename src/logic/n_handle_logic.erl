@@ -102,7 +102,7 @@ delete(Client, HandleId) ->
 -spec add_user(Client :: n_entity_logic:client(),
     HandleId :: od_handle:id(), UserId :: od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
-add_user(Client, HandleId, UserId)  ->
+add_user(Client, HandleId, UserId) ->
     add_user(Client, HandleId, UserId, #{}).
 
 
@@ -134,7 +134,7 @@ add_user(Client, HandleId, UserId, Data) ->
 -spec add_group(Client :: n_entity_logic:client(),
     HandleId :: od_handle:id(), GroupId :: od_group:id()) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, HandleId, GroupId)  ->
+add_group(Client, HandleId, GroupId) ->
     add_group(Client, HandleId, GroupId, #{}).
 
 
@@ -150,12 +150,12 @@ add_group(Client, HandleId, GroupId)  ->
     HandleId :: od_handle:id(), GroupId :: od_group:id(),
     PrivilegesOrData :: [privileges:handle_privileges()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, HandleId, GroupId, Privileges) when is_binary(GroupId) ->
+add_group(Client, HandleId, GroupId, Privileges) when is_list(Privileges) ->
     add_group(Client, HandleId, GroupId, #{
         <<"privileges">> => Privileges
     });
 add_group(Client, HandleId, GroupId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, HandleId, {child, GroupId}, Data).
+    n_entity_logic:create(Client, ?PLUGIN, HandleId, {group, GroupId}, Data).
 
 
 get_users(Client, HandleId) ->

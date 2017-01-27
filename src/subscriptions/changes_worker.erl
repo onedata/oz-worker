@@ -79,7 +79,7 @@ handle(healthcheck) ->
 handle(stream_presence_check) ->
     case global:whereis_name(?STREAM_GLOBAL_NAME) of
         undefined -> start_changes_stream();
-        _ -> ?info("Stream detected - presence check OK")
+        _ -> ?debug("Stream detected - presence check OK")
     end, ok;
 
 handle(_Request) ->

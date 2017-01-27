@@ -53,7 +53,7 @@ put(Seq, Doc, Model) ->
                 {_, _, FinalCache} = gb_trees:take_smallest(UpdatedCache),
                 {ok, State#subscriptions_state{cache = FinalCache}};
             false ->
-                ?warning("Cache not saturated - size ~p of ~p", [Size, Limit]),
+                ?debug("Cache not saturated - size ~p of ~p", [Size, Limit]),
                 {ok, State#subscriptions_state{cache = UpdatedCache}}
         end
     end),

@@ -40,7 +40,7 @@ response(create, _SpaceId, {deprecated_create_share, ShareId}, {ok, ShareId}) ->
 response(create, _SpaceId, {deprecated_user_privileges, _UserId}, ok) ->
     n_rest_handler:ok_no_content_reply();
 % TODO VFS-2918
-response(create, _SpaceId, {deprecated_child_privileges, _GroupId}, ok) ->
+response(create, _SpaceId, {deprecated_group_privileges, _GroupId}, ok) ->
     n_rest_handler:ok_no_content_reply();
 
 response(create, undefined, entity, {ok, SpaceId}) ->

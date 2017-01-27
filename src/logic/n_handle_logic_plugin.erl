@@ -131,7 +131,7 @@ create(?USER, HandleId, {user, UserId}, Data) ->
         od_handle, HandleId,
         Privileges
     ),
-    {ok, HandleId};
+    {ok, UserId};
 create(?USER, HandleId, {group, GroupId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
     entity_graph:add_relation(
@@ -139,7 +139,7 @@ create(?USER, HandleId, {group, GroupId}, Data) ->
         od_handle, HandleId,
         Privileges
     ),
-    {ok, HandleId}.
+    {ok, GroupId}.
 
 
 %%--------------------------------------------------------------------
@@ -348,7 +348,9 @@ authorize(create, undefined, entity, ?USER(UserId)) ->
     {data_dependent, fun(Data) ->
         HServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
         ShareId = maps:get(<<"resourceId">>, Data, <<"">>),
-        {ok, #od_share{space = SpaceId}} = od_share:get(ShareId),
+        {ok, #od_share{space = SpaceId}} = ?throw_on_failure(
+            n_share_logic_plugin:get_entity(ShareId)
+        ),
         CanManageShares = n_space_logic:has_eff_privilege(
             SpaceId, UserId, ?SPACE_MANAGE_SHARES
         ),
@@ -419,6 +421,12 @@ authorize(delete, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
 -spec validate(Operation :: n_entity_logic:operation(),
     Resource :: resource()) ->
     n_entity_logic:validity_verificator().
+% TODO VFS-2918
+validate(create, {deprecated_user_privileges, UserId}) ->
+    validate(update, {user_privileges, UserId});
+% TODO VFS-2918
+validate(create, {deprecated_group_privileges, GroupId}) ->
+    validate(update, {user_privileges, GroupId});
 validate(create, entity) -> #{
     required => #{
         <<"handleServiceId">> => {binary, {exists, fun(Value) ->
@@ -435,23 +443,37 @@ validate(create, {user, _UserId}) -> #{
     required => #{
         resource => {any, {resource_exists, <<"User Id">>, fun({user, UserId}) ->
             n_user_logic:exists(UserId) end}
-        },
-        <<"privileges">> => {list_of_atoms, privileges:handle_service_privileges()}
+        }
+    },
+    optional => #{
+        <<"privileges">> => {list_of_atoms, privileges:handle_privileges()}
     }
 };
 validate(create, {group, _GroupId}) -> #{
     required => #{
-        resource => {any, {resource_exists, <<"Group Id">>, fun({child, GroupId}) ->
+        resource => {any, {resource_exists, <<"Group Id">>, fun({group, GroupId}) ->
             n_group_logic:exists(GroupId) end}
-        },
-        <<"privileges">> => {list_of_atoms, privileges:handle_service_privileges()}
+        }
+    },
+    optional => #{
+        <<"privileges">> => {list_of_atoms, privileges:handle_privileges()}
     }
 };
 validate(update, entity) -> #{
     required => #{
         <<"metadata">> => {binary, non_empty}
     }
-}.
+};
+validate(update, {user_privileges, _UserId}) -> #{
+    required => #{
+        <<"privileges">> => {list_of_atoms, privileges:handle_privileges()}
+    },
+    optional => #{
+        <<"operation">> => {atom, [set, grant, revoke]}
+    }
+};
+validate(update, {group_privileges, GroupId}) ->
+    validate(update, {user_privileges, GroupId}).
 
 
 %%--------------------------------------------------------------------

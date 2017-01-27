@@ -673,7 +673,9 @@ validate(create, {user, _UserId}) -> #{
     required => #{
         resource => {any, {resource_exists, <<"User Id">>, fun({user, UserId}) ->
             n_user_logic:exists(UserId) end}
-        },
+        }
+    },
+    optional => #{
         <<"privileges">> => {list_of_atoms, privileges:group_privileges()}
     }
 };
@@ -681,7 +683,9 @@ validate(create, {child, _ChildId}) -> #{
     required => #{
         resource => {any, {resource_exists, <<"Group Id">>, fun({child, ChildId}) ->
             n_group_logic:exists(ChildId) end}
-        },
+        }
+    },
+    optional => #{
         <<"privileges">> => {list_of_atoms, privileges:group_privileges()}
     }
 };

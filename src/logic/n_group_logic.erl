@@ -427,7 +427,7 @@ add_group(Client, GroupId, ChildGroupId)  ->
     GroupId :: od_group:id(), ChildGroupId :: od_group:id(),
     PrivilegesOrData :: [privileges:group_privileges()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, GroupId, ChildGroupId, Privileges) when is_binary(ChildGroupId) ->
+add_group(Client, GroupId, ChildGroupId, Privileges) when is_list(Privileges) ->
     add_group(Client, GroupId, ChildGroupId, #{
         <<"privileges">> => Privileges
     });

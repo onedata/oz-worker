@@ -296,6 +296,12 @@ delete(SpaceId, {group, GroupId}) ->
     entity_graph:remove_relation(
         od_group, GroupId,
         od_space, SpaceId
+    );
+
+delete(SpaceId, {provider, ProviderId}) ->
+    entity_graph:remove_relation(
+        od_space, SpaceId,
+        od_provider, ProviderId
     ).
 
 
@@ -551,15 +557,19 @@ validate(create, {user, _UserId}) -> #{
     required => #{
         resource => {any, {resource_exists, <<"User Id">>, fun({user, UserId}) ->
             n_user_logic:exists(UserId) end}
-        },
+        }
+    },
+    optional => #{
         <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
     }
 };
 validate(create, {group, _GroupId}) -> #{
     required => #{
-        resource => {any, {resource_exists, <<"Group Id">>, fun({child, GroupId}) ->
+        resource => {any, {resource_exists, <<"Group Id">>, fun({group, GroupId}) ->
             n_group_logic:exists(GroupId) end}
-        },
+        }
+    },
+    optional => #{
         <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
     }
 };

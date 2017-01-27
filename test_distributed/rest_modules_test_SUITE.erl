@@ -1454,20 +1454,16 @@ add_user_to_service_test(Config) ->
     UserId = ?config(userId, Config),
     UserId2 = ?config(userId2, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
+    Result = add_user_to_handle_service(Id, UserId2, UserReqParams),
 
-    Result = add_user_to_handle_service(Id, UserId, UserReqParams),
-    Result2 = add_user_to_handle_service(Id, UserId2, UserReqParams),
-
-    ?assertEqual(204, Result),
-    ?assertEqual(204, Result2).
+    ?assertEqual(201, Result).
 
 list_service_users_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
     UserId2 = ?config(userId2, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
-    204 = add_user_to_handle_service(Id, UserId, UserReqParams),
-    204 = add_user_to_handle_service(Id, UserId2, UserReqParams),
+    201 = add_user_to_handle_service(Id, UserId2, UserReqParams),
 
     Users = list_users_of_handle_service(Id, UserReqParams),
 
@@ -1481,8 +1477,7 @@ delete_user_from_service_test(Config) ->
     UserId = ?config(userId, Config),
     UserId2 = ?config(userId2, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
-    204 = add_user_to_handle_service(Id, UserId, UserReqParams),
-    204 = add_user_to_handle_service(Id, UserId2, UserReqParams),
+    201 = add_user_to_handle_service(Id, UserId2, UserReqParams),
 
     Result = delete_user_from_handle_service(Id, UserId, UserReqParams),
 
@@ -1498,7 +1493,7 @@ add_group_to_service_test(Config) ->
 
     Result = add_group_to_handle_service(Id, GroupId, UserReqParams),
 
-    ?assertEqual(204, Result).
+    ?assertEqual(201, Result).
 
 list_service_groups_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1506,8 +1501,8 @@ list_service_groups_test(Config) ->
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
     GroupId1 = create_group(Config, <<"test_group1">>, <<"organization">>, UserReqParams),
     GroupId2 = create_group(Config, <<"test_group2">>, <<"organization">>, UserReqParams),
-    204 = add_group_to_handle_service(Id, GroupId1, UserReqParams),
-    204 = add_group_to_handle_service(Id, GroupId2, UserReqParams),
+    201 = add_group_to_handle_service(Id, GroupId1, UserReqParams),
+    201 = add_group_to_handle_service(Id, GroupId2, UserReqParams),
 
     Groups = list_groups_of_handle_service(Id, UserReqParams),
 
@@ -1520,7 +1515,7 @@ delete_group_from_service_test(Config) ->
     UserId = ?config(userId, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
     GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
-    204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+    201 = add_group_to_handle_service(Id, GroupId, UserReqParams),
 
     Result = delete_group_from_handle_service(Id, GroupId, UserReqParams),
 
@@ -1531,7 +1526,7 @@ get_user_privileges_for_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
-    204 = add_user_to_handle_service(Id, UserId, UserReqParams),
+    201 = add_user_to_handle_service(Id, UserId, UserReqParams),
 
     Privileges = get_user_privileges_for_handle_service(Id, UserId, UserReqParams),
 
@@ -1558,7 +1553,7 @@ get_group_privileges_for_service_test(Config) ->
     UserId = ?config(userId, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
     GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
-    204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+    201 = add_group_to_handle_service(Id, GroupId, UserReqParams),
 
     Privileges = get_group_privileges_for_handle_service(Id, GroupId, UserReqParams),
 
@@ -1573,7 +1568,7 @@ set_group_privileges_for_service_test(Config) ->
     UserId = ?config(userId, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
     GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
-    204 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+    201 = add_group_to_handle_service(Id, GroupId, UserReqParams),
     Privileges = #{<<"privileges">> => [<<"delete_handle_service">>, <<"view_handle_service">>]},
 
     Result = set_group_privileges_for_handle_service(Id, GroupId, Privileges, UserReqParams),
@@ -1687,7 +1682,7 @@ add_user_to_handle_test(Config) ->
 
     Result = add_user_to_handle(HId, UserId, UserReqParams),
 
-    ?assertEqual(204, Result).
+    ?assertEqual(201, Result).
 
 list_handle_users_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1697,8 +1692,8 @@ list_handle_users_test(Config) ->
     create_space_and_share(Config, ?SHARE_ID_1, UserReqParams),
     HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
 
-    204 = add_user_to_handle(HId, UserId, UserReqParams),
-    204 = add_user_to_handle(HId, UserId2, UserReqParams),
+    201 = add_user_to_handle(HId, UserId, UserReqParams),
+    201 = add_user_to_handle(HId, UserId2, UserReqParams),
 
     Users = list_users_of_handle(HId, UserReqParams),
 
@@ -1714,8 +1709,8 @@ delete_user_from_handle_test(Config) ->
     Id = add_handle_service(Config, ?DOI_SERVICE, UserId, UserReqParams),
     create_space_and_share(Config, ?SHARE_ID_1, UserReqParams),
     HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
-    204 = add_user_to_handle(HId, UserId, UserReqParams),
-    204 = add_user_to_handle(HId, UserId2, UserReqParams),
+    201 = add_user_to_handle(HId, UserId, UserReqParams),
+    201 = add_user_to_handle(HId, UserId2, UserReqParams),
 
     Result = delete_user_from_handle(HId, UserId, UserReqParams),
 
@@ -1733,7 +1728,7 @@ add_group_to_handle_test(Config) ->
 
     Result = add_group_to_handle(HId, GroupId, UserReqParams),
 
-    ?assertEqual(204, Result).
+    ?assertEqual(201, Result).
 
 list_handle_groups_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -1743,8 +1738,8 @@ list_handle_groups_test(Config) ->
     HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
     GroupId1 = create_group(Config, <<"test_group1">>, <<"organization">>, UserReqParams),
     GroupId2 = create_group(Config, <<"test_group2">>, <<"organization">>, UserReqParams),
-    204 = add_group_to_handle(HId, GroupId1, UserReqParams),
-    204 = add_group_to_handle(HId, GroupId2, UserReqParams),
+    201 = add_group_to_handle(HId, GroupId1, UserReqParams),
+    201 = add_group_to_handle(HId, GroupId2, UserReqParams),
 
     Groups = list_groups_of_handle(HId, UserReqParams),
 
@@ -1759,7 +1754,7 @@ delete_group_from_handle_test(Config) ->
     create_space_and_share(Config, ?SHARE_ID_1, UserReqParams),
     HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
     GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
-    204 = add_group_to_handle(HId, GroupId, UserReqParams),
+    201 = add_group_to_handle(HId, GroupId, UserReqParams),
 
     Result = delete_group_from_handle(HId, GroupId, UserReqParams),
 
@@ -1772,7 +1767,7 @@ get_user_privileges_for_handle_test(Config) ->
     Id = add_handle_service(Config, ?DOI_SERVICE, UserId, UserReqParams),
     create_space_and_share(Config, ?SHARE_ID_1, UserReqParams),
     HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
-    204 = add_user_to_handle(HId, UserId, UserReqParams),
+    201 = add_user_to_handle(HId, UserId, UserReqParams),
 
     Privileges = get_user_privileges_for_handle(HId, UserId, UserReqParams),
 
@@ -1803,7 +1798,7 @@ get_group_privileges_for_handle_test(Config) ->
     create_space_and_share(Config, ?SHARE_ID_1, UserReqParams),
     HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
     GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
-    204 = add_group_to_handle(HId, GroupId, UserReqParams),
+    201 = add_group_to_handle(HId, GroupId, UserReqParams),
 
     Privileges = get_group_privileges_for_handle(HId, GroupId, UserReqParams),
 
@@ -1821,7 +1816,7 @@ set_group_privileges_for_handle_test(Config) ->
         create_space_and_share(Config, ?SHARE_ID_1, UserReqParams),
         HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
         GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
-        204 = add_group_to_handle(HId, GroupId, UserReqParams),
+        201 = add_group_to_handle(HId, GroupId, UserReqParams),
         Privileges = #{<<"privileges">> => [<<"view_handle">>]},
 
         Result = set_group_privileges_for_handle(HId, GroupId, Privileges, UserReqParams),
@@ -1976,6 +1971,7 @@ init_per_testcase(_Default, Config) ->
 end_per_testcase(_, Config) ->
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     unmock_handle_proxy(Config),
+    oz_test_utils:delete_all_entities(Config),
     file:delete(KeyFile),
     file:delete(CSRFile),
     file:delete(CertFile).
@@ -2920,11 +2916,12 @@ create_space_and_share(Config, ShareId, {RestAddress, Headers, Options}) ->
     SpaceId = create_space_for_user(Config, <<"spaceName">>, {RestAddress, Headers, Options}),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
     Address = <<(list_to_binary(RestAddress))/binary, "/spaces/", SpaceId/binary, "/shares/", ShareId/binary>>,
-    BodyJson = #{
+    BodyJson = json_utils:encode_map(#{
         <<"name">> => <<"whatever">>,
         <<"rootFileId">> => <<"whatever">>
-    },
+    }),
     Response = do_request(Address, Headers, put, BodyJson, Options),
+    ct:print("Response: ~p", [Response]),
     ?assertEqual(204, get_response_status(Response)).
 
 
@@ -3037,20 +3034,14 @@ mock_handle_proxy(Config) ->
     ok = test_utils:mock_expect(Nodes, od_share, get,
         fun
             (?SHARE_ID_1) ->
-                {ok, #document{value = #od_share{public_url = ?SHARE_1_PUBLIC_URL}}};
+                {ok, #document{value = Share} = Doc} = meck:passthrough([?SHARE_ID_1]),
+                ct:print("YYY1: ~p", [Doc#document{value = Share#od_share{public_url = ?SHARE_1_PUBLIC_URL}}]),
+                {ok, Doc#document{value = Share#od_share{public_url = ?SHARE_1_PUBLIC_URL}}};
             (?SHARE_ID_2) ->
-                {ok, #document{value = #od_share{public_url = ?SHARE_2_PUBLIC_URL}}};
+                {ok, #document{value = Share} = Doc} = meck:passthrough([?SHARE_ID_2]),
+                ct:print("YYY2: ~p", [Doc#document{value = Share#od_share{public_url = ?SHARE_2_PUBLIC_URL}}]),
+                {ok, Doc#document{value = Share#od_share{public_url = ?SHARE_2_PUBLIC_URL}}};
             (_) ->
-                meck:passthrough()
-        end),
-
-    ok = test_utils:mock_expect(Nodes, od_share, update,
-        fun
-            (?SHARE_ID_1, _UpdateFun) ->
-                {ok, whatever};
-            (?SHARE_ID_2, _UpdateFun) ->
-                {ok, whatever};
-            (_, _) ->
                 meck:passthrough()
         end),
 

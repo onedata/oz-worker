@@ -115,7 +115,11 @@ create(_, ProviderId, support, Data) ->
     {ok, SpaceId};
 
 create(_, undefined, check_my_ports, Data) ->
-    test_connection(Data).
+    try
+        test_connection(Data)
+    catch _:_ ->
+        ?ERROR_INTERNAL_SERVER_ERROR
+    end.
 
 
 get(_, undefined, undefined, list) ->

@@ -41,8 +41,8 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
 {internal, fun((entity()) -> boolean())} |
 {external, fun(() -> boolean())}.
 
--type type_validator() :: atom | list_of_atoms | binary | list_of_binaries |
-integer | float | json | token.
+-type type_validator() :: any | atom | list_of_atoms | binary |
+list_of_binaries | integer | float | json | token.
 
 -type value_validator() :: any | non_empty |
 {not_lower_than, integer()} | {not_greater_than, integer()} |
@@ -666,6 +666,8 @@ transform_and_check_value(Key, Data, Validator) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec check_type(type_validator(), Key :: binary(), Value :: term()) -> term().
+check_type(any, _Key, Term) ->
+    Term;
 check_type(atom, _Key, Atom) when is_atom(Atom) ->
     Atom;
 check_type(atom, Key, Binary) when is_binary(Binary) ->

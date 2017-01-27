@@ -634,7 +634,8 @@ deserialize_macaroon(Data) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns body that was sent in HTTP request.
+%% Returns body that was sent in HTTP request. Empty body is treated as empty
+%% JSON object (without harm for server logic).
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(Req :: cowboy_req:req()) ->
@@ -642,7 +643,10 @@ deserialize_macaroon(Data) ->
 get_data(Req) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
     Data = try
-        json_utils:decode_map(Body)
+        case Body of
+            <<"">> -> #{};
+            _ -> json_utils:decode_map(Body)
+        end
     catch _:_ ->
         throw(?ERROR_MALFORMED_DATA)
     end,

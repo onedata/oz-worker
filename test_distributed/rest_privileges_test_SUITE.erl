@@ -1871,7 +1871,6 @@ init_per_suite(Config) ->
 
 
 end_per_suite(_Config) ->
-    timer:sleep(12312322),
     hackney:stop(),
     application:stop(etls).
 

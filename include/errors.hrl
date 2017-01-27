@@ -74,7 +74,7 @@
 ).
 -define(ERROR_ALIAS_OCCUPIED, {error, alias_occupied}).
 -define(ERROR_RESOURCE_DOES_NOT_EXIST(__ReadableIdentifier),
-    {error, resource_does_not_exist, __ReadableIdentifier}).
+    {error, {resource_does_not_exist, __ReadableIdentifier}}).
 
 -define(ERROR_CANNOT_DELETE_ENTITY(__EntityModel, __EntityId),
     {error, {cannot_delete_entity, __EntityModel, __EntityId}}
