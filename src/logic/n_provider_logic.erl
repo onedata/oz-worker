@@ -6,7 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-
+%%% This module encapsulates all provider logic functionalities.
+%%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(n_provider_logic).
@@ -55,7 +56,20 @@
     check_provider_connectivity/1
 ]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new space document in database. Has two variants:
+%% 1) Space Name is given explicitly
+%% 2) Space name is provided in a proper Data object.
+% TODO
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(), NameOrData :: binary() | #{}) ->
+    {ok, od_space:id()} | {error, term()}.
 create(Client, Name, URLs, RedirectionPoint, CSR) ->
     create(Client, #{
         <<"name">> => Name,

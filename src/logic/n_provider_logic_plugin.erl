@@ -54,6 +54,14 @@ get_entity(ProviderId) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 create(_, _, entity, Data) ->
     Name = case maps:get(<<"name">>, Data, undefined) of
         undefined ->
@@ -122,6 +130,14 @@ create(_, undefined, check_my_ports, Data) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
+    Entity :: n_entity_logic:entity(), Resource :: resource()) ->
+    n_entity_logic:result().
 get(_, undefined, undefined, list) ->
     {ok, ProviderDocs} = od_provider:list(),
     {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]};
@@ -157,6 +173,13 @@ get(_, undefined, undefined, {check_my_ip, Req}) ->
     {ok, list_to_binary(inet_parse:ntoa(Ip))}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a resource based on EntityId, Resource identifier and Data.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    n_entity_logic:data()) -> n_entity_logic:result().
 update(ProviderId, entity, Data) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
         #od_provider{
@@ -181,6 +204,13 @@ update(ProviderId, {space, SpaceId}, Data) ->
     ).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes a resource based on EntityId and Resource identifier.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
+    n_entity_logic:result().
 delete(ProviderId, entity) ->
     entity_graph:delete_with_relations(od_provider, ProviderId);
 
@@ -190,6 +220,20 @@ delete(ProviderId, {space, SpaceId}) ->
     ).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(Resource :: resource()) ->
+    n_entity_logic:existence_verificator()|
+    [n_entity_logic:existence_verificator()].
 exists({space, SpaceId}) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{spaces = Spaces}) ->
@@ -216,6 +260,22 @@ exists(_) ->
     end}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns existence verificators for given Resource identifier.
+%% Existence verificators can be internal, which means they operate on the
+%% entity to which the resource corresponds, or external - independent of
+%% the entity. If there are multiple verificators, they will be checked in
+%% sequence until one of them returns true.
+%% Implicit verificators 'true' | 'false' immediately stop the verification
+%% process with given result.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize(Operation :: n_entity_logic:operation(),
+    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
+    Client :: n_entity_logic:client()) ->
+    n_entity_logic:authorization_verificator() |
+    [authorization_verificator:existence_verificator()].
 authorize(create, undefined, check_my_ports, _) ->
     true;
 
@@ -292,6 +352,18 @@ authorize(delete, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns validity verificators for given Operation and Resource identifier.
+%% Returns a map with 'required', 'optional' and 'at_least_one' keys.
+%% Under each of them, there is a map:
+%%      Key => {type_verificator, value_verificator}
+%% Which means how value of given Key should be validated.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate(Operation :: n_entity_logic:operation(),
+    Resource :: resource()) ->
+    n_entity_logic:validity_verificator().
 validate(create, entity) -> #{
     required => #{
         <<"urls">> => {list_of_binaries, non_empty},
@@ -350,10 +422,29 @@ validate(update, {space, _SpaceId}) -> #{
 }.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the entity with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
 entity_to_string(SpaceId) ->
     od_provider:to_string(SpaceId).
 
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if given user is an
+%% effective user of the provider represented by entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_membership(UserId :: od_user:id()) ->
+    n_entity_logic:authorization_verificator().
 auth_by_membership(UserId) ->
     {internal, fun(#od_provider{eff_users = EffUsers}) ->
         maps:is_key(UserId, EffUsers)
@@ -406,6 +497,13 @@ test_connection([{Key, _} | _], _) ->
     throw(?ERROR_BAD_DATA(Key)).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Reads minimum space support size from app.config env variable.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_min_support_size() -> integer().
 get_min_support_size() ->
     {ok, MinSupportSize} = application:get_env(
         oz_worker, minimum_space_support_size

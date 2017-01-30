@@ -6,12 +6,12 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-
+%%% This module encapsulates all share logic functionalities.
+%%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(n_share_logic).
 -author("Lukasz Opiola").
-
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -40,34 +40,96 @@
     share_id_to_redirect_url/1
 ]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
 
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new share document in database based on Share Id, Name,
+%% RootFileId and parent SpaceId.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(), ShareId :: od_share:id(),
+    Name :: binary(), RootFileId :: binary(), SpaceId :: od_space:id()) ->
+    {ok, od_share:id()} | {error, term()}.
 create(Client, ShareId, Name, RootFileId, SpaceId) ->
     create(Client, #{
         <<"shareId">> => ShareId,
         <<"name">> => Name,
-        <<"spaceId">> => SpaceId,
+        <<"shareId">> => SpaceId,
         <<"rootFileId">> => RootFileId
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new share document in database. Share Id, Name,
+%% RootFileId and parent SpaceId are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(), Data :: #{}) ->
+    {ok, od_share:id()} | {error, term()}.
 create(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a share record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: n_entity_logic:client(), ShareId :: od_share:id()) ->
+    {ok, #od_share{}} | {error, term()}.
 get(Client, ShareId) ->
     n_entity_logic:get(Client, ?PLUGIN, entity, ShareId).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves information about a share record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_data(Client :: n_entity_logic:client(), ShareId :: od_share:id()) ->
+    {ok, #{}} | {error, term()}.
 get_data(Client, ShareId) ->
     n_entity_logic:get(Client, ?PLUGIN, data, ShareId).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Lists all shares (their ids) in database.
+%% @end
+%%--------------------------------------------------------------------
+-spec list(Client :: n_entity_logic:client()) ->
+    {ok, [od_share:id()]} | {error, term()}.
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates information of given share (currently only name is supported).
+%% Has two variants:
+%% 1) Share Name is given explicitly
+%% 2) Share name is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(Client :: n_entity_logic:client(), ShareId :: od_share:id(),
+    Data :: #{}) -> ok | {error, term()}.
+update(Client, ShareId, NewName) when is_binary(NewName) ->
+    update(Client, ShareId, #{<<"name">> => NewName});
 update(Client, ShareId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, ShareId, entity, Data).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given share from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(Client :: n_entity_logic:client(), ShareId :: od_share:id()) ->
+    ok | {error, term()}.
 delete(Client, ShareId) ->
     n_entity_logic:delete(Client, ?PLUGIN, ShareId, entity).
 
