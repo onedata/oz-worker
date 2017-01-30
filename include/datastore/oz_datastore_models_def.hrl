@@ -73,8 +73,8 @@
 % Groups and spaces must be processed top-down and bottom-up, as they hold the
 % information about users' memberships and members of entities.
 %
-% After a new relation appears, the parent is marked bottom_up_dirty and the
-% child is marked top_down_dirty.
+% After a new relation appears (or existing one is changed or deleted),
+% the parent is marked bottom_up_dirty and the child is marked top_down_dirty.
 
 %% This record defines a user and is handled as a database document
 -record(od_user, {

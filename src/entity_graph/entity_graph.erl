@@ -26,12 +26,9 @@
 %%% documents update, they are marked as dirty, and added to the queue in
 %%% effective graph state to be processed. After that, the modifying process
 %%% schedules a refresh by spawning an async process.
-%%% Operations that concern group relations cannot be performed while
-%%% effective graph is dirty. They will wait on critical section lock until
-%%% the graph has been fully recalculated. This is because groups can be
-%%% nested, but cycles must be disallowed.
-%%% Other operations can be performed in parallel, as effective graph logic
-%%% operates only on effective relations, so no conflicts are possible.
+%%% All operations concerning relations can be performed in parallel,
+%%% as effective graph logic operates only on effective relations, so no
+%%% conflicts are possible.
 %%% The relations introduced by other operations do not have possible negative
 %%% effects, they will just mark some records as dirty and the effective graph
 %%% will become eventually consistent.
