@@ -62,14 +62,13 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new space document in database. Has two variants:
-%% 1) Space Name is given explicitly
-%% 2) Space name is provided in a proper Data object.
-% TODO
+%% Creates a new provider document in database based on Name, URLs,
+%% RedirectionPoint and CSR (Certificate Signing Request).
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), NameOrData :: binary() | #{}) ->
-    {ok, od_space:id()} | {error, term()}.
+-spec create(Client :: n_entity_logic:client(), Name :: binary(),
+    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+    {ok, od_provider:id()} | {error, term()}.
 create(Client, Name, URLs, RedirectionPoint, CSR) ->
     create(Client, #{
         <<"name">> => Name,
@@ -77,6 +76,17 @@ create(Client, Name, URLs, RedirectionPoint, CSR) ->
         <<"redirectionPoint">> => RedirectionPoint,
         <<"csr">> => CSR
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new provider document in database based on Name, URLs,
+%% RedirectionPoint, CSR (Certificate Signing Request), Latitude and Longitude.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(), Name :: binary(),
+    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+    {ok, od_provider:id()} | {error, term()}.
 create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
     create(Client, #{
         <<"name">> => Name,
@@ -86,53 +96,197 @@ create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new provider document in database. Name, URLs, RedirectionPoint and
+%% CSR (Certificate Signing Request) are provided in a
+%% proper Data object, Latitude and Longitude are optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(), Name :: binary(),
+    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+    {ok, od_provider:id()} | {error, term()}.
 create(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% TODO This is a developer functionality and should be removed when
+%% TODO VFS-2550 is ready.
+%% Creates a new provider document in database. UUID, Name, URLs,
+%% RedirectionPoint and CSR (Certificate Signing Request) are provided in a
+%% proper Data object, Latitude and Longitude are optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(Client :: n_entity_logic:client(), Name :: binary(),
+    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+    {ok, od_provider:id()} | {error, term()}.
 create_dev(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, entity_dev, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a provider record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, #od_provider{}} | {error, term()}.
 get(Client, ProviderId) ->
     n_entity_logic:get(Client, ?PLUGIN, ProviderId, entity).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves information about a provider record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_data(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, #{}} | {error, term()}.
 get_data(Client, ProviderId) ->
     n_entity_logic:get(Client, ?PLUGIN, ProviderId, data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Lists all providers (their ids) in database.
+%% @end
+%%--------------------------------------------------------------------
+-spec list(Client :: n_entity_logic:client()) ->
+    {ok, [od_provider:id()]} | {error, term()}.
 list(Client) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, list).
-get_eff_users(Client, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_users).
-get_eff_user(Client, ProviderId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_user, UserId}).
-get_eff_groups(Client, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_groups).
-get_eff_group(Client, ProviderId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_group, GroupId}).
-get_spaces(Client, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, spaces).
-get_space(Client, ProviderId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
 
 
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates information of given provider. Supports updating Name, URLs,
+%% RedirectionPoint, Latitude and Longitude.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+    Data :: #{}) -> ok | {error, term()}.
 update(Client, ProviderId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, ProviderId, entity, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given provider from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+    ok | {error, term()}.
 delete(Client, ProviderId) ->
     n_entity_logic:delete(Client, ?PLUGIN, ProviderId, entity).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space based on support_space_token and support size.
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+    Token :: token:id() | macaroon:macaroon(), SupportSize :: integer()) ->
+    {ok, od_space:id()} | {error, term()}.
 support_space(Client, ProviderId, Token, SupportSize) ->
     support_space(Client, ProviderId, #{
         <<"token">> => Token, <<"size">> => SupportSize
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space. Token (support_space_token) and SupportSize
+%% are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+    Data :: #{}) -> {ok, od_space:id()} | {error, term()}.
 support_space(Client, ProviderId, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, ProviderId, support, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective users of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_users(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, [od_user:id()]} | {error, term()}.
+get_eff_users(Client, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_users).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective user among
+%% effective users of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+get_eff_user(Client, ProviderId, UserId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_user, UserId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective groups of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_groups(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, [od_group:id()]} | {error, term()}.
+get_eff_groups(Client, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_groups).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective group among
+%% effective groups of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_group(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+    GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
+get_eff_group(Client, ProviderId, GroupId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_group, GroupId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of spaces of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, [od_space:id()]} | {error, term()}.
+get_spaces(Client, ProviderId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, spaces).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific space among spaces of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
+get_space(Client, ProviderId, SpaceId) ->
+    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates support size for specified space of given provider. Has two variants:
+%% 1) New support size is given explicitly
+%% 2) New support size is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_support_size(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id(), SupSizeOrData :: integer() | #{}) -> ok | {error, term()}.
 update_support_size(Client, ProviderId, SpaceId, SupSize) when is_integer(SupSize) ->
     update_support_size(Client, ProviderId, SpaceId, #{
         <<"size">> => SupSize
@@ -141,14 +295,36 @@ update_support_size(Client, ProviderId, SpaceId, Data) ->
     n_entity_logic:update(Client, ?PLUGIN, ProviderId, {space, SpaceId}, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Revokes support for specified space on behalf of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec revoke_support(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> ok | {error, term()}.
 revoke_support(Client, ProviderId, SpaceId) ->
     n_entity_logic:delete(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Performs port check operation by requesting all specified URLs and returning
+%% whether the requests succeeded.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_my_ports(Client :: n_entity_logic:client(), Data :: #{}) ->
+    ok | {error, term()}.
 check_my_ports(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, check_my_ports, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the IP of requesting client based on cowboy req.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_my_ip(Client :: n_entity_logic:client(),
+    CowboyReq :: cowboy_req:req()) -> {ok, IP :: binary()} | {error, term()}.
 check_my_ip(Client, CowboyReq) ->
     n_entity_logic:get(Client, ?PLUGIN, undefined, {check_my_ip, CowboyReq}).
 
@@ -164,7 +340,8 @@ exists(ProviderId) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns full provider URL.
+%% @doc
+%% Returns full provider URL.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_url(ProviderId :: od_provider:id()) -> {ok, ProviderURL :: binary()}.
