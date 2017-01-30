@@ -19,7 +19,7 @@
 
 %% API
 -export([init/0, terminate/0]).
--export([find/2, find_all/1, find_query/2]).
+-export([find_record/2, find_all/1, query/2, query_record/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
 
 
@@ -49,12 +49,12 @@ terminate() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link data_backend_behaviour} callback find/2.
+%% {@link data_backend_behaviour} callback find_record/2.
 %% @end
 %%--------------------------------------------------------------------
--spec find(ResourceType :: binary(), Id :: binary()) ->
+-spec find_record(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find(<<"clienttoken">>, _Id) ->
+find_record(<<"clienttoken">>, _Id) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
@@ -66,23 +66,28 @@ find(<<"clienttoken">>, _Id) ->
 -spec find_all(ResourceType :: binary()) ->
     {ok, [proplists:proplist()]} | gui_error:error_result().
 find_all(<<"clienttoken">>) ->
-    UserId = gui_session:get_user_id(),
-    {ok, ClientTokens} = user_logic:get_client_tokens(UserId),
-    Res = lists:map(
-        fun(Id) ->
-            [{<<"id">>, Id}]
-        end, ClientTokens),
-    {ok, Res}.
+    gui_error:report_error(<<"Not implemented">>).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link data_backend_behaviour} callback find_query/2.
+%% {@link data_backend_behaviour} callback query/2.
 %% @end
 %%--------------------------------------------------------------------
--spec find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
+-spec query(ResourceType :: binary(), Data :: proplists:proplist()) ->
+    {ok, [proplists:proplist()]} | gui_error:error_result().
+query(<<"clienttoken">>, _Data) ->
+    gui_error:report_error(<<"Not implemented">>).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link data_backend_behaviour} callback query_record/2.
+%% @end
+%%--------------------------------------------------------------------
+-spec query_record(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
-find_query(<<"clienttoken">>, _Data) ->
+query_record(<<"clienttoken">>, _Data) ->
     gui_error:report_error(<<"Not implemented">>).
 
 
@@ -97,6 +102,7 @@ create_record(<<"clienttoken">>, _Data) ->
     UserId = gui_session:get_user_id(),
     Token = auth_logic:gen_token(UserId),
     user_logic:add_client_token(UserId, Token),
+    user_data_backend:push_user_record(UserId),
     {ok, [
         {<<"id">>, Token}
     ]}.
@@ -126,4 +132,6 @@ delete_record(<<"clienttoken">>, Token) ->
     {ok, Macaroon} = token_utils:deserialize(Token),
     Identifier = macaroon:identifier(Macaroon),
     onedata_auth:delete(Identifier),
-    user_logic:delete_client_token(UserId, Token).
+    user_logic:delete_client_token(UserId, Token),
+    user_data_backend:push_user_record(UserId),
+    ok.
