@@ -85,7 +85,8 @@ create(Client, Name, URLs, RedirectionPoint, CSR) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: n_entity_logic:client(), Name :: binary(),
-    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary(),
+    Latitude :: float(), Longitude :: float()) ->
     {ok, od_provider:id()} | {error, term()}.
 create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
     create(Client, #{
@@ -105,8 +106,7 @@ create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), Name :: binary(),
-    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+-spec create(Client :: n_entity_logic:client(), Data :: #{}) ->
     {ok, od_provider:id()} | {error, term()}.
 create(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
@@ -121,8 +121,7 @@ create(Client, Data) ->
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), Name :: binary(),
-    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+-spec create_dev(Client :: n_entity_logic:client(), Data :: #{}) ->
     {ok, od_provider:id()} | {error, term()}.
 create_dev(Client, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, undefined, entity_dev, Data).

@@ -175,7 +175,7 @@ create_group_invite_token(Client, SpaceId) ->
 %% provider to grant support to given space.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group_invite_token(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec create_provider_invite_token(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
 create_provider_invite_token(Client, SpaceId) ->
     n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_provider_token, #{}).
@@ -550,9 +550,8 @@ has_eff_privilege(#od_space{eff_users = UsersPrivileges}, UserId, Privilege) ->
 %% Predicate saying whether specified user is an effective user in given space.
 %% @end
 %%--------------------------------------------------------------------
--spec has_eff_privilege(SpaceOrId :: od_space:id() | #od_space{},
-    UserId :: od_user:id(), Privilege :: privileges:space_privileges()) ->
-    boolean().
+-spec has_eff_user(SpaceOrId :: od_space:id() | #od_space{},
+    UserId :: od_user:id()) -> boolean().
 has_eff_user(SpaceId, UserId) when is_binary(SpaceId) ->
     case od_space:get(SpaceId) of
         {ok, #document{value = Space}} ->
