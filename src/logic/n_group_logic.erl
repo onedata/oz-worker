@@ -129,7 +129,7 @@ create(Client, Data) ->
 -spec get(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
     {ok, #od_group{}} | {error, term()}.
 get(Client, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, entity, GroupId).
+    n_entity_logic:get(Client, ?PLUGIN, GroupId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -138,9 +138,9 @@ get(Client, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(Client :: n_entity_logic:client(), GroupId :: od_group:id()) ->
-    {ok, #{}} | {error, term()}.
+    {ok, maps:map()} | {error, term()}.
 get_data(Client, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, data, GroupId).
+    n_entity_logic:get(Client, ?PLUGIN, GroupId, data).
 
 
 %%--------------------------------------------------------------------
@@ -246,7 +246,7 @@ delete_oz_privileges(Client, GroupId) ->
 %%--------------------------------------------------------------------
 -spec create_space(Client :: n_entity_logic:client(), GroupId :: od_group:id(),
     NameOrData :: binary() | #{}) -> {ok, od_space:id()} | {error, term()}.
-create_space(Client, GroupId, Name) ->
+create_space(Client, GroupId, Name) when is_binary(Name) ->
     create_space(Client, GroupId, #{<<"name">> => Name});
 create_space(Client, GroupId, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, GroupId, create_space, Data).

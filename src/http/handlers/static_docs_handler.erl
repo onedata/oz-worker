@@ -61,7 +61,7 @@ handle(Req, State) ->
                 {ReqHeaders, _} = cowboy_req:headers(Req),
                 {ok, Code, RespHeaders, Result} =
                     http_client:get(FileURL, maps:from_list(ReqHeaders)),
-                {ok, Req2} = cowboy_req:reply(Code, RespHeaders, Result, Req),
+                {ok, Req2} = cowboy_req:reply(Code, maps:to_list(RespHeaders), Result, Req),
                 Req2
         end,
         {ok, NewReq, State}

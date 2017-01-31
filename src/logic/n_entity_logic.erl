@@ -23,11 +23,11 @@
 -type client() :: #client{}.
 -type el_plugin() :: module().
 -type operation() :: create | get | update | delete.
--type entity_id() :: od_user:id() | od_group:id() | od_space:id() |
+-type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
 od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id().
 -type entity_type() :: od_user | od_group | od_space |
 od_share | od_provider | od_handle_service | od_handle | oz_privileges.
--type entity() :: #od_user{} | #od_group{} | #od_space{} |
+-type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
 -type resource() :: atom() | {atom(), term()}.
 -type data() :: maps:map() | binary().
@@ -38,6 +38,7 @@ od_share | od_provider | od_handle_service | od_handle | oz_privileges.
 {external, fun(() -> boolean())}.
 
 -type authorization_verificator() :: true | false |
+{data_dependent, fun((data()) -> boolean())} |
 {internal, fun((entity()) -> boolean())} |
 {external, fun(() -> boolean())}.
 
@@ -83,8 +84,8 @@ optional => #{Key :: binary() | resource => {type_validator(), value_validator()
 -record(request, {
     client = #client{} :: client(),
     el_plugin = undefined :: el_plugin(),
-    entity_id = undefined :: undefined | entity_id(),
-    entity = undefined :: undefined | entity(),
+    entity_id = undefined :: entity_id(),
+    entity = undefined :: entity(),
     operation = create :: operation(),
     resource = undefined :: resource(),
     data = #{} :: data()
@@ -429,7 +430,7 @@ call_authorize(Request) ->
 %% validity verificators for given resource.
 %% @end
 %%--------------------------------------------------------------------
--spec call_validate(Request :: #request{}) -> [validity_verificator()].
+-spec call_validate(Request :: #request{}) -> validity_verificator().
 call_validate(Request) ->
     #request{
         operation = Operation,
@@ -451,10 +452,7 @@ check_existence_of_entity(#request{entity_id = undefined} = Request) ->
     Request;
 check_existence_of_entity(#request{entity = undefined} = Request) ->
     % This will throw NOT_FOUND if the entity cannot be retrieved.
-    Request#request{entity = call_get_entity(Request)};
-check_existence_of_entity(Request) ->
-    % Entity is defined and fetched
-    Request.
+    Request#request{entity = call_get_entity(Request)}.
 
 
 %%--------------------------------------------------------------------
@@ -634,7 +632,7 @@ check_validity(#request{data = Data, resource = Resource} = Request) ->
 %%--------------------------------------------------------------------
 -spec transform_and_check_value(Key :: binary(), Data :: data(),
     Validator :: {type_validator(), value_validator()}) ->
-    {true, NewData :: data()}.
+    {true, NewData :: data()} | false.
 transform_and_check_value(Key, Data, Validator) ->
     case maps:get(Key, Data, undefined) of
         undefined ->

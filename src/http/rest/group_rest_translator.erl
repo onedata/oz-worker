@@ -10,6 +10,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(group_rest_translator).
+-behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
 -include("rest.hrl").

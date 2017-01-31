@@ -23,8 +23,8 @@
     method = get :: n_rest_handler:method(),
     % Entity logic plugin to handle the request
     el_plugin = undefined :: undefined | n_entity_logic:el_plugin(),
-    entity_id = undefined :: undefined | n_entity_logic:entity_id(),
-    resource = undefined :: undefined | n_entity_logic:resource(),
+    entity_id = undefined :: undefined | n_entity_logic:entity_id() | client_id | {binding, atom()},
+    resource = undefined :: undefined | n_entity_logic:resource() | {binding, atom()},
     % Rest translator plugin to translate the response
     translator = undefined :: module()
 }).
@@ -35,9 +35,13 @@
     body = {binary, <<"">>} :: jiffy:json_value() | {binary, binary()}
 }).
 
-% Convenience macros user in rest_req
+% Convenience macros user in rest_req, they will be processed before passed
+% further to entity logic.
+% Injects the value of binding into this placeholder
 -define(BINDING(__KEY), {binding, __KEY}).
+% Injects the id of authenticated client into this placeholder
 -define(CLIENT_ID, client_id).
+% Injects the cowboy #req{} record into this placeholder
 -define(COWBOY_REQ, cowboy_req).
 
 % Defines with HTTP codes

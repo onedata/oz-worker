@@ -12,7 +12,6 @@
 %%%-------------------------------------------------------------------
 -module(n_user_logic).
 -author("Lukasz Opiola").
--behaviour(data_logic_behaviour).
 
 -include("errors.hrl").
 -include("entity_logic.hrl").
@@ -112,7 +111,7 @@ create(UserInfo) ->
 %% Allows to specify UserId (it must be not occupied).
 %% @end
 %%--------------------------------------------------------------------
--spec create(UserInfo :: #od_user{}, ProposedUserId :: od_user:id()) ->
+-spec create(UserInfo :: #od_user{}, ProposedUserId :: od_user:id() | undefined) ->
     {ok, od_user:id()} | {error, term()}.
 create(UserInfo, ProposedUserId) ->
     try
@@ -344,7 +343,7 @@ set_default_space(Client, UserId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec set_space_alias(Client :: n_entity_logic:client(), UserId :: od_user:id(),
-    Data :: binary() | #{}, Alias :: binary()) -> ok | {error, term()}.
+    SpaceId :: od_space:id(), AliasOrData :: binary() | #{}) -> ok | {error, term()}.
 set_space_alias(Client, UserId, SpaceId, Alias) when is_binary(Alias) ->
     set_space_alias(Client, UserId, SpaceId, #{<<"alias">> => Alias});
 set_space_alias(Client, UserId, SpaceId, Data) ->
@@ -469,7 +468,7 @@ create_group(Client, UserId, Data) ->
 %%--------------------------------------------------------------------
 -spec create_space(Client :: n_entity_logic:client(), UserId :: od_user:id(),
     NameOrData :: binary() | #{}) -> {ok, od_space:id()} | {error, term()}.
-create_space(Client, UserId, Name) ->
+create_space(Client, UserId, Name) when is_binary(Name) ->
     create_space(Client, UserId, #{<<"name">> => Name});
 create_space(Client, UserId, Data) ->
     n_entity_logic:create(Client, ?PLUGIN, UserId, create_space, Data).
@@ -1006,10 +1005,13 @@ authenticate_by_basic_credentials(Login, Password) ->
                 ?APP_NAME, onepanel_role_to_group_mapping
             ),
             Groups = maps:get(UserRole, GroupMapping, []),
+            ?emergency("Groups: ~p", [Groups]),
             lists:foreach(
                 fun(GroupId) ->
+                    ?emergency("GroupId: ~p", [GroupId]),
                     case n_group_logic:add_user(?ROOT, GroupId, UserId) of
                         {ok, UserId} ->
+                            ?emergency("CO???"),
                             {ok, #od_group{
                                 name = GroupName
                             }} = n_group_logic:get(?ROOT, GroupId),

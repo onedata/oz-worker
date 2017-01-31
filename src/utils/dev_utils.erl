@@ -130,8 +130,8 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 ProviderList = proplists:get_value(<<"providers">>, Props),
                 {Member, UsersToAdd, GroupsToAdd} =
                     case GroupList of
-                        [] -> {{user, hd(UserList)}, tl(UserList), []};
-                        _ -> {{group, hd(GroupList)}, UserList, tl(GroupList)}
+                        [] -> {{od_user, hd(UserList)}, tl(UserList), []};
+                        _ -> {{od_group, hd(GroupList)}, UserList, tl(GroupList)}
                     end,
                 %% create space with given name; if name is not defined, set Id as a name
                 {ok, SpaceId} = case proplists:get_value(<<"displayed_name">>, Props) of
@@ -263,7 +263,7 @@ create_group_with_uuid(UserId, Name, UUId) ->
 %% Throws exception when call to the datastore fails, or given member doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create_space_with_uuid({user | group, Id :: binary()}, Name :: binary(), UUId :: binary()) ->
+-spec create_space_with_uuid({od_user | od_group, Id :: binary()}, Name :: binary(), UUId :: binary()) ->
     {ok, SpaceId :: binary()} | no_return().
 create_space_with_uuid(Member, Name, UUId) ->
     create_space_with_provider(Member, Name, #{}, UUId).
@@ -288,16 +288,16 @@ create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUId) ->
 %% Throws exception when call to the datastore fails, or user/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create_space_with_provider({user | group, Id :: binary()}, Name :: binary(),
-    Support :: [{Provider :: binary(), ProvidedSize :: pos_integer()}], UUId :: binary()) ->
+-spec create_space_with_provider({od_user | od_group, Id :: binary()}, Name :: binary(),
+    Support :: #{Provider :: binary() => ProvidedSize :: pos_integer()}, UUId :: binary()) ->
     {ok, SpaceId :: binary()}.
 create_space_with_provider({MemberType, MemberId}, Name, Supports, UUId) ->
     {ok, SpaceId} = od_space:save(
         #document{key = UUId, value = #od_space{name = Name}}
     ),
     AddFun = case MemberType of
-        user -> add_user;
-        group -> add_group
+        od_user -> add_user;
+        od_group -> add_group
     end,
     {ok, MemberId} = n_space_logic:AddFun(
         ?ROOT, SpaceId, MemberId, privileges:space_admin()

@@ -122,13 +122,10 @@ get_response(<<"description">>, _Args) -> [].
 %%%-------------------------------------------------------------------
 -spec get_earliest_datestamp() -> erlang:datetime().
 get_earliest_datestamp() ->
-    {ok, Ids} = oai_utils:list_handles(),
-    Datestamps = lists:flatmap(fun(Id) ->
+    Ids = oai_utils:list_handles(),
+    Datestamps = lists:map(fun(Id) ->
         #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
-        case Timestamp of
-            undefined -> [];
-            _ -> [Timestamp]
-        end
+        Timestamp
     end, Ids),
     case Datestamps of
         [] -> none;

@@ -34,7 +34,9 @@ response({error, Type}) ->
         Code when is_integer(Code) ->
             #rest_resp{code = Code};
         {Code, {MessageFormat, FormatArgs}} ->
-            MessageBinary = str_utils:format_bin(MessageFormat, FormatArgs),
+            MessageBinary = str_utils:format_bin(
+                str_utils:to_list(MessageFormat), FormatArgs
+            ),
             #rest_resp{code = Code, body = #{<<"error">> => MessageBinary}};
         {Code, MessageBinary} ->
             #rest_resp{code = Code, body = #{<<"error">> =>  MessageBinary}}

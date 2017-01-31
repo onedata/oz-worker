@@ -101,7 +101,7 @@ create(Client, Data) ->
 -spec get(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id()) ->
     {ok, #od_handle_service{}} | {error, term()}.
 get(Client, HServiceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, entity, HServiceId).
+    n_entity_logic:get(Client, ?PLUGIN, HServiceId, entity).
 
 
 %%--------------------------------------------------------------------

@@ -84,7 +84,7 @@ providers(Doc, od_handle_service) ->
 
 providers(Doc, od_handle) ->
     #document{value = #od_handle{eff_users = EffUsers}} = Doc,
-    through_users((EffUsers));
+    through_users(maps:keys(EffUsers));
 
 providers(_Doc, _Type) ->
     [].

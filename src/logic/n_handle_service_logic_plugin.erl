@@ -299,7 +299,7 @@ exists({eff_group_privileges, UserId}) ->
 
 exists({handle, HandleId}) ->
     {internal, fun(#od_handle_service{handles = Handles}) ->
-        maps:is_key(HandleId, Handles)
+        lists:member(HandleId, Handles)
     end};
 
 exists(_) ->

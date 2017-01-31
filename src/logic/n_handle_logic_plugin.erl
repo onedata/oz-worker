@@ -101,8 +101,7 @@ create(Client, _, entity, Data) ->
     {ok, HandleId} = od_handle:create(Handle),
     entity_graph:add_relation(
         od_handle, HandleId,
-        od_handle_service, HandleServiceId,
-        privileges:handle_admin()
+        od_handle_service, HandleServiceId
     ),
     case Client of
         ?USER(UserId) ->
@@ -155,13 +154,13 @@ get(_, undefined, undefined, list) ->
     {ok, [HandleId || #document{key = HandleId} <- HandleDocs]};
 
 get(_, _HandleId, #od_handle{} = Handle, data) ->
-    #od_handle{handle_service = HandleService, public_handle = Handle,
+    #od_handle{handle_service = HandleService, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
         metadata = Metadata, timestamp = Timestamp
     } = Handle,
     {ok, #{
         <<"handleServiceId">> => HandleService,
-        <<"handle">> => Handle,
+        <<"handle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
@@ -170,10 +169,10 @@ get(_, _HandleId, #od_handle{} = Handle, data) ->
 
 get(_, _HandleId, #od_handle{} = Handle, public_data) ->
     #od_handle{
-        public_handle = Handle, metadata = Metadata, timestamp = Timestamp
+        public_handle = PublicHandle, metadata = Metadata, timestamp = Timestamp
     } = Handle,
     {ok, #{
-        <<"handle">> => Handle,
+        <<"handle">> => PublicHandle,
         <<"metadata">> => Metadata,
         <<"timestamp">> => Timestamp
     }};

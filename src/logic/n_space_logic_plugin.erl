@@ -353,9 +353,9 @@ exists({eff_group_privileges, UserId}) ->
         maps:is_key(UserId, Users)
     end};
 
-exists({share, ProviderId}) ->
-    {internal, fun(#od_space{shares = Providers}) ->
-        maps:is_key(ProviderId, Providers)
+exists({share, ShareId}) ->
+    {internal, fun(#od_space{shares = Shares}) ->
+        lists:member(ShareId, Shares)
     end};
 
 exists({provider, ProviderId}) ->

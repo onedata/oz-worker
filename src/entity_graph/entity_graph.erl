@@ -595,6 +595,10 @@ mark_dirty(EntityId, #od_handle{} = Handle) ->
 % Shares do not take part in eff graph recomputation
 mark_dirty(_, _, _, _, #od_share{} = Entity) ->
     Entity;
+% Handles are children towards shares only, modifying this relation should
+% not cause graph recalculation.
+mark_dirty(top_down, _, _, _, #od_handle{} = Entity) ->
+    Entity;
 mark_dirty(Direction, Flag, EntityType, EntityId, Entity) ->
     Priority = get_priority(Direction, Entity),
     update_state(Direction, Flag, EntityType, EntityId, Priority),

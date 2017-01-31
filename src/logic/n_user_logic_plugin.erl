@@ -339,7 +339,7 @@ delete(UserId, default_space) ->
 
 delete(UserId, {space_alias, SpaceId}) ->
     {ok, _} = od_user:update(UserId, fun(#od_user{space_aliases = Aliases} = User) ->
-        {ok, User#od_user{client_tokens = maps:remove(SpaceId, Aliases)}}
+        {ok, User#od_user{space_aliases = maps:remove(SpaceId, Aliases)}}
     end),
     ok;
 

@@ -539,7 +539,7 @@ authenticate_by_macaroons(Req) ->
             false;
         _ ->
             case auth_logic:validate_token(<<>>, Macaroon,
-                DischargeMacaroons, undefined, undefined) of
+                DischargeMacaroons, <<"">>, undefined) of
                 {ok, UserId} ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};

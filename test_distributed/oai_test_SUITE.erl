@@ -102,18 +102,18 @@
 -define(PROXY_ENDPOINT, <<"172.17.0.9:8080/api/v1">>).
 
 -define(DOI_NAME, <<"LifeWatch DataCite">>).
--define(DOI_SERVICE_PROPERTIES, [
-    {<<"type">>, <<"DOI">>},
-    {<<"host">>, <<"https://mds.test.datacite.org">>},
-    {<<"doiEndpoint">>, <<"/doi">>},
-    {<<"metadataEndpoint">>, <<"/metadata">>},
-    {<<"mediaEndpoint">>, <<"/media">>},
-    {<<"prefix">>, <<"10.5072">>},
-    {<<"username">>, <<"alice">>},
-    {<<"password">>, <<"*******">>},
-    {<<"identifierTemplate">>, <<"{{space.name}}-{{space.guid}}">>},
-    {<<"allowTemplateOverride">>, false}
-]).
+-define(DOI_SERVICE_PROPERTIES, #{
+    <<"type">> => <<"DOI">>,
+    <<"host">> => <<"https://mds.test.datacite.org">>,
+    <<"doiEndpoint">> => <<"/doi">>,
+    <<"metadataEndpoint">> => <<"/metadata">>,
+    <<"mediaEndpoint">> => <<"/media">>,
+    <<"prefix">> => <<"10.5072">>,
+    <<"username">> => <<"alice">>,
+    <<"password">> => <<"*******">>,
+    <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
+    <<"allowTemplateOverride">> => false
+}).
 
 -define(HANDLE_RESOURCE_TYPE, <<"Share">>).
 
@@ -876,10 +876,10 @@ id_not_existing_test_base(Config, Method) ->
     ?assert(check_id_not_existing_error(200, Args, Method, [], Config)).
 
 cannot_disseminate_format_test_base(Config, Method) ->
-
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    ct:print("WWAWAAWAWAW?: ~p", [{oz_test_utils:get_space(Config, Space1)}]),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
     ),
@@ -961,7 +961,7 @@ init_per_suite(Config) ->
     end,
     [
         {?ENV_UP_POSTHOOK, Posthook},
-        {?LOAD_MODULES, [oz_test_utils]}| Config
+        {?LOAD_MODULES, [oz_test_utils]} | Config
     ].
 
 init_per_testcase(_, Config) ->
@@ -974,6 +974,7 @@ end_per_testcase(_, Config) ->
     ok.
 
 end_per_suite(_Config) ->
+    timer:sleep(123123123),
     hackney:stop(),
     application:stop(etls).
 
@@ -1193,10 +1194,12 @@ ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
 ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 
 create_spaces(Config, SpacesNames, Client) ->
-    lists:map(fun(SpaceName) ->
+    Result = lists:map(fun(SpaceName) ->
         {ok, SpaceId} = oz_test_utils:create_space(Config, Client, SpaceName),
         SpaceId
-    end, SpacesNames).
+    end, SpacesNames),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    Result.
 
 create_shares(Config, SpaceIds) ->
     ShareIds = ?SHARE_IDS(length(SpaceIds)),
@@ -1251,6 +1254,7 @@ create_handle_service(Config, User) ->
     {ok, HSId} = oz_test_utils:create_handle_service(Config, ?USER(User),
         ?DOI_NAME, ?PROXY_ENDPOINT, ?DOI_SERVICE_PROPERTIES
     ),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     HSId.
 
 create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, Metadata, Timestamp) ->

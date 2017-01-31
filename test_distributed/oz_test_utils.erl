@@ -823,7 +823,7 @@ create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a handle service.
+%% Creates a handle service.npr
 %% @end
 %%--------------------------------------------------------------------
 -spec create_handle_service(Config :: term(), Client :: n_entity_logic:client(),
@@ -1023,11 +1023,11 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, HServices} = list_handle_services(Config),
     {ok, Groups} = list_groups(Config),
     {ok, Users} = list_users(Config),
-    [?assertMatch(ok, delete_provider(Config, PId)) || PId <- Providers],
-    [?assertMatch(ok, delete_share(Config, ShId)) || ShId <- Shares],
-    [?assertMatch(ok, delete_space(Config, SpId)) || SpId <- Spaces],
-    [?assertMatch(ok, delete_handle(Config, HId)) || HId <- Handles],
-    [?assertMatch(ok, delete_handle_service(Config, HSId)) || HSId <- HServices],
+    [delete_provider(Config, PId) || PId <- Providers],
+    [delete_handle(Config, HId) || HId <- Handles],
+    [delete_share(Config, ShId) || ShId <- Shares],
+    [delete_space(Config, SpId) || SpId <- Spaces],
+    [delete_handle_service(Config, HSId) || HSId <- HServices],
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of
         true ->

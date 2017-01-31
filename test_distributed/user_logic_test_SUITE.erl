@@ -68,7 +68,7 @@ basic_auth_login_test(Config) ->
     {ok, 200, RespHeaders, _} = Response,
     % Make sure response headers contain cookie with session id - which means
     % that the user has logged in.
-    Cookie = proplists:get_value(<<"set-cookie">>, RespHeaders, <<"">>),
+    Cookie = maps:get(<<"set-cookie">>, RespHeaders, <<"">>),
     ?assertMatch(<<"session_id=", _/binary>>, Cookie),
     % Try some inexistent user credentials if 401 is returned
     WrongUserPasswordB64 = base64:encode(<<"lol:wut">>),

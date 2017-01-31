@@ -363,13 +363,13 @@ get_url(ProviderId) ->
     {ok, ProviderId :: od_provider:id()} | {error, no_provider}.
 choose_provider_for_user(UserId) ->
     % Check if the user has a default space and if it is supported.
-    #od_user{
+    {ok, #od_user{
         spaces = Spaces, default_space = DefaultSpace
-    } = n_user_logic:get(?ROOT, UserId),
+    }} = n_user_logic:get(?ROOT, UserId),
     {ok, DSProviders} =
         case DefaultSpace of
             undefined ->
-                {ok, [{providers, []}]};
+                {ok, []};
             _ ->
                 n_space_logic:get_providers(?ROOT, DefaultSpace)
         end,

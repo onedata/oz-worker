@@ -57,8 +57,8 @@ create(Client, ShareId, Name, RootFileId, SpaceId) ->
     create(Client, #{
         <<"shareId">> => ShareId,
         <<"name">> => Name,
-        <<"shareId">> => SpaceId,
-        <<"rootFileId">> => RootFileId
+        <<"rootFileId">> => RootFileId,
+        <<"spaceId">> => SpaceId
     }).
 
 
@@ -82,7 +82,7 @@ create(Client, Data) ->
 -spec get(Client :: n_entity_logic:client(), ShareId :: od_share:id()) ->
     {ok, #od_share{}} | {error, term()}.
 get(Client, ShareId) ->
-    n_entity_logic:get(Client, ?PLUGIN, entity, ShareId).
+    n_entity_logic:get(Client, ?PLUGIN, ShareId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -93,7 +93,7 @@ get(Client, ShareId) ->
 -spec get_data(Client :: n_entity_logic:client(), ShareId :: od_share:id()) ->
     {ok, #{}} | {error, term()}.
 get_data(Client, ShareId) ->
-    n_entity_logic:get(Client, ?PLUGIN, data, ShareId).
+    n_entity_logic:get(Client, ?PLUGIN, ShareId, data).
 
 
 %%--------------------------------------------------------------------
@@ -171,7 +171,7 @@ share_id_to_redirect_url(ShareId) ->
     {Online, Offline} = lists:partition(
         fun(ProviderId) ->
             subscriptions:any_connection_active(ProviderId)
-        end, Providers),
+        end, maps:keys(Providers)),
     % But if there are none, choose one of inactive
     Choice = case length(Online) of
         0 -> Offline;

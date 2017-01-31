@@ -47,15 +47,15 @@
 %
 % The below ASCII visual shows possible relations in entities graph.
 %
-%     share  provider
-%       ^      ^
-%        \    /
-%         \  /
+%       provider
+%           ^
+%           |
+%           |
 %         space    handle_service     handle
-%         ^  ^        ^        ^       ^   ^
-%         |   \      /         |      /    |
-%         |    \    /          |     /     |
-%        user    group          user      group
+%        ^ ^  ^       ^         ^       ^   ^
+%       /  |   \     /          |      /    |
+%      /   |    \   /           |     /     |
+%  share  user   group           user     group
 %                  ^                        ^
 %                  |                        |
 %                  |                        |
