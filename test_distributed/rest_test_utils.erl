@@ -290,7 +290,11 @@ check_rest_call(Config, ArgsMap) ->
                     true ->
                         ok;
                     false ->
-                        throw({body, RespBodyXML, ExpBodyXML, {
+                        Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
+                        ExpBodyBin = erlang:iolist_to_binary(xmerl:export_simple(
+                            [ExpBodyXML], xmerl_xml, [{prolog, Prolog}]
+                        )),
+                        throw({body, RespBody, ExpBodyBin, {
                             RespCode, RespHeaders, RespBody
                         }})
                 end

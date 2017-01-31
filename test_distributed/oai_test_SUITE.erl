@@ -879,7 +879,6 @@ cannot_disseminate_format_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
-    ct:print("WWAWAAWAWAW?: ~p", [{oz_test_utils:get_space(Config, Space1)}]),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
     ),
@@ -903,7 +902,7 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
     ),
     HSId = create_handle_service(Config, User),
-    Identifier = create_handle(Config, User, HSId, ?SHARE_ID, undefined),
+    Identifier = create_handle(Config, User, HSId, ?SHARE_ID, ?DC_METADATA_XML),
 
     Args = [{<<"identifier">>, oai_identifier(Identifier)}],
 
