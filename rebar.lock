@@ -9,7 +9,7 @@
  {<<"certifi">>,{pkg,<<"certifi">>,<<"0.4.0">>},3},
  {<<"cluster_manager">>,
   {raw,{git,"ssh://git@git.plgrid.pl:7999/vfs/cluster-manager.git",
-            {ref,"21b61591b52de93a4a19bb7421367423d2edaaec"}}},
+            {ref,"5d54032e886be5e538a2a0e67f7d343a0277af70"}}},
   0},
  {<<"cluster_worker">>,
   {git,"ssh://git@git.plgrid.pl:7999/vfs/cluster-worker.git",

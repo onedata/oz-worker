@@ -85,8 +85,12 @@ handle(<<"unsupportSpace">>, Props) ->
     UserId = gui_session:get_user_id(),
     case n_space_logic:leave_provider(Client, SpaceId, ProviderId) of
         ok ->
+            user_data_backend:push_user_record(UserId),
             gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(Client, UserId)
+                <<"space">>, space_data_backend:space_record(SpaceId, UserId)
+            ),
+            gui_async:push_updated(
+                <<"provider">>, provider_data_backend:provider_record(ProviderId, UserId)
             ),
             ok;
         ?ERROR_UNAUTHORIZED ->
@@ -106,9 +110,7 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
             gui_error:report_warning(<<"Invalid token type.">>);
         {ok, SpaceId} ->
             % Push user record with a new space list.
-            gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(?USER(UserId), UserId)
-            ),
+            user_data_backend:push_user_record_when_synchronized(UserId),
             {ok, [{<<"spaceId">>, SpaceId}]}
     end;
 
@@ -116,9 +118,7 @@ handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     UserId = gui_session:get_user_id(),
     n_user_logic:leave_space(?USER(UserId), UserId, SpaceId),
     % Push user record with a new space list.
-    gui_async:push_updated(
-        <<"user">>, user_data_backend:user_record(?USER(UserId), UserId)
-    ),
+    user_data_backend:push_user_record(UserId),
     ok;
 
 handle(<<"getTokenUserJoinGroup">>, [{<<"groupId">>, GroupId}]) ->
@@ -143,8 +143,6 @@ handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
             gui_error:report_warning(<<"Invalid token type.">>);
         {ok, GroupId} ->
             % Push user record with a new group list.
-            gui_async:push_updated(
-                <<"user">>, user_data_backend:user_record(?USER(UserId), UserId)
-            ),
+            user_data_backend:push_user_record_when_synchronized(UserId),
             {ok, [{<<"groupId">>, GroupId}]}
     end.
