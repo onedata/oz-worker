@@ -22,7 +22,7 @@
 -type id() :: binary().
 -type name() :: binary().
 -type proxy_endpoint() :: binary().
--type service_properties() :: #{}.
+-type service_properties() :: maps:map().
 
 -export_type([doc/0, info/0, id/0]).
 -export_type([name/0, proxy_endpoint/0, service_properties/0]).

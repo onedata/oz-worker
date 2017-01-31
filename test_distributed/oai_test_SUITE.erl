@@ -974,7 +974,6 @@ end_per_testcase(_, Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    timer:sleep(123123123),
     hackney:stop(),
     application:stop(etls).
 
