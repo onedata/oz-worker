@@ -903,6 +903,12 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
     ),
     HSId = create_handle_service(Config, User),
     Identifier = create_handle(Config, User, HSId, ?SHARE_ID, ?DC_METADATA_XML),
+    % Modify handle metadata to undefined (this should not occur in normal
+    % conditions because entity logic won't accept undefined metadata,
+    % but check if returned OAI error in such case is correct).
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_handle, update, [
+        Identifier, #{metadata => undefined}]
+    )),
 
     Args = [{<<"identifier">>, oai_identifier(Identifier)}],
 

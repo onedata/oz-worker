@@ -218,7 +218,10 @@ get(_, _HandleId, #od_handle{eff_groups = Groups}, {eff_group_privileges, GroupI
 -spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
     n_entity_logic:data()) -> n_entity_logic:result().
 update(HandleId, entity, #{<<"metadata">> := NewMetadata}) ->
-    {ok, _} = od_handle:update(HandleId, #{metadata => NewMetadata}),
+    {ok, _} = od_handle:update(HandleId, #{
+        metadata => NewMetadata,
+        timestamp => od_handle:actual_timestamp()
+    }),
     ok;
 
 update(HandleId, {user_privileges, UserId}, Data) ->

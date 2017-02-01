@@ -81,8 +81,8 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
     Until = oai_datestamp_to_datetime(UntilDatestamp),
     Identifiers = list_handles(),
     HarvestedMetadata = lists:flatmap(fun(Identifier) ->
-        #od_handle{timestamp = Timestamp} = Handle = get_handle(Identifier),
-        case should_be_harvested(From, Until, MetadataPrefix, Timestamp) of
+        Handle = get_handle(Identifier),
+        case should_be_harvested(From, Until, MetadataPrefix, Handle) of
             false -> [];
             true ->
                 [HarvestingFun(Identifier, Handle)]
@@ -102,8 +102,10 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
 %%% @end
 %%%--------------------------------------------------------------------
 -spec should_be_harvested(supported_datestamp(), supported_datestamp(),
-    binary(), supported_datestamp()) -> boolean().
-should_be_harvested(From, Until, MetadataPrefix, Datestamp) ->
+    binary(), #od_handle{}) -> boolean().
+should_be_harvested(_From, _Until, _MetadataPrefix, #od_handle{metadata = undefined}) ->
+    false;
+should_be_harvested(From, Until, MetadataPrefix, #od_handle{timestamp = Datestamp}) ->
     MetadataFormats = metadata_formats:supported_formats(),
     is_in_time_range(From, Until, Datestamp) and
         lists:member(MetadataPrefix, MetadataFormats).
