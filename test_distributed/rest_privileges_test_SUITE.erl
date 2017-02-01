@@ -887,6 +887,10 @@ list_users_test(Config) ->
 
 list_groups_test(Config) ->
     % Remove predefined groups as they spoil the test results
+    % They are created in after init procedures, so we also need to make sure
+    % that they are not added after the tes starts.
+    Nodes = ?config(oz_worker_nodes, Config),
+    [test_utils:set_env(Node, oz_worker, predefined_groups, []) || Node <- Nodes],
     ok = oz_test_utils:delete_all_entities(Config, true),
     % Create some groups with some users
     {ok, UserWithGroups1} = oz_test_utils:create_user(Config, #od_user{}),
