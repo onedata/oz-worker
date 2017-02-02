@@ -48,7 +48,8 @@
     check_my_ip/2
 ]).
 -export([
-    exists/1
+    exists/1,
+    has_eff_user/2
 ]).
 -export([
     get_url/1,
@@ -336,6 +337,24 @@ check_my_ip(Client, CowboyReq) ->
 -spec exists(ProviderId :: od_provider:id()) -> boolean().
 exists(ProviderId) ->
     od_provider:exists(ProviderId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified user is an effective user in given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_user(ProviderOrId :: od_provider:id() | #od_provider{},
+    UserId :: od_user:id()) -> boolean().
+has_eff_user(ProviderId, UserId) when is_binary(ProviderId) ->
+    case od_provider:get(ProviderId) of
+        {ok, #document{value = Provider}} ->
+            has_eff_user(Provider, UserId);
+        _ ->
+            false
+    end;
+has_eff_user(#od_provider{eff_users = EffUsers}, UserId) ->
+    maps:is_key(UserId, EffUsers).
 
 
 %%--------------------------------------------------------------------

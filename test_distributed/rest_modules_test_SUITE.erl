@@ -505,30 +505,25 @@ delete_provider_test(Config) ->
     ?assertMatch({request_error, ?NOT_FOUND}, get_provider_info(ProviderReqParams)).
 
 get_supported_space_info_test(Config) ->
-    try
-        ProviderId = ?config(providerId, Config),
-        ProviderReqParams = ?config(providerReqParams, Config),
-        UserReqParams = ?config(userReqParams, Config),
-        OtherRestAddress = ?config(otherRestAddress, Config),
-        ParamsWithOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
+    ProviderId = ?config(providerId, Config),
+    ProviderReqParams = ?config(providerReqParams, Config),
+    UserReqParams = ?config(userReqParams, Config),
+    OtherRestAddress = ?config(otherRestAddress, Config),
+    ParamsWithOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
 
-        %% get space creation token1
-        SID = create_space_and_get_support(Config, ?SPACE_NAME1, UserReqParams, ?SPACE_SIZE1, ProviderReqParams),
-        Expected = [SID, ?SPACE_NAME1, ProviderId, binary_to_integer(?SPACE_SIZE1)],
+    %% get space creation token1
+    SID = create_space_and_get_support(Config, ?SPACE_NAME1, UserReqParams, ?SPACE_SIZE1, ProviderReqParams),
+    Expected = [SID, ?SPACE_NAME1, ProviderId, binary_to_integer(?SPACE_SIZE1)],
 
-        %% assertMatch has problem with nested brackets below
-        [SID_test, SpaceName_test, [{ProviderId_test, SpaceSize_test}]]
-            = get_space_info_by_provider(SID, ProviderReqParams),
-        ?assertMatch([SID_test, SpaceName_test, ProviderId_test, SpaceSize_test], Expected),
+    %% assertMatch has problem with nested brackets below
+    [SID_test, SpaceName_test, [{ProviderId_test, SpaceSize_test}]]
+        = get_space_info_by_provider(SID, ProviderReqParams),
+    ?assertMatch([SID_test, SpaceName_test, ProviderId_test, SpaceSize_test], Expected),
 
-        %% assertMatch has problem with nested brackets below
-        [SID_test2, SpaceName_test2, [{ProviderId_test2, SpaceSize_test2}]]
-            = get_space_info_by_provider(SID, ParamsWithOtherAddress),
-        ?assertMatch([SID_test2, SpaceName_test2, ProviderId_test2, SpaceSize_test2], Expected)
-    catch
-        T:M ->
-            ct:print("WAAAT: ~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    %% assertMatch has problem with nested brackets below
+    [SID_test2, SpaceName_test2, [{ProviderId_test2, SpaceSize_test2}]]
+        = get_space_info_by_provider(SID, ParamsWithOtherAddress),
+    ?assertMatch([SID_test2, SpaceName_test2, ProviderId_test2, SpaceSize_test2], Expected).
 
 unsupport_space_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
@@ -622,8 +617,9 @@ delete_user_test(Config) ->
     ParamsWithOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     ?assertMatch(ok, check_status(delete_user(UserReqParams))),
-    ?assertMatch({request_error, ?NOT_FOUND}, get_user_info(UserReqParams)),
-    ?assertMatch({request_error, ?NOT_FOUND}, get_user_info(ParamsWithOtherAddress)).
+    % UNAUTHORIZED because the authorization macaroon is not longer valid
+    ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(UserReqParams)),
+    ?assertMatch({request_error, ?UNAUTHORIZED}, get_user_info(ParamsWithOtherAddress)).
 
 create_space_for_user_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -779,8 +775,6 @@ effective_group_for_user_test(Config) ->
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserReqParams))),
     ?assertMatch(true, is_included([GID1, GID2], get_user_groups(UserParamsOtherAddress))),
 
-    ensure_effective_users_and_groups_updated(Config),
-
     ?assertMatch(true, is_included([GID1, GID2], get_user_effective_groups(UserReqParams))),
     ?assertMatch(true, is_included([GID1, GID2], get_user_effective_groups(UserParamsOtherAddress))).
 
@@ -790,7 +784,7 @@ get_group_info_by_user_test(Config) ->
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     GID1 = create_group_for_user(Config, ?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
-    ensure_effective_users_and_groups_updated(Config),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserReqParams)),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserParamsOtherAddress)).
@@ -806,15 +800,15 @@ get_ancestor_group_info_by_user_test(Config) ->
     GID1 = create_group(Config, ?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
     GID2 = create_group(Config, ?GROUP_NAME2, ?GROUP_TYPE2, User2ReqParams),
 
-    ?assertMatch({request_error, ?NOT_FOUND}, get_group_info_by_user(GID2, User1ReqParams)),
-    ?assertMatch({request_error, ?NOT_FOUND}, get_group_info_by_user(GID2, User1ParamsOtherAddress)),
+    ?assertMatch({request_error, ?NOT_FOUND}, get_eff_group_info_by_user(GID2, User1ReqParams)),
+    ?assertMatch({request_error, ?NOT_FOUND}, get_eff_group_info_by_user(GID2, User1ParamsOtherAddress)),
 
     Token = get_group_invitation_group_token(GID2, User2ReqParams),
     ?assertMatch(GID2, join_group_to_group(Token, GID1, User1ReqParams)),
-    ensure_effective_users_and_groups_updated(Config),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
-    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_user(GID2, User1ReqParams)),
-    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info_by_user(GID2, User1ParamsOtherAddress)).
+    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_eff_group_info_by_user(GID2, User1ReqParams)),
+    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_eff_group_info_by_user(GID2, User1ParamsOtherAddress)).
 
 % This test is disabled as currently we do not remove a group when last member leaves.
 last_user_leaves_group_test(Config) ->
@@ -823,7 +817,7 @@ last_user_leaves_group_test(Config) ->
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     GID1 = create_group_for_user(Config, ?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
-    ensure_effective_users_and_groups_updated(Config),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertMatch(ok, check_status(user_leaves_group(GID1, UserReqParams))),
     ?assertMatch(false, is_included([GID1], get_user_groups(UserReqParams))),
@@ -842,7 +836,7 @@ non_last_user_leaves_group_test(Config) ->
     GID1 = create_group_for_user(Config, ?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
     InvitationToken = get_group_invitation_token(GID1, User1ReqParams),
     join_user_to_group(Config, InvitationToken, User2ReqParams),
-    ensure_effective_users_and_groups_updated(Config),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
     User2ParamsOtherAddress = update_req_params(User2ReqParams, OtherRestAddress, address),
@@ -868,8 +862,8 @@ group_invitation_test(Config) ->
     InvitationToken = get_group_invitation_token(GID1, User1ReqParams),
 
     %% check if GID returned for user2 is the same as GID1
-    ?assertMatch(GID1, join_user_to_group(Config, InvitationToken, User2ParamsOtherAddress)),
-    ensure_effective_users_and_groups_updated(Config),
+    ?assertMatch(UserId2, join_user_to_group(Config, InvitationToken, User2ParamsOtherAddress)),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ReqParams)),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ParamsOtherAddress)),
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID1, User1ReqParams))),
@@ -955,7 +949,7 @@ group_cycle_prevented_test(Config) ->
     Token2 = get_group_invitation_group_token(GID2, User1ReqParams),
     ?assertMatch(GID1, join_group_to_group(Token1, GID2, User1ReqParams)),
     ?assertMatch(GID2, join_group_to_group(Token2, GID3, User1ReqParams)),
-    ensure_effective_users_and_groups_updated(Config),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     Token3 = get_group_invitation_group_token(GID3, User1ReqParams),
     ?assertMatch({request_error, ?BAD_REQUEST}, join_group_to_group(Token3, GID1, User1ReqParams)),
@@ -1527,6 +1521,7 @@ get_user_privileges_for_service_test(Config) ->
     UserId = ?config(userId, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
     201 = add_user_to_handle_service(Id, UserId, UserReqParams),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     Privileges = get_user_privileges_for_handle_service(Id, UserId, UserReqParams),
 
@@ -1544,6 +1539,7 @@ set_user_privileges_for_service_test(Config) ->
     Privileges = #{<<"privileges">> => [<<"view_handle_service">>]},
 
     Result = set_user_privileges_for_handle_service(Id, UserId, Privileges, UserReqParams),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertEqual(204, Result),
     ?assertEqual(Privileges, get_user_privileges_for_handle_service(Id, UserId, UserReqParams)).
@@ -1554,6 +1550,7 @@ get_group_privileges_for_service_test(Config) ->
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
     GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
     201 = add_group_to_handle_service(Id, GroupId, UserReqParams),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     Privileges = get_group_privileges_for_handle_service(Id, GroupId, UserReqParams),
 
@@ -1572,6 +1569,7 @@ set_group_privileges_for_service_test(Config) ->
     Privileges = #{<<"privileges">> => [<<"delete_handle_service">>, <<"view_handle_service">>]},
 
     Result = set_group_privileges_for_handle_service(Id, GroupId, Privileges, UserReqParams),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertEqual(204, Result),
     ?assertEqual(Privileges, get_group_privileges_for_handle_service(Id, GroupId, UserReqParams)).
@@ -1611,7 +1609,8 @@ list_handles_test(Config) ->
     create_space_and_share(Config, ?SHARE_ID_2, UserReqParams),
     Id1 = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
     Id2 = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_2), UserReqParams),
-
+    oz_test_utils:set_user_oz_privileges(Config, UserId, grant, [?OZ_HANDLES_LIST]),
+    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     Handles = list_handle(UserReqParams),
 
     #{<<"handles">> := HandlesList} =
@@ -1809,24 +1808,19 @@ get_group_privileges_for_handle_test(Config) ->
     ).
 
 set_group_privileges_for_handle_test(Config) ->
-    try
-        UserReqParams = ?config(userReqParams, Config),
-        UserId = ?config(userId, Config),
-        Id = add_handle_service(Config, ?DOI_SERVICE, UserId, UserReqParams),
-        create_space_and_share(Config, ?SHARE_ID_1, UserReqParams),
-        HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
-        GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
-        201 = add_group_to_handle(HId, GroupId, UserReqParams),
-        Privileges = #{<<"privileges">> => [<<"view_handle">>]},
+    UserReqParams = ?config(userReqParams, Config),
+    UserId = ?config(userId, Config),
+    Id = add_handle_service(Config, ?DOI_SERVICE, UserId, UserReqParams),
+    create_space_and_share(Config, ?SHARE_ID_1, UserReqParams),
+    HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
+    GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
+    201 = add_group_to_handle(HId, GroupId, UserReqParams),
+    Privileges = #{<<"privileges">> => [<<"view_handle">>]},
 
-        Result = set_group_privileges_for_handle(HId, GroupId, Privileges, UserReqParams),
+    Result = set_group_privileges_for_handle(HId, GroupId, Privileges, UserReqParams),
 
-        ?assertEqual(204, Result),
-        ?assertEqual(Privileges, get_group_privileges_for_handle(HId, GroupId, UserReqParams))
-    catch
-        T:M ->
-            ct:print("WAAAT: ~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    ?assertEqual(204, Result),
+    ?assertEqual(Privileges, get_group_privileges_for_handle(HId, GroupId, UserReqParams)).
 
 %% other tests =======================================================
 
@@ -1977,16 +1971,12 @@ end_per_testcase(_, Config) ->
     file:delete(CertFile).
 
 end_per_suite(_Config) ->
-    timer:sleep(12312312),
     hackney:stop(),
     application:stop(etls).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-ensure_effective_users_and_groups_updated(Config) ->
-    oz_test_utils:ensure_eff_graph_up_to_date(Config).
 
 is_included(_, []) -> false;
 is_included([], _MainList) -> true;
@@ -2170,7 +2160,6 @@ create_space_and_get_support(Config, SpaceName, UserReqParams, SpaceSize, Provid
     SID = create_space_for_user(Config, SpaceName, UserReqParams),
     Token = get_space_support_token(SID, UserReqParams),
     R = support_space(Token, SpaceSize, ProviderReqParams),
-    ct:print("R ~p", [R]),
     SID.
 
 get_supported_spaces({RestAddress, Headers, Options}) ->
@@ -2181,7 +2170,6 @@ get_supported_spaces({RestAddress, Headers, Options}) ->
 get_space_info_by_provider(SID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Response = do_request(RestAddress ++ "/provider/spaces/" ++ EncodedSID, Headers, get, [], Options),
-    ct:print("Path: ~p", [RestAddress ++ "/provider/spaces/" ++ EncodedSID]),
     get_body_val([spaceId, name, providersSupports], Response).
 
 unsupport_space(SID, {RestAddress, Headers, Options}) ->
@@ -2228,7 +2216,6 @@ register_user(UserName, ProviderId, Config, ProviderReqParams) ->
 
 get_user_info({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user", Headers, get, [], Options),
-    ct:print("CO JEST? ~p", [Response]),
     get_body_val([userId, name, alias], Response).
 
 update_user(Attributes, {RestAddress, Headers, Options}) ->
@@ -2301,6 +2288,11 @@ get_user_effective_groups({RestAddress, Headers, Options}) ->
 get_group_info_by_user(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/user/groups/" ++ Encoded, Headers, get, [], Options),
+    get_body_val([groupId, name, type], Response).
+
+get_eff_group_info_by_user(GID, {RestAddress, Headers, Options}) ->
+    Encoded = binary_to_list(http_utils:url_encode(GID)),
+    Response = do_request(RestAddress ++ "/user/effective_groups/" ++ Encoded, Headers, get, [], Options),
     get_body_val([groupId, name, type], Response).
 
 user_leaves_group(GID, {RestAddress, Headers, Options}) ->
@@ -2921,7 +2913,6 @@ create_space_and_share(Config, ShareId, {RestAddress, Headers, Options}) ->
         <<"rootFileId">> => <<"whatever">>
     }),
     Response = do_request(Address, Headers, put, BodyJson, Options),
-    ct:print("Response: ~p", [Response]),
     ?assertEqual(204, get_response_status(Response)).
 
 
@@ -3035,11 +3026,9 @@ mock_handle_proxy(Config) ->
         fun
             (?SHARE_ID_1) ->
                 {ok, #document{value = Share} = Doc} = meck:passthrough([?SHARE_ID_1]),
-                ct:print("YYY1: ~p", [Doc#document{value = Share#od_share{public_url = ?SHARE_1_PUBLIC_URL}}]),
                 {ok, Doc#document{value = Share#od_share{public_url = ?SHARE_1_PUBLIC_URL}}};
             (?SHARE_ID_2) ->
                 {ok, #document{value = Share} = Doc} = meck:passthrough([?SHARE_ID_2]),
-                ct:print("YYY2: ~p", [Doc#document{value = Share#od_share{public_url = ?SHARE_2_PUBLIC_URL}}]),
                 {ok, Doc#document{value = Share#od_share{public_url = ?SHARE_2_PUBLIC_URL}}};
             (_) ->
                 meck:passthrough()
@@ -3048,15 +3037,15 @@ mock_handle_proxy(Config) ->
     ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
         fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
-            {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
+            {ok, 201, #{<<"location">> => <<"/test_location">>}, <<"">>}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
         fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
-            {ok, 204, [], <<"">>}
+            {ok, 204, #{}, <<"">>}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
         fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
-            {ok, 200, [], <<"">>}
+            {ok, 200, #{}, <<"">>}
         end).
 
 unmock_handle_proxy(Config) ->

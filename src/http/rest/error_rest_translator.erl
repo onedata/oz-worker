@@ -73,7 +73,7 @@ translate(?ERROR_MALFORMED_DATA) ->
         <<"Provided data could not be understood by the server">>
     };
 translate(?ERROR_BAD_MACAROON) ->
-    {?HTTP_400_BAD_REQUEST,
+    {?HTTP_401_UNAUTHORIZED,
         <<"Provided macaroon is not valid">>
     };
 translate(?ERROR_MISSING_REQUIRED_VALUE(Key)) ->

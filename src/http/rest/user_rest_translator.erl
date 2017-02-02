@@ -34,7 +34,7 @@
 -spec response(Operation :: n_entity_logic:operation(),
     EntityId :: n_entity_logic:entity_id(), Resource :: n_entity_logic:resource(),
     Result :: n_entity_logic:result()) -> #rest_resp{}.
-response(create, _UserId, deprecated_default_space, ok) ->
+response(create, UserId, {deprecated_default_space, UserId}, ok) ->
     n_rest_handler:ok_no_content_reply();
 
 response(create, _UserId, authorize, {ok, DischargeMacaroon}) ->
@@ -43,13 +43,13 @@ response(create, _UserId, authorize, {ok, DischargeMacaroon}) ->
 response(create, _UserId, client_tokens, {ok, Token}) ->
     n_rest_handler:ok_body_reply(#{<<"token">> => Token});
 
-response(create, _UserId, default_space, ok) ->
+response(create, UserId, {default_space, UserId}, ok) ->
     n_rest_handler:ok_no_content_reply();
 
 response(create, _UserId, space_alias, ok) ->
     n_rest_handler:ok_no_content_reply();
 
-response(create, _UserId, default_provider, ok) ->
+response(create, UserId, {default_provider, UserId}, ok) ->
     n_rest_handler:ok_no_content_reply();
 
 response(create, _UserId, create_group, {ok, GroupId}) ->
@@ -87,7 +87,7 @@ response(create, _UserId, join_space, {ok, SpaceId}) ->
     n_rest_handler:created_reply([<<"user">>, <<"spaces">>, SpaceId]);
 
 
-response(get, _UserId, deprecated_default_space, {ok, SpaceId}) ->
+response(get, UserId, {deprecated_default_space, UserId}, {ok, SpaceId}) ->
     n_rest_handler:ok_body_reply(#{<<"spaceId">> => SpaceId});
 
 response(get, UserId, data, {ok, UserData}) ->
@@ -102,13 +102,13 @@ response(get, _UserId, oz_privileges, {ok, Privileges}) ->
 response(get, _UserId, eff_oz_privileges, {ok, Privileges}) ->
     n_rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(get, _UserId, default_space, {ok, DefaultSpace}) ->
+response(get, UserId, {default_space, UserId}, {ok, DefaultSpace}) ->
     n_rest_handler:ok_body_reply(#{<<"spaceId">> => DefaultSpace});
 
 response(get, _UserId, {space_alias, _SpaceId}, {ok, SpaceAlias}) ->
     n_rest_handler:ok_body_reply(#{<<"alias">> => SpaceAlias});
 
-response(get, _UserId, default_provider, {ok, DefaultProvider}) ->
+response(get, UserId, {default_provider, UserId}, {ok, DefaultProvider}) ->
     n_rest_handler:ok_body_reply(#{<<"providerId">> => DefaultProvider});
 
 response(get, _UserId, client_tokens, {ok, Tokens}) ->

@@ -221,7 +221,7 @@ get_eff_oz_privileges(Client, UserId) ->
 -spec get_default_space(Client :: n_entity_logic:client(), UserId :: od_user:id()) ->
     {ok, od_space:id()} | {error, term()}.
 get_default_space(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, default_space).
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {default_space, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -245,7 +245,7 @@ get_space_alias(Client, UserId, SpaceId) ->
 -spec get_default_provider(Client :: n_entity_logic:client(), UserId :: od_user:id()) ->
     {ok, od_provider:id()} | {error, term()}.
 get_default_provider(Client, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, UserId, default_provider).
+    n_entity_logic:get(Client, ?PLUGIN, UserId, {default_provider, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -332,7 +332,7 @@ update_oz_privileges(Client, UserId, Data) ->
 set_default_space(Client, UserId, SpaceId) when is_binary(SpaceId) ->
     set_default_space(Client, UserId, #{<<"spaceId">> => SpaceId});
 set_default_space(Client, UserId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, UserId, default_space, Data).
+    n_entity_logic:create(Client, ?PLUGIN, UserId, {default_space, UserId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -362,7 +362,7 @@ set_space_alias(Client, UserId, SpaceId, Data) ->
 set_default_provider(Client, UserId, ProviderId) when is_binary(ProviderId) ->
     set_default_provider(Client, UserId, #{<<"providerId">> => ProviderId});
 set_default_provider(Client, UserId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, UserId, default_provider, Data).
+    n_entity_logic:create(Client, ?PLUGIN, UserId, {default_provider, UserId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -406,7 +406,7 @@ delete_client_token(Client, UserId, TokenId) ->
 -spec unset_default_space(Client :: n_entity_logic:client(), UserId :: od_user:id()) ->
     ok | {error, term()}.
 unset_default_space(Client, UserId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, UserId, default_space).
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {default_space, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -428,7 +428,7 @@ delete_space_alias(Client, UserId, SpaceId) ->
 -spec unset_default_provider(Client :: n_entity_logic:client(), UserId :: od_user:id()) ->
     ok | {error, term()}.
 unset_default_provider(Client, UserId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, UserId, default_provider).
+    n_entity_logic:delete(Client, ?PLUGIN, UserId, {default_provider, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -1005,13 +1005,10 @@ authenticate_by_basic_credentials(Login, Password) ->
                 ?APP_NAME, onepanel_role_to_group_mapping
             ),
             Groups = maps:get(UserRole, GroupMapping, []),
-            ?emergency("Groups: ~p", [Groups]),
             lists:foreach(
                 fun(GroupId) ->
-                    ?emergency("GroupId: ~p", [GroupId]),
                     case n_group_logic:add_user(?ROOT, GroupId, UserId) of
                         {ok, UserId} ->
-                            ?emergency("CO???"),
                             {ok, #od_group{
                                 name = GroupName
                             }} = n_group_logic:get(?ROOT, GroupId),

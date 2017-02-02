@@ -101,23 +101,23 @@ user_routes() ->
         }},
 
         {<<"/user/default_space">>, R#rest_req{
-            method = get, entity_id = ?CLIENT_ID, resource = default_space
+            method = get, entity_id = ?CLIENT_ID, resource = {default_space, ?CLIENT_ID}
         }},
         {<<"/user/default_space">>, R#rest_req{
-            method = put, entity_id = ?CLIENT_ID, resource = default_space
+            method = put, entity_id = ?CLIENT_ID, resource = {default_space, ?CLIENT_ID}
         }},
         {<<"/user/default_space">>, R#rest_req{
-            method = delete, entity_id = ?CLIENT_ID, resource = default_space
+            method = delete, entity_id = ?CLIENT_ID, resource = {default_space, ?CLIENT_ID}
         }},
 
         {<<"/user/default_provider">>, R#rest_req{
-            method = get, entity_id = ?CLIENT_ID, resource = default_provider
+            method = get, entity_id = ?CLIENT_ID, resource = {default_provider, ?CLIENT_ID}
         }},
         {<<"/user/default_provider">>, R#rest_req{
-            method = put, entity_id = ?CLIENT_ID, resource = default_provider
+            method = put, entity_id = ?CLIENT_ID, resource = {default_provider, ?CLIENT_ID}
         }},
         {<<"/user/default_provider">>, R#rest_req{
-            method = delete, entity_id = ?CLIENT_ID, resource = default_provider
+            method = delete, entity_id = ?CLIENT_ID, resource = {default_provider, ?CLIENT_ID}
         }},
 
         {<<"/user/groups">>, R#rest_req{
@@ -150,11 +150,11 @@ user_routes() ->
         }},
         % TODO VFS-2918
         {<<"/user/spaces/default">>, R#rest_req{
-            method = get, entity_id = ?CLIENT_ID, resource = deprecated_default_space
+            method = get, entity_id = ?CLIENT_ID, resource = {deprecated_default_space, ?CLIENT_ID}
         }},
         % TODO VFS-2918
         {<<"/user/spaces/default">>, R#rest_req{
-            method = put, entity_id = ?CLIENT_ID, resource = deprecated_default_space
+            method = put, entity_id = ?CLIENT_ID, resource = {deprecated_default_space, ?CLIENT_ID}
         }},
         {<<"/user/spaces/join">>, R#rest_req{
             method = post, entity_id = ?CLIENT_ID, resource = join_space
@@ -272,18 +272,18 @@ group_routes() ->
         {<<"/groups/:id/users">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = users
         }},
-        {<<"/groups/:id/users/:uid">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
-        }},
-        {<<"/groups/:id/users/token">>, R#rest_req{
-            method = post, entity_id = ?BINDING(id), resource = invite_user_token
-        }},
         % TODO VFS-2918
         {<<"/groups/:id/users/token">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = deprecated_invite_user_token
         }},
+        {<<"/groups/:id/users/token">>, R#rest_req{
+            method = post, entity_id = ?BINDING(id), resource = invite_user_token
+        }},
         {<<"/groups/:id/users/:uid">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
+        }},
+        {<<"/groups/:id/users/:uid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
         }},
         {<<"/groups/:id/users/:uid">>, R#rest_req{
             method = delete, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
@@ -502,18 +502,18 @@ space_routes() ->
         {<<"/spaces/:id/users">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = users
         }},
-        {<<"/spaces/:id/users/:uid">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
-        }},
-        {<<"/spaces/:id/users/token">>, R#rest_req{
-            method = post, entity_id = ?BINDING(id), resource = invite_user_token
-        }},
         % TODO VFS-2918
         {<<"/spaces/:id/users/token">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = deprecated_invite_user_token
         }},
+        {<<"/spaces/:id/users/token">>, R#rest_req{
+            method = post, entity_id = ?BINDING(id), resource = invite_user_token
+        }},
         {<<"/spaces/:id/users/:uid">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
+        }},
+        {<<"/spaces/:id/users/:uid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}
         }},
         {<<"/spaces/:id/users/:uid">>, R#rest_req{
             method = delete, entity_id = ?BINDING(id), resource = {user, ?BINDING(uid)}

@@ -22,11 +22,11 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/utils/utils.hrl").
 
--type resource() :: deprecated_default_space | % TODO VFS-2918
+-type resource() :: {deprecated_default_space, od_user:id()} | % TODO VFS-2918
 authorize | entity | data | list |
 client_tokens | {client_token, binary()} |
-default_space | {space_alias, od_space:id()} |
-default_provider |
+{default_space, od_user:id()} | {space_alias, od_space:id()} |
+{default_provider, od_user:id()} |
 oz_privileges | eff_oz_privileges |
 create_group | create_space | create_handle_service | create_handle |
 join_group | join_space |
@@ -75,7 +75,7 @@ get_entity(UserId) ->
     EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
     n_entity_logic:data()) -> n_entity_logic:result().
 % TODO VFS-2918
-create(_Client, UserId, deprecated_default_space, #{<<"spaceId">> := SpaceId}) ->
+create(_Client, UserId, {deprecated_default_space, UserId}, #{<<"spaceId">> := SpaceId}) ->
     {ok, _} = od_user:update(UserId, #{default_space => SpaceId}),
     ok;
 
@@ -95,7 +95,7 @@ create(_Client, UserId, client_tokens, _Data) ->
     end),
     {ok, Token};
 
-create(_Client, UserId, default_space, Data) ->
+create(_Client, UserId, {default_space, UserId}, Data) ->
     SpaceId = maps:get(<<"spaceId">>, Data),
     case n_user_logic:has_eff_space(UserId, SpaceId) of
         true ->
@@ -112,7 +112,7 @@ create(_Client, UserId, {space_alias, SpaceId}, Data) ->
     end),
     ok;
 
-create(_Client, UserId, default_provider, Data) ->
+create(_Client, UserId, {default_provider, UserId}, Data) ->
     ProviderId = maps:get(<<"providerId">>, Data),
     case n_user_logic:has_eff_provider(UserId, ProviderId) of
         true ->
@@ -164,7 +164,7 @@ create(_Client, UserId, join_space, Data) ->
     Entity :: n_entity_logic:entity(), Resource :: resource()) ->
     n_entity_logic:result().
 % TODO VFS-2918
-get(_, _UserId, #od_user{default_space = DefaultSpace}, deprecated_default_space) ->
+get(_, UserId, #od_user{default_space = DefaultSpace}, {deprecated_default_space, UserId}) ->
     {ok, DefaultSpace};
 
 get(_, _UserId, #od_user{} = User, data) ->
@@ -191,11 +191,11 @@ get(_, _UserId, #od_user{oz_privileges = OzPrivileges}, oz_privileges) ->
     {ok, OzPrivileges};
 get(_, _UserId, #od_user{eff_oz_privileges = OzPrivileges}, eff_oz_privileges) ->
     {ok, OzPrivileges};
-get(_, _UserId, #od_user{default_space = DefaultSpace}, default_space) ->
+get(_, UserId, #od_user{default_space = DefaultSpace}, {default_space, UserId}) ->
     {ok, DefaultSpace};
 get(_, _UserId, #od_user{space_aliases = SpaceAliases}, {space_alias, SpaceId}) ->
     {ok, maps:get(SpaceId, SpaceAliases)};
-get(_, _UserId, #od_user{default_provider = DefaultProvider}, default_provider) ->
+get(_, _UserId, #od_user{default_provider = DefaultProvider}, {default_provider, UserId}) ->
     {ok, DefaultProvider};
 get(_, _UserId, #od_user{client_tokens = ClientTokens}, client_tokens) ->
     {ok, ClientTokens};
@@ -333,7 +333,7 @@ delete(UserId, {client_token, TokenId}) ->
     end),
     ok;
 
-delete(UserId, default_space) ->
+delete(UserId, {default_space, UserId}) ->
     {ok, _} = od_user:update(UserId, #{default_space => undefined}),
     ok;
 
@@ -343,7 +343,7 @@ delete(UserId, {space_alias, SpaceId}) ->
     end),
     ok;
 
-delete(UserId, default_provider) ->
+delete(UserId, {default_provider, UserId}) ->
     {ok, _} = od_user:update(UserId, #{default_provider => undefined}),
     ok;
 
@@ -383,7 +383,7 @@ delete(UserId, {handle, HandleId}) ->
     n_entity_logic:existence_verificator()|
     [n_entity_logic:existence_verificator()].
 % TODO VFS-2918
-exists(deprecated_default_space) ->
+exists({deprecated_default_space, _UserId}) ->
     true;
 
 exists({client_token, TokenId}) ->
@@ -391,7 +391,7 @@ exists({client_token, TokenId}) ->
         lists:member(TokenId, Tokens)
     end};
 
-exists(default_space) ->
+exists({default_space, _UserId}) ->
     {internal, fun(#od_user{default_space = DefaultSpace}) ->
         undefined =/= DefaultSpace
     end};
@@ -400,7 +400,7 @@ exists({space_alias, SpaceId}) ->
         maps:is_key(SpaceId, Aliases)
     end};
 
-exists(default_provider) ->
+exists({default_provider, _UserId}) ->
     {internal, fun(#od_user{default_provider = DefaultProvider}) ->
         undefined =/= DefaultProvider
     end};
@@ -471,10 +471,10 @@ exists(_) ->
     n_entity_logic:authorization_verificator() |
     [authorization_verificator:existence_verificator()].
 % TODO VFS-2918
-authorize(create, UserId, deprecated_default_space, ?USER(UserId)) ->
+authorize(create, UserId, {deprecated_default_space, UserId}, ?USER(UserId)) ->
     true;
 % TODO VFS-2918
-authorize(get, UserId, deprecated_default_space, ?USER(UserId)) ->
+authorize(get, UserId, {deprecated_default_space, UserId}, ?USER(UserId)) ->
     true;
 
 authorize(create, _UserId, authorize, _Client) ->
@@ -539,10 +539,10 @@ authorize(get, _UserId, entity, ?USER(UserId)) ->
     Resource :: resource()) ->
     n_entity_logic:validity_verificator().
 % TODO VFS-2918
-validate(create, deprecated_default_space) -> #{
+validate(create, {deprecated_default_space, UserId}) -> #{
     required => #{
-        <<"spaceId">> => {binary, {exists, fun(Value) ->
-            n_space_logic:exists(Value)
+        <<"spaceId">> => {binary, {exists, fun(SpaceId) ->
+            n_space_logic:has_eff_user(SpaceId, UserId)
         end}}
     }
 };
@@ -554,10 +554,10 @@ validate(create, authorize) -> #{
 };
 validate(create, client_tokens) -> #{
 };
-validate(create, default_space) -> #{
+validate(create, {default_space, UserId}) -> #{
     required => #{
-        <<"spaceId">> => {binary, {exists, fun(Value) ->
-            n_space_logic:exists(Value)
+        <<"spaceId">> => {binary, {exists, fun(SpaceId) ->
+            n_space_logic:has_eff_user(SpaceId, UserId)
         end}}
     }
 };
@@ -566,10 +566,10 @@ validate(create, {space_alias, _SpaceId}) -> #{
         <<"alias">> => {binary, non_empty}
     }
 };
-validate(create, default_provider) -> #{
+validate(create, {default_provider, UserId}) -> #{
     required => #{
-        <<"providerId">> => {binary, {exists, fun(Value) ->
-            n_provider_logic:exists(Value)
+        <<"providerId">> => {binary, {exists, fun(ProviderId) ->
+            n_provider_logic:has_eff_user(ProviderId, UserId)
         end}}
     }
 };
