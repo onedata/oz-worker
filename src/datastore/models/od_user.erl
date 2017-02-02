@@ -224,7 +224,7 @@ before(ModelName, Method, _Level, Context) ->
 {email, binary()} | {alias, binary()}) ->
     {ok, #document{}} | {error, any()}.
 
-get_by_criterion({euserapmail, Value}) ->
+get_by_criterion({email, Value}) ->
     Filter = fun
         ('$end_of_table', Acc) ->
             {abort, Acc};
@@ -302,7 +302,18 @@ to_string(UserId) ->
 
 
 record_upgrade(1, User) ->
-    {} = User,
+    {
+        Name,
+        Login,
+        BasicAuthEnabled,
+        Alias,
+        EmailList,
+        ConnectedAccounts,
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens
+    } = User,
     {2, #od_user{
 
     }}.

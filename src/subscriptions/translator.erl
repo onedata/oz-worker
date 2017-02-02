@@ -20,6 +20,8 @@
 -export([get_ignore_msg/1, as_msg/3]).
 
 % TODO VFS-2918
+-export([calculate_space_aliases/2]).
+
 -define(MIN_SUFFIX_HASH_LEN, 6).
 
 %%%-------------------------------------------------------------------
@@ -87,7 +89,9 @@ get_msg(Seq, Doc, od_user = Model) ->
         {email_list, []}, % TODO currently always empty
         {connected_accounts, []}, % TODO currently always empty
         {default_space, DefaultSpace},
-        {space_aliases, maps:to_list(calculate_space_aliases(Spaces, SpaceAliases))},
+        {space_aliases, maps:to_list(translator:calculate_space_aliases(
+            Spaces, SpaceAliases
+        ))},
 
         % Direct relations to other entities
         {groups, Groups},
@@ -98,6 +102,7 @@ get_msg(Seq, Doc, od_user = Model) ->
         % Effective relations to other entities
         {eff_groups, eff_relation_to_proplist(EffGroups)},
         {eff_spaces, []}, % TODO currently always empty
+        {eff_shares, []}, % TODO currently always empty
         {eff_providers, []}, % TODO currently always empty
         {eff_handle_services, []}, % TODO currently always empty
         {eff_handles, []}, % TODO currently always empty
@@ -139,6 +144,7 @@ get_msg(Seq, Doc, od_group = Model) ->
         % Effective relations to other entities
         {eff_users, eff_relation_with_attrs_to_proplist(EUsers)},
         {eff_spaces, []}, % TODO currently always empty
+        {eff_shares, []}, % TODO currently always empty
         {eff_providers, []}, % TODO currently always empty
         {eff_handle_services, []}, % TODO currently always empty
         {eff_handles, []} % TODO currently always empty
@@ -185,7 +191,11 @@ get_msg(Seq, Doc, od_share = Model) ->
         % Direct relations to other entities
         {space, Space},
         {handle, Handle},
-        {root_file, RootFile}
+        {root_file, RootFile},
+
+        % Effective relations to other entities
+        {eff_users, []}, % TODO currently always empty
+        {eff_groups, []} % TODO currently always empty
     ]}];
 get_msg(Seq, Doc, od_provider = Model) ->
     #document{value = Value, key = Id} = Doc,
@@ -287,6 +297,7 @@ get_public_msg(Seq, Doc, od_user = Model) ->
         % Effective relations to other entities
         {eff_groups, []},
         {eff_spaces, []},
+        {eff_shares, []}, % TODO currently always empty
         {eff_providers, []},
         {eff_handle_services, []},
         {eff_handles, []},

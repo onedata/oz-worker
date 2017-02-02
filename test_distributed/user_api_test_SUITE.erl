@@ -82,32 +82,32 @@ all() ->
         get_eff_oz_privileges_test,
         get_default_space_test,
         get_space_alias_test,
-        get_default_provider_test,
+        get_default_provider_test
 
-        update_test,
-        update_oz_privileges_test,
-        set_default_space_test,
-        set_space_alias_test,
-        set_default_provider_test,
-
-        delete_test,
-        delete_oz_privileges_test,
-        delete_client_token_test,
-        unset_default_space_test,
-        delete_space_alias_test,
-        unset_default_provider_test,
-
-        join_group_test,
-        join_space_test,
-        get_groups_test,
-        get_spaces_test,
-        get_eff_providers_test,
-        get_handle_services_test,
-        get_handles_test,
-        leave_group_test,
-        leave_space_test,
-        leave_handle_service_test,
-        leave_handle_test
+%%        update_test,
+%%        update_oz_privileges_test,
+%%        set_default_space_test,
+%%        set_space_alias_test,
+%%        set_default_provider_test,
+%%
+%%        delete_test,
+%%        delete_oz_privileges_test,
+%%        delete_client_token_test,
+%%        unset_default_space_test,
+%%        delete_space_alias_test,
+%%        unset_default_provider_test,
+%%
+%%        join_group_test,
+%%        join_space_test,
+%%        get_groups_test,
+%%        get_spaces_test,
+%%        get_eff_providers_test,
+%%        get_handle_services_test,
+%%        get_handles_test,
+%%        leave_group_test,
+%%        leave_space_test,
+%%        leave_handle_service_test,
+%%        leave_handle_test
     ]).
 
 %%%===================================================================
@@ -225,7 +225,7 @@ authorize_test(Config) ->
                     operation = create,
                     module = n_user_logic,
                     function = authorize,
-                    args = [client, User, data],
+                    args = [data],
                     expected_result = ?OK_BINARY
                 }
             },
@@ -250,10 +250,18 @@ get_test(Config) ->
     ]),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
+    % TODO VFS-2918
+%%    ExpectedBody = #{
+%%        <<"name">> => ExpName,
+%%        <<"login">> => ExpLogin,
+%%        <<"alias">> => ExpAlias,
+%%        <<"emailList">> => ExpEmailList
+%%    },
     ExpectedBody = #{
         <<"name">> => ExpName,
         <<"login">> => ExpLogin,
         <<"alias">> => ExpAlias,
+        <<"connectedAccounts">> => [],
         <<"emailList">> => ExpEmailList
     },
     ApiTestSpec = #api_test_spec{
@@ -291,13 +299,7 @@ get_test(Config) ->
             method = get,
             path = <<"/user/">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"userId">> => User,
-                <<"name">> => ExpName,
-                <<"login">> => ExpLogin,
-                <<"alias">> => ExpAlias,
-                <<"emailList">> => ExpEmailList
-            }
+            expected_body = ExpectedBody#{<<"userId">> => User}
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -667,17 +669,19 @@ get_space_alias_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
     % Set an alias for given space
-    Alias = <<"Alias">>,
-    ok = oz_test_utils:set_user_space_alias(Config, User, Space, Alias),
-    ApiTestSpec = ApiTestSpec#api_test_spec{
+    ExpAlias = <<"Alias">>,
+    ok = oz_test_utils:set_user_space_alias(Config, User, Space, ExpAlias),
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
         rest_spec = RestSpec#rest_spec{
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"alias">> => Alias}
+            expected_body = #{<<"alias">> => ExpAlias}
         },
         logic_spec = LogicSpec#logic_spec{
-            expected_result = ?OK_BINARY(Alias)
+            expected_result = ?OK_BINARY(ExpAlias)
         }
     },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
     % Unset the space alias and check if it's not present again
     ok = oz_test_utils:unset_user_space_alias(Config, User, Space),
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
