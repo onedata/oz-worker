@@ -42,32 +42,32 @@
     get_eff_oz_privileges_test/1,
     get_default_space_test/1,
     get_space_alias_test/1,
-    get_default_provider_test/1,
+    get_default_provider_test/1
 
-    update_test/1,
-    update_oz_privileges_test/1,
-    set_default_space_test/1,
-    set_space_alias_test/1,
-    set_default_provider_test/1,
-
-    delete_test/1,
-    delete_oz_privileges_test/1,
-    delete_client_token_test/1,
-    unset_default_space_test/1,
-    delete_space_alias_test/1,
-    unset_default_provider_test/1,
-
-    join_group_test/1,
-    join_space_test/1,
-    get_groups_test/1,
-    get_spaces_test/1,
-    get_eff_providers_test/1,
-    get_handle_services_test/1,
-    get_handles_test/1,
-    leave_group_test/1,
-    leave_space_test/1,
-    leave_handle_service_test/1,
-    leave_handle_test/1
+%%    update_test/1,
+%%    update_oz_privileges_test/1,
+%%    set_default_space_test/1,
+%%    set_space_alias_test/1,
+%%    set_default_provider_test/1,
+%%
+%%    delete_test/1,
+%%    delete_oz_privileges_test/1,
+%%    delete_client_token_test/1,
+%%    unset_default_space_test/1,
+%%    delete_space_alias_test/1,
+%%    unset_default_provider_test/1,
+%%
+%%    join_group_test/1,
+%%    join_space_test/1,
+%%    get_groups_test/1,
+%%    get_spaces_test/1,
+%%    get_eff_providers_test/1,
+%%    get_handle_services_test/1,
+%%    get_handles_test/1,
+%%    leave_group_test/1,
+%%    leave_space_test/1,
+%%    leave_handle_service_test/1,
+%%    leave_handle_test/1
 ]).
 
 all() ->
@@ -733,95 +733,95 @@ get_default_provider_test(Config) ->
 
 
 
-update_test(Config) ->
-
-    ok.
-
-
-update_oz_privileges_test(Config) ->
-    ok.
-
-
-set_default_space_test(Config) ->
-    ok.
-
-
-set_space_alias_test(Config) ->
-    ok.
-
-
-set_default_provider_test(Config) ->
-    ok.
-
-
-
-delete_test(Config) ->
-    ok.
-
-
-delete_oz_privileges_test(Config) ->
-    ok.
-
-
-delete_client_token_test(Config) ->
-    ok.
-
-
-unset_default_space_test(Config) ->
-    ok.
-
-
-delete_space_alias_test(Config) ->
-    ok.
-
-
-unset_default_provider_test(Config) ->
-    ok.
-
-
-
-join_group_test(Config) ->
-    ok.
-
-
-join_space_test(Config) ->
-    ok.
-
-
-get_groups_test(Config) ->
-    ok.
-
-
-get_spaces_test(Config) ->
-    ok.
-
-
-get_eff_providers_test(Config) ->
-    ok.
-
-
-get_handle_services_test(Config) ->
-    ok.
-
-
-get_handles_test(Config) ->
-    ok.
-
-
-leave_group_test(Config) ->
-    ok.
-
-
-leave_space_test(Config) ->
-    ok.
-
-
-leave_handle_service_test(Config) ->
-    ok.
-
-
-leave_handle_test(Config) ->
-    ok.
+%%update_test(Config) ->
+%%
+%%    ok.
+%%
+%%
+%%update_oz_privileges_test(Config) ->
+%%    ok.
+%%
+%%
+%%set_default_space_test(Config) ->
+%%    ok.
+%%
+%%
+%%set_space_alias_test(Config) ->
+%%    ok.
+%%
+%%
+%%set_default_provider_test(Config) ->
+%%    ok.
+%%
+%%
+%%
+%%delete_test(Config) ->
+%%    ok.
+%%
+%%
+%%delete_oz_privileges_test(Config) ->
+%%    ok.
+%%
+%%
+%%delete_client_token_test(Config) ->
+%%    ok.
+%%
+%%
+%%unset_default_space_test(Config) ->
+%%    ok.
+%%
+%%
+%%delete_space_alias_test(Config) ->
+%%    ok.
+%%
+%%
+%%unset_default_provider_test(Config) ->
+%%    ok.
+%%
+%%
+%%
+%%join_group_test(Config) ->
+%%    ok.
+%%
+%%
+%%join_space_test(Config) ->
+%%    ok.
+%%
+%%
+%%get_groups_test(Config) ->
+%%    ok.
+%%
+%%
+%%get_spaces_test(Config) ->
+%%    ok.
+%%
+%%
+%%get_eff_providers_test(Config) ->
+%%    ok.
+%%
+%%
+%%get_handle_services_test(Config) ->
+%%    ok.
+%%
+%%
+%%get_handles_test(Config) ->
+%%    ok.
+%%
+%%
+%%leave_group_test(Config) ->
+%%    ok.
+%%
+%%
+%%leave_space_test(Config) ->
+%%    ok.
+%%
+%%
+%%leave_handle_service_test(Config) ->
+%%    ok.
+%%
+%%
+%%leave_handle_test(Config) ->
+%%    ok.
 
 
 %%%===================================================================
@@ -835,6 +835,5 @@ init_per_suite(Config) ->
 
 
 end_per_suite(_Config) ->
-    timer:sleep(24 * 3600 * 1000),
     hackney:stop(),
     application:stop(etls).

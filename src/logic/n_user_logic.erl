@@ -1112,7 +1112,7 @@ setup_user(UserId, UserInfo) ->
                     <<Name/binary, "'s space">>
             end,
             {ok, SpaceId} = n_space_logic:create(?USER(UserId), SpaceName),
-            set_default_space(?USER(UserId), UserId, SpaceId);
+            od_user:update(UserId, #{default_space => SpaceId});
         _ ->
             ok
     end,
