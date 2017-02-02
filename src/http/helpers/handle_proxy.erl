@@ -18,7 +18,7 @@
 -type public_url() :: binary().
 
 %% API
--export([register_handle/4, unregister_handle/1, modify_handle/4]).
+-export([register_handle/4, unregister_handle/1, modify_handle/2]).
 
 %%%===================================================================
 %%% API
@@ -91,47 +91,34 @@ unregister_handle(HandleId) ->
 %% Modify handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec modify_handle(od_handle:id(), od_handle:resource_type(), od_handle:resource_id(), od_handle:metadata()) ->
+-spec modify_handle(od_handle:id(), od_handle:metadata()) ->
     ok.
-modify_handle(_HandleId, undefined, undefined, undefined) ->
-    ok;
-modify_handle(HandleId, NewResourceType, NewResourceId, NewMetadata) ->
-    {ok, #document{value = #od_handle{handle_service = HandleServiceId,
-        resource_type = ResourceType, resource_id = ResourceId, public_handle = PublicHandle,
-        metadata = Metadata}}} =
-        od_handle:get(HandleId),
+modify_handle(HandleId, NewMetadata) ->
+    {ok, #document{value = #od_handle{
+        handle_service = HandleServiceId, public_handle = PublicHandle,
+        resource_type = ResourceType, resource_id = ResourceId
+    }}} = od_handle:get(HandleId),
     {ok, #document{value = #od_handle_service{
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties}}
     } = od_handle_service:get(HandleServiceId),
-    case (NewResourceType =:= undefined orelse NewResourceType =:= ResourceType)
-        andalso (NewResourceId =:= undefined orelse NewResourceId =:= ResourceId)
-        andalso (NewMetadata =:= undefined orelse NewMetadata =:= Metadata)
-    of
-        true ->
-            ok;
-        false ->
-            FinalResourceType = utils:ensure_defined(NewResourceType, undefined, ResourceType),
-            FinalResourceId = utils:ensure_defined(NewResourceId, undefined, ResourceId),
-            FinalMetadata = utils:ensure_defined(NewMetadata, undefined, Metadata),
-            FinalUrl = get_redirect_url(FinalResourceType, FinalResourceId),
-            Body = #{
-                <<"url">> => FinalUrl,
-                <<"serviceProperties">> => ServiceProperties,
-                <<"metadata">> => #{<<"onedata_dc">> => FinalMetadata}
-            },
-            Headers = #{<<"content-type">> => <<"application/json">>, <<"accept">> => <<"application/json">>},
-            Type = maps:get(<<"type">>, ServiceProperties),
-            {ok, 204, _, _} =
-                case Type of
-                    <<"DOI">> ->
-                        PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-                        handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode_map(Body));
-                    _ ->
-                        handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode_map(Body))
-                end,
-            ok
-    end.
+    Url = get_redirect_url(ResourceType, ResourceId),
+    Body = #{
+        <<"url">> => Url,
+        <<"serviceProperties">> => ServiceProperties,
+        <<"metadata">> => #{<<"onedata_dc">> => NewMetadata}
+    },
+    Headers = #{<<"content-type">> => <<"application/json">>, <<"accept">> => <<"application/json">>},
+    Type = maps:get(<<"type">>, ServiceProperties),
+    {ok, 204, _, _} =
+        case Type of
+            <<"DOI">> ->
+                PublicHandleEncoded = http_utils:url_encode(PublicHandle),
+                handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode_map(Body));
+            _ ->
+                handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode_map(Body))
+        end,
+    ok.
 
 %%%===================================================================
 %%% Internal functions

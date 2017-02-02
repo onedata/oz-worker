@@ -220,5 +220,5 @@ translate(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)) ->
     }};
 % Wildcard match
 translate({error, Reason}) ->
-    ?warning("Unexpected error: {error, ~p} in rest error translator", [Reason]),
+    ?error("Unexpected error: {error, ~p} in rest error translator", [Reason]),
     translate(?ERROR_INTERNAL_SERVER_ERROR).

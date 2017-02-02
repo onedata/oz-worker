@@ -93,6 +93,7 @@
 ]).
 -export([
     create_handle/6, create_handle/3,
+    get_handle/2,
     list_handles/1,
     update_handle/3, update_handle/5,
     delete_handle/2,
@@ -914,6 +915,19 @@ create_handle(Config, Client, Data) ->
     ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, create, [
         Client, Data
     ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves handle data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle(Config :: term(), HandleId :: od_handle:id()) ->
+    {ok, #od_handle{}}.
+get_handle(Config, HandleId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, n_handle_logic, get, [?ROOT, HandleId]
+    )).
 
 
 %%--------------------------------------------------------------------

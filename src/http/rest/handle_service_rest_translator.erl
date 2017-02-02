@@ -55,7 +55,7 @@ response(create, HServiceId, {group, GroupId}, {ok, GroupId}) ->
     );
 
 response(get, HServiceId, data, {ok, HServiceData}) ->
-    n_rest_handler:ok_body_reply(HServiceData#{<<"handle_serviceId">> => HServiceId});
+    n_rest_handler:ok_body_reply(HServiceData#{<<"handleServiceId">> => HServiceId});
 
 response(get, undefined, list, {ok, HServices}) ->
     n_rest_handler:ok_body_reply(#{<<"handle_services">> => HServices});

@@ -118,7 +118,9 @@ response(get, _UserId, groups, {ok, Groups}) ->
     n_rest_handler:ok_body_reply(#{<<"groups">> => Groups});
 
 response(get, _UserId, eff_groups, {ok, Groups}) ->
-    n_rest_handler:ok_body_reply(#{<<"groups">> => Groups});
+    % TODO VFS-2918
+    n_rest_handler:ok_body_reply(#{<<"effective_groups">> => Groups});
+%%    n_rest_handler:ok_body_reply(#{<<"groups">> => Groups});
 
 response(get, _UserId, {group, GroupId}, {ok, Group}) ->
     group_rest_translator:response(get, GroupId, data, {ok, Group});

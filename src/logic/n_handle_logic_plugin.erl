@@ -222,6 +222,7 @@ update(HandleId, entity, #{<<"metadata">> := NewMetadata}) ->
         metadata => NewMetadata,
         timestamp => od_handle:actual_timestamp()
     }),
+    handle_proxy:modify_handle(HandleId, NewMetadata),
     ok;
 
 update(HandleId, {user_privileges, UserId}, Data) ->
@@ -251,6 +252,7 @@ update(HandleId, {group_privileges, GroupId}, Data) ->
 -spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
     n_entity_logic:result().
 delete(HandleId, entity) ->
+    handle_proxy:unregister_handle(HandleId),
     entity_graph:delete_with_relations(od_handle, HandleId);
 
 delete(HandleId, {user, UserId}) ->
@@ -369,12 +371,12 @@ authorize(create, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 
 
-authorize(get, _HandleId, entity, ?USER(UserId)) ->[
+authorize(get, _HandleId, entity, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?HANDLE_VIEW),
     auth_by_oz_privilege(UserId, ?OZ_HANDLES_LIST)
 ];
 
-authorize(get, _HandleId, data, ?USER(UserId)) ->[
+authorize(get, _HandleId, data, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?HANDLE_VIEW),
     auth_by_oz_privilege(UserId, ?OZ_HANDLES_LIST)
 ];

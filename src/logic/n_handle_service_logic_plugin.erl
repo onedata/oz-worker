@@ -114,7 +114,7 @@ create(?USER, HServiceId, {user, UserId}, Data) ->
     ),
     {ok, UserId};
 create(?USER, HServiceId, {group, GroupId}, Data) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle_service, HServiceId,

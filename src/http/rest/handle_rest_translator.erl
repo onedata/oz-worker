@@ -54,8 +54,11 @@ response(create, HandleId, {group, GroupId}, {ok, GroupId}) ->
         [<<"handles">>, HandleId, <<"groups">>, GroupId]
     );
 
-response(get, HandleId, data, {ok, HServiceData}) ->
-    n_rest_handler:ok_body_reply(HServiceData#{<<"handleId">> => HandleId});
+response(get, HandleId, data, {ok, #{<<"timestamp">> := Timestamp} = HandleData}) ->
+    n_rest_handler:ok_body_reply(HandleData#{
+        <<"handleId">> => HandleId,
+        <<"timestamp">> => timestamp_utils:datetime_to_datestamp(Timestamp)
+    });
 
 response(get, undefined, list, {ok, HServices}) ->
     n_rest_handler:ok_body_reply(#{<<"handles">> => HServices});

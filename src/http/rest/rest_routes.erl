@@ -365,14 +365,14 @@ group_routes() ->
         {<<"/groups/:id/children">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = children
         }},
-        {<<"/groups/:id/children/:chid">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = {child, ?BINDING(chid)}
-        }},
         {<<"/groups/:id/children/token">>, R#rest_req{
             method = post, entity_id = ?BINDING(id), resource = invite_group_token
         }},
         {<<"/groups/:id/children/:chid">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = {child, ?BINDING(chid)}
+        }},
+        {<<"/groups/:id/children/:chid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {child, ?BINDING(chid)}
         }},
         {<<"/groups/:id/children/:chid">>, R#rest_req{
             method = delete, entity_id = ?BINDING(id), resource = {child, ?BINDING(chid)}
@@ -541,9 +541,6 @@ space_routes() ->
         {<<"/spaces/:id/groups">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = groups
         }},
-        {<<"/spaces/:id/groups/:gid">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
-        }},
         {<<"/spaces/:id/groups/token">>, R#rest_req{
             method = post, entity_id = ?BINDING(id), resource = invite_group_token
         }},
@@ -553,6 +550,9 @@ space_routes() ->
         }},
         {<<"/spaces/:id/groups/:gid">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
+        }},
+        {<<"/spaces/:id/groups/:gid">>, R#rest_req{
+            method = put, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
         }},
         {<<"/spaces/:id/groups/:gid">>, R#rest_req{
             method = delete, entity_id = ?BINDING(id), resource = {group, ?BINDING(gid)}
