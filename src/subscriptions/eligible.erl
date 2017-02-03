@@ -26,20 +26,12 @@
 -spec providers(Doc :: datastore:document(), Model :: subscriptions:model())
         -> [ProviderId :: binary()].
 providers(Doc, od_space) ->
-    #document{value = #od_space{users = UserPrivileges, groups = GroupPrivileges,
-        providers = ProvidersSupports}} = Doc,
+    #document{value = #od_space{
+        eff_users = EffUsers, providers = ProvidersSupports
+    }} = Doc,
     SpaceProviders = maps:keys(ProvidersSupports),
-
-    GroupUsersSets = lists:flatmap(fun({GroupId, _}) ->
-        {ok, #document{value = #od_group{users = GroupUserTuples}}} =
-            od_group:get(GroupId),
-        maps:keys(GroupUserTuples)
-    end, maps:to_list(GroupPrivileges)),
-
-    SpaceUsers = maps:keys(UserPrivileges),
-    SpaceUsersSet = ordsets:from_list(SpaceUsers),
-
-    SpaceProviders ++ through_users(SpaceUsersSet ++ GroupUsersSets);
+    SpaceEffUsers = maps:keys(EffUsers),
+    SpaceProviders ++ through_users(SpaceEffUsers);
 
 % For share, the eligible providers are the same as for its parent space.
 providers(Doc, od_share) ->
@@ -48,29 +40,8 @@ providers(Doc, od_share) ->
     providers(ParentDoc, od_space);
 
 providers(Doc, od_group) ->
-    #document{
-        value = #od_group{
-            users = UsersWithPrivileges,
-            eff_users = EUsersWithPrivileges,
-            eff_children = EChildrenWithPrivileges
-        }} = Doc,
-    EGroups = maps:keys(EChildrenWithPrivileges),
-    Users = maps:keys(UsersWithPrivileges),
-    EUsers = maps:keys(EUsersWithPrivileges),
-    AncestorsUsers = lists:foldl(
-        fun(AncestorId, Acc) ->
-            case od_group:get(AncestorId) of
-                {ok, #document{
-                    value = #od_group{eff_users = AncUsersAndPerms}}} ->
-                    AncestorUsers = maps:keys(AncUsersAndPerms),
-                    Acc ++ AncestorUsers;
-                {error, Reason} ->
-                    ?warning("Referenced group ~p not found due to ~p",
-                        [AncestorId, Reason]),
-                    Acc
-            end
-        end, [], EGroups -- [Doc#document.key]),
-    through_users(Users ++ EUsers ++ AncestorsUsers);
+    #document{value = #od_group{eff_users = EffUsers}} = Doc,
+    through_users(maps:keys(EffUsers));
 
 providers(Doc, od_user) ->
     through_users([Doc#document.key]);

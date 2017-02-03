@@ -228,7 +228,6 @@ fetch_from_db(Seqs) ->
                 exit(Pid, fetch_taking_too_long),
                 exit(fetch_taking_too_long)
         end
-
     end), ok.
 
 

@@ -20,7 +20,7 @@
 
 %% API
 -export([
-    all/0
+    all/0, init_per_suite/1
 ]).
 -export([
     user_upgrade_test/1
@@ -48,7 +48,20 @@ all() -> ?ALL([
 
 
 user_upgrade_test(Config) ->
-    ok.
+    OldUserRecord = old_user_record(),
+    {NewVersion, NewRecord} = oz_test_utils:call_oz(
+        Config, od_user, record_upgrade, [1, OldUserRecord]
+    ),
+    ?assertEqual(2, NewVersion),
+    ?assertMatch(NewRecord, new_user_record()).
+
+
+%%%===================================================================
+%%% Setup/teardown functions
+%%%===================================================================
+
+init_per_suite(Config) ->
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 

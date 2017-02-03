@@ -71,11 +71,8 @@ create_provider(Config, Name, Spaces, URLs) ->
         <<"csr">> => CSR
     },
     {ok, {Id, _}} = oz_test_utils:create_provider(Config, Params),
-    SpacesWithSupports = maps:from_list([
-        {S, 1000000000} || S <- Spaces
-    ]),
     {ok, Id} = oz_test_utils:call_oz(
-        Config, od_provider, update, [Id, #{spaces => SpacesWithSupports}]
+        Config, od_provider, update, [Id, #{spaces => Spaces}]
     ),
     Id.
 
@@ -301,7 +298,7 @@ provider_expectation(Id, Name, URLs, Spaces) ->
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
 
-        {<<"spaces">>, Spaces},
+        {<<"spaces">>, maps:keys(Spaces)},
 
         {<<"public_only">>, false}
     ]}].

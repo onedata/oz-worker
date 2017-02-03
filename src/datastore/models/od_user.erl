@@ -303,6 +303,7 @@ to_string(UserId) ->
 
 record_upgrade(1, User) ->
     {
+        od_user,
         Name,
         Login,
         BasicAuthEnabled,
@@ -312,8 +313,45 @@ record_upgrade(1, User) ->
         DefaultSpace,
         DefaultProvider,
         ChosenProvider,
-        ClientTokens
+        ClientTokens,
+        SpaceAliases,
+        OzPrivileges,
+        _EffOzPrivileges,
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        _EffGroups,
+        _EffSpaces,
+        _EffShares,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+        _TopDownDirty
+
     } = User,
     {2, #od_user{
-
+        name = Name,
+        login = Login,
+        alias = Alias,
+        email_list = EmailList,
+        basic_auth_enabled = BasicAuthEnabled,
+        connected_accounts = ConnectedAccounts,
+        default_space = DefaultSpace,
+        default_provider = DefaultProvider,
+        chosen_provider = ChosenProvider,
+        client_tokens = ClientTokens,
+        space_aliases = SpaceAliases,
+        oz_privileges = OzPrivileges,
+        eff_oz_privileges = [],
+        groups = Groups,
+        spaces = Spaces,
+        handle_services = HandleServices,
+        handles = Handles,
+        eff_groups = #{}, % eff groups should be empty, the entity will be recalculated anyway
+        eff_spaces = #{},
+        eff_providers = #{},
+        eff_handle_services = #{},
+        eff_handles = #{},
+        top_down_dirty = true
     }}.
