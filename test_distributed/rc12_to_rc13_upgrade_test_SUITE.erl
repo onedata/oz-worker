@@ -23,8 +23,9 @@
     all/0, init_per_suite/1
 ]).
 -export([
-    user_upgrade_test/1
-%%    group_upgrade_test/1,
+    user_upgrade_test/1,
+    group_upgrade_test/1
+    %% TODO
 %%    space_upgrade_test/1,
 %%    share_upgrade_test/1,
 %%    provider_upgrade_test/1,
@@ -37,8 +38,9 @@
 %%%===================================================================
 
 all() -> ?ALL([
-    user_upgrade_test
-%%    group_upgrade_test,
+    user_upgrade_test,
+    group_upgrade_test
+    %% TODO
 %%    space_upgrade_test,
 %%    share_upgrade_test,
 %%    provider_upgrade_test,
@@ -53,7 +55,16 @@ user_upgrade_test(Config) ->
         Config, od_user, record_upgrade, [1, OldUserRecord]
     ),
     ?assertEqual(2, NewVersion),
-    ?assertMatch(NewRecord, new_user_record()).
+    ?assertEqual(NewRecord, new_user_record()).
+
+
+group_upgrade_test(Config) ->
+    OldGroupRecord = old_group_record(),
+    {NewVersion, NewRecord} = oz_test_utils:call_oz(
+        Config, od_group, record_upgrade, [1, OldGroupRecord]
+    ),
+    ?assertEqual(2, NewVersion),
+    ?assertEqual(NewRecord, new_group_record()).
 
 
 %%%===================================================================
@@ -64,6 +75,72 @@ init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
+%%%===================================================================
+%%% Record definitions
+%%%===================================================================
+
+old_group_record() -> {od_group,
+    <<"name">>,
+    role,
+    [ % oz_privileges
+        view_privileges, set_privileges, list_users, add_member_to_space
+    ],
+    [], % eff_oz_privileges
+    [<<"parent1">>, <<"parent2">>],
+    [
+        {<<"child1">>, [?GROUP_VIEW, ?GROUP_CREATE_SPACE, ?GROUP_INVITE_GROUP]},
+        {<<"child2">>, [?GROUP_UPDATE, ?GROUP_DELETE, ?GROUP_JOIN_GROUP]}
+    ],
+    [], % eff_parents
+    [], % eff_children
+    [
+        {<<"user1">>, [?GROUP_JOIN_GROUP, ?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES]},
+        {<<"user2">>, [?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_REMOVE_GROUP]}
+    ],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"handle_service1">>],
+    [<<"handle1">>, <<"handle2">>],
+    [], % eff_users
+    [], % eff_spaces
+    [], % eff_shares
+    [], % eff_providers
+    [], % eff_handle_services
+    [], % eff_handles
+    false, % top_down_dirty
+    false  % bottom_up_dirty
+}.
+
+new_group_record() -> #od_group{
+    name = <<"name">>,
+    type = role,
+    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
+    eff_oz_privileges = [],
+
+    parents = [<<"parent1">>, <<"parent2">>],
+    children = #{
+        <<"child1">> => [?GROUP_VIEW, ?GROUP_CREATE_SPACE, ?GROUP_INVITE_GROUP],
+        <<"child2">> => [?GROUP_UPDATE, ?GROUP_DELETE, ?GROUP_JOIN_GROUP]
+    },
+    eff_parents = #{},
+    eff_children = #{},
+
+    users = #{
+        <<"user1">> => [?GROUP_JOIN_GROUP, ?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES],
+        <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_REMOVE_GROUP]
+    },
+    spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
+    handle_services = [<<"handle_service1">>],
+    handles = [<<"handle1">>, <<"handle2">>],
+
+    eff_users = #{},
+    eff_spaces = #{},
+    eff_providers = #{},
+    eff_handle_services = #{},
+    eff_handles = #{},
+
+    top_down_dirty = true,
+    bottom_up_dirty = true
+}.
 
 old_user_record() -> {od_user,
     <<"name">>,

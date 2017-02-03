@@ -301,6 +301,13 @@ to_string(UserId) ->
     <<"user:", UserId/binary>>.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades record from specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_upgrade(datastore_json:record_version(), tuple()) ->
+    {datastore_json:record_version(), tuple()}.
 record_upgrade(1, User) ->
     {
         od_user,
@@ -328,7 +335,6 @@ record_upgrade(1, User) ->
         _EffHandleServices,
         _EffHandles,
         _TopDownDirty
-
     } = User,
     {2, #od_user{
         name = Name,
