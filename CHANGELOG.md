@@ -4,6 +4,16 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc12
+
+* VFS-2496 Allow to set null default provider or space
+* VFS-2931 Reduce number of kept rotated log files
+* VFS-2883 Update oz-gui-default reference
+* VFS-2883 Add space support sizes information per provider in space data backend
+* VFS-2883 Add space size to space record served by space data backend
+* VFS-2883 Add provider hostname to provider record served by proivder data backend
+
+
 ### 3.0.0-rc11
 
 * VFS-2765 Add some error resistance when obtaining unexpected data from openid providers
