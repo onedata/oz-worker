@@ -188,7 +188,7 @@ space_update_through_users_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Config, ?ID(p1), #{}),
-    S1 = #od_space{name = <<"initial">>, users = #{?ID(u1) => []}},
+    S1 = #od_space{name = <<"initial">>, users = #{?ID(u1) => []}, eff_users = #{?ID(u1) => {[], []}}},
     U1 = #od_user{name = <<"u1">>},
 
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
@@ -211,13 +211,16 @@ space_update_through_groups_test(Config) ->
     % given
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Config, ?ID(p1), #{}),
-    S1 = #od_space{name = <<"initial">>, groups = #{?ID(g1) => []}},
     U1 = #od_user{name = <<"u1">>},
-
     G1 = #od_group{
         name = <<"g1">>,
         users = #{?ID(u1) => privileges:group_admin()},
         spaces = [?ID(s1)]
+    },
+    S1 = #od_space{name = <<"initial">>,
+        users = #{?ID(u1) => []},
+        eff_users = #{?ID(u1) => {[], []}},
+        groups = #{?ID(g1) => []}
     },
 
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
@@ -262,7 +265,9 @@ handle_update_through_users_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Config, ?ID(p1), #{}),
     Timestamp = od_handle:actual_timestamp(),
-    H1 = #od_handle{metadata = <<"initial">>, users = #{?ID(u1) => []}, timestamp = Timestamp},
+    H1 = #od_handle{metadata = <<"initial">>,
+        users = #{?ID(u1) => []},  eff_users = #{?ID(u1) => {[], []}},
+        timestamp = Timestamp},
     U1 = #od_user{name = <<"u1">>},
 
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
@@ -286,7 +291,9 @@ handle_update_through_groups_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Config, ?ID(p1), #{}),
     Timestamp = od_handle:actual_timestamp(),
-    H1 = #od_handle{metadata = <<"initial">>, groups = #{?ID(g1) => []}, timestamp = Timestamp},
+    H1 = #od_handle{metadata = <<"initial">>,
+        groups = #{?ID(g1) => []}, eff_users = #{?ID(u1) => {[], []}},
+        timestamp = Timestamp},
     U1 = #od_user{name = <<"u1">>},
 
     G1 = #od_group{
@@ -562,8 +569,8 @@ simple_delete_test(Config) ->
     PID = subscriptions_test_utils:create_provider(Config, ?ID(p1), #{?ID(s1) => ?SUP_SIZE}),
     U1 = #od_user{name = <<"u1">>, groups = [?ID(g1)]},
     S1 = #od_space{name = <<"s1">>, providers = #{PID => 0},
-        users = #{?ID(u1) => []}},
-    G1 = #od_group{name = <<"g1">>, users = #{?ID(u1) => []}},
+        users = #{?ID(u1) => []}, eff_users = #{?ID(u1) => {[], []}}},
+    G1 = #od_group{name = <<"g1">>, users = #{?ID(u1) => []}, eff_users = #{?ID(u1) => {[], []}}},
 
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(s1), S1),
@@ -629,7 +636,7 @@ group_update_through_users_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     PID = subscriptions_test_utils:create_provider(Config, ?ID(p1), #{}),
     U1 = #od_user{name = <<"u1">>},
-    G1 = #od_group{name = <<"g1">>, users = #{?ID(u1) => []}},
+    G1 = #od_group{name = <<"g1">>, users = #{?ID(u1) => []}, eff_users = #{?ID(u1) => {[], []}}},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(g1), G1),
 
@@ -731,18 +738,26 @@ updates_for_added_user_test(Config) ->
         ?ID(s1) => ?SUP_SIZE, ?ID(s2) => ?SUP_SIZE
     }),
     U1 = #od_user{name = <<"u1">>, groups = [?ID(g1)],
-        eff_groups = #{?ID(g1) => [], ?ID(g2) => []}, spaces = [?ID(s2)]},
-    G1 = #od_group{name = <<"g1">>, users = #{?ID(u1) => []},
+        eff_groups = #{?ID(g1) => [], ?ID(g2) => []},
+        spaces = [?ID(s2)], eff_spaces = #{?ID(s1) => [], ?ID(s2) => []}
+    },
+    G1 = #od_group{name = <<"g1">>, users = #{?ID(u1) => []}, eff_users = #{?ID(u1) => {[], []}},
         spaces = [?ID(s1)], eff_children = #{?ID(g1) => {[], []}, ?ID(g2) => {[], []}},
         parents = [?ID(g2)]},
-    G2 = #od_group{name = <<"g1">>, users = #{},
+    G2 = #od_group{name = <<"g1">>, users = #{}, eff_users = #{?ID(u1) => {[], []}},
         spaces = [], eff_children = #{?ID(g2) => {[], []}},
         children = #{?ID(g1) => [], ?ID(g3) => []}},
-    G3 = #od_group{name = <<"g1">>, users = #{},
+    G3 = #od_group{name = <<"g1">>, users = #{}, eff_users = #{?ID(u1) => {[], []}},
         spaces = [], eff_children = #{?ID(g3) => {[], []}, ?ID(g2) => {[], []}},
         parents = [?ID(g2)]},
-    S1 = #od_space{name = <<"s1">>, providers = #{PID => 0}, groups = #{?ID(g1) => []}},
-    S2 = #od_space{name = <<"s2">>, providers = #{PID => 0}, users = #{?ID(u1) => []}},
+    S1 = #od_space{name = <<"s1">>, providers = #{PID => 0},
+        groups = #{?ID(g1) => []}, eff_groups = #{
+            ?ID(g1) => {[], []},
+            ?ID(g2) => {[], []},
+            ?ID(g3) => {[], []}
+        }, eff_users = #{?ID(u1) => {[], []}}},
+    S2 = #od_space{name = <<"s2">>, providers = #{PID => 0},
+        users = #{?ID(u1) => []}, eff_users = #{?ID(u1) => {[], []}}},
     subscriptions_test_utils:save(Node, ?ID(u1), U1),
     subscriptions_test_utils:save(Node, ?ID(g1), G1),
     subscriptions_test_utils:save(Node, ?ID(g2), G2),

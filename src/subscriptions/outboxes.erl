@@ -35,7 +35,12 @@ push(ID, PushFun) ->
         buffer = [], timer = undefined, timer_expires = undefined
     }}, fun(Outbox = #outbox{buffer = Buffer, timer = TRef}) ->
         case TRef of undefined -> ok; _ -> timer:cancel(TRef) end,
-        PushFun(ID, Buffer),
+        try
+            PushFun(ID, Buffer)
+        catch Type:Message ->
+            ?error_stacktrace("Failed to push messages to provider - ~p:~p~n"
+            "Batch: ~p", [Type, Message, Buffer])
+        end,
         {ok, Outbox#outbox{buffer = [], timer = undefined}}
     end), ok.
 

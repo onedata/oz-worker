@@ -36,7 +36,7 @@
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
--export([record_struct/1]).
+-export([record_struct/1, record_upgrade/2]).
 -export([to_string/1]).
 
 %%--------------------------------------------------------------------
@@ -46,6 +46,20 @@
 %%--------------------------------------------------------------------
 -spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
 record_struct(1) ->
+    {record, [
+        {public_handle, string},
+        {resource_type, string},
+        {resource_id, string},
+        {metadata, string},
+        {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
+        {handle_service, string},
+        {users, [{string, [atom]}]},
+        {groups, [{string, [atom]}]},
+        {eff_users, [{string, [atom]}]},
+        {eff_groups, [{string, [atom]}]},
+        {bottom_up_dirty, boolean}
+    ]};
+record_struct(2) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
@@ -148,7 +162,8 @@ exists(Key) ->
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
     StoreLevel = ?DISK_ONLY_LEVEL,
-    ?MODEL_CONFIG(handle_bucket, [], StoreLevel).
+    Config = ?MODEL_CONFIG(handle_bucket, [], StoreLevel),
+    Config#model_config{version = 2}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -180,4 +195,41 @@ before(_ModelName, _Method, _Level, _Context) ->
 -spec to_string(HandleId :: id()) -> binary().
 to_string(HandleId) ->
     <<"handle:", HandleId/binary>>.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades record from specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_upgrade(datastore_json:record_version(), tuple()) ->
+    {datastore_json:record_version(), tuple()}.
+record_upgrade(1, Handle) ->
+    {
+        od_handle,
+        PublicHandle,
+        ResourceType,
+        ResourceId,
+        Metadata,
+        Timestamp,
+        HandleService,
+        Users,
+        Groups,
+        _EffUsers,
+        _EffGroups,
+        _BottomUpDirty
+    } = Handle,
+    {2, #od_handle{
+        public_handle = PublicHandle,
+        resource_type = ResourceType,
+        metadata = Metadata,
+        timestamp = Timestamp,
+        resource_id = ResourceId,
+        handle_service = HandleService,
+        users = maps:from_list(Users),
+        groups = maps:from_list(Groups),
+        eff_users = #{},
+        eff_groups = #{},
+        bottom_up_dirty = true
+    }}.
 

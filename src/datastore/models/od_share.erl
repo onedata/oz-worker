@@ -29,7 +29,7 @@
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
--export([record_struct/1]).
+-export([record_struct/1, record_upgrade/2]).
 -export([to_string/1]).
 
 %%--------------------------------------------------------------------
@@ -39,6 +39,17 @@
 %%--------------------------------------------------------------------
 -spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
 record_struct(1) ->
+    {record, [
+        {name, string},
+        {public_url, string},
+        {space, string},
+        {handle, string},
+        {root_file, string},
+        {eff_users, [string]},
+        {eff_groups, [string]},
+        {bottom_up_dirty, boolean}
+    ]};
+record_struct(2) ->
     {record, [
         {name, string},
         {public_url, string},
@@ -124,7 +135,8 @@ exists(Key) ->
 model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
     StoreLevel = application:get_env(?APP_NAME, share_store_level, ?DISK_ONLY_LEVEL),
-    ?MODEL_CONFIG(share_bucket, [], StoreLevel).
+    Config = ?MODEL_CONFIG(share_bucket, [], StoreLevel),
+    Config#model_config{version = 2}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -156,3 +168,31 @@ before(_ModelName, _Method, _Level, _Context) ->
 -spec to_string(ShareId :: id()) -> binary().
 to_string(ShareId) ->
     <<"share:", ShareId/binary>>.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades record from specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_upgrade(datastore_json:record_version(), tuple()) ->
+    {datastore_json:record_version(), tuple()}.
+record_upgrade(1, Share) ->
+    {
+        od_share,
+        Name,
+        PublicUrl,
+        SpaceId,
+        HandleId,
+        RootFileId,
+        _EffUsers,
+        _EffGroups,
+        _BottomUpDirty
+    } = Share,
+    {2, #od_share{
+        name = Name,
+        public_url = PublicUrl,
+        space = SpaceId,
+        handle = HandleId,
+        root_file = RootFileId
+    }}.

@@ -318,7 +318,7 @@ handle_service_expectation(Id, Name, ProxyEndpoint, ServiceProperties, Users, Gr
         {<<"id">>, Id},
         {<<"name">>, Name},
         {<<"proxy_endpoint">>, ProxyEndpoint},
-        {<<"service_properties">>, ServiceProperties},
+        {<<"service_properties">>, maps:to_list(ServiceProperties)},
 
         {<<"users">>, privileges_as_binaries(maps:to_list(Users))},
         {<<"groups">>, privileges_as_binaries(maps:to_list(Groups))},

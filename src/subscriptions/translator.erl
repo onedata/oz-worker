@@ -222,7 +222,7 @@ get_msg(Seq, Doc, od_handle_service = Model) ->
         {id, Id},
         {name, Name},
         {proxy_endpoint, ProxyEndpoint},
-        {service_properties, ServiceProperties},
+        {service_properties, maps:to_list(ServiceProperties)},
 
         % Direct relations to other entities
         {users, relation_with_attrs_to_proplist(Users)},

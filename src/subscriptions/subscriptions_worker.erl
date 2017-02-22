@@ -214,7 +214,8 @@ fetch_from_db(Seqs) ->
         process_flag(trap_exit, true),
 
         {ok, Pid} = couchdb_datastore_driver:changes_start_link(fun
-            (_Seq, stream_ended, _Type) -> ok;
+            (_Seq, stream_ended, _Type) ->
+                ok;
             (Seq, Doc, Type) ->
                 handle_change(Seq, Doc, Type)
         end, From, To),

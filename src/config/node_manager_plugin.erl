@@ -92,8 +92,8 @@ modules_with_args() ->
     Base = node_manager:cluster_worker_modules() ++ [
         {changes_worker, []},
         {singleton, ozpca_worker, [
-            {supervisor_spec, ozpca_worker:supervisor_spec()},
-            {supervisor_child_spec, [ozpca_worker:supervisor_child_spec()]}
+            {supervisor_flags, ozpca_worker:supervisor_flags()},
+            {supervisor_children_spec, [ozpca_worker:supervisor_children_spec()]}
         ]},
         {subscriptions_worker, []}
     ],
