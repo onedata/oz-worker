@@ -185,8 +185,10 @@ record_upgrade(1, Share) ->
         SpaceId,
         HandleId,
         RootFileId,
+
         _EffUsers,
         _EffGroups,
+
         _BottomUpDirty
     } = Share,
     {2, #od_share{

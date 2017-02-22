@@ -513,7 +513,10 @@ authorize(delete, _SpaceId, {group, _GroupId}, ?USER(UserId)) -> [
 ];
 
 authorize(delete, _SpaceId, {provider, _ProviderId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?SPACE_REMOVE_PROVIDER).
+    auth_by_privilege(UserId, ?SPACE_REMOVE_PROVIDER);
+
+authorize(_, _, _, _) ->
+    false.
 
 
 %%--------------------------------------------------------------------

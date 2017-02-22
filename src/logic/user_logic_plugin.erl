@@ -523,7 +523,10 @@ authorize(get, undefined, list, ?USER(UserId)) ->
 authorize(get, _UserId, data, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_USERS_LIST);
 authorize(get, _UserId, entity, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?OZ_USERS_LIST).
+    auth_by_oz_privilege(UserId, ?OZ_USERS_LIST);
+
+authorize(_, _, _, _) ->
+    false.
 
 
 %%--------------------------------------------------------------------

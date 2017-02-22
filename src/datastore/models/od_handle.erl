@@ -212,11 +212,14 @@ record_upgrade(1, Handle) ->
         ResourceId,
         Metadata,
         Timestamp,
+
         HandleService,
         Users,
         Groups,
+
         _EffUsers,
         _EffGroups,
+
         _BottomUpDirty
     } = Handle,
     {2, #od_handle{
@@ -224,12 +227,15 @@ record_upgrade(1, Handle) ->
         resource_type = ResourceType,
         metadata = Metadata,
         timestamp = Timestamp,
+
         resource_id = ResourceId,
         handle_service = HandleService,
         users = maps:from_list(Users),
         groups = maps:from_list(Groups),
+
         eff_users = #{},
         eff_groups = #{},
+
         bottom_up_dirty = true
     }}.
 

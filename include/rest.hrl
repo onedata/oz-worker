@@ -16,11 +16,11 @@
 -include("entity_logic.hrl").
 
 -define(REST_LISTENER, rest).
--define(REST_HANDLER_MODULE, n_rest_handler).
+-define(REST_HANDLER_MODULE, rest_handler).
 
 %% Record containing the state of REST request.
 -record(rest_req, {
-    method = get :: n_rest_handler:method(),
+    method = get :: rest_handler:method(),
     % Entity logic plugin to handle the request
     el_plugin = undefined :: undefined | entity_logic:el_plugin(),
     entity_id = undefined :: undefined | entity_logic:entity_id() | client_id | {binding, atom()},

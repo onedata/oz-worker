@@ -349,7 +349,10 @@ authorize(delete, _ProvId, entity, ?USER(UserId)) ->
     user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_DELETE);
 
 authorize(delete, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
-    true.
+    true;
+
+authorize(_, _, _, _) ->
+    false.
 
 
 %%--------------------------------------------------------------------

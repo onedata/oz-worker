@@ -111,28 +111,9 @@ optional => #{Key :: binary() | resource => {type_validator(), value_validator()
     EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
     result().
 create(Client, ELPlugin, EntityId, Resource, Data) ->
-    try
-        Request = #request{
-            client = Client,
-            el_plugin = ELPlugin,
-            entity_id = EntityId,
-            operation = create,
-            data = Data,
-            resource = Resource
-        },
-        call_create(
-            check_validity(
-                check_authorization(
-                    check_existence_of_entity(Request))))
-    catch
-        throw:Error ->
-            Error;
-        Type:Message ->
-            ?error_stacktrace("Error in entity_logic:create - ~p:~p", [
-                Type, Message
-            ]),
-            ?ERROR_INTERNAL_SERVER_ERROR
-    end.
+    handle_errors(fun create_internal/5, [
+        Client, ELPlugin, EntityId, Resource, Data
+    ]).
 
 
 %%--------------------------------------------------------------------
@@ -143,26 +124,9 @@ create(Client, ELPlugin, EntityId, Resource, Data) ->
 -spec get(Client :: client(), ELPlugin :: el_plugin(),
     EntityId :: entity_id(), Resource :: resource()) -> result().
 get(Client, ELPlugin, EntityId, Resource) ->
-    try
-        Request = #request{
-            client = Client,
-            el_plugin = ELPlugin,
-            entity_id = EntityId,
-            operation = get,
-            resource = Resource
-        },
-        call_get_resource(
-            check_authorization(
-                check_existence(Request)))
-    catch
-        throw:Error ->
-            Error;
-        Type:Message ->
-            ?error_stacktrace("Error in entity_logic:get - ~p:~p", [
-                Type, Message
-            ]),
-            ?ERROR_INTERNAL_SERVER_ERROR
-    end.
+    handle_errors(fun get_internal/4, [
+        Client, ELPlugin, EntityId, Resource
+    ]).
 
 
 %%--------------------------------------------------------------------
@@ -174,28 +138,9 @@ get(Client, ELPlugin, EntityId, Resource) ->
     EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
     result().
 update(Client, ELPlugin, EntityId, Resource, Data) ->
-    try
-        Request = #request{
-            client = Client,
-            el_plugin = ELPlugin,
-            entity_id = EntityId,
-            operation = update,
-            resource = Resource,
-            data = Data
-        },
-        call_update(
-            check_validity(
-                check_authorization(
-                    check_existence(Request))))
-    catch
-        throw:Error ->
-            Error;
-        Type:Message ->
-            ?error_stacktrace("Error in entity_logic:update - ~p:~p", [
-                Type, Message
-            ]),
-            ?ERROR_INTERNAL_SERVER_ERROR
-    end.
+    handle_errors(fun update_internal/5, [
+        Client, ELPlugin, EntityId, Resource, Data
+    ]).
 
 
 %%--------------------------------------------------------------------
@@ -206,38 +151,9 @@ update(Client, ELPlugin, EntityId, Resource, Data) ->
 -spec delete(Client :: client(), ELPlugin :: el_plugin(),
     EntityId :: entity_id(), Resource :: resource()) -> result().
 delete(Client, ELPlugin, EntityId, Resource) ->
-    try
-        Request = #request{
-            client = Client,
-            el_plugin = ELPlugin,
-            entity_id = EntityId,
-            operation = delete,
-            resource = Resource
-        },
-        Result = call_delete(
-            check_authorization(
-                check_existence(Request))),
-        case {Result, Resource} of
-            {ok, entity} ->
-                % If an entity is deleted, log an information about it
-                % (it's a serious operation and this information might be useful).
-                ?info("~s has been deleted by client: ~s", [
-                    ELPlugin:entity_to_string(EntityId),
-                    client_to_string(Client)
-                ]),
-                ok;
-            _ ->
-                Result
-        end
-    catch
-        throw:Error ->
-            Error;
-        Type:Message ->
-            ?error_stacktrace("Error in entity_logic:delete - ~p:~p", [
-                Type, Message
-            ]),
-            ?ERROR_INTERNAL_SERVER_ERROR
-    end.
+    handle_errors(fun delete_internal/4, [
+        Client, ELPlugin, EntityId, Resource
+    ]).
 
 
 %%--------------------------------------------------------------------
@@ -255,6 +171,131 @@ client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Wraps implementations of create/get/update/delete and handles all
+%% errors uniformly.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_errors(Function :: fun(), Args :: [term()]) -> result().
+handle_errors(Function, Args) ->
+    try
+        Function(Args)
+    catch
+        throw:Error ->
+            Error;
+        Type:Message ->
+            ?error_stacktrace("Unexpected error in entity_logic - ~p:~p", [
+                Type, Message
+            ]),
+            ?ERROR_INTERNAL_SERVER_ERROR
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Creates a resource using provided entity logic module.
+%% Must be evaluated inside handle_errors function.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_internal(Client :: client(), ELPlugin :: el_plugin(),
+    EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
+    result().
+create_internal(Client, ELPlugin, EntityId, Resource, Data) ->
+    Request = #request{
+        client = Client,
+        el_plugin = ELPlugin,
+        entity_id = EntityId,
+        operation = create,
+        data = Data,
+        resource = Resource
+    },
+    call_create(
+        check_validity(
+            check_authorization(
+                check_existence_of_entity(Request)))).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a resource using provided entity logic module.
+%% Must be evaluated inside handle_errors function.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_internal(Client :: client(), ELPlugin :: el_plugin(),
+    EntityId :: entity_id(), Resource :: resource()) -> result().
+get_internal(Client, ELPlugin, EntityId, Resource) ->
+    Request = #request{
+        client = Client,
+        el_plugin = ELPlugin,
+        entity_id = EntityId,
+        operation = get,
+        resource = Resource
+    },
+    call_get_resource(
+        check_authorization(
+            check_existence(Request))).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a resource using provided entity logic module.
+%% Must be evaluated inside handle_errors function.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_internal(Client :: client(), ELPlugin :: el_plugin(),
+    EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
+    result().
+update_internal(Client, ELPlugin, EntityId, Resource, Data) ->
+    Request = #request{
+        client = Client,
+        el_plugin = ELPlugin,
+        entity_id = EntityId,
+        operation = update,
+        resource = Resource,
+        data = Data
+    },
+    call_update(
+        check_validity(
+            check_authorization(
+                check_existence(Request)))).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes a resource using provided entity logic module.
+%% Must be evaluated inside handle_errors function.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_internal(Client :: client(), ELPlugin :: el_plugin(),
+    EntityId :: entity_id(), Resource :: resource()) -> result().
+delete_internal(Client, ELPlugin, EntityId, Resource) ->
+    Request = #request{
+        client = Client,
+        el_plugin = ELPlugin,
+        entity_id = EntityId,
+        operation = delete,
+        resource = Resource
+    },
+    Result = call_delete(
+        check_authorization(
+            check_existence(Request))),
+    case {Result, Resource} of
+        {ok, entity} ->
+            % If an entity is deleted, log an information about it
+            % (it's a serious operation and this information might be useful).
+            ?info("~s has been deleted by client: ~s", [
+                ELPlugin:entity_to_string(EntityId),
+                client_to_string(Client)
+            ]),
+            ok;
+        _ ->
+            Result
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -425,7 +466,15 @@ call_authorize(Request) ->
     catch
         throw:Error ->
             throw(Error);
-        _:_ ->
+        Type:Message ->
+            ?error_stacktrace("Cannot get authorization rules - ~p:~p~n"
+            "Plugin: ~p~n"
+            "Client: ~p~n"
+            "Operation: ~p~n"
+            "EntityId: ~p~n"
+            "Resource: ~p~n", [
+                Type, Message, ELPlugin, Client, Operation, EntityId, Resource
+            ]),
             [false]
     end.
 
@@ -684,33 +733,42 @@ check_type(atom, Key, Binary) when is_binary(Binary) ->
     end;
 check_type(atom, Key, _) ->
     throw(?ERROR_BAD_VALUE_ATOM(Key));
-check_type(list_of_atoms, _Key, []) ->
-    [];
-check_type(list_of_atoms, _Key, [Atom | _] = Atoms) when is_atom(Atom) ->
-    Atoms;
-check_type(list_of_atoms, Key, [Binary | _] = Binaries) when is_binary(Binary) ->
+check_type(list_of_atoms, Key, Values) ->
     try
-        [binary_to_existing_atom(Bin, utf8) || Bin <- Binaries]
+        lists:map(
+            fun(Value) ->
+                case Value of
+                    Atom when is_atom(Atom) ->
+                        Atom;
+                    Bin when is_binary(Bin) ->
+                        binary_to_existing_atom(Bin, utf8)
+                end
+            end, Values)
     catch
         _:_ ->
             throw(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key))
     end;
-check_type(list_of_atoms, Key, _) ->
-    throw(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key));
 check_type(binary, _Key, Binary) when is_binary(Binary) ->
     Binary;
 check_type(binary, _Key, Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
 check_type(binary, Key, _) ->
     throw(?ERROR_BAD_VALUE_BINARY(Key));
-check_type(list_of_binaries, _Key, []) ->
-    [];
-check_type(list_of_binaries, _Key, [Binary | _] = Binaries) when is_binary(Binary) ->
-    Binaries;
-check_type(list_of_binaries, _Key, [Atom | _] = Atoms) when is_atom(Atom) ->
-    [atom_to_binary(A, utf8) || A <- Atoms];
-check_type(list_of_binaries, Key, _) ->
-    throw(?ERROR_BAD_VALUE_LIST_OF_BINARIES(Key));
+check_type(list_of_binaries, Key, Values)  ->
+    try
+        lists:map(
+            fun(Value) ->
+                case Value of
+                    Atom when is_atom(Atom) ->
+                        atom_to_binary(Atom, utf8);
+                    Bin when is_binary(Bin) ->
+                        Bin
+                end
+            end, Values)
+    catch
+        _:_ ->
+            throw(?ERROR_BAD_VALUE_LIST_OF_BINARIES(Key))
+    end;
 check_type(integer, Key, Bin) when is_binary(Bin) ->
     try
         binary_to_integer(Bin)

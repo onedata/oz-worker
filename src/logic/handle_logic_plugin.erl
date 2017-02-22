@@ -410,7 +410,10 @@ authorize(delete, _HandleId, {user, _UserId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?HANDLE_UPDATE);
 
 authorize(delete, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE).
+    auth_by_privilege(UserId, ?HANDLE_UPDATE);
+
+authorize(_, _, _, _) ->
+    false.
 
 
 %%--------------------------------------------------------------------

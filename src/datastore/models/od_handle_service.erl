@@ -187,20 +187,26 @@ record_upgrade(1, HandleService) ->
         Name,
         ProxyEndpoint,
         ServiceProperties,
+
         Users,
         Groups,
+
         _EffUsers,
         _EffGroups,
+
         _BottomUpDirty
     } = HandleService,
     {2, #od_handle_service{
         name = Name,
         proxy_endpoint = ProxyEndpoint,
         service_properties = maps:from_list(ServiceProperties),
+
         users = maps:from_list(Users),
         groups = maps:from_list(Groups),
         handles = [],
+
         eff_users = #{},
         eff_groups = #{},
+
         bottom_up_dirty = true
     }}.

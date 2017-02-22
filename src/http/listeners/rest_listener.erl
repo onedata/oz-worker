@@ -133,5 +133,5 @@ routes() ->
     {ok, ZoneCADir} = application:get_env(?APP_NAME, ozpca_dir),
     [
         {<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}} |
-        n_rest_handler:rest_routes()
+        rest_handler:rest_routes()
     ].

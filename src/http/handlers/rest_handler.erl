@@ -9,7 +9,7 @@
 %%% Cowboy's rest pseudo-behavior, delegating specifics to submodules.
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_rest_handler).
+-module(rest_handler).
 -author("Lukasz Opiola").
 
 -include("rest.hrl").

@@ -35,41 +35,41 @@
     EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
     Result :: entity_logic:result()) -> #rest_resp{}.
 response(create, undefined, entity, {ok, {ProvId, Certificate}}) ->
-    n_rest_handler:ok_body_reply(#{
+    rest_handler:ok_body_reply(#{
         <<"providerId">> => ProvId,
         <<"certificate">> => Certificate
     });
 response(create, undefined, entity_dev, {ok, {ProvId, Certificate}}) ->
-    n_rest_handler:ok_body_reply(#{
+    rest_handler:ok_body_reply(#{
         <<"providerId">> => ProvId,
         <<"certificate">> => Certificate
     });
 response(create, _ProvId, support, {ok, SpaceId}) ->
-    n_rest_handler:created_reply([<<"provider/spaces/">>, SpaceId]);
+    rest_handler:created_reply([<<"provider/spaces/">>, SpaceId]);
 response(create, _ProvId, check_my_ports, {ok, Body}) ->
-    n_rest_handler:ok_body_reply(Body);
+    rest_handler:ok_body_reply(Body);
 
 response(get, undefined, list, {ok, ProviderIds}) ->
-    n_rest_handler:ok_body_reply(#{<<"providers">> => ProviderIds});
+    rest_handler:ok_body_reply(#{<<"providers">> => ProviderIds});
 response(get, EntityId, data, {ok, ProviderData}) ->
-    n_rest_handler:ok_body_reply(ProviderData#{<<"providerId">> => EntityId});
+    rest_handler:ok_body_reply(ProviderData#{<<"providerId">> => EntityId});
 response(get, _ProvId, eff_users, {ok, UserIds}) ->
-    n_rest_handler:ok_body_reply(#{<<"users">> => UserIds});
+    rest_handler:ok_body_reply(#{<<"users">> => UserIds});
 response(get, _ProvId, {eff_user, UserId}, {ok, UserData}) ->
     user_rest_translator:response(get, UserId, data, {ok, UserData});
 response(get, _ProvId, eff_groups, {ok, GroupIds}) ->
-    n_rest_handler:ok_body_reply(#{<<"groups">> => GroupIds});
+    rest_handler:ok_body_reply(#{<<"groups">> => GroupIds});
 response(get, _ProvId, {eff_group, GroupId}, {ok, GroupData}) ->
     group_rest_translator:response(get, GroupId, data, {ok, GroupData});
 response(get, _ProvId, spaces, {ok, SpaceIds}) ->
-    n_rest_handler:ok_body_reply(#{<<"spaces">> => SpaceIds});
+    rest_handler:ok_body_reply(#{<<"spaces">> => SpaceIds});
 response(get, _ProvId, {space, SpaceId}, {ok, SpaceData}) ->
     space_rest_translator:response(get, SpaceId, data, {ok, SpaceData});
 response(get, _ProvId, {check_my_ip, _}, {ok, IP}) ->
-    n_rest_handler:ok_body_reply(IP);
+    rest_handler:ok_body_reply(IP);
 
 response(update, _ProvId, _, ok) ->
-    n_rest_handler:updated_reply();
+    rest_handler:updated_reply();
 
 response(delete, _ProvId, _, ok) ->
-    n_rest_handler:deleted_reply().
+    rest_handler:deleted_reply().

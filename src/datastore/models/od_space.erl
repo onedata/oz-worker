@@ -186,24 +186,30 @@ record_upgrade(1, Space) ->
     {
         od_space,
         Name,
+
         ProviderSupports,
         Users,
         Groups,
         Shares,
+
         _EffUsers,
         _EffGroups,
+
         _TopDownDirty,
         _BottomUpDirty
     } = Space,
     {2, #od_space{
         name = Name,
+
         users = maps:from_list(Users),
         groups = maps:from_list(Groups),
         providers = maps:from_list(ProviderSupports),
         shares = Shares,
+
         eff_users = #{},
         eff_groups = #{},
         eff_providers = #{},
+
         top_down_dirty = true,
         bottom_up_dirty = true
     }}.

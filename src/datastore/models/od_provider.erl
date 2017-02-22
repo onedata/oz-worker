@@ -191,9 +191,12 @@ record_upgrade(1, Provider) ->
         Serial,
         Latitude,
         Longitude,
+
         Spaces,
+
         _EffUsers,
         _EffGroups,
+
         _BottomUpDirty
     } = Provider,
     {2, #od_provider{
@@ -203,10 +206,13 @@ record_upgrade(1, Provider) ->
         serial = Serial,
         latitude = Latitude,
         longitude = Longitude,
+
         % Set support sizes to 0 as there is no access to this information
         % from here.
         spaces = maps:from_list([{SpaceId, 0} || SpaceId <- Spaces]),
+
         eff_users = #{},
         eff_groups = #{},
+
         bottom_up_dirty = true
     }}.

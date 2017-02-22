@@ -36,38 +36,38 @@
     Result :: entity_logic:result()) -> #rest_resp{}.
 % TODO VFS-2918
 response(create, _HandleId, {deprecated_user_privileges, _UserId}, ok) ->
-    n_rest_handler:ok_no_content_reply();
+    rest_handler:ok_no_content_reply();
 % TODO VFS-2918
 response(create, _HandleId, {deprecated_group_privileges, _GroupId}, ok) ->
-    n_rest_handler:ok_no_content_reply();
+    rest_handler:ok_no_content_reply();
 
 response(create, undefined, entity, {ok, HandleId}) ->
-    n_rest_handler:created_reply([<<"handles">>, HandleId]);
+    rest_handler:created_reply([<<"handles">>, HandleId]);
 
 response(create, HandleId, {user, UserId}, {ok, UserId}) ->
-    n_rest_handler:created_reply(
+    rest_handler:created_reply(
         [<<"handles">>, HandleId, <<"users">>, UserId]
     );
 
 response(create, HandleId, {group, GroupId}, {ok, GroupId}) ->
-    n_rest_handler:created_reply(
+    rest_handler:created_reply(
         [<<"handles">>, HandleId, <<"groups">>, GroupId]
     );
 
 response(get, HandleId, data, {ok, #{<<"timestamp">> := Timestamp} = HandleData}) ->
-    n_rest_handler:ok_body_reply(HandleData#{
+    rest_handler:ok_body_reply(HandleData#{
         <<"handleId">> => HandleId,
         <<"timestamp">> => timestamp_utils:datetime_to_datestamp(Timestamp)
     });
 
 response(get, undefined, list, {ok, HServices}) ->
-    n_rest_handler:ok_body_reply(#{<<"handles">> => HServices});
+    rest_handler:ok_body_reply(#{<<"handles">> => HServices});
 
 response(get, _HandleId, users, {ok, Users}) ->
-    n_rest_handler:ok_body_reply(#{<<"users">> => Users});
+    rest_handler:ok_body_reply(#{<<"users">> => Users});
 
 response(get, _HandleId, eff_users, {ok, Users}) ->
-    n_rest_handler:ok_body_reply(#{<<"users">> => Users});
+    rest_handler:ok_body_reply(#{<<"users">> => Users});
 
 response(get, _HandleId, {user, UserId}, {ok, User}) ->
     user_rest_translator:response(get, UserId, data, {ok, User});
@@ -76,16 +76,16 @@ response(get, _HandleId, {eff_user, UserId}, {ok, User}) ->
     user_rest_translator:response(get, UserId, data, {ok, User});
 
 response(get, _HandleId, {user_privileges, _UserId}, {ok, Privileges}) ->
-    n_rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
 
 response(get, _HandleId, {eff_user_privileges, _UserId}, {ok, Privileges}) ->
-    n_rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
 
 response(get, _HandleId, groups, {ok, Groups}) ->
-    n_rest_handler:ok_body_reply(#{<<"groups">> => Groups});
+    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
 
 response(get, _HandleId, eff_groups, {ok, Groups}) ->
-    n_rest_handler:ok_body_reply(#{<<"groups">> => Groups});
+    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
 
 response(get, _HandleId, {group, GroupId}, {ok, Group}) ->
     group_rest_translator:response(get, GroupId, data, {ok, Group});
@@ -94,15 +94,15 @@ response(get, _HandleId, {eff_group, GroupId}, {ok, Group}) ->
     group_rest_translator:response(get, GroupId, data, {ok, Group});
 
 response(get, _HandleId, {group_privileges, _GroupId}, {ok, Privileges}) ->
-    n_rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
 
 response(get, _HandleId, {eff_group_privileges, _GroupId}, {ok, Privileges}) ->
-    n_rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
 
 
 response(update, _HandleId, _, ok) ->
-    n_rest_handler:updated_reply();
+    rest_handler:updated_reply();
 
 
 response(delete, _HandleId, _, ok) ->
-    n_rest_handler:deleted_reply().
+    rest_handler:deleted_reply().

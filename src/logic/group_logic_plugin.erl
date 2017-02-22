@@ -623,7 +623,10 @@ authorize(delete, _GroupId, {user, _UserId}, ?USER(UserId)) -> [
 authorize(delete, _GroupId, {child, _ChildGroupId}, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?GROUP_REMOVE_GROUP),
     auth_by_oz_privilege(UserId, ?OZ_GROUPS_REMOVE_MEMBERS)
-].
+];
+
+authorize(_, _, _, _) ->
+    false.
 
 
 %%--------------------------------------------------------------------

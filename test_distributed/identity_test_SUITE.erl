@@ -92,8 +92,8 @@ certs_are_published_on_provider_registration_via_rest(Config) ->
     ?assertMatch(ok, verify(OZ1, Cert2)),
     ?assertMatch(ok, verify(OZ2, Cert2)).
 
-%% todo: this is a-happy-path only as auth in n_rest_handler is mocked anyway
-%% todo: remove n_rest_handler mock and test auth thoroughly
+%% todo: this is a-happy-path only as auth in rest_handler is mocked anyway
+%% todo: remove rest_handler mock and test auth thoroughly
 provider_certs_are_updated_via_rest(Config) ->
     %% given
     [OZ1, OZ2, _] = ?config(oz_worker_nodes, Config),
@@ -124,8 +124,8 @@ init_per_testcase(_, Config) ->
     hackney:start(),
 
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_new(Nodes, n_rest_handler),
-    test_utils:mock_expect(Nodes, n_rest_handler, is_authorized,
+    test_utils:mock_new(Nodes, rest_handler),
+    test_utils:mock_expect(Nodes, rest_handler, is_authorized,
         fun(Req, State) ->
             {Bindings, _} = cowboy_req:bindings(Req),
             ResId = proplists:get_value(id, Bindings),
@@ -136,7 +136,7 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, [n_rest_handler]),
+    test_utils:mock_unload(Nodes, [rest_handler]),
 
     hackney:stop(),
     application:stop(etls),

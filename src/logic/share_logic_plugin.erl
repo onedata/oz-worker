@@ -192,7 +192,10 @@ authorize(update, _ShareId, entity, ?USER(UserId)) ->
     auth_by_space_privilege(UserId, ?SPACE_MANAGE_SHARES);
 
 authorize(delete, _ShareId, entity, ?USER(UserId)) ->
-    auth_by_space_privilege(UserId, ?SPACE_MANAGE_SHARES).
+    auth_by_space_privilege(UserId, ?SPACE_MANAGE_SHARES);
+
+authorize(_, _, _, _) ->
+    false.
 
 
 %%--------------------------------------------------------------------
