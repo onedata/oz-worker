@@ -36,14 +36,11 @@
 response(create, undefined, {provider, _Id}, ok) ->
     n_rest_handler:ok_no_content_reply();
 
-
 response(get, undefined, {publickey, _Id}, {ok, EncodedPublicKey}) ->
     n_rest_handler:ok_body_reply(#{<<"publicKey">> => EncodedPublicKey});
 
-
 response(update, undefined, _, ok) ->
     n_rest_handler:updated_reply();
-
 
 response(delete, undefined, _, ok) ->
     n_rest_handler:deleted_reply().

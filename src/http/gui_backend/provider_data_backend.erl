@@ -153,7 +153,7 @@ provider_record(ProviderId, UserId) ->
     Spaces = maps:keys(SpacesWithSupports),
 
     #{host := Host} = url_utils:parse(RedPoint),
-    IsWorking = n_provider_logic:check_provider_connectivity(ProviderId),
+    IsWorking = n_provider_logic:is_provider_connected(ProviderId),
 
     SpacesToDisplay = lists:filter(
         fun(Space) ->

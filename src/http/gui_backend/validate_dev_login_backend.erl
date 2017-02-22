@@ -48,20 +48,12 @@ page_init() ->
             gui_session:log_in(UserId)
     end,
     ?info("[DEV MODE] User ~p logged in", [UserId]),
-    {ok, #od_user{
-        default_provider = DefaultProvider
-    }} = n_user_logic:get(?USER(UserId), UserId),
-    case DefaultProvider of
-        undefined ->
-            {redirect_relative, <<"/">>};
-        ProvId ->
-            case n_provider_logic:check_provider_connectivity(ProvId) of
-                true ->
-                    ?debug("Automatically redirecting user `~s` "
-                    "to default provider `~s`", [UserId, ProvId]),
-                    {ok, ProvURL} = auth_logic:get_redirection_uri(UserId, ProvId),
-                    {redirect_absolute, ProvURL};
-                false ->
-                    {redirect_relative, <<"/">>}
-            end
+    case n_user_logic:get_default_provider_if_online(UserId) of
+        {true, DefaultProv} ->
+            ?debug("Automatically redirecting user `~s` "
+            "to default provider `~s`", [UserId, DefaultProv]),
+            {ok, ProvURL} = auth_logic:get_redirection_uri(UserId, DefaultProv),
+            {redirect_absolute, ProvURL};
+        false ->
+            {redirect_relative, <<"/">>}
     end.

@@ -88,7 +88,8 @@
     add_oauth_account/2,
     is_email_occupied/2,
     authenticate_by_basic_credentials/2,
-    change_user_password/3
+    change_user_password/3,
+    get_default_provider_if_online/1
 ]).
 
 %%%===================================================================
@@ -1021,6 +1022,7 @@ authenticate_by_basic_credentials(Login, Password) ->
             {ok, UserDocument, FirstLogin}
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Contacts onepanel to change user's password using basic authorization
@@ -1057,6 +1059,26 @@ change_user_password(Login, OldPassword, NewPassword) ->
             {error, bad_request};
         {error, Error} ->
             {error, Error}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns default provider for given user if it is online (connected to onezone
+%% using subscriptions channel), or false otherwise.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_default_provider_if_online(UserOrId :: od_user:id() | #od_user{}) ->
+    {true, od_provider:id()} | false.
+get_default_provider_if_online(UserId) ->
+    {ok, User} = get(?ROOT, UserId),
+    get_default_provider_if_online(User);
+get_default_provider_if_online(#od_user{default_provider = undefined}) ->
+    false;
+get_default_provider_if_online(#od_user{default_provider = DefaultProv}) ->
+    case n_provider_logic:is_provider_connected(DefaultProv) of
+        true -> {true, DefaultProv};
+        false -> false
     end.
 
 

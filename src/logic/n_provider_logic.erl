@@ -54,7 +54,7 @@
 -export([
     get_url/1,
     choose_provider_for_user/1,
-    check_provider_connectivity/1
+    is_provider_connected/1
 ]).
 
 %%%===================================================================
@@ -420,8 +420,8 @@ choose_provider_for_user(UserId) ->
 % Checks if given provider (by Id) is alive and responding.
 %% @end
 %%--------------------------------------------------------------------
--spec check_provider_connectivity(ProviderId :: od_provider:id()) -> boolean().
-check_provider_connectivity(ProviderId) ->
+-spec is_provider_connected(ProviderId :: od_provider:id()) -> boolean().
+is_provider_connected(ProviderId) ->
     case subscriptions:any_connection_active(ProviderId) of
         true ->
             true;
@@ -431,7 +431,8 @@ check_provider_connectivity(ProviderId) ->
                 % but the worker is fully operational. For example, when the
                 % connection has timed out and provider hasn't reconnected yet.
                 % In such case, make sure it is really inoperable by making
-                % a http request.
+                % a http request. Use low connection timeout so as not to delay
+                % the calling process to much.
                 {ok, #od_provider{
                     redirection_point = RedPoint
                 }} = get(?ROOT, ProviderId),
@@ -439,8 +440,11 @@ check_provider_connectivity(ProviderId) ->
                 ConnCheckEndpoint = str_utils:format_bin("https://~s~s", [
                     Host, ?PROVIDER_ID_ENDPOINT
                 ]),
-                {ok, _, _, ProviderId} =
-                    http_client:get(ConnCheckEndpoint, #{}, <<>>, [insecure]),
+                {ok, _, _, ProviderId} = http_client:get(
+                    ConnCheckEndpoint, #{}, <<>>, [
+                        insecure, {connect_timeout, 2000}
+                    ]
+                ),
                 true
             catch _:_ ->
                 false

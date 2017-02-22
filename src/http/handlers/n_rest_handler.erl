@@ -161,28 +161,13 @@ resource_exists(Req, State) ->
 is_authorized(Req, State) ->
     % Check if the request carries any authorization
     try
-        % First, check for basic auth headers.
-        Client = case authenticate_by_basic_auth(Req) of
-            {true, BasicClient} ->
-                BasicClient;
-            false ->
-                % Basic auth not found, try macaroons
-                case authenticate_by_macaroons(Req) of
-                    {true, MacaroonClient} ->
-                        MacaroonClient;
-                    false ->
-                        % Macaroon auth not found,
-                        % try to authorize as provider
-                        case authenticate_by_provider_certs(Req) of
-                            {true, ProviderClient} ->
-                                ProviderClient;
-                            false ->
-                                % No auth found, client is nobody.
-                                ?NOBODY
-                        end
-                end
-        end,
-        % Always return true - this is checked by entity_logic later.
+        % Try to authenticate the client using several methods.
+        Client = authenticate(Req, [
+            fun authenticate_by_basic_auth/1,
+            fun authenticate_by_macaroons/1,
+            fun authenticate_by_provider_certs/1
+        ]),
+        % Always return true - authorization is checked by entity_logic later.
         {true, Req, State#state{client = Client}}
     catch
         throw:Error ->
@@ -491,6 +476,27 @@ translate_response(TranslatorModule, Operation, EntityId, Resource, Result) ->
                 Resource, Result, Type, Message
             ]),
             error_rest_translator:response(?ERROR_INTERNAL_SERVER_ERROR)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authenticate REST client using provided auth methods expressed
+%% as functions to use.
+%% @end
+%%--------------------------------------------------------------------
+-spec authenticate(Req :: cowboy_req:req(),
+    AuthFuns :: [fun((cowboy_req:req()) -> false | {true, #client{}})]) ->
+    #client{}.
+authenticate(Req, []) ->
+    ?NOBODY;
+authenticate(Req, [AuthMethod | Rest]) ->
+    case AuthMethod(Req) of
+        {true, Client} ->
+            Client;
+        false ->
+            authenticate(Req, Rest)
     end.
 
 

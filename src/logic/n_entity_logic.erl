@@ -6,7 +6,14 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-
+%%% This module encapsulates all common logic concerning entities in onezone.
+%%% It is used to process entity requests is a standardized way, i.e.:
+%%%     # checks existence of given entity
+%%%     # checks authorization of client to perform certain action
+%%%     # checks validity of data provided in the request
+%%%     # handles all errors in a uniform way
+%%% It uses a callback system, accepting modules that implement
+%%% entity_logic_plugin_behaviour.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(n_entity_logic).
