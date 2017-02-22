@@ -104,7 +104,7 @@ automatic_group_membership_test(Config) ->
         Node, oz_worker, predefined_groups, PredefinedGroups
     ),
     % Call the group creation procedure
-    ok = rpc:call(Node, n_group_logic, create_predefined_groups, []),
+    ok = rpc:call(Node, group_logic, create_predefined_groups, []),
     % Now, prepare config entry for onepanel role to groups mapping. We want
     % everyone with role "user2Role" to belong to both groups 1 and 2.
     RoleToGroupMapping = #{
@@ -150,13 +150,13 @@ change_password_test(Config) ->
     % accepts (user3:password3) credentials for user with id userId3
     % Try to change password of userId3. First, use wrong password.
     ?assertEqual({error, <<"Invalid password">>}, rpc:call(
-        Node, n_user_logic, change_user_password, [
+        Node, user_logic, change_user_password, [
             <<"user3">>, <<"bad_password">>, <<"new_password">>
         ]
     )),
     % Now with correct credentials
     ?assertEqual(ok, rpc:call(
-        Node, n_user_logic, change_user_password, [
+        Node, user_logic, change_user_password, [
             <<"user3">>, <<"password3">>, <<"new_password">>
         ]
     )),

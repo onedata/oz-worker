@@ -36,7 +36,7 @@
 -spec user_routes() -> [{binary(), #rest_req{}}].
 user_routes() ->
     R = #rest_req{
-        el_plugin = n_user_logic_plugin,
+        el_plugin = user_logic_plugin,
         translator = user_rest_translator
     },
     [
@@ -236,7 +236,7 @@ user_routes() ->
 -spec group_routes() -> [{binary(), #rest_req{}}].
 group_routes() ->
     R = #rest_req{
-        el_plugin = n_group_logic_plugin,
+        el_plugin = group_logic_plugin,
         translator = group_rest_translator
     },
     [
@@ -479,7 +479,7 @@ group_routes() ->
 -spec space_routes() -> [{binary(), #rest_req{}}].
 space_routes() ->
     R = #rest_req{
-        el_plugin = n_space_logic_plugin,
+        el_plugin = space_logic_plugin,
         translator = space_rest_translator
     },
     [
@@ -615,7 +615,7 @@ space_routes() ->
 -spec share_routes() -> [{binary(), #rest_req{}}].
 share_routes() ->
     R = #rest_req{
-        el_plugin = n_share_logic_plugin,
+        el_plugin = share_logic_plugin,
         translator = share_rest_translator
     },
     [
@@ -645,7 +645,7 @@ share_routes() ->
 -spec provider_routes() -> [{binary(), #rest_req{}}].
 provider_routes() ->
     R = #rest_req{
-        el_plugin = n_provider_logic_plugin,
+        el_plugin = provider_logic_plugin,
         translator = provider_rest_translator
     },
     [
@@ -731,7 +731,7 @@ provider_routes() ->
 -spec handle_service_routes() -> [{binary(), #rest_req{}}].
 handle_service_routes() ->
     R = #rest_req{
-        el_plugin = n_handle_service_logic_plugin,
+        el_plugin = handle_service_logic_plugin,
         translator = handle_service_rest_translator
     },
     [
@@ -832,7 +832,7 @@ handle_service_routes() ->
 -spec handle_routes() -> [{binary(), #rest_req{}}].
 handle_routes() ->
     R = #rest_req{
-        el_plugin = n_handle_logic_plugin,
+        el_plugin = handle_logic_plugin,
         translator = handle_rest_translator
     },
     [
@@ -926,7 +926,7 @@ handle_routes() ->
 -spec identity_routes() -> [{binary(), #rest_req{}}].
 identity_routes() ->
     R = #rest_req{
-        el_plugin = n_identity_logic_plugin,
+        el_plugin = identity_logic_plugin,
         translator = identity_rest_translator
     },
     [

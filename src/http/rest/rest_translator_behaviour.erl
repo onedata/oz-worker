@@ -20,7 +20,7 @@
 %% expressed by #rest_resp{} record.
 %% @end
 %%--------------------------------------------------------------------
--callback response(Operation :: n_entity_logic:operation(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: n_entity_logic:resource(),
-    Result :: n_entity_logic:result()) -> #rest_resp{}.
+-callback response(Operation :: entity_logic:operation(),
+    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
+    Result :: entity_logic:result()) -> #rest_resp{}.
 

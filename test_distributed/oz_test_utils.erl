@@ -164,7 +164,7 @@ call_oz(Config, Module, Function, Args) ->
 -spec create_user(Config :: term(), User :: #od_user{}) -> {ok, od_user:id()}.
 create_user(Config, User) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_user_logic, create, [User]
+        Config, user_logic, create, [User]
     )).
 
 
@@ -177,7 +177,7 @@ create_user(Config, User) ->
     {ok, Token :: binary()}.
 create_client_token(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_user_logic, create_client_token, [?ROOT, UserId]
+        Config, user_logic, create_client_token, [?ROOT, UserId]
     )).
 
 
@@ -189,7 +189,7 @@ create_client_token(Config, UserId) ->
 -spec get_user(Config :: term(), UserId :: od_user:id()) -> {ok, #od_user{}}.
 get_user(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_user_logic, get, [?ROOT, UserId]
+        Config, user_logic, get, [?ROOT, UserId]
     )).
 
 
@@ -201,7 +201,7 @@ get_user(Config, UserId) ->
 -spec get_user_oz_privileges(Config :: term(), UserId :: od_user:id()) ->
     {ok, [privileges:oz_privilege()]}.
 get_user_oz_privileges(Config, UserId) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_user_logic, get_oz_privileges, [
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_oz_privileges, [
         ?ROOT, UserId
     ])).
 
@@ -214,7 +214,7 @@ get_user_oz_privileges(Config, UserId) ->
 -spec get_user_eff_oz_privileges(Config :: term(), UserId :: od_user:id()) ->
     {ok, [privileges:oz_privilege()]}.
 get_user_eff_oz_privileges(Config, UserId) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_user_logic, get_eff_oz_privileges, [
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_eff_oz_privileges, [
         ?ROOT, UserId
     ])).
 
@@ -227,7 +227,7 @@ get_user_eff_oz_privileges(Config, UserId) ->
 -spec list_users(Config :: term()) -> {ok, [od_user:id()]}.
 list_users(Config) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_user_logic, list, [?ROOT]
+        Config, user_logic, list, [?ROOT]
     )).
 
 
@@ -240,7 +240,7 @@ list_users(Config) ->
     Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
 set_user_oz_privileges(Config, UserId, Operation, Privileges) ->
-    ?assertMatch(ok, call_oz(Config, n_user_logic, update_oz_privileges, [
+    ?assertMatch(ok, call_oz(Config, user_logic, update_oz_privileges, [
         ?ROOT, UserId, Operation, Privileges
     ])).
 
@@ -253,7 +253,7 @@ set_user_oz_privileges(Config, UserId, Operation, Privileges) ->
 -spec set_user_default_space(Config :: term(), UserId :: od_user:id(),
     SpaceId :: od_space:id()) -> ok.
 set_user_default_space(Config, UserId, SpaceId) ->
-    ?assertMatch(ok, call_oz(Config, n_user_logic, set_default_space, [
+    ?assertMatch(ok, call_oz(Config, user_logic, set_default_space, [
         ?ROOT, UserId, SpaceId
     ])).
 
@@ -265,7 +265,7 @@ set_user_default_space(Config, UserId, SpaceId) ->
 %%--------------------------------------------------------------------
 -spec unset_user_default_space(Config :: term(), UserId :: od_user:id()) -> ok.
 unset_user_default_space(Config, UserId) ->
-    ?assertMatch(ok, call_oz(Config, n_user_logic, unset_default_space, [
+    ?assertMatch(ok, call_oz(Config, user_logic, unset_default_space, [
         ?ROOT, UserId
     ])).
 
@@ -278,7 +278,7 @@ unset_user_default_space(Config, UserId) ->
 -spec set_user_space_alias(Config :: term(), UserId :: od_user:id(),
     SpaceId :: od_space:id(), Alias :: binary()) -> ok.
 set_user_space_alias(Config, UserId, SpaceId, Alias) ->
-    ?assertMatch(ok, call_oz(Config, n_user_logic, set_space_alias, [
+    ?assertMatch(ok, call_oz(Config, user_logic, set_space_alias, [
         ?ROOT, UserId, SpaceId, Alias
     ])).
 
@@ -291,7 +291,7 @@ set_user_space_alias(Config, UserId, SpaceId, Alias) ->
 -spec unset_user_space_alias(Config :: term(), UserId :: od_user:id(),
     SpaceId :: od_space:id()) -> ok.
 unset_user_space_alias(Config, UserId, SpaceId) ->
-    ?assertMatch(ok, call_oz(Config, n_user_logic, delete_space_alias, [
+    ?assertMatch(ok, call_oz(Config, user_logic, delete_space_alias, [
         ?ROOT, UserId, SpaceId
     ])).
 
@@ -304,7 +304,7 @@ unset_user_space_alias(Config, UserId, SpaceId) ->
 -spec set_user_default_provider(Config :: term(), UserId :: od_user:id(),
     ProviderId :: od_provider:id()) -> ok.
 set_user_default_provider(Config, UserId, ProviderId) ->
-    ?assertMatch(ok, call_oz(Config, n_user_logic, set_default_provider, [
+    ?assertMatch(ok, call_oz(Config, user_logic, set_default_provider, [
         ?ROOT, UserId, ProviderId
     ])).
 
@@ -317,7 +317,7 @@ set_user_default_provider(Config, UserId, ProviderId) ->
 -spec unset_user_default_provider(Config :: term(), UserId :: od_user:id()) ->
     ok.
 unset_user_default_provider(Config, UserId) ->
-    ?assertMatch(ok, call_oz(Config, n_user_logic, unset_default_provider, [
+    ?assertMatch(ok, call_oz(Config, user_logic, unset_default_provider, [
         ?ROOT, UserId
     ])).
 
@@ -330,7 +330,7 @@ unset_user_default_provider(Config, UserId) ->
 -spec delete_user(Config :: term(), UserId :: od_user:id()) -> ok.
 delete_user(Config, UserId) ->
     ?assertMatch(ok, call_oz(
-        Config, n_user_logic, delete, [?ROOT, UserId]
+        Config, user_logic, delete, [?ROOT, UserId]
     )).
 
 
@@ -343,7 +343,7 @@ delete_user(Config, UserId) ->
     SpaceId :: od_space:id()) -> ok.
 user_leave_space(Config, UserId, SpaceId) ->
     ?assertMatch(ok, call_oz(
-        Config, n_user_logic, leave_space, [?ROOT, UserId, SpaceId]
+        Config, user_logic, leave_space, [?ROOT, UserId, SpaceId]
     )).
 
 
@@ -352,11 +352,11 @@ user_leave_space(Config, UserId, SpaceId) ->
 %% Creates group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group(Config :: term(), Client :: n_entity_logic:client(),
+-spec create_group(Config :: term(), Client :: entity_logic:client(),
     Name :: od_group:name()) -> {ok, Id :: binary()}.
 create_group(Config, Client, Name) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_group_logic, create, [Client, Name]
+        Config, group_logic, create, [Client, Name]
     )).
 
 
@@ -369,7 +369,7 @@ create_group(Config, Client, Name) ->
     {ok, #od_group{}}.
 get_group(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_group_logic, get, [?ROOT, GroupId]
+        Config, group_logic, get, [?ROOT, GroupId]
     )).
 
 
@@ -381,7 +381,7 @@ get_group(Config, GroupId) ->
 -spec get_group_oz_privileges(Config :: term(), GroupId :: od_group:id()) ->
     {ok, [privileges:oz_privilege()]}.
 get_group_oz_privileges(Config, GroupId) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, get_oz_privileges, [
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, get_oz_privileges, [
         ?ROOT, GroupId
     ])).
 
@@ -394,7 +394,7 @@ get_group_oz_privileges(Config, GroupId) ->
 -spec get_group_eff_oz_privileges(Config :: term(), GroupId :: od_group:id()) ->
     {ok, [privileges:oz_privilege()]}.
 get_group_eff_oz_privileges(Config, GroupId) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, get_eff_oz_privileges, [
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_oz_privileges, [
         ?ROOT, GroupId
     ])).
 
@@ -406,7 +406,7 @@ get_group_eff_oz_privileges(Config, GroupId) ->
 %%--------------------------------------------------------------------
 -spec list_groups(Config :: term()) -> {ok, [od_group:id()]}.
 list_groups(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_group_logic, list, [?ROOT])).
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, list, [?ROOT])).
 
 
 %%--------------------------------------------------------------------
@@ -418,7 +418,7 @@ list_groups(Config) ->
     Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
 set_group_oz_privileges(Config, GroupId, Operation, Privileges) ->
-    ?assertMatch(ok, call_oz(Config, n_group_logic, update_oz_privileges, [
+    ?assertMatch(ok, call_oz(Config, group_logic, update_oz_privileges, [
         ?ROOT, GroupId, Operation, Privileges
     ])).
 
@@ -431,7 +431,7 @@ set_group_oz_privileges(Config, GroupId, Operation, Privileges) ->
 -spec delete_group(Config :: term(), GroupId :: od_group:id()) -> ok.
 delete_group(Config, GroupId) ->
     ?assertMatch(ok, call_oz(
-        Config, n_group_logic, delete, [?ROOT, GroupId]
+        Config, group_logic, delete, [?ROOT, GroupId]
     )).
 
 
@@ -444,7 +444,7 @@ delete_group(Config, GroupId) ->
     UserId :: od_user:id()) -> {ok, UserId :: od_user:id()}.
 add_user_to_group(Config, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_group_logic, add_user, [?ROOT, GroupId, UserId]
+        Config, group_logic, add_user, [?ROOT, GroupId, UserId]
     )).
 
 
@@ -457,7 +457,7 @@ add_user_to_group(Config, GroupId, UserId) ->
     ChildGroupId :: od_group:id()) -> {ok, ChildGroupId :: od_group:id()}.
 add_group_to_group(Config, GroupId, ChildGroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_group_logic, add_group, [?ROOT, GroupId, ChildGroupId]
+        Config, group_logic, add_group, [?ROOT, GroupId, ChildGroupId]
     )).
 
 
@@ -470,7 +470,7 @@ add_group_to_group(Config, GroupId, ChildGroupId) ->
     UserId :: od_user:id()) -> ok.
 group_remove_user(Config, GroupId, UserId) ->
     ?assertMatch(ok, call_oz(
-        Config, n_group_logic, remove_user, [?ROOT, GroupId, UserId]
+        Config, group_logic, remove_user, [?ROOT, GroupId, UserId]
     )).
 
 
@@ -483,7 +483,7 @@ group_remove_user(Config, GroupId, UserId) ->
     SpaceId :: od_space:id()) -> ok.
 group_leave_space(Config, GroupId, SpaceId) ->
     ?assertMatch(ok, call_oz(
-        Config, n_group_logic, leave_space, [?ROOT, GroupId, SpaceId]
+        Config, group_logic, leave_space, [?ROOT, GroupId, SpaceId]
     )).
 
 
@@ -492,11 +492,11 @@ group_leave_space(Config, GroupId, SpaceId) ->
 %% Creates a space in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_space(Config :: term(), Client :: n_entity_logic:client(),
+-spec create_space(Config :: term(), Client :: entity_logic:client(),
     Name :: od_space:name()) -> {ok, od_space:id()}.
 create_space(Config, Client, Name) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, create, [Client, Name]
+        Config, space_logic, create, [Client, Name]
     )).
 
 
@@ -509,7 +509,7 @@ create_space(Config, Client, Name) ->
     {ok, #od_space{}}.
 get_space(Config, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, get, [?ROOT, SpaceId]
+        Config, space_logic, get, [?ROOT, SpaceId]
     )).
 
 
@@ -520,7 +520,7 @@ get_space(Config, SpaceId) ->
 %%--------------------------------------------------------------------
 -spec list_spaces(Config :: term()) -> {ok, [od_space:id()]}.
 list_spaces(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_space_logic, list, [?ROOT])).
+    ?assertMatch({ok, _}, call_oz(Config, space_logic, list, [?ROOT])).
 
 
 %%--------------------------------------------------------------------
@@ -532,7 +532,7 @@ list_spaces(Config) ->
     Name :: od_space:name()) -> ok.
 update_space(Config, SpaceId, Name) ->
     ?assertMatch(ok, call_oz(
-        Config, n_space_logic, update, [?ROOT, SpaceId, Name]
+        Config, space_logic, update, [?ROOT, SpaceId, Name]
     )).
 
 
@@ -544,7 +544,7 @@ update_space(Config, SpaceId, Name) ->
 -spec delete_space(Config :: term(), SpaceId :: od_space:id()) -> ok.
 delete_space(Config, SpaceId) ->
     ?assertMatch(ok, call_oz(
-        Config, n_space_logic, delete, [?ROOT, SpaceId]
+        Config, space_logic, delete, [?ROOT, SpaceId]
     )).
 
 
@@ -557,7 +557,7 @@ delete_space(Config, SpaceId) ->
     UserId :: od_user:id()) -> {ok, od_user:id()}.
 add_user_to_space(Config, SpaceId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, add_user, [?ROOT, SpaceId, UserId]
+        Config, space_logic, add_user, [?ROOT, SpaceId, UserId]
     )).
 
 
@@ -570,7 +570,7 @@ add_user_to_space(Config, SpaceId, UserId) ->
     GroupId :: od_group:id()) -> {ok, od_group:id()}.
 add_group_to_space(Config, SpaceId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, add_group, [?ROOT, SpaceId, GroupId]
+        Config, space_logic, add_group, [?ROOT, SpaceId, GroupId]
     )).
 
 
@@ -583,7 +583,7 @@ add_group_to_space(Config, SpaceId, GroupId) ->
     UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:space_privilege()]) -> ok.
 space_set_user_privileges(Config, SpaceId, UserId, Operation, Privs) ->
-    ?assertMatch(ok, call_oz(Config, n_space_logic, update_user_privileges, [
+    ?assertMatch(ok, call_oz(Config, space_logic, update_user_privileges, [
         ?ROOT, SpaceId, UserId, Operation, Privs
     ])).
 
@@ -597,7 +597,7 @@ space_set_user_privileges(Config, SpaceId, UserId, Operation, Privs) ->
     GroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:space_privilege()]) -> ok.
 space_set_group_privileges(Config, SpaceId, GroupId, Operation, Privs) ->
-    ?assertMatch(ok, call_oz(Config, n_space_logic, update_group_privileges, [
+    ?assertMatch(ok, call_oz(Config, space_logic, update_group_privileges, [
         ?ROOT, SpaceId, GroupId, Operation, Privs
     ])).
 
@@ -608,11 +608,11 @@ space_set_group_privileges(Config, SpaceId, GroupId, Operation, Privs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_invite_user_token(Config :: term(),
-    Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+    Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()}.
 space_invite_user_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, create_user_invite_token, [Client, SpaceId]
+        Config, space_logic, create_user_invite_token, [Client, SpaceId]
     )).
 
 
@@ -622,11 +622,11 @@ space_invite_user_token(Config, Client, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_invite_group_token(Config :: term(),
-    Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+    Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()}.
 space_invite_group_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, create_group_invite_token, [Client, SpaceId]
+        Config, space_logic, create_group_invite_token, [Client, SpaceId]
     )).
 
 
@@ -636,11 +636,11 @@ space_invite_group_token(Config, Client, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_invite_provider_token(Config :: term(),
-    Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+    Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()}.
 space_invite_provider_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, create_provider_invite_token, [Client, SpaceId]
+        Config, space_logic, create_provider_invite_token, [Client, SpaceId]
     )).
 
 
@@ -653,7 +653,7 @@ space_invite_provider_token(Config, Client, SpaceId) ->
     UserId :: od_user:id()) -> boolean().
 space_has_effective_user(Config, SpaceId, UserId) ->
     {ok, EffUsers} = ?assertMatch({ok, _}, call_oz(
-        Config, n_space_logic, get_eff_users, [?ROOT, SpaceId]
+        Config, space_logic, get_eff_users, [?ROOT, SpaceId]
     )),
     lists:member(UserId, EffUsers).
 
@@ -663,11 +663,11 @@ space_has_effective_user(Config, SpaceId, UserId) ->
 %% Creates a share in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_share(Config :: term(), Client :: n_entity_logic:client(),
+-spec create_share(Config :: term(), Client :: entity_logic:client(),
     ShareId :: od_share:id(), Name :: od_share:name(), RootFileId :: binary(),
     SpaceId :: od_space:id()) -> {ok, od_share:id()}.
 create_share(Config, Client, ShareId, Name, RootFileId, SpaceId) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_share_logic, create, [
+    ?assertMatch({ok, _}, call_oz(Config, share_logic, create, [
         Client, ShareId, Name, RootFileId, SpaceId
     ])).
 
@@ -677,11 +677,11 @@ create_share(Config, Client, ShareId, Name, RootFileId, SpaceId) ->
 %% Creates a share in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_share(Config :: term(), Client :: n_entity_logic:client(),
+-spec create_share(Config :: term(), Client :: entity_logic:client(),
     Data :: maps:map()) -> {ok, od_share:id()}.
 create_share(Config, Client, Data) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_share_logic, create, [Client, Data]
+        Config, share_logic, create, [Client, Data]
     )).
 
 %%--------------------------------------------------------------------
@@ -691,7 +691,7 @@ create_share(Config, Client, Data) ->
 %%--------------------------------------------------------------------
 -spec list_shares(Config :: term()) -> {ok, [od_share:id()]}.
 list_shares(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_share_logic, list, [?ROOT])).
+    ?assertMatch({ok, _}, call_oz(Config, share_logic, list, [?ROOT])).
 
 
 %%--------------------------------------------------------------------
@@ -701,7 +701,7 @@ list_shares(Config) ->
 %%--------------------------------------------------------------------
 -spec delete_share(Config :: term(), ShareId :: od_share:id()) -> ok.
 delete_share(Config, ShareId) ->
-    ?assertMatch(ok, call_oz(Config, n_share_logic, delete, [?ROOT, ShareId])).
+    ?assertMatch(ok, call_oz(Config, share_logic, delete, [?ROOT, ShareId])).
 
 
 %%--------------------------------------------------------------------
@@ -715,7 +715,7 @@ create_provider_and_certs(Config, Name) ->
     {KeyFile, CSRFile, CertFile} = generate_provider_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
     {ok, {ProviderId, Certificate}} = ?assertMatch({ok, _}, call_oz(
-        Config, n_provider_logic, create, [
+        Config, provider_logic, create, [
             ?NOBODY,
             Name,
             [<<"127.0.0.1">>],
@@ -735,7 +735,7 @@ create_provider_and_certs(Config, Name) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
 create_provider(Config, Data) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_provider_logic, create, [?NOBODY, Data]
+        Config, provider_logic, create, [?NOBODY, Data]
     )).
 
 
@@ -748,7 +748,7 @@ create_provider(Config, Data) ->
     {ok, #od_provider{}}.
 get_provider(Config, ProviderId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_provider_logic, get, [?ROOT, ProviderId]
+        Config, provider_logic, get, [?ROOT, ProviderId]
     )).
 
 
@@ -759,7 +759,7 @@ get_provider(Config, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec list_providers(Config :: term()) -> {ok, [od_provider:id()]}.
 list_providers(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_provider_logic, list, [?ROOT])).
+    ?assertMatch({ok, _}, call_oz(Config, provider_logic, list, [?ROOT])).
 
 
 %%--------------------------------------------------------------------
@@ -769,7 +769,7 @@ list_providers(Config) ->
 %%--------------------------------------------------------------------
 -spec delete_provider(Config :: term(), ProviderId :: od_provider:id()) -> ok.
 delete_provider(Config, ProviderId) ->
-    ?assertMatch(ok, call_oz(Config, n_provider_logic, delete, [
+    ?assertMatch(ok, call_oz(Config, provider_logic, delete, [
         ?ROOT, ProviderId
     ])).
 
@@ -786,7 +786,7 @@ support_space(Config, ProviderId, SpaceId, Size) ->
     {ok, Macaroon} = ?assertMatch({ok, _}, space_invite_provider_token(
         Config, ?ROOT, SpaceId
     )),
-    ?assertMatch({ok, _}, call_oz(Config, n_provider_logic, support_space, [
+    ?assertMatch({ok, _}, call_oz(Config, provider_logic, support_space, [
         ?PROVIDER(ProviderId), ProviderId, Macaroon, Size
     ])).
 
@@ -796,12 +796,12 @@ support_space(Config, ProviderId, SpaceId, Size) ->
 %% Supports a space by a provider based on token.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), Client :: n_entity_logic:client(),
+-spec support_space(Config :: term(), Client :: entity_logic:client(),
     ProviderId :: od_provider:id(), Token :: binary() | macaroon:macaroon(),
     Size :: non_neg_integer()) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
 support_space(Config, Client, ProviderId, Token, Size) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_provider_logic, support_space, [
+    ?assertMatch({ok, _}, call_oz(Config, provider_logic, support_space, [
         Client, ProviderId, Token, Size
     ])).
 
@@ -811,13 +811,13 @@ support_space(Config, Client, ProviderId, Token, Size) ->
 %% Creates a handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle_service(Config :: term(), Client :: n_entity_logic:client(),
+-spec create_handle_service(Config :: term(), Client :: entity_logic:client(),
     Name :: od_handle_service:name(),
     ProxyEndpoint :: od_handle_service:proxy_endpoint(),
     ServiceProperties :: od_handle_service:service_properties()) ->
     {ok, od_handle_service:id()}.
 create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, create, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, create, [
         Client, Name, ProxyEndpoint, ServiceProperties
     ])).
 
@@ -827,10 +827,10 @@ create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
 %% Creates a handle service.npr
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle_service(Config :: term(), Client :: n_entity_logic:client(),
+-spec create_handle_service(Config :: term(), Client :: entity_logic:client(),
     Data :: maps:map()) -> {ok, od_handle_service:id()}.
 create_handle_service(Config, Client, Data) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, create, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, create, [
         Client, Data
     ])).
 
@@ -842,7 +842,7 @@ create_handle_service(Config, Client, Data) ->
 %%--------------------------------------------------------------------
 -spec list_handle_services(Config :: term()) -> {ok, [od_handle_service:id()]}.
 list_handle_services(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, list, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, list, [
         ?ROOT
     ])).
 
@@ -855,7 +855,7 @@ list_handle_services(Config) ->
 -spec delete_handle_service(Config :: term(),
     HandleServiceId :: od_handle_service:id()) -> ok.
 delete_handle_service(Config, HandleServiceId) ->
-    ?assertMatch(ok, call_oz(Config, n_handle_service_logic, delete, [
+    ?assertMatch(ok, call_oz(Config, handle_service_logic, delete, [
         ?ROOT, HandleServiceId
     ])).
 
@@ -869,7 +869,7 @@ delete_handle_service(Config, HandleServiceId) ->
     HServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
     {ok, od_user:id()}.
 add_user_to_handle_service(Config, HServiceId, UserId) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, add_user, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, add_user, [
         ?ROOT, HServiceId, UserId
     ])).
 
@@ -883,7 +883,7 @@ add_user_to_handle_service(Config, HServiceId, UserId) ->
     HServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
     {ok, od_group:id()}.
 add_group_to_handle_service(Config, HServiceId, GroupId) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_service_logic, add_group, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, add_group, [
         ?ROOT, HServiceId, GroupId
     ])).
 
@@ -893,13 +893,13 @@ add_group_to_handle_service(Config, HServiceId, GroupId) ->
 %% Creates a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle(Config :: term(), Client :: n_entity_logic:client(),
+-spec create_handle(Config :: term(), Client :: entity_logic:client(),
     HandleServiceId :: od_handle_service:id(),
     ResourceType :: od_handle:resource_type(),
     ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata()) ->
     {ok, od_handle:id()}.
 create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadata) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, create, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_logic, create, [
         Client, HandleServiceId, ResourceType, ResourceId, Metadata
     ])).
 
@@ -909,10 +909,10 @@ create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadat
 %% Creates a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle(Config :: term(), Client :: n_entity_logic:client(),
+-spec create_handle(Config :: term(), Client :: entity_logic:client(),
     Data :: maps:map()) -> {ok, od_handle:id()}.
 create_handle(Config, Client, Data) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, create, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_logic, create, [
         Client, Data
     ])).
 
@@ -926,7 +926,7 @@ create_handle(Config, Client, Data) ->
     {ok, #od_handle{}}.
 get_handle(Config, HandleId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, n_handle_logic, get, [?ROOT, HandleId]
+        Config, handle_logic, get, [?ROOT, HandleId]
     )).
 
 
@@ -937,7 +937,7 @@ get_handle(Config, HandleId) ->
 %%--------------------------------------------------------------------
 -spec list_handles(Config :: term()) -> {ok, [od_handle:id()]}.
 list_handles(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, list, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_logic, list, [
         ?ROOT
     ])).
 
@@ -950,7 +950,7 @@ list_handles(Config) ->
 -spec update_handle(Config :: term(), HandleId :: od_handle:id(),
     Data :: maps:map()) -> ok.
 update_handle(Config, HandleId, Data) ->
-    ?assertMatch(ok, call_oz(Config, n_handle_logic, update, [
+    ?assertMatch(ok, call_oz(Config, handle_logic, update, [
         ?ROOT, HandleId, Data
     ])).
 
@@ -965,7 +965,7 @@ update_handle(Config, HandleId, Data) ->
     NewResourceId :: od_handle:resource_id(),
     NewMetadata :: od_handle:metadata()) -> ok.
 update_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
-    ?assertMatch(ok, call_oz(Config, n_handle_logic, update, [?ROOT, HandleId, #{
+    ?assertMatch(ok, call_oz(Config, handle_logic, update, [?ROOT, HandleId, #{
         <<"resourceType">> => NewResourceType,
         <<"resourceId">> => NewResourceId,
         <<"metadata">> => NewMetadata
@@ -979,7 +979,7 @@ update_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
 %%--------------------------------------------------------------------
 -spec delete_handle(Config :: term(), HandleId :: od_handle:id()) -> ok.
 delete_handle(Config, HandleId) ->
-    ?assertMatch(ok, call_oz(Config, n_handle_logic, delete, [?ROOT, HandleId])).
+    ?assertMatch(ok, call_oz(Config, handle_logic, delete, [?ROOT, HandleId])).
 
 
 %%--------------------------------------------------------------------
@@ -990,7 +990,7 @@ delete_handle(Config, HandleId) ->
 -spec add_user_to_handle(Config :: term(), HServiceId :: od_handle:id(),
     UserId :: od_user:id()) -> {ok, od_user:id()}.
 add_user_to_handle(Config, HandleId, UserId) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, add_user, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_logic, add_user, [
         ?ROOT, HandleId, UserId
     ])).
 
@@ -1003,7 +1003,7 @@ add_user_to_handle(Config, HandleId, UserId) ->
 -spec add_group_to_handle(Config :: term(), HServiceId :: od_handle:id(),
     GroupId :: od_group:id()) -> {ok, od_group:id()}.
 add_group_to_handle(Config, HandleId, GroupId) ->
-    ?assertMatch({ok, _}, call_oz(Config, n_handle_logic, add_group, [
+    ?assertMatch({ok, _}, call_oz(Config, handle_logic, add_group, [
         ?ROOT, HandleId, GroupId
     ])).
 

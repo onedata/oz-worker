@@ -36,7 +36,7 @@ handle(Req, State) ->
         % Get query string from URL
         % Get the alias from URL
         {ShareId, _} = cowboy_req:binding(share_id, Req),
-        URL = n_share_logic:share_id_to_redirect_url(ShareId),
+        URL = share_logic:share_id_to_redirect_url(ShareId),
         {ok, Req2} = cowboy_req:reply(307,
             [
                 {<<"location">>, URL},

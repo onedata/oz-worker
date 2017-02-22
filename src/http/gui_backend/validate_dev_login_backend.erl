@@ -48,7 +48,7 @@ page_init() ->
             gui_session:log_in(UserId)
     end,
     ?info("[DEV MODE] User ~p logged in", [UserId]),
-    case n_user_logic:get_default_provider_if_online(UserId) of
+    case user_logic:get_default_provider_if_online(UserId) of
         {true, DefaultProv} ->
             ?debug("Automatically redirecting user `~s` "
             "to default provider `~s`", [UserId, DefaultProv]),

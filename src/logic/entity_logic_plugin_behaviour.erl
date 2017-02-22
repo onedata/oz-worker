@@ -20,8 +20,8 @@
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--callback get_entity(EntityId :: n_entity_logic:entity_id()) ->
-    {ok, n_entity_logic:entity()} | {error, Reason :: term()}.
+-callback get_entity(EntityId :: entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | {error, Reason :: term()}.
 
 
 %%--------------------------------------------------------------------
@@ -29,9 +29,9 @@
 %% Creates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--callback create(Client :: n_entity_logic:client(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: n_entity_logic:resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-callback create(Client :: entity_logic:client(),
+    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
+    entity_logic:data()) -> entity_logic:result().
 
 
 %%--------------------------------------------------------------------
@@ -39,9 +39,9 @@
 %% Retrieves a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--callback get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
-    Entity :: n_entity_logic:entity(), Resource :: n_entity_logic:resource()) ->
-    n_entity_logic:result().
+-callback get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
+    Entity :: entity_logic:entity(), Resource :: entity_logic:resource()) ->
+    entity_logic:result().
 
 
 %%--------------------------------------------------------------------
@@ -49,9 +49,9 @@
 %% Updates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--callback update(EntityId :: n_entity_logic:entity_id(),
-    Resource :: n_entity_logic:resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-callback update(EntityId :: entity_logic:entity_id(),
+    Resource :: entity_logic:resource(),
+    entity_logic:data()) -> entity_logic:result().
 
 
 %%--------------------------------------------------------------------
@@ -59,8 +59,8 @@
 %% Deletes a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--callback delete(EntityId :: n_entity_logic:entity_id(),
-    Resource :: n_entity_logic:resource()) -> n_entity_logic:result().
+-callback delete(EntityId :: entity_logic:entity_id(),
+    Resource :: entity_logic:resource()) -> entity_logic:result().
 
 
 %%--------------------------------------------------------------------
@@ -74,9 +74,9 @@
 %% process with given result.
 %% @end
 %%--------------------------------------------------------------------
--callback exists(Resource :: n_entity_logic:resource()) ->
-    n_entity_logic:existence_verificator()|
-    [n_entity_logic:existence_verificator()].
+-callback exists(Resource :: entity_logic:resource()) ->
+    entity_logic:existence_verificator()|
+    [entity_logic:existence_verificator()].
 
 
 %%--------------------------------------------------------------------
@@ -90,10 +90,10 @@
 %% process with given result.
 %% @end
 %%--------------------------------------------------------------------
--callback authorize(Operation :: n_entity_logic:operation(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: n_entity_logic:resource(),
-    Client :: n_entity_logic:client()) ->
-    n_entity_logic:authorization_verificator() |
+-callback authorize(Operation :: entity_logic:operation(),
+    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
+    Client :: entity_logic:client()) ->
+    entity_logic:authorization_verificator() |
     [authorization_verificator:existence_verificator()].
 
 
@@ -106,9 +106,9 @@
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--callback validate(Operation :: n_entity_logic:operation(),
-    Resource :: n_entity_logic:resource()) ->
-    n_entity_logic:validity_verificator().
+-callback validate(Operation :: entity_logic:operation(),
+    Resource :: entity_logic:resource()) ->
+    entity_logic:validity_verificator().
 
 
 %%--------------------------------------------------------------------
@@ -116,4 +116,4 @@
 %% Returns readable string representing the entity with given id.
 %% @end
 %%--------------------------------------------------------------------
--callback entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
+-callback entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().

@@ -142,18 +142,18 @@ delete_record(<<"provider">>, _Id) ->
     proplists:proplist().
 provider_record(ProviderId, UserId) ->
     Client = ?USER(gui_session:get_user_id()),
-    {ok, #od_user{eff_spaces = EffUserSpaces}} = n_user_logic:get(Client, UserId),
+    {ok, #od_user{eff_spaces = EffUserSpaces}} = user_logic:get(Client, UserId),
     {ok, #od_provider{
         name = Name,
         redirection_point = RedPoint,
         latitude = Latitude,
         longitude = Longitude,
         spaces = SpacesWithSupports
-    }} = n_provider_logic:get(?ROOT, ProviderId),
+    }} = provider_logic:get(?ROOT, ProviderId),
     Spaces = maps:keys(SpacesWithSupports),
 
     #{host := Host} = url_utils:parse(RedPoint),
-    IsWorking = n_provider_logic:is_provider_connected(ProviderId),
+    IsWorking = provider_logic:is_provider_connected(ProviderId),
 
     SpacesToDisplay = lists:filter(
         fun(Space) ->

@@ -9,7 +9,7 @@
 
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_identity_logic_plugin).
+-module(identity_logic_plugin).
 -author("Lukasz Opiola").
 
 -include("errors.hrl").
@@ -37,8 +37,8 @@
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_entity(EntityId :: n_entity_logic:entity_id()) ->
-    {ok, n_entity_logic:entity()} | {error, Reason :: term()}.
+-spec get_entity(EntityId :: entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | {error, Reason :: term()}.
 get_entity(_) ->
     ?ERROR_NOT_FOUND.
 
@@ -48,9 +48,9 @@ get_entity(_) ->
 %% Creates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-spec create(Client :: entity_logic:client(),
+    EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    entity_logic:data()) -> entity_logic:result().
 create(_Client, undefined, {provider, Id}, Data) ->
     EncodedPublicKey = maps:get(<<"publicKey">>, Data),
     URLs = maps:get(<<"urls">>, Data),
@@ -71,9 +71,9 @@ create(_Client, undefined, {provider, Id}, Data) ->
 %% Retrieves a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
-    Entity :: n_entity_logic:entity(), Resource :: resource()) ->
-    n_entity_logic:result().
+-spec get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
+    Entity :: entity_logic:entity(), Resource :: resource()) ->
+    entity_logic:result().
 get(_, undefined, undefined, {publickey, Id}) ->
     plugins:apply(identity_repository, get, [Id]).
 
@@ -83,8 +83,8 @@ get(_, undefined, undefined, {publickey, Id}) ->
 %% Updates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    entity_logic:data()) -> entity_logic:result().
 update(undefined, {publickey, Id}, #{<<"publicKey">> := EncodedPublicKey}) ->
     case plugins:apply(identity_repository, publish, [Id, EncodedPublicKey]) of
         ok ->
@@ -100,8 +100,8 @@ update(undefined, {publickey, Id}, #{<<"publicKey">> := EncodedPublicKey}) ->
 %% Deletes a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
-    n_entity_logic:result().
+-spec delete(EntityId :: entity_logic:entity_id(), Resource :: resource()) ->
+    entity_logic:result().
 delete(_, _) ->
     ?ERROR_NOT_IMPLEMENTED.
 
@@ -118,8 +118,8 @@ delete(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(Resource :: resource()) ->
-    n_entity_logic:existence_verificator()|
-    [n_entity_logic:existence_verificator()].
+    entity_logic:existence_verificator()|
+    [entity_logic:existence_verificator()].
 exists({publickey, Id}) ->
     {external, fun() ->
         case plugins:apply(identity_repository, get, [Id]) of
@@ -140,10 +140,10 @@ exists({publickey, Id}) ->
 %% process with given result.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize(Operation :: n_entity_logic:operation(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    Client :: n_entity_logic:client()) ->
-    n_entity_logic:authorization_verificator() |
+-spec authorize(Operation :: entity_logic:operation(),
+    EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    Client :: entity_logic:client()) ->
+    entity_logic:authorization_verificator() |
     [authorization_verificator:existence_verificator()].
 authorize(create, undefined, {provider, _Id}, _Client) ->
     true;
@@ -167,9 +167,9 @@ authorize(delete, undefined, _, _Client) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(Operation :: n_entity_logic:operation(),
+-spec validate(Operation :: entity_logic:operation(),
     Resource :: resource()) ->
-    n_entity_logic:validity_verificator().
+    entity_logic:validity_verificator().
 validate(create, {provider, _Id}) -> #{
     required => #{
         <<"publicKey">> => {binary, non_empty},
@@ -189,7 +189,7 @@ validate(update, {publickey, _Id}) -> #{
 %% Returns readable string representing the entity with given id.
 %% @end
 %%--------------------------------------------------------------------
--spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
+-spec entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().
 entity_to_string(Id) ->
     <<"identity:", Id/binary>>.
 

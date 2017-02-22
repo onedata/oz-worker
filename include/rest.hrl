@@ -22,9 +22,9 @@
 -record(rest_req, {
     method = get :: n_rest_handler:method(),
     % Entity logic plugin to handle the request
-    el_plugin = undefined :: undefined | n_entity_logic:el_plugin(),
-    entity_id = undefined :: undefined | n_entity_logic:entity_id() | client_id | {binding, atom()},
-    resource = undefined :: undefined | n_entity_logic:resource() | {binding, atom()},
+    el_plugin = undefined :: undefined | entity_logic:el_plugin(),
+    entity_id = undefined :: undefined | entity_logic:entity_id() | client_id | {binding, atom()},
+    resource = undefined :: undefined | entity_logic:resource() | {binding, atom()},
     % Rest translator plugin to translate the response
     translator = undefined :: module()
 }).

@@ -511,17 +511,17 @@ get_redirection_point_by_alias(Alias) ->
                 try
                     {ok, #od_provider{
                         redirection_point = RedPoint
-                    }} = n_provider_logic:get(?ROOT, ChosenProvider),
+                    }} = provider_logic:get(?ROOT, ChosenProvider),
                     RedPoint
                 catch _:_ ->
                     {ok, NewChosenProv} =
-                        n_provider_logic:choose_provider_for_user(UserId),
+                        provider_logic:choose_provider_for_user(UserId),
                     {ok, _} = od_user:update(UserId, #{
                         chosen_provider => NewChosenProv
                     }),
                     {ok, #od_provider{
                         redirection_point = RedPoint2
-                    }} = n_provider_logic:get(?ROOT, NewChosenProv),
+                    }} = provider_logic:get(?ROOT, NewChosenProv),
                     RedPoint2
                 end,
             {ok, RedirectionPoint};

@@ -10,7 +10,7 @@
 %%% entity logic operations corresponding to od_share model.
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_share_logic_plugin).
+-module(share_logic_plugin).
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
@@ -38,8 +38,8 @@
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_entity(EntityId :: n_entity_logic:entity_id()) ->
-    {ok, n_entity_logic:entity()} | {error, Reason :: term()}.
+-spec get_entity(EntityId :: entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | {error, Reason :: term()}.
 get_entity(ShareId) ->
     case od_share:get(ShareId) of
         {ok, #document{value = Share}} ->
@@ -54,9 +54,9 @@ get_entity(ShareId) ->
 %% Creates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-spec create(Client :: entity_logic:client(),
+    EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    entity_logic:data()) -> entity_logic:result().
 create(_Client, _, entity, Data) ->
     ShareId = maps:get(<<"shareId">>, Data),
     Name = maps:get(<<"name">>, Data),
@@ -65,7 +65,7 @@ create(_Client, _, entity, Data) ->
     Share = #document{key = ShareId, value = #od_share{
         name = Name,
         root_file = RootFileId,
-        public_url = n_share_logic:share_id_to_public_url(ShareId)
+        public_url = share_logic:share_id_to_public_url(ShareId)
     }},
     case od_share:create(Share) of
         {ok, ShareId} ->
@@ -86,9 +86,9 @@ create(_Client, _, entity, Data) ->
 %% Retrieves a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
-    Entity :: n_entity_logic:entity(), Resource :: resource()) ->
-    n_entity_logic:result().
+-spec get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
+    Entity :: entity_logic:entity(), Resource :: resource()) ->
+    entity_logic:result().
 get(_, undefined, undefined, list) ->
     {ok, ShareDocs} = od_share:list(),
     {ok, [ShareId || #document{key = ShareId} <- ShareDocs]};
@@ -110,8 +110,8 @@ get(_, _ShareId, #od_share{} = Share, data) ->
 %% Updates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    entity_logic:data()) -> entity_logic:result().
 update(ShareId, entity, #{<<"name">> := NewName}) ->
     {ok, _} = od_share:update(ShareId, #{name => NewName}),
     ok.
@@ -122,8 +122,8 @@ update(ShareId, entity, #{<<"name">> := NewName}) ->
 %% Deletes a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
-    n_entity_logic:result().
+-spec delete(EntityId :: entity_logic:entity_id(), Resource :: resource()) ->
+    entity_logic:result().
 delete(ShareId, entity) ->
     entity_graph:delete_with_relations(od_share, ShareId).
 
@@ -140,8 +140,8 @@ delete(ShareId, entity) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(Resource :: resource()) ->
-    n_entity_logic:existence_verificator()|
-    [n_entity_logic:existence_verificator()].
+    entity_logic:existence_verificator()|
+    [entity_logic:existence_verificator()].
 exists(_) ->
     % No matter the resource, return true if it belongs to a share
     {internal, fun(#od_share{}) ->
@@ -162,15 +162,15 @@ exists(_) ->
 %% process with given result.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize(Operation :: n_entity_logic:operation(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    Client :: n_entity_logic:client()) ->
-    n_entity_logic:authorization_verificator() |
+-spec authorize(Operation :: entity_logic:operation(),
+    EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    Client :: entity_logic:client()) ->
+    entity_logic:authorization_verificator() |
     [authorization_verificator:existence_verificator()].
 authorize(create, undefined, entity, ?USER(UserId)) ->
     {data_dependent, fun(Data) ->
         SpaceId = maps:get(<<"spaceId">>, Data, <<"">>),
-        n_space_logic:has_eff_privilege(
+        space_logic:has_eff_privilege(
             SpaceId, UserId, ?SPACE_MANAGE_SHARES
         )
     end};
@@ -204,18 +204,18 @@ authorize(delete, _ShareId, entity, ?USER(UserId)) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(Operation :: n_entity_logic:operation(),
+-spec validate(Operation :: entity_logic:operation(),
     Resource :: resource()) ->
-    n_entity_logic:validity_verificator().
+    entity_logic:validity_verificator().
 validate(create, entity) -> #{
     required => #{
         <<"shareId">> => {binary, {not_exists, fun(Value) ->
-            not n_share_logic:exists(Value)
+            not share_logic:exists(Value)
         end}},
         <<"name">> => {binary, non_empty},
         <<"rootFileId">> => {binary, non_empty},
         <<"spaceId">> => {binary, {exists, fun(Value) ->
-            n_space_logic:exists(Value)
+            space_logic:exists(Value)
         end}}
     }
 };
@@ -231,7 +231,7 @@ validate(update, entity) -> #{
 %% Returns readable string representing the entity with given id.
 %% @end
 %%--------------------------------------------------------------------
--spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
+-spec entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().
 entity_to_string(ShareId) ->
     od_share:to_string(ShareId).
 
@@ -248,10 +248,10 @@ entity_to_string(ShareId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_space_membership(UserId :: od_user:id()) ->
-    n_entity_logic:authorization_verificator().
+    entity_logic:authorization_verificator().
 auth_by_space_membership(UserId) ->
     {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic:has_eff_user(SpaceId, UserId)
+        space_logic:has_eff_user(SpaceId, UserId)
     end}.
 
 
@@ -265,10 +265,10 @@ auth_by_space_membership(UserId) ->
 %%--------------------------------------------------------------------
 -spec auth_by_space_privilege(UserId :: od_user:id(),
     Privilege :: privileges:space_privilege()) ->
-    n_entity_logic:authorization_verificator().
+    entity_logic:authorization_verificator().
 auth_by_space_privilege(UserId, Privilege) ->
     {internal, fun(#od_share{space = SpaceId}) ->
-        n_space_logic:has_eff_privilege(SpaceId, UserId, Privilege)
+        space_logic:has_eff_privilege(SpaceId, UserId, Privilege)
     end}.
 
 
@@ -281,10 +281,10 @@ auth_by_space_privilege(UserId, Privilege) ->
 %%--------------------------------------------------------------------
 -spec auth_by_oz_privilege(UserId :: od_user:id(),
     Privilege :: privileges:oz_privilege()) ->
-    n_entity_logic:authorization_verificator().
+    entity_logic:authorization_verificator().
 auth_by_oz_privilege(UserId, Privilege) ->
     {external, fun() ->
-        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
+        user_logic:has_eff_oz_privilege(UserId, Privilege)
     end}.
 
 

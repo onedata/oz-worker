@@ -144,7 +144,7 @@ after_init([]) ->
         %% This code will be run on every node_manager, so we need a
         %% transaction here that will prevent duplicates.
         critical_section:run(create_predefined_groups, fun() ->
-            n_group_logic:create_predefined_groups()
+            group_logic:create_predefined_groups()
         end)
     catch
         _:Error ->

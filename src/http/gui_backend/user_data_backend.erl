@@ -113,7 +113,7 @@ create_record(<<"user">>, _Data) ->
     Data :: proplists:proplist()) -> ok | gui_error:error_result().
 update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
     Client = ?USER(gui_session:get_user_id()),
-    case n_user_logic:update_alias(Client, UserId, NewAlias) of
+    case user_logic:update_alias(Client, UserId, NewAlias) of
         ok ->
             ok;
         ?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(_) ->
@@ -163,7 +163,7 @@ delete_record(<<"user">>, _Id) ->
 %% Returns a client-compliant user record based on user id.
 %% @end
 %%--------------------------------------------------------------------
--spec user_record(Client :: n_entity_logic:client(), UserId :: od_user:id()) ->
+-spec user_record(Client :: entity_logic:client(), UserId :: od_user:id()) ->
     proplists:proplist().
 user_record(Client, UserId) ->
     {ok, #od_user{
@@ -177,7 +177,7 @@ user_record(Client, UserId) ->
         eff_groups = EffGroups,
         eff_spaces = EffSpaces,
         eff_providers = EffProviders
-    }} = n_user_logic:get(Client, UserId),
+    }} = user_logic:get(Client, UserId),
     Alias = alias_db_to_client(UserAlias),
     Authorizers = authorizers_db_to_client(OAuthAccounts),
     ClientTokens = client_tokens_db_to_client(ClientTokenIds),

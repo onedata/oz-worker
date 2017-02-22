@@ -380,7 +380,7 @@ remove_share_test(Config) ->
 %%%===================================================================
 get_public_share_url(Config, ShareId) ->
     oz_test_utils:call_oz(
-        Config, n_share_logic, share_id_to_public_url, [ShareId]
+        Config, share_logic, share_id_to_public_url, [ShareId]
     ).
 
 %%%===================================================================

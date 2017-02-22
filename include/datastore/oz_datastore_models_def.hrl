@@ -266,7 +266,7 @@
     secret :: undefined | binary(),
     resource :: undefined | atom(),
     resource_id :: undefined | binary(),
-    issuer :: undefined | n_entity_logic:client()
+    issuer :: undefined | entity_logic:client()
 }).
 
 %% Records of this type store a macaroons secret

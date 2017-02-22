@@ -148,7 +148,7 @@ validate_login() ->
                                                         OAuthAccount
                                                     ]
                                                 },
-                                                {ok, UserId} = n_user_logic:create(UserInfo),
+                                                {ok, UserId} = user_logic:create(UserInfo),
                                                 gui_session:log_in(UserId),
                                                 gui_session:put_value(firstLogin, true),
                                                 new_user
@@ -172,7 +172,7 @@ validate_login() ->
                                             false ->
                                                 % Everything ok, get the user and add new provider info
                                                 UserId = gui_session:get_user_id(),
-                                                ok = n_user_logic:add_oauth_account(UserId, OAuthAccount),
+                                                ok = user_logic:add_oauth_account(UserId, OAuthAccount),
                                                 {redirect, <<?PAGE_AFTER_LOGIN, "?expand_accounts=true">>}
                                         end
                                 end
@@ -200,5 +200,5 @@ validate_login() ->
     boolean().
 is_any_email_in_use(UserId, Emails) ->
     lists:any(fun(Email) ->
-        n_user_logic:is_email_occupied(UserId, Email)
+        user_logic:is_email_occupied(UserId, Email)
     end, Emails).

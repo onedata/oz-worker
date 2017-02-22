@@ -31,9 +31,9 @@
 %% expressed by #rest_resp{} record.
 %% @end
 %%--------------------------------------------------------------------
--spec response(Operation :: n_entity_logic:operation(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: n_entity_logic:resource(),
-    Result :: n_entity_logic:result()) -> #rest_resp{}.
+-spec response(Operation :: entity_logic:operation(),
+    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
+    Result :: entity_logic:result()) -> #rest_resp{}.
 response(create, UserId, {deprecated_default_space, UserId}, ok) ->
     n_rest_handler:ok_no_content_reply();
 
@@ -130,7 +130,7 @@ response(get, _UserId, {eff_group, GroupId}, {ok, Group}) ->
 
 response(get, UserId, spaces, {ok, Spaces}) ->
     % TODO VFS-2918
-    DefaultSpace = case n_user_logic:get_default_space(?ROOT, UserId) of
+    DefaultSpace = case user_logic:get_default_space(?ROOT, UserId) of
         {ok, SpaceId} -> SpaceId;
         ?ERROR_NOT_FOUND -> undefined
     end,

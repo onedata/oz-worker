@@ -107,7 +107,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 % Add all users to group
                 lists:foreach(
                     fun(UserId) ->
-                        {ok, UserId} = n_group_logic:add_user(?ROOT, GroupId, UserId)
+                        {ok, UserId} = group_logic:add_user(?ROOT, GroupId, UserId)
                     end, UsersToAdd),
                 maps:put(GroupId, GroupCreator, Acc)
             end, #{}, Groups),
@@ -116,7 +116,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
             NestedGroups = proplists:get_value(<<"groups">>, Props, []),
             GroupCreator = maps:get(GroupId, GroupCreators),
             lists:foreach(fun(NestedGroupId) ->
-                {ok, NestedGroupId} = n_group_logic:add_group(?ROOT, GroupId, NestedGroupId)
+                {ok, NestedGroupId} = group_logic:add_group(?ROOT, GroupId, NestedGroupId)
             end, NestedGroups)
         % Mark group changed as normally it is done asynchronously
         % and it could occur after refreshing
@@ -144,18 +144,18 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 lists:foreach(
                     fun({ProviderId, ProviderProps}) ->
                         SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
-                        {ok, Token} = n_space_logic:create_provider_invite_token(?ROOT, SpaceId),
-                        {ok, SpaceId} = n_provider_logic:support_space(?ROOT, ProviderId, Token, SupportedSize)
+                        {ok, Token} = space_logic:create_provider_invite_token(?ROOT, SpaceId),
+                        {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Token, SupportedSize)
                     end, ProviderList),
                 % Add all users to space
                 lists:foreach(
                     fun(UserId) ->
-                        n_space_logic:add_user(?ROOT, SpaceId, UserId)
+                        space_logic:add_user(?ROOT, SpaceId, UserId)
                     end, UsersToAdd),
                 % Add all groups to space
                 lists:foreach(
                     fun(GroupId) ->
-                        n_space_logic:add_user(?ROOT, SpaceId, GroupId)
+                        space_logic:add_user(?ROOT, SpaceId, GroupId)
                     end, GroupsToAdd)
             end, Spaces),
 
@@ -163,7 +163,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
         lists:foreach(
             fun({UserId, Props}) ->
                 DefaultSpace = proplists:get_value(<<"default_space">>, Props),
-                n_space_logic:update_user_privileges(
+                space_logic:update_user_privileges(
                     ?ROOT, DefaultSpace, UserId, set, privileges:space_admin()
                 )
             end, Users),
@@ -184,15 +184,15 @@ set_up_test_entities(Users, Groups, Spaces) ->
 destroy_test_entities(Users, Groups, Spaces) ->
     lists:foreach(
         fun({UserId, _}) ->
-            try n_user_logic:delete(?ROOT, UserId) catch _:_ -> ok end
+            try user_logic:delete(?ROOT, UserId) catch _:_ -> ok end
         end, Users),
     lists:foreach(
         fun({GroupId, _}) ->
-            try n_group_logic:delete(?ROOT, GroupId) catch _:_ -> ok end
+            try group_logic:delete(?ROOT, GroupId) catch _:_ -> ok end
         end, Groups),
     lists:foreach(
         fun({SpaceId, _}) ->
-            try n_space_logic:delete(?ROOT, SpaceId) catch _:_ -> ok end
+            try space_logic:delete(?ROOT, SpaceId) catch _:_ -> ok end
         end, Spaces),
     ok.
 
@@ -252,7 +252,7 @@ create_group_with_uuid(UserId, Name, UUId) ->
     {ok, GroupId} = od_group:save(
         #document{key = UUId, value = #od_group{name = Name}}
     ),
-    {ok, UserId} = n_group_logic:add_user(
+    {ok, UserId} = group_logic:add_user(
         ?ROOT, GroupId, UserId, privileges:group_admin()
     ),
     {ok, GroupId}.
@@ -299,12 +299,12 @@ create_space_with_provider({MemberType, MemberId}, Name, Supports, UUId) ->
         od_user -> add_user;
         od_group -> add_group
     end,
-    {ok, MemberId} = n_space_logic:AddFun(
+    {ok, MemberId} = space_logic:AddFun(
         ?ROOT, SpaceId, MemberId, privileges:space_admin()
     ),
     maps:map(
         fun(ProviderId, SupportSize) ->
-            {ok, Macaroon} = n_space_logic:create_provider_invite_token(?ROOT, SpaceId),
-            {ok, SpaceId} = n_provider_logic:support_space(?ROOT, ProviderId, Macaroon, SupportSize)
+            {ok, Macaroon} = space_logic:create_provider_invite_token(?ROOT, SpaceId),
+            {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Macaroon, SupportSize)
         end, Supports),
     {ok, SpaceId}.

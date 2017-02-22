@@ -264,7 +264,7 @@ ensure_list(Arg) -> [Arg].
 %%%-------------------------------------------------------------------
 -spec list_handles() -> [od_handle:id()].
 list_handles() ->
-    {ok, HandlesList} = n_handle_logic:list(?ROOT),
+    {ok, HandlesList} = handle_logic:list(?ROOT),
     HandlesList.
 
 
@@ -275,7 +275,7 @@ list_handles() ->
 %%%-------------------------------------------------------------------
 -spec get_handle(HandleId :: od_handle:id()) -> #od_handle{}.
 get_handle(HandleId) ->
-    {ok, Handle} = n_handle_logic:get(?ROOT, HandleId),
+    {ok, Handle} = handle_logic:get(?ROOT, HandleId),
     Handle.
 
 

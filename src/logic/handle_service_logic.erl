@@ -10,13 +10,13 @@
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_handle_service_logic).
+-module(handle_service_logic).
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(PLUGIN, n_handle_service_logic_plugin).
+-define(PLUGIN, handle_service_logic_plugin).
 
 -export([
     create/4, create/2
@@ -69,7 +69,7 @@
 %% ProxyEndpoint and ServiceProperties.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), Name :: binary(),
+-spec create(Client :: entity_logic:client(), Name :: binary(),
     ProxyEndpoint :: od_handle_service:proxy_endpoint(),
     ServiceProperties :: od_handle_service:service_properties()) ->
     {ok, od_handle_service:id()} | {error, term()}.
@@ -87,10 +87,10 @@ create(Client, Name, ProxyEndpoint, ServiceProperties) ->
 %% and ServiceProperties are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), Data :: #{}) ->
+-spec create(Client :: entity_logic:client(), Data :: #{}) ->
     {ok, od_handle_service:id()} | {error, term()}.
 create(Client, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
 %%--------------------------------------------------------------------
@@ -98,10 +98,10 @@ create(Client, Data) ->
 %% Retrieves a handle_service record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+-spec get(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
     {ok, #od_handle_service{}} | {error, term()}.
 get(Client, HServiceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, entity).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -109,10 +109,10 @@ get(Client, HServiceId) ->
 %% Retrieves information about a handle_service record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+-spec get_data(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
     {ok, #{}} | {error, term()}.
 get_data(Client, HServiceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, data).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, data).
 
 
 %%--------------------------------------------------------------------
@@ -120,10 +120,10 @@ get_data(Client, HServiceId) ->
 %% Lists all handle_services (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: n_entity_logic:client()) ->
+-spec list(Client :: entity_logic:client()) ->
     {ok, [od_handle_service:id()]} | {error, term()}.
 list(Client) ->
-    n_entity_logic:get(Client, ?PLUGIN, undefined, list).
+    entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
 %%--------------------------------------------------------------------
@@ -132,10 +132,10 @@ list(Client) ->
 %% ProxyEndpoint and ServiceProperties.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec update(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     Data :: #{}) -> ok | {error, term()}.
 update(Client, HServiceId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, HServiceId, entity, Data).
+    entity_logic:update(Client, ?PLUGIN, HServiceId, entity, Data).
 
 
 %%--------------------------------------------------------------------
@@ -143,10 +143,10 @@ update(Client, HServiceId, Data) ->
 %% Deletes given handle_service from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+-spec delete(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
     ok | {error, term()}.
 delete(Client, HServiceId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, HServiceId, entity).
+    entity_logic:delete(Client, ?PLUGIN, HServiceId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -154,7 +154,7 @@ delete(Client, HServiceId) ->
 %% Adds specified user to given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: n_entity_logic:client(),
+-spec add_user(Client :: entity_logic:client(),
     HServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
 add_user(Client, HServiceId, UserId)  ->
@@ -169,7 +169,7 @@ add_user(Client, HServiceId, UserId)  ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: n_entity_logic:client(),
+-spec add_user(Client :: entity_logic:client(),
     HServiceId :: od_handle_service:id(), UserId :: od_user:id(),
     PrivilegesPrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
@@ -178,7 +178,7 @@ add_user(Client, HServiceId, UserId, Privileges) when is_list(Privileges) ->
         <<"privileges">> => Privileges
     });
 add_user(Client, HServiceId, UserId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, HServiceId, {user, UserId}, Data).
+    entity_logic:create(Client, ?PLUGIN, HServiceId, {user, UserId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -186,7 +186,7 @@ add_user(Client, HServiceId, UserId, Data) ->
 %% Adds specified group to given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: n_entity_logic:client(),
+-spec add_group(Client :: entity_logic:client(),
     HServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
     {ok, od_group:id()} | {error, term()}.
 add_group(Client, HServiceId, GroupId)  ->
@@ -201,7 +201,7 @@ add_group(Client, HServiceId, GroupId)  ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: n_entity_logic:client(),
+-spec add_group(Client :: entity_logic:client(),
     HServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
     PrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
@@ -210,7 +210,7 @@ add_group(Client, HServiceId, GroupId, Privileges) when is_list(Privileges) ->
         <<"privileges">> => Privileges
     });
 add_group(Client, HServiceId, GroupId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, HServiceId, {group, GroupId}, Data).
+    entity_logic:create(Client, ?PLUGIN, HServiceId, {group, GroupId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -218,10 +218,10 @@ add_group(Client, HServiceId, GroupId, Data) ->
 %% Retrieves the list of users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get_users(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 get_users(Client, HServiceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, users).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, users).
 
 
 %%--------------------------------------------------------------------
@@ -229,10 +229,10 @@ get_users(Client, HServiceId) ->
 %% Retrieves the list of effective users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_users(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get_eff_users(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 get_eff_users(Client, HServiceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, eff_users).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, eff_users).
 
 
 %%--------------------------------------------------------------------
@@ -240,10 +240,10 @@ get_eff_users(Client, HServiceId) ->
 %% Retrieves the information about specific user among users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec get_user(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_user(Client, HServiceId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {user, UserId}).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {user, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -252,10 +252,10 @@ get_user(Client, HServiceId, UserId) ->
 %% effective users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec get_eff_user(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_eff_user(Client, HServiceId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_user, UserId}).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_user, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -263,10 +263,10 @@ get_eff_user(Client, HServiceId, UserId) ->
 %% Retrieves the privileges of specific user among users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_privileges(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec get_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     UserId :: od_user:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
 get_user_privileges(Client, HServiceId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {user_privileges, UserId}).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {user_privileges, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -275,10 +275,10 @@ get_user_privileges(Client, HServiceId, UserId) ->
 %% among effective users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user_privileges(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec get_eff_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     UserId :: od_user:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
 get_eff_user_privileges(Client, HServiceId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_user_privileges, UserId}).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_user_privileges, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -286,10 +286,10 @@ get_eff_user_privileges(Client, HServiceId, UserId) ->
 %% Retrieves the list of groups of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+-spec get_groups(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 get_groups(Client, HServiceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, groups).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, groups).
 
 
 %%--------------------------------------------------------------------
@@ -297,10 +297,10 @@ get_groups(Client, HServiceId) ->
 %% Retrieves the list of effective groups of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_groups(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+-spec get_eff_groups(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 get_eff_groups(Client, HServiceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, eff_groups).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, eff_groups).
 
 
 %%--------------------------------------------------------------------
@@ -308,10 +308,10 @@ get_eff_groups(Client, HServiceId) ->
 %% Retrieves the information about specific group among groups of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec get_group(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_group(Client, HServiceId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {group, GroupId}).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {group, GroupId}).
 
 
 %%--------------------------------------------------------------------
@@ -320,10 +320,10 @@ get_group(Client, HServiceId, GroupId) ->
 %% effective groups of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec get_eff_group(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_eff_group(Client, HServiceId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_group, GroupId}).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_group, GroupId}).
 
 
 %%--------------------------------------------------------------------
@@ -331,10 +331,10 @@ get_eff_group(Client, HServiceId, GroupId) ->
 %% Retrieves the privileges of specific group among groups of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_privileges(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec get_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
 get_group_privileges(Client, HServiceId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {group_privileges, GroupId}).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {group_privileges, GroupId}).
 
 
 %%--------------------------------------------------------------------
@@ -343,10 +343,10 @@ get_group_privileges(Client, HServiceId, GroupId) ->
 %% among effective groups of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group_privileges(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec get_eff_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
 get_eff_group_privileges(Client, HServiceId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_group_privileges, GroupId}).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_group_privileges, GroupId}).
 
 
 %%--------------------------------------------------------------------
@@ -354,10 +354,10 @@ get_eff_group_privileges(Client, HServiceId, GroupId) ->
 %% Retrieves the list of handles of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_handles(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+-spec get_handles(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
     {ok, [od_handle:id()]} | {error, term()}.
 get_handles(Client, HServiceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, handles).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, handles).
 
 
 %%--------------------------------------------------------------------
@@ -365,10 +365,10 @@ get_handles(Client, HServiceId) ->
 %% Retrieves the information about specific handle among handles of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_handle(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec get_handle(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     HandleId :: od_handle:id()) -> {ok, #{}} | {error, term()}.
 get_handle(Client, HServiceId, HandleId) ->
-    n_entity_logic:get(Client, ?PLUGIN, HServiceId, {handle, HandleId}).
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {handle, HandleId}).
 
 
 %%--------------------------------------------------------------------
@@ -377,7 +377,7 @@ get_handle(Client, HServiceId, HandleId) ->
 %% Allows to specify operation (set | grant | revoke) and the privileges.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec update_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
     Privs :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
 update_user_privileges(Client, HServiceId, UserId, Operation, Privs) when is_list(Privs) ->
@@ -393,10 +393,10 @@ update_user_privileges(Client, HServiceId, UserId, Operation, Privs) when is_lis
 %% Privileges must be included in proper Data object, operation is optional.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec update_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
 update_user_privileges(Client, HServiceId, UserId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, HServiceId, {user_privileges, UserId}, Data).
+    entity_logic:update(Client, ?PLUGIN, HServiceId, {user_privileges, UserId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -405,7 +405,7 @@ update_user_privileges(Client, HServiceId, UserId, Data) ->
 %% Allows to specify operation (set | grant | revoke) and the privileges.
 %% @end
 %%--------------------------------------------------------------------
--spec update_group_privileges(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec update_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     GroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
     Privs :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
 update_group_privileges(Client, HServiceId, GroupId, Operation, Privs) when is_list(Privs) ->
@@ -421,10 +421,10 @@ update_group_privileges(Client, HServiceId, GroupId, Operation, Privs) when is_l
 %% Privileges must be included in proper Data object, operation is optional.
 %% @end
 %%--------------------------------------------------------------------
--spec update_group_privileges(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec update_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     GroupId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
 update_group_privileges(Client, HServiceId, GroupId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, HServiceId, {group_privileges, GroupId}, Data).
+    entity_logic:update(Client, ?PLUGIN, HServiceId, {group_privileges, GroupId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -432,10 +432,10 @@ update_group_privileges(Client, HServiceId, GroupId, Data) ->
 %% Removes specified user from given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec remove_user(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     UserId :: od_user:id()) -> ok | {error, term()}.
 remove_user(Client, HServiceId, UserId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, HServiceId, {user, UserId}).
+    entity_logic:delete(Client, ?PLUGIN, HServiceId, {user, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -443,10 +443,10 @@ remove_user(Client, HServiceId, UserId) ->
 %% Removes specified group from given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(Client :: n_entity_logic:client(), HServiceId :: od_handle_service:id(),
+-spec remove_group(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
     GroupId :: od_group:id()) -> ok | {error, term()}.
 remove_group(Client, HServiceId, GroupId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, HServiceId, {group, GroupId}).
+    entity_logic:delete(Client, ?PLUGIN, HServiceId, {group, GroupId}).
 
 
 %%--------------------------------------------------------------------

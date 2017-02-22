@@ -721,8 +721,8 @@ last_user_leaves_space_test(Config) ->
     ?assertMatch([[], <<"undefined">>], get_user_spaces(UserParamsOtherAddress)),
     ?assertMatch(false, is_included([SID1], get_supported_spaces(ProviderReqParams))),
     ?assertMatch(false, is_included([SID1], get_supported_spaces(ProvParamsOtherAddress))),
-    ?assertMatch(false, rpc:call(Node1, n_space_logic, exists, [SID1])),
-    ?assertMatch(false, rpc:call(Node2, n_space_logic, exists, [SID1])).
+    ?assertMatch(false, rpc:call(Node1, space_logic, exists, [SID1])),
+    ?assertMatch(false, rpc:call(Node2, space_logic, exists, [SID1])).
 
 not_last_user_leaves_space_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -2190,7 +2190,7 @@ support_space(Token, Size, {RestAddress, Headers, Options}) ->
 %% User functions =========================================================
 
 create_user(UserName, Node) ->
-    {ok, UserId} = rpc:call(Node, n_user_logic, create, [#od_user{name = UserName}]),
+    {ok, UserId} = rpc:call(Node, user_logic, create, [#od_user{name = UserName}]),
     UserId.
 
 %% this function authorizes users

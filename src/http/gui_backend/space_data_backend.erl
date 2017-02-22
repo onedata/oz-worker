@@ -61,7 +61,7 @@ terminate() ->
 find_record(<<"space">>, SpaceId) ->
     UserId = gui_session:get_user_id(),
     % Check if the user belongs to this space
-    case n_space_logic:has_eff_user(SpaceId, UserId) of
+    case space_logic:has_eff_user(SpaceId, UserId) of
         false ->
             gui_error:unauthorized();
         true ->
@@ -116,7 +116,7 @@ create_record(<<"space">>, Data) ->
             gui_error:report_error(<<"Empty space names are not allowed">>);
         Bin when is_binary(Bin) ->
             UserId = gui_session:get_user_id(),
-            {ok, SpaceId} = n_space_logic:create(?USER(UserId), Name),
+            {ok, SpaceId} = space_logic:create(?USER(UserId), Name),
             user_data_backend:push_user_record_when_synchronized(UserId),
             {ok, space_record(SpaceId, UserId)};
         _ ->
@@ -134,7 +134,7 @@ create_record(<<"space">>, Data) ->
     ok | gui_error:error_result().
 update_record(<<"space">>, SpaceId, [{<<"name">>, NewName}]) ->
     UserId = gui_session:get_user_id(),
-    case n_space_logic:update(?USER(UserId), SpaceId, NewName) of
+    case space_logic:update(?USER(UserId), SpaceId, NewName) of
         ok ->
             ok;
         ?ERROR_UNAUTHORIZED ->
@@ -171,7 +171,7 @@ delete_record(<<"space">>, _Id) ->
     proplists:proplist().
 space_record(SpaceId, UserId) ->
     % Check if that user has view privileges in that space
-    HasViewPrivs = n_space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_VIEW),
+    HasViewPrivs = space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_VIEW),
     space_record(SpaceId, UserId, HasViewPrivs).
 
 

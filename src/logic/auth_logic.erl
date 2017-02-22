@@ -100,7 +100,7 @@ get_redirection_uri(UserId, ProviderId) ->
     {ok, _} = od_user:update(UserId, #{chosen_provider => ProviderId}),
     % TODO return IP address rather than alias.onedata.org
 %%    {ok, Hostname} = application:get_env(oz_worker, http_domain),
-%%    {ok, #od_user{alias = Alias}} = n_user_logic:get(?ROOT, UserId),
+%%    {ok, #od_user{alias = Alias}} = user_logic:get(?ROOT, UserId),
 %%    Prefix = case Alias of
 %%        ?EMPTY_ALIAS ->
 %%            <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
@@ -112,7 +112,7 @@ get_redirection_uri(UserId, ProviderId) ->
     % (so their web browsers can connect).
     % To do this, we need a recursive DNS server in docker environment,
     % whose address must be fed to system's resolv.conf.
-    {ok, ProviderURL} = n_provider_logic:get_url(ProviderId),
+    {ok, ProviderURL} = provider_logic:get_url(ProviderId),
     URL = str_utils:format_bin("~s~s?code=~s", [
         ProviderURL, ?provider_auth_endpoint, Token
     ]),

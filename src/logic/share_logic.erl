@@ -10,13 +10,13 @@
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_share_logic).
+-module(share_logic).
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(PLUGIN, n_share_logic_plugin).
+-define(PLUGIN, share_logic_plugin).
 
 -export([
     create/5, create/2
@@ -50,7 +50,7 @@
 %% RootFileId and parent SpaceId.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), ShareId :: od_share:id(),
+-spec create(Client :: entity_logic:client(), ShareId :: od_share:id(),
     Name :: binary(), RootFileId :: binary(), SpaceId :: od_space:id()) ->
     {ok, od_share:id()} | {error, term()}.
 create(Client, ShareId, Name, RootFileId, SpaceId) ->
@@ -68,10 +68,10 @@ create(Client, ShareId, Name, RootFileId, SpaceId) ->
 %% RootFileId and parent SpaceId are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), Data :: #{}) ->
+-spec create(Client :: entity_logic:client(), Data :: #{}) ->
     {ok, od_share:id()} | {error, term()}.
 create(Client, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
 %%--------------------------------------------------------------------
@@ -79,10 +79,10 @@ create(Client, Data) ->
 %% Retrieves a share record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: n_entity_logic:client(), ShareId :: od_share:id()) ->
+-spec get(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
     {ok, #od_share{}} | {error, term()}.
 get(Client, ShareId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ShareId, entity).
+    entity_logic:get(Client, ?PLUGIN, ShareId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -90,10 +90,10 @@ get(Client, ShareId) ->
 %% Retrieves information about a share record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(Client :: n_entity_logic:client(), ShareId :: od_share:id()) ->
+-spec get_data(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
     {ok, #{}} | {error, term()}.
 get_data(Client, ShareId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ShareId, data).
+    entity_logic:get(Client, ?PLUGIN, ShareId, data).
 
 
 %%--------------------------------------------------------------------
@@ -101,10 +101,10 @@ get_data(Client, ShareId) ->
 %% Lists all shares (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: n_entity_logic:client()) ->
+-spec list(Client :: entity_logic:client()) ->
     {ok, [od_share:id()]} | {error, term()}.
 list(Client) ->
-    n_entity_logic:get(Client, ?PLUGIN, undefined, list).
+    entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
 %%--------------------------------------------------------------------
@@ -115,12 +115,12 @@ list(Client) ->
 %% 2) Share name is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: n_entity_logic:client(), ShareId :: od_share:id(),
+-spec update(Client :: entity_logic:client(), ShareId :: od_share:id(),
     Data :: #{}) -> ok | {error, term()}.
 update(Client, ShareId, NewName) when is_binary(NewName) ->
     update(Client, ShareId, #{<<"name">> => NewName});
 update(Client, ShareId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, ShareId, entity, Data).
+    entity_logic:update(Client, ?PLUGIN, ShareId, entity, Data).
 
 
 %%--------------------------------------------------------------------
@@ -128,10 +128,10 @@ update(Client, ShareId, Data) ->
 %% Deletes given share from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Client :: n_entity_logic:client(), ShareId :: od_share:id()) ->
+-spec delete(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
     ok | {error, term()}.
 delete(Client, ShareId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, ShareId, entity).
+    entity_logic:delete(Client, ?PLUGIN, ShareId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -178,5 +178,5 @@ share_id_to_redirect_url(ShareId) ->
         _ -> Online
     end,
     ChosenProvider = lists:nth(rand:uniform(length(Choice)), Choice),
-    {ok, ProviderURL} = n_provider_logic:get_url(ChosenProvider),
+    {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
     str_utils:format_bin("~s/#/public/shares/~s", [ProviderURL, ShareId]).

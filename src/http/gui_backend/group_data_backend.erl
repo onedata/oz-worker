@@ -137,11 +137,11 @@ delete_record(<<"group">>, _Id) ->
 %% Returns a client-compliant group record based on group id.
 %% @end
 %%--------------------------------------------------------------------
--spec group_record(Client :: n_entity_logic:client(), GroupId :: binary()) ->
+-spec group_record(Client :: entity_logic:client(), GroupId :: binary()) ->
     proplists:proplist().
 group_record(Client, GroupId) ->
     UserId = gui_session:get_user_id(),
-    {ok, #{<<"name">> := Name}} = n_group_logic:get_data(Client, GroupId),
+    {ok, #{<<"name">> := Name}} = group_logic:get_data(Client, GroupId),
     [
         {<<"id">>, GroupId},
         {<<"name">>, Name},

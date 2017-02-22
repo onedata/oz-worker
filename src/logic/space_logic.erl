@@ -10,13 +10,13 @@
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_space_logic).
+-module(space_logic).
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(PLUGIN, n_space_logic_plugin).
+-define(PLUGIN, space_logic_plugin).
 
 -export([
     create/2
@@ -77,12 +77,12 @@
 %% 2) Space name is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), NameOrData :: binary() | #{}) ->
+-spec create(Client :: entity_logic:client(), NameOrData :: binary() | #{}) ->
     {ok, od_space:id()} | {error, term()}.
 create(Client, Name) when is_binary(Name) ->
     create(Client, #{<<"name">> => Name});
 create(Client, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
 %%--------------------------------------------------------------------
@@ -90,10 +90,10 @@ create(Client, Data) ->
 %% Retrieves a space record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, #od_space{}} | {error, term()}.
 get(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, entity).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -101,10 +101,10 @@ get(Client, SpaceId) ->
 %% Retrieves information about a space record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get_data(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, #{}} | {error, term()}.
 get_data(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, data).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, data).
 
 
 %%--------------------------------------------------------------------
@@ -112,10 +112,10 @@ get_data(Client, SpaceId) ->
 %% Lists all spaces (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: n_entity_logic:client()) ->
+-spec list(Client :: entity_logic:client()) ->
     {ok, [od_space:id()]} | {error, term()}.
 list(Client) ->
-    n_entity_logic:get(Client, ?PLUGIN, undefined, list).
+    entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
 %%--------------------------------------------------------------------
@@ -126,12 +126,12 @@ list(Client) ->
 %% 2) Space name is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec update(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     Data :: #{}) -> ok | {error, term()}.
 update(Client, SpaceId, NewName) when is_binary(NewName) ->
     update(Client, SpaceId, #{<<"name">> => NewName});
 update(Client, SpaceId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, SpaceId, entity, Data).
+    entity_logic:update(Client, ?PLUGIN, SpaceId, entity, Data).
 
 
 %%--------------------------------------------------------------------
@@ -139,10 +139,10 @@ update(Client, SpaceId, Data) ->
 %% Deletes given space from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec delete(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     ok | {error, term()}.
 delete(Client, SpaceId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, entity).
+    entity_logic:delete(Client, ?PLUGIN, SpaceId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -151,10 +151,10 @@ delete(Client, SpaceId) ->
 %% given space.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user_invite_token(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec create_user_invite_token(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
 create_user_invite_token(Client, SpaceId) ->
-    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_user_token, #{}).
+    entity_logic:create(Client, ?PLUGIN, SpaceId, invite_user_token, #{}).
 
 
 %%--------------------------------------------------------------------
@@ -163,10 +163,10 @@ create_user_invite_token(Client, SpaceId) ->
 %% given space.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group_invite_token(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec create_group_invite_token(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
 create_group_invite_token(Client, SpaceId) ->
-    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_group_token, #{}).
+    entity_logic:create(Client, ?PLUGIN, SpaceId, invite_group_token, #{}).
 
 
 %%--------------------------------------------------------------------
@@ -175,10 +175,10 @@ create_group_invite_token(Client, SpaceId) ->
 %% provider to grant support to given space.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_invite_token(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec create_provider_invite_token(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
 create_provider_invite_token(Client, SpaceId) ->
-    n_entity_logic:create(Client, ?PLUGIN, SpaceId, invite_provider_token, #{}).
+    entity_logic:create(Client, ?PLUGIN, SpaceId, invite_provider_token, #{}).
 
 
 %%--------------------------------------------------------------------
@@ -186,7 +186,7 @@ create_provider_invite_token(Client, SpaceId) ->
 %% Adds specified user to given space.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: n_entity_logic:client(),
+-spec add_user(Client :: entity_logic:client(),
     SpaceId :: od_space:id(), UserId :: od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
 add_user(Client, SpaceId, UserId) ->
@@ -201,7 +201,7 @@ add_user(Client, SpaceId, UserId) ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: n_entity_logic:client(),
+-spec add_user(Client :: entity_logic:client(),
     SpaceId :: od_space:id(), UserId :: od_user:id(),
     PrivilegesPrivilegesOrData :: [privileges:space_privileges()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
@@ -210,7 +210,7 @@ add_user(Client, SpaceId, UserId, Privileges) when is_list(Privileges) ->
         <<"privileges">> => Privileges
     });
 add_user(Client, SpaceId, UserId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, SpaceId, {user, UserId}, Data).
+    entity_logic:create(Client, ?PLUGIN, SpaceId, {user, UserId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -218,7 +218,7 @@ add_user(Client, SpaceId, UserId, Data) ->
 %% Adds specified group to given space.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: n_entity_logic:client(),
+-spec add_group(Client :: entity_logic:client(),
     SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
     {ok, od_group:id()} | {error, term()}.
 add_group(Client, SpaceId, GroupId) ->
@@ -233,7 +233,7 @@ add_group(Client, SpaceId, GroupId) ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: n_entity_logic:client(),
+-spec add_group(Client :: entity_logic:client(),
     SpaceId :: od_space:id(), GroupId :: od_group:id(),
     PrivilegesOrData :: [privileges:space_privileges()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
@@ -242,7 +242,7 @@ add_group(Client, SpaceId, GroupId, Privileges) when is_list(Privileges) ->
         <<"privileges">> => Privileges
     });
 add_group(Client, SpaceId, GroupId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, SpaceId, {group, GroupId}, Data).
+    entity_logic:create(Client, ?PLUGIN, SpaceId, {group, GroupId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -250,10 +250,10 @@ add_group(Client, SpaceId, GroupId, Data) ->
 %% Retrieves the list of users of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get_users(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 get_users(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, users).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, users).
 
 
 %%--------------------------------------------------------------------
@@ -261,10 +261,10 @@ get_users(Client, SpaceId) ->
 %% Retrieves the list of effective users of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_users(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get_eff_users(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 get_eff_users(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, eff_users).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, eff_users).
 
 
 %%--------------------------------------------------------------------
@@ -272,10 +272,10 @@ get_eff_users(Client, SpaceId) ->
 %% Retrieves the information about specific user among users of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_user(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_user(Client, SpaceId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {user, UserId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {user, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -284,10 +284,10 @@ get_user(Client, SpaceId, UserId) ->
 %% effective users of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_eff_user(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_eff_user(Client, SpaceId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_user, UserId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_user, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -295,10 +295,10 @@ get_eff_user(Client, SpaceId, UserId) ->
 %% Retrieves the privileges of specific user among users of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_privileges(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_user_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     UserId :: od_user:id()) -> {ok, [privileges:space_privileges()]} | {error, term()}.
 get_user_privileges(Client, SpaceId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {user_privileges, UserId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {user_privileges, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -307,10 +307,10 @@ get_user_privileges(Client, SpaceId, UserId) ->
 %% among effective users of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user_privileges(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_eff_user_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     UserId :: od_user:id()) -> {ok, [privileges:space_privileges()]} | {error, term()}.
 get_eff_user_privileges(Client, SpaceId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_user_privileges, UserId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_user_privileges, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -318,10 +318,10 @@ get_eff_user_privileges(Client, SpaceId, UserId) ->
 %% Retrieves the list of groups of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get_groups(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 get_groups(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, groups).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, groups).
 
 
 %%--------------------------------------------------------------------
@@ -329,10 +329,10 @@ get_groups(Client, SpaceId) ->
 %% Retrieves the list of effective groups of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_groups(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get_eff_groups(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 get_eff_groups(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, eff_groups).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, eff_groups).
 
 
 %%--------------------------------------------------------------------
@@ -340,10 +340,10 @@ get_eff_groups(Client, SpaceId) ->
 %% Retrieves the information about specific group among groups of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_group(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_group(Client, SpaceId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {group, GroupId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {group, GroupId}).
 
 
 %%--------------------------------------------------------------------
@@ -352,10 +352,10 @@ get_group(Client, SpaceId, GroupId) ->
 %% effective groups of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_eff_group(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_eff_group(Client, SpaceId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_group, GroupId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_group, GroupId}).
 
 
 %%--------------------------------------------------------------------
@@ -363,10 +363,10 @@ get_eff_group(Client, SpaceId, GroupId) ->
 %% Retrieves the privileges of specific group among groups of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_privileges(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_group_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:space_privileges()]} | {error, term()}.
 get_group_privileges(Client, SpaceId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {group_privileges, GroupId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {group_privileges, GroupId}).
 
 
 %%--------------------------------------------------------------------
@@ -375,10 +375,10 @@ get_group_privileges(Client, SpaceId, GroupId) ->
 %% among effective groups of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group_privileges(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_eff_group_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:space_privileges()]} | {error, term()}.
 get_eff_group_privileges(Client, SpaceId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_group_privileges, GroupId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {eff_group_privileges, GroupId}).
 
 
 %%--------------------------------------------------------------------
@@ -386,10 +386,10 @@ get_eff_group_privileges(Client, SpaceId, GroupId) ->
 %% Retrieves the list of shares of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_shares(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get_shares(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_share:id()]} | {error, term()}.
 get_shares(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, shares).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, shares).
 
 
 %%--------------------------------------------------------------------
@@ -397,10 +397,10 @@ get_shares(Client, SpaceId) ->
 %% Retrieves the information about specific share among shares of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_share(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_share(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     ShareId :: od_share:id()) -> {ok, #{}} | {error, term()}.
 get_share(Client, SpaceId, ShareId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {share, ShareId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {share, ShareId}).
 
 
 %%--------------------------------------------------------------------
@@ -408,10 +408,10 @@ get_share(Client, SpaceId, ShareId) ->
 %% Retrieves the list of providers of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_providers(Client :: n_entity_logic:client(), SpaceId :: od_space:id()) ->
+-spec get_providers(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_provider:id()]} | {error, term()}.
 get_providers(Client, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, providers).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, providers).
 
 
 %%--------------------------------------------------------------------
@@ -419,10 +419,10 @@ get_providers(Client, SpaceId) ->
 %% Retrieves the information about specific provider among providers of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_provider(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec get_provider(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
 get_provider(Client, SpaceId, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, SpaceId, {provider, ProviderId}).
+    entity_logic:get(Client, ?PLUGIN, SpaceId, {provider, ProviderId}).
 
 
 %%--------------------------------------------------------------------
@@ -431,7 +431,7 @@ get_provider(Client, SpaceId, ProviderId) ->
 %% Allows to specify operation (set | grant | revoke) and the privileges.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec update_user_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
     Privs :: [privileges:space_privilege()]) -> ok | {error, term()}.
 update_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(Privs) ->
@@ -447,10 +447,10 @@ update_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(P
 %% Privileges must be included in proper Data object, operation is optional.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec update_user_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
 update_user_privileges(Client, SpaceId, UserId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {user_privileges, UserId}, Data).
+    entity_logic:update(Client, ?PLUGIN, SpaceId, {user_privileges, UserId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -459,7 +459,7 @@ update_user_privileges(Client, SpaceId, UserId, Data) ->
 %% Allows to specify operation (set | grant | revoke) and the privileges.
 %% @end
 %%--------------------------------------------------------------------
--spec update_group_privileges(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec update_group_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     GroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
     Privs :: [privileges:space_privilege()]) -> ok | {error, term()}.
 update_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list(Privs) ->
@@ -475,10 +475,10 @@ update_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list
 %% Privileges must be included in proper Data object, operation is optional.
 %% @end
 %%--------------------------------------------------------------------
--spec update_group_privileges(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec update_group_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     GroupId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
 update_group_privileges(Client, SpaceId, GroupId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, SpaceId, {group_privileges, GroupId}, Data).
+    entity_logic:update(Client, ?PLUGIN, SpaceId, {group_privileges, GroupId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -486,10 +486,10 @@ update_group_privileges(Client, SpaceId, GroupId, Data) ->
 %% Leaves specified provider (ceases support for given space).
 %% @end
 %%--------------------------------------------------------------------
--spec leave_provider(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec leave_provider(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     ProviderId :: od_provider:id()) -> ok | {error, term()}.
 leave_provider(Client, SpaceId, ProviderId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {provider, ProviderId}).
+    entity_logic:delete(Client, ?PLUGIN, SpaceId, {provider, ProviderId}).
 
 
 %%--------------------------------------------------------------------
@@ -497,10 +497,10 @@ leave_provider(Client, SpaceId, ProviderId) ->
 %% Removes specified user from given space.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec remove_user(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     UserId :: od_user:id()) -> ok | {error, term()}.
 remove_user(Client, SpaceId, UserId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {user, UserId}).
+    entity_logic:delete(Client, ?PLUGIN, SpaceId, {user, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -508,10 +508,10 @@ remove_user(Client, SpaceId, UserId) ->
 %% Removes specified group from given space.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(Client :: n_entity_logic:client(), SpaceId :: od_space:id(),
+-spec remove_group(Client :: entity_logic:client(), SpaceId :: od_space:id(),
     GroupId :: od_group:id()) -> ok | {error, term()}.
 remove_group(Client, SpaceId, GroupId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, SpaceId, {group, GroupId}).
+    entity_logic:delete(Client, ?PLUGIN, SpaceId, {group, GroupId}).
 
 
 %%--------------------------------------------------------------------

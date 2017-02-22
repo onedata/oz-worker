@@ -10,7 +10,7 @@
 %%% entity logic operations corresponding to od_space model.
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_space_logic_plugin).
+-module(space_logic_plugin).
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
@@ -51,8 +51,8 @@ providers | {provider, od_provider:id()}.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_entity(EntityId :: n_entity_logic:entity_id()) ->
-    {ok, n_entity_logic:entity()} | {error, Reason :: term()}.
+-spec get_entity(EntityId :: entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | {error, Reason :: term()}.
 get_entity(SpaceId) ->
     case od_space:get(SpaceId) of
         {ok, #document{value = Space}} ->
@@ -67,9 +67,9 @@ get_entity(SpaceId) ->
 %% Creates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-spec create(Client :: entity_logic:client(),
+    EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    entity_logic:data()) -> entity_logic:result().
 % TODO VFS-2918
 create(_Client, SpaceId, {deprecated_user_privileges, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data),
@@ -90,11 +90,11 @@ create(_Client, SpaceId, {deprecated_child_privileges, GroupId}, Data) ->
     );
 % TODO VFS-2918
 create(Client, SpaceId, {deprecated_create_share, ShareId}, Data) ->
-    case n_share_logic:exists(ShareId) of
+    case share_logic:exists(ShareId) of
         true ->
             ?ERROR_BAD_VALUE_ID_OCCUPIED(<<"shareId">>);
         false ->
-            n_share_logic_plugin:create(Client, undefined, entity, Data#{
+            share_logic_plugin:create(Client, undefined, entity, Data#{
                 <<"spaceId">> => SpaceId,
                 <<"shareId">> => ShareId
             })
@@ -162,9 +162,9 @@ create(_Client, SpaceId, {group, GroupId}, Data) ->
 %% Retrieves a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
-    Entity :: n_entity_logic:entity(), Resource :: resource()) ->
-    n_entity_logic:result().
+-spec get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
+    Entity :: entity_logic:entity(), Resource :: resource()) ->
+    entity_logic:result().
 % TODO VFS-2918 - remove Client from get when these are not needed
 % TODO VFS-2918
 get(Client, SpaceId, _, deprecated_invite_user_token) ->
@@ -206,11 +206,11 @@ get(_, _SpaceId, #od_space{users = Users}, users) ->
 get(_, _SpaceId, #od_space{eff_users = Users}, eff_users) ->
     {ok, maps:keys(Users)};
 get(_, _SpaceId, #od_space{}, {user, UserId}) ->
-    {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
-    n_user_logic_plugin:get(?ROOT, UserId, User, data);
+    {ok, User} = ?throw_on_failure(user_logic_plugin:get_entity(UserId)),
+    user_logic_plugin:get(?ROOT, UserId, User, data);
 get(_, _SpaceId, #od_space{}, {eff_user, UserId}) ->
-    {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
-    n_user_logic_plugin:get(?ROOT, UserId, User, data);
+    {ok, User} = ?throw_on_failure(user_logic_plugin:get_entity(UserId)),
+    user_logic_plugin:get(?ROOT, UserId, User, data);
 get(_, _SpaceId, #od_space{users = Users}, {user_privileges, UserId}) ->
     {ok, maps:get(UserId, Users)};
 get(_, _SpaceId, #od_space{eff_users = Users}, {eff_user_privileges, UserId}) ->
@@ -222,11 +222,11 @@ get(_, _SpaceId, #od_space{groups = Groups}, groups) ->
 get(_, _SpaceId, #od_space{eff_groups = Groups}, eff_groups) ->
     {ok, maps:keys(Groups)};
 get(_, _SpaceId, #od_space{}, {group, GroupId}) ->
-    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
-    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
+    {ok, Group} = ?throw_on_failure(group_logic_plugin:get_entity(GroupId)),
+    group_logic_plugin:get(?ROOT, GroupId, Group, data);
 get(_, _SpaceId, #od_space{}, {eff_group, GroupId}) ->
-    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
-    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
+    {ok, Group} = ?throw_on_failure(group_logic_plugin:get_entity(GroupId)),
+    group_logic_plugin:get(?ROOT, GroupId, Group, data);
 get(_, _SpaceId, #od_space{groups = Groups}, {group_privileges, GroupId}) ->
     {ok, maps:get(GroupId, Groups)};
 get(_, _SpaceId, #od_space{eff_groups = Groups}, {eff_group_privileges, GroupId}) ->
@@ -236,14 +236,14 @@ get(_, _SpaceId, #od_space{eff_groups = Groups}, {eff_group_privileges, GroupId}
 get(_, _SpaceId, #od_space{shares = Shares}, shares) ->
     {ok, Shares};
 get(_, _SpaceId, #od_space{}, {share, ShareId}) ->
-    {ok, Share} = ?throw_on_failure(n_share_logic_plugin:get_entity(ShareId)),
-    n_share_logic_plugin:get(?ROOT, ShareId, Share, data);
+    {ok, Share} = ?throw_on_failure(share_logic_plugin:get_entity(ShareId)),
+    share_logic_plugin:get(?ROOT, ShareId, Share, data);
 
 get(_, _SpaceId, #od_space{providers = Providers}, providers) ->
     {ok, maps:keys(Providers)};
 get(_, _SpaceId, #od_space{}, {provider, ProviderId}) ->
-    {ok, Provider} = ?throw_on_failure(n_provider_logic_plugin:get_entity(ProviderId)),
-    n_provider_logic_plugin:get(?ROOT, ProviderId, Provider, data).
+    {ok, Provider} = ?throw_on_failure(provider_logic_plugin:get_entity(ProviderId)),
+    provider_logic_plugin:get(?ROOT, ProviderId, Provider, data).
 
 
 %%--------------------------------------------------------------------
@@ -251,8 +251,8 @@ get(_, _SpaceId, #od_space{}, {provider, ProviderId}) ->
 %% Updates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    entity_logic:data()) -> entity_logic:result().
 update(SpaceId, entity, #{<<"name">> := NewName}) ->
     {ok, _} = od_space:update(SpaceId, #{name => NewName}),
     ok;
@@ -281,8 +281,8 @@ update(SpaceId, {group_privileges, GroupId}, Data) ->
 %% Deletes a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
-    n_entity_logic:result().
+-spec delete(EntityId :: entity_logic:entity_id(), Resource :: resource()) ->
+    entity_logic:result().
 delete(SpaceId, entity) ->
     entity_graph:delete_with_relations(od_space, SpaceId);
 
@@ -317,8 +317,8 @@ delete(SpaceId, {provider, ProviderId}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(Resource :: resource()) ->
-    n_entity_logic:existence_verificator()|
-    [n_entity_logic:existence_verificator()].
+    entity_logic:existence_verificator()|
+    [entity_logic:existence_verificator()].
 exists({user, UserId}) ->
     {internal, fun(#od_space{users = Users}) ->
         maps:is_key(UserId, Users)
@@ -383,10 +383,10 @@ exists(_) ->
 %% process with given result.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize(Operation :: n_entity_logic:operation(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    Client :: n_entity_logic:client()) ->
-    n_entity_logic:authorization_verificator() |
+-spec authorize(Operation :: entity_logic:operation(),
+    EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    Client :: entity_logic:client()) ->
+    entity_logic:authorization_verificator() |
     [authorization_verificator:existence_verificator()].
 % TODO VFS-2918
 authorize(create, _GroupId, {deprecated_create_share, _ShareId}, ?USER(UserId)) ->
@@ -427,7 +427,7 @@ authorize(create, _SpaceId, {group, _GroupId}, ?USER(UserId)) ->
 
 
 authorize(get, undefined, list, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_LIST);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_LIST);
 
 authorize(get, _SpaceId, entity, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?SPACE_VIEW),
@@ -525,9 +525,9 @@ authorize(delete, _SpaceId, {provider, _ProviderId}, ?USER(UserId)) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(Operation :: n_entity_logic:operation(),
+-spec validate(Operation :: entity_logic:operation(),
     Resource :: resource()) ->
-    n_entity_logic:validity_verificator().
+    entity_logic:validity_verificator().
 % TODO VFS-2918
 validate(create, {deprecated_create_share, _ShareId}) -> #{
     required => #{
@@ -556,7 +556,7 @@ validate(create, invite_provider_token) -> #{
 validate(create, {user, _UserId}) -> #{
     required => #{
         resource => {any, {resource_exists, <<"User Id">>, fun({user, UserId}) ->
-            n_user_logic:exists(UserId) end}
+            user_logic:exists(UserId) end}
         }
     },
     optional => #{
@@ -566,7 +566,7 @@ validate(create, {user, _UserId}) -> #{
 validate(create, {group, _GroupId}) -> #{
     required => #{
         resource => {any, {resource_exists, <<"Group Id">>, fun({group, GroupId}) ->
-            n_group_logic:exists(GroupId) end}
+            group_logic:exists(GroupId) end}
         }
     },
     optional => #{
@@ -595,7 +595,7 @@ validate(update, {group_privileges, GroupId}) ->
 %% Returns readable string representing the entity with given id.
 %% @end
 %%--------------------------------------------------------------------
--spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
+-spec entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().
 entity_to_string(SpaceId) ->
     od_space:to_string(SpaceId).
 
@@ -612,7 +612,7 @@ entity_to_string(SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_membership(UserId :: od_user:id()) ->
-    n_entity_logic:authorization_verificator().
+    entity_logic:authorization_verificator().
 auth_by_membership(UserId) ->
     {internal, fun(#od_space{users = Users, eff_users = EffUsers}) ->
         maps:is_key(UserId, EffUsers) orelse maps:is_key(UserId, Users)
@@ -627,7 +627,7 @@ auth_by_membership(UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_support(ProviderId :: od_provider:id()) ->
-    n_entity_logic:authorization_verificator().
+    entity_logic:authorization_verificator().
 auth_by_support(ProviderId) ->
     {internal, fun(#od_space{providers = Providers}) ->
         maps:is_key(ProviderId, Providers)
@@ -643,10 +643,10 @@ auth_by_support(ProviderId) ->
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(UserId :: od_user:id(),
     Privilege :: privileges:space_privilege()) ->
-    n_entity_logic:authorization_verificator().
+    entity_logic:authorization_verificator().
 auth_by_privilege(UserId, Privilege) ->
     {internal, fun(#od_space{} = Space) ->
-        n_space_logic:has_eff_privilege(Space, UserId, Privilege)
+        space_logic:has_eff_privilege(Space, UserId, Privilege)
     end}.
 
 
@@ -659,9 +659,9 @@ auth_by_privilege(UserId, Privilege) ->
 %%--------------------------------------------------------------------
 -spec auth_by_oz_privilege(UserId :: od_user:id(),
     Privilege :: privileges:oz_privilege()) ->
-    n_entity_logic:authorization_verificator().
+    entity_logic:authorization_verificator().
 auth_by_oz_privilege(UserId, Privilege) ->
     {external, fun() ->
-        n_user_logic:has_eff_oz_privilege(UserId, Privilege)
+        user_logic:has_eff_oz_privilege(UserId, Privilege)
     end}.
 

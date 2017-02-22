@@ -31,9 +31,9 @@
 %% expressed by #rest_resp{} record.
 %% @end
 %%--------------------------------------------------------------------
--spec response(Operation :: n_entity_logic:operation(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: n_entity_logic:resource(),
-    Result :: n_entity_logic:result()) -> #rest_resp{}.
+-spec response(Operation :: entity_logic:operation(),
+    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
+    Result :: entity_logic:result()) -> #rest_resp{}.
 % TODO VFS-2918
 response(create, _HServiceId, {deprecated_user_privileges, _UserId}, ok) ->
     n_rest_handler:ok_no_content_reply();

@@ -24,7 +24,7 @@
 
 % State of REST handler
 -record(state, {
-    client = #client{} :: n_entity_logic:client(),
+    client = #client{} :: entity_logic:client(),
     rest_req = undefined :: #rest_req{} | undefined,
     allowed_methods :: [method()]
 }).
@@ -410,7 +410,7 @@ send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec resolve_bindings(Binding | {atom(), Binding},
-    Client :: n_entity_logic:client(), Req :: cowboy_req:req()) ->
+    Client :: entity_logic:client(), Req :: cowboy_req:req()) ->
     binary() |  {atom(), binary()} | cowboy_req:req() when
     Binding :: {binding, atom()} | client_id | cowboy_req.
 resolve_bindings(?BINDING(Key), _Client, Req) ->
@@ -432,17 +432,17 @@ resolve_bindings(Other, _Client, _Req) ->
 %% Calls entity logic function to handle a request.
 %% @end
 %%--------------------------------------------------------------------
--spec call_entity_logic(method(), n_entity_logic:client(), n_entity_logic:el_plugin(),
-    n_entity_logic:entity_id(), n_entity_logic:resource(), n_entity_logic:data()) ->
+-spec call_entity_logic(method(), entity_logic:client(), entity_logic:el_plugin(),
+    entity_logic:entity_id(), entity_logic:resource(), entity_logic:data()) ->
     ok | {ok, term()} | {error, term()}.
 call_entity_logic(create, Client, LogicPlugin, EntityId, Resource, Data) ->
-    n_entity_logic:create(Client, LogicPlugin, EntityId, Resource, Data);
+    entity_logic:create(Client, LogicPlugin, EntityId, Resource, Data);
 call_entity_logic(get, Client, LogicPlugin, EntityId, Resource, _Data) ->
-    n_entity_logic:get(Client, LogicPlugin, EntityId, Resource);
+    entity_logic:get(Client, LogicPlugin, EntityId, Resource);
 call_entity_logic(update, Client, LogicPlugin, EntityId, Resource, Data) ->
-    n_entity_logic:update(Client, LogicPlugin, EntityId, Resource, Data);
+    entity_logic:update(Client, LogicPlugin, EntityId, Resource, Data);
 call_entity_logic(delete, Client, LogicPlugin, EntityId, Resource, _Data) ->
-    n_entity_logic:delete(Client, LogicPlugin, EntityId, Resource).
+    entity_logic:delete(Client, LogicPlugin, EntityId, Resource).
 
 
 %%--------------------------------------------------------------------
@@ -451,8 +451,8 @@ call_entity_logic(delete, Client, LogicPlugin, EntityId, Resource, _Data) ->
 %% Translates entity logic response into REST response using TranslatorModule.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_response(TranslatorModule :: module(), n_entity_logic:operation(),
-    n_entity_logic:entity_id(), n_entity_logic:resource(), n_entity_logic:result()) ->
+-spec translate_response(TranslatorModule :: module(), entity_logic:operation(),
+    entity_logic:entity_id(), entity_logic:resource(), entity_logic:result()) ->
     #rest_resp{}.
 translate_response(TranslatorModule, Operation, EntityId, Resource, Result) ->
     try
@@ -514,7 +514,7 @@ authenticate_by_basic_auth(Req) ->
         <<"Basic ", UserPasswdB64/binary>> ->
             UserPasswd = base64:decode(UserPasswdB64),
             [User, Passwd] = binary:split(UserPasswd, <<":">>),
-            case n_user_logic:authenticate_by_basic_credentials(User, Passwd) of
+            case user_logic:authenticate_by_basic_credentials(User, Passwd) of
                 {ok, #document{key = UserId}, _} ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};
@@ -645,7 +645,7 @@ deserialize_macaroon(Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_data(Req :: cowboy_req:req()) ->
-    {Data :: n_entity_logic:data(), cowboy_req:req()}.
+    {Data :: entity_logic:data(), cowboy_req:req()}.
 get_data(Req) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
     Data = try
@@ -696,7 +696,7 @@ method_to_binary(delete) -> <<"DELETE">>.
 %% that should be called to handle it.
 %% @end
 %%--------------------------------------------------------------------
--spec method_to_operation(method()) -> n_entity_logic:operation().
+-spec method_to_operation(method()) -> entity_logic:operation().
 method_to_operation(post) -> create;
 method_to_operation(put) -> create;
 method_to_operation(get) -> get;

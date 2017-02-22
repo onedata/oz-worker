@@ -38,10 +38,10 @@ handle(<<"changePassword">>, Props) ->
     UserId = gui_session:get_user_id(),
     {ok, #od_user{
         login = Login
-    }} = n_user_logic:get(?USER(UserId), UserId),
+    }} = user_logic:get(?USER(UserId), UserId),
     OldPassword = proplists:get_value(<<"oldPassword">>, Props),
     NewPassword = proplists:get_value(<<"newPassword">>, Props),
-    case n_user_logic:change_user_password(Login, OldPassword, NewPassword) of
+    case user_logic:change_user_password(Login, OldPassword, NewPassword) of
         ok ->
             ok;
         {error, Binary} when is_binary(Binary) ->
@@ -61,7 +61,7 @@ handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
 
 handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     Client = ?USER(gui_session:get_user_id()),
-    case n_space_logic:create_provider_invite_token(Client, SpaceId) of
+    case space_logic:create_provider_invite_token(Client, SpaceId) of
         {ok, Token} ->
             {ok, [{<<"token">>, Token}]};
         ?ERROR_UNAUTHORIZED ->
@@ -83,7 +83,7 @@ handle(<<"unsupportSpace">>, Props) ->
     SpaceId = proplists:get_value(<<"spaceId">>, Props),
     ProviderId = proplists:get_value(<<"providerId">>, Props),
     UserId = gui_session:get_user_id(),
-    case n_space_logic:leave_provider(Client, SpaceId, ProviderId) of
+    case space_logic:leave_provider(Client, SpaceId, ProviderId) of
         ok ->
             user_data_backend:push_user_record(UserId),
             gui_async:push_updated(
@@ -103,7 +103,7 @@ handle(<<"unsupportSpace">>, Props) ->
 
 handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
     UserId = gui_session:get_user_id(),
-    case n_user_logic:join_space(?USER(UserId), UserId, Token) of
+    case user_logic:join_space(?USER(UserId), UserId, Token) of
         ?ERROR_BAD_VALUE_TOKEN(_) ->
             gui_error:report_warning(<<"Invalid token value.">>);
         ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(_) ->
@@ -116,14 +116,14 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
 
 handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     UserId = gui_session:get_user_id(),
-    n_user_logic:leave_space(?USER(UserId), UserId, SpaceId),
+    user_logic:leave_space(?USER(UserId), UserId, SpaceId),
     % Push user record with a new space list.
     user_data_backend:push_user_record(UserId),
     ok;
 
 handle(<<"getTokenUserJoinGroup">>, [{<<"groupId">>, GroupId}]) ->
     UserId = gui_session:get_user_id(),
-    case n_group_logic:create_user_invite_token(?USER(UserId), GroupId) of
+    case group_logic:create_user_invite_token(?USER(UserId), GroupId) of
         {ok, Token} ->
             {ok, [{<<"token">>, Token}]};
         ?ERROR_UNAUTHORIZED ->
@@ -136,7 +136,7 @@ handle(<<"getTokenUserJoinGroup">>, [{<<"groupId">>, GroupId}]) ->
 
 handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
     UserId = gui_session:get_user_id(),
-    case n_user_logic:join_group(?USER(UserId), UserId, Token) of
+    case user_logic:join_group(?USER(UserId), UserId, Token) of
         ?ERROR_BAD_VALUE_TOKEN(_) ->
             gui_error:report_warning(<<"Invalid token value.">>);
         ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(_) ->

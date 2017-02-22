@@ -389,7 +389,7 @@ log_failed_logic_test(TestDesc, Module, Function, Args, Client, Expected, Got) -
     "Expected: ~p~n"
     "Got: ~p", [
         TestDescString, Module, Function, Args,
-        n_entity_logic:client_to_string(client_to_logic_client(Client)),
+        entity_logic:client_to_string(client_to_logic_client(Client)),
         Expected, Got
     ]).
 
@@ -416,7 +416,7 @@ log_failed_rest_test(TestDesc, Method, Path, Client, UnmetExp, Got, Expected, Re
     "   Headers: ~p~n"
     "   Body: ~p", [
         TestDescString, Method, Path,
-        n_entity_logic:client_to_string(client_to_logic_client(Client)),
+        entity_logic:client_to_string(client_to_logic_client(Client)),
         UnmetExp, Got, Expected, Code, Headers, Body
     ]).
 

@@ -68,7 +68,7 @@ predefined_groups_test(Config) ->
     % Call the group creation procedure. The function reads from env and
     % creates the predefined groups
     ?assertEqual(ok, oz_test_utils:call_oz(
-        Config, n_group_logic, create_predefined_groups, []
+        Config, group_logic, create_predefined_groups, []
     )),
     % Now, lets check if the groups are present in the system and have desired
     % privileges.
@@ -117,7 +117,7 @@ global_groups_test(Config) ->
     [test_utils:set_env(N, oz_worker, predefined_groups, PredefinedGroups) || N <- Nodes],
     % Make sure predefined groups are created
     ?assertEqual(ok, oz_test_utils:call_oz(
-        Config, n_group_logic, create_predefined_groups, []
+        Config, group_logic, create_predefined_groups, []
     )),
     % Enable global groups
     [test_utils:set_env(N, oz_worker, enable_global_groups, true) || N <- Nodes],
@@ -176,7 +176,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     [test_utils:set_env(N, oz_worker, predefined_groups, PredefinedGroups) || N <- Nodes],
     % Make sure predefined groups are created
     ?assertEqual(ok, oz_test_utils:call_oz(
-        Config, n_group_logic, create_predefined_groups, []
+        Config, group_logic, create_predefined_groups, []
     )),
     % Enable global groups
     [test_utils:set_env(N, oz_worker, enable_global_groups, true) || N <- Nodes],

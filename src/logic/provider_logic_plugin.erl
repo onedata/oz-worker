@@ -10,7 +10,7 @@
 %%% entity logic operations corresponding to od_provider model.
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_provider_logic_plugin).
+-module(provider_logic_plugin).
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
@@ -43,8 +43,8 @@ check_my_ports | {check_my_ip, cowboy_req:req()}.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_entity(EntityId :: n_entity_logic:entity_id()) ->
-    {ok, n_entity_logic:entity()} | {error, Reason :: term()}.
+-spec get_entity(EntityId :: entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | {error, Reason :: term()}.
 get_entity(ProviderId) ->
     case od_provider:get(ProviderId) of
         {ok, #document{value = Provider}} ->
@@ -59,9 +59,9 @@ get_entity(ProviderId) ->
 %% Creates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-spec create(Client :: entity_logic:client(),
+    EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    entity_logic:data()) -> entity_logic:result().
 create(_, _, entity, Data) ->
     Name = case maps:get(<<"name">>, Data, undefined) of
         undefined ->
@@ -135,9 +135,9 @@ create(_, undefined, check_my_ports, Data) ->
 %% Retrieves a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: n_entity_logic:client(), EntityId :: n_entity_logic:entity_id(),
-    Entity :: n_entity_logic:entity(), Resource :: resource()) ->
-    n_entity_logic:result().
+-spec get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
+    Entity :: entity_logic:entity(), Resource :: resource()) ->
+    entity_logic:result().
 get(_, undefined, undefined, list) ->
     {ok, ProviderDocs} = od_provider:list(),
     {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]};
@@ -156,18 +156,18 @@ get(_, _ProviderId, #od_provider{} = Provider, data) ->
 get(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
     {ok, maps:keys(Spaces)};
 get(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
-    {ok, Space} = ?throw_on_failure(n_space_logic_plugin:get_entity(SpaceId)),
-    n_space_logic_plugin:get(?ROOT, SpaceId, Space, data);
+    {ok, Space} = ?throw_on_failure(space_logic_plugin:get_entity(SpaceId)),
+    space_logic_plugin:get(?ROOT, SpaceId, Space, data);
 get(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
     {ok, maps:keys(EffUsers)};
 get(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
-    {ok, User} = ?throw_on_failure(n_user_logic_plugin:get_entity(UserId)),
-    n_user_logic_plugin:get(?ROOT, UserId, User, data);
+    {ok, User} = ?throw_on_failure(user_logic_plugin:get_entity(UserId)),
+    user_logic_plugin:get(?ROOT, UserId, User, data);
 get(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
     {ok, maps:keys(EffGroups)};
 get(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
-    {ok, Group} = ?throw_on_failure(n_group_logic_plugin:get_entity(GroupId)),
-    n_group_logic_plugin:get(?ROOT, GroupId, Group, data);
+    {ok, Group} = ?throw_on_failure(group_logic_plugin:get_entity(GroupId)),
+    group_logic_plugin:get(?ROOT, GroupId, Group, data);
 get(_, undefined, undefined, {check_my_ip, Req}) ->
     {{Ip, _Port}, _} = cowboy_req:peer(Req),
     {ok, list_to_binary(inet_parse:ntoa(Ip))}.
@@ -178,8 +178,8 @@ get(_, undefined, undefined, {check_my_ip, Req}) ->
 %% Updates a resource based on EntityId, Resource identifier and Data.
 %% @end
 %%--------------------------------------------------------------------
--spec update(EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    n_entity_logic:data()) -> n_entity_logic:result().
+-spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    entity_logic:data()) -> entity_logic:result().
 update(ProviderId, entity, Data) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
         #od_provider{
@@ -209,8 +209,8 @@ update(ProviderId, {space, SpaceId}, Data) ->
 %% Deletes a resource based on EntityId and Resource identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(EntityId :: n_entity_logic:entity_id(), Resource :: resource()) ->
-    n_entity_logic:result().
+-spec delete(EntityId :: entity_logic:entity_id(), Resource :: resource()) ->
+    entity_logic:result().
 delete(ProviderId, entity) ->
     entity_graph:delete_with_relations(od_provider, ProviderId);
 
@@ -232,8 +232,8 @@ delete(ProviderId, {space, SpaceId}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(Resource :: resource()) ->
-    n_entity_logic:existence_verificator()|
-    [n_entity_logic:existence_verificator()].
+    entity_logic:existence_verificator()|
+    [entity_logic:existence_verificator()].
 exists({space, SpaceId}) ->
     % No matter the resource, return true if it belongs to a provider
     {internal, fun(#od_provider{spaces = Spaces}) ->
@@ -271,10 +271,10 @@ exists(_) ->
 %% process with given result.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize(Operation :: n_entity_logic:operation(),
-    EntityId :: n_entity_logic:entity_id(), Resource :: resource(),
-    Client :: n_entity_logic:client()) ->
-    n_entity_logic:authorization_verificator() |
+-spec authorize(Operation :: entity_logic:operation(),
+    EntityId :: entity_logic:entity_id(), Resource :: resource(),
+    Client :: entity_logic:client()) ->
+    entity_logic:authorization_verificator() |
     [authorization_verificator:existence_verificator()].
 authorize(create, undefined, check_my_ports, _) ->
     true;
@@ -293,7 +293,7 @@ authorize(get, undefined, {check_my_ip, _}, _) ->
     true;
 
 authorize(get, _ProvId, entity, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
 
 authorize(get, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;
@@ -304,35 +304,35 @@ authorize(get, _ProvId, data, ?PROVIDER) ->
 
 authorize(get, _ProvId, data, ?USER(UserId)) -> [
     auth_by_membership(UserId),
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST)
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST)
 ];
 
 authorize(get, undefined, list, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
 
 authorize(get, _ProvId, eff_users, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
 
 authorize(get, _ProvId, {eff_user, _}, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
 
 authorize(get, _ProvId, eff_groups, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
 
 authorize(get, _ProvId, {eff_group, _}, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
 
 authorize(get, ProvId, spaces, ?PROVIDER(ProvId)) ->
     true;
 
 authorize(get, _ProvId, spaces, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
 
 authorize(get, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true;
 
 authorize(get, _ProvId, {space, _}, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
 
 
 authorize(update, ProvId, entity, ?PROVIDER(ProvId)) ->
@@ -346,7 +346,7 @@ authorize(delete, ProvId, entity, ?PROVIDER(ProvId)) ->
     true;
 
 authorize(delete, _ProvId, entity, ?USER(UserId)) ->
-    n_user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_DELETE);
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_DELETE);
 
 authorize(delete, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
     true.
@@ -361,9 +361,9 @@ authorize(delete, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(Operation :: n_entity_logic:operation(),
+-spec validate(Operation :: entity_logic:operation(),
     Resource :: resource()) ->
-    n_entity_logic:validity_verificator().
+    entity_logic:validity_verificator().
 validate(create, entity) -> #{
     required => #{
         <<"urls">> => {list_of_binaries, non_empty},
@@ -427,7 +427,7 @@ validate(update, {space, _SpaceId}) -> #{
 %% Returns readable string representing the entity with given id.
 %% @end
 %%--------------------------------------------------------------------
--spec entity_to_string(EntityId :: n_entity_logic:entity_id()) -> binary().
+-spec entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().
 entity_to_string(SpaceId) ->
     od_provider:to_string(SpaceId).
 
@@ -444,7 +444,7 @@ entity_to_string(SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_membership(UserId :: od_user:id()) ->
-    n_entity_logic:authorization_verificator().
+    entity_logic:authorization_verificator().
 auth_by_membership(UserId) ->
     {internal, fun(#od_provider{eff_users = EffUsers}) ->
         maps:is_key(UserId, EffUsers)

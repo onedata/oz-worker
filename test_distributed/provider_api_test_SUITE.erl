@@ -110,7 +110,7 @@ create_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = create,
-            module = n_provider_logic,
+            module = provider_logic,
             function = create,
             args = [client, data],
             expected_result = ?OK_TERM(fun({ProviderId, Certificate}) ->
@@ -213,7 +213,7 @@ get_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_provider_logic,
+            module = provider_logic,
             function = get_data,
             args = [client, P1],
             expected_result = ?OK_MAP(ExpBody)
@@ -271,7 +271,7 @@ list_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_provider_logic,
+            module = provider_logic,
             function = list,
             args = [client],
             expected_result = ?OK_LIST(ExpProviders)
@@ -303,7 +303,7 @@ update_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = update,
-            module = n_provider_logic,
+            module = provider_logic,
             function = update,
             args = [client, P1, data],
             expected_result = ?OK
@@ -435,7 +435,7 @@ delete_test(Config) ->
                 },
                 logic_spec = #logic_spec{
                     operation = delete,
-                    module = n_provider_logic,
+                    module = provider_logic,
                     function = delete,
                     args = [client, Provider],
                     expected_result = ?OK
@@ -462,7 +462,7 @@ delete_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = delete,
-            module = n_provider_logic,
+            module = provider_logic,
             function = delete,
             args = [client, P8]
         }
@@ -487,7 +487,7 @@ delete_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = delete,
-            module = n_provider_logic,
+            module = provider_logic,
             function = delete,
             args = [client, P1],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
@@ -522,7 +522,7 @@ get_eff_users_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_provider_logic,
+            module = provider_logic,
             function = get_eff_users,
             args = [client, P1],
             expected_result = ?OK_LIST([])
@@ -571,7 +571,7 @@ get_eff_users_test(Config) ->
             },
             logic_spec = #logic_spec{
                 operation = get,
-                module = n_provider_logic,
+                module = provider_logic,
                 function = get_eff_user,
                 args = [client, P1, UserId],
                 expected_result = ExpectedLogicResult
@@ -679,7 +679,7 @@ get_eff_groups_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_provider_logic,
+            module = provider_logic,
             function = get_eff_groups,
             args = [client, P1],
             expected_result = ?OK_LIST([])
@@ -731,7 +731,7 @@ get_eff_groups_test(Config) ->
             },
             logic_spec = #logic_spec{
                 operation = get,
-                module = n_provider_logic,
+                module = provider_logic,
                 function = get_eff_group,
                 args = [client, P1, GroupId],
                 expected_result = ExpectedLogicResult
@@ -818,7 +818,7 @@ get_spaces_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_provider_logic,
+            module = provider_logic,
             function = get_spaces,
             args = [client, P1],
             expected_result = ?OK_LIST([])
@@ -873,7 +873,7 @@ get_spaces_test(Config) ->
             },
             logic_spec = #logic_spec{
                 operation = get,
-                module = n_provider_logic,
+                module = provider_logic,
                 function = get_space,
                 args = [client, P1, SpaceId],
                 expected_result = ExpectedLogicResult
@@ -1056,7 +1056,7 @@ support_space_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = create,
-            module = n_provider_logic,
+            module = provider_logic,
             function = support_space,
             args = [client, P1, data],
             expected_result = ?OK_TERM(VerifyFun)
@@ -1066,7 +1066,7 @@ support_space_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
-    % n_provider_logic should also allow using non-serialized macaroons, check it
+    % provider_logic should also allow using non-serialized macaroons, check it
     {ok, BadMacaroon3} = oz_test_utils:space_invite_user_token(
         Config, ?USER(U1), S1
     ),
@@ -1154,7 +1154,7 @@ update_support_size_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = update,
-            module = n_provider_logic,
+            module = provider_logic,
             function = update_support_size,
             args = [client, P1, S1, data],
             expected_result = ?OK
@@ -1234,7 +1234,7 @@ revoke_support_test(Config) ->
                 rest_spec = undefined,
                 logic_spec = #logic_spec{
                     operation = delete,
-                    module = n_provider_logic,
+                    module = provider_logic,
                     function = revoke_support,
                     args = [client, P1, S1],
                     expected_result = ?OK
@@ -1264,7 +1264,7 @@ revoke_support_test(Config) ->
         rest_spec = undefined,
         logic_spec = #logic_spec{
             operation = delete,
-            module = n_provider_logic,
+            module = provider_logic,
             function = revoke_support,
             args = [client, P1, S1],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
@@ -1307,7 +1307,7 @@ check_my_ports_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = create,
-            module = n_provider_logic,
+            module = provider_logic,
             function = check_my_ports,
             args = [client, data],
             expected_result = ?OK_TERM(fun(Result) ->

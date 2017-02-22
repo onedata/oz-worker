@@ -93,7 +93,7 @@ validate(Macaroon, TokenType) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Issuer :: n_entity_logic:client(), TokenType :: token_type(),
+-spec create(Issuer :: entity_logic:client(), TokenType :: token_type(),
     Resource :: {resource_type(), binary()}) ->
     {ok, macaroon:macaroon()} | {error, Reason :: any()}.
 create(Issuer, TokenType, {ResourceType, ResourceId}) ->

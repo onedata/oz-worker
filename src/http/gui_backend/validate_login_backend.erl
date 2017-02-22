@@ -37,7 +37,7 @@ page_init() ->
         {redirect, URL} ->
             UserId = gui_session:get_user_id(),
             ?info("User ~p logged in", [UserId]),
-            case n_user_logic:get_default_provider_if_online(UserId) of
+            case user_logic:get_default_provider_if_online(UserId) of
                 {true, DefaultProv} ->
                     ?debug("Automatically redirecting user `~s` "
                     "to default provider `~s`", [UserId, DefaultProv]),

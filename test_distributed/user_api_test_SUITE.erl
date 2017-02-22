@@ -117,10 +117,10 @@ all() ->
 create_test(Config) ->
     UserRecord = #od_user{name = <<"Name">>, login = <<"login">>},
     {ok, UserId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, n_user_logic, create, [UserRecord]
+        Config, user_logic, create, [UserRecord]
     )),
     {ok, User} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, n_user_logic, get, [?USER(UserId), UserId]
+        Config, user_logic, get, [?USER(UserId), UserId]
     )),
     #od_user{name = Name, login = Login} = User,
     ?assertEqual(Name, <<"Name">>),
@@ -128,17 +128,17 @@ create_test(Config) ->
     % Try to create a user with given Id
     PredefinedUserId = <<"ausdhf87adsga87ht2q7hrw">>,
     {ok, PredefinedUserId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, n_user_logic, create, [UserRecord, PredefinedUserId]
+        Config, user_logic, create, [UserRecord, PredefinedUserId]
     )),
     {ok, User2} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, n_user_logic, get, [?USER(PredefinedUserId), PredefinedUserId]
+        Config, user_logic, get, [?USER(PredefinedUserId), PredefinedUserId]
     )),
     #od_user{name = Name, login = Login} = User2,
     ?assertEqual(Name, <<"Name">>),
     ?assertEqual(Login, <<"login">>),
     % Second try should fail (such id exists)
     ?assertMatch(?ERROR_BAD_VALUE_ID_OCCUPIED(<<"userId">>), oz_test_utils:call_oz(
-        Config, n_user_logic, create, [UserRecord, PredefinedUserId]
+        Config, user_logic, create, [UserRecord, PredefinedUserId]
     )).
 
 
@@ -157,7 +157,7 @@ create_client_token_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = create,
-            module = n_user_logic,
+            module = user_logic,
             function = create_client_token,
             args = [client, User],
             expected_result = ?OK_BINARY
@@ -223,7 +223,7 @@ authorize_test(Config) ->
                 },
                 logic_spec = #logic_spec{
                     operation = create,
-                    module = n_user_logic,
+                    module = user_logic,
                     function = authorize,
                     args = [data],
                     expected_result = ?OK_BINARY
@@ -282,7 +282,7 @@ get_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = get_data,
             args = [client, User],
             expected_result = ?OK_MAP(ExpectedBody)
@@ -336,7 +336,7 @@ list_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = list,
             args = [client],
             expected_result = ?OK_LIST(ExpUsers)
@@ -364,7 +364,7 @@ list_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = list,
             args = [client],
             expected_result = ?OK_LIST(ExpUsers2)
@@ -395,7 +395,7 @@ get_oz_privileges_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = get_oz_privileges,
             args = [client, User],
             expected_result = ?ERROR_REASON(?ERROR_FORBIDDEN)
@@ -433,7 +433,7 @@ get_oz_privileges_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = get_oz_privileges,
             args = [client, User],
             expected_result = ?OK_LIST([])
@@ -487,7 +487,7 @@ get_eff_oz_privileges_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = get_eff_oz_privileges,
             args = [client, User],
             expected_result = ?ERROR_REASON(?ERROR_FORBIDDEN)
@@ -527,7 +527,7 @@ get_eff_oz_privileges_test(Config) ->
         },
         logic_spec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = get_eff_oz_privileges,
             args = [client, User],
             expected_result = ?OK_LIST([])
@@ -616,7 +616,7 @@ get_default_space_test(Config) ->
         },
         logic_spec = LogicSpec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = get_default_space,
             args = [client, User],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
@@ -661,7 +661,7 @@ get_space_alias_test(Config) ->
         },
         logic_spec = LogicSpec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = get_space_alias,
             args = [client, User, Space],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
@@ -704,7 +704,7 @@ get_default_provider_test(Config) ->
         },
         logic_spec = LogicSpec = #logic_spec{
             operation = get,
-            module = n_user_logic,
+            module = user_logic,
             function = get_default_provider,
             args = [client, User],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)

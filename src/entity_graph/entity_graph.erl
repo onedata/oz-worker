@@ -83,11 +83,11 @@
 ]).
 
 % Types imported from entity_logic for shorter code
--type entity_id() :: n_entity_logic:entity_id().
+-type entity_id() :: entity_logic:entity_id().
 % OZ privileges are treated differently, but the recalculation process is
 % in large part the same as other relations.
 -type entity_type() :: entity_type() | oz_privileges.
--type entity() :: n_entity_logic:entity().
+-type entity() :: entity_logic:entity().
 
 % Internal types
 % Direction in effective graph

@@ -10,7 +10,7 @@
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_provider_logic).
+-module(provider_logic).
 -author("Lukasz Opiola").
 
 -include("entity_logic.hrl").
@@ -19,7 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("hackney/include/hackney_lib.hrl").
 
--define(PLUGIN, n_provider_logic_plugin).
+-define(PLUGIN, provider_logic_plugin).
 
 -export([
     create/5, create/7, create/2, create_dev/2
@@ -67,7 +67,7 @@
 %% RedirectionPoint and CSR (Certificate Signing Request).
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), Name :: binary(),
+-spec create(Client :: entity_logic:client(), Name :: binary(),
     URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
     {ok, od_provider:id()} | {error, term()}.
 create(Client, Name, URLs, RedirectionPoint, CSR) ->
@@ -85,7 +85,7 @@ create(Client, Name, URLs, RedirectionPoint, CSR) ->
 %% RedirectionPoint, CSR (Certificate Signing Request), Latitude and Longitude.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), Name :: binary(),
+-spec create(Client :: entity_logic:client(), Name :: binary(),
     URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary(),
     Latitude :: float(), Longitude :: float()) ->
     {ok, od_provider:id()} | {error, term()}.
@@ -107,10 +107,10 @@ create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: n_entity_logic:client(), Data :: #{}) ->
+-spec create(Client :: entity_logic:client(), Data :: #{}) ->
     {ok, od_provider:id()} | {error, term()}.
 create(Client, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
 
 %%--------------------------------------------------------------------
@@ -122,10 +122,10 @@ create(Client, Data) ->
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create_dev(Client :: n_entity_logic:client(), Data :: #{}) ->
+-spec create_dev(Client :: entity_logic:client(), Data :: #{}) ->
     {ok, od_provider:id()} | {error, term()}.
 create_dev(Client, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, undefined, entity_dev, Data).
+    entity_logic:create(Client, ?PLUGIN, undefined, entity_dev, Data).
 
 
 %%--------------------------------------------------------------------
@@ -133,10 +133,10 @@ create_dev(Client, Data) ->
 %% Retrieves a provider record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     {ok, #od_provider{}} | {error, term()}.
 get(Client, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, entity).
+    entity_logic:get(Client, ?PLUGIN, ProviderId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -144,10 +144,10 @@ get(Client, ProviderId) ->
 %% Retrieves information about a provider record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_data(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     {ok, #{}} | {error, term()}.
 get_data(Client, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, data).
+    entity_logic:get(Client, ?PLUGIN, ProviderId, data).
 
 
 %%--------------------------------------------------------------------
@@ -155,10 +155,10 @@ get_data(Client, ProviderId) ->
 %% Lists all providers (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: n_entity_logic:client()) ->
+-spec list(Client :: entity_logic:client()) ->
     {ok, [od_provider:id()]} | {error, term()}.
 list(Client) ->
-    n_entity_logic:get(Client, ?PLUGIN, undefined, list).
+    entity_logic:get(Client, ?PLUGIN, undefined, list).
 
 
 %%--------------------------------------------------------------------
@@ -167,10 +167,10 @@ list(Client) ->
 %% RedirectionPoint, Latitude and Longitude.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+-spec update(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     Data :: #{}) -> ok | {error, term()}.
 update(Client, ProviderId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, ProviderId, entity, Data).
+    entity_logic:update(Client, ?PLUGIN, ProviderId, entity, Data).
 
 
 %%--------------------------------------------------------------------
@@ -178,10 +178,10 @@ update(Client, ProviderId, Data) ->
 %% Deletes given provider from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec delete(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     ok | {error, term()}.
 delete(Client, ProviderId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, ProviderId, entity).
+    entity_logic:delete(Client, ?PLUGIN, ProviderId, entity).
 
 
 %%--------------------------------------------------------------------
@@ -189,7 +189,7 @@ delete(Client, ProviderId) ->
 %% Supports a space based on support_space_token and support size.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+-spec support_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     Token :: token:id() | macaroon:macaroon(), SupportSize :: integer()) ->
     {ok, od_space:id()} | {error, term()}.
 support_space(Client, ProviderId, Token, SupportSize) ->
@@ -204,10 +204,10 @@ support_space(Client, ProviderId, Token, SupportSize) ->
 %% are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+-spec support_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     Data :: #{}) -> {ok, od_space:id()} | {error, term()}.
 support_space(Client, ProviderId, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, ProviderId, support, Data).
+    entity_logic:create(Client, ?PLUGIN, ProviderId, support, Data).
 
 
 %%--------------------------------------------------------------------
@@ -215,10 +215,10 @@ support_space(Client, ProviderId, Data) ->
 %% Retrieves the list of effective users of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_users(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_eff_users(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 get_eff_users(Client, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_users).
+    entity_logic:get(Client, ?PLUGIN, ProviderId, eff_users).
 
 
 %%--------------------------------------------------------------------
@@ -227,10 +227,10 @@ get_eff_users(Client, ProviderId) ->
 %% effective users of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+-spec get_eff_user(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_eff_user(Client, ProviderId, UserId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_user, UserId}).
+    entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_user, UserId}).
 
 
 %%--------------------------------------------------------------------
@@ -238,10 +238,10 @@ get_eff_user(Client, ProviderId, UserId) ->
 %% Retrieves the list of effective groups of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_groups(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_eff_groups(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 get_eff_groups(Client, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, eff_groups).
+    entity_logic:get(Client, ?PLUGIN, ProviderId, eff_groups).
 
 
 %%--------------------------------------------------------------------
@@ -250,10 +250,10 @@ get_eff_groups(Client, ProviderId) ->
 %% effective groups of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+-spec get_eff_group(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_eff_group(Client, ProviderId, GroupId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_group, GroupId}).
+    entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_group, GroupId}).
 
 
 %%--------------------------------------------------------------------
@@ -261,10 +261,10 @@ get_eff_group(Client, ProviderId, GroupId) ->
 %% Retrieves the list of spaces of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(Client :: n_entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_spaces(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     {ok, [od_space:id()]} | {error, term()}.
 get_spaces(Client, ProviderId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, spaces).
+    entity_logic:get(Client, ?PLUGIN, ProviderId, spaces).
 
 
 %%--------------------------------------------------------------------
@@ -272,10 +272,10 @@ get_spaces(Client, ProviderId) ->
 %% Retrieves the information about specific space among spaces of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_space(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+-spec get_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
 get_space(Client, ProviderId, SpaceId) ->
-    n_entity_logic:get(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
+    entity_logic:get(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
 
 
 %%--------------------------------------------------------------------
@@ -285,14 +285,14 @@ get_space(Client, ProviderId, SpaceId) ->
 %% 2) New support size is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_support_size(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+-spec update_support_size(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id(), SupSizeOrData :: integer() | #{}) -> ok | {error, term()}.
 update_support_size(Client, ProviderId, SpaceId, SupSize) when is_integer(SupSize) ->
     update_support_size(Client, ProviderId, SpaceId, #{
         <<"size">> => SupSize
     });
 update_support_size(Client, ProviderId, SpaceId, Data) ->
-    n_entity_logic:update(Client, ?PLUGIN, ProviderId, {space, SpaceId}, Data).
+    entity_logic:update(Client, ?PLUGIN, ProviderId, {space, SpaceId}, Data).
 
 
 %%--------------------------------------------------------------------
@@ -300,10 +300,10 @@ update_support_size(Client, ProviderId, SpaceId, Data) ->
 %% Revokes support for specified space on behalf of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec revoke_support(Client :: n_entity_logic:client(), ProviderId :: od_provider:id(),
+-spec revoke_support(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> ok | {error, term()}.
 revoke_support(Client, ProviderId, SpaceId) ->
-    n_entity_logic:delete(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
+    entity_logic:delete(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
 
 
 %%--------------------------------------------------------------------
@@ -312,10 +312,10 @@ revoke_support(Client, ProviderId, SpaceId) ->
 %% whether the requests succeeded.
 %% @end
 %%--------------------------------------------------------------------
--spec check_my_ports(Client :: n_entity_logic:client(), Data :: #{}) ->
+-spec check_my_ports(Client :: entity_logic:client(), Data :: #{}) ->
     ok | {error, term()}.
 check_my_ports(Client, Data) ->
-    n_entity_logic:create(Client, ?PLUGIN, undefined, check_my_ports, Data).
+    entity_logic:create(Client, ?PLUGIN, undefined, check_my_ports, Data).
 
 
 %%--------------------------------------------------------------------
@@ -323,10 +323,10 @@ check_my_ports(Client, Data) ->
 %% Retrieves the IP of requesting client based on cowboy req.
 %% @end
 %%--------------------------------------------------------------------
--spec check_my_ip(Client :: n_entity_logic:client(),
+-spec check_my_ip(Client :: entity_logic:client(),
     CowboyReq :: cowboy_req:req()) -> {ok, IP :: binary()} | {error, term()}.
 check_my_ip(Client, CowboyReq) ->
-    n_entity_logic:get(Client, ?PLUGIN, undefined, {check_my_ip, CowboyReq}).
+    entity_logic:get(Client, ?PLUGIN, undefined, {check_my_ip, CowboyReq}).
 
 
 %%--------------------------------------------------------------------
@@ -384,13 +384,13 @@ choose_provider_for_user(UserId) ->
     % Check if the user has a default space and if it is supported.
     {ok, #od_user{
         spaces = Spaces, default_space = DefaultSpace
-    }} = n_user_logic:get(?ROOT, UserId),
+    }} = user_logic:get(?ROOT, UserId),
     {ok, DSProviders} =
         case DefaultSpace of
             undefined ->
                 {ok, []};
             _ ->
-                n_space_logic:get_providers(?ROOT, DefaultSpace)
+                space_logic:get_providers(?ROOT, DefaultSpace)
         end,
     case DSProviders of
         List when length(List) > 0 ->
@@ -400,7 +400,7 @@ choose_provider_for_user(UserId) ->
             % Default space does not have a provider, look in other spaces
             ProviderIds = lists:foldl(
                 fun(Space, Acc) ->
-                    {ok, Providers} = n_space_logic:get_providers(?ROOT, Space),
+                    {ok, Providers} = space_logic:get_providers(?ROOT, Space),
                     Providers ++ Acc
                 end, [], Spaces),
 

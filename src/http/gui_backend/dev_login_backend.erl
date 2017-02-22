@@ -33,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
-    {ok, UserIds} = n_user_logic:list(?ROOT),
+    {ok, UserIds} = user_logic:list(?ROOT),
     Buttons = lists:map(
         fun(UserId) ->
             Path = str_utils:format_bin("/validate_dev_login?user=~s",

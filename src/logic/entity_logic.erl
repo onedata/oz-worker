@@ -16,7 +16,7 @@
 %%% entity_logic_plugin_behaviour.
 %%% @end
 %%%-------------------------------------------------------------------
--module(n_entity_logic).
+-module(entity_logic).
 -author("Lukasz Opiola").
 
 -include("entity_logic.hrl").
