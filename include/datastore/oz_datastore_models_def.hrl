@@ -78,7 +78,7 @@
 
 %% This record defines a user and is handled as a database document
 -record(od_user, {
-    name = <<"New User">> :: od_user:name(),
+    name = <<"">> :: od_user:name(),
     login = <<"">> :: binary(),
     alias = ?EMPTY_ALIAS :: binary(),
     email_list = [] :: [binary()],
@@ -122,7 +122,7 @@
 %% This record defines a group of users, it has: name, list of users that
 %% belongs to it, list of spaces that are used by this group
 -record(od_group, {
-    name = <<"New Group">> :: od_group:name(),
+    name = <<"">> :: od_group:name(),
     type = role :: od_group:type(),
 
     % Privileges of this group in admin's OZ API
@@ -156,7 +156,7 @@
 
 %% This record defines a space that can be used by users to store their files
 -record(od_space, {
-    name = <<"New Space">> :: od_space:name(),
+    name = <<"">> :: od_space:name(),
 
     % Direct relations to other entities
     users = #{} :: entity_graph:relation_with_attrs(od_user:id(), [privileges:space_privilege()]),
@@ -183,7 +183,7 @@
 %% (every share belongs to one space, so its effective relations are the same
 %% as of the parent space).
 -record(od_share, {
-    name = <<"New Share">> :: od_share:name(),
+    name = <<"">> :: od_share:name(),
     public_url = undefined :: undefined | binary(),
 
     % Direct relations to other entities
@@ -194,7 +194,7 @@
 
 %% This record defines a provider who supports spaces and can be reached via url
 -record(od_provider, {
-    name = <<"New provider">> :: od_provider:name(),
+    name = <<"">> :: od_provider:name(),
     redirection_point :: undefined | binary(),
     urls :: undefined | [binary()],
     serial :: undefined | binary(),
@@ -213,7 +213,7 @@
 }).
 
 -record(od_handle_service, {
-    name = <<"New handle service">> :: od_handle_service:name(),
+    name = <<"">> :: od_handle_service:name(),
     proxy_endpoint :: od_handle_service:proxy_endpoint() | undefined,
     service_properties = #{} :: od_handle_service:service_properties(),
 
