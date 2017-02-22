@@ -923,12 +923,6 @@ get_spaces_test(Config) ->
             exclude ->
                 {?HTTP_404_NOT_FOUND, undefined}
         end,
-        ExpectedLogicResult = case ExcludeOrInclude of
-            include ->
-                ?OK_MAP_CONTAINS(ExpBodyContains);
-            exclude ->
-                ?ERROR_REASON(?ERROR_NOT_FOUND)
-        end,
         #api_test_spec{
             client_spec = #client_spec{
                 correct = [{provider, P2, KeyFile2, CertFile2}]
