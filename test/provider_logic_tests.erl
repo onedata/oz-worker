@@ -25,7 +25,7 @@ provider_logic_test_() ->
         fun setup/0,
         fun teardown/1,
         [
-            {"test_connection function", fun test_connection_test/0}
+            {"test_connection function", fun test_connection/0}
         ]
     }.
 
@@ -43,7 +43,7 @@ teardown(_) ->
 %%% Tests functions
 %%%===================================================================
 
-test_connection_test() ->
+test_connection() ->
     meck:expect(http_client, get,
         fun
             (<<"https://172.16.67.194:443/test">>, #{}, <<>>, [insecure]) ->
