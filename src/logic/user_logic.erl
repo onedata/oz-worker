@@ -1070,7 +1070,7 @@ change_user_password(Login, OldPassword, NewPassword) ->
 %%--------------------------------------------------------------------
 -spec get_default_provider_if_online(UserOrId :: od_user:id() | #od_user{}) ->
     {true, od_provider:id()} | false.
-get_default_provider_if_online(UserId) ->
+get_default_provider_if_online(UserId) when is_binary(UserId) ->
     {ok, User} = get(?ROOT, UserId),
     get_default_provider_if_online(User);
 get_default_provider_if_online(#od_user{default_provider = undefined}) ->
