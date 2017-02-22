@@ -98,20 +98,6 @@ authenticate_user(Identifier) ->
 get_redirection_uri(UserId, ProviderId) ->
     Token = gen_token(UserId, ProviderId),
     {ok, _} = od_user:update(UserId, #{chosen_provider => ProviderId}),
-    % TODO return IP address rather than alias.onedata.org
-%%    {ok, Hostname} = application:get_env(oz_worker, http_domain),
-%%    {ok, #od_user{alias = Alias}} = user_logic:get(?ROOT, UserId),
-%%    Prefix = case Alias of
-%%        ?EMPTY_ALIAS ->
-%%            <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
-%%        _ ->
-%%            Alias
-%%    end,
-    % It shall be used normally when we have a possibility to
-    % resolve domains on developer's host systems
-    % (so their web browsers can connect).
-    % To do this, we need a recursive DNS server in docker environment,
-    % whose address must be fed to system's resolv.conf.
     {ok, ProviderURL} = provider_logic:get_url(ProviderId),
     URL = str_utils:format_bin("~s~s?code=~s", [
         ProviderURL, ?provider_auth_endpoint, Token
@@ -173,12 +159,6 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, _Method, _RootResource)
             VerifyFun = fun
                 (<<"time < ", Integer/binary>>) ->
                     erlang:system_time(seconds) < binary_to_integer(Integer);
-                % TODO currently not used, to be fixed in VFS-2874
-%%                (<<"method = ", Met/binary>>) ->
-%%                    Method =:= Met;
-%%                (<<"rootResource in ", Resources/binary>>) ->
-%%                    lists:member(atom_to_binary(RootResource, utf8),
-%%                        binary:split(Resources, <<",">>, [global]));
                 (<<"providerId = ", PID/binary>>) ->
                     PID =:= ProviderId;
                 (_) ->
