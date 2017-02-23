@@ -188,6 +188,10 @@ authorize(get, _ShareId, data, ?USER(UserId)) -> [
     auth_by_oz_privilege(UserId, ?OZ_SHARES_LIST)
 ];
 
+authorize(get, _ShareId, data, ?PROVIDER(ProviderId)) -> [
+    auth_by_space_support(ProviderId)
+];
+
 authorize(update, _ShareId, entity, ?USER(UserId)) ->
     auth_by_space_privilege(UserId, ?SPACE_MANAGE_SHARES);
 
@@ -255,6 +259,21 @@ entity_to_string(ShareId) ->
 auth_by_space_membership(UserId) ->
     {internal, fun(#od_share{space = SpaceId}) ->
         space_logic:has_eff_user(SpaceId, UserId)
+    end}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns authorization verificator that checks if given provider supports
+%% the space to which share represented by entity belongs.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_space_support(ProviderId :: od_provider:id()) ->
+    entity_logic:authorization_verificator().
+auth_by_space_support(ProviderId) ->
+    {internal, fun(#od_share{space = SpaceId}) ->
+        space_logic:has_provider(SpaceId, ProviderId)
     end}.
 
 

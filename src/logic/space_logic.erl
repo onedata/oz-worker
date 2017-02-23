@@ -63,7 +63,8 @@
 -export([
     exists/1,
     has_eff_privilege/3,
-    has_eff_user/2
+    has_eff_user/2,
+    has_provider/2
 ]).
 
 %%%===================================================================
@@ -562,3 +563,20 @@ has_eff_user(SpaceId, UserId) when is_binary(SpaceId) ->
 has_eff_user(#od_space{eff_users = EffUsers}, UserId) ->
     maps:is_key(UserId, EffUsers).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified provider supports given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_provider(SpaceOrId :: od_space:id() | #od_space{},
+    ProviderId :: od_provider:id()) -> boolean().
+has_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
+    case od_space:get(SpaceId) of
+        {ok, #document{value = Space}} ->
+            has_provider(Space, ProviderId);
+        _ ->
+            false
+    end;
+has_provider(#od_space{providers = Providers}, ProviderId) ->
+    maps:is_key(ProviderId, Providers).
