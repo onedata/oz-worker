@@ -27,10 +27,10 @@
         -> [ProviderId :: binary()].
 providers(Doc, od_space) ->
     #document{value = #od_space{
-        eff_users = EffUsers, providers = ProvidersSupports
+        users = Users, eff_users = EffUsers, providers = ProvidersSupports
     }} = Doc,
     SpaceProviders = maps:keys(ProvidersSupports),
-    SpaceEffUsers = maps:keys(EffUsers),
+    SpaceEffUsers = ordsets:union(maps:keys(Users), maps:keys(EffUsers)),
     SpaceProviders ++ through_users(SpaceEffUsers);
 
 % For share, the eligible providers are the same as for its parent space.
@@ -40,8 +40,8 @@ providers(Doc, od_share) ->
     providers(ParentDoc, od_space);
 
 providers(Doc, od_group) ->
-    #document{value = #od_group{eff_users = EffUsers}} = Doc,
-    through_users(maps:keys(EffUsers));
+    #document{value = #od_group{users = Users, eff_users = EffUsers}} = Doc,
+    through_users(ordsets:union(maps:keys(Users), maps:keys(EffUsers)));
 
 providers(Doc, od_user) ->
     through_users([Doc#document.key]);
@@ -50,12 +50,12 @@ providers(Doc, od_provider) ->
     [Doc#document.key];
 
 providers(Doc, od_handle_service) ->
-    #document{value = #od_handle_service{eff_users = EffUsers}} = Doc,
-    through_users(maps:keys(EffUsers));
+    #document{value = #od_handle_service{users = Users, eff_users = EffUsers}} = Doc,
+    through_users(ordsets:union(maps:keys(Users), maps:keys(EffUsers)));
 
 providers(Doc, od_handle) ->
-    #document{value = #od_handle{eff_users = EffUsers}} = Doc,
-    through_users(maps:keys(EffUsers));
+    #document{value = #od_handle{users = Users, eff_users = EffUsers}} = Doc,
+    through_users(ordsets:union(maps:keys(Users), maps:keys(EffUsers)));
 
 providers(_Doc, _Type) ->
     [].
