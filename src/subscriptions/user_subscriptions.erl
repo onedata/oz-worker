@@ -109,7 +109,7 @@ get_groups(ProviderID, UserChanges) ->
                     ?warning("Missing group ~p; provider ~p", [GroupID, ProviderID]),
                     [GroupID]
             end
-        end, ordsets:union(Groups, maps:keys(EffGroups))),
+        end, ordsets:union(Groups, maps:keys(EffGroups)))),
 
         lists:filtermap(fun(GroupID) ->
             case get_with_revs(od_group, GroupID) of
