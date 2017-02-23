@@ -182,7 +182,7 @@ client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).
 -spec handle_errors(Function :: fun(), Args :: [term()]) -> result().
 handle_errors(Function, Args) ->
     try
-        Function(Args)
+        erlang:apply(Function, Args)
     catch
         throw:Error ->
             Error;
@@ -220,6 +220,7 @@ create_internal(Client, ELPlugin, EntityId, Resource, Data) ->
 
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Retrieves a resource using provided entity logic module.
 %% Must be evaluated inside handle_errors function.
@@ -241,6 +242,7 @@ get_internal(Client, ELPlugin, EntityId, Resource) ->
 
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Updates a resource using provided entity logic module.
 %% Must be evaluated inside handle_errors function.
@@ -265,6 +267,7 @@ update_internal(Client, ELPlugin, EntityId, Resource, Data) ->
 
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Deletes a resource using provided entity logic module.
 %% Must be evaluated inside handle_errors function.
