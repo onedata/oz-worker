@@ -255,6 +255,18 @@ get(_, _SpaceId, #od_space{}, {provider, ProviderId}) ->
     entity_logic:data()) -> entity_logic:result().
 update(SpaceId, entity, #{<<"name">> := NewName}) ->
     {ok, _} = od_space:update(SpaceId, #{name => NewName}),
+    % TODO VFS-2999 This is needed to trigger subscriptions update of user
+    % docs, which include space aliases. Should be removed when aliases are
+    % reworked.
+    {ok, #document{value = #od_space{
+        eff_users = EffUsers
+    }}} = od_space:get(SpaceId),
+    lists:foreach(
+        fun(UserId) ->
+            od_user:update(UserId, fun(#od_user{} = User) ->
+                {ok, User#od_user{top_down_dirty = true}}
+            end)
+        end, maps:keys(EffUsers)),
     ok;
 
 update(SpaceId, {user_privileges, UserId}, Data) ->
