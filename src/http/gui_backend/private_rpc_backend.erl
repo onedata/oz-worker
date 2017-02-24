@@ -62,7 +62,8 @@ handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
 handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     Client = ?USER(gui_session:get_user_id()),
     case space_logic:create_provider_invite_token(Client, SpaceId) of
-        {ok, Token} ->
+        {ok, Macaroon} ->
+            {ok, Token} = token_utils:serialize62(Macaroon),
             {ok, [{<<"token">>, Token}]};
         ?ERROR_UNAUTHORIZED ->
             gui_error:report_warning(
