@@ -195,7 +195,7 @@ get(_, UserId, #od_user{default_space = DefaultSpace}, {default_space, UserId}) 
     {ok, DefaultSpace};
 get(_, _UserId, #od_user{space_aliases = SpaceAliases}, {space_alias, SpaceId}) ->
     {ok, maps:get(SpaceId, SpaceAliases)};
-get(_, _UserId, #od_user{default_provider = DefaultProvider}, {default_provider, UserId}) ->
+get(_, UserId, #od_user{default_provider = DefaultProvider}, {default_provider, UserId}) ->
     {ok, DefaultProvider};
 get(_, _UserId, #od_user{client_tokens = ClientTokens}, client_tokens) ->
     {ok, ClientTokens};
