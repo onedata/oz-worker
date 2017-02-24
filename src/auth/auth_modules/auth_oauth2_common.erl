@@ -17,8 +17,8 @@
 
 %% API
 -export([
-    get_redirect_url/3, get_redirect_url/4,
-    validate_login/2, validate_login/3
+    get_redirect_url/3,
+    validate_login/2
 ]).
 
 %%%===================================================================
