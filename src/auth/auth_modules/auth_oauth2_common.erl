@@ -86,7 +86,7 @@ validate_login(ProviderName, SecretSendMethod) ->
         end,
         SecretHeaders = case SecretSendMethod of
             secret_over_http_post ->
-                [];
+                #{};
             secret_over_http_basic ->
                 B64 = base64:encode(
                     <<ClientId/binary, ":", ClientSecret/binary>>
