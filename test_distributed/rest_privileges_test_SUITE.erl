@@ -1176,8 +1176,8 @@ list_providers_of_space_test(Config) ->
     {ok, Space1} = oz_test_utils:create_space(
         Config, ?USER(UserWithSpaces), <<"sp">>
     ),
-    {ok, _} = oz_test_utils:support_space(Config, Provider1, Space1, 100),
-    {ok, _} = oz_test_utils:support_space(Config, Provider2, Space1, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider1, Space1, 10000000),
+    {ok, _} = oz_test_utils:support_space(Config, Provider2, Space1, 10000000),
     ExpectedProviders = [
         {Provider1, <<"pr1">>},
         {Provider2, <<"pr2">>}
@@ -1436,9 +1436,9 @@ list_eff_users_of_provider_test(Config) ->
     {ok, ParentGroup} = oz_test_utils:add_group_to_space(
         Config, Space3, ParentGroup
     ),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 100),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space2, 100),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space3, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 10000000),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space2, 10000000),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space3, 10000000),
     ExpectedUsers = [
         {User1, <<"u1">>},
         {User2, <<"u2">>},
@@ -1569,8 +1569,8 @@ list_eff_groups_of_provider_test(Config) ->
     {ok, Space2} = oz_test_utils:create_space(
         Config, ?USER(UserWithSpaces), <<"sp">>
     ),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 100),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space2, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 10000000),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space2, 10000000),
 
     % Dummy users are users are used to create nested groups
     {ok, DummyUser1} = oz_test_utils:create_user(Config, #od_user{}),
@@ -1740,9 +1740,9 @@ list_spaces_of_provider_test(Config) ->
     {ok, Space3} = oz_test_utils:create_space(
         Config, ?USER(UserWithSpaces), <<"sp3">>
     ),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 100),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space2, 100),
-    {ok, _} = oz_test_utils:support_space(Config, Provider, Space3, 100),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 10000000),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space2, 10000000),
+    {ok, _} = oz_test_utils:support_space(Config, Provider, Space3, 10000000),
     ExpectedSpaces = [
         {Space1, <<"sp1">>},
         {Space2, <<"sp2">>},
