@@ -29,7 +29,7 @@
 %%--------------------------------------------------------------------
 -spec get_hooks() -> [{model_behaviour:model_type(), model_behaviour:model_action()}].
 get_hooks() ->
-    case application:get_env(?APP_Name, location_service_enabled) of
+    case application:get_env(?APP_NAME, location_service_enabled) of
         {ok, true} ->
             [{X, Y} || X <- ?MODELS, Y <- ?METHODS];
         {ok, false} ->

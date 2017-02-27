@@ -15,13 +15,15 @@
 -author("Lukasz Opiola").
 
 
+-include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([init/0, terminate/0]).
 -export([find_record/2, find_all/1, query/2, query_record/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
--export([user_record/1, push_user_record/1]).
+-export([user_record/2]).
+-export([push_user_record/1, push_user_record_when_synchronized/1]).
 
 %%%===================================================================
 %%% data_backend_behaviour callbacks
@@ -55,12 +57,7 @@ terminate() ->
 -spec find_record(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_record(<<"user">>, UserId) ->
-    case gui_session:get_user_id() of
-        UserId ->
-            {ok, user_record(UserId)};
-        _ ->
-            gui_error:unauthorized()
-    end.
+    {ok, user_record(?USER(gui_session:get_user_id()), UserId)}.
 
 
 %%--------------------------------------------------------------------
@@ -115,17 +112,18 @@ create_record(<<"user">>, _Data) ->
 -spec update_record(RsrcType :: binary(), Id :: binary(),
     Data :: proplists:proplist()) -> ok | gui_error:error_result().
 update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
-    case user_logic:set_alias(UserId, NewAlias) of
+    Client = ?USER(gui_session:get_user_id()),
+    case user_logic:update_alias(Client, UserId, NewAlias) of
         ok ->
             ok;
-        {error, disallowed_alias_prefix} ->
+        ?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(_) ->
             gui_error:report_warning(
                 <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
-        {error, invalid_alias} ->
+        ?ERROR_BAD_VALUE_ALIAS(_) ->
             gui_error:report_warning(
                 <<"Alias can contain only lowercase letters and digits, and "
                 "must be at least 5 characters long.">>);
-        {error, alias_occupied} ->
+        ?ERROR_ALIAS_OCCUPIED ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
                 "Please choose other alias.">>)
@@ -155,31 +153,36 @@ update_record(<<"user">>, UserId, Data) ->
 delete_record(<<"user">>, _Id) ->
     gui_error:report_error(<<"Not implemented">>).
 
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a client-compliant user record based on space id.
+%% Returns a client-compliant user record based on user id.
 %% @end
 %%--------------------------------------------------------------------
--spec user_record(UserId :: od_user:id()) -> proplists:proplist().
-user_record(UserId) ->
-    {ok, #document{value = #od_user{
+-spec user_record(Client :: entity_logic:client(), UserId :: od_user:id()) ->
+    proplists:proplist().
+user_record(Client, UserId) ->
+    {ok, #od_user{
         name = Name,
         alias = UserAlias,
         basic_auth_enabled = BasicAuthEnabled,
         connected_accounts = OAuthAccounts,
         client_tokens = ClientTokenIds,
         default_space = DefaultSpaceValue,
-        default_provider = DefaultProviderValue
-    }}} = od_user:get(UserId),
+        default_provider = DefaultProviderValue,
+        eff_groups = EffGroups,
+        eff_spaces = EffSpaces,
+        eff_providers = EffProviders
+    }} = user_logic:get(Client, UserId),
     Alias = alias_db_to_client(UserAlias),
     Authorizers = authorizers_db_to_client(OAuthAccounts),
     ClientTokens = client_tokens_db_to_client(ClientTokenIds),
     DefaultSpace = undefined_to_null(DefaultSpaceValue),
     DefaultProvider = undefined_to_null(DefaultProviderValue),
-    {ok, [{effective_groups, Groups}]} = user_logic:get_effective_groups(UserId),
-    {ok, UserSpaces} = user_logic:get_spaces(UserId),
-    Spaces = proplists:get_value(spaces, UserSpaces),
-    {ok, [{providers, Providers}]} = user_logic:get_providers(UserId),
     [
         {<<"id">>, UserId},
         {<<"name">>, Name},
@@ -189,9 +192,9 @@ user_record(UserId) ->
         {<<"clienttokens">>, ClientTokens},
         {<<"defaultSpaceId">>, DefaultSpace},
         {<<"defaultProviderId">>, DefaultProvider},
-        {<<"groups">>, Groups},
-        {<<"spaces">>, Spaces},
-        {<<"providers">>, Providers}
+        {<<"groups">>, maps:keys(EffGroups)},
+        {<<"spaces">>, maps:keys(EffSpaces)},
+        {<<"providers">>, maps:keys(EffProviders)}
     ].
 
 
@@ -202,7 +205,21 @@ user_record(UserId) ->
 %%--------------------------------------------------------------------
 -spec push_user_record(UserId :: od_user:id()) -> ok.
 push_user_record(UserId) ->
-    gui_async:push_updated(<<"user">>, user_record(UserId)).
+    gui_async:push_updated(<<"user">>, user_record(?USER(UserId), UserId)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Schedules an asynchronous push when user record has been synchronized.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_user_record_when_synchronized(UserId :: od_user:id()) -> ok.
+push_user_record_when_synchronized(UserId) ->
+    {ok, _} = gui_async:spawn(true, fun() ->
+        entity_graph:ensure_up_to_date(),
+        gui_async:push_updated(<<"user">>, user_record(?USER(UserId), UserId))
+    end),
+    ok.
 
 
 %%%===================================================================
@@ -274,5 +291,3 @@ client_tokens_db_to_client(ClientTokenIds) ->
 -spec undefined_to_null(Value :: undefined | term()) -> null | term().
 undefined_to_null(undefined) -> null;
 undefined_to_null(Value) -> Value.
-
-

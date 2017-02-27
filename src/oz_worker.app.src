@@ -10,7 +10,7 @@
 %% ===================================================================
 
 {application, oz_worker, [
-    {description, "Global registry of data."},
+    {description, "OneZone worker node."},
     {vsn, "3.0.0-rc12"},
     {registered, [oz_worker_sup]},
     {applications, [

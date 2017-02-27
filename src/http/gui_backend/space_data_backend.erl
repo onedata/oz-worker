@@ -14,8 +14,10 @@
 -author("Lukasz Opiola").
 -behaviour(data_backend_behaviour).
 
+-include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% data_backend_behaviour callbacks
 -export([init/0, terminate/0]).
@@ -59,7 +61,7 @@ terminate() ->
 find_record(<<"space">>, SpaceId) ->
     UserId = gui_session:get_user_id(),
     % Check if the user belongs to this space
-    case space_logic:has_effective_user(SpaceId, UserId) of
+    case space_logic:has_eff_user(SpaceId, UserId) of
         false ->
             gui_error:unauthorized();
         true ->
@@ -114,8 +116,8 @@ create_record(<<"space">>, Data) ->
             gui_error:report_error(<<"Empty space names are not allowed">>);
         Bin when is_binary(Bin) ->
             UserId = gui_session:get_user_id(),
-            {ok, SpaceId} = space_logic:create({user, UserId}, Name),
-            user_data_backend:push_user_record(UserId),
+            {ok, SpaceId} = space_logic:create(?USER(UserId), Name),
+            user_data_backend:push_user_record_when_synchronized(UserId),
             {ok, space_record(SpaceId, UserId)};
         _ ->
             gui_error:report_error(<<"Invalid space name">>)
@@ -132,7 +134,14 @@ create_record(<<"space">>, Data) ->
     ok | gui_error:error_result().
 update_record(<<"space">>, SpaceId, [{<<"name">>, NewName}]) ->
     UserId = gui_session:get_user_id(),
-    space_logic:modify(SpaceId, {user, UserId}, NewName);
+    case space_logic:update(?USER(UserId), SpaceId, NewName) of
+        ok ->
+            ok;
+        ?ERROR_UNAUTHORIZED ->
+            <<"You do not have permissions to update this space.">>;
+        _ ->
+            <<"Cannot update space name.">>
+    end;
 update_record(<<"space">>, _SpaceId, _Data) ->
     gui_error:report_error(<<"Not implemented">>).
 
@@ -162,9 +171,7 @@ delete_record(<<"space">>, _Id) ->
     proplists:proplist().
 space_record(SpaceId, UserId) ->
     % Check if that user has view privileges in that space
-    HasViewPrivs = space_logic:has_effective_privilege(
-        SpaceId, UserId, space_view_data
-    ),
+    HasViewPrivs = space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_VIEW),
     space_record(SpaceId, UserId, HasViewPrivs).
 
 
@@ -179,17 +186,19 @@ space_record(SpaceId, UserId) ->
 space_record(SpaceId, UserId, HasViewPrivileges) ->
     {ok, #document{value = #od_space{
         name = DefaultName,
-        providers_supports = ProvidersSupports
+        providers = ProvidersSupports
     }}} = od_space:get(SpaceId),
-    Name = get_displayed_space_name(SpaceId, DefaultName, UserId),
-    {Providers, SupportSizes} = lists:unzip(ProvidersSupports),
-    TotalSize = lists:sum(SupportSizes),
+    % Try to get space name from personal user's mapping, if not use its
+    % default name.
+    Name = get_displayed_space_name(SpaceId, UserId, DefaultName),
+    Providers = maps:keys(ProvidersSupports),
+    TotalSize = lists:sum(maps:values(ProvidersSupports)),
     [
         {<<"id">>, SpaceId},
         {<<"name">>, Name},
         {<<"hasViewPrivilege">>, HasViewPrivileges},
         {<<"totalSize">>, TotalSize},
-        {<<"supportSizes">>, ProvidersSupports},
+        {<<"supportSizes">>, maps:to_list(ProvidersSupports)},
         {<<"providers">>, Providers},
         {<<"user">>, UserId}
     ].
@@ -206,9 +215,9 @@ space_record(SpaceId, UserId, HasViewPrivileges) ->
 %% default name.
 %% @end
 %%--------------------------------------------------------------------
--spec get_displayed_space_name(SpaceId :: od_space:id(),
-    DefaultName :: binary(), UserId :: od_user:id()) -> binary().
-get_displayed_space_name(SpaceId, DefaultName, UserId) ->
+-spec get_displayed_space_name(SpaceId :: od_space:id(), UserId :: od_user:id(),
+    DefaultName :: binary()) -> binary().
+get_displayed_space_name(SpaceId, UserId, DefaultName) ->
     {ok, #document{value = #od_user{
         space_aliases = SpaceNamesMap
     }}} = od_user:get(UserId),

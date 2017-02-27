@@ -13,7 +13,6 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
--include("http/handlers/rest_handler.hrl").
 -include("auth_common.hrl").
 -include("gui/common.hrl").
 
@@ -106,7 +105,7 @@ validate_login() ->
                             [Reason, ParamsProplist, gui_ctx:get_form_params()]),
                         {error, ?error_auth_invalid_request};
 
-                    {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderId, user_id = UserID, email_list = OriginalEmails, name = Name}} ->
+                    {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderId, user_id = OauthUserId, email_list = OriginalEmails, name = Name}} ->
                         Emails = lists:map(fun(Email) ->
                             http_utils:normalize_email(Email)
                         end, OriginalEmails),
@@ -120,7 +119,7 @@ validate_login() ->
                         case proplists:get_value(connect_account, Props) of
                             false ->
                                 % Standard login, check if there is an account belonging to the user
-                                case user_logic:get_user_doc({connected_account_user_id, {ProviderId, UserID}}) of
+                                case od_user:get({connected_account_user_id, {ProviderId, OauthUserId}}) of
                                     {ok, #document{key = UserId}} ->
                                         % The account already exists
                                         gui_session:log_in(UserId),
@@ -159,7 +158,7 @@ validate_login() ->
                             true ->
                                 % Account adding flow
                                 % Check if this account isn't connected to other profile
-                                case user_logic:get_user({connected_account_user_id, {ProviderId, UserID}}) of
+                                case od_user:get({connected_account_user_id, {ProviderId, OauthUserId}}) of
                                     {ok, _} ->
                                         % The account is used on some other profile, cannot proceed
                                         {error, ?error_auth_account_already_connected};
@@ -174,7 +173,7 @@ validate_login() ->
                                                 % Everything ok, get the user and add new provider info
                                                 UserId = gui_session:get_user_id(),
                                                 ok = user_logic:add_oauth_account(UserId, OAuthAccount),
-                                                {redirect, <<?page_after_login, "?expand_accounts=true">>}
+                                                {redirect, <<?PAGE_AFTER_LOGIN, "?expand_accounts=true">>}
                                         end
                                 end
                         end

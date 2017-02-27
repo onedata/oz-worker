@@ -13,6 +13,7 @@
 
 -include("registered_names.hrl").
 -include("http/handlers/oai.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -75,8 +76,7 @@ get_response(<<"header">>, Args) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     From = proplists:get_value(<<"from">>, Args),
     Until = proplists:get_value(<<"until">>, Args),
-    HarvestingFun = fun(Id, Metadata) ->
-        Timestamp = proplists:get_value(timestamp, Metadata),
+    HarvestingFun = fun(Id, #od_handle{timestamp = Timestamp}) ->
         #oai_header{
             identifier = oai_utils:oai_identifier_encode(Id),
             datestamp = oai_utils:datetime_to_oai_datestamp(Timestamp)

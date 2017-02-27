@@ -58,7 +58,7 @@ start() ->
         http_number_of_http_acceptors),
     {ok, Timeout} = application:get_env(?CLUSTER_WORKER_APP_NAME,
         http_socket_timeout_seconds),
-    {ok, OAI_PMH_PATH} = application:get_env(?APP_Name, oai_pmh_api_prefix),
+    {ok, OAI_PMH_PATH} = application:get_env(?APP_NAME, oai_pmh_api_prefix),
     RedirectDispatch = [
         {'_', [
             {OAI_PMH_PATH ++ "/[...]", oai_handler, []},
@@ -105,7 +105,7 @@ stop() ->
 -spec healthcheck() -> ok | {error, server_not_responding}.
 healthcheck() ->
     Endpoint = "http://127.0.0.1:" ++ integer_to_list(port()),
-    case http_client:get(Endpoint, [], <<>>, [insecure]) of
+    case http_client:get(Endpoint, #{}, <<>>, [insecure]) of
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
     end.

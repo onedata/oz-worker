@@ -12,6 +12,7 @@
 -author("Tomasz Lichon").
 
 -ifdef(TEST).
+-include("datastore/oz_datastore_models_def.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================
@@ -24,7 +25,7 @@ provider_logic_test_() ->
         fun setup/0,
         fun teardown/1,
         [
-            {"test_connection function", fun test_connection_test/0}
+            {"test_connection function", fun test_connection/0}
         ]
     }.
 
@@ -33,42 +34,40 @@ provider_logic_test_() ->
 %%%===================================================================
 
 setup() ->
-    ok.
+    meck:new(http_client).
 
 teardown(_) ->
-    ok.
+    meck:unload(http_client).
 
 %%%===================================================================
 %%% Tests functions
 %%%===================================================================
 
-test_connection_test() ->
-    meck:new(http_client),
+test_connection() ->
     meck:expect(http_client, get,
         fun
-            (<<"https://172.16.67.194:443/test">>, [], <<>>, [insecure]) ->
+            (<<"https://172.16.67.194:443/test">>, #{}, <<>>, [insecure]) ->
                 {ok, 200, nothing_important, <<"gui">>};
-            (<<"https://172.16.67.194:8443/rest/latest/test">>, [], <<>>,
+            (<<"https://172.16.67.194:8443/rest/latest/test">>, #{}, <<>>,
                 [insecure]) ->
                 {ok, 200, nothing_important, <<"rest">>};
-            (<<"https://172.16.67.194:123/wrong_url">>, [], <<>>, [insecure]) ->
+            (<<"https://172.16.67.194:123/wrong_url">>, #{}, <<>>, [insecure]) ->
                 {error, {conn_failed, {error, econnrefused}}}
         end),
-    Arg = [
-        {<<"gui">>, <<"https://172.16.67.194:443/test">>},
-        {<<"rest">>, <<"https://172.16.67.194:8443/rest/latest/test">>},
-        {<<"unknown_service">>, <<"https://172.16.67.194:123/wrong_url">>}
-    ],
+    Args = #{
+        <<"gui">> => <<"https://172.16.67.194:443/test">>,
+        <<"rest">> => <<"https://172.16.67.194:8443/rest/latest/test">>,
+        <<"unknown_service">> => <<"https://172.16.67.194:123/wrong_url">>
+    },
 
-    Ans = provider_logic:test_connection(Arg),
-    Expected = {ok, [
-        {<<"https://172.16.67.194:443/test">>, ok},
-        {<<"https://172.16.67.194:8443/rest/latest/test">>, ok},
-        {<<"https://172.16.67.194:123/wrong_url">>, error}
-    ]},
+    Ans = provider_logic:check_my_ports(#client{}, Args),
+    Expected = {ok, #{
+        <<"https://172.16.67.194:443/test">> => ok,
+        <<"https://172.16.67.194:8443/rest/latest/test">> => ok,
+        <<"https://172.16.67.194:123/wrong_url">> => error
+    }},
 
-    ?assertEqual(Expected, Ans),
-    meck:unload(http_client).
+    ?assertEqual(Expected, Ans).
 
 %%%===================================================================
 %%% Internal functions

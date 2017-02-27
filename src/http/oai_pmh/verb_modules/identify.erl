@@ -13,6 +13,7 @@
 
 -include("http/handlers/oai.hrl").
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -78,11 +79,11 @@ optional_response_elements() ->
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"repositoryName">>, _Args) ->
-    {ok, RepositoryName} = application:get_env(?APP_Name, oz_name),
+    {ok, RepositoryName} = application:get_env(?APP_NAME, oz_name),
     list_to_binary(RepositoryName);
 get_response(<<"baseURL">>, _Args) ->
-    Hostname = dns_query_handler:get_canonical_hostname(),
-    {ok, OAI_PREFIX} = application:get_env(?APP_Name, oai_pmh_api_prefix),
+    {ok, Hostname} = application:get_env(oz_worker, http_domain),
+    {ok, OAI_PREFIX} = application:get_env(?APP_NAME, oai_pmh_api_prefix),
     list_to_binary(Hostname ++ OAI_PREFIX);
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
@@ -96,7 +97,7 @@ get_response(<<"deletedRecord">>, _Args) ->
 get_response(<<"granularity">>, _Args) ->
     <<"YYYY-MM-DDThh:mm:ssZ">>;
 get_response(<<"adminEmail">>, _Args) ->
-    {ok, AdminEmails} = application:get_env(?APP_Name, admin_emails),
+    {ok, AdminEmails} = application:get_env(?APP_NAME, admin_emails),
     lists:map(fun(AdminEmail) ->
         list_to_binary(AdminEmail)
     end, AdminEmails);
@@ -121,13 +122,10 @@ get_response(<<"description">>, _Args) -> [].
 %%%-------------------------------------------------------------------
 -spec get_earliest_datestamp() -> erlang:datetime().
 get_earliest_datestamp() ->
-    {ok, Ids} = handle_logic:list(),
-    Datestamps = lists:flatmap(fun(Id) ->
-        {ok, Metadata} = handle_logic:get_metadata(Id),
-        case proplists:get_value(timestamp, Metadata) of
-            undefined -> [];
-            Timestamp -> [Timestamp]
-        end
+    Ids = oai_utils:list_handles(),
+    Datestamps = lists:map(fun(Id) ->
+        #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
+        Timestamp
     end, Ids),
     case Datestamps of
         [] -> none;

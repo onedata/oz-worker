@@ -22,11 +22,15 @@
 -type id() :: binary().
 -export_type([doc/0, info/0, id/0]).
 
+-type name() :: binary().
+-export_type([name/0]).
+
 
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
--export([record_struct/1]).
+-export([record_struct/1, record_upgrade/2]).
+-export([to_string/1]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -45,6 +49,19 @@ record_struct(1) ->
         {spaces, [string]},
         {eff_users, [string]},
         {eff_groups, [string]},
+        {bottom_up_dirty, boolean}
+    ]};
+record_struct(2) ->
+    {record, [
+        {name, string},
+        {redirection_point, string},
+        {urls, [string]},
+        {serial, string},
+        {latitude, float},
+        {longitude, float},
+        {spaces, #{string => integer}},
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
         {bottom_up_dirty, boolean}
     ]}.
 
@@ -123,7 +140,8 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(provider_bucket, [], ?GLOBALLY_CACHED_LEVEL).
+    Config = ?MODEL_CONFIG(provider_bucket, [], ?GLOBALLY_CACHED_LEVEL),
+    Config#model_config{version = 2}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -145,3 +163,56 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the provider with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(ProviderId :: id()) -> binary().
+to_string(ProviderId) ->
+    <<"provider:", ProviderId/binary>>.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades record from specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_upgrade(datastore_json:record_version(), tuple()) ->
+    {datastore_json:record_version(), tuple()}.
+record_upgrade(1, Provider) ->
+    {
+        od_provider,
+        ClientName,
+        RedirectionPoint,
+        Urls,
+        Serial,
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        _EffUsers,
+        _EffGroups,
+
+        _BottomUpDirty
+    } = Provider,
+    {2, #od_provider{
+        name = ClientName,
+        redirection_point = RedirectionPoint,
+        urls = Urls,
+        serial = Serial,
+        latitude = Latitude,
+        longitude = Longitude,
+
+        % Set support sizes to 0 as there is no access to this information
+        % from here.
+        spaces = maps:from_list([{SpaceId, 0} || SpaceId <- Spaces]),
+
+        eff_users = #{},
+        eff_groups = #{},
+
+        bottom_up_dirty = true
+    }}.

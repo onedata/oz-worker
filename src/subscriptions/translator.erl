@@ -15,8 +15,14 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 -export([get_ignore_msg/1, as_msg/3]).
+
+% TODO VFS-2918
+-export([calculate_space_aliases/2]).
+
+-define(MIN_SUFFIX_HASH_LEN, 6).
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -71,6 +77,7 @@ get_msg(Seq, Doc, od_user = Model) ->
         space_aliases = SpaceAliases,
 
         groups = Groups,
+        spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
 
@@ -82,7 +89,9 @@ get_msg(Seq, Doc, od_user = Model) ->
         {email_list, []}, % TODO currently always empty
         {connected_accounts, []}, % TODO currently always empty
         {default_space, DefaultSpace},
-        {space_aliases, maps:to_list(SpaceAliases)},
+        {space_aliases, maps:to_list(translator:calculate_space_aliases(
+            Spaces, SpaceAliases
+        ))},
 
         % Direct relations to other entities
         {groups, Groups},
@@ -91,7 +100,7 @@ get_msg(Seq, Doc, od_user = Model) ->
         {handles, Handles},
 
         % Effective relations to other entities
-        {eff_groups, EffGroups},
+        {eff_groups, eff_relation_to_proplist(EffGroups)},
         {eff_spaces, []}, % TODO currently always empty
         {eff_shares, []}, % TODO currently always empty
         {eff_providers, []}, % TODO currently always empty
@@ -122,18 +131,18 @@ get_msg(Seq, Doc, od_group = Model) ->
 
         % Group graph related entities (direct and effective)
         {parents, Parents},
-        {children, Children},
+        {children, relation_with_attrs_to_proplist(Children)},
         {eff_children, []}, % TODO currently always empty
         {eff_parents, []}, % TODO currently always empty
 
         % Direct relations to other entities
-        {users, Users},
+        {users, relation_with_attrs_to_proplist(Users)},
         {spaces, Spaces},
         {handle_services, HandleServices},
         {handles, Handles},
 
         % Effective relations to other entities
-        {eff_users, EUsers},
+        {eff_users, eff_relation_with_attrs_to_proplist(EUsers)},
         {eff_spaces, []}, % TODO currently always empty
         {eff_shares, []}, % TODO currently always empty
         {eff_providers, []}, % TODO currently always empty
@@ -145,7 +154,7 @@ get_msg(Seq, Doc, od_space = Model) ->
     #od_space{
         name = Name,
 
-        providers_supports = Supports,
+        providers = Supports,
         users = Users,
         groups = Groups,
         shares = Shares
@@ -155,9 +164,9 @@ get_msg(Seq, Doc, od_space = Model) ->
         {name, Name},
 
         % Direct relations to other entities
-        {providers_supports, Supports},
-        {users, Users},
-        {groups, Groups},
+        {providers_supports, relation_with_attrs_to_proplist(Supports)},
+        {users, relation_with_attrs_to_proplist(Users)},
+        {groups, relation_with_attrs_to_proplist(Groups)},
         {shares, Shares},
 
         % Effective relations to other entities
@@ -190,13 +199,13 @@ get_msg(Seq, Doc, od_share = Model) ->
     ]}];
 get_msg(Seq, Doc, od_provider = Model) ->
     #document{value = Value, key = Id} = Doc,
-    #od_provider{client_name = Name, urls = URLs, spaces = SpaceIds} = Value,
+    #od_provider{name = Name, urls = URLs, spaces = Spaces} = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {client_name, Name},
         {urls, URLs},
 
         % Direct relations to other entities
-        {spaces, SpaceIds},
+        {spaces, relation_to_proplist(Spaces)},
 
         {public_only, false}
     ]}];
@@ -213,11 +222,11 @@ get_msg(Seq, Doc, od_handle_service = Model) ->
         {id, Id},
         {name, Name},
         {proxy_endpoint, ProxyEndpoint},
-        {service_properties, ServiceProperties},
+        {service_properties, maps:to_list(ServiceProperties)},
 
         % Direct relations to other entities
-        {users, Users},
-        {groups, Groups},
+        {users, relation_with_attrs_to_proplist(Users)},
+        {groups, relation_with_attrs_to_proplist(Groups)},
 
         % Effective relations to other entities
         {eff_users, []}, % TODO currently always empty
@@ -246,8 +255,8 @@ get_msg(Seq, Doc, od_handle = Model) ->
 
         % Direct relations to other entities
         {handle_service, HandleService},
-        {users, Users},
-        {groups, Groups},
+        {users, relation_with_attrs_to_proplist(Users)},
+        {groups, relation_with_attrs_to_proplist(Groups)},
 
         % Effective relations to other entities
         {eff_users, []}, % TODO currently always empty
@@ -288,7 +297,7 @@ get_public_msg(Seq, Doc, od_user = Model) ->
         % Effective relations to other entities
         {eff_groups, []},
         {eff_spaces, []},
-        {eff_shares, []},
+        {eff_shares, []}, % TODO currently always empty
         {eff_providers, []},
         {eff_handle_services, []},
         {eff_handles, []},
@@ -297,7 +306,7 @@ get_public_msg(Seq, Doc, od_user = Model) ->
     ]}];
 
 get_public_msg(Seq, Doc, od_provider = Model) ->
-    #document{key = Id, value = #od_provider{client_name = Name, urls = URLs}} = Doc,
+    #document{key = Id, value = #od_provider{name = Name, urls = URLs}} = Doc,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {client_name, Name},
         {urls, URLs},
@@ -309,7 +318,7 @@ get_public_msg(Seq, Doc, od_provider = Model) ->
 
 -spec revs_prop(Doc :: datastore:document()) -> term().
 revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
-    {ok, MaxSize} = application:get_env(?APP_Name, subscriptions_sent_revisions_limit),
+    {ok, MaxSize} = application:get_env(?APP_NAME, subscriptions_sent_revisions_limit),
     {Start, Hashes} = Revs,
     Size = min(MaxSize, length(Hashes)),
 
@@ -329,3 +338,51 @@ message_model(od_user) -> od_user;
 message_model(od_group) -> od_group;
 message_model(od_handle) -> od_handle;
 message_model(od_handle_service) -> od_handle_service.
+
+
+% TODO VFS-2918
+calculate_space_aliases(SpaceIds, SpaceAliases) ->
+    SpaceNames = maps:from_list(lists:map(
+        fun(SpaceId) ->
+            {ok, #document{
+                value = #od_space{name = Name}
+            }} = od_space:get(SpaceId),
+            {SpaceId, Name}
+        end, SpaceIds)),
+    % Overwrite names with existing aliases
+    SpaceNamesMerged = maps:merge(SpaceNames, SpaceAliases),
+    AllNames = maps:values(SpaceNamesMerged),
+    % Duplicated names should get the id of space concatenated
+    UniqueNames = maps:map(
+        fun(SpId, SpName) ->
+            case lists:member(SpName, AllNames -- [SpName]) of
+                false ->
+                    SpName;
+                true ->
+                    <<SpName/binary, "#", (binary:part(SpId, 0, 8))/binary>>
+            end
+        end, SpaceNamesMerged),
+    UniqueNames.
+
+
+% TODO VFS-2918
+relation_to_proplist(Map) ->
+    maps:keys(Map).
+
+
+% TODO VFS-2918
+relation_with_attrs_to_proplist(Map) ->
+    maps:to_list(Map).
+
+
+% TODO VFS-2918
+eff_relation_to_proplist(Map) ->
+    maps:keys(Map).
+
+
+% TODO VFS-2918
+eff_relation_with_attrs_to_proplist(Map) ->
+    maps:to_list(maps:map(
+        fun(_K, {Attrs, _}) ->
+            Attrs
+        end, Map)).

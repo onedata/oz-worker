@@ -5,7 +5,8 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc Definitions of names used to identify different parts of application (or whole application).
+%%% @doc Definitions of names used to identify different parts of application
+%%% (or whole application).
 %%% @end
 %%%-------------------------------------------------------------------
 
@@ -13,7 +14,7 @@
 -define(REGISTERED_NAMES_HRL, 1).
 
 %% App name
--define(APP_Name, oz_worker).
+-define(APP_NAME, oz_worker).
 -define(CLUSTER_WORKER_NAME, cluster_worker).
 
 -endif.

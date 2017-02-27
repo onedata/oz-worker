@@ -73,7 +73,7 @@ get(ID) ->
     Reason :: request_failed | {error_code(), Message :: binary()}.
 set(ID, Data) ->
     Body = json_utils:encode({struct, [{?DATA_KEY, Data}]}),
-    Headers = [{<<"content-type">>, <<"application/json">>}],
+    Headers = #{<<"content-type">> => <<"application/json">>},
     case http_client:request(post, get_dht_endpoint(ID), Headers, Body) of
         {ok, 200, _, ResponseBody} ->
             Response = json_utils:decode(ResponseBody),
@@ -103,16 +103,16 @@ set(ID, Data) ->
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
 init(_Args) ->
     {ok, Host} = application:get_env(oz_worker, http_domain),
-    {ok, ServicePort} = application:get_env(?APP_Name, location_service_port),
-    {ok, RestPort} = application:get_env(?APP_Name, location_service_rest_port),
-    {ok, Nodes} = application:get_env(?APP_Name, location_service_bootstrap_nodes),
-    {ok, [DBNode | _]} = application:get_env(?APP_Name, db_nodes),
+    {ok, ServicePort} = application:get_env(?APP_NAME, location_service_port),
+    {ok, RestPort} = application:get_env(?APP_NAME, location_service_rest_port),
+    {ok, Nodes} = application:get_env(?APP_NAME, location_service_bootstrap_nodes),
+    {ok, [DBNode | _]} = application:get_env(?APP_NAME, db_nodes),
     BootstrapArgs = lists:append([" -b " ++ atom_to_list(Node) || Node <- Nodes]),
 
     Pid = spawn_link(
         fun() ->
             process_flag(trap_exit, true),
-            {ok, LibPath} = application:get_env(?APP_Name, location_service_lib_path),
+            {ok, LibPath} = application:get_env(?APP_NAME, location_service_lib_path),
 
             Command = "node " ++ filename:join(LibPath, "start.js")
                 ++ " -h " ++ Host
@@ -202,7 +202,7 @@ process_log(Msg) ->
 %%--------------------------------------------------------------------
 -spec get_dht_endpoint(ID :: binary()) -> binary().
 get_dht_endpoint(ID) ->
-    {ok, RestPort} = application:get_env(?APP_Name, location_service_rest_port),
+    {ok, RestPort} = application:get_env(?APP_NAME, location_service_rest_port),
     Address = "localhost:" ++ integer_to_list(RestPort) ++ "/" ++ binary_to_list(ID),
     list_to_binary(Address).
 
@@ -213,7 +213,7 @@ get_dht_endpoint(ID) ->
 %%--------------------------------------------------------------------
 -spec get_log_level_opt() -> string().
 get_log_level_opt() ->
-    case application:get_env(?APP_Name, location_service_log_level) of
+    case application:get_env(?APP_NAME, location_service_log_level) of
         {ok, 1} -> "-v";
         {ok, 2} -> "-vv";
         {ok, 3} -> "-vvv";

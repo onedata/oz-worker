@@ -14,6 +14,8 @@
 -author("Lukasz Opiola").
 -behaviour(rpc_backend_behaviour).
 
+-include("rest.hrl").
+-include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -36,7 +38,7 @@ handle(<<"changePassword">>, Props) ->
     UserId = gui_session:get_user_id(),
     {ok, #od_user{
         login = Login
-    }} = user_logic:get_user(UserId),
+    }} = user_logic:get(?USER(UserId), UserId),
     OldPassword = proplists:get_value(<<"oldPassword">>, Props),
     NewPassword = proplists:get_value(<<"newPassword">>, Props),
     case user_logic:change_user_password(Login, OldPassword, NewPassword) of
@@ -58,12 +60,16 @@ handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     ]};
 
 handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
-    Client = #client{type = user, id = gui_session:get_user_id()},
-    {ok, Token} = token_logic:create(
-        Client, space_support_token, {space, SpaceId}),
-    {ok, [
-        {<<"token">>, Token}
-    ]};
+    Client = ?USER(gui_session:get_user_id()),
+    case space_logic:create_provider_invite_token(Client, SpaceId) of
+        {ok, Macaroon} ->
+            {ok, Token} = token_utils:serialize62(Macaroon),
+            {ok, [{<<"token">>, Token}]};
+        ?ERROR_UNAUTHORIZED ->
+            gui_error:report_warning(
+                <<"You do not have permissions to issue support tokens.">>
+            )
+    end;
 
 handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     UserId = gui_session:get_user_id(),
@@ -74,16 +80,12 @@ handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     ]};
 
 handle(<<"unsupportSpace">>, Props) ->
+    Client = ?USER(gui_session:get_user_id()),
     SpaceId = proplists:get_value(<<"spaceId">>, Props),
     ProviderId = proplists:get_value(<<"providerId">>, Props),
     UserId = gui_session:get_user_id(),
-    Authorized = space_logic:has_effective_privilege(
-        SpaceId, UserId, space_remove_provider
-    ),
-    case Authorized of
-        true ->
-            true = space_logic:remove_provider(SpaceId, ProviderId),
-            % Push user record with a new spaces and providers list.
+    case space_logic:leave_provider(Client, SpaceId, ProviderId) of
+        ok ->
             user_data_backend:push_user_record(UserId),
             gui_async:push_updated(
                 <<"space">>, space_data_backend:space_record(SpaceId, UserId)
@@ -92,7 +94,7 @@ handle(<<"unsupportSpace">>, Props) ->
                 <<"provider">>, provider_data_backend:provider_record(ProviderId, UserId)
             ),
             ok;
-        false ->
+        ?ERROR_UNAUTHORIZED ->
             gui_error:report_warning(
                 <<"You do not have permissions to unsupport this space. "
                 "Those persmissions can be modified in file browser, "
@@ -102,32 +104,46 @@ handle(<<"unsupportSpace">>, Props) ->
 
 handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
     UserId = gui_session:get_user_id(),
-    case token_logic:validate(Token, space_invite_user_token) of
-        false ->
+    case user_logic:join_space(?USER(UserId), UserId, Token) of
+        ?ERROR_BAD_VALUE_TOKEN(_) ->
             gui_error:report_warning(<<"Invalid token value.">>);
-        {true, Macaroon} ->
-            {ok, SpaceId} = space_logic:join({user, UserId}, Macaroon),
+        ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(_) ->
+            gui_error:report_warning(<<"Invalid token type.">>);
+        {ok, SpaceId} ->
             % Push user record with a new space list.
-            user_data_backend:push_user_record(UserId),
+            user_data_backend:push_user_record_when_synchronized(UserId),
             {ok, [{<<"spaceId">>, SpaceId}]}
     end;
 
 handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     UserId = gui_session:get_user_id(),
-    space_logic:remove_user(SpaceId, UserId),
+    user_logic:leave_space(?USER(UserId), UserId, SpaceId),
     % Push user record with a new space list.
     user_data_backend:push_user_record(UserId),
     ok;
 
+handle(<<"getTokenUserJoinGroup">>, [{<<"groupId">>, GroupId}]) ->
+    UserId = gui_session:get_user_id(),
+    case group_logic:create_user_invite_token(?USER(UserId), GroupId) of
+        {ok, Token} ->
+            {ok, [{<<"token">>, Token}]};
+        ?ERROR_UNAUTHORIZED ->
+            gui_error:report_warning(
+                <<"You do not have permissions to issue invite tokens for users.">>
+            )
+    end;
+
+
+
 handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
     UserId = gui_session:get_user_id(),
-    case token_logic:validate(Token, group_invite_token) of
-        false ->
+    case user_logic:join_group(?USER(UserId), UserId, Token) of
+        ?ERROR_BAD_VALUE_TOKEN(_) ->
             gui_error:report_warning(<<"Invalid token value.">>);
-        {true, Macaroon} ->
-            {ok, GroupId} = group_logic:join(UserId, Macaroon),
-            % Push user record - space list might have changed due to
-            % joining a new group.
-            user_data_backend:push_user_record(UserId),
+        ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(_) ->
+            gui_error:report_warning(<<"Invalid token type.">>);
+        {ok, GroupId} ->
+            % Push user record with a new group list.
+            user_data_backend:push_user_record_when_synchronized(UserId),
             {ok, [{<<"groupId">>, GroupId}]}
     end.
