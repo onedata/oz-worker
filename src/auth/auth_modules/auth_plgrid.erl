@@ -103,9 +103,9 @@ validate_login() ->
         RequestBody = <<"openid.mode=check_authentication&", Params/binary>>,
 
         % Send validation request
-        {ok, 200, _, Response} = http_client:post(ReceivedEndpoint,
-            #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>},
-            RequestBody),
+        {ok, 200, _, Response} = http_client:post(ReceivedEndpoint, #{
+            <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+        }, RequestBody, [{ssl_lib, erlang}]),
 
         % Check if server responded positively
         Response = <<"is_valid:true\n">>,
@@ -161,7 +161,7 @@ plgrid_endpoint() ->
     {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{
         <<"Accept">> => <<"application/xrds+xml;level=1, */*">>,
         <<"Connection">> => <<"close">>
-    }, <<>>, [{follow_redirect, true}, {max_redirect, 5}]),
+    }, <<>>, [{follow_redirect, true}, {max_redirect, 5}, {ssl_lib, erlang}]),
     discover_op_endpoint(XRDS).
 
 %%--------------------------------------------------------------------
