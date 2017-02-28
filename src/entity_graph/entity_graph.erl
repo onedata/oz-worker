@@ -478,14 +478,22 @@ delete_with_relations(EntityType, EntityId) ->
             fun(ParType, ParentIds) ->
                 lists:foreach(
                     fun(ParId) ->
-                        ok = remove_relation(EntityType, EntityId, ParType, ParId)
+                        update_entity_sync(ParType, ParId, fun(Parent) ->
+                            {ok, mark_dirty(bottom_up, true, ParType, ParId, remove_child(
+                                Parent, EntityType, EntityId
+                            ))}
+                        end)
                     end, ParentIds)
             end, IndependentParents),
         maps:map(
             fun(ChType, ChIds) ->
                 lists:foreach(
                     fun(ChId) ->
-                        ok = remove_relation(ChType, ChId, EntityType, EntityId)
+                        update_entity_sync(ChType, ChId, fun(Child) ->
+                            {ok, mark_dirty(top_down, true, ChType, ChId, remove_parent(
+                                Child, EntityType, EntityId
+                            ))}
+                        end)
                     end, ChIds)
             end, IndependentChildren),
         % Remove all dependent relations and dependent entities
@@ -493,8 +501,7 @@ delete_with_relations(EntityType, EntityId) ->
             fun(ParType, ParentIds) ->
                 lists:foreach(
                     fun(ParId) ->
-                        ok = remove_relation(EntityType, EntityId, ParType, ParId),
-                        ok = ParType:delete(ParId),
+                        ok = delete_with_relations(ParType, ParId),
                         ?info("~s has been deleted because it depended on ~s "
                         "(that is being deleted)", [
                             ParType:to_string(ParId),
@@ -506,8 +513,7 @@ delete_with_relations(EntityType, EntityId) ->
             fun(ChType, ChIds) ->
                 lists:foreach(
                     fun(ChId) ->
-                        ok = remove_relation(ChType, ChId, EntityType, EntityId),
-                        ok = ChType:delete(ChId),
+                        ok = delete_with_relations(ChType, ChId),
                         ?info("~s has been deleted because it depended on ~s "
                         "(that is being deleted)", [
                             ChType:to_string(ChId),

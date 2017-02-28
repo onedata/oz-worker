@@ -175,7 +175,7 @@ is_authorized(Req, State) ->
             {halt, send_response(RestResp, Req), State};
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
-                Type, Message
+                ?MODULE, Type, Message
             ]),
             RestResp = error_rest_translator:response(?ERROR_INTERNAL_SERVER_ERROR),
             {halt, send_response(RestResp, Req), State}
