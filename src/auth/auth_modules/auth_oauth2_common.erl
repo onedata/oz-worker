@@ -17,8 +17,8 @@
 
 %% API
 -export([
-    get_redirect_url/3, get_redirect_url/4,
-    validate_login/2, validate_login/3
+    get_redirect_url/3,
+    validate_login/2
 ]).
 
 %%%===================================================================
@@ -33,18 +33,6 @@
 -spec get_redirect_url(boolean(), ProviderName :: atom(),
     HandlerModule :: atom()) -> {ok, binary()} | {error, term()}.
 get_redirect_url(ConnectAccount, ProviderName, HandlerModule) ->
-    get_redirect_url(ConnectAccount, ProviderName, HandlerModule, false).
-
-%%--------------------------------------------------------------------
-%% @doc Returns full URL, where the user will be redirected for authorization.
-%% See function specification in auth_module_behaviour.
-%% Allows to turn on insecure mode.
-%% @end
-%%--------------------------------------------------------------------
--spec get_redirect_url(boolean(), ProviderName :: atom(),
-    HandlerModule :: atom(), Insecure :: boolean()) ->
-    {ok, binary()} | {error, term()}.
-get_redirect_url(ConnectAccount, ProviderName, HandlerModule, Insecure) ->
     try
         ParamsProplist = [
             {<<"client_id">>,
@@ -59,7 +47,7 @@ get_redirect_url(ConnectAccount, ProviderName, HandlerModule, Insecure) ->
                 auth_logic:generate_state_token(HandlerModule, ConnectAccount)}
         ],
         Params = http_utils:proplist_to_url_params(ParamsProplist),
-        AuthorizeEndpoint = authorize_endpoint(get_xrds(ProviderName, Insecure)),
+        AuthorizeEndpoint = authorize_endpoint(get_xrds(ProviderName)),
         {ok, <<AuthorizeEndpoint/binary, "?", Params/binary>>}
     catch
         Type:Message ->
@@ -67,6 +55,7 @@ get_redirect_url(ConnectAccount, ProviderName, HandlerModule, Insecure) ->
                 [ProviderName]),
             {error, {Type, Message}}
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Validates login request that came back from the provider.
@@ -77,23 +66,7 @@ get_redirect_url(ConnectAccount, ProviderName, HandlerModule, Insecure) ->
     SecretSendMethod :: secret_over_http_basic | secret_over_http_post) ->
     {ok, #oauth_account{}} | {error, term()}.
 validate_login(ProviderName, SecretSendMethod) ->
-    validate_login(ProviderName, SecretSendMethod, false).
-
-%%--------------------------------------------------------------------
-%% @doc Validates login request that came back from the provider.
-%% See function specification in auth_module_behaviour.
-%% Allows to turn on insecure mode.
-%% @end
-%%--------------------------------------------------------------------
--spec validate_login(ProviderName :: atom(),
-    SecretSendMethod :: secret_over_http_basic | secret_over_http_post,
-    Insecure :: boolean()) -> {ok, #oauth_account{}} | {error, term()}.
-validate_login(ProviderName, SecretSendMethod, Insecure) ->
     try
-        Opts = case Insecure of
-            true -> [insecure];
-            false -> []
-        end,
         % Retrieve URL params
         ParamsProplist = gui_ctx:get_url_params(),
         % Parse out code parameter
@@ -113,7 +86,7 @@ validate_login(ProviderName, SecretSendMethod, Insecure) ->
         end,
         SecretHeaders = case SecretSendMethod of
             secret_over_http_post ->
-                [];
+                #{};
             secret_over_http_basic ->
                 B64 = base64:encode(
                     <<ClientId/binary, ":", ClientSecret/binary>>
@@ -132,12 +105,12 @@ validate_login(ProviderName, SecretSendMethod, Insecure) ->
             <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
         },
         % Send request to access token endpoint
-        XRDS = get_xrds(ProviderName, Insecure),
+        XRDS = get_xrds(ProviderName),
         {ok, 200, _, ResponseBinary} = http_client:post(
             access_token_endpoint(XRDS),
             Headers,
             Params,
-            Opts
+            [{ssl_lib, erlang}]
         ),
 
         % Parse out received access token and form a user info request
@@ -151,7 +124,7 @@ validate_login(ProviderName, SecretSendMethod, Insecure) ->
             URL,
             #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>},
             <<"">>,
-            Opts
+            [{ssl_lib, erlang}]
         ),
 
         % Parse JSON with user info
@@ -181,15 +154,12 @@ validate_login(ProviderName, SecretSendMethod, Insecure) ->
 %% of openid provider (endpoints etc).
 %% @end
 %%--------------------------------------------------------------------
--spec get_xrds(ProviderName :: atom(), Insecure :: boolean()) ->
+-spec get_xrds(ProviderName :: atom()) ->
     proplists:proplist().
-get_xrds(ProviderName, Insecure) ->
-    Opts = case Insecure of
-        true -> [insecure, {follow_redirect, true}, {max_redirect, 5}];
-        false -> [{follow_redirect, true}, {max_redirect, 5}]
-    end,
+get_xrds(ProviderName) ->
     ProviderConfig = auth_config:get_auth_config(ProviderName),
     XRDSEndpoint = proplists:get_value(xrds_endpoint, ProviderConfig),
+    Opts = [{ssl_lib, erlang}, {follow_redirect, true}, {max_redirect, 5}],
     {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{}, <<>>, Opts),
     json_utils:decode(XRDS).
 

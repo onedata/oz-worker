@@ -33,7 +33,7 @@
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 get_redirect_url(ConnectAccount) ->
     auth_oauth2_common:get_redirect_url(
-        ConnectAccount, ?PROVIDER_NAME, ?MODULE, true
+        ConnectAccount, ?PROVIDER_NAME, ?MODULE
     ).
 
 %%--------------------------------------------------------------------
@@ -45,5 +45,5 @@ get_redirect_url(ConnectAccount) ->
     {ok, #oauth_account{}} | {error, term()}.
 validate_login() ->
     auth_oauth2_common:validate_login(
-        ?PROVIDER_NAME, secret_over_http_basic, true
+        ?PROVIDER_NAME, secret_over_http_basic
     ).
