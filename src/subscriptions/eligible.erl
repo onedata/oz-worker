@@ -36,13 +36,8 @@ providers(Doc, od_space) ->
 % For share, the eligible providers are the same as for its parent space.
 providers(Doc, od_share) ->
     #document{value = #od_share{space = ParentId}} = Doc,
-    case ParentId of
-        undefined ->
-            [];
-        _ ->
-            {ok, ParentDoc} = od_space:get(ParentId),
-            providers(ParentDoc, od_space)
-    end;
+    {ok, ParentDoc} = od_space:get(ParentId),
+    providers(ParentDoc, od_space);
 
 providers(Doc, od_group) ->
     #document{value = #od_group{users = Users, eff_users = EffUsers}} = Doc,
