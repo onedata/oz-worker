@@ -18,7 +18,8 @@
 %% API
 -export([
     get_redirect_url/3,
-    validate_login/2
+    validate_login/2,
+    get_user_info/2, get_user_info/3
 ]).
 
 %%%===================================================================
@@ -116,32 +117,68 @@ validate_login(ProviderName, SecretSendMethod) ->
         % Parse out received access token and form a user info request
         Response = json_utils:decode(ResponseBinary),
         AccessToken = proplists:get_value(<<"access_token">>, Response),
-        UserInfoEndpoint = user_info_endpoint(XRDS),
-        URL = <<UserInfoEndpoint/binary, "?access_token=", AccessToken/binary>>,
 
-        % Send request to user info endpoint
-        {ok, 200, _, Response2} = http_client:get(
-            URL,
-            #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>},
-            <<"">>,
-            [{ssl_lib, erlang}]
-        ),
+        io:format("~nT = <<\"~s\">>.~n~n", [AccessToken]),
 
-        % Parse JSON with user info
-        JSONProplist = json_utils:decode(Response2),
-        ProvUserInfo = #oauth_account{
-            provider_id = ProviderName,
-            user_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
-            email_list = auth_utils:extract_emails(JSONProplist),
-            name = auth_utils:get_value_binary(<<"name">>, JSONProplist)
-        },
-        {ok, ProvUserInfo}
+        get_user_info(ProviderName, AccessToken, XRDS)
     catch
         Type:Message ->
             ?debug_stacktrace("Error in OpenID validate_login (~p) - ~p:~p",
                 [ProviderName, Type, Message]),
             {error, {Type, Message}}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user info for given OpenID provider and access token.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_info(ProviderName :: atom(), AccessToken :: binary()) ->
+    {ok, #oauth_account{}} | {error, term()}.
+get_user_info(ProviderName, AccessToken) ->
+    XRDS = get_xrds(ProviderName),
+    get_user_info(ProviderName, AccessToken, XRDS).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user info for given OpenID provider and access token.
+%% Allows to specify XRDS proplist (useful when it has been already obtained to
+%% avoid repeating requests).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_info(ProviderName :: atom(), AccessToken :: binary()) ->
+    {ok, #oauth_account{}} | {error, bad_access_token}.
+get_user_info(ProviderName, AccessToken, XRDS) ->
+    UserInfoEndpoint = user_info_endpoint(XRDS),
+
+    URL = <<UserInfoEndpoint/binary, "?access_token=", AccessToken/binary>>,
+
+    % Send request to user info endpoint
+    Response = http_client:get(
+        URL,
+        #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>},
+        <<"">>,
+        [{ssl_lib, erlang}]
+    ),
+
+    case Response of
+        {ok, 200, _, Body} ->
+            % Parse JSON with user info
+            JSONProplist = json_utils:decode(Body),
+            ProvUserInfo = #oauth_account{
+                provider_id = ProviderName,
+                user_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
+                email_list = auth_utils:extract_emails(JSONProplist),
+                name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
+                login = auth_utils:get_value_binary(<<"login">>, JSONProplist)
+            },
+            {ok, ProvUserInfo};
+        _ ->
+            {error, bad_access_token}
+    end.
+
 
 %%%===================================================================
 %%% Internal functions
@@ -154,8 +191,7 @@ validate_login(ProviderName, SecretSendMethod) ->
 %% of openid provider (endpoints etc).
 %% @end
 %%--------------------------------------------------------------------
--spec get_xrds(ProviderName :: atom()) ->
-    proplists:proplist().
+-spec get_xrds(ProviderName :: atom()) -> proplists:proplist().
 get_xrds(ProviderName) ->
     ProviderConfig = auth_config:get_auth_config(ProviderName),
     XRDSEndpoint = proplists:get_value(xrds_endpoint, ProviderConfig),

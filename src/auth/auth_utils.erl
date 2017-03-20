@@ -21,7 +21,11 @@
 -export([local_auth_endpoint/0, get_value_binary/2, extract_emails/1]).
 
 % Authentication flow handling
--export([validate_login/0]).
+-export([
+    validate_login/0,
+    get_user_by_oauth_account/1,
+    acquire_user_by_oauth_account/1
+]).
 
 %%%===================================================================
 %%% API functions
@@ -105,76 +109,40 @@ validate_login() ->
                             [Reason, ParamsProplist, gui_ctx:get_form_params()]),
                         {error, ?error_auth_invalid_request};
 
-                    {ok, OriginalOAuthAccount = #oauth_account{provider_id = ProviderId, user_id = OauthUserId, email_list = OriginalEmails, name = Name}} ->
+                    {ok, OriginalOAuthAccount} ->
+                        #oauth_account{
+                            email_list = OriginalEmails
+                        } = OriginalOAuthAccount,
                         Emails = lists:map(fun(Email) ->
                             http_utils:normalize_email(Email)
                         end, OriginalEmails),
-                        case Emails of
-                            [] ->
-                                throw(no_email_received_from_openid);
-                            _ ->
-                                ok
-                        end,
-                        OAuthAccount = OriginalOAuthAccount#oauth_account{email_list = Emails, provider_id = ProviderId},
+                        OAuthAccount = OriginalOAuthAccount#oauth_account{
+                            email_list = Emails
+                        },
                         case proplists:get_value(connect_account, Props) of
                             false ->
                                 % Standard login, check if there is an account belonging to the user
-                                case od_user:get({connected_account_user_id, {ProviderId, OauthUserId}}) of
-                                    {ok, #document{key = UserId}} ->
-                                        % The account already exists
+                                case acquire_user_by_oauth_account(OAuthAccount) of
+                                    {exists, UserId} ->
                                         gui_session:log_in(UserId),
                                         {redirect, Redirect};
-                                    _ ->
-                                        % Error -> this is a first login
-                                        % Check if any of emails is in use
-                                        case is_any_email_in_use(<<"">>, Emails) of
-                                            true ->
-                                                % At least one email is in database, cannot create account
-                                                {error, ?error_auth_new_email_occupied};
-                                            false ->
-                                                % All emails are available, proceed
-                                                % check if name was returned from openid, if not set
-                                                % email as name (the part before @)
-                                                NameToSet = case Name of
-                                                    <<"">> ->
-                                                        hd(binary:split(hd(Emails), <<"@">>));
-                                                    _ ->
-                                                        Name
-                                                end,
-                                                UserInfo = #od_user{
-                                                    email_list = Emails,
-                                                    name = NameToSet,
-                                                    connected_accounts = [
-                                                        OAuthAccount
-                                                    ]
-                                                },
-                                                {ok, UserId} = user_logic:create(UserInfo),
-                                                gui_session:log_in(UserId),
-                                                gui_session:put_value(firstLogin, true),
-                                                new_user
-                                        end
+                                    {created, UserId} ->
+                                        gui_session:log_in(UserId),
+                                        gui_session:put_value(firstLogin, true),
+                                        new_user
                                 end;
-
                             true ->
                                 % Account adding flow
                                 % Check if this account isn't connected to other profile
-                                case od_user:get({connected_account_user_id, {ProviderId, OauthUserId}}) of
+                                case get_user_by_oauth_account(OAuthAccount) of
                                     {ok, _} ->
                                         % The account is used on some other profile, cannot proceed
                                         {error, ?error_auth_account_already_connected};
                                     _ ->
-                                        % Not found, ok
-                                        % Check if any of emails is in use by another user
-                                        case is_any_email_in_use(gui_session:get_user_id(), Emails) of
-                                            true ->
-                                                % At least one email is in database, cannot connect account
-                                                {error, ?error_auth_connect_email_occupied};
-                                            false ->
-                                                % Everything ok, get the user and add new provider info
-                                                UserId = gui_session:get_user_id(),
-                                                ok = user_logic:add_oauth_account(UserId, OAuthAccount),
-                                                {redirect, <<?PAGE_AFTER_LOGIN, "?expand_accounts=true">>}
-                                        end
+                                        % Not found = ok, get the user and add new provider info
+                                        UserId = gui_session:get_user_id(),
+                                        ok = user_logic:add_oauth_account(UserId, OAuthAccount),
+                                        {redirect, <<?PAGE_AFTER_LOGIN, "?expand_accounts=true">>}
                                 end
                         end
                 end
@@ -185,6 +153,43 @@ validate_login() ->
             {error, ?error_auth_invalid_request}
     end.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves system user based on given OAuth account. If the account is not
+%% connected to any user, returns {error, not_found}.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_by_oauth_account(#oauth_account{}) -> {ok, #document{}} | {error, not_found}.
+get_user_by_oauth_account(OAuthAccount) ->
+    #oauth_account{provider_id = ProviderId, user_id = OAuthUserId} = OAuthAccount,
+    case od_user:get({connected_account_user_id, {ProviderId, OAuthUserId}}) of
+        {ok, #document{} = Doc} ->
+            {ok, Doc};
+        {error, {not_found, od_user}} ->
+            {error, not_found}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to retrieve system user by given oauth account, and if it does not
+%% exist, creates a new user with that account connected.
+%% In both cases, returns the user id.
+%% @end
+%%--------------------------------------------------------------------
+-spec acquire_user_by_oauth_account(#oauth_account{}) ->
+    {exists | created, UserId :: od_user:id()}.
+acquire_user_by_oauth_account(OAuthAccount) ->
+    case get_user_by_oauth_account(OAuthAccount) of
+        {ok, #document{key = UserId}} ->
+            {exists, UserId};
+        {error, not_found} ->
+            {ok, UserId} = create_user_by_oauth_account(OAuthAccount),
+            {created, UserId}
+    end.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -192,13 +197,43 @@ validate_login() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns true if any of the given emails is occupied
-%% (but not by the specified user).
+%% Creates a new user based on given OAuth account. Before creating such user,
+%% it must be ensured that user with such OAuth account does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec is_any_email_in_use(UserId :: od_user:id(), Emails :: [binary()]) ->
-    boolean().
-is_any_email_in_use(UserId, Emails) ->
-    lists:any(fun(Email) ->
-        user_logic:is_email_occupied(UserId, Email)
-    end, Emails).
+-spec create_user_by_oauth_account(#oauth_account{}) ->
+    {ok, UserId :: od_user:id()} | {error, not_found}.
+create_user_by_oauth_account(#oauth_account{email_list = Emails} = OAuthAccount) ->
+    UserInfo = #od_user{
+        email_list = Emails,
+        name = resolve_name_from_oauth_account(OAuthAccount),
+        connected_accounts = [OAuthAccount]
+    },
+    user_logic:create(UserInfo).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Resolve what name should be set for user based on his OAuth account.
+%% If user name was send by OAuth provider, use it.
+%% If not, try this with login.
+%% If not, try using the email (the part before @) as name.
+%% If there is no email, return a generic "unknown" string.
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_name_from_oauth_account(#oauth_account{}) -> binary().
+resolve_name_from_oauth_account(OAuthAccount) ->
+    case OAuthAccount of
+        #oauth_account{name = <<"">>, login = <<"">>, email_list = []} ->
+            <<"Unknown Name">>;
+        #oauth_account{name = <<"">>, login = <<"">>, email_list = EmailList} ->
+            hd(binary:split(hd(EmailList), <<"@">>));
+        #oauth_account{name = <<"">>, login = Login} ->
+            Login;
+        #oauth_account{name = Name} ->
+            Name
+    end.
+
+
+
