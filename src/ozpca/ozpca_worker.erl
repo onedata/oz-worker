@@ -25,7 +25,7 @@
 -export([init/1, handle/1, cleanup/0]).
 
 %% API
--export([supervisor_spec/0, supervisor_child_spec/0]).
+-export([supervisor_flags/0, supervisor_children_spec/0]).
 
 %%%===================================================================
 %%% worker_plugin_behaviour callbacks
@@ -90,8 +90,8 @@ cleanup() ->
 %% Returns a supervisor spec for a ozpca worker supervisor.
 %% @end
 %%--------------------------------------------------------------------
--spec supervisor_spec() -> supervisor:sup_flags().
-supervisor_spec() ->
+-spec supervisor_flags() -> supervisor:sup_flags().
+supervisor_flags() ->
     #{
         strategy => one_for_one,
         intensity => 1000,
@@ -103,8 +103,8 @@ supervisor_spec() ->
 %% Returns a worker child_spec for a ozpca gen_server.
 %% @end
 %%--------------------------------------------------------------------
--spec supervisor_child_spec() -> supervisor:child_spec().
-supervisor_child_spec() ->
+-spec supervisor_children_spec() -> supervisor:child_spec().
+supervisor_children_spec() ->
     #{
         id => ozpca,
         start => {ozpca, start_link, []},

@@ -31,8 +31,7 @@
 updates(ProviderID, NewUserIDs) ->
     UserChanges = get_users(ProviderID, NewUserIDs),
     GroupChanges = get_groups(ProviderID, UserChanges),
-    SpaceChanges = get_spaces(ProviderID, UserChanges)
-        ++ get_group_spaces(ProviderID, GroupChanges),
+    SpaceChanges = get_spaces(ProviderID, UserChanges),
     ShareChanges = get_shares(ProviderID, SpaceChanges),
     HandleServiceChanges = get_handle_services(ProviderID, UserChanges),
     HandleChanges = get_handles(ProviderID, UserChanges),
@@ -78,7 +77,7 @@ get_users(ProviderID, NewUserIDs) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_spaces(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        #document{value = #od_user{spaces = Spaces}} = UserDoc,
+        #document{value = #od_user{spaces = Spaces, eff_spaces = EffSpaces}} = UserDoc,
         lists:filtermap(fun(SpaceID) ->
             case get_with_revs(od_space, SpaceID) of
                 {ok, Doc} -> {true, {-1, Doc, od_space}};
@@ -86,7 +85,7 @@ get_spaces(ProviderID, UserChanges) ->
                     ?warning("Missing space ~p; provider ~p", [SpaceID, ProviderID]),
                     false
             end
-        end, Spaces)
+        end, ordsets:union(Spaces, maps:keys(EffSpaces)))
     end, UserChanges).
 
 
@@ -100,18 +99,17 @@ get_spaces(ProviderID, UserChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_groups(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        #document{value = #od_user{eff_groups = Groups}} = UserDoc,
+        #document{value = #od_user{groups = Groups, eff_groups = EffGroups}} = UserDoc,
 
         AllGroups = lists:usort(lists:flatmap(fun(GroupID) ->
             case od_group:get(GroupID) of
-                {ok, #document{value = #od_group{children = Tuples}}} ->
-                    {NestedIDs, _} = lists:unzip(Tuples),
-                    [GroupID | NestedIDs];
+                {ok, #document{value = #od_group{children = ChildrenWithPrivs}}} ->
+                    [GroupID | maps:keys(ChildrenWithPrivs)];
                 {error, _} ->
                     ?warning("Missing group ~p; provider ~p", [GroupID, ProviderID]),
                     [GroupID]
             end
-        end, Groups)),
+        end, ordsets:union(Groups, maps:keys(EffGroups)))),
 
         lists:filtermap(fun(GroupID) ->
             case get_with_revs(od_group, GroupID) of
@@ -122,27 +120,6 @@ get_groups(ProviderID, UserChanges) ->
             end
         end, AllGroups)
     end, UserChanges).
-
-%%--------------------------------------------------------------------
-%% @doc @private
-%% Fetches spaces of the users that are accessible due to group membership.
-%% @end
-%%--------------------------------------------------------------------
--spec get_group_spaces(ProviderID :: binary(),
-    GroupChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
-    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
-get_group_spaces(ProviderID, GroupChanges) ->
-    lists:flatmap(fun({_, GroupDoc, _}) ->
-        #document{value = #od_group{spaces = Spaces}} = GroupDoc,
-        lists:filtermap(fun(SpaceID) ->
-            case get_with_revs(od_space, SpaceID) of
-                {ok, Doc} -> {true, {-1, Doc, od_space}};
-                {error, _} ->
-                    ?warning("Missing space ~p; provider ~p", [SpaceID, ProviderID]),
-                    false
-            end
-        end, Spaces)
-    end, GroupChanges).
 
 %%--------------------------------------------------------------------
 %% @doc @private
@@ -175,7 +152,10 @@ get_shares(ProviderID, SpaceChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_handle_services(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        HandleServices = user_logic:get_all_handle_services(UserDoc),
+        #document{value = #od_user{
+            handle_services = HandleServices,
+            eff_handle_services = EffHandleServices
+        }} = UserDoc,
         lists:filtermap(fun(HandleServiceId) ->
             case get_with_revs(od_handle_service, HandleServiceId) of
                 {ok, Doc} -> {true, {-1, Doc, od_handle_service}};
@@ -184,7 +164,7 @@ get_handle_services(ProviderID, UserChanges) ->
                         [HandleServiceId, ProviderID]),
                     false
             end
-        end, HandleServices)
+        end, ordsets:union(HandleServices, maps:keys(EffHandleServices)))
     end, UserChanges).
 
 %%--------------------------------------------------------------------
@@ -197,7 +177,10 @@ get_handle_services(ProviderID, UserChanges) ->
     [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
 get_handles(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
-        Handles = user_logic:get_all_handles(UserDoc),
+        #document{value = #od_user{
+            handles = Handles,
+            eff_handles = EffHandles
+        }} = UserDoc,
         lists:filtermap(fun(HandleId) ->
             case get_with_revs(od_handle, HandleId) of
                 {ok, Doc} -> {true, {-1, Doc, od_handle}};
@@ -206,7 +189,7 @@ get_handles(ProviderID, UserChanges) ->
                         [HandleId, ProviderID]),
                     false
             end
-        end, Handles)
+        end, ordsets:union(Handles, maps:keys(EffHandles)))
     end, UserChanges).
 
 %%--------------------------------------------------------------------

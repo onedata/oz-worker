@@ -29,7 +29,7 @@
 %%--------------------------------------------------------------------
 -spec load_auth_config() -> ok | no_return().
 load_auth_config() ->
-    {ok, AuthConfigFile} = application:get_env(?APP_Name, auth_config_file),
+    {ok, AuthConfigFile} = application:get_env(?APP_NAME, auth_config_file),
     Config = case file:consult(AuthConfigFile) of
                  {ok, []} ->
                      [];
@@ -39,7 +39,7 @@ load_auth_config() ->
                      ?error("Cannot parse auth config: ~p.", [Other]),
                      throw(cannot_parse_auth_config)
              end,
-    application:set_env(?APP_Name, auth_config, Config).
+    application:set_env(?APP_NAME, auth_config, Config).
 
 %%--------------------------------------------------------------------
 %% @doc Returns list of configured OAuth providers.
@@ -47,7 +47,7 @@ load_auth_config() ->
 %%--------------------------------------------------------------------
 -spec get_auth_providers() -> [term()].
 get_auth_providers() ->
-    {ok, Config} = application:get_env(?APP_Name, auth_config),
+    {ok, Config} = application:get_env(?APP_NAME, auth_config),
     lists:map(
         fun({Provider, _}) ->
             Provider
@@ -59,7 +59,7 @@ get_auth_providers() ->
 %%--------------------------------------------------------------------
 -spec get_auth_config(Provider :: atom()) -> [term()].
 get_auth_config(Provider) ->
-    {ok, Config} = application:get_env(?APP_Name, auth_config),
+    {ok, Config} = application:get_env(?APP_NAME, auth_config),
     proplists:get_value(Provider, Config).
 
 %%--------------------------------------------------------------------

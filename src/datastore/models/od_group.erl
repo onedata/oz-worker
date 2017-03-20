@@ -20,14 +20,17 @@
 -type doc() :: datastore:document().
 -type info() :: #od_group{}.
 -type id() :: binary().
--type type() :: 'organization' | 'unit' | 'team' | 'role'.
 -export_type([doc/0, info/0, id/0]).
--export_type([type/0]).
+
+-type name() :: binary().
+-type type() :: organization | unit | team | role.
+-export_type([name/0, type/0]).
 
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
--export([record_struct/1]).
+-export([record_struct/1, record_upgrade/2]).
+-export([to_string/1]).
 
 -define(USER_MODULE, od_user).
 
@@ -57,6 +60,28 @@ record_struct(1) ->
         {eff_providers, [string]},
         {eff_handle_services, [string]},
         {eff_handles, [string]},
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+record_struct(2) ->
+    {record, [
+        {name, string},
+        {type, atom},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
     ]}.
@@ -137,11 +162,12 @@ exists(Key) ->
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_Name, group_store_level, ?DISK_ONLY_LEVEL),
+    StoreLevel = application:get_env(?APP_NAME, group_store_level, ?DISK_ONLY_LEVEL),
     UserHooks = [{?USER_MODULE, save}, {?USER_MODULE, update}, {?USER_MODULE, create},
         {?USER_MODULE, create_or_opdate}],
     Hooks = [{?MODULE, save}, {?MODULE, update}, {?MODULE, create}, {?MODULE, create_or_opdate}],
-    ?MODEL_CONFIG(od_group_bucket, Hooks ++ UserHooks, StoreLevel).
+    Config = ?MODEL_CONFIG(od_group_bucket, Hooks ++ UserHooks, StoreLevel),
+    Config#model_config{version = 2}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -151,10 +177,6 @@ model_init() ->
 -spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term(),
     ReturnValue :: term()) -> ok.
-'after'(?MODULE, _Method, _Level, _Context, {ok, ID}) ->
-    group_graph:mark_group_changed(ID);
-'after'(?USER_MODULE, _Method, _Level, _Context, {ok, ID}) ->
-    group_graph:mark_user_changed(ID);
 'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
     ok.
 
@@ -167,3 +189,75 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the group with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(GroupId :: id()) -> binary().
+to_string(GroupId) ->
+    <<"group:", GroupId/binary>>.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades record from specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_upgrade(datastore_json:record_version(), tuple()) ->
+    {datastore_json:record_version(), tuple()}.
+record_upgrade(1, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        _EffOzPrivileges,
+
+        Parents,
+        Children,
+        _EffParents,
+        _EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        _EffUsers,
+        _EffSpaces,
+        _EffShares,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Group,
+    {2, #od_group{
+        name = Name,
+        type = Type,
+        oz_privileges = OzPrivileges,
+        eff_oz_privileges = [],
+
+        parents = Parents,
+        children = maps:from_list(Children),
+        eff_parents = #{},
+        eff_children = #{},
+
+        users = maps:from_list(Users),
+        spaces = Spaces,
+        handle_services = HandleServices,
+        handles = Handles,
+
+        eff_users = #{},
+        eff_spaces = #{},
+        eff_providers = #{},
+        eff_handle_services = #{},
+        eff_handles = #{},
+
+        top_down_dirty = true,
+        bottom_up_dirty = true
+    }}.

@@ -27,7 +27,8 @@
 
 %% API
 -export([start/0, stop/0, get_redirection_uri/2,
-    gen_token/1, gen_token/2, validate_token/5, invalidate_token/1,
+    gen_token/1, gen_token/2, validate_token/5,
+    invalidate_token/1, invalidate_user_tokens/1,
     authenticate_user/1]).
 
 %% Handling state tokens
@@ -67,7 +68,7 @@ authenticate_user(Identifier) ->
             % @todo yeah, that seems like a very authenticated UserId
             UserId = UserId,
 
-            {ok, ExpirationSecs} = application:get_env(?APP_Name,
+            {ok, ExpirationSecs} = application:get_env(?APP_NAME,
                 authentication_macaroon_expiration_seconds),
 
             Location = ?MACAROONS_LOCATION,
@@ -97,20 +98,6 @@ authenticate_user(Identifier) ->
 get_redirection_uri(UserId, ProviderId) ->
     Token = gen_token(UserId, ProviderId),
     {ok, _} = od_user:update(UserId, #{chosen_provider => ProviderId}),
-    % TODO return IP address rather than alias.onedata.org
-%%    Hostname = list_to_binary(dns_query_handler:get_canonical_hostname()),
-%%    {ok, #od_user{alias = Alias}} = user_logic:get_user(UserId),
-%%    Prefix = case Alias of
-%%        ?EMPTY_ALIAS ->
-%%            <<?NO_ALIAS_UUID_PREFIX, UserId/binary>>;
-%%        _ ->
-%%            Alias
-%%    end,
-    % It shall be used normally when we have a possibility to
-    % resolve domains on developer's host systems
-    % (so their web browsers can connect).
-    % To do this, we need a recursive DNS server in docker environment,
-    % whose address must be fed to system's resolv.conf.
     {ok, ProviderURL} = provider_logic:get_url(ProviderId),
     URL = str_utils:format_bin("~s~s?code=~s", [
         ProviderURL, ?provider_auth_endpoint, Token
@@ -163,7 +150,7 @@ gen_token(UserId, _ProviderId) ->
     DischargeMacaroons :: [macaroon:macaroon()], Method :: binary(),
     RootResource :: atom()) ->
     {ok, UserId :: binary()} | {error, Reason :: any()}.
-validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) ->
+validate_token(ProviderId, Macaroon, DischargeMacaroons, _Method, _RootResource) ->
     Identifier = macaroon:identifier(Macaroon),
     case onedata_auth:get(Identifier) of
         {ok, #document{value = #onedata_auth{secret = Secret, user_id = UserId}}} ->
@@ -172,11 +159,6 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
             VerifyFun = fun
                 (<<"time < ", Integer/binary>>) ->
                     erlang:system_time(seconds) < binary_to_integer(Integer);
-                (<<"method = ", Met/binary>>) ->
-                    Method =:= Met;
-                (<<"rootResource in ", Resources/binary>>) ->
-                    lists:member(atom_to_binary(RootResource, utf8),
-                        binary:split(Resources, <<",">>, [global]));
                 (<<"providerId = ", PID/binary>>) ->
                     PID =:= ProviderId;
                 (_) ->
@@ -193,19 +175,28 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, Method, RootResource) -
             {error, unknown_macaroon}
     end.
 
+
 %%--------------------------------------------------------------------
-%% @doc Invalidates a given token or all of user's tokens.
+%% @doc Invalidates all auth tokens of given user.
 %% @end
 %%--------------------------------------------------------------------
--spec invalidate_token({user_id, binary()} | binary()) -> ok.
-invalidate_token({user_id, UserId}) ->
+-spec invalidate_user_tokens(UserId :: od_user:id()) -> ok.
+invalidate_user_tokens(UserId) ->
     {ok, AuthDocs} = onedata_auth:get_auth_by_user_id(UserId),
-    lists:foreach(fun(#document{key = AuthId}) ->
-        invalidate_token(AuthId) end, AuthDocs),
-    ok;
+    lists:foreach(
+        fun(#document{key = AuthId}) ->
+            invalidate_token(AuthId)
+        end, AuthDocs).
+
+
+%%--------------------------------------------------------------------
+%% @doc Invalidates a given auth token.
+%% @end
+%%--------------------------------------------------------------------
+-spec invalidate_token(binary()) -> ok.
 invalidate_token(Identifier) when is_binary(Identifier) ->
-    onedata_auth:delete(Identifier),
-    ok.
+    onedata_auth:delete(Identifier).
+
 
 %%--------------------------------------------------------------------
 %% @doc Generates a state token and retuns it. In the process, it stores the token
@@ -272,7 +263,7 @@ clear_expired_state_tokens() ->
 -spec create_macaroon(Secret :: iodata(), Identifier :: iodata(),
     Caveats :: [iodata()]) -> macaroon:macaroon().
 create_macaroon(Secret, Identifier, Caveats) ->
-    {ok, ExpirationSeconds} = application:get_env(?APP_Name,
+    {ok, ExpirationSeconds} = application:get_env(?APP_NAME,
         authorization_macaroon_expiration_seconds),
     ExpirationTime = erlang:system_time(seconds) + ExpirationSeconds,
 

@@ -91,10 +91,10 @@ validate_login() ->
         NewParamsProplist = lists:map(
             fun(Key) ->
                 Value = case proplists:get_value(Key, ParamsProplist) of
-                            undefined ->
-                                throw("Value for " ++ str_utils:to_list(Key) ++ " not found");
-                            Val -> Val
-                        end,
+                    undefined ->
+                        throw("Value for " ++ str_utils:to_list(Key) ++ " not found");
+                    Val -> Val
+                end,
                 {Key, Value}
             end, SignedArgs),
 
@@ -103,9 +103,9 @@ validate_login() ->
         RequestBody = <<"openid.mode=check_authentication&", Params/binary>>,
 
         % Send validation request
-        {ok, 200, _, Response} = http_client:post(ReceivedEndpoint,
-            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}],
-            RequestBody),
+        {ok, 200, _, Response} = http_client:post(ReceivedEndpoint, #{
+            <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+        }, RequestBody, [{ssl_lib, erlang}]),
 
         % Check if server responded positively
         Response = <<"is_valid:true\n">>,
@@ -158,10 +158,10 @@ validate_login() ->
 -spec plgrid_endpoint() -> binary().
 plgrid_endpoint() ->
     XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)),
-    {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, [
-        {<<"Accept">>, <<"application/xrds+xml;level=1, */*">>},
-        {<<"Connection">>, <<"close">>}
-    ], <<>>, [{follow_redirect, true}, {max_redirect, 5}]),
+    {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{
+        <<"Accept">> => <<"application/xrds+xml;level=1, */*">>,
+        <<"Connection">> => <<"close">>
+    }, <<>>, [{follow_redirect, true}, {max_redirect, 5}, {ssl_lib, erlang}]),
     discover_op_endpoint(XRDS).
 
 %%--------------------------------------------------------------------

@@ -12,62 +12,90 @@
 -module(token_logic).
 -author("Konrad Zemek").
 
+-include("tokens.hrl").
+-include("entity_logic.hrl").
 -include("registered_names.hrl").
--include("http/handlers/rest_handler.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% Atoms representing types of valid tokens.
--type token_type() :: group_invite_token | group_invite_group_token | space_create_token |
-space_invite_user_token | space_invite_group_token | space_support_token.
+-type token_type() :: ?GROUP_INVITE_USER_TOKEN | ?GROUP_INVITE_GROUP_TOKEN |
+?SPACE_INVITE_USER_TOKEN | ?SPACE_INVITE_GROUP_TOKEN |
+?SPACE_SUPPORT_TOKEN.
 
 %% Atoms representing valid resource types.
--type resource_type() :: user | group | space.
+-type resource_type() :: od_user | od_group | od_space.
+
+-export_type([token_type/0, resource_type/0]).
 
 %% API
--export([validate/2, create/3, get_issuer/1, consume/1]).
--export_type([token_type/0, resource_type/0]).
+-export([serialize/1, deserialize/1]).
+-export([validate/2, create/3, get_issuer/1, consume/1, delete/1]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Checks if a given token is a valid macaroon of a given type.
-%% Throws exception when call to the datastore fails.
+%% @doc
+%% Serializes a macaroon into a binary token.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(Token :: binary(), TokenType :: token_type()) ->
-    {true, macaroon:macaroon()} | false.
-validate(Token, TokenType) ->
-    case token_utils:deserialize(Token) of
-        {error, _} -> false;
-        {ok, M} ->
-            Id = macaroon:identifier(M),
-            case token:get(Id) of
-                {error, _} -> false;
-                {ok, #document{value = #token{secret = Secret}}} ->
-                    V = macaroon_verifier:create(),
-                    V1 = macaroon_verifier:satisfy_exact(V,
-                        ["tokenType = ", atom_to_list(TokenType)]),
+-spec serialize(macaroon:macaroon()) -> {ok, Token :: binary()} | {error, term()}.
+serialize(Macaroon) ->
+    token_utils:serialize62(Macaroon).
 
-                    case macaroon_verifier:verify(V1, M, Secret) of
-                        ok -> {true, M};
-                        {error, Reason} ->
-                            ?info("Bad macaroon ~p: ~p", [Id, Reason]),
-                            false
-                    end
-            end
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deserializes a macaroon from a binary token.
+%% @end
+%%--------------------------------------------------------------------
+-spec deserialize(Token :: binary()) ->
+    {ok, macaroon:macaroon()} | {error, macaroon_invalid}.
+deserialize(Token) ->
+    token_utils:deserialize(Token).
+
+
+%%--------------------------------------------------------------------
+%% @doc Checks if a given token is a valid macaroon of a given type.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate(macaroon:macaroon(), TokenType :: token_type()) ->
+    ok | inexistent | bad_macaroon | bad_type.
+validate(Macaroon, TokenType) ->
+    try
+        Id = macaroon:identifier(Macaroon),
+        case token:get(Id) of
+            {error, _} ->
+                inexistent;
+            {ok, #document{value = #token{secret = Secret}}} ->
+                V = macaroon_verifier:create(),
+                V1 = macaroon_verifier:satisfy_exact(V,
+                    ["tokenType = ", atom_to_list(TokenType)]),
+
+                case macaroon_verifier:verify(V1, Macaroon, Secret) of
+                    ok ->
+                        ok;
+                    {error, Reason} ->
+                        ?debug("Bad macaroon ~p: ~p", [Id, Reason]),
+                        bad_type
+                end
+        end
+    catch
+        _:_ ->
+            bad_macaroon
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc Creates a macaroon token of a given type.
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Issuer :: rest_handler:client(), TokenType :: token_type(),
+-spec create(Issuer :: entity_logic:client(), TokenType :: token_type(),
     Resource :: {resource_type(), binary()}) ->
-    {ok, Token :: binary()} | {error, Reason :: any()}.
+    {ok, macaroon:macaroon()} | {error, Reason :: any()}.
 create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     Secret = crypto:strong_rand_bytes(macaroon:suggested_secret_length()),
     TokenData = #token{secret = Secret, issuer = Issuer,
@@ -76,11 +104,11 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     {ok, Identifier} = token:save(#document{value = TokenData}),
 
     % @todo expiration time
-    M1 = macaroon:create("registry", Secret, Identifier),
+    M1 = macaroon:create("onezone", Secret, Identifier),
     M2 = macaroon:add_first_party_caveat(M1,
         ["tokenType = ", atom_to_list(TokenType)]),
+    {ok, M2}.
 
-    token_utils:serialize62(M2).
 
 %%--------------------------------------------------------------------
 %% @doc Returns token issuer.
@@ -88,19 +116,19 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
 %% or token doesn't exist in db.
 %% @end
 %%--------------------------------------------------------------------
--spec get_issuer(Token :: binary()) -> {ok, [proplists:property()]}.
-get_issuer(Token) ->
-    {ok, Macaroon} = token_utils:deserialize(Token),
+-spec get_issuer(macaroon:macaroon()) -> {ok, maps:map()}.
+get_issuer(Macaroon) ->
     Identifier = macaroon:identifier(Macaroon),
     {ok, TokenDoc} = token:get(Identifier),
     #document{value = #token{
         issuer = #client{type = ClientType, id = ClientId}
     }} = TokenDoc,
 
-    {ok, [
-        {clientType, ClientType},
-        {clientId, ClientId}
-    ]}.
+    {ok, #{
+        <<"clientType">> => ClientType,
+        <<"clientId">> => ClientId
+    }}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Consumes a token, returning associated resource.
@@ -118,3 +146,13 @@ consume(M) ->
     ok = token:delete(Identifier),
     {ok, {ResourceType, ResourceId}}.
 
+
+%%--------------------------------------------------------------------
+%% @doc Deletes a client token.
+%% Throws exception when call to the datastore fails, or token doesn't exist in db.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(Macaroon :: macaroon:macaroon()) -> ok.
+delete(M) ->
+    Identifier = macaroon:identifier(M),
+    ok = token:delete(Identifier).

@@ -22,7 +22,7 @@
 -type id() :: binary().
 -type name() :: binary().
 -type proxy_endpoint() :: binary().
--type service_properties() :: json_term().
+-type service_properties() :: maps:map().
 
 -export_type([doc/0, info/0, id/0]).
 -export_type([name/0, proxy_endpoint/0, service_properties/0]).
@@ -30,7 +30,8 @@
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
--export([record_struct/1]).
+-export([record_struct/1, record_upgrade/2]).
+-export([to_string/1]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -47,6 +48,18 @@ record_struct(1) ->
         {groups, [{string, [atom]}]},
         {eff_users, [{string, [atom]}]},
         {eff_groups, [{string, [atom]}]},
+        {bottom_up_dirty, boolean}
+    ]};
+record_struct(2) ->
+    {record, [
+        {name, string},
+        {proxy_endpoint, string},
+        {service_properties, #{term => term}},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {handles, [string]},
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {bottom_up_dirty, boolean}
     ]}.
 
@@ -126,7 +139,8 @@ exists(Key) ->
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
     StoreLevel = ?DISK_ONLY_LEVEL,
-    ?MODEL_CONFIG(handle_service_bucket, [], StoreLevel).
+    Config = ?MODEL_CONFIG(handle_service_bucket, [], StoreLevel),
+    Config#model_config{version = 2}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -148,3 +162,51 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the handle service with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(HServiceId :: id()) -> binary().
+to_string(HServiceId) ->
+    <<"handle_service:", HServiceId/binary>>.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades record from specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_upgrade(datastore_json:record_version(), tuple()) ->
+    {datastore_json:record_version(), tuple()}.
+record_upgrade(1, HandleService) ->
+    {
+        od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+
+        _EffUsers,
+        _EffGroups,
+
+        _BottomUpDirty
+    } = HandleService,
+    {2, #od_handle_service{
+        name = Name,
+        proxy_endpoint = ProxyEndpoint,
+        service_properties = maps:from_list(ServiceProperties),
+
+        users = maps:from_list(Users),
+        groups = maps:from_list(Groups),
+        handles = [],
+
+        eff_users = #{},
+        eff_groups = #{},
+
+        bottom_up_dirty = true
+    }}.

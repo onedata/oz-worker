@@ -73,8 +73,9 @@ validate_login() ->
         % Convert proplist to params string
         Params = http_utils:proplist_to_url_params(NewParamsProplist),
         % Send request to GitHub endpoint
-        {ok, 200, _, Response} = http_client:post(access_token_endpoint(),
-            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}], Params),
+        {ok, 200, _, Response} = http_client:post(access_token_endpoint(), #{
+            <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+        }, Params, [{ssl_lib, erlang}]),
 
         % Parse out received access token
         AccessToken = proplists:get_value(<<"access_token">>, cow_qs:parse_qs(Response)),
@@ -82,18 +83,18 @@ validate_login() ->
         % Form user info request
         URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, 200, _, JSON} = http_client:get(URL, [
-            {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>},
-            {<<"User-Agent">>, <<?user_agent_name>>}
-        ]),
+        {ok, 200, _, JSON} = http_client:get(URL, #{
+            <<"Content-Type">> => <<"application/x-www-form-urlencoded">>,
+            <<"User-Agent">> => <<?user_agent_name>>
+        }, <<"">>, [{ssl_lib, erlang}]),
 
         % Form user email request
         URLEmail = <<(user_emails_endpoint())/binary, "?access_token=", AccessToken/binary>>,
         % Send request to GitHub endpoint
-        {ok, 200, _, JSONEmails} = http_client:get(URLEmail, [
-            {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>},
-            {<<"User-Agent">>, <<?user_agent_name>>}
-        ]),
+        {ok, 200, _, JSONEmails} = http_client:get(URLEmail, #{
+            <<"Content-Type">> => <<"application/x-www-form-urlencoded">>,
+            <<"User-Agent">> => <<?user_agent_name>>
+        }, <<"">>, [{ssl_lib, erlang}]),
         % Parse received emails
         EmailList = lists:map(
             fun(Email) ->

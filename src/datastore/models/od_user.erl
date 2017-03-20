@@ -22,13 +22,17 @@
 -type id() :: binary().
 -export_type([doc/0, info/0, id/0]).
 
+-type name() :: binary().
+-export_type([name/0]).
+
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
     model_init/0, 'after'/5, before/4]).
--export([record_struct/1]).
+-export([record_struct/1, record_upgrade/2]).
 
 %% API
--export([get_all_ids/0, get_by_criterion/1]).
+-export([get_by_criterion/1]).
+-export([to_string/1]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -67,6 +71,38 @@ record_struct(1) ->
         {eff_providers, [string]},
         {eff_handle_services, [string]},
         {eff_handles, [string]},
+        {top_down_dirty, boolean}
+    ]};
+record_struct(2) ->
+    {record, [
+        {name, string},
+        {login, string},
+        {alias, string},
+        {email_list, [string]},
+        {basic_auth_enabled, boolean},
+        {connected_accounts, [{record, 1, [
+            {provider_id, atom},
+            {user_id, string},
+            {login, string},
+            {name, string},
+            {email_list, [string]}
+        ]}]},
+        {default_space, string},
+        {default_provider, string},
+        {chosen_provider, string},
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
         {top_down_dirty, boolean}
     ]}.
 
@@ -147,9 +183,10 @@ exists(Key) ->
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
     % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_Name, user_store_level, ?DISK_ONLY_LEVEL),
+    StoreLevel = application:get_env(?APP_NAME, user_store_level, ?DISK_ONLY_LEVEL),
     Hooks = record_location_hooks:get_hooks(),
-    ?MODEL_CONFIG(od_user_bucket, Hooks, StoreLevel).
+    Config = ?MODEL_CONFIG(od_user_bucket, Hooks, StoreLevel),
+    Config#model_config{version = 2}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -173,31 +210,11 @@ before(ModelName, Method, _Level, Context) ->
     record_location_hooks:handle_before(ModelName, Method, Context).
 
 %%%===================================================================
-%%% API callbacks
+%%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc 
-%% @private
-%% Gets all users from DB (that have at least one email address set).
-%% This function is used for development purposes, there appears to be no production use case.
-%% @end
-%%--------------------------------------------------------------------
--spec get_all_ids() -> {ok, [binary()]}.
-get_all_ids() ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #od_user{}, key = Id}, Acc) ->
-            {next, [Id | Acc]};
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).
-
-%%--------------------------------------------------------------------
-%% @doc 
-%% @private
 %% Gets first user matching given criterion.
 %% todo: change implementation to something fast (connected with VFS-1498)
 %% @end
@@ -219,8 +236,13 @@ get_by_criterion({email, Value}) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result};
+    case datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []) of
+        {ok, []} ->
+            {error, {not_found, od_user}};
+        {ok, [Result | _]} ->
+            {ok, Result}
+    end;
+
 
 get_by_criterion({alias, Value}) ->
     Filter = fun
@@ -234,8 +256,12 @@ get_by_criterion({alias, Value}) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result};
+    case datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []) of
+        {ok, []} ->
+            {error, {not_found, od_user}};
+        {ok, [Result | _]} ->
+            {ok, Result}
+    end;
 
 get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
     Filter = fun
@@ -257,5 +283,91 @@ get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    {ok, [Result | _]} = datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []),
-    {ok, Result}.
+    case datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []) of
+        {ok, []} ->
+            {error, {not_found, od_user}};
+        {ok, [Result | _]} ->
+            {ok, Result}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the user with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(UserId :: id()) -> binary().
+to_string(UserId) ->
+    <<"user:", UserId/binary>>.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades record from specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_upgrade(datastore_json:record_version(), tuple()) ->
+    {datastore_json:record_version(), tuple()}.
+record_upgrade(1, User) ->
+    {
+        od_user,
+        Name,
+        Login,
+        BasicAuthEnabled,
+        Alias,
+        EmailList,
+        ConnectedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        _EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        _EffGroups,
+        _EffSpaces,
+        _EffShares,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+
+        _TopDownDirty
+    } = User,
+    {2, #od_user{
+        name = Name,
+        login = Login,
+        alias = Alias,
+        email_list = EmailList,
+        basic_auth_enabled = BasicAuthEnabled,
+        connected_accounts = ConnectedAccounts,
+
+        default_space = DefaultSpace,
+        default_provider = DefaultProvider,
+        chosen_provider = ChosenProvider,
+        client_tokens = ClientTokens,
+        space_aliases = SpaceAliases,
+
+        oz_privileges = OzPrivileges,
+        eff_oz_privileges = [],
+
+        groups = Groups,
+        spaces = Spaces,
+        handle_services = HandleServices,
+        handles = Handles,
+
+        eff_groups = #{}, % eff groups should be empty, the entity will be recalculated anyway
+        eff_spaces = #{},
+        eff_providers = #{},
+        eff_handle_services = #{},
+        eff_handles = #{},
+
+        top_down_dirty = true
+    }}.

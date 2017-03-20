@@ -129,7 +129,7 @@ init_per_testcase(_, Config) ->
         fun(Req, State) ->
             {Bindings, _} = cowboy_req:bindings(Req),
             ResId = proplists:get_value(id, Bindings),
-            {true, Req, State#rstate{client = #client{type = provider, id = ResId}}}
+            {true, Req, setelement(2, State, ?PROVIDER(ResId))}
         end),
 
     Config.
@@ -150,7 +150,7 @@ verify(Node, Cert) ->
     rpc:call(Node, identity, verify, [Cert]).
 
 get_cert(Node) ->
-    {ok, IdentityCertFile} = rpc:call(Node, application, get_env, [?APP_Name, identity_cert_file]),
+    {ok, IdentityCertFile} = rpc:call(Node, application, get_env, [?APP_NAME, identity_cert_file]),
     rpc:call(Node, identity_utils, read_cert, [IdentityCertFile]).
 
 get_id(Node) ->
@@ -180,7 +180,7 @@ get_public_key_rest(OzNode, ID) ->
     RestAddress = get_rest_address(OzNode),
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Endpoint = RestAddress ++ "/publickey/" ++ EncodedID,
-    Response = http_client:request(get, Endpoint, [], [], [insecure]),
+    Response = http_client:request(get, Endpoint, #{}, [], [insecure]),
 
     ?assertMatch({ok, 200, _ResponseHeaders, _}, Response),
     {_, _, _, ResponseBody} = Response,
@@ -194,7 +194,7 @@ update_public_key_rest(OzNode, ID, PublicKey) ->
     Endpoint = RestAddress ++ "/publickey/" ++ EncodedID,
     Encoded = identity_utils:encode(PublicKey),
     Body = json_utils:encode([{<<"publicKey">>, Encoded}]),
-    Headers = [{<<"content-type">>, <<"application/json">>}],
+    Headers = #{<<"content-type">> => <<"application/json">>},
     Response = http_client:request(patch, Endpoint, Headers, Body, [insecure]),
     ?assertMatch({ok, 204, _, _}, Response).
 
@@ -208,7 +208,7 @@ register_provider_rest(OzNode, ID, PublicKey) ->
         {<<"urls">>, [<<"127.0.0.1">>]},
         {<<"redirectionPoint">>, <<"127.0.0.1">>}
     ]),
-    Headers = [{<<"content-type">>, <<"application/json">>}],
+    Headers = #{<<"content-type">> => <<"application/json">>},
     Response = http_client:request(post, Endpoint, Headers, Body, [insecure]),
     ?assertMatch({ok, 204, _, _}, Response).
 
@@ -225,9 +225,9 @@ get_node_ip(Node) ->
     re:replace(os:cmd(CMD), "\\s+", "", [global, {return, list}]).
 
 get_rest_port(Node) ->
-    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_Name, rest_port]),
+    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_NAME, rest_port]),
     RestPort.
 
 get_rest_api_prefix(Node) ->
-    {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_Name, rest_api_prefix]),
+    {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_NAME, rest_api_prefix]),
     RestAPIPrefix.

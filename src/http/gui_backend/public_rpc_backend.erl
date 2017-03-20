@@ -33,13 +33,13 @@
 -spec handle(FunctionId :: binary(), RequestData :: term()) ->
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
 handle(<<"getZoneName">>, _) ->
-    {ok, ZoneName} = application:get_env(?APP_Name, oz_name),
+    {ok, ZoneName} = application:get_env(?APP_NAME, oz_name),
     {ok, [
         {<<"zoneName">>, str_utils:to_binary(ZoneName)}
     ]};
 
 handle(<<"getSupportedAuthorizers">>, _) ->
-    case application:get_env(?APP_Name, dev_mode) of
+    case application:get_env(?APP_NAME, dev_mode) of
         {ok, true} ->
             % If dev mode is enabled, always return basic auth and just one
             % dummy provider which will redirect to /dev_login page.
@@ -58,7 +58,7 @@ handle(<<"getSupportedAuthorizers">>, _) ->
     end;
 
 handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
-    case application:get_env(?APP_Name, dev_mode) of
+    case application:get_env(?APP_NAME, dev_mode) of
         {ok, true} ->
             {ok, [
                 {<<"url">>, <<"/dev_login">>}

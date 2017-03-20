@@ -24,9 +24,6 @@
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
 -export([
-    set_space_name_mapping_test/1,
-    clean_space_name_mapping_test/1,
-    remove_space_test/1,
     basic_auth_login_test/1,
     automatic_group_membership_test/1,
     change_password_test/1
@@ -34,9 +31,6 @@
 
 all() ->
     ?ALL([
-        set_space_name_mapping_test,
-        clean_space_name_mapping_test,
-        remove_space_test,
         basic_auth_login_test,
         automatic_group_membership_test,
         change_password_test
@@ -45,87 +39,6 @@ all() ->
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
-
-set_space_name_mapping_test(Config) ->
-    [Node | _] = Nodes = ?config(oz_worker_nodes, Config),
-
-    {ok, UserId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_user(Config, #od_user{})
-    ),
-
-    SpaceName1 = <<"space_name">>,
-    {ok, SpaceId1} = ?assertMatch({ok, _},
-        oz_test_utils:create_space(Config, {user, UserId}, SpaceName1)),
-    ?assertEqual(SpaceName1, get_space_name_mapping(Node, UserId, SpaceId1)),
-
-    SpaceName2 = <<"different_space_name">>,
-    {ok, SpaceId2} = ?assertMatch({ok, _},
-        oz_test_utils:create_space(Config, {user, UserId}, SpaceName2)),
-    ?assertEqual(SpaceName2, get_space_name_mapping(Node, UserId, SpaceId2)),
-
-    SpaceName3 = <<"space_name">>,
-    {ok, SpaceId3} = ?assertMatch({ok, _},
-        oz_test_utils:create_space(Config, {user, UserId}, SpaceName3)),
-    ?assertEqual(<<SpaceName3/binary, "#", SpaceId3:6/binary>>,
-        get_space_name_mapping(Node, UserId, SpaceId3)),
-
-    SpaceName4 = <<"space_name">>,
-    SpaceId4 = <<SpaceId3:6/binary, "$random">>,
-    space_save_mock(Nodes, SpaceId4),
-    {ok, SpaceId4} = ?assertMatch({ok, _},
-        oz_test_utils:create_space(Config, {user, UserId}, SpaceName4)),
-    ?assertEqual(<<SpaceName4/binary, "#", SpaceId4:7/binary>>,
-        get_space_name_mapping(Node, UserId, SpaceId4)),
-
-    SpaceName5 = <<"modified_space_name">>,
-    ?assertEqual(ok, oz_test_utils:modify_space(
-        Config, SpaceId4, {user, UserId}, SpaceName5)),
-    ?assertEqual(SpaceName5, get_space_name_mapping(Node, UserId, SpaceId4)).
-
-clean_space_name_mapping_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-
-    SpaceName = <<"space_name">>,
-    {ok, UserId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_user(Config, #od_user{})
-    ),
-    {ok, GroupId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_group(Config, UserId, <<"group">>)
-    ),
-    {ok, SpaceId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_space(Config, {group, GroupId}, SpaceName)
-    ),
-    ?assertMatch({ok, _},
-        oz_test_utils:add_member_to_space(Config, {user, UserId}, SpaceId)),
-
-    ?assertNot(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
-
-    ?assert(oz_test_utils:leave_space(Config, {group, GroupId}, SpaceId)),
-    ?assertNot(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
-
-    ?assert(oz_test_utils:leave_space(Config, {user, UserId}, SpaceId)),
-    ?assert(clean_space_name_mapping(Node, UserId, SpaceId)),
-    ?assertMatch({ok, #document{value = #od_user{space_aliases = #{}}}},
-        rpc:call(Node, od_user, get, [UserId])).
-
-remove_space_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-
-    SpaceName = <<"space_name">>,
-    {ok, UserId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_user(Config, #od_user{})
-    ),
-    {ok, SpaceId} = ?assertMatch(
-        {ok, _}, oz_test_utils:create_space(Config, {user, UserId}, SpaceName)
-    ),
-
-    ?assertEqual(SpaceName, get_space_name_mapping(Node, UserId, SpaceId)),
-    oz_test_utils:remove_space(Config, SpaceId),
-    ?assertMatch({ok, #document{value = #od_user{
-        spaces = [], space_aliases = #{}
-    }}}, rpc:call(Node, od_user, get, [UserId])).
 
 % Check if basic auth login endpoint works.
 basic_auth_login_test(Config) ->
@@ -145,9 +58,9 @@ basic_auth_login_test(Config) ->
         "https://~s/do_login", [OneZoneIP]
     ),
     UserPasswordB64 = base64:encode(<<"user1:password1">>),
-    BasicAuthHeaders = [
-        {<<"authorization">>, <<"Basic ", UserPasswordB64/binary>>}
-    ],
+    BasicAuthHeaders = #{
+        <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
+    },
     Response = http_client:post(
         BasicAuthEndpoint, BasicAuthHeaders, [], [insecure]
     ),
@@ -155,13 +68,13 @@ basic_auth_login_test(Config) ->
     {ok, 200, RespHeaders, _} = Response,
     % Make sure response headers contain cookie with session id - which means
     % that the user has logged in.
-    Cookie = proplists:get_value(<<"set-cookie">>, RespHeaders, <<"">>),
+    Cookie = maps:get(<<"set-cookie">>, RespHeaders, <<"">>),
     ?assertMatch(<<"session_id=", _/binary>>, Cookie),
     % Try some inexistent user credentials if 401 is returned
     WrongUserPasswordB64 = base64:encode(<<"lol:wut">>),
-    WrongBasicAuthHeaders = [
-        {<<"authorization">>, <<"Basic ", WrongUserPasswordB64/binary>>}
-    ],
+    WrongBasicAuthHeaders = #{
+        <<"authorization">> => <<"Basic ", WrongUserPasswordB64/binary>>
+    },
     ?assertMatch({ok, 401, _, _}, http_client:post(
         BasicAuthEndpoint, WrongBasicAuthHeaders, [], [insecure]
     )),
@@ -213,17 +126,14 @@ automatic_group_membership_test(Config) ->
     ),
     % Appmock's app description contains mocked user (user2:password2)
     UserPasswordB64 = base64:encode(<<"user2:password2">>),
-    BasicAuthHeaders = [
-        {<<"authorization">>, <<"Basic ", UserPasswordB64/binary>>}
-    ],
+    BasicAuthHeaders = #{
+        <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
+    },
     ?assertMatch({ok, 200, _, _}, http_client:post(
         BasicAuthEndpoint, BasicAuthHeaders, [], [insecure]
     )),
     % now for the groups check
-    {ok, [{groups, GroupIds}]} = ?assertMatch(
-        {ok, [{groups, _}]},
-        rpc:call(Node, user_logic, get_groups, [<<"user2Id">>])
-    ),
+    {ok, #od_user{groups = GroupIds}} = oz_test_utils:get_user(Config, <<"user2Id">>),
     ?assertEqual([<<"group1">>, <<"group2">>], lists:sort(GroupIds)),
     ok.
 
@@ -274,20 +184,6 @@ end_per_testcase(_Config, _) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-space_save_mock(Nodes, SpaceId) ->
-    test_utils:mock_new(Nodes, od_space),
-    test_utils:mock_expect(Nodes, od_space, save, fun(Doc) ->
-        meck:passthrough([Doc#document{key = SpaceId}])
-    end).
-
-get_space_name_mapping(Node, UserId, SpaceId) ->
-    {ok, Data} = ?assertMatch({ok, _},
-        rpc:call(Node, space_logic, get_data, [SpaceId, {user, UserId}])),
-    proplists:get_value(name, Data).
-
-clean_space_name_mapping(Node, UserId, SpaceId) ->
-    rpc:call(Node, user_logic, clean_space_name_mapping, [UserId, SpaceId]).
 
 appmock_mocked_endpoint(Config) ->
     [AppmockNode] = ?config(appmock_nodes, Config),

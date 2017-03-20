@@ -46,7 +46,7 @@ app_name() ->
 %%--------------------------------------------------------------------
 -spec cm_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 cm_nodes() ->
-    application:get_env(?APP_Name, cm_nodes).
+    application:get_env(?APP_NAME, cm_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -55,7 +55,7 @@ cm_nodes() ->
 %%--------------------------------------------------------------------
 -spec db_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 db_nodes() ->
-    application:get_env(?APP_Name, db_nodes).
+    application:get_env(?APP_NAME, db_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -74,12 +74,12 @@ renamed_models() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
-listeners() ->  [
+listeners() -> [
     oz_redirector_listener,
     subscriptions_wss_listener,
     rest_listener,
     gui_listener |
-    node_manager:cluster_worker_listeners() -- [redirector_listener]
+        node_manager:cluster_worker_listeners() -- [redirector_listener]
 ].
 
 %%--------------------------------------------------------------------
@@ -90,15 +90,14 @@ listeners() ->  [
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() ->
     Base = node_manager:cluster_worker_modules() ++ [
-        {groups_graph_caches_worker, []},
         {changes_worker, []},
         {singleton, ozpca_worker, [
-            {supervisor_spec, ozpca_worker:supervisor_spec()},
-            {supervisor_child_spec, [ozpca_worker:supervisor_child_spec()]}
+            {supervisor_flags, ozpca_worker:supervisor_flags()},
+            {supervisor_children_spec, [ozpca_worker:supervisor_children_spec()]}
         ]},
         {subscriptions_worker, []}
     ],
-    case application:get_env(?APP_Name, location_service_enabled) of
+    case application:get_env(?APP_NAME, location_service_enabled) of
         {ok, false} -> Base;
         {ok, true} -> Base ++ [
             {location_service_worker, []},
@@ -133,12 +132,14 @@ after_init([]) ->
         %% This cannot be started before all workers are up
         %% and critical section is running
         %% todo: once critical section works in worker init, move it there
-        case application:get_env(?APP_Name, location_service_enabled) of
+        case application:get_env(?APP_NAME, location_service_enabled) of
             {ok, false} ->
                 ok;
             {ok, true} ->
                 identity_publisher_worker:start_refreshing()
         end,
+
+        entity_graph:init_state(),
 
         %% This code will be run on every node_manager, so we need a
         %% transaction here that will prevent duplicates.
@@ -244,7 +245,7 @@ on_code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 -spec check_node_ip_address() -> IPV4Addr :: {A :: byte(), B :: byte(), C :: byte(), D :: byte()}.
 check_node_ip_address() ->
-    case application:get_env(?APP_Name, external_ip, undefined) of
+    case application:get_env(?APP_NAME, external_ip, undefined) of
         undefined ->
             ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
             {127, 0, 0, 1};

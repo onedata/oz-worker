@@ -1,343 +1,373 @@
 %%%-------------------------------------------------------------------
-%%% @author Konrad Zemek
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @author Lukasz Opiola
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc The module implementing the business logic for space providers.
-%%% This module serves as a buffer between the database and the REST API.
+%%% @doc
+%%% This module encapsulates all provider logic functionalities.
+%%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(provider_logic).
--author("Konrad Zemek").
+-author("Lukasz Opiola").
 
+-include("entity_logic.hrl").
 -include("gui/common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
--include("datastore/oz_datastore_models_def.hrl").
--include("registered_names.hrl").
--include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("hackney/include/hackney_lib.hrl").
 
-%% API
--export([create/4, create/5, modify/2, exists/1]).
--export([has_user/2, has_group/2]).
--export([get_effective_users/1, get_effective_groups/1]).
--export([get_data/1, get_spaces/1, get_url/1]).
--export([remove/1]).
--export([test_connection/1, check_provider_connectivity/1]).
--export([choose_provider_for_user/1]).
--export([list/0]).
+-define(PLUGIN, provider_logic_plugin).
+
+-export([
+    create/5, create/7, create/2, create_dev/2
+]).
+-export([
+    get/2,
+    get_data/2,
+    list/1
+]).
+-export([
+    update/3
+]).
+-export([
+    delete/2
+]).
+-export([
+    get_eff_users/2, get_eff_user/3,
+    get_eff_groups/2, get_eff_group/3,
+    get_spaces/2, get_space/3,
+    support_space/4, support_space/3,
+    update_support_size/4,
+    revoke_support/3
+]).
+-export([
+    check_my_ports/2,
+    check_my_ip/2
+]).
+-export([
+    exists/1,
+    has_eff_user/2
+]).
+-export([
+    get_url/1,
+    choose_provider_for_user/1,
+    is_provider_connected/1
+]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Create a provider's account.
-%% Throws exception when call to the datastore fails.
+%% @doc
+%% Creates a new provider document in database based on Name, URLs,
+%% RedirectionPoint and CSR (Certificate Signing Request).
 %% @end
 %%--------------------------------------------------------------------
--spec create(ClientName :: binary(), URLs :: [binary()],
-    RedirectionPoint :: binary(), CSR :: binary()) ->
-    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
-create(ClientName, URLs, RedirectionPoint, CSRBin) ->
-    create(ClientName, URLs, RedirectionPoint, CSRBin, #{}).
+-spec create(Client :: entity_logic:client(), Name :: binary(),
+    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+    {ok, od_provider:id()} | {error, term()}.
+create(Client, Name, URLs, RedirectionPoint, CSR) ->
+    create(Client, #{
+        <<"name">> => Name,
+        <<"urls">> => URLs,
+        <<"redirectionPoint">> => RedirectionPoint,
+        <<"csr">> => CSR
+    }).
 
 
 %%--------------------------------------------------------------------
-%% @doc Create a provider's account.
-%% Throws exception when call to the datastore fails.
-%% Accepts optional arguments map (which currently supports 'latitude' and
-%% 'longitude' keys)
+%% @doc
+%% Creates a new provider document in database based on Name, URLs,
+%% RedirectionPoint, CSR (Certificate Signing Request), Latitude and Longitude.
 %% @end
 %%--------------------------------------------------------------------
--spec create(ClientName :: binary(), URLs :: [binary()],
-    RedirectionPoint :: binary(), CSR :: binary(),
-    OptionalArgs :: #{atom() => term()}) ->
-    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
-create(ClientName, URLs, RedirectionPoint, CSRBin, OptionalArgs) ->
-    ProviderId = datastore_utils:gen_uuid(),
-    {ok, {ProviderCertPem, Serial}} = worker_proxy:call(ozpca_worker,
-        {sign_provider_req, ProviderId, CSRBin}),
+-spec create(Client :: entity_logic:client(), Name :: binary(),
+    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary(),
+    Latitude :: float(), Longitude :: float()) ->
+    {ok, od_provider:id()} | {error, term()}.
+create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
+    create(Client, #{
+        <<"name">> => Name,
+        <<"urls">> => URLs,
+        <<"redirectionPoint">> => RedirectionPoint,
+        <<"csr">> => CSR,
+        <<"latitude">> => Latitude,
+        <<"longitude">> => Longitude
+    }).
 
-    Latitude = maps:get(latitude, OptionalArgs, undefined),
-    Longitude = maps:get(longitude, OptionalArgs, undefined),
-
-    Provider = #od_provider{client_name = ClientName, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial,
-        latitude = Latitude, longitude = Longitude},
-    od_provider:save(#document{key = ProviderId, value = Provider}),
-
-    {ok, ProviderId, ProviderCertPem}.
 
 %%--------------------------------------------------------------------
-%% @doc Modify provider's details.
-%% Throws exception when call to the datastore fails, or provider doesn't exist.
+%% @doc
+%% Creates a new provider document in database. Name, URLs, RedirectionPoint and
+%% CSR (Certificate Signing Request) are provided in a
+%% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(ProviderId :: binary(), Data :: [proplists:property()]) ->
-    ok.
-modify(ProviderId, Data) ->
-    {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
-        URLs = proplists:get_value(<<"urls">>, Data, Provider#od_provider.urls),
-        RedirectionPoint = proplists:get_value(<<"redirectionPoint">>, Data, Provider#od_provider.redirection_point),
-        ClientName = proplists:get_value(<<"clientName">>, Data, Provider#od_provider.client_name),
-        Latitude = proplists:get_value(<<"latitude">>, Data, Provider#od_provider.latitude),
-        Longitude = proplists:get_value(<<"longitude">>, Data, Provider#od_provider.longitude),
+-spec create(Client :: entity_logic:client(), Data :: #{}) ->
+    {ok, od_provider:id()} | {error, term()}.
+create(Client, Data) ->
+    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
 
-        {ok, Provider#od_provider{
-            urls = URLs,
-            redirection_point = RedirectionPoint,
-            client_name = ClientName,
-            latitude = Latitude,
-            longitude = Longitude
-        }}
-    end),
-    ok.
 
 %%--------------------------------------------------------------------
-%% @doc Returns whether a Provider exists.
-%% Throws exception when call to the datastore fails.
+%% @doc
+%% TODO This is a developer functionality and should be removed when
+%% TODO VFS-2550 is ready.
+%% Creates a new provider document in database. UUID, Name, URLs,
+%% RedirectionPoint and CSR (Certificate Signing Request) are provided in a
+%% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(ProviderId :: binary()) ->
-    boolean().
+-spec create_dev(Client :: entity_logic:client(), Data :: #{}) ->
+    {ok, od_provider:id()} | {error, term()}.
+create_dev(Client, Data) ->
+    entity_logic:create(Client, ?PLUGIN, undefined, entity_dev, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a provider record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, #od_provider{}} | {error, term()}.
+get(Client, ProviderId) ->
+    entity_logic:get(Client, ?PLUGIN, ProviderId, entity).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves information about a provider record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_data(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, #{}} | {error, term()}.
+get_data(Client, ProviderId) ->
+    entity_logic:get(Client, ?PLUGIN, ProviderId, data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Lists all providers (their ids) in database.
+%% @end
+%%--------------------------------------------------------------------
+-spec list(Client :: entity_logic:client()) ->
+    {ok, [od_provider:id()]} | {error, term()}.
+list(Client) ->
+    entity_logic:get(Client, ?PLUGIN, undefined, list).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates information of given provider. Supports updating Name, URLs,
+%% RedirectionPoint, Latitude and Longitude.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+    Data :: #{}) -> ok | {error, term()}.
+update(Client, ProviderId, Data) ->
+    entity_logic:update(Client, ?PLUGIN, ProviderId, entity, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given provider from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    ok | {error, term()}.
+delete(Client, ProviderId) ->
+    entity_logic:delete(Client, ?PLUGIN, ProviderId, entity).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space based on support_space_token and support size.
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+    Token :: token:id() | macaroon:macaroon(), SupportSize :: integer()) ->
+    {ok, od_space:id()} | {error, term()}.
+support_space(Client, ProviderId, Token, SupportSize) ->
+    support_space(Client, ProviderId, #{
+        <<"token">> => Token, <<"size">> => SupportSize
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space. Token (support_space_token) and SupportSize
+%% are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+    Data :: #{}) -> {ok, od_space:id()} | {error, term()}.
+support_space(Client, ProviderId, Data) ->
+    entity_logic:create(Client, ?PLUGIN, ProviderId, support, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective users of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_users(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, [od_user:id()]} | {error, term()}.
+get_eff_users(Client, ProviderId) ->
+    entity_logic:get(Client, ?PLUGIN, ProviderId, eff_users).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective user among
+%% effective users of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+get_eff_user(Client, ProviderId, UserId) ->
+    entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_user, UserId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective groups of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_groups(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, [od_group:id()]} | {error, term()}.
+get_eff_groups(Client, ProviderId) ->
+    entity_logic:get(Client, ?PLUGIN, ProviderId, eff_groups).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective group among
+%% effective groups of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_group(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+    GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
+get_eff_group(Client, ProviderId, GroupId) ->
+    entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_group, GroupId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of spaces of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, [od_space:id()]} | {error, term()}.
+get_spaces(Client, ProviderId) ->
+    entity_logic:get(Client, ?PLUGIN, ProviderId, spaces).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific space among spaces of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
+get_space(Client, ProviderId, SpaceId) ->
+    entity_logic:get(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates support size for specified space of given provider. Has two variants:
+%% 1) New support size is given explicitly
+%% 2) New support size is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_support_size(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id(), SupSizeOrData :: integer() | #{}) -> ok | {error, term()}.
+update_support_size(Client, ProviderId, SpaceId, SupSize) when is_integer(SupSize) ->
+    update_support_size(Client, ProviderId, SpaceId, #{
+        <<"size">> => SupSize
+    });
+update_support_size(Client, ProviderId, SpaceId, Data) ->
+    entity_logic:update(Client, ?PLUGIN, ProviderId, {space, SpaceId}, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Revokes support for specified space on behalf of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec revoke_support(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> ok | {error, term()}.
+revoke_support(Client, ProviderId, SpaceId) ->
+    entity_logic:delete(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Performs port check operation by requesting all specified URLs and returning
+%% whether the requests succeeded.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_my_ports(Client :: entity_logic:client(), Data :: #{}) ->
+    ok | {error, term()}.
+check_my_ports(Client, Data) ->
+    entity_logic:create(Client, ?PLUGIN, undefined, check_my_ports, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the IP of requesting client based on cowboy req.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_my_ip(Client :: entity_logic:client(),
+    CowboyReq :: cowboy_req:req()) -> {ok, IP :: binary()} | {error, term()}.
+check_my_ip(Client, CowboyReq) ->
+    entity_logic:get(Client, ?PLUGIN, undefined, {check_my_ip, CowboyReq}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether a provider exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(ProviderId :: od_provider:id()) -> boolean().
 exists(ProviderId) ->
     od_provider:exists(ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc Get provider's details.
-%% Throws exception when call to the datastore fails, or provider doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec get_data(ProviderId :: binary()) ->
-    {ok, Data :: [proplists:property()]}.
-get_data(ProviderId) ->
-    {ok, #document{value = #od_provider{
-        client_name = ClientName,
-        urls = URLs,
-        redirection_point = RedirectionPoint,
-        latitude = Latitude,
-        longitude = Longitude
-    }}} = od_provider:get(ProviderId),
-
-    {ok, [
-        {clientName, ClientName},
-        {providerId, ProviderId},
-        {urls, URLs},
-        {redirectionPoint, RedirectionPoint},
-        {latitude, Latitude},
-        {longitude, Longitude}
-    ]}.
 
 %%--------------------------------------------------------------------
-%% @doc Get Spaces supported by the provider.
-%% Throws exception when call to the datastore fails, or provider doesn't exist.
+%% @doc
+%% Predicate saying whether specified user is an effective user in given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(ProviderId :: binary()) ->
-    {ok, Data :: [proplists:property()]}.
-get_spaces(ProviderId) ->
-    {ok, #document{
-        value = #od_provider{
-            spaces = Spaces
-        }}} = od_provider:get(ProviderId),
-    {ok, [{spaces, Spaces}]}.
+-spec has_eff_user(ProviderOrId :: od_provider:id() | #od_provider{},
+    UserId :: od_user:id()) -> boolean().
+has_eff_user(ProviderId, UserId) when is_binary(ProviderId) ->
+    case od_provider:get(ProviderId) of
+        {ok, #document{value = Provider}} ->
+            has_eff_user(Provider, UserId);
+        _ ->
+            false
+    end;
+has_eff_user(#od_provider{eff_users = EffUsers}, UserId) ->
+    maps:is_key(UserId, EffUsers).
+
 
 %%--------------------------------------------------------------------
-%% @doc Get Users effectively supported by the provider (sum of all users of
-%% spaces that it supports).
-%% Throws exception when call to the datastore fails, or provider doesn't exist.
+%% @doc
+%% Returns full provider URL.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_users(ProviderId :: binary()) ->
-    {ok, Data :: [proplists:property()]}.
-get_effective_users(ProviderId) ->
-    {ok, #document{
-        value = #od_provider{
-            spaces = Spaces
-        }}} = od_provider:get(ProviderId),
-    Users = lists:foldl(
-        fun(SpaceId, Acc) ->
-            {ok, [{users, SpUsers}]} = space_logic:get_effective_users(SpaceId),
-            ordsets:union([Acc, ordsets:from_list(SpUsers)])
-        end, [], Spaces),
-    {ok, [{users, Users}]}.
-
-%%--------------------------------------------------------------------
-%% @doc Get Users effectively supported by the provider (sum of all users of
-%% spaces that it supports).
-%% Throws exception when call to the datastore fails, or provider doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec get_effective_groups(ProviderId :: binary()) ->
-    {ok, Data :: [proplists:property()]}.
-get_effective_groups(ProviderId) ->
-    {ok, #document{
-        value = #od_provider{
-            spaces = Spaces
-        }}} = od_provider:get(ProviderId),
-    Groups = lists:foldl(
-        fun(SpaceId, Acc) ->
-            {ok, [{groups, SpaceGroups}]} = space_logic:get_effective_groups(
-                SpaceId
-            ),
-            ordsets:union([Acc, ordsets:from_list(SpaceGroups)])
-        end, [], Spaces),
-    {ok, [{groups, Groups}]}.
-
-%%--------------------------------------------------------------------
-%% @doc Returns full provider URL.
-%% @end
-%%--------------------------------------------------------------------
--spec get_url(ProviderId :: binary()) ->
-    {ok, ProviderURL :: binary()}.
+-spec get_url(ProviderId :: od_provider:id()) -> {ok, ProviderURL :: binary()}.
 get_url(ProviderId) ->
-    {ok, PData} = provider_logic:get_data(ProviderId),
-    RedirectionPoint = proplists:get_value(redirectionPoint, PData),
-    #hackney_url{host = Host, port = Port} =
-        hackney_url:parse_url(RedirectionPoint),
-    URL = str_utils:format_bin("https://~s:~B", [Host, Port]),
-    {ok, URL}.
+    {ok, #od_provider{redirection_point = RedPoint}} = get(?ROOT, ProviderId),
+    #{host := Host, port := Port} = url_utils:parse(RedPoint),
+    {ok, str_utils:format_bin("https://~s:~B", [Host, Port])}.
 
-
-%%--------------------------------------------------------------------
-%% @doc Remove provider's account.
-%% Throws exception when call to the datastore fails, or provider is already removed.
-%% @end
-%%--------------------------------------------------------------------
--spec remove(ProviderId :: binary()) ->
-    true.
-remove(ProviderId) ->
-    {ok, #document{value = #od_provider{spaces = Spaces, serial = Serial}}} = od_provider:get(ProviderId),
-
-    lists:foreach(fun(SpaceId) ->
-        {ok, _} = od_space:update(SpaceId, fun(Space) ->
-            #od_space{providers_supports = Supports} = Space,
-            {ok, Space#od_space{
-                providers_supports = proplists:delete(ProviderId, Supports)
-            }}
-        end)
-    end, Spaces),
-
-    worker_proxy:call(ozpca_worker, {revoke, Serial}),
-    case (od_provider:delete(ProviderId)) of
-        ok -> true;
-        _ -> false
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Tests connection to given url.
-%% @end
-%%--------------------------------------------------------------------
--spec test_connection(ToCheck :: any()) ->
-    {ok, [{ServiceName :: binary(), Status :: ok | error}]} | {error, bad_data}.
-test_connection(ToCheck) ->
-    test_connection(ToCheck, []).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Tests connection to given url.
-%% @end
-%%--------------------------------------------------------------------
--spec test_connection(ToCheck :: any(),
-    Acc :: [{ServiceName :: binary(), Status :: ok | error}]) ->
-    {ok, [{ServiceName :: binary(), Status :: ok | error}]} | {error, bad_data}.
-test_connection([], Acc) ->
-    {ok, lists:reverse(Acc)};
-test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
-    ConnStatus = case http_client:get(Url, [], <<>>, [insecure]) of
-        {ok, 200, _, _} -> ok;
-        _ -> error
-    end,
-    test_connection(Rest, [{Url, ConnStatus} | Acc]);
-test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
-    ConnStatus =
-        case http_client:get(Url, [], <<>>, [insecure]) of
-            {ok, 200, _, ServiceName} ->
-                ok;
-            Error ->
-                ?debug("Checking connection to ~p failed with error: ~n~p",
-                    [Url, Error]),
-                error
-        end,
-    test_connection(Rest, [{Url, ConnStatus} | Acc]);
-test_connection(_, _) ->
-    {error, bad_data}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns whether the user identified by UserId is supported by this
-%% provider, i.e. the provider supports a space where this user belongs.
-%% Shall return false in any other case (provider doesn't exist, etc).
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec has_user(ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
-    boolean().
-has_user(ProviderId, UserId) ->
-    case od_provider:get(ProviderId) of
-        {error, {not_found, _}} ->
-            false;
-        {ok, #document{value = #od_provider{spaces = Spaces}}} ->
-            lists:any(
-                fun(SpaceId) ->
-                    space_logic:has_effective_user(SpaceId, UserId)
-                end, Spaces)
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns whether the group identified by GroupId is supported by this
-%% provider, i.e. the provider supports a space where this group belongs.
-%% Shall return false in any other case (provider doesn't exist, etc).
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec has_group(ProviderId :: od_provider:id(), GroupId :: od_group:id()) ->
-    boolean().
-has_group(ProviderId, GroupId) ->
-    case od_provider:get(ProviderId) of
-        {error, {not_found, _}} ->
-            false;
-        {ok, #document{value = #od_provider{spaces = Spaces}}} ->
-            lists:any(
-                fun(SpaceId) ->
-                    space_logic:has_effective_group(SpaceId, GroupId)
-                end, Spaces)
-    end.
-
-
-% Checks if given provider (by ID) is alive and responding.
--spec check_provider_connectivity(ProviderId :: binary()) -> boolean().
-check_provider_connectivity(ProviderId) ->
-    case subscriptions:any_connection_active(ProviderId) of
-        true ->
-            true;
-        false ->
-            try
-                % Sometimes it may happen that there is no websocket connection
-                % but the worker is fully operational. For example, when the
-                % connection has timed out and provider hasn't reconnected yet.
-                % In such case, make sure it is really inoperable by making
-                % a http request.
-                {ok, Data} = provider_logic:get_data(ProviderId),
-                RedirectionPoint = proplists:get_value(redirectionPoint, Data),
-                #hackney_url{
-                    host = Host
-                } = hackney_url:parse_url(RedirectionPoint),
-                ConnCheckEndpoint = str_utils:format_bin("https://~s~s", [
-                    Host, ?provider_id_endpoint
-                ]),
-                {ok, _, _, ProviderId} =
-                    http_client:get(ConnCheckEndpoint, [], <<>>, [insecure]),
-                true
-            catch _:_ ->
-                false
-            end
-    end.
 
 %%--------------------------------------------------------------------
 %% @doc Returns provider id of provider that has been chosen
@@ -349,17 +379,18 @@ check_provider_connectivity(ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec choose_provider_for_user(Referer :: binary() | undefined) ->
-    {ok, ProviderID :: binary()} | {error, no_provider}.
-choose_provider_for_user(UserID) ->
+    {ok, ProviderId :: od_provider:id()} | {error, no_provider}.
+choose_provider_for_user(UserId) ->
     % Check if the user has a default space and if it is supported.
-    {ok, [{spaces, Spaces}, {default, DefaultSpace}]} =
-        user_logic:get_spaces(UserID),
-    {ok, [{providers, DSProviders}]} =
+    {ok, #od_user{
+        spaces = Spaces, default_space = DefaultSpace
+    }} = user_logic:get(?ROOT, UserId),
+    {ok, DSProviders} =
         case DefaultSpace of
             undefined ->
-                {ok, [{providers, []}]};
+                {ok, []};
             _ ->
-                space_logic:get_providers(DefaultSpace, user)
+                space_logic:get_providers(?ROOT, DefaultSpace)
         end,
     case DSProviders of
         List when length(List) > 0 ->
@@ -367,28 +398,28 @@ choose_provider_for_user(UserID) ->
             {ok, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)};
         _ ->
             % Default space does not have a provider, look in other spaces
-            ProviderIDs = lists:foldl(
+            ProviderIds = lists:foldl(
                 fun(Space, Acc) ->
-                    {ok, [{providers, Providers}]} = space_logic:get_providers(Space, user),
+                    {ok, Providers} = space_logic:get_providers(?ROOT, Space),
                     Providers ++ Acc
                 end, [], Spaces),
 
-            case ProviderIDs of
+            case ProviderIds of
                 [] ->
                     % No provider for other spaces = nowhere to redirect
                     {error, no_provider};
                 _ ->
                     % There are some providers for other spaces, random one
-                    {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIDs) + 1), ProviderIDs)}
+                    {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIds) + 1), ProviderIds)}
             end
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a list of all providers in the system (their ids).
+%% Checks if given provider (by Id) is alive and responding.
 %% @end
 %%--------------------------------------------------------------------
--spec list() -> {ok, [od_provider:id()]}.
-list() ->
-    {ok, ProviderDocs} = od_provider:list(),
-    {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]}.
+-spec is_provider_connected(ProviderId :: od_provider:id()) -> boolean().
+is_provider_connected(ProviderId) ->
+    subscriptions:any_connection_active(ProviderId).

@@ -15,19 +15,19 @@
 -include("registered_names.hrl").
 
 % Relative suffix of GUI address, leading to privacy policy page
--define(privacy_policy_url, "/privacy_policy").
+-define(PRIVACY_POLICY_URL, "/privacy_policy").
 
 % Endpoint at oneprovider to get its ID
--define(provider_id_endpoint, "/get_provider_id").
+-define(PROVIDER_ID_ENDPOINT, "/get_provider_id").
 
 % Relative suffix of GUI address, leading to page with info about providers
--define(become_a_provider_url, "/become_a_provider").
+-define(BECOME_A_PROVIDER_URL, "/become_a_provider").
 
 % URL (relative) to redirect to after login.
--define(page_after_login, "/#/onezone").
+-define(PAGE_AFTER_LOGIN, "/#/onezone").
 
 % Macros used as ids of errors that can appear on GUI pages
--define(error_internal_server_error, "internal_server_error").
+-define(ERROR_INTERNAL_SERVER_ERROR, "internal_server_error").
 
 -endif.
 

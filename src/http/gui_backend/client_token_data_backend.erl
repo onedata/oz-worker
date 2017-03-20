@@ -100,8 +100,7 @@ query_record(<<"clienttoken">>, _Data) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 create_record(<<"clienttoken">>, _Data) ->
     UserId = gui_session:get_user_id(),
-    Token = auth_logic:gen_token(UserId),
-    user_logic:add_client_token(UserId, Token),
+    {ok, Token} = user_logic:create_client_token(?USER(UserId), UserId),
     user_data_backend:push_user_record(UserId),
     {ok, [
         {<<"id">>, Token}
@@ -129,9 +128,7 @@ update_record(<<"clienttoken">>, _TokenId, _Data) ->
     ok | gui_error:error_result().
 delete_record(<<"clienttoken">>, Token) ->
     UserId = gui_session:get_user_id(),
-    {ok, Macaroon} = token_utils:deserialize(Token),
-    Identifier = macaroon:identifier(Macaroon),
-    onedata_auth:delete(Identifier),
-    user_logic:delete_client_token(UserId, Token),
+    user_logic:delete_client_token(?USER(UserId), UserId, Token),
+    % Push user record with a new client token list.
     user_data_backend:push_user_record(UserId),
     ok.

@@ -15,6 +15,7 @@
 -behaviour(data_backend_behaviour).
 
 -include("datastore/oz_datastore_models_def.hrl").
+-include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% data_backend_behaviour callbacks
@@ -141,27 +142,74 @@ delete_record(<<"provider">>, _Id) ->
 -spec provider_record(ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
     proplists:proplist().
 provider_record(ProviderId, UserId) ->
-    {ok, UserSpaces} = user_logic:get_spaces(UserId),
-    UserSpaceIds = proplists:get_value(spaces, UserSpaces),
-    {ok, ProviderData} = provider_logic:get_data(ProviderId),
-    Name = proplists:get_value(clientName, ProviderData),
-    Latitude = proplists:get_value(latitude, ProviderData, 0.0),
-    Longitude = proplists:get_value(longitude, ProviderData, 0.0),
-    RedPoint = proplists:get_value(redirectionPoint, ProviderData),
+    Client = ?USER(gui_session:get_user_id()),
+    {ok, #od_user{eff_spaces = EffUserSpaces}} = user_logic:get(Client, UserId),
+    {ok, #od_provider{
+        name = Name,
+        redirection_point = RedPoint,
+        latitude = Latitude,
+        longitude = Longitude,
+        spaces = SpacesWithSupports
+    }} = provider_logic:get(?ROOT, ProviderId),
+    Spaces = maps:keys(SpacesWithSupports),
+
     #{host := Host} = url_utils:parse(RedPoint),
-    IsWorking = provider_logic:check_provider_connectivity(ProviderId),
-    {ok, [{spaces, Spaces}]} = provider_logic:get_spaces(ProviderId),
+    Status = case provider_logic:is_provider_connected(ProviderId) of
+        true ->
+            <<"online">>;
+        false ->
+            % Sometimes it may happen that there is no websocket connection
+            % but the worker is fully operational. For example, when the
+            % connection has timed out and provider hasn't reconnected yet.
+            % In such case, make sure it is really inoperable and send the
+            % result asynchronously.
+            gui_async:spawn(true, fun() ->
+                check_provider_async(ProviderId)
+            end),
+            <<"pending">>
+    end,
+
     SpacesToDisplay = lists:filter(
         fun(Space) ->
-            lists:member(Space, UserSpaceIds)
+            lists:member(Space, maps:keys(EffUserSpaces))
         end, Spaces),
     [
         {<<"id">>, ProviderId},
         {<<"name">>, Name},
-        {<<"isWorking">>, IsWorking},
+        {<<"status">>, Status},
         {<<"host">>, Host},
         {<<"spaces">>, SpacesToDisplay},
         {<<"latitude">>, Latitude},
         {<<"longitude">>, Longitude},
         {<<"user">>, UserId}
     ].
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Asynchronously tries to connect to a provider via HTTP and pushes the
+%% information whether it was successful to client. This is used when
+%% subscriptions channel report no connection, but the provider might still be
+%% online.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_provider_async(ProviderId :: od_provider:id()) -> ok.
+check_provider_async(ProviderId) ->
+    Status = try
+        {ok, ProviderUrl} = provider_logic:get_url(ProviderId),
+        ConnCheckEndpoint = <<ProviderUrl/binary, ?PROVIDER_ID_ENDPOINT>>,
+        case http_client:get(ConnCheckEndpoint, #{}, <<>>, [insecure]) of
+            {ok, _, _, ProviderId} -> <<"online">>;
+            _ -> <<"offline">>
+        end
+    catch _:_ ->
+        <<"offline">>
+    end,
+    gui_async:push_updated(<<"provider">>, [
+        {<<"id">>, ProviderId}, {<<"status">>, Status}
+    ]).

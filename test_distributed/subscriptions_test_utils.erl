@@ -59,14 +59,21 @@ get_rev(Node, Model, Id) ->
     {ok, #document{rev = Rev}} = Result,
     Rev.
 
-create_provider(Node, Name, Spaces) ->
-    create_provider(Node, Name, Spaces, [<<"127.0.0.1">>]).
-create_provider(Node, Name, Spaces, URLs) ->
+create_provider(Config, Name, Spaces) ->
+    create_provider(Config, Name, Spaces, [<<"127.0.0.1">>]).
+create_provider(Config, Name, Spaces, URLs) ->
     {_, CSRFile, _} = generate_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
-    Params = [Name, URLs, <<"https://127.0.0.1:443">>, CSR],
-    {ok, Id, _} = rpc:call(Node, provider_logic, create, Params),
-    {ok, Id} = rpc:call(Node, od_provider, update, [Id, #{spaces => Spaces}]),
+    Params = #{
+        <<"name">> => Name,
+        <<"urls">> => URLs,
+        <<"redirectionPoint">> => <<"https://127.0.0.1:443">>,
+        <<"csr">> => CSR
+    },
+    {ok, {Id, _}} = oz_test_utils:create_provider(Config, Params),
+    {ok, Id} = oz_test_utils:call_oz(
+        Config, od_provider, update, [Id, #{spaces => Spaces}]
+    ),
     Id.
 
 generate_space_ids(Number) ->
@@ -82,8 +89,8 @@ generate_ids(Prefix, Number) ->
     [?ID(list_to_atom(Prefix ++ integer_to_list(N))) || N <- lists:seq(1, Number)].
 
 create_spaces(SIds, UIds, GIds, Node) ->
-    Groups = [{GId, []} || GId <- GIds],
-    Users = [{UId, []} || UId <- UIds],
+    Groups = maps:from_list([{GId, []} || GId <- GIds]),
+    Users = maps:from_list([{UId, []} || UId <- UIds]),
     lists:map(fun({SId, N}) ->
         Space = #od_space{
             name = list_to_binary("s" ++ integer_to_list(N) ++ integer_to_list(erlang:system_time(micro_seconds))),
@@ -105,7 +112,7 @@ create_users(UIds, GIds, Node) ->
     end, lists:zip(UIds, lists:seq(1, length(UIds)))).
 
 create_groups(GIds, UIds, SIds, Node) ->
-    Users = [{UId, []} || UId <- UIds],
+    Users = maps:from_list([{UId, []} || UId <- UIds]),
     lists:map(fun({GId, N}) ->
         Group = #od_group{
             name = list_to_binary("g" ++ integer_to_list(N)),
@@ -139,7 +146,7 @@ get_last_sequence_number(Node) ->
 %%% Message expectations
 %%%===================================================================
 
-expectation(Id, #od_space{name = Name, providers_supports = Supports,
+expectation(Id, #od_space{name = Name, providers = Supports,
     groups = Groups, users = Users, shares = Shares}) ->
     space_expectation(Id, Name, Users, Groups, Supports, Shares);
 expectation(Id, #od_share{name = Name, space = Space,
@@ -159,7 +166,7 @@ expectation(Id, #od_group{name = Name, type = Type, users = Users, spaces = Spac
     group_expectation(Id, Name, Type, Users, EUsers, Spaces, Children, Parents,
         HandleServices, Handles);
 
-expectation(Id, #od_provider{client_name = Name, urls = URLs, spaces = Spaces}) ->
+expectation(Id, #od_provider{name = Name, urls = URLs, spaces = Spaces}) ->
     provider_expectation(Id, Name, URLs, Spaces);
 
 expectation(Id, #od_handle_service{name = Name, proxy_endpoint = ProxyEndpoint,
@@ -197,7 +204,7 @@ user_expectation(Id, Name, Spaces, Groups, EffGroups, DefaultSpace, HandleServic
         {<<"handle_services">>, HandleServices},
         {<<"handles">>, Handles},
 
-        {<<"eff_groups">>, EffGroups},
+        {<<"eff_groups">>, maps:keys(EffGroups)},
         {<<"eff_spaces">>, []}, % TODO currently always empty
         {<<"eff_shares">>, []}, % TODO currently always empty
         {<<"eff_providers">>, []}, % TODO currently always empty
@@ -223,7 +230,7 @@ public_only_user_expectation(Id, Name) ->
 
         {<<"eff_groups">>, []},
         {<<"eff_spaces">>, []},
-        {<<"eff_shares">>, []},
+        {<<"eff_shares">>, []}, % TODO currently always empty
         {<<"eff_providers">>, []},
         {<<"eff_handle_services">>, []},
         {<<"eff_handles">>, []},
@@ -232,21 +239,25 @@ public_only_user_expectation(Id, Name) ->
     ]}].
 
 group_expectation(Id, Name, Type, Users, EUsers, Spaces, Children, Parents, HandleServices, Handles) ->
+    EUsersPrivileges = lists:map(
+        fun({Id, {Privileges, _}}) ->
+            {Id, Privileges}
+        end, maps:to_list(EUsers)    ),
     [{<<"id">>, Id}, {<<"od_group">>, [
         {<<"name">>, Name},
         {<<"type">>, atom_to_binary(Type, utf8)},
 
         {<<"parents">>, Parents},
-        {<<"children">>, privileges_as_binaries(Children)},
+        {<<"children">>, privileges_as_binaries(maps:to_list(Children))},
         {<<"eff_children">>, []}, % TODO currently always empty
         {<<"eff_parents">>, []}, % TODO currently always empty
 
-        {<<"users">>, privileges_as_binaries(Users)},
+        {<<"users">>, privileges_as_binaries(maps:to_list(Users))},
         {<<"spaces">>, Spaces},
         {<<"handle_services">>, HandleServices},
         {<<"handles">>, Handles},
 
-        {<<"eff_users">>, privileges_as_binaries(EUsers)},
+        {<<"eff_users">>, privileges_as_binaries(EUsersPrivileges)},
         {<<"eff_spaces">>, []}, % TODO currently always empty
         {<<"eff_shares">>, []}, % TODO currently always empty
         {<<"eff_providers">>, []}, % TODO currently always empty
@@ -259,9 +270,9 @@ space_expectation(Id, Name, Users, Groups, Supports, Shares) ->
         {<<"id">>, Id},
         {<<"name">>, Name},
 
-        {<<"providers_supports">>, Supports},
-        {<<"users">>, privileges_as_binaries(Users)},
-        {<<"groups">>, privileges_as_binaries(Groups)},
+        {<<"providers_supports">>, maps:to_list(Supports)},
+        {<<"users">>, privileges_as_binaries(maps:to_list(Users))},
+        {<<"groups">>, privileges_as_binaries(maps:to_list(Groups))},
         {<<"shares">>, Shares},
 
         {<<"eff_users">>, []}, % TODO currently always empty
@@ -287,7 +298,7 @@ provider_expectation(Id, Name, URLs, Spaces) ->
         {<<"client_name">>, Name},
         {<<"urls">>, URLs},
 
-        {<<"spaces">>, Spaces},
+        {<<"spaces">>, maps:keys(Spaces)},
 
         {<<"public_only">>, false}
     ]}].
@@ -307,10 +318,10 @@ handle_service_expectation(Id, Name, ProxyEndpoint, ServiceProperties, Users, Gr
         {<<"id">>, Id},
         {<<"name">>, Name},
         {<<"proxy_endpoint">>, ProxyEndpoint},
-        {<<"service_properties">>, ServiceProperties},
+        {<<"service_properties">>, maps:to_list(ServiceProperties)},
 
-        {<<"users">>, privileges_as_binaries(Users)},
-        {<<"groups">>, privileges_as_binaries(Groups)},
+        {<<"users">>, privileges_as_binaries(maps:to_list(Users))},
+        {<<"groups">>, privileges_as_binaries(maps:to_list(Groups))},
 
         {<<"eff_users">>, []}, % TODO currently always empty
         {<<"eff_groups">>, []} % TODO currently always empty
@@ -327,8 +338,8 @@ handle_expectation(Id, HandleServiceId, PublicHandle, ResourceType, ResourceId,
         {<<"timestamp">>, timestamp_utils:datetime_to_datestamp(Timestamp)},
 
         {<<"handle_service">>, HandleServiceId},
-        {<<"users">>, privileges_as_binaries(Users)},
-        {<<"groups">>, privileges_as_binaries(Groups)},
+        {<<"users">>, privileges_as_binaries(maps:to_list(Users))},
+        {<<"groups">>, privileges_as_binaries(maps:to_list(Groups))},
 
         {<<"eff_users">>, []}, % TODO currently always empty
         {<<"eff_groups">>, []} % TODO currently always empty
@@ -396,6 +407,7 @@ verify_messages(Context, Retries, Expected, Forbidden) ->
     call_worker(Node, {update_missing_seq, ProviderId, ResumeAt, Missing}),
     All = lists:append(get_messages()),
 
+    % Useful for debug
 %%    ct:print("ALL: ~p~nEXPECTED: ~p~nFORBIDDEN: ~p~n", [All, Expected, Forbidden]),
 
     Seqs = extract_seqs(All),

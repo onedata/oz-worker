@@ -22,7 +22,7 @@
 -export([find_record/2, find_all/1, query/2, query_record/2]).
 -export([create_record/2, update_record/3, delete_record/2]).
 %% API
--export([group_record/1]).
+-export([group_record/2]).
 
 
 %%%===================================================================
@@ -58,12 +58,7 @@ terminate() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 find_record(<<"group">>, GroupId) ->
     UserId = gui_session:get_user_id(),
-    case group_logic:has_effective_user(GroupId, UserId) of
-        false ->
-            gui_error:unauthorized();
-        true ->
-            {ok, group_record(GroupId)}
-    end.
+    {ok, group_record(?USER(UserId), GroupId)}.
 
 
 %%--------------------------------------------------------------------
@@ -142,10 +137,11 @@ delete_record(<<"group">>, _Id) ->
 %% Returns a client-compliant group record based on group id.
 %% @end
 %%--------------------------------------------------------------------
--spec group_record(GroupId :: binary()) -> proplists:proplist().
-group_record(GroupId) ->
+-spec group_record(Client :: entity_logic:client(), GroupId :: binary()) ->
+    proplists:proplist().
+group_record(Client, GroupId) ->
     UserId = gui_session:get_user_id(),
-    {ok, #document{value = #od_group{name = Name}}} = od_group:get(GroupId),
+    {ok, #{<<"name">> := Name}} = group_logic:get_data(Client, GroupId),
     [
         {<<"id">>, GroupId},
         {<<"name">>, Name},

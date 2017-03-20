@@ -65,11 +65,13 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec sign_provider_req(ProviderId :: binary(), CSRPem :: binary()) ->
-    {ok, {CertPem :: binary(), Serial :: binary()}}.
+    {ok, {CertPem :: binary(), Serial :: binary()}} | {error, bad_csr}.
 sign_provider_req(ProviderId, CSRPem) ->
     case delegate(fun sign_provider_req_imp/3, [ProviderId, CSRPem]) of
         {ok, CertPem, Serial} when is_binary(CertPem), is_integer(Serial) ->
-            {ok, {CertPem, integer_to_binary(Serial, 16)}}
+            {ok, {CertPem, integer_to_binary(Serial, 16)}};
+        {error, bad_csr} ->
+            {error, bad_csr}
     end.
 
 %%--------------------------------------------------------------------
@@ -111,7 +113,7 @@ revoke(Serial) ->
 %%--------------------------------------------------------------------
 -spec cacert_path(CaDir :: string()) -> string().
 cacert_path(CaDir) ->
-    {ok, CaDir} = application:get_env(?APP_Name, ozpca_dir),
+    {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
     filename:join(CaDir, ?CACERT_FILE).
 
 %%%===================================================================
@@ -126,10 +128,10 @@ cacert_path(CaDir) ->
     {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore.
 init(_Args) ->
-    {ok, KeyFile} = application:get_env(?APP_Name, oz_key_file),
-    {ok, CertFile} = application:get_env(?APP_Name, oz_cert_file),
-    {ok, CaDir} = application:get_env(?APP_Name, ozpca_dir),
-    {ok, Domain} = application:get_env(?APP_Name, http_domain),
+    {ok, KeyFile} = application:get_env(?APP_NAME, oz_key_file),
+    {ok, CertFile} = application:get_env(?APP_NAME, oz_cert_file),
+    {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
+    {ok, Domain} = application:get_env(?APP_NAME, http_domain),
     case filelib:is_regular(CertFile) of
         true -> ok;
         false -> generate_oz_cert(KeyFile, CertFile, CaDir, Domain)
@@ -295,12 +297,19 @@ sign_provider_req_imp(CaDir, ProviderId, CSRPem) ->
         " -out ", CertFile]),
 
     {ok, Pem} = file:read_file(CertFile),
-    [{'Certificate', CertDer, not_encrypted}] = public_key:pem_decode(Pem),
-    Cert = public_key:pkix_decode_cert(CertDer, otp),
-    #'OTPCertificate'{tbsCertificate = #'OTPTBSCertificate'{serialNumber = Serial}} = Cert,
-    utils:rmtempdir(TmpDir),
-
-    {ok, Pem, Serial}.
+    case public_key:pem_decode(Pem) of
+        [] ->
+            % Cert was not written, which implies openssl error (bad CSR)
+            {error, bad_csr};
+        [{'Certificate', CertDer, not_encrypted}] ->
+            Cert = public_key:pkix_decode_cert(CertDer, otp),
+            #'OTPCertificate'{
+                tbsCertificate = #'OTPTBSCertificate'{
+                    serialNumber = Serial
+                }} = Cert,
+            utils:rmtempdir(TmpDir),
+            {ok, Pem, Serial}
+    end.
 
 %%--------------------------------------------------------------------
 %% @private @doc
@@ -395,7 +404,7 @@ ca_config_file(TmpDir, CaDir) ->
     PeerCert :: #'OTPCertificate'{}) ->
     valid | {bad_cert, Reason :: any()}.
 check_revoked(CaCertDer, CaCert, PeerCert) ->
-    {ok, CaDir} = application:get_env(?APP_Name, ozpca_dir),
+    {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
 
     {ok, CRLPem} = file:read_file(filename:join(CaDir, "crl.pem")),
     [{'CertificateList', CRLDer, not_encrypted}] = public_key:pem_decode(CRLPem),
@@ -486,8 +495,8 @@ req_cnf(DN) ->
 %%--------------------------------------------------------------------
 -spec ca_cnf(CaDir :: string()) -> Config :: iolist().
 ca_cnf(CaDir) ->
-    {ok, CertDomain} = application:get_env(?APP_Name, http_domain),
-    {ok, RestPort} = application:get_env(?APP_Name, rest_port),
+    {ok, CertDomain} = application:get_env(?APP_NAME, http_domain),
+    {ok, RestPort} = application:get_env(?APP_NAME, rest_port),
     Port = integer_to_binary(RestPort),
     ["# Purpose: Configuration for CAs.\n"
     "\n"

@@ -17,6 +17,7 @@
 
 -include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([page_init/0]).
@@ -36,22 +37,22 @@ page_init() ->
         {redirect, URL} ->
             UserId = gui_session:get_user_id(),
             ?info("User ~p logged in", [UserId]),
-            case user_logic:get_default_provider(UserId) of
-                {ok, undefined} ->
-                    {redirect_relative, URL};
-                {ok, ProvId} ->
+            case user_logic:get_default_provider_if_online(UserId) of
+                {true, DefaultProv} ->
                     ?debug("Automatically redirecting user `~s` "
-                    "to default provider `~s`", [UserId, ProvId]),
+                    "to default provider `~s`", [UserId, DefaultProv]),
                     {ok, ProvURL} = auth_logic:get_redirection_uri(
-                        UserId, ProvId
+                        UserId, DefaultProv
                     ),
-                    {redirect_absolute, ProvURL}
+                    {redirect_absolute, ProvURL};
+                false ->
+                    {redirect_relative, URL}
             end;
         new_user ->
             UserId = gui_session:get_user_id(),
             ?info("User ~p logged in for the first time", [UserId]),
-            {redirect_relative, <<?page_after_login>>};
+            {redirect_relative, <<?PAGE_AFTER_LOGIN>>};
         {error, ErrorId} ->
-            ?info("Error: ~p", [ErrorId]),
+            ?error("Error during login: ~p", [ErrorId]),
             {redirect_relative, <<"/">>}
     end.

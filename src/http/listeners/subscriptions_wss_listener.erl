@@ -12,7 +12,6 @@
 -module(subscriptions_wss_listener).
 -author("Michal Zmuda").
 
--include("rest_config.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -34,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec port() -> integer().
 port() ->
-    {ok, WssPort} = application:get_env(?APP_Name, subscriptions_wss_port),
+    {ok, WssPort} = application:get_env(?APP_NAME, subscriptions_wss_port),
     WssPort.
 
 
@@ -48,15 +47,15 @@ start() ->
     try
         % Get rest config
         Port = port(),
-        {ok, HttpsAcceptors} = application:get_env(?APP_Name, subscroptions_https_acceptors),
+        {ok, HttpsAcceptors} = application:get_env(?APP_NAME, subscroptions_https_acceptors),
 
         % Get certs
-        {ok, ZoneCADir} = application:get_env(?APP_Name, ozpca_dir),
+        {ok, ZoneCADir} = application:get_env(?APP_NAME, ozpca_dir),
         {ok, ZoneCaCert} = file:read_file(ozpca:cacert_path(ZoneCADir)),
 
-        {ok, KeyFile} = application:get_env(?APP_Name, web_key_file),
-        {ok, CertFile} = application:get_env(?APP_Name, web_cert_file),
-        {ok, CaCertsDir} = application:get_env(?APP_Name, cacerts_dir),
+        {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
+        {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
+        {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
         {ok, CaCerts} = file_utils:read_files({dir, CaCertsDir}),
 
         Dispatch = [
@@ -112,7 +111,7 @@ stop() ->
 -spec healthcheck() -> ok | {error, server_not_responding}.
 healthcheck() ->
     Endpoint = "https://127.0.0.1:" ++ integer_to_list(port()),
-    case http_client:get(Endpoint, [], <<>>, [insecure]) of
+    case http_client:get(Endpoint, #{}, <<>>, [insecure]) of
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
     end.

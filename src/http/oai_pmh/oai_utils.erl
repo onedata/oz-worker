@@ -11,14 +11,17 @@
 -module(oai_utils).
 -author("Jakub Kudzia").
 
+-include("entity_logic.hrl").
 -include("http/handlers/oai.hrl").
 -include("http/handlers/oai_errors.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([datetime_to_oai_datestamp/1, oai_datestamp_to_datetime/1,
     is_harvesting/1, verb_to_module/1, is_earlier_or_equal/2,
     dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4,
     oai_identifier_encode/1, oai_identifier_decode/1]).
+-export([list_handles/0, get_handle/1]).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -67,7 +70,7 @@ oai_datestamp_to_datetime(Datestamp) ->
 %%% Function responsible for performing harvesting.
 %%% Harvests metadata which has representation in MetadataPrefix format
 %%% and which has Datestamp in range [FromDatestamp, UntilDatestamp].
-%%% HarvestingFun must be a callback which takes Identifier and Metadata
+%%% HarvestingFun must be a callback which takes Identifier and Handle record
 %%% and returns intended part of metadata.
 %%% Throws with noRecordsMatch if nothing is harvested.
 %%% @end
@@ -76,17 +79,18 @@ oai_datestamp_to_datetime(Datestamp) ->
 harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
     From = oai_datestamp_to_datetime(FromDatestamp),
     Until = oai_datestamp_to_datetime(UntilDatestamp),
-    {ok, Identifiers} = handle_logic:list(),
+    Identifiers = list_handles(),
     HarvestedMetadata = lists:flatmap(fun(Identifier) ->
-        {ok, Metadata} = handle_logic:get_metadata(Identifier),
-        case should_be_harvested(From, Until, MetadataPrefix, Metadata) of
+        Handle = get_handle(Identifier),
+        case should_be_harvested(From, Until, MetadataPrefix, Handle) of
             false -> [];
             true ->
-                [HarvestingFun(Identifier, Metadata)]
+                [HarvestingFun(Identifier, Handle)]
         end
     end, Identifiers),
     case HarvestedMetadata of
-        [] -> throw({noRecordsMatch, FromDatestamp, UntilDatestamp, MetadataPrefix});
+        [] ->
+            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, MetadataPrefix});
         _ -> HarvestedMetadata
     end.
 
@@ -97,17 +101,14 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
 %%% MetadataPrefix).
 %%% @end
 %%%--------------------------------------------------------------------
--spec should_be_harvested(supported_datestamp(), supported_datestamp(), binary(),
-    [proplists:property()]) -> boolean().
-should_be_harvested(From, Until, MetadataPrefix, Metadata) ->
-    case proplists:get_value(metadata, Metadata) of
-        undefined -> false;
-        _ ->
-            Datestamp = proplists:get_value(timestamp, Metadata),
-            MetadataFormats = metadata_formats:supported_formats(),
-            is_in_time_range(From, Until, Datestamp) and
-                lists:member(MetadataPrefix, MetadataFormats)
-    end.
+-spec should_be_harvested(supported_datestamp(), supported_datestamp(),
+    binary(), #od_handle{}) -> boolean().
+should_be_harvested(_From, _Until, _MetadataPrefix, #od_handle{metadata = undefined}) ->
+    false;
+should_be_harvested(From, Until, MetadataPrefix, #od_handle{timestamp = Datestamp}) ->
+    MetadataFormats = metadata_formats:supported_formats(),
+    is_in_time_range(From, Until, Datestamp) and
+        lists:member(MetadataPrefix, MetadataFormats).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -200,7 +201,7 @@ to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp}) ->
     #xmlElement{
         name = header,
         content = ensure_list(to_xml({identifier, Identifier})) ++
-            ensure_list(to_xml({datestamp, Datestamp}))};
+        ensure_list(to_xml({datestamp, Datestamp}))};
 to_xml(#oai_metadata{metadata_format = Format, value = Value}) ->
     MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
     Mod = metadata_formats:module(MetadataPrefix),
@@ -215,7 +216,7 @@ to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
             ensure_list(to_xml({schema, Schema})) ++
             ensure_list(to_xml({metadataNamespace, Namespace}))
     };
-to_xml(#oai_about{value=Value}) ->
+to_xml(#oai_about{value = Value}) ->
     #xmlElement{
         name = about,
         content = ensure_list(to_xml(Value))
@@ -242,7 +243,7 @@ to_xml({Name, Content, Attributes}) ->
             #xmlAttribute{name = ensure_atom(N), value = str_utils:to_list(V)}
         end, Attributes)
     };
-to_xml(Content) -> #xmlText{value=str_utils:to_list(Content)}.
+to_xml(Content) -> #xmlText{value = str_utils:to_list(Content)}.
 
 
 %%%-------------------------------------------------------------------
@@ -254,6 +255,29 @@ to_xml(Content) -> #xmlText{value=str_utils:to_list(Content)}.
 ensure_list(undefined) -> [];
 ensure_list(Arg) when is_list(Arg) -> Arg;
 ensure_list(Arg) -> [Arg].
+
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% Returns the list of all handles in the system.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec list_handles() -> [od_handle:id()].
+list_handles() ->
+    {ok, HandlesList} = handle_logic:list(?ROOT),
+    HandlesList.
+
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% Retrieves specified handle record.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec get_handle(HandleId :: od_handle:id()) -> #od_handle{}.
+get_handle(HandleId) ->
+    {ok, Handle} = handle_logic:get(?ROOT, HandleId),
+    Handle.
+
 
 %%%===================================================================
 %%% Internal functions
@@ -277,7 +301,7 @@ granularity({{_, _, _}, {_, _, _}}) -> seconds_granularity.
 %%% to maximal or minimal datetime() with given date().
 %%% @end
 %%%-------------------------------------------------------------------
--spec granularity_days_to_seconds({Direction :: max | min, supported_datestamp() })
+-spec granularity_days_to_seconds({Direction :: max | min, supported_datestamp()})
         -> undefined | erlang:datetime().
 granularity_days_to_seconds({_, undefined}) -> undefined;
 granularity_days_to_seconds({min, {Y, M, D}}) -> {{Y, M, D}, {0, 0, 0}};
