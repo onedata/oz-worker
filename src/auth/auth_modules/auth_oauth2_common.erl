@@ -118,8 +118,6 @@ validate_login(ProviderId, SecretSendMethod) ->
         Response = json_utils:decode(ResponseBinary),
         AccessToken = proplists:get_value(<<"access_token">>, Response),
 
-        io:format("~nT = <<\"~s\">>.~n~n", [AccessToken]),
-
         get_user_info(ProviderId, AccessToken, XRDS)
     catch
         Type:Message ->
