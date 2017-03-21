@@ -24,7 +24,8 @@
 -export([
     validate_login/0,
     get_user_by_oauth_account/1,
-    acquire_user_by_oauth_account/1
+    acquire_user_by_oauth_account/1,
+    acquire_user_by_external_access_token/2
 ]).
 
 %%%===================================================================
@@ -163,7 +164,7 @@ validate_login() ->
 -spec get_user_by_oauth_account(#oauth_account{}) -> {ok, #document{}} | {error, not_found}.
 get_user_by_oauth_account(OAuthAccount) ->
     #oauth_account{provider_id = ProviderId, user_id = OAuthUserId} = OAuthAccount,
-    case od_user:get({connected_account_user_id, {ProviderId, OAuthUserId}}) of
+    case od_user:get_by_criterion({oauth_user_id, {ProviderId, OAuthUserId}}) of
         {ok, #document{} = Doc} ->
             {ok, Doc};
         {error, {not_found, od_user}} ->
@@ -174,7 +175,9 @@ get_user_by_oauth_account(OAuthAccount) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Tries to retrieve system user by given oauth account, and if it does not
-%% exist, creates a new user with that account connected.
+%% exist, creates a new user with that account connected. If a new user is
+%% created, the function returns when its effective relations have been
+%% fully synchronized.
 %% In both cases, returns the user id.
 %% @end
 %%--------------------------------------------------------------------
@@ -186,7 +189,29 @@ acquire_user_by_oauth_account(OAuthAccount) ->
             {exists, UserId};
         {error, not_found} ->
             {ok, UserId} = create_user_by_oauth_account(OAuthAccount),
+            entity_graph:ensure_up_to_date(),
             {created, UserId}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to retrieve system user by given oauth account, and if it does not
+%% exist, creates a new user with that account connected. If a new user is
+%% created, the function returns when its effective relations have been
+%% fully synchronized.
+%% In both cases, returns the user id.
+%% @end
+%%--------------------------------------------------------------------
+-spec acquire_user_by_external_access_token(ProviderId :: atom(), AccessToken :: binary()) ->
+    {exists | created, UserId :: od_user:id()} | {error, bad_access_token}.
+acquire_user_by_external_access_token(ProviderId, AccessToken) ->
+    Module = auth_config:get_provider_module(ProviderId),
+    case Module:get_user_info(AccessToken) of
+        {ok, OAuthAccount} ->
+            acquire_user_by_oauth_account(OAuthAccount);
+        {error, bad_access_token} ->
+            {error, bad_access_token}
     end.
 
 

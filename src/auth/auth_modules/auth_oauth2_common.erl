@@ -31,13 +31,13 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(boolean(), ProviderName :: atom(),
+-spec get_redirect_url(boolean(), ProviderId :: atom(),
     HandlerModule :: atom()) -> {ok, binary()} | {error, term()}.
-get_redirect_url(ConnectAccount, ProviderName, HandlerModule) ->
+get_redirect_url(ConnectAccount, ProviderId, HandlerModule) ->
     try
         ParamsProplist = [
             {<<"client_id">>,
-                auth_config:get_provider_app_id(ProviderName)},
+                auth_config:get_provider_app_id(ProviderId)},
             {<<"response_type">>,
                 <<"code">>},
             {<<"scope">>,
@@ -48,12 +48,12 @@ get_redirect_url(ConnectAccount, ProviderName, HandlerModule) ->
                 auth_logic:generate_state_token(HandlerModule, ConnectAccount)}
         ],
         Params = http_utils:proplist_to_url_params(ParamsProplist),
-        AuthorizeEndpoint = authorize_endpoint(get_xrds(ProviderName)),
+        AuthorizeEndpoint = authorize_endpoint(get_xrds(ProviderId)),
         {ok, <<AuthorizeEndpoint/binary, "?", Params/binary>>}
     catch
         Type:Message ->
             ?error_stacktrace("Cannot get redirect URL for ~p",
-                [ProviderName]),
+                [ProviderId]),
             {error, {Type, Message}}
     end.
 
@@ -63,17 +63,17 @@ get_redirect_url(ConnectAccount, ProviderName, HandlerModule) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(ProviderName :: atom(),
+-spec validate_login(ProviderId :: atom(),
     SecretSendMethod :: secret_over_http_basic | secret_over_http_post) ->
     {ok, #oauth_account{}} | {error, term()}.
-validate_login(ProviderName, SecretSendMethod) ->
+validate_login(ProviderId, SecretSendMethod) ->
     try
         % Retrieve URL params
         ParamsProplist = gui_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
-        ClientId = auth_config:get_provider_app_id(ProviderName),
-        ClientSecret = auth_config:get_provider_app_secret(ProviderName),
+        ClientId = auth_config:get_provider_app_id(ProviderId),
+        ClientSecret = auth_config:get_provider_app_secret(ProviderId),
         % Form access token request
         % Check which way we should send secret - HTTP Basic or POST
         SecretPostParams = case SecretSendMethod of
@@ -106,7 +106,7 @@ validate_login(ProviderName, SecretSendMethod) ->
             <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
         },
         % Send request to access token endpoint
-        XRDS = get_xrds(ProviderName),
+        XRDS = get_xrds(ProviderId),
         {ok, 200, _, ResponseBinary} = http_client:post(
             access_token_endpoint(XRDS),
             Headers,
@@ -120,11 +120,11 @@ validate_login(ProviderName, SecretSendMethod) ->
 
         io:format("~nT = <<\"~s\">>.~n~n", [AccessToken]),
 
-        get_user_info(ProviderName, AccessToken, XRDS)
+        get_user_info(ProviderId, AccessToken, XRDS)
     catch
         Type:Message ->
             ?debug_stacktrace("Error in OpenID validate_login (~p) - ~p:~p",
-                [ProviderName, Type, Message]),
+                [ProviderId, Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -134,11 +134,11 @@ validate_login(ProviderName, SecretSendMethod) ->
 %% Retrieves user info for given OpenID provider and access token.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(ProviderName :: atom(), AccessToken :: binary()) ->
-    {ok, #oauth_account{}} | {error, term()}.
-get_user_info(ProviderName, AccessToken) ->
-    XRDS = get_xrds(ProviderName),
-    get_user_info(ProviderName, AccessToken, XRDS).
+-spec get_user_info(ProviderId :: atom(), AccessToken :: binary()) ->
+    {ok, #oauth_account{}} | {error, bad_access_token}.
+get_user_info(ProviderId, AccessToken) ->
+    XRDS = get_xrds(ProviderId),
+    get_user_info(ProviderId, AccessToken, XRDS).
 
 
 %%--------------------------------------------------------------------
@@ -148,9 +148,10 @@ get_user_info(ProviderName, AccessToken) ->
 %% avoid repeating requests).
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(ProviderName :: atom(), AccessToken :: binary()) ->
+-spec get_user_info(ProviderId :: atom(), AccessToken :: binary(),
+    XRDS :: proplists:proplist()) ->
     {ok, #oauth_account{}} | {error, bad_access_token}.
-get_user_info(ProviderName, AccessToken, XRDS) ->
+get_user_info(ProviderId, AccessToken, XRDS) ->
     UserInfoEndpoint = user_info_endpoint(XRDS),
 
     URL = <<UserInfoEndpoint/binary, "?access_token=", AccessToken/binary>>,
@@ -168,7 +169,7 @@ get_user_info(ProviderName, AccessToken, XRDS) ->
             % Parse JSON with user info
             JSONProplist = json_utils:decode(Body),
             ProvUserInfo = #oauth_account{
-                provider_id = ProviderName,
+                provider_id = ProviderId,
                 user_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
                 email_list = auth_utils:extract_emails(JSONProplist),
                 name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
@@ -191,9 +192,9 @@ get_user_info(ProviderName, AccessToken, XRDS) ->
 %% of openid provider (endpoints etc).
 %% @end
 %%--------------------------------------------------------------------
--spec get_xrds(ProviderName :: atom()) -> proplists:proplist().
-get_xrds(ProviderName) ->
-    ProviderConfig = auth_config:get_auth_config(ProviderName),
+-spec get_xrds(ProviderId :: atom()) -> proplists:proplist().
+get_xrds(ProviderId) ->
+    ProviderConfig = auth_config:get_auth_config(ProviderId),
     XRDSEndpoint = proplists:get_value(xrds_endpoint, ProviderConfig),
     Opts = [{ssl_lib, erlang}, {follow_redirect, true}, {max_redirect, 5}],
     {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{}, <<>>, Opts),
@@ -209,6 +210,7 @@ get_xrds(ProviderName) ->
 authorize_endpoint(XRDS) ->
     proplists:get_value(<<"authorization_endpoint">>, XRDS).
 
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -218,6 +220,7 @@ authorize_endpoint(XRDS) ->
 -spec access_token_endpoint(XRDS :: proplists:proplist()) -> binary().
 access_token_endpoint(XRDS) ->
     proplists:get_value(<<"token_endpoint">>, XRDS).
+
 
 %%--------------------------------------------------------------------
 %% @private
