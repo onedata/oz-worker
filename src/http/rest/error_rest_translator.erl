@@ -76,6 +76,10 @@ translate(?ERROR_BAD_MACAROON) ->
     {?HTTP_401_UNAUTHORIZED,
         <<"Provided authorization token is not valid">>
     };
+translate(?ERROR_BAD_BASIC_CREDENTIALS) ->
+    {?HTTP_401_UNAUTHORIZED,
+        <<"Provided basic authorization credentials are not valid">>
+    };
 translate(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(OAuthProviderId)) ->
     {?HTTP_401_UNAUTHORIZED,
         {<<"Provided access token for \"~p\" is not valid">>, [OAuthProviderId]}

@@ -560,7 +560,7 @@ authenticate_by_basic_auth(Req) ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};
                 _ ->
-                    false
+                    throw(?ERROR_BAD_BASIC_CREDENTIALS)
             end;
         _ ->
             false
