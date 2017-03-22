@@ -152,8 +152,7 @@ validate_login() ->
 %% Retrieves user info from oauth provider based on access token.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(AccessToken :: binary()) ->
-    {ok, #oauth_account{}} | {error, bad_access_token}.
+-spec get_user_info(AccessToken :: binary()) -> no_return().
 get_user_info(_AccessToken) ->
     error(unsupported).
 
