@@ -17,10 +17,10 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
--define(PROVIDER_NAME, plgrid).
+-define(PROVIDER_ID, plgrid).
 
 %% API
--export([get_redirect_url/1, validate_login/0]).
+-export([get_redirect_url/1, validate_login/0, get_user_info/1]).
 
 %%%===================================================================
 %%% API functions
@@ -58,7 +58,7 @@ get_redirect_url(ConnectAccount) ->
     catch
         Type:Message ->
             ?error_stacktrace("Cannot get redirect URL for ~p. ~p:~p",
-                [?PROVIDER_NAME, Type, Message]),
+                [?PROVIDER_ID, Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -132,7 +132,7 @@ validate_login() ->
             end, [DN1, DN2, DN3]),
 
         ProvUserInfo = #oauth_account{
-            provider_id = ?PROVIDER_NAME,
+            provider_id = ?PROVIDER_ID,
             user_id = str_utils:to_binary(Login),
             login = Login,
             email_list = Emails,
@@ -146,6 +146,16 @@ validate_login() ->
             {error, {Type, Message}}
     end.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user info from oauth provider based on access token.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_info(AccessToken :: binary()) -> no_return().
+get_user_info(_AccessToken) ->
+    error(unsupported).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -157,12 +167,13 @@ validate_login() ->
 %%--------------------------------------------------------------------
 -spec plgrid_endpoint() -> binary().
 plgrid_endpoint() ->
-    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)),
+    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_ID)),
     {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{
         <<"Accept">> => <<"application/xrds+xml;level=1, */*">>,
         <<"Connection">> => <<"close">>
     }, <<>>, [{follow_redirect, true}, {max_redirect, 5}, {ssl_lib, erlang}]),
     discover_op_endpoint(XRDS).
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -176,6 +187,7 @@ discover_op_endpoint(XRDS) ->
     {Xml, _} = xmerl_scan:string(binary_to_list(XRDS)),
     list_to_binary(xml_extract_value("URI", Xml)).
 
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -186,6 +198,7 @@ discover_op_endpoint(XRDS) ->
 xml_extract_value(KeyName, Xml) ->
     [#xmlElement{content = [#xmlText{value = Value} | _]}] = xmerl_xpath:string("//" ++ KeyName, Xml),
     Value.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -206,6 +219,7 @@ parse_teams(XMLContent) ->
             binary_to_list(unicode:characters_to_binary(Value, unicode))
         end, TeamList).
 
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -223,6 +237,7 @@ find_XML_node(NodeName, #xmlElement{} = XMLElement) ->
 
 find_XML_node(_NodeName, _) ->
     undefined.
+
 
 %%--------------------------------------------------------------------
 %% @private

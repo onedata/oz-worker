@@ -163,6 +163,7 @@ is_authorized(Req, State) ->
     try
         % Try to authenticate the client using several methods.
         Client = authenticate(Req, [
+            fun authenticate_by_oauth_provider/1,
             fun authenticate_by_basic_auth/1,
             fun authenticate_by_macaroons/1,
             fun authenticate_by_provider_certs/1
@@ -489,7 +490,7 @@ translate_response(TranslatorModule, Operation, EntityId, Resource, Result) ->
 -spec authenticate(Req :: cowboy_req:req(),
     AuthFuns :: [fun((cowboy_req:req()) -> false | {true, #client{}})]) ->
     #client{}.
-authenticate(Req, []) ->
+authenticate(_Req, []) ->
     ?NOBODY;
 authenticate(Req, [AuthMethod | Rest]) ->
     case AuthMethod(Req) of
@@ -497,6 +498,46 @@ authenticate(Req, [AuthMethod | Rest]) ->
             Client;
         false ->
             authenticate(Req, Rest)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authenticate client by provided token, if its prefix matches
+%% any of the configured oauth providers supporting authority delegation.
+%% @end
+%%--------------------------------------------------------------------
+-spec authenticate_by_oauth_provider(Req :: cowboy_req:req()) ->
+    false | {true, #client{}}.
+authenticate_by_oauth_provider(Req) ->
+    case cowboy_req:header(<<"x-auth-token">>, Req) of
+        {undefined, _} ->
+            false;
+        {AccessToken, _} ->
+            AuthDelegationProviders = auth_config:get_providers_with_auth_delegation(),
+            MatchingProviders = lists:dropwhile(
+                fun({_ProvId, TokenPrefix}) ->
+                    % If prefix matches, return false:
+                    % dropwhile will stop and return the rest
+                    % of the list with matched provider at the beginning
+                    not bin_starts_with(AccessToken, TokenPrefix)
+                end, AuthDelegationProviders),
+            case MatchingProviders of
+                [] ->
+                    false;
+                [{ProviderId, TokPrefix} | _] ->
+                    Len = byte_size(TokPrefix),
+                    <<TokPrefix:Len/binary, AccessTokenNoPrefix/binary>> = AccessToken,
+                    case auth_utils:acquire_user_by_external_access_token(
+                        ProviderId, AccessTokenNoPrefix
+                    ) of
+                        {error, bad_access_token} ->
+                            throw(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId));
+                        {_, UserId} ->
+                            {true, #client{type = user, id = UserId}}
+                    end
+            end
     end.
 
 
@@ -519,7 +560,7 @@ authenticate_by_basic_auth(Req) ->
                     Client = #client{type = user, id = UserId},
                     {true, Client};
                 _ ->
-                    false
+                    throw(?ERROR_BAD_BASIC_CREDENTIALS)
             end;
         _ ->
             false
@@ -702,3 +743,15 @@ method_to_operation(put) -> create;
 method_to_operation(get) -> get;
 method_to_operation(patch) -> update;
 method_to_operation(delete) -> delete.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Checks if given binary starts with given prefix.
+%% @end
+%%--------------------------------------------------------------------
+-spec bin_starts_with(Subject :: binary(), Prefix :: binary()) -> boolean().
+bin_starts_with(Subject, Prefix) ->
+    FirstChars = binary:part(Subject, 0, byte_size(Prefix)),
+    FirstChars =:= Prefix.

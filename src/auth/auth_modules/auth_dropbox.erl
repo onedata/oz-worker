@@ -16,10 +16,10 @@
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 
--define(PROVIDER_NAME, dropbox).
+-define(PROVIDER_ID, dropbox).
 
 %% API
--export([get_redirect_url/1, validate_login/0]).
+-export([get_redirect_url/1, validate_login/0, get_user_info/1]).
 
 %%%===================================================================
 %%% API
@@ -34,7 +34,7 @@
 get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
-            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_ID)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"response_type">>, <<"code">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
@@ -43,7 +43,7 @@ get_redirect_url(ConnectAccount) ->
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
-            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_NAME]),
+            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_ID]),
             {error, {Type, Message}}
     end.
 
@@ -61,8 +61,8 @@ validate_login() ->
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Prepare basic auth code
-        AuthEncoded = base64:encode(<<(auth_config:get_provider_app_id(?PROVIDER_NAME))/binary, ":",
-            (auth_config:get_provider_app_secret(?PROVIDER_NAME))/binary>>),
+        AuthEncoded = base64:encode(<<(auth_config:get_provider_app_id(?PROVIDER_ID))/binary, ":",
+            (auth_config:get_provider_app_secret(?PROVIDER_ID))/binary>>),
         % Form access token request
         NewParamsProplist = [
             {<<"code">>, <<Code/binary>>},
@@ -80,26 +80,38 @@ validate_login() ->
         JSONProplist = json_utils:decode(Response),
         AccessToken = proplists:get_value(<<"access_token">>, JSONProplist),
 
-        % Send request to Dropbox endpoint
-        {ok, 200, _, JSON} = http_client:get(user_info_endpoint(), #{
-            <<"Authorization">> => <<"Bearer ", AccessToken/binary>>
-        }, <<"">>, [{ssl_lib, erlang}]),
-
-        % Parse received JSON
-        UserInfoProplist = json_utils:decode(JSON),
-        ProvUserInfo = #oauth_account{
-            provider_id = ?PROVIDER_NAME,
-            user_id = auth_utils:get_value_binary(<<"uid">>, JSONProplist),
-            email_list = auth_utils:extract_emails(UserInfoProplist),
-            name = auth_utils:get_value_binary(<<"display_name">>, UserInfoProplist),
-            login = auth_utils:get_value_binary(<<"login">>, UserInfoProplist)
-        },
-        {ok, ProvUserInfo}
+        get_user_info(AccessToken)
     catch
         Type:Message ->
             ?debug_stacktrace("Error in ~p:validate_login - ~p:~p", [?MODULE, Type, Message]),
             {error, {Type, Message}}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user info from oauth provider based on access token.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_info(AccessToken :: binary()) ->
+    {ok, #oauth_account{}} | {error, bad_access_token}.
+get_user_info(AccessToken) ->
+    % Send request to Dropbox endpoint
+    {ok, 200, _, JSON} = http_client:get(user_info_endpoint(), #{
+        <<"Authorization">> => <<"Bearer ", AccessToken/binary>>
+    }, <<"">>, [{ssl_lib, erlang}]),
+
+    % Parse received JSON
+    UserInfoProplist = json_utils:decode(JSON),
+    ProvUserInfo = #oauth_account{
+        provider_id = ?PROVIDER_ID,
+        user_id = auth_utils:get_value_binary(<<"uid">>, UserInfoProplist),
+        email_list = auth_utils:extract_emails(UserInfoProplist),
+        name = auth_utils:get_value_binary(<<"display_name">>, UserInfoProplist),
+        login = auth_utils:get_value_binary(<<"login">>, UserInfoProplist)
+    },
+    {ok, ProvUserInfo}.
+
 
 %%%===================================================================
 %%% Internal functions
@@ -112,22 +124,22 @@ validate_login() ->
 %%--------------------------------------------------------------------
 -spec authorize_endpoint() -> binary().
 authorize_endpoint() ->
-    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Provider endpoint, where access token is aquired.
+%% @doc Provider endpoint, where access token is acquired.
 %% @end
 %%--------------------------------------------------------------------
 -spec access_token_endpoint() -> binary().
 access_token_endpoint() ->
-    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Provider endpoint, where user info is aquired.
+%% @doc Provider endpoint, where user info is acquired.
 %% @end
 %%--------------------------------------------------------------------
 -spec user_info_endpoint() -> binary().
 user_info_endpoint() ->
-    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
