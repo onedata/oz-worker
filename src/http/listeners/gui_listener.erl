@@ -75,7 +75,7 @@ start() ->
                 {"/share/:share_id", public_share_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
                 rest_listener:routes(),
-                docs_routes()
+                static_routes()
             ])}
         ]),
 
@@ -140,19 +140,19 @@ healthcheck() ->
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Returns a Cowboy-understandable PathList of docs routes.
+%% @doc Returns a Cowboy-understandable PathList of static routes.
 %% @end
 %%--------------------------------------------------------------------
--spec docs_routes() -> [{Path :: string(), Module :: module(), State :: term()}].
-docs_routes() ->
+-spec static_routes() -> [{Path :: string(), Module :: module(), State :: term()}].
+static_routes() ->
     % Resolve static files root. First, check if there is a non-empty dir
     % located in gui_custom_static_root. If not, use default.
-    {ok, CstmRoot} = application:get_env(?APP_NAME, gui_custom_static_root),
+    {ok, CustomRoot} = application:get_env(?APP_NAME, gui_custom_static_root),
     {ok, DefRoot} = application:get_env(?APP_NAME, gui_default_static_root),
-    DocRoot = case file:list_dir_all(CstmRoot) of
+    DocRoot = case file:list_dir_all(CustomRoot) of
         {error, enoent} -> DefRoot;
         {ok, []} -> DefRoot;
-        {ok, _} -> CstmRoot
+        {ok, _} -> CustomRoot
     end,
 
     Routes = [{"/[...]", gui_static_handler, {dir, DocRoot}}],
