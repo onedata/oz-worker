@@ -11,7 +11,7 @@
 
 {application, oz_worker, [
     {description, "OneZone worker node."},
-    {vsn, "3.0.0-rc12"},
+    {vsn, "3.0.0-rc13"},
     {registered, [oz_worker_sup]},
     {applications, [
         kernel,
