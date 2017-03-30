@@ -118,6 +118,7 @@ create_record(<<"space">>, Data) ->
             UserId = gui_session:get_user_id(),
             {ok, SpaceId} = space_logic:create(?USER(UserId), Name),
             user_data_backend:push_user_record_when_synchronized(UserId),
+            entity_graph:ensure_up_to_date(),
             {ok, space_record(SpaceId, UserId)};
         _ ->
             gui_error:report_error(<<"Invalid space name">>)

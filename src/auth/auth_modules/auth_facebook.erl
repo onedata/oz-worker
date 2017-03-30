@@ -16,10 +16,10 @@
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 
--define(PROVIDER_NAME, facebook).
+-define(PROVIDER_ID, facebook).
 
 %% API
--export([get_redirect_url/1, validate_login/0]).
+-export([get_redirect_url/1, validate_login/0, get_user_info/1]).
 
 %%%===================================================================
 %%% API functions
@@ -34,7 +34,7 @@
 get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
-            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_ID)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"scope">>, <<"email">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
@@ -43,7 +43,7 @@ get_redirect_url(ConnectAccount) ->
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
-            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_NAME]),
+            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_ID]),
             {error, {Type, Message}}
     end.
 
@@ -62,8 +62,8 @@ validate_login() ->
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request
         NewParamsProplist = [
-            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_NAME)},
-            {<<"client_secret">>, auth_config:get_provider_app_secret(?PROVIDER_NAME)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_ID)},
+            {<<"client_secret">>, auth_config:get_provider_app_secret(?PROVIDER_ID)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"code">>, <<Code/binary>>}
         ],
@@ -78,29 +78,39 @@ validate_login() ->
         % Parse out received access token
         AccessToken = proplists:get_value(<<"access_token">>, cow_qs:parse_qs(Response)),
 
-        % Form user info request
-        URL2 = <<(user_info_endpoint())/binary,
-            "?access_token=", AccessToken/binary,
-            "&fields=email,name">>,
-        % Send request to Facebook endpoint
-        {ok, 200, _, JSON} = http_client:get(URL2, #{
-            <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
-        }, <<"">>, [{ssl_lib, erlang}]),
-
-        % Parse received JSON
-        JSONProplist = json_utils:decode(JSON),
-        ProvUserInfo = #oauth_account{
-            provider_id = ?PROVIDER_NAME,
-            user_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
-            email_list = auth_utils:extract_emails(JSONProplist),
-            name = auth_utils:get_value_binary(<<"name">>, JSONProplist)
-        },
-        {ok, ProvUserInfo}
+        get_user_info(AccessToken)
     catch
         Type:Message ->
             ?debug_stacktrace("Error in ~p:validate_login - ~p:~p", [?MODULE, Type, Message]),
             {error, {Type, Message}}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user info from oauth provider based on access token.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_info(AccessToken :: binary()) ->
+    {ok, #oauth_account{}} | {error, bad_access_token}.
+get_user_info(AccessToken) ->
+    UserInfoUrl = <<(user_info_endpoint())/binary,
+        "?access_token=", AccessToken/binary,
+        "&fields=email,name">>,
+    % Send request to Facebook endpoint
+    {ok, 200, _, JSON} = http_client:get(UserInfoUrl, #{
+        <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+    }, <<"">>, [{ssl_lib, erlang}]),
+
+    % Parse received JSON
+    JSONProplist = json_utils:decode(JSON),
+    ProvUserInfo = #oauth_account{
+        provider_id = ?PROVIDER_ID,
+        user_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
+        email_list = auth_utils:extract_emails(JSONProplist),
+        name = auth_utils:get_value_binary(<<"name">>, JSONProplist)
+    },
+    {ok, ProvUserInfo}.
 
 %%%===================================================================
 %%% Internal functions
@@ -113,22 +123,22 @@ validate_login() ->
 %%--------------------------------------------------------------------
 -spec authorize_endpoint() -> binary().
 authorize_endpoint() ->
-    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Provider endpoint, where access token is aquired.
+%% @doc Provider endpoint, where access token is acquired.
 %% @end
 %%--------------------------------------------------------------------
 -spec access_token_endpoint() -> binary().
 access_token_endpoint() ->
-    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc Provider endpoint, where user info is aquired.
+%% @doc Provider endpoint, where user info is acquired.
 %% @end
 %%--------------------------------------------------------------------
 -spec user_info_endpoint() -> binary().
 user_info_endpoint() ->
-    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)).
+    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).

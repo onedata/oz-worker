@@ -23,6 +23,10 @@
 % Errors connected with bad data
 -define(ERROR_MALFORMED_DATA, {error, bad_data}).
 -define(ERROR_BAD_MACAROON, {error, bad_macaroon}).
+-define(ERROR_BAD_BASIC_CREDENTIALS, {error, bad_basic_credentials}).
+-define(ERROR_BAD_EXTERNAL_ACCESS_TOKEN(__OAuthProviderId),
+    {error, {bad_external_access_token, __OAuthProviderId}}
+).
 -define(ERROR_MISSING_REQUIRED_VALUE(__Key),
     {error, {missing_required_data, __Key}}
 ).

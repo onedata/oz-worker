@@ -32,8 +32,18 @@
 %% has been pre-validated. Beside validating the request,
 %% the function must retrieve user info from the provider.
 %% Must return oauth_account record upon success,
-%% or error and its desription otherwise.
+%% or error and its description otherwise.
 %% @end
 %%--------------------------------------------------------------------
 -callback validate_login() ->
     {ok, #oauth_account{}} | {error, term()}.
+
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user info from oauth provider based on access token.
+%% @end
+%%--------------------------------------------------------------------
+-callback get_user_info(AccessToken :: binary()) ->
+    {ok, #oauth_account{}} | {error, bad_access_token}.

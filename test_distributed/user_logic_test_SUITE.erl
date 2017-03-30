@@ -22,7 +22,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1, end_per_testcase/2]).
+-export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([
     basic_auth_login_test/1,
     automatic_group_membership_test/1,
@@ -175,11 +175,6 @@ end_per_suite(_Config) ->
     hackney:stop(),
     application:stop(etls).
 
-end_per_testcase(Config, set_space_name_mapping_test) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_validate_and_unload(Nodes, od_space);
-end_per_testcase(_Config, _) ->
-    ok.
 
 %%%===================================================================
 %%% Internal functions

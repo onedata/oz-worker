@@ -220,7 +220,7 @@ before(ModelName, Method, _Level, Context) ->
 %% @end
 %%--------------------------------------------------------------------
 
--spec get_by_criterion(Criterion :: {connected_account_user_id, {ProviderID :: atom(), UserID :: binary()}} |
+-spec get_by_criterion(Criterion :: {oauth_user_id, {ProviderID :: atom(), UserID :: binary()}} |
 {email, binary()} | {alias, binary()}) ->
     {ok, #document{}} | {error, any()}.
 
@@ -263,7 +263,7 @@ get_by_criterion({alias, Value}) ->
             {ok, Result}
     end;
 
-get_by_criterion({connected_account_user_id, {ProviderID, UserID}}) ->
+get_by_criterion({oauth_user_id, {ProviderID, UserID}}) ->
     Filter = fun
         ('$end_of_table', Acc) ->
             {abort, Acc};
