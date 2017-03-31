@@ -592,7 +592,7 @@ space_routes() ->
             method = get, entity_id = ?BINDING(id), resource = providers
         }},
         {<<"/spaces/:id/providers/token">>, R#rest_req{
-            method = post, entity_id = ?BINDING(id), resource = invite_user_token
+            method = post, entity_id = ?BINDING(id), resource = invite_provider_token
         }},
         % TODO VFS-2918
         {<<"/spaces/:id/providers/token">>, R#rest_req{
