@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc14
+
+* HOTFIX fix a bug in REST routing
+
+
 ### 3.0.0-rc13
 
 * VFS-3118 Change default env value for custom gui root
