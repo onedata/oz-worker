@@ -451,23 +451,11 @@ authorize(get, _SpaceId, data, ?USER(UserId)) -> [
     auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST)
 ];
 
-authorize(get, _SpaceId, data, ?PROVIDER(ProviderId)) ->
-    auth_by_support(ProviderId);
-
 authorize(get, _SpaceId, shares, ?USER(UserId)) ->
     auth_by_membership(UserId);
 
-authorize(get, _SpaceId, shares, ?PROVIDER(ProviderId)) ->
-    auth_by_support(ProviderId);
-
 authorize(get, _SpaceId, {share, _ShareId}, ?USER(UserId)) ->
     auth_by_membership(UserId);
-
-authorize(get, _SpaceId, {share, _ShareId}, ?PROVIDER(ProviderId)) ->
-    auth_by_support(ProviderId);
-
-authorize(get, _SpaceId, providers, ?PROVIDER(ProviderId)) ->
-    auth_by_support(ProviderId);
 
 authorize(get, _SpaceId, users, ?USER(UserId)) -> [
     auth_by_privilege(UserId, ?SPACE_VIEW),
@@ -499,6 +487,10 @@ authorize(get, _SpaceId, {provider, _ProviderId}, ?USER(UserId)) -> [
 authorize(get, _SpaceId, _, ?USER(UserId)) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(UserId, ?SPACE_VIEW);
+
+authorize(get, _SpaceId, _, ?PROVIDER(ProviderId)) ->
+    % Providers are allowed to view space data if they support it
+    auth_by_support(ProviderId);
 
 
 authorize(update, _SpaceId, entity, ?USER(UserId)) ->
