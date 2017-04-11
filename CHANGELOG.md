@@ -4,11 +4,45 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc14
+
+* HOTFIX fix a bug in REST routing
+
+
+### 3.0.0-rc13
+
+* VFS-3118 Change default env value for custom gui root
+* VFS-3097 Wait for effective graph synchronization after new space is created via GUI
+* VFS-3097 Allow using external access token to authorize REST operations
+
+
 ### 3.0.0-rc12
 
+* VFS-3006 Remove annotations.
+* VFS-2719 Do not remove relations of entity being deleted, as this caused unnecessary db operations
+* VFS-2719 Trigger user subscriptions upon space rename
+* VFS-2719 Add authorization case for providers accessing shares
+* VFS-2719 Use a union of direct and effective relations in subscriptions for faster propagation
+* VFS-2719 Do not re-check provider connectivity if subscriptions channel is down
+* VFS-2719 Set default entity names to empty string
+* VFS-2719 Remove entity from dirty queue if it no longer exists
+* VFS-2496 Push new provider record after unsupport space
+* VFS-2496 Push new space record after unsupport space
+* VFS-2719 Migrate all calls to user_logic to new api
+* VFS-2719 Implement REST translators for all modules
+* VFS-2496 User real user id rather than 0 in gui backend
+* VFS-2882 Add group data backend
+* VFS-2719 Completed user REST routes
+* VFS-2882 Push providers upon group join that adds a space to user
+* VFS-2882 Add support for joining groups via gui
+* VFS-2898 Supervise ozpca process
+* VFS-2719 Add differentiation between unauthorized and forbidden in entity logic
+* VFS-2719 Use OZ hostname from app.config everywhere (rahter than from dns.config)
+* VFS-2719 Account oz privileges in effective graph
+* VFS-2719 Add support for collecting eff relationship intermediaries
+* VFs-2719 Create first placeholder for eff_graph logic
 * VFS-2496 Allow to set null default provider or space
 * VFS-2931 Reduce number of kept rotated log files
-* VFS-2883 Update oz-gui-default reference
 * VFS-2883 Add space support sizes information per provider in space data backend
 * VFS-2883 Add space size to space record served by space data backend
 * VFS-2883 Add provider hostname to provider record served by proivder data backend
