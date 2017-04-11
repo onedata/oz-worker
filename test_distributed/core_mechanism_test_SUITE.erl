@@ -19,6 +19,7 @@
 -include_lib("kernel/src/inet_dns.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_common_internal.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
+-include_lib("cluster_worker/include/global_definitions.hrl").
 
 -define(TIMEOUT, timer:minutes(5)).
 -define(call_store(N, F, A), ?call(N, datastore, F, A)).
@@ -36,8 +37,16 @@
 all() -> ?ALL([dns_get_all_ips_test, test_models]).
 
 test_models(Config) ->
-    [Worker | _] = ?config(oz_worker_nodes, Config),
+    [Worker | _] = Workers = ?config(oz_worker_nodes, Config),
     Models = ?call(Worker, datastore_config, models, []),
+
+    lists:foreach(fun(Worker) ->
+        test_utils:set_env(Worker, ?CLUSTER_WORKER_APP_NAME, cache_to_disk_delay_ms, timer:seconds(1)),
+%%        test_utils:set_env(Worker, ?CLUSTER_WORKER_APP_NAME, cache_to_disk_force_delay_ms, timer:seconds(2)),
+        % TODO - change to 2 seconds
+        test_utils:set_env(Worker, ?CLUSTER_WORKER_APP_NAME, cache_to_disk_force_delay_ms, timer:seconds(1)),
+        test_utils:set_env(Worker, ?CLUSTER_WORKER_APP_NAME, datastore_pool_queue_flush_delay, 1000)
+    end, Workers),
 
     lists:foreach(fun(ModelName) ->
 %%        ct:print("Module ~p", [ModelName]),
