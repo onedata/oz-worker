@@ -408,15 +408,6 @@ group_routes() ->
         {<<"/groups/:id/spaces/:sid">>, R#rest_req{
             method = delete, entity_id = ?BINDING(id), resource = {space, ?BINDING(sid)}
         }},
-        {<<"/groups/:id/spaces/:sid/alias">>, R#rest_req{
-            method = get, entity_id = ?BINDING(id), resource = {space_alias, ?BINDING(sid)}
-        }},
-        {<<"/groups/:id/spaces/:sid/alias">>, R#rest_req{
-            method = put, entity_id = ?BINDING(id), resource = {space_alias, ?BINDING(sid)}
-        }},
-        {<<"/groups/:id/spaces/:sid/alias">>, R#rest_req{
-            method = delete, entity_id = ?BINDING(id), resource = {space_alias, ?BINDING(sid)}
-        }},
         {<<"/groups/:id/effective_spaces">>, R#rest_req{
             method = get, entity_id = ?BINDING(id), resource = eff_spaces
         }},
