@@ -43,9 +43,9 @@
 -spec save(datastore:document()) -> {ok, datastore:key()} | datastore:generic_error().
 save(#document{value = Sess} = Document) ->
     Timestamp = os:timestamp(),
-    datastore:save(?STORE_LEVEL, Document#document{value = Sess#session{
+    model:execute_with_default_context(?MODULE, save, [Document#document{value = Sess#session{
         accessed = Timestamp
-    }}).
+    }}]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -55,7 +55,8 @@ save(#document{value = Sess} = Document) ->
 -spec update(datastore:key(), Diff :: datastore:document_diff()) ->
     {ok, datastore:key()} | datastore:update_error().
 update(Key, Diff) when is_map(Diff) ->
-    datastore:update(?STORE_LEVEL, ?MODULE, Key, Diff#{accessed => os:timestamp()});
+    model:execute_with_default_context(?MODULE, update, [Key,
+        Diff#{accessed => os:timestamp()}]);
 update(Key, Diff) when is_function(Diff) ->
     NewDiff = fun(Sess) ->
         case Diff(Sess) of
@@ -63,7 +64,7 @@ update(Key, Diff) when is_function(Diff) ->
             {error, Reason} -> {error, Reason}
         end
               end,
-    datastore:update(?STORE_LEVEL, ?MODULE, Key, NewDiff).
+    model:execute_with_default_context(?MODULE, update, [Key, NewDiff]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -73,9 +74,9 @@ update(Key, Diff) when is_function(Diff) ->
 -spec create(datastore:document()) -> {ok, datastore:key()} | datastore:create_error().
 create(#document{value = Sess} = Document) ->
     Timestamp = os:timestamp(),
-    datastore:create(?STORE_LEVEL, Document#document{value = Sess#session{
+    model:execute_with_default_context(?MODULE, create, [Document#document{value = Sess#session{
         accessed = Timestamp
-    }}).
+    }}]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -85,7 +86,7 @@ create(#document{value = Sess} = Document) ->
 %%--------------------------------------------------------------------
 -spec get(datastore:key()) -> {ok, datastore:document()} | datastore:get_error().
 get(Key) ->
-    case datastore:get(?STORE_LEVEL, ?MODULE, Key) of
+    case model:execute_with_default_context(?MODULE, get, [Key]) of
         {ok, Doc} ->
             session:update(Key, #{}),
             {ok, Doc};
@@ -100,7 +101,7 @@ get(Key) ->
 %%--------------------------------------------------------------------
 -spec delete(datastore:key()) -> ok | datastore:generic_error().
 delete(Key) ->
-    datastore:delete(?STORE_LEVEL, ?MODULE, Key).
+    model:execute_with_default_context(?MODULE, delete, [Key]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -109,7 +110,7 @@ delete(Key) ->
 %%--------------------------------------------------------------------
 -spec exists(datastore:key()) -> datastore:exists_return().
 exists(Key) ->
-    case ?RESPONSE(datastore:exists(?STORE_LEVEL, ?MODULE, Key)) of
+    case ?RESPONSE(model:execute_with_default_context(?MODULE, exists, [Key])) of
         true ->
             update(Key, #{}),
             true;
