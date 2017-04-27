@@ -238,7 +238,7 @@ get_by_criterion({email, Value}) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    case datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []) of
+    case model:execute_with_default_context(?MODULE, list, [Filter, []]) of
         {ok, []} ->
             {error, {not_found, od_user}};
         {ok, [Result | _]} ->
@@ -258,7 +258,7 @@ get_by_criterion({alias, Value}) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    case datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []) of
+    case model:execute_with_default_context(?MODULE, list, [Filter, []]) of
         {ok, []} ->
             {error, {not_found, od_user}};
         {ok, [Result | _]} ->
@@ -285,7 +285,7 @@ get_by_criterion({oauth_user_id, {ProviderID, UserID}}) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    case datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []) of
+    case model:execute_with_default_context(?MODULE, list, [Filter, []]) of
         {ok, []} ->
             {error, {not_found, od_user}};
         {ok, [Result | _]} ->

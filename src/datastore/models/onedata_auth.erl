@@ -152,4 +152,4 @@ get_auth_by_user_id(UserId) ->
         (_, Acc) ->
             {next, Acc}
     end,
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, Filter, []).
+    model:execute_with_default_context(?MODULE, list, [Filter, []]).

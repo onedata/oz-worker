@@ -134,7 +134,7 @@ before(_ModelName, _Method, _Level, _Context) ->
 -spec create_or_update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
     {ok, datastore:ext_key()} | datastore:update_error().
 create_or_update(Doc, Diff) ->
-    datastore:create_or_update(?STORE_LEVEL, Doc, Diff).
+    model:execute_with_default_context(?MODULE, create_or_update, [Doc, Diff]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -143,5 +143,5 @@ create_or_update(Doc, Diff) ->
 %%--------------------------------------------------------------------
 -spec all() -> {ok, [datastore:document()]} | no_return().
 all() ->
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).
+    model:execute_with_default_context(?MODULE, list, [?GET_ALL, []]).
 
