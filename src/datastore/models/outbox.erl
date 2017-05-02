@@ -130,6 +130,6 @@ before(_ModelName, _Method, _Level, _Context) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_or_update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
-    {ok, datastore:ext_key()} | datastore:update_error().
+    {ok, datastore:ext_key()} | datastore:generic_error().
 create_or_update(Doc, Diff) ->
     model:execute_with_default_context(?MODULE, create_or_update, [Doc, Diff]).
