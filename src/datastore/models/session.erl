@@ -43,9 +43,11 @@
 -spec save(datastore:document()) -> {ok, datastore:key()} | datastore:generic_error().
 save(#document{value = Sess} = Document) ->
     Timestamp = os:timestamp(),
-    model:execute_with_default_context(?MODULE, save, [Document#document{value = Sess#session{
-        accessed = Timestamp
-    }}]).
+    model:execute_with_default_context(?MODULE, save, [
+        Document#document{value = Sess#session{
+            accessed = Timestamp
+        }}
+    ]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -74,9 +76,11 @@ update(Key, Diff) when is_function(Diff) ->
 -spec create(datastore:document()) -> {ok, datastore:key()} | datastore:create_error().
 create(#document{value = Sess} = Document) ->
     Timestamp = os:timestamp(),
-    model:execute_with_default_context(?MODULE, create, [Document#document{value = Sess#session{
-        accessed = Timestamp
-    }}]).
+    model:execute_with_default_context(?MODULE, create, [
+        Document#document{value = Sess#session{
+            accessed = Timestamp
+        }}
+    ]).
 
 %%--------------------------------------------------------------------
 %% @doc

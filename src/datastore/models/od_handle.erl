@@ -98,9 +98,11 @@ actual_timestamp() ->
 -spec save(datastore:document()) ->
     {ok, datastore:ext_key()} | datastore:generic_error().
 save(Document = #document{value = Handle}) ->
-    model:execute_with_default_context(?MODULE, save,
-        [Document#document{value = Handle#od_handle{timestamp =
-        od_handle:actual_timestamp()}}]).
+    model:execute_with_default_context(?MODULE, save, [
+        Document#document{value = Handle#od_handle{
+            timestamp = od_handle:actual_timestamp()
+        }}
+    ]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -120,9 +122,11 @@ update(Key, Diff) ->
 -spec create(datastore:document()) ->
     {ok, datastore:ext_key()} | datastore:create_error().
 create(Document = #document{value = Handle}) ->
-    model:execute_with_default_context(?MODULE, create,
-        [Document#document{value = Handle#od_handle{timestamp =
-        od_handle:actual_timestamp()}}]).
+    model:execute_with_default_context(?MODULE, create, [
+        Document#document{value = Handle#od_handle{
+            timestamp = od_handle:actual_timestamp()
+        }}
+    ]).
 
 %%--------------------------------------------------------------------
 %% @doc
