@@ -76,7 +76,7 @@ validate_login() ->
         }, <<"">>, [{ssl_lib, erlang}]),
 
         % Parse out received access token
-        AccessToken = proplists:get_value(<<"access_token">>, cow_qs:parse_qs(Response)),
+        AccessToken = maps:get(<<"access_token">>, json_utils:decode_map(Response)),
 
         get_user_info(AccessToken)
     catch
