@@ -141,9 +141,13 @@ public_rpc_backend() -> public_rpc_backend.
     {ok, proplists:proplist()} | gui_error:error_result().
 session_details() ->
     FirstLogin = gui_session:get_value(firstLogin, false),
+    {_AppId, _AppName, AppVersion} = lists:keyfind(
+        ?APP_NAME, 1, application:loaded_applications()
+    ),
     Res = [
         {<<"userId">>, gui_session:get_user_id()},
-        {<<"firstLogin">>, FirstLogin}
+        {<<"firstLogin">>, FirstLogin},
+        {<<"serviceVersion">>, str_utils:to_binary(AppVersion)}
     ],
     {ok, Res}.
 
