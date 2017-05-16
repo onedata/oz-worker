@@ -9,7 +9,7 @@
 %%% via RHEA KeyCloak OpenID Connect.
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_rhea).
+-module(auth_keycloak).
 -behaviour(auth_module_behaviour).
 
 -include_lib("ctool/include/logging.hrl").
