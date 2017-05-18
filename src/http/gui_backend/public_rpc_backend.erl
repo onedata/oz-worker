@@ -34,8 +34,12 @@
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
 handle(<<"getZoneName">>, _) ->
     {ok, ZoneName} = application:get_env(?APP_NAME, oz_name),
+    {_AppId, _AppName, AppVersion} = lists:keyfind(
+        ?APP_NAME, 1, application:loaded_applications()
+    ),
     {ok, [
-        {<<"zoneName">>, str_utils:to_binary(ZoneName)}
+        {<<"zoneName">>, str_utils:to_binary(ZoneName)},
+        {<<"serviceVersion">>, str_utils:to_binary(AppVersion)}
     ]};
 
 handle(<<"getSupportedAuthorizers">>, _) ->
