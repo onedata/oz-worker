@@ -525,7 +525,8 @@ delete_with_relations(EntityType, EntityId) ->
         % be updating the entity)
         ok = sync_on_entity(EntityType, EntityId, fun() ->
             EntityType:delete(EntityId)
-        end)
+        end),
+        schedule_refresh()
     catch
         Type:Message ->
             ?error_stacktrace(
