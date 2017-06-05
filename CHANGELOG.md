@@ -4,6 +4,21 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc15
+
+* VFS-3251 Updating GUI to 3.0.0-rc15
+* VFS-3245 Schedule effective graph refresh after entity deletion
+* VFS-3181 Add an RPC call to retrieve service version info
+* VFS-3181 Using GUI VFS-3172 with service version display
+* Add service version info to sessionDetails in GUI
+* VFS-3213 Update cberl reference
+* VFS-3213 Add libcouchbase package dependency
+* VFS-3146 Update models specyfications
+* VFS-3146 Update datastore models to use new datastore API
+* VFS-3132 Remove invalid paths from rest routes
+* VFS-3088 Integrate with new datastore
+
+
 ### 3.0.0-rc14
 
 * HOTFIX fix a bug in REST routing
