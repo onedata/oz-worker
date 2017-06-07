@@ -18,8 +18,8 @@
 %% API
 -export([
     get_redirect_url/3,
-    validate_login/2,
-    get_user_info/2, get_user_info/3
+    validate_login/3,
+    get_user_info/3, get_user_info/4
 ]).
 
 %%%===================================================================
@@ -64,9 +64,10 @@ get_redirect_url(ConnectAccount, ProviderId, HandlerModule) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_login(ProviderId :: atom(),
-    SecretSendMethod :: secret_over_http_basic | secret_over_http_post) ->
+    SecretSendMethod :: secret_over_http_basic | secret_over_http_post,
+    AccessTokenSendMethod :: access_token_in_url | access_token_in_header) ->
     {ok, #oauth_account{}} | {error, term()}.
-validate_login(ProviderId, SecretSendMethod) ->
+validate_login(ProviderId, SecretSendMethod, AccessTokenSendMethod) ->
     try
         % Retrieve URL params
         ParamsProplist = gui_ctx:get_url_params(),
@@ -118,7 +119,7 @@ validate_login(ProviderId, SecretSendMethod) ->
         Response = json_utils:decode(ResponseBinary),
         AccessToken = proplists:get_value(<<"access_token">>, Response),
 
-        get_user_info(ProviderId, AccessToken, XRDS)
+        get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS)
     catch
         Type:Message ->
             ?debug_stacktrace("Error in OpenID validate_login (~p) - ~p:~p",
@@ -132,11 +133,13 @@ validate_login(ProviderId, SecretSendMethod) ->
 %% Retrieves user info for given OpenID provider and access token.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(ProviderId :: atom(), AccessToken :: binary()) ->
+-spec get_user_info(ProviderId :: atom(),
+    AccessTokenSendMethod :: access_token_in_url | access_token_in_header,
+    AccessToken :: binary()) ->
     {ok, #oauth_account{}} | {error, bad_access_token}.
-get_user_info(ProviderId, AccessToken) ->
+get_user_info(ProviderId, AccessTokenSendMethod, AccessToken) ->
     XRDS = get_xrds(ProviderId),
-    get_user_info(ProviderId, AccessToken, XRDS).
+    get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS).
 
 
 %%--------------------------------------------------------------------
@@ -146,18 +149,32 @@ get_user_info(ProviderId, AccessToken) ->
 %% avoid repeating requests).
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(ProviderId :: atom(), AccessToken :: binary(),
+-spec get_user_info(ProviderId :: atom(),
+    AccessTokenSendMethod :: access_token_in_url | access_token_in_header,
+    AccessToken :: binary(),
     XRDS :: proplists:proplist()) ->
     {ok, #oauth_account{}} | {error, bad_access_token}.
-get_user_info(ProviderId, AccessToken, XRDS) ->
+get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
     UserInfoEndpoint = user_info_endpoint(XRDS),
 
-    URL = <<UserInfoEndpoint/binary, "?access_token=", AccessToken/binary>>,
+    URL = case AccessTokenSendMethod of
+        access_token_in_url ->
+            <<UserInfoEndpoint/binary, "?access_token=", AccessToken/binary>>;
+        access_token_in_header ->
+            UserInfoEndpoint
+    end,
+
+    Headers = case AccessTokenSendMethod of
+        access_token_in_url ->
+            #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>};
+        access_token_in_header ->
+            #{<<"Authorization">> => <<"Bearer ", AccessToken/binary>>}
+    end,
 
     % Send request to user info endpoint
     Response = http_client:get(
         URL,
-        #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>},
+        Headers,
         <<"">>,
         [{ssl_lib, erlang}]
     ),

@@ -6,17 +6,17 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc: This module implements auth_module_behaviour and handles signing in
-%%% via Indigo OpenID.
+%%% via RHEA KeyCloak OpenID Connect.
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_indigo).
+-module(auth_keycloak).
 -behaviour(auth_module_behaviour).
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 
--define(PROVIDER_ID, indigo).
+-define(PROVIDER_ID, rhea).
 
 %% API
 -export([get_redirect_url/1, validate_login/0, get_user_info/1]).
@@ -46,7 +46,7 @@ get_redirect_url(ConnectAccount) ->
     {ok, #oauth_account{}} | {error, term()}.
 validate_login() ->
     auth_oauth2_common:validate_login(
-        ?PROVIDER_ID, secret_over_http_basic, access_token_in_url
+        ?PROVIDER_ID, secret_over_http_post, access_token_in_header
     ).
 
 
@@ -59,5 +59,5 @@ validate_login() ->
     {ok, #oauth_account{}} | {error, bad_access_token}.
 get_user_info(AccessToken) ->
     auth_oauth2_common:get_user_info(
-        ?PROVIDER_ID, access_token_in_url, AccessToken
+        ?PROVIDER_ID, access_token_in_header, AccessToken
     ).
