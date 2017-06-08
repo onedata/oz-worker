@@ -4,6 +4,12 @@
 CHANGELOG
 ---------
 
+### 3.0.0-rc16
+
+* VFS-3217 Rename auth_rhea module to auth_keycloak module
+* VFS-3217 Add support for RHEA KeyCloak OpenID Connect
+
+
 ### 3.0.0-rc15
 
 * VFS-3251 Updating GUI to 3.0.0-rc15
