@@ -1880,7 +1880,7 @@ bad_request_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(etls),
+    ssl:start(),
     hackney:start(),
     Posthook = fun(NewConfig) ->
         [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
@@ -1971,7 +1971,7 @@ end_per_testcase(_, Config) ->
 
 end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls).
+    ssl:stop().
 
 %%%===================================================================
 %%% Internal functions

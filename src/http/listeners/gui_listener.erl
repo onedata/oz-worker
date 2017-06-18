@@ -56,7 +56,8 @@ start() ->
         {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
         {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
         {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
-        {ok, CaCerts} = file_utils:read_files({dir, CaCertsDir}),
+        {ok, CaCertPems} = file_utils:read_files({dir, CaCertsDir}),
+        CaCerts = lists:map(fun cert_decoder:pem_to_der/1, CaCertPems),
 
         % Initialize auth handler
         auth_config:load_auth_config(),
@@ -83,13 +84,12 @@ start() ->
         gui:init(),
         % Start the listener for web gui and nagios handler
         {ok, _} = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
-            ranch_etls, [
+            ranch_ssl, [
                 {port, GuiPort},
                 {keyfile, KeyFile},
                 {certfile, CertFile},
                 {cacerts, CaCerts},
-                {ciphers, ssl:cipher_suites() -- ssl_utils:weak_ciphers()},
-                {versions, ['tlsv1.2', 'tlsv1.1']}
+                {ciphers, ssl:cipher_suites() -- ssl_utils:weak_ciphers()}
             ], cowboy_protocol, [
                 {env, [{dispatch, Dispatch}]},
                 {max_keepalive, MaxKeepAlive},

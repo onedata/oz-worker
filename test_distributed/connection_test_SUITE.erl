@@ -46,7 +46,7 @@ datastore_connection_test(Config) ->
 %%%===================================================================
 
 init_per_testcase(rest_api_connection_test, Config) ->
-    application:start(etls),
+    ssl:start(),
     hackney:start(),
     Config;
 init_per_testcase(_, Config) ->
@@ -54,6 +54,6 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(rest_api_connection_test, _Config) ->
     hackney:stop(),
-    application:stop(etls);
+    ssl:stop();
 end_per_testcase(_, _Config) ->
     ok.

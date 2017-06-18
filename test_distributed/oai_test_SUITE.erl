@@ -955,7 +955,7 @@ list_records_no_set_error_test_base(Config, Method) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(etls),
+    ssl:start(),
     hackney:start(),
     Posthook = fun(NewConfig) ->
         [Node1 | _] = ?config(oz_worker_nodes, NewConfig),
@@ -980,7 +980,7 @@ end_per_testcase(_, Config) ->
 
 end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls).
+    ssl:stop().
 
 %%%===================================================================
 %%% Functions used to validate REST calls

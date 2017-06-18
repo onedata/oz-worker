@@ -605,7 +605,7 @@ authenticate_by_macaroons(Req) ->
 -spec authenticate_by_provider_certs(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
 authenticate_by_provider_certs(Req) ->
-    case etls:peercert(cowboy_req:get(socket, Req)) of
+    case ssl:peercert(cowboy_req:get(socket, Req)) of
         {ok, PeerCert} ->
             case worker_proxy:call(ozpca_worker,
                 {verify_provider, PeerCert}) of
@@ -617,7 +617,7 @@ authenticate_by_provider_certs(Req) ->
                     "bad peer certificate: ~p", [Reason]),
                     false
             end;
-        {error, no_peer_certificate} ->
+        {error, no_peercert} ->
             false
     end.
 

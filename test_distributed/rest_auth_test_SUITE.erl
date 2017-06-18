@@ -199,14 +199,14 @@ basic_auth_header(Login, Password) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(etls),
+    ssl:start(),
     hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls).
+    ssl:stop().
 
 
 init_per_testcase(basic_auth_test, Config) ->

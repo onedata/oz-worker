@@ -1869,14 +1869,14 @@ list_spaces_of_provider_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(etls),
+    ssl:start(),
     hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls).
+    ssl:stop().
 
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
