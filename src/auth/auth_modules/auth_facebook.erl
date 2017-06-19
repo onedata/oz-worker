@@ -73,7 +73,7 @@ validate_login() ->
         % Send request to Facebook endpoint
         {ok, 200, _, Response} = http_client:get(URL, #{
             <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
-        }, <<"">>, [{ssl_lib, erlang}]),
+        }, <<"">>),
 
         % Parse out received access token
         AccessToken = maps:get(<<"access_token">>, json_utils:decode_map(Response)),
@@ -100,7 +100,7 @@ get_user_info(AccessToken) ->
     % Send request to Facebook endpoint
     {ok, 200, _, JSON} = http_client:get(UserInfoUrl, #{
         <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
-    }, <<"">>, [{ssl_lib, erlang}]),
+    }, <<"">>),
 
     % Parse received JSON
     JSONProplist = json_utils:decode(JSON),
