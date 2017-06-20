@@ -2061,7 +2061,9 @@ do_request(Endpoint, Headers, Method, Body) ->
     do_request(Endpoint, Headers, Method, Body, []).
 do_request(Endpoint, Headers, Method, Body, Options) ->
     % Add insecure option - we do not want the GR server cert to be checked.
-    case http_client:request(Method, Endpoint, maps:from_list(Headers), Body, [insecure | Options]) of
+    case http_client:request(Method, Endpoint, maps:from_list(Headers), Body,
+        [insecure, {pool, false} | Options])
+    of
         {ok, RespCode, RespHeaders, RespBody} ->
             {ok, RespCode, maps:to_list(RespHeaders), RespBody};
         Other ->

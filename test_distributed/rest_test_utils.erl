@@ -159,7 +159,7 @@ check_rest_call(Config, ArgsMap) ->
             URL,
             HeadersPlusAuth,
             ReqBody,
-            [insecure | ReqOptsPlusAuth]
+            [{pool, false}, insecure | ReqOptsPlusAuth]
         ),
 
         % Check response code if specified
