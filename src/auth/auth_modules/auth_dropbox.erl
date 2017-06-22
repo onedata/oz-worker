@@ -75,7 +75,7 @@ validate_login() ->
         {ok, 200, _, Response} = http_client:post(access_token_endpoint(), #{
             <<"Content-Type">> => <<"application/x-www-form-urlencoded">>,
             <<"Authorization">> => <<"Basic ", AuthEncoded/binary>>
-        }, Params, [{ssl_lib, erlang}]),
+        }, Params),
 
         JSONProplist = json_utils:decode(Response),
         AccessToken = proplists:get_value(<<"access_token">>, JSONProplist),
@@ -99,7 +99,7 @@ get_user_info(AccessToken) ->
     % Send request to Dropbox endpoint
     {ok, 200, _, JSON} = http_client:get(user_info_endpoint(), #{
         <<"Authorization">> => <<"Bearer ", AccessToken/binary>>
-    }, <<"">>, [{ssl_lib, erlang}]),
+    }, <<"">>),
 
     % Parse received JSON
     UserInfoProplist = json_utils:decode(JSON),

@@ -111,8 +111,7 @@ validate_login(ProviderId, SecretSendMethod, AccessTokenSendMethod) ->
         {ok, 200, _, ResponseBinary} = http_client:post(
             access_token_endpoint(XRDS),
             Headers,
-            Params,
-            [{ssl_lib, erlang}]
+            Params
         ),
 
         % Parse out received access token and form a user info request
@@ -172,12 +171,7 @@ get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
     end,
 
     % Send request to user info endpoint
-    Response = http_client:get(
-        URL,
-        Headers,
-        <<"">>,
-        [{ssl_lib, erlang}]
-    ),
+    Response = http_client:get(URL, Headers, <<"">>),
 
     case Response of
         {ok, 200, _, Body} ->
@@ -211,7 +205,7 @@ get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
 get_xrds(ProviderId) ->
     ProviderConfig = auth_config:get_auth_config(ProviderId),
     XRDSEndpoint = proplists:get_value(xrds_endpoint, ProviderConfig),
-    Opts = [{ssl_lib, erlang}, {follow_redirect, true}, {max_redirect, 5}],
+    Opts = [{follow_redirect, true}, {max_redirect, 5}],
     {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{}, <<>>, Opts),
     json_utils:decode(XRDS).
 

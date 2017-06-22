@@ -1880,7 +1880,7 @@ bad_request_test(Config) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(etls),
+    ssl:start(),
     hackney:start(),
     Posthook = fun(NewConfig) ->
         [Node1, Node2] = ?config(oz_worker_nodes, NewConfig),
@@ -1971,7 +1971,7 @@ end_per_testcase(_, Config) ->
 
 end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls).
+    ssl:stop().
 
 %%%===================================================================
 %%% Internal functions
@@ -2061,7 +2061,9 @@ do_request(Endpoint, Headers, Method, Body) ->
     do_request(Endpoint, Headers, Method, Body, []).
 do_request(Endpoint, Headers, Method, Body, Options) ->
     % Add insecure option - we do not want the GR server cert to be checked.
-    case http_client:request(Method, Endpoint, maps:from_list(Headers), Body, [insecure | Options]) of
+    case http_client:request(Method, Endpoint, maps:from_list(Headers), Body,
+        [insecure, {pool, false} | Options])
+    of
         {ok, RespCode, RespHeaders, RespBody} ->
             {ok, RespCode, maps:to_list(RespHeaders), RespBody};
         Other ->

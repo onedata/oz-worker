@@ -120,7 +120,7 @@ provider_certs_are_updated_via_rest(Config) ->
 %%%===================================================================
 
 init_per_testcase(_, Config) ->
-    application:start(etls),
+    ssl:start(),
     hackney:start(),
 
     Nodes = ?config(oz_worker_nodes, Config),
@@ -139,7 +139,7 @@ end_per_testcase(_, Config) ->
     test_utils:mock_unload(Nodes, [rest_handler]),
 
     hackney:stop(),
-    application:stop(etls),
+    ssl:stop(),
     ok.
 
 %%%===================================================================

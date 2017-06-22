@@ -388,13 +388,13 @@ get_public_share_url(Config, ShareId) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    application:start(etls),
+    ssl:start(),
     hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 end_per_suite(_Config) ->
     hackney:stop(),
-    application:stop(etls).
+    ssl:stop().
 
 end_per_testcase(_, Config) ->
     % Remove everything that was created during a testcase
