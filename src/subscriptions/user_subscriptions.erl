@@ -201,4 +201,6 @@ get_handles(ProviderID, UserChanges) ->
 -spec get_with_revs(Model :: atom(), Key :: binary()) ->
     {ok, datastore:document()} | {error, Reason :: binary()}.
 get_with_revs(Model, Key) ->
-    couchdb_datastore_driver:get_with_revs(Model:model_init(), Key).
+    % With datastore 2, always use the last rev, which is in the document
+    % by default.
+    Model:get(Key).

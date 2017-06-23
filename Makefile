@@ -45,7 +45,6 @@ deps:
 
 compile:
 	$(REBAR) compile
-	make -C $(LIB_DIR)/cluster_worker/ priv/sync_gateway
 
 ## Generates a production release
 generate: compile deps

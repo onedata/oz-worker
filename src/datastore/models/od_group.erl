@@ -163,13 +163,15 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_NAME, group_store_level, ?DISK_ONLY_LEVEL),
     UserHooks = [{?USER_MODULE, save}, {?USER_MODULE, update}, {?USER_MODULE, create},
         {?USER_MODULE, create_or_opdate}],
     Hooks = [{?MODULE, save}, {?MODULE, update}, {?MODULE, create}, {?MODULE, create_or_opdate}],
-    Config = ?MODEL_CONFIG(od_group_bucket, Hooks ++ UserHooks, StoreLevel),
-    Config#model_config{version = 2}.
+    Config = ?MODEL_CONFIG(od_group_bucket, Hooks ++ UserHooks, ?GLOBALLY_CACHED_LEVEL),
+    Config#model_config{
+        version = 2,
+        list_enabled = {true, return_errors},
+        sync_enabled = true
+    }.
 
 %%--------------------------------------------------------------------
 %% @doc

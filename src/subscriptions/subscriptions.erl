@@ -16,6 +16,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
+-export([bucket/0, supported_models/0]).
 -export([add_connection/2, remove_connection/2, get_doc/1, update_users/2,
     update_missing_seq/3, seen/2, all/0, any_connection_active/1]).
 
@@ -23,6 +24,31 @@
 -type model() :: od_user | od_group | od_space | od_share | od_provider |
 od_handle | od_handle_service.
 -export_type([seq/0, model/0]).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Bucket name where synced records are kept.
+%% @end
+%%--------------------------------------------------------------------
+-spec bucket() -> binary().
+bucket() ->
+    <<"sync">>.
+
+%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of all models that are supported in subscriptions.
+%% @end
+%%--------------------------------------------------------------------
+-spec supported_models() -> [atom()].
+supported_models() -> [
+    od_user,
+    od_group,
+    od_space,
+    od_share,
+    od_provider,
+    od_handle_service,
+    od_handle
+].
 
 %%--------------------------------------------------------------------
 %% @doc

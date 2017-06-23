@@ -171,9 +171,12 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    StoreLevel = ?DISK_ONLY_LEVEL,
-    Config = ?MODEL_CONFIG(handle_bucket, [], StoreLevel),
-    Config#model_config{version = 2}.
+    Config = ?MODEL_CONFIG(handle_bucket, [], ?GLOBALLY_CACHED_LEVEL),
+    Config#model_config{
+        version = 2,
+        list_enabled = {true, return_errors},
+        sync_enabled = true
+    }.
 
 %%--------------------------------------------------------------------
 %% @doc

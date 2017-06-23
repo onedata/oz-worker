@@ -25,6 +25,10 @@
 -define(call_store(N, F, A), ?call(N, datastore, F, A)).
 -define(call_store(N, Model, F, A), ?call(N,
     model, execute_with_default_context, [Model, F, A])).
+-define(call_store(N, Model, F, A, Override), ?call(N,
+    model, execute_with_default_context, [Model, F, A, Override])).
+-define(call_disk(N, Model, F, A), ?call(N,
+    model, execute_with_default_context, [Model, F, A, [{level, ?DIRECT_DISK_LEVEL}]])).
 -define(call(N, M, F, A), ?call(N, M, F, A, ?TIMEOUT)).
 -define(call(N, M, F, A, T), rpc:call(N, M, F, A, T)).
 
@@ -66,14 +70,13 @@ test_models(Config) ->
             value = MC#model_config.defaults
         },
         ?assertMatch({ok, _}, ?call_store(Worker, ModelName, save, [Doc])),
-        ?assertMatch({ok, true}, ?call_store(Worker, ModelName, exists, [Key])),
+        ?assertMatch({ok, _}, ?call_store(Worker, ModelName, get, [Key])),
 
 %%        ct:print("Module ok ~p", [ModelName]),
 
         case Cache of
             true ->
-                PModule = ?call_store(Worker, driver_to_module, [persistence_driver_module]),
-                ?assertMatch({ok, true}, ?call(Worker, PModule, exists, [MC, Key]), 10);
+                ?assertMatch({ok, _, _}, ?call_disk(Worker, ModelName, get, [Key]), 10);
 %%                ct:print("Module caching ok ~p", [ModelName]);
             _ ->
                 ok

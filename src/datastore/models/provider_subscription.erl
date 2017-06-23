@@ -97,7 +97,8 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    ?MODEL_CONFIG(provider_subscription_bucket, [], ?GLOBAL_ONLY_LEVEL).
+    Config = ?MODEL_CONFIG(provider_subscription_bucket, [], ?GLOBAL_ONLY_LEVEL),
+    Config#model_config{list_enabled = {true, return_errors}}.
 
 %%--------------------------------------------------------------------
 %% @doc

@@ -47,7 +47,7 @@ record_struct(1) ->
         {basic_auth_enabled, boolean},
         {alias, string},
         {email_list, [string]},
-        {connected_accounts, [{record, 1, [
+        {connected_accounts, [{record, [
             {provider_id, atom},
             {user_id, string},
             {login, string},
@@ -80,7 +80,7 @@ record_struct(2) ->
         {alias, string},
         {email_list, [string]},
         {basic_auth_enabled, boolean},
-        {connected_accounts, [{record, 1, [
+        {connected_accounts, [{record, [
             {provider_id, atom},
             {user_id, string},
             {login, string},
@@ -179,16 +179,17 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link model_behaviour} callback model_init/0.
-%% todo: change level once list is supported by the datastore (couchbase)
 %% @end
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_NAME, user_store_level, ?DISK_ONLY_LEVEL),
     Hooks = record_location_hooks:get_hooks(),
-    Config = ?MODEL_CONFIG(od_user_bucket, Hooks, StoreLevel),
-    Config#model_config{version = 2}.
+    Config = ?MODEL_CONFIG(od_user_bucket, Hooks, ?GLOBALLY_CACHED_LEVEL),
+    Config#model_config{
+        version = 2,
+        list_enabled = {true, return_errors},
+        sync_enabled = true
+    }.
 
 %%--------------------------------------------------------------------
 %% @doc
