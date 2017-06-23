@@ -23,7 +23,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% worker_plugin_behaviour callbacks
--export([init/1, handle/1, cleanup/0, change_callback/3]).
+-export([init/1, handle/1, cleanup/0, change_callback/1]).
 
 -define(STREAM_GLOBAL_NAME, subscriptions_current_changes_stream).
 
@@ -36,15 +36,13 @@
 %% Handles changes & dispatches them to be processed.
 %% @end
 %%--------------------------------------------------------------------
-
--spec change_callback(Seq :: subscriptions:seq(),
-    datastore:document() | stream_ended,
-    model_behaviour:model_type() | undefined) -> ok.
-
-change_callback(_Seq, stream_ended, _Type) ->
+-spec change_callback({ok, stream_ended | datastore:document()}) -> ok.
+change_callback({error, _, _}) ->
+    ok;
+change_callback({ok, end_of_stream}) ->
     gen_server:cast(?MODULE, {stop, stream_ended});
-
-change_callback(Seq, Doc, Type) ->
+change_callback({ok, Doc = #document{seq = Seq, value = Value}}) ->
+    Type = element(1, Value),
     Request = {handle_change, Seq, Doc, Type},
     worker_proxy:cast(?SUBSCRIPTIONS_WORKER_NAME, Request).
 
@@ -61,8 +59,11 @@ change_callback(Seq, Doc, Type) ->
 -spec init(Args :: term()) ->
     {ok, State :: worker_host:plugin_state()} | {error, Reason :: term()}.
 init(_Args) ->
+    couchbase_changes:enable([subscriptions:bucket()]),
+    couchbase_changes_worker:start_link(subscriptions:bucket(), <<"">>),
     schedule_stream_presence_check(),
     {ok, #{}}.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -107,16 +108,15 @@ cleanup() ->
 %% If couchbase is not reachable, stream is not to be started.
 %% @end
 %%--------------------------------------------------------------------
-
 -spec start_changes_stream() -> ok.
 start_changes_stream() ->
     case get_last_seq() of
         {error, Reason} ->
             ?warning("Stream failed to start due to ~p", [Reason]);
         {ok, Start} ->
-            {ok, Pid} = couchdb_datastore_driver:changes_start_link(
-                fun change_callback/3, Start, infinity),
-
+            {ok, Pid} = couchbase_changes:stream(subscriptions:bucket(), <<"">>,
+                fun change_callback/1, [{since, Start}, {until, infinity}]
+            ),
             case global:register_name(?STREAM_GLOBAL_NAME, Pid) of
                 yes -> ?info("Stream sucessfully started & registered");
                 no ->
@@ -149,10 +149,11 @@ get_last_seq() ->
 -spec fetch_last_seq() -> {ok, non_neg_integer()}| {error, term()}.
 fetch_last_seq() ->
     try
-        %% todo: once couchbeam is fixed, use different method
-        {ok, LastSeq, _} = couchdb_datastore_driver:db_run(couchbeam_changes,
-            follow_once, [], 30),
-        {ok, binary_to_integer(LastSeq)}
+        {ok, _, LastSeq} = couchbase_driver:get_counter(
+            #{bucket => subscriptions:bucket()},
+            couchbase_changes:get_seq_key(<<"">>)
+        ),
+        {ok, LastSeq}
     catch
         E:R ->
             ?error_stacktrace("Last sequence unavailable as ~p:~p", [E, R]),

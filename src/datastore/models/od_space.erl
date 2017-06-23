@@ -140,10 +140,12 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_NAME, space_store_level, ?DISK_ONLY_LEVEL),
-    Config = ?MODEL_CONFIG(space_bucket, [], StoreLevel),
-    Config#model_config{version = 2}.
+    Config = ?MODEL_CONFIG(space_bucket, [], ?GLOBALLY_CACHED_LEVEL),
+    Config#model_config{
+        version = 2,
+        list_enabled = {true, return_errors},
+        sync_enabled = true
+    }.
 
 %%--------------------------------------------------------------------
 %% @doc

@@ -317,18 +317,10 @@ get_public_msg(Seq, Doc, od_provider = Model) ->
     ]}].
 
 -spec revs_prop(Doc :: datastore:document()) -> term().
-revs_prop(#document{rev = Revs}) when is_tuple(Revs) ->
+revs_prop(#document{rev = Revs}) when is_list(Revs) ->
     {ok, MaxSize} = application:get_env(?APP_NAME, subscriptions_sent_revisions_limit),
-    {Start, Hashes} = Revs,
-    Size = min(MaxSize, length(Hashes)),
-
-    Numbers = lists:seq(Start, Start - Size + 1, -1),
-    PrefixedRevs = lists:zipwith(fun(N, H) ->
-        list_to_binary(integer_to_list(N) ++ "-" ++ binary_to_list(H))
-    end, Numbers, lists:sublist(Hashes, Size)),
-    {revs, PrefixedRevs};
-revs_prop(#document{rev = Rev}) ->
-    {revs, [Rev]}.
+    Size = min(MaxSize, length(Revs)),
+    {revs, lists:sublist(Revs, Size)}.
 
 -spec message_model(subscriptions:model()) -> atom().
 message_model(od_space) -> od_space;

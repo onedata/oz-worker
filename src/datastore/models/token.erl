@@ -37,7 +37,7 @@ record_struct(1) ->
         {secret, binary},
         {resource, atom},
         {resource_id, string},
-        {issuer, {record, 1, [
+        {issuer, {record, [
             {type, atom},
             {id, string}
         ]}}
