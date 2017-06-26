@@ -205,7 +205,7 @@ fetch_from_cache(Seqs) ->
 -spec fetch_from_db(Seqs :: ordsets:ordset(subscriptions:seq())) -> ok.
 fetch_from_db([]) -> ok;
 fetch_from_db(Seqs) ->
-    From = hd(Seqs),
+    From = hd(Seqs) - 1,
     To = lists:last(Seqs) + 1,
 
     spawn(fun() ->
@@ -255,6 +255,8 @@ accumulate_changes(Pid, SeqsToFetch, Changes) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec ignore_all(Seqs :: ordsets:ordset(subscriptions:seq())) -> ok.
+ignore_all([]) ->
+    ok;
 ignore_all(Seqs) ->
     ?debug("Ignoring sequence numbers ~p", [Seqs]),
     Subscriptions = subscriptions:all(),

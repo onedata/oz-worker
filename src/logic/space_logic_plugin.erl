@@ -264,9 +264,11 @@ update(SpaceId, entity, #{<<"name">> := NewName}) ->
     lists:foreach(
         fun(UserId) ->
             od_user:update(UserId, fun(#od_user{} = User) ->
-                {ok, User#od_user{top_down_dirty = true}}
+                {ok, entity_graph:mark_dirty(UserId, User)}
             end)
         end, maps:keys(EffUsers)),
+    entity_graph:ensure_up_to_date(),
+    % TODO end
     ok;
 
 update(SpaceId, {user_privileges, UserId}, Data) ->
