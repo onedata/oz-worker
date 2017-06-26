@@ -132,6 +132,9 @@ oldest_seq() ->
 %%--------------------------------------------------------------------
 -spec get_cache() -> gb_trees:tree().
 get_cache() ->
-    {ok, Doc} = subscriptions_state:get(?SUBSCRIPTIONS_STATE_KEY),
-    #document{value = #subscriptions_state{cache = Cache}} = Doc,
-    Cache.
+    case subscriptions_state:get(?SUBSCRIPTIONS_STATE_KEY) of
+        {ok, #document{value = #subscriptions_state{cache = Cache}}} ->
+            Cache;
+        {error, {not_found, subscriptions_state}} ->
+            gb_trees:empty()
+    end.
