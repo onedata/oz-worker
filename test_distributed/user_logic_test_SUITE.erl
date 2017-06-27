@@ -18,6 +18,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
@@ -96,7 +97,7 @@ automatic_group_membership_test(Config) ->
         #{
             id => <<"group2">>,
             name => <<"Group 2">>,
-            oz_privileges => [view_privileges, set_privileges]
+            oz_privileges => [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES]
         }
     ],
     % Set the corresponding env variable on one of the nodes

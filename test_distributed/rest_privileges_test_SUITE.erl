@@ -50,22 +50,22 @@ all() ->
     ?ALL([
         % test case                   % tested_privileges
         % ---------------------------------------------------
-        view_privileges_test,         % view_privileges
-        set_privileges_test,          % set_privileges
+        view_privileges_test,         % ?OZ_VIEW_PRIVILEGES
+        set_privileges_test,          % ?OZ_SET_PRIVILEGES
 
-        modify_space_members_test,    % (add|remove)_member_to_space,
+        modify_space_members_test,    % ?OZ_SPACES_(ADD|REMOVE)_MEMBERS,
 
-        list_users_test,              % list_users
+        list_users_test,              % ?OZ_USERS_LIST
 
-        list_groups_test,             % list_groups
+        list_groups_test,             % ?OZ_GROUPS_LIST
 
-        list_spaces_test,             % list_spaces
-        list_providers_of_space_test, % list_providers_of_space
+        list_spaces_test,             % ?OZ_SPACES_LIST
+        list_providers_of_space_test, % ?OZ_SPACES_LIST_PROVIDERS
 
-        list_providers_test,          % list_providers
-        list_eff_users_of_provider_test,  % list_users_of_provider
-        list_eff_groups_of_provider_test, % list_groups_of_provider
-        list_spaces_of_provider_test  % list_spaces_of_provider
+        list_providers_test,          % ?OZ_USERS_LIST
+        list_eff_users_of_provider_test,  % ?OZ_PROVIDERS_LIST_USERS
+        list_eff_groups_of_provider_test, % ?OZ_PROVIDERS_LIST_GROUPS
+        list_spaces_of_provider_test  % ?OZ_PROVIDERS_LIST_SPACES
     ]).
 
 %%%===================================================================

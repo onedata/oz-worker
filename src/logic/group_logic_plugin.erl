@@ -598,21 +598,19 @@ authorize(delete, _GroupId, oz_privileges, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_SET_PRIVILEGES);
 
 authorize(delete, _GroupId, {parent, _ParentId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?GROUP_UPDATE);
-% TODO VFS-2918
-%%    auth_by_privilege(UserId, ?GROUP_LEAVE_GROUP);
+    auth_by_privilege(UserId, ?GROUP_LEAVE_GROUP);
 
 authorize(delete, _GroupId, {space, _SpaceId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_LEAVE_SPACE);
 
 authorize(delete, _GroupId, {handle_service, _HServiceId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_UPDATE);
-% TODO VFS-2918
+% TODO VFS-3351
 %%    auth_by_privilege(UserId, ?GROUP_LEAVE_HANDLE_SERVICE);
 
 authorize(delete, _GroupId, {handle, _HandleId}, ?USER(UserId)) ->
     auth_by_privilege(UserId, ?GROUP_UPDATE);
-% TODO VFS-2918
+% TODO VFS-3351
 %%    auth_by_privilege(UserId, ?GROUP_LEAVE_HANDLE);
 
 authorize(delete, _GroupId, {user, _UserId}, ?USER(UserId)) -> [
