@@ -1534,7 +1534,9 @@ set_user_privileges_for_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
-    Privileges = #{<<"privileges">> => [?HANDLE_SERVICE_VIEW]},
+    Privileges = #{<<"privileges">> => [str_utils:to_binary(P) || P <- [
+        ?HANDLE_SERVICE_VIEW]
+    ]},
 
     Result = set_user_privileges_for_handle_service(Id, UserId, Privileges, UserReqParams),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
@@ -1565,7 +1567,9 @@ set_group_privileges_for_service_test(Config) ->
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
     GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
     201 = add_group_to_handle_service(Id, GroupId, UserReqParams),
-    Privileges = #{<<"privileges">> => [?HANDLE_SERVICE_DELETE, ?HANDLE_SERVICE_VIEW]},
+    Privileges = #{<<"privileges">> => [str_utils:to_binary(P) || P <- [
+        ?HANDLE_SERVICE_DELETE, ?HANDLE_SERVICE_VIEW]
+    ]},
 
     Result = set_group_privileges_for_handle_service(Id, GroupId, Privileges, UserReqParams),
     oz_test_utils:ensure_eff_graph_up_to_date(Config),
@@ -1781,7 +1785,9 @@ set_user_privileges_for_handle_test(Config) ->
     Id = add_handle_service(Config, ?DOI_SERVICE, UserId, UserReqParams),
     create_space_and_share(Config, ?SHARE_ID_1, UserReqParams),
     HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
-    Privileges = #{<<"privileges">> => [?HANDLE_VIEW]},
+    Privileges = #{<<"privileges">> => [str_utils:to_binary(P) || P <- [
+        ?HANDLE_VIEW]
+    ]},
 
     Result = set_user_privileges_for_handle(HId, UserId, Privileges, UserReqParams),
 
@@ -1812,7 +1818,9 @@ set_group_privileges_for_handle_test(Config) ->
     HId = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
     GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
     201 = add_group_to_handle(HId, GroupId, UserReqParams),
-    Privileges = #{<<"privileges">> => [?HANDLE_VIEW]},
+    Privileges = #{<<"privileges">> => [str_utils:to_binary(P) || P <- [
+        ?HANDLE_VIEW]
+    ]},
 
     Result = set_group_privileges_for_handle(HId, GroupId, Privileges, UserReqParams),
 
