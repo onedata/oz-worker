@@ -154,7 +154,7 @@ old_user_record() -> {od_user,
         <<"sp2">> => <<"sp2Name">>
     },
     [  % oz_privileges
-        view_privileges, set_privileges, list_users, add_member_to_space
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
     ],
     [],  % eff_oz_privileges
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -221,7 +221,7 @@ old_group_record() -> {od_group,
     <<"name">>,
     role,
     [ % oz_privileges
-        view_privileges, set_privileges, list_users, add_member_to_space
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
     ],
     [], % eff_oz_privileges
     [<<"parent1">>, <<"parent2">>],
