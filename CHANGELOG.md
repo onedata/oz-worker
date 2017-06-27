@@ -4,6 +4,13 @@
 CHANGELOG
 ---------
 
+### 17.06.0-beta2
+
+* VFS-3342 Make sure user aliases in subscriptions are precomputed every time a space name changes, decrease changes intervals
+* VFS-3345 Updating GUI ref (development) - changed height of textarea in getting support modal - truncating long provider names in space details
+* VFS-3286 Cluster_worker update (update node monitoring logging)
+
+
 ### 3.0.0-rc16
 
 * VFS-3217 Rename auth_rhea module to auth_keycloak module
