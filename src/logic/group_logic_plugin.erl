@@ -112,6 +112,7 @@ create(Client, _, entity, Data) ->
         _ ->
             ok
     end,
+    entity_graph:ensure_up_to_date(),
     {ok, GroupId};
 
 create(Client, GroupId, invite_user_token, _) ->
