@@ -104,6 +104,7 @@ create(Client, _, entity, Data) ->
         _ ->
             ok
     end,
+    entity_graph:ensure_up_to_date(),
     {ok, HServiceId};
 create(?USER, HServiceId, {user, UserId}, Data) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),

@@ -112,6 +112,7 @@ create(Client, _, entity, #{<<"name">> := Name}) ->
         _ ->
             ok
     end,
+    entity_graph:ensure_up_to_date(),
     {ok, SpaceId};
 
 create(Client, SpaceId, invite_user_token, _) ->
