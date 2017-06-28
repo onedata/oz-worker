@@ -4,6 +4,12 @@
 CHANGELOG
 ---------
 
+### 17.06.0-beta3
+
+* VFS-3350 Make sure effective privileges are recomputed after creating new entities; remove deprecated privilege names
+* Releasing new version 17.06.0-beta2
+
+
 ### 17.06.0-beta2
 
 * VFS-3342 Make sure user aliases in subscriptions are precomputed every time a space name changes, decrease changes intervals
