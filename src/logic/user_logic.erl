@@ -85,6 +85,8 @@
     has_eff_provider/2
 ]).
 -export([
+    idp_uid_to_system_uid/2,
+    onepanel_uid_to_system_uid/1,
     add_oauth_account/2,
     is_email_occupied/2,
     authenticate_by_basic_credentials/2,
@@ -885,6 +887,26 @@ has_eff_provider(#od_user{eff_providers = EffProviders}, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Constructs user id based on Identity Provider name and user's id in that IdP.
+%% @end
+%%--------------------------------------------------------------------
+-spec idp_uid_to_system_uid(IdPName :: atom(), IdPUserId :: od_user:id()) -> binary().
+idp_uid_to_system_uid(IdPName, IdPUserId) ->
+    str_utils:format_bin("~p:~s", [IdPName, IdPUserId]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Constructs user id based on Identity Provider name and user's id in that IdP.
+%% @end
+%%--------------------------------------------------------------------
+-spec onepanel_uid_to_system_uid(OnepanelUserId :: od_user:id()) -> binary().
+onepanel_uid_to_system_uid(OnepanelUserId) ->
+    <<"onezone:", OnepanelUserId/binary>>.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Adds an oauth account to user's accounts.
 %% @end
 %%--------------------------------------------------------------------
@@ -975,7 +997,8 @@ authenticate_by_basic_credentials(Login, Password) ->
         {error, Reason} ->
             {error, Reason};
         Props ->
-            UserId = proplists:get_value(<<"userId">>, Props),
+            OnepanelUserId = proplists:get_value(<<"userId">>, Props),
+            UserId = onepanel_uid_to_system_uid(OnepanelUserId),
             UserRole = proplists:get_value(<<"userRole">>, Props),
             {UserDocument, FirstLogin} = case od_user:get(UserId) of
                 {error, {not_found, od_user}} ->
@@ -986,7 +1009,7 @@ authenticate_by_basic_credentials(Login, Password) ->
                     },
                     {ok, UserId} = create(UserRecord, UserId),
                     ?info("Created new account for user '~s' from onepanel "
-                    "(role: '~s')", [Login, UserRole]),
+                    "(role: '~s'), id: '~s'", [Login, UserRole, UserId]),
                     {ok, UserDoc} = od_user:get(UserId),
                     {UserDoc, true};
                 {ok, #document{value = #od_user{} = UserInfo} = UserDoc} ->

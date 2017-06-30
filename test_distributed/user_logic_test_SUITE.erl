@@ -134,7 +134,10 @@ automatic_group_membership_test(Config) ->
         BasicAuthEndpoint, BasicAuthHeaders, [], [insecure]
     )),
     % now for the groups check
-    {ok, #od_user{groups = GroupIds}} = oz_test_utils:get_user(Config, <<"user2Id">>),
+    User2Id = oz_test_utils:call_oz(
+        Config, user_logic, onepanel_uid_to_system_uid, [<<"user2Id">>]
+    ),
+    {ok, #od_user{groups = GroupIds}} = oz_test_utils:get_user(Config, User2Id),
     ?assertEqual([<<"group1">>, <<"group2">>], lists:sort(GroupIds)),
     ok.
 

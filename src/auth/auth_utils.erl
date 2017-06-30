@@ -228,13 +228,19 @@ acquire_user_by_external_access_token(ProviderId, AccessToken) ->
 %%--------------------------------------------------------------------
 -spec create_user_by_oauth_account(#oauth_account{}) ->
     {ok, UserId :: od_user:id()} | {error, not_found}.
-create_user_by_oauth_account(#oauth_account{email_list = Emails} = OAuthAccount) ->
+create_user_by_oauth_account(OAuthAccount) ->
+    #oauth_account{
+        provider_id = IdPName,
+        user_id = IdPUserId,
+        email_list = Emails
+    } = OAuthAccount,
     UserInfo = #od_user{
         email_list = Emails,
         name = resolve_name_from_oauth_account(OAuthAccount),
         connected_accounts = [OAuthAccount]
     },
-    user_logic:create(UserInfo).
+    UserId = user_logic:idp_uid_to_system_uid(IdPName, IdPUserId),
+    user_logic:create(UserInfo, UserId).
 
 
 %%--------------------------------------------------------------------
