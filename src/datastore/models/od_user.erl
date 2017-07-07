@@ -196,7 +196,7 @@ model_init() ->
     Hooks = record_location_hooks:get_hooks(),
     Config = ?MODEL_CONFIG(od_user_bucket, Hooks, ?GLOBALLY_CACHED_LEVEL),
     Config#model_config{
-        version = 2,
+        version = 3,
         list_enabled = {true, return_errors},
         sync_enabled = true
     }.
