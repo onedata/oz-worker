@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 17.06.0-beta5
+
+* VFS-3224 Implement SAML login, add better error handling in login process
+
+
 ### 17.06.0-beta4
 
 * VFS-3386 Create new users upon IdP login with id based on IdP name and user id in that IdP
