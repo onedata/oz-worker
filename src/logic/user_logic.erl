@@ -87,7 +87,7 @@
 -export([
     idp_uid_to_system_uid/2,
     onepanel_uid_to_system_uid/1,
-    add_oauth_account/2,
+    add_linked_account/2,
     is_email_occupied/2,
     authenticate_by_basic_credentials/2,
     change_user_password/3,
@@ -907,32 +907,32 @@ onepanel_uid_to_system_uid(OnepanelUserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds an oauth account to user's accounts.
+%% Adds an linked account to user's accounts.
 %% @end
 %%--------------------------------------------------------------------
--spec add_oauth_account(UserId :: od_user:id(),
-    OAuthAccount :: #oauth_account{}) -> ok.
-add_oauth_account(UserId, OAuthAccount) ->
+-spec add_linked_account(UserId :: od_user:id(),
+    LinkedAccounts :: #linked_account{}) -> ok.
+add_linked_account(UserId, LinkedAccount) ->
     {ok, #document{
         value = #od_user{
             name = Name,
             email_list = Emails,
-            connected_accounts = ConnectedAccounts
+            linked_accounts = LinkedAccounts
         }}} = od_user:get(UserId),
-    #oauth_account{
-        name = OAuthName,
-        email_list = OAuthEmails
-    } = OAuthAccount,
+    #linked_account{
+        name = LinkedName,
+        email_list = LinkedEmails
+    } = LinkedAccount,
     % If no name is specified, take the one provided with new info
     NewName = case Name of
-        <<"">> -> OAuthName;
+        <<"">> -> LinkedName;
         _ -> Name
     end,
     {ok, _} = od_user:update(UserId, #{
         name => NewName,
         % Add emails from provider that are not yet added to account
-        email_list => lists:usort(Emails ++ OAuthEmails),
-        connected_accounts => ConnectedAccounts ++ [OAuthAccount]
+        email_list => lists:usort(Emails ++ LinkedEmails),
+        linked_accounts => LinkedAccounts ++ [LinkedAccount]
     }),
     ok.
 

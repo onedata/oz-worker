@@ -43,7 +43,7 @@ get_redirect_url(ConnectAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_login() ->
-    {ok, #oauth_account{}} | {error, term()}.
+    {ok, #linked_account{}} | {error, term()}.
 validate_login() ->
     auth_oauth2_common:validate_login(
         ?PROVIDER_ID, secret_over_http_basic, access_token_in_url
@@ -56,7 +56,7 @@ validate_login() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user_info(AccessToken :: binary()) ->
-    {ok, #oauth_account{}} | {error, bad_access_token}.
+    {ok, #linked_account{}} | {error, bad_access_token}.
 get_user_info(AccessToken) ->
     auth_oauth2_common:get_user_info(
         ?PROVIDER_ID, access_token_in_url, AccessToken

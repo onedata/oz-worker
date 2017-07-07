@@ -15,6 +15,7 @@
 -behaviour(rpc_backend_behaviour).
 
 -include("gui/common.hrl").
+-include_lib("esaml/include/esaml.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -52,10 +53,8 @@ handle(<<"getSupportedAuthorizers">>, _) ->
             ]};
         _ ->
             % Production mode, return providers from config
-            % get_auth_providers() returns list of atoms
-            ProvidersAtoms = auth_config:get_auth_providers(),
-            Providers =
-                [str_utils:to_binary(Provider) || Provider <- ProvidersAtoms],
+            ProvidersAtoms = auth_utils:get_all_idps(),
+            Providers = [str_utils:to_binary(P) || P <- ProvidersAtoms],
             {ok, [
                 {<<"authorizers">>, Providers}
             ]}
@@ -68,9 +67,8 @@ handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
                 {<<"url">>, <<"/dev_login">>}
             ]};
         _ ->
-            Provider = binary_to_atom(ProviderBin, utf8),
-            HandlerModule = auth_config:get_provider_module(Provider),
-            {ok, URL} = HandlerModule:get_redirect_url(false),
+            ProviderId = binary_to_atom(ProviderBin, utf8),
+            {ok, URL} = auth_utils:get_redirect_url(ProviderId, false),
             {ok, [
                 {<<"url">>, URL}
             ]}

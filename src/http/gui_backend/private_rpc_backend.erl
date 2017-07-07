@@ -52,9 +52,8 @@ handle(<<"changePassword">>, Props) ->
     end;
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
-    Provider = binary_to_atom(ProviderBin, utf8),
-    HandlerModule = auth_config:get_provider_module(Provider),
-    {ok, URL} = HandlerModule:get_redirect_url(true),
+    ProviderId = binary_to_atom(ProviderBin, utf8),
+    {ok, URL} = auth_utils:get_redirect_url(ProviderId, true),
     {ok, [
         {<<"url">>, URL}
     ]};

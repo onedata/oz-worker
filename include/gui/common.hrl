@@ -23,6 +23,9 @@
 % Relative suffix of GUI address, leading to page with info about providers
 -define(BECOME_A_PROVIDER_URL, "/become_a_provider").
 
+% URL (relative) pointing to login page.
+-define(LOGIN_PAGE, "/#/home/login").
+
 % URL (relative) to redirect to after login.
 -define(PAGE_AFTER_LOGIN, "/#/onezone").
 
