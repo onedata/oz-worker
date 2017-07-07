@@ -22,8 +22,8 @@
 
 %% This record must be defined here as od_user depends on it.
 %% This record defines user's account info
-%% received from an openid / oauth provider.
--record(oauth_account, {
+%% received from an SAML / openid / oauth provider.
+-record(linked_account, {
     provider_id = undefined :: atom(),
     user_id = <<"">> :: binary(),
     login = <<"">> :: binary(),
@@ -85,7 +85,7 @@
     % Decides if this user can login via login:password, only users created in
     % onepanel are currently allowed to do that.
     basic_auth_enabled = false :: boolean(),
-    connected_accounts = [] :: [#oauth_account{}],
+    linked_accounts = [] :: [#linked_account{}],
     default_space = undefined :: binary() | undefined,
     % This allows to remember the provider which was selected for user,
     % so DNS knows where to redirect

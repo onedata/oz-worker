@@ -56,7 +56,7 @@ get_redirect_url(ConnectAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_login() ->
-    {ok, #oauth_account{}} | {error, term()}.
+    {ok, #linked_account{}} | {error, term()}.
 validate_login() ->
     try
         % Retrieve URL params
@@ -94,7 +94,7 @@ validate_login() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user_info(AccessToken :: binary()) ->
-    {ok, #oauth_account{}} | {error, bad_access_token}.
+    {ok, #linked_account{}} | {error, bad_access_token}.
 get_user_info(AccessToken) ->
     URL = <<(user_info_endpoint())/binary, "?access_token=", AccessToken/binary>>,
     % Send request to GitHub endpoint
@@ -118,7 +118,7 @@ get_user_info(AccessToken) ->
 
     % Parse received JSON
     JSONProplist = json_utils:decode(JSON),
-    ProvUserInfo = #oauth_account{
+    ProvUserInfo = #linked_account{
         provider_id = ?PROVIDER_ID,
         user_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
         email_list = EmailList,

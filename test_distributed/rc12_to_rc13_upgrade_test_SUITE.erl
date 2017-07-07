@@ -49,12 +49,19 @@ all() -> ?ALL([
 
 
 user_upgrade_test(Config) ->
-    OldUserRecord = old_user_record(),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_user, record_upgrade, [1, OldUserRecord]
+    UserRecordVer1 = user_record_1(),
+
+    {Version2, UserRecordVer2} = oz_test_utils:call_oz(
+        Config, od_user, record_upgrade, [1, UserRecordVer1]
     ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, new_user_record()).
+    ?assertEqual(2, Version2),
+    ?assertEqual(UserRecordVer2, user_record_2()),
+
+    {Version3, UserRecordVer3} = oz_test_utils:call_oz(
+        Config, od_user, record_upgrade, [2, UserRecordVer2]
+    ),
+    ?assertEqual(3, Version3),
+    ?assertEqual(UserRecordVer3, user_record_3()).
 
 
 group_upgrade_test(Config) ->
@@ -123,7 +130,7 @@ init_per_suite(Config) ->
 %%% Record definitions
 %%%===================================================================
 
-old_user_record() -> {od_user,
+user_record_1() -> {od_user,
     <<"name">>,
     <<"login">>,
     true,   % basic_auth_enabled
@@ -170,21 +177,68 @@ old_user_record() -> {od_user,
     false  % top_down_dirty
 }.
 
-new_user_record() -> #od_user{
+user_record_2() -> {od_user,
+    <<"name">>,
+    <<"login">>,
+    <<"alias">>,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+    true,
+    [
+        {oauth_account,
+            google,
+            <<"user_id1">>,
+            <<"login1">>,
+            <<"name1">>,
+            [<<"email1@email.com">>]
+        },
+        {oauth_account,
+            github,
+            <<"user_id2">>,
+            <<"login2">>,
+            <<"name2">>,
+            [<<"email2@email.com">>]
+        }
+    ],
+    <<"default_space">>,
+    <<"default_provider">>,
+    <<"chosen_provider">>,
+    [<<"token1">>, <<"token2">>],
+    #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+    [
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+    ],
+    [],
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    true
+}.
+
+user_record_3() -> #od_user{
     name = <<"name">>,
     login = <<"login">>,
     alias = <<"alias">>,
     email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
     basic_auth_enabled = true,
-    connected_accounts = [
-        #oauth_account{
+    linked_accounts = [
+        #linked_account{
             provider_id = google,
             user_id = <<"user_id1">>,
             login = <<"login1">>,
             name = <<"name1">>,
             email_list = [<<"email1@email.com">>]
         },
-        #oauth_account{
+        #linked_account{
             provider_id = github,
             user_id = <<"user_id2">>,
             login = <<"login2">>,
@@ -209,7 +263,7 @@ new_user_record() -> #od_user{
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
     handle_services = [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
     handles = [<<"handle1">>, <<"handle2">>, <<"handle3">>],
-    eff_groups = #{}, % eff groups should be empty, the entity will be recalculated anyway
+    eff_groups = #{},
     eff_spaces = #{},
     eff_providers = #{},
     eff_handle_services = #{},

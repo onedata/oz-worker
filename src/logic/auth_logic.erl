@@ -13,6 +13,7 @@
 -author("Konrad Zemek").
 
 -include("auth_common.hrl").
+-include("gui/common.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
@@ -214,7 +215,7 @@ generate_state_token(HandlerModule, ConnectAccount) ->
         {connect_account, ConnectAccount},
         % Right now this always redirects to main page, although
         % might be used in the future.
-        {redirect_after_login, <<"/">>}
+        {redirect_after_login, <<?PAGE_AFTER_LOGIN>>}
     ],
 
     ets:insert(?STATE_TOKEN, {Token, erlang:monotonic_time(seconds), StateInfo}),

@@ -68,7 +68,7 @@ get_redirect_url(ConnectAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_login() ->
-    {ok, #oauth_account{}} | {error, term()}.
+    {ok, #linked_account{}} | {error, term()}.
 validate_login() ->
     try
         % Retrieve URL params
@@ -131,7 +131,7 @@ validate_login() ->
                 (X /= [])
             end, [DN1, DN2, DN3]),
 
-        ProvUserInfo = #oauth_account{
+        ProvUserInfo = #linked_account{
             provider_id = ?PROVIDER_ID,
             user_id = str_utils:to_binary(Login),
             login = Login,

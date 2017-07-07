@@ -11,7 +11,7 @@
 %%% returned by auth providers and log the user in.
 %%% @end
 %%%-------------------------------------------------------------------
--module(validate_login_backend).
+-module(oidc_consume_backend).
 -author("Lukasz Opiola").
 -behaviour(page_backend_behaviour).
 
@@ -33,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
-    case auth_utils:validate_login() of
+    case auth_utils:validate_oidc_login() of
         {redirect, URL} ->
             UserId = gui_session:get_user_id(),
             ?info("User ~p logged in", [UserId]),
@@ -53,6 +53,10 @@ page_init() ->
             ?info("User ~p logged in for the first time", [UserId]),
             {redirect_relative, <<?PAGE_AFTER_LOGIN>>};
         {error, ErrorId} ->
-            ?error("Error during login: ~p", [ErrorId]),
-            {redirect_relative, <<"/">>}
+            gui_ctx:set_resp_cookie(
+                <<"authentication_error">>,
+                atom_to_binary(ErrorId, utf8),
+                [{path, <<"/">>}]
+            ),
+            {reply, 307, #{<<"Location">> => <<?LOGIN_PAGE>>}}
     end.

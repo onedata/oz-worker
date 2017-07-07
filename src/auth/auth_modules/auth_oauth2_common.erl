@@ -66,7 +66,7 @@ get_redirect_url(ConnectAccount, ProviderId, HandlerModule) ->
 -spec validate_login(ProviderId :: atom(),
     SecretSendMethod :: secret_over_http_basic | secret_over_http_post,
     AccessTokenSendMethod :: access_token_in_url | access_token_in_header) ->
-    {ok, #oauth_account{}} | {error, term()}.
+    {ok, #linked_account{}} | {error, term()}.
 validate_login(ProviderId, SecretSendMethod, AccessTokenSendMethod) ->
     try
         % Retrieve URL params
@@ -135,7 +135,7 @@ validate_login(ProviderId, SecretSendMethod, AccessTokenSendMethod) ->
 -spec get_user_info(ProviderId :: atom(),
     AccessTokenSendMethod :: access_token_in_url | access_token_in_header,
     AccessToken :: binary()) ->
-    {ok, #oauth_account{}} | {error, bad_access_token}.
+    {ok, #linked_account{}} | {error, bad_access_token}.
 get_user_info(ProviderId, AccessTokenSendMethod, AccessToken) ->
     XRDS = get_xrds(ProviderId),
     get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS).
@@ -152,7 +152,7 @@ get_user_info(ProviderId, AccessTokenSendMethod, AccessToken) ->
     AccessTokenSendMethod :: access_token_in_url | access_token_in_header,
     AccessToken :: binary(),
     XRDS :: proplists:proplist()) ->
-    {ok, #oauth_account{}} | {error, bad_access_token}.
+    {ok, #linked_account{}} | {error, bad_access_token}.
 get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
     UserInfoEndpoint = user_info_endpoint(XRDS),
 
@@ -177,7 +177,7 @@ get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
         {ok, 200, _, Body} ->
             % Parse JSON with user info
             JSONProplist = json_utils:decode(Body),
-            ProvUserInfo = #oauth_account{
+            ProvUserInfo = #linked_account{
                 provider_id = ProviderId,
                 user_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
                 email_list = auth_utils:extract_emails(JSONProplist),

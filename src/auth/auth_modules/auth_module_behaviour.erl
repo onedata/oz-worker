@@ -31,12 +31,12 @@
 %% Will be called from auth_utils:validate_login/0 when the request
 %% has been pre-validated. Beside validating the request,
 %% the function must retrieve user info from the provider.
-%% Must return oauth_account record upon success,
+%% Must return linked_account record upon success,
 %% or error and its description otherwise.
 %% @end
 %%--------------------------------------------------------------------
 -callback validate_login() ->
-    {ok, #oauth_account{}} | {error, term()}.
+    {ok, #linked_account{}} | {error, term()}.
 
 
 
@@ -46,4 +46,4 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback get_user_info(AccessToken :: binary()) ->
-    {ok, #oauth_account{}} | {error, bad_access_token}.
+    {ok, #linked_account{}} | {error, bad_access_token}.

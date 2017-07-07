@@ -170,7 +170,7 @@ user_record(Client, UserId) ->
         name = Name,
         alias = UserAlias,
         basic_auth_enabled = BasicAuthEnabled,
-        connected_accounts = OAuthAccounts,
+        linked_accounts = LinkedAccounts,
         client_tokens = ClientTokenIds,
         default_space = DefaultSpaceValue,
         default_provider = DefaultProviderValue,
@@ -179,7 +179,7 @@ user_record(Client, UserId) ->
         eff_providers = EffProviders
     }} = user_logic:get(Client, UserId),
     Alias = alias_db_to_client(UserAlias),
-    Authorizers = authorizers_db_to_client(OAuthAccounts),
+    Authorizers = authorizers_db_to_client(LinkedAccounts),
     ClientTokens = client_tokens_db_to_client(ClientTokenIds),
     DefaultSpace = undefined_to_null(DefaultSpaceValue),
     DefaultProvider = undefined_to_null(DefaultProviderValue),
@@ -240,21 +240,25 @@ alias_db_to_client(Bin) when is_binary(Bin) -> Bin.
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Converts oauth accounts in db format to client format.
+%% Converts linked accounts in db format to client format.
 %% @end
 %%--------------------------------------------------------------------
--spec authorizers_db_to_client(OAuthAccounts :: [#oauth_account{}]) ->
-    binary() | null.
-authorizers_db_to_client(OAuthAccounts) ->
+-spec authorizers_db_to_client(LinkedAccounts :: [#linked_account{}]) ->
+    proplists:proplist().
+authorizers_db_to_client(LinkedAccounts) ->
     lists:foldl(
-        fun(OAuthAccount, Acc) ->
-            #oauth_account{
+        fun(LinkedAccount, Acc) ->
+            #linked_account{
                 provider_id = Provider,
                 email_list = Emails,
-                user_id = SubId} = OAuthAccount,
+                user_id = SubId} = LinkedAccount,
             ProviderBin = str_utils:to_binary(Provider),
             SubIdBin = str_utils:to_binary(SubId),
             AccId = <<ProviderBin/binary, "#", SubIdBin/binary>>,
+            EmailsNotEmpty = case Emails of
+                [] -> [<<"<no email address>">>];
+                _ -> Emails
+            end,
             Accounts = lists:map(
                 fun(Email) ->
                     [
@@ -262,9 +266,9 @@ authorizers_db_to_client(OAuthAccounts) ->
                         {<<"type">>, ProviderBin},
                         {<<"email">>, Email}
                     ]
-                end, Emails),
+                end, EmailsNotEmpty),
             Accounts ++ Acc
-        end, [], OAuthAccounts).
+        end, [], LinkedAccounts).
 
 
 %%--------------------------------------------------------------------

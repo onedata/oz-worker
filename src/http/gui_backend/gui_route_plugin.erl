@@ -18,8 +18,9 @@
 -author("Lukasz Opiola").
 -behaviour(gui_route_plugin_behaviour).
 
--include("registered_names.hrl").
 -include("gui/common.hrl").
+-include("auth_common.hrl").
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("gui/include/gui.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -44,10 +45,22 @@
     page_backend = basic_login_backend
 }).
 
--define(VALIDATE_LOGIN, #gui_route{
+-define(OIDC_CONSUME_ENDPOINT, #gui_route{
     requires_session = ?SESSION_ANY,  % Can be used to log in or connect account
     html_file = undefined,
-    page_backend = validate_login_backend
+    page_backend = oidc_consume_backend
+}).
+
+-define(SAML_METADATA_BACKEND, #gui_route{
+    requires_session = ?SESSION_ANY,  % Can be used to log in or connect account
+    html_file = undefined,
+    page_backend = saml_metadata_backend
+}).
+
+-define(SAML_CONSUME_BACKEND, #gui_route{
+    requires_session = ?SESSION_ANY,  % Can be used to log in or connect account
+    html_file = undefined,
+    page_backend = saml_consume_backend
 }).
 
 -define(INDEX, #gui_route{
@@ -79,10 +92,12 @@
 %% {@link gui_route_plugin_behaviour} callback route/1.
 %% @end
 %%--------------------------------------------------------------------
--spec route(Path :: binary()) -> #gui_route{}.
+-spec route(Path :: binary()) -> #gui_route{} | undefined.
 route(<<"/do_logout">>) -> ?LOGOUT;
 route(<<"/do_login">>) -> ?BASIC_LOGIN;
-route(<<"/validate_login">>) -> ?VALIDATE_LOGIN;
+route(<<"/validate_login">>) -> ?OIDC_CONSUME_ENDPOINT;
+route(<<?SAML_METADATA_ENDPOINT>>) -> ?SAML_METADATA_BACKEND;
+route(<<?SAML_CONSUME_ENDPOINT>>) -> ?SAML_CONSUME_BACKEND;
 route(<<"/dev_login">>) ->
     case application:get_env(?APP_NAME, dev_mode) of
         {ok, true} ->
@@ -99,7 +114,7 @@ route(<<"/validate_dev_login">>) ->
     end;
 route(<<"/">>) -> ?INDEX;
 route(<<"/index.html">>) -> ?INDEX;
-route(_) -> ?INDEX.
+route(_) -> undefined.
 
 
 %%--------------------------------------------------------------------
