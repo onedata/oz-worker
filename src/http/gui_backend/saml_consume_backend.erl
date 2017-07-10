@@ -62,4 +62,9 @@ page_init() ->
     end,
     % This page is visited with a POST request, so use a 303 redirect in
     % response so that web browser switches to GET.
-    {reply, 303, #{<<"location">> => RedirectURL}}.
+    {reply, 303, #{
+        <<"location">> => RedirectURL,
+        % Connection close is required, otherwise chrome/safari can get stuck
+        % stalled waiting for data.
+        <<"connection">> => <<"close">>
+    }}.
