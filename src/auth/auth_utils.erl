@@ -60,6 +60,8 @@ get_value_binary(Key, Proplist) ->
     case proplists:get_value(Key, Proplist, <<"">>) of
         Bin when is_binary(Bin) ->
             Bin;
+        Str when is_list(Str) ->
+            str_utils:unicode_list_to_binary(Str);
         null ->
             <<"">>;
         Other ->
