@@ -114,6 +114,8 @@ route(<<"/validate_dev_login">>) ->
     end;
 route(<<"/">>) -> ?INDEX;
 route(<<"/index.html">>) -> ?INDEX;
+% Ember-style URLs also point to index file
+route(<<"/#/", _/binary>>) -> ?INDEX;
 route(_) -> undefined.
 
 
