@@ -87,7 +87,8 @@
 -export([
     idp_uid_to_system_uid/2,
     onepanel_uid_to_system_uid/1,
-    add_linked_account/2,
+    create_user_by_linked_account/1,
+    merge_linked_account/2,
     is_email_occupied/2,
     authenticate_by_basic_credentials/2,
     change_user_password/3,
@@ -892,7 +893,12 @@ has_eff_provider(#od_user{eff_providers = EffProviders}, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec idp_uid_to_system_uid(IdPName :: atom(), IdPUserId :: od_user:id()) -> binary().
 idp_uid_to_system_uid(IdPName, IdPUserId) ->
-    str_utils:format_bin("~p:~s", [IdPName, IdPUserId]).
+    % Pipes are not allowed in user name as they are used as special character
+    % in associative IDs in GUI.
+    binary:replace(
+        str_utils:format_bin("~p:~s", [IdPName, IdPUserId]),
+        <<"|">>, <<"_">>, [global]
+    ).
 
 
 %%--------------------------------------------------------------------
@@ -906,33 +912,81 @@ onepanel_uid_to_system_uid(OnepanelUserId) ->
 
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
-%% Adds an linked account to user's accounts.
+%% Creates a new user based on given linked account. Before creating such user,
+%% it must be ensured that user with such linked account does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec add_linked_account(UserId :: od_user:id(),
-    LinkedAccounts :: #linked_account{}) -> ok.
-add_linked_account(UserId, LinkedAccount) ->
-    {ok, #document{
-        value = #od_user{
-            name = Name,
-            email_list = Emails,
-            linked_accounts = LinkedAccounts
-        }}} = od_user:get(UserId),
+-spec create_user_by_linked_account(#linked_account{}) ->
+    {ok, UserId :: od_user:id()} | {error, not_found}.
+create_user_by_linked_account(LinkedAccount) ->
+    #linked_account{provider_id = IdPName, user_id = IdPUserId} = LinkedAccount,
+    UserId = idp_uid_to_system_uid(IdPName, IdPUserId),
+    {ok, UserId} = create(#od_user{}, UserId),
+    merge_linked_account(UserId, LinkedAccount),
+    {ok, UserId}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds an linked account to user's account or replaces the old one (if
+%% present). Gathers user name and emails in the process into user's account.
+%% @end
+%%--------------------------------------------------------------------
+-spec merge_linked_account(UserId :: od_user:id(),
+    LinkedAccount :: #linked_account{}) -> ok.
+merge_linked_account(UserId, LinkedAccount) ->
+    % The update cannot be done in one transaction, because linked account
+    % merging causes adding/removing the user from groups, which modifies user
+    % doc and would cause a deadlock. Instead, use a critical section to make
+    % sure that merging accounts is sequential.
+    critical_section:run({merge_acc, UserId}, fun() ->
+        merge_linked_account_unsafe(UserId, LinkedAccount)
+    end).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Adds an linked account to user's account or replaces the old one (if
+%% present). Gathers user name and emails in the process into user's account.
+%% Operates on #od_user{} record and returns a modified version.
+%% This code should not be run in parallel.
+%% @end
+%%--------------------------------------------------------------------
+-spec merge_linked_account_unsafe(UserId :: od_user:id(),
+    LinkedAccount :: #linked_account{}) -> ok.
+merge_linked_account_unsafe(UserId, LinkedAccount) ->
+    {ok, #document{value = #od_user{
+        name = Name, email_list = Emails, linked_accounts = LinkedAccounts
+    } = UserInfo}} = od_user:get(UserId),
     #linked_account{
-        name = LinkedName,
-        email_list = LinkedEmails
+        provider_id = IdP, user_id = IdPUserId,
+        email_list = LinkedEmails, groups = NewGroups
     } = LinkedAccount,
     % If no name is specified, take the one provided with new info
     NewName = case Name of
-        <<"">> -> LinkedName;
+        <<"">> -> resolve_name_from_linked_account(LinkedAccount);
         _ -> Name
     end,
+    % Add (normalized) emails from provider that are not yet added to account
+    NormalizedEmails = [http_utils:normalize_email(E) || E <- LinkedEmails],
+    NewEmails = lists:usort(Emails ++ NormalizedEmails),
+    % Replace existing linked account, if present
+    {NewLinkedAccs, OldGroups} = case find_linked_account(UserInfo, IdP, IdPUserId) of
+        #linked_account{groups = OldGr} = OldLinkedAcc ->
+            {[LinkedAccount | (LinkedAccounts -- [OldLinkedAcc])], OldGr};
+        undefined ->
+            {[LinkedAccount | LinkedAccounts], []}
+    end,
+    % Coalesce user groups
+    idp_group_mapping:coalesce_groups(IdP, UserId, OldGroups, NewGroups),
+    % Return updated user info
     {ok, _} = od_user:update(UserId, #{
         name => NewName,
-        % Add emails from provider that are not yet added to account
-        email_list => lists:usort(Emails ++ LinkedEmails),
-        linked_accounts => LinkedAccounts ++ [LinkedAccount]
+        email_list => NewEmails,
+        linked_accounts => NewLinkedAccs
     }),
     ok.
 
@@ -943,8 +997,7 @@ add_linked_account(UserId, LinkedAccount) ->
 %% given user. It is not recognized as occupied if the same user already has it.
 %% @end
 %%--------------------------------------------------------------------
--spec is_email_occupied(UserId :: od_user:id(), Email :: binary()) ->
-    boolean().
+-spec is_email_occupied(UserId :: od_user:id(), Email :: binary()) -> boolean().
 is_email_occupied(UserId, Email) ->
     case od_user:get_by_criterion({email, Email}) of
         {ok, #document{key = UserId}} ->
@@ -1175,3 +1228,57 @@ setup_user(UserId, UserInfo) ->
         _ ->
             ok
     end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Finds a linked account in user doc based on IdP and user id in that IdP.
+%% Returns undefined upon failure.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_linked_account(UserInfo :: od_user:info(), IdP :: atom(),
+    IdPUserId :: binary()) -> undefined | #linked_account{}.
+find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, IdPUserId) ->
+    lists:foldl(
+        fun
+            (LAcc = #linked_account{provider_id = PId, user_id = UId}, undefined)
+                when PId =:= IdP, UId =:= IdPUserId ->
+                LAcc;
+            (_Other, Found) ->
+                Found
+        end, undefined, LinkedAccounts).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Resolve what name should be set for user based on his linked account.
+%% If user name was send by linked provider, use it.
+%% If not, try this with login.
+%% If not, try using the email (the part before @) as name.
+%% If there is no email, return a generic "unknown" string.
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_name_from_linked_account(#linked_account{}) -> binary().
+resolve_name_from_linked_account(#linked_account{
+    name = <<"">>,
+    login = <<"">>,
+    email_list = []
+}) ->
+    <<"Unknown Name">>;
+resolve_name_from_linked_account(#linked_account{
+    name = <<"">>,
+    login = <<"">>,
+    email_list = EmailList
+}) ->
+    hd(binary:split(hd(EmailList), <<"@">>));
+resolve_name_from_linked_account(#linked_account{
+    name = <<"">>,
+    login = Login
+}) ->
+    Login;
+resolve_name_from_linked_account(#linked_account{
+    name = Name
+}) ->
+    Name.

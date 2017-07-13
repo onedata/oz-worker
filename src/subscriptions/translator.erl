@@ -77,11 +77,11 @@ get_msg(Seq, Doc, od_user = Model) ->
         space_aliases = SpaceAliases,
 
         groups = Groups,
-        spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
 
-        eff_groups = EffGroups
+        eff_groups = EffGroups,
+        eff_spaces = EffSpaces
     } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {name, Name},
@@ -90,7 +90,7 @@ get_msg(Seq, Doc, od_user = Model) ->
         {connected_accounts, []}, % TODO currently always empty
         {default_space, DefaultSpace},
         {space_aliases, maps:to_list(translator:calculate_space_aliases(
-            Spaces, SpaceAliases
+            eff_relation_to_proplist(EffSpaces), SpaceAliases
         ))},
 
         % Direct relations to other entities

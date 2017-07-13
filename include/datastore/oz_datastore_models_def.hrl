@@ -28,7 +28,11 @@
     user_id = <<"">> :: binary(),
     login = <<"">> :: binary(),
     name = <<"">> :: binary(),
-    email_list = [] :: [binary()]
+    email_list = [] :: [binary()],
+    % A list of strings that do not change for each given group so that
+    % a diff can be computed every time a user logs in. Must be normalized
+    % according to specification in idp_group_mapping.
+    groups = [] :: [idp_group_mapping:membership_spec()]
 }).
 
 %%%===================================================================

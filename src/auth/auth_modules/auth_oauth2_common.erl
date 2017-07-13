@@ -177,12 +177,20 @@ get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
         {ok, 200, _, Body} ->
             % Parse JSON with user info
             JSONProplist = json_utils:decode(Body),
+            UserGroups = case auth_config:has_group_mapping_enabled(ProviderId) of
+                false ->
+                    [];
+                true ->
+                    HandlerModule = auth_config:get_provider_module(ProviderId),
+                    HandlerModule:normalized_membership_specs(JSONProplist)
+            end,
             ProvUserInfo = #linked_account{
                 provider_id = ProviderId,
                 user_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
-                email_list = auth_utils:extract_emails(JSONProplist),
+                login = auth_utils:get_value_binary(<<"login">>, JSONProplist),
                 name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
-                login = auth_utils:get_value_binary(<<"login">>, JSONProplist)
+                email_list = auth_utils:extract_emails(JSONProplist),
+                groups = UserGroups
             },
             {ok, ProvUserInfo};
         _ ->

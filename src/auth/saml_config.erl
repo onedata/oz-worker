@@ -15,8 +15,16 @@
 -include("auth_common.hrl").
 -include("registered_names.hrl").
 -include_lib("esaml/include/esaml.hrl").
+-include_lib("ctool/include/logging.hrl").
 
--export([get_sp_config/0, get_supported_idps/0, get_idp_config/1]).
+-export([
+    get_sp_config/0,
+    get_supported_idps/0,
+    get_idp_config/1,
+    has_group_mapping_enabled/1,
+    get_super_group/1,
+    normalize_membership_specs/2
+]).
 
 %%%===================================================================
 %%% API functions
@@ -86,6 +94,57 @@ get_idp_config(IdPId) ->
         signs_logout_requests = false, % TODO Logout currently not supported
         attribute_mapping = maps:get(attribute_mapping, IdPConfig)
     }.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether given IdP has enabled group mapping based on its config.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_group_mapping_enabled(IdPId :: atom()) -> boolean().
+has_group_mapping_enabled(IdPId) ->
+    SAMLConfig = get_config(),
+    SupportedIdPs = maps:get(supported_idps, SAMLConfig),
+    IdPConfig = maps:get(IdPId, SupportedIdPs),
+    GroupMappingConfig = maps:get(group_mapping, IdPConfig, #{}),
+    maps:get(enabled, GroupMappingConfig, false).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the super group for given IdP, if specified in config.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_super_group(IdPId :: atom()) ->
+    undefined | idp_group_mapping:group_spec().
+get_super_group(IdPId) ->
+    SAMLConfig = get_config(),
+    SupportedIdPs = maps:get(supported_idps, SAMLConfig),
+    IdPConfig = maps:get(IdPId, SupportedIdPs),
+    GroupMappingConfig = maps:get(group_mapping, IdPConfig, #{}),
+    maps:get(super_group, GroupMappingConfig, undefined).
+
+
+% TODO move this to a configurable plugin during auth system refactoring
+%%--------------------------------------------------------------------
+%% @doc
+%% Normalizes group membership specs for given IdP.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalize_membership_specs(IdPId :: atom(), Groups :: [binary()]) ->
+    [idp_group_mapping:membership_spec()].
+normalize_membership_specs(elixir, Groups) ->
+    lists:map(
+        fun(Group) ->
+            [VO | Rest] = binary:split(Group, <<":">>, [global]),
+            MappedTokens = [<<"vo:", VO/binary>>] ++
+                [<<"tm:", Gr/binary>> || Gr <- Rest] ++
+                [<<"user:member">>],
+            str_utils:join_binary(MappedTokens, <<"/">>)
+        end, Groups);
+normalize_membership_specs(_, Groups) ->
+    Groups.
+
 
 %%%===================================================================
 %%% Internal functions

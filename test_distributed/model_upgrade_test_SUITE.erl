@@ -9,7 +9,7 @@
 %%% rc12 and rc13.
 %%% @end
 %%%-------------------------------------------------------------------
--module(rc12_to_rc13_upgrade_test_SUITE).
+-module(model_upgrade_test_SUITE).
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models_def.hrl").
@@ -61,7 +61,13 @@ user_upgrade_test(Config) ->
         Config, od_user, record_upgrade, [2, UserRecordVer2]
     ),
     ?assertEqual(3, Version3),
-    ?assertEqual(UserRecordVer3, user_record_3()).
+    ?assertEqual(UserRecordVer3, user_record_3()),
+
+    {Version4, UserRecordVer4} = oz_test_utils:call_oz(
+        Config, od_user, record_upgrade, [3, UserRecordVer3]
+    ),
+    ?assertEqual(4, Version4),
+    ?assertEqual(UserRecordVer4, user_record_4()).
 
 
 group_upgrade_test(Config) ->
@@ -231,19 +237,68 @@ user_record_3() -> #od_user{
     email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
     basic_auth_enabled = true,
     linked_accounts = [
+        {linked_account,
+            google,
+            <<"user_id1">>,
+            <<"login1">>,
+            <<"name1">>,
+            [<<"email1@email.com">>]
+        },
+        {linked_account,
+            github,
+            <<"user_id2">>,
+            <<"login2">>,
+            <<"name2">>,
+            [<<"email2@email.com">>]
+        }
+    ],
+    default_space = <<"default_space">>,
+    default_provider = <<"default_provider">>,
+    chosen_provider = <<"chosen_provider">>,
+    client_tokens = [<<"token1">>, <<"token2">>],
+    space_aliases = #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+    oz_privileges = [
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+    ],
+    eff_oz_privileges = [],
+    groups = [<<"group1">>, <<"group2">>, <<"group3">>],
+    spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
+    handle_services = [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    handles = [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    eff_groups = #{},
+    eff_spaces = #{},
+    eff_providers = #{},
+    eff_handle_services = #{},
+    eff_handles = #{},
+    top_down_dirty = true
+}.
+
+user_record_4() -> #od_user{
+    name = <<"name">>,
+    login = <<"login">>,
+    alias = <<"alias">>,
+    email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
+    basic_auth_enabled = true,
+    linked_accounts = [
         #linked_account{
             provider_id = google,
             user_id = <<"user_id1">>,
             login = <<"login1">>,
             name = <<"name1">>,
-            email_list = [<<"email1@email.com">>]
+            email_list = [<<"email1@email.com">>],
+            groups = []
         },
         #linked_account{
             provider_id = github,
             user_id = <<"user_id2">>,
             login = <<"login2">>,
             name = <<"name2">>,
-            email_list = [<<"email2@email.com">>]
+            email_list = [<<"email2@email.com">>],
+            groups = []
         }
     ],
     default_space = <<"default_space">>,
