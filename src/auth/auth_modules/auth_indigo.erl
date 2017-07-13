@@ -99,7 +99,7 @@ normalized_membership_specs(Props) ->
 %% Returns the group Id for KeyCloak VO.
 %% @end
 %%--------------------------------------------------------------------
--spec vo_id() -> {ok, #linked_account{}} | {error, term()}.
+-spec vo_id() -> binary().
 vo_id() ->
     GroupMappingConfig = auth_config:get_group_mapping_config(?PROVIDER_ID),
     case proplists:get_value(vo_group_id, GroupMappingConfig) of

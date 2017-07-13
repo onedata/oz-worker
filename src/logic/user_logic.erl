@@ -1237,22 +1237,16 @@ setup_user(UserId, UserInfo) ->
 %% Returns undefined upon failure.
 %% @end
 %%--------------------------------------------------------------------
--spec find_linked_account(UserInfo :: #od_user{}, IdP :: atom(),
+-spec find_linked_account(UserInfo :: od_user:info(), IdP :: atom(),
     IdPUserId :: binary()) -> undefined | #linked_account{}.
 find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, IdPUserId) ->
     lists:foldl(
-        fun(LinkedAccount, Found) ->
-            case Found of
-                #linked_account{} ->
-                    Found;
-                undefined ->
-                    case LinkedAccount of
-                        #linked_account{provider_id = IdP, user_id = IdPUserId} ->
-                            LinkedAccount;
-                        _ ->
-                            Found
-                    end
-            end
+        fun
+            (LAcc = #linked_account{provider_id = PId, user_id = UId}, undefined)
+                when PId =:= IdP, UId =:= IdPUserId ->
+                LAcc;
+            (_Other, Found) ->
+                Found
         end, undefined, LinkedAccounts).
 
 
@@ -1267,14 +1261,24 @@ find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, IdPUserId) 
 %% @end
 %%--------------------------------------------------------------------
 -spec resolve_name_from_linked_account(#linked_account{}) -> binary().
-resolve_name_from_linked_account(LinkedAccount) ->
-    case LinkedAccount of
-        #linked_account{name = <<"">>, login = <<"">>, email_list = []} ->
-            <<"Unknown Name">>;
-        #linked_account{name = <<"">>, login = <<"">>, email_list = EmailList} ->
-            hd(binary:split(hd(EmailList), <<"@">>));
-        #linked_account{name = <<"">>, login = Login} ->
-            Login;
-        #linked_account{name = Name} ->
-            Name
-    end.
+resolve_name_from_linked_account(#linked_account{
+    name = <<"">>,
+    login = <<"">>,
+    email_list = []
+}) ->
+    <<"Unknown Name">>;
+resolve_name_from_linked_account(#linked_account{
+    name = <<"">>,
+    login = <<"">>,
+    email_list = EmailList
+}) ->
+    hd(binary:split(hd(EmailList), <<"@">>));
+resolve_name_from_linked_account(#linked_account{
+    name = <<"">>,
+    login = Login
+}) ->
+    Login;
+resolve_name_from_linked_account(#linked_account{
+    name = Name
+}) ->
+    Name.
