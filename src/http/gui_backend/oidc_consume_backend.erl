@@ -33,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
-    case auth_utils:validate_oidc_login() of
+    RedirectURL = case auth_utils:validate_oidc_login() of
         {redirect, URL} ->
             UserId = gui_session:get_user_id(),
             ?info("User ~p logged in", [UserId]),
@@ -44,19 +44,27 @@ page_init() ->
                     {ok, ProvURL} = auth_logic:get_redirection_uri(
                         UserId, DefaultProv
                     ),
-                    {redirect_absolute, ProvURL};
+                    ProvURL;
                 false ->
-                    {redirect_relative, URL}
+                    URL
             end;
         new_user ->
             UserId = gui_session:get_user_id(),
             ?info("User ~p logged in for the first time", [UserId]),
-            {redirect_relative, <<?PAGE_AFTER_LOGIN>>};
+            <<?PAGE_AFTER_LOGIN>>;
         {error, ErrorId} ->
             gui_ctx:set_resp_cookie(
                 <<"authentication_error">>,
                 atom_to_binary(ErrorId, utf8),
                 [{path, <<"/">>}]
             ),
-            {reply, 307, #{<<"Location">> => <<?LOGIN_PAGE>>}}
-    end.
+            <<?LOGIN_PAGE>>
+    end,
+    % This page is visited with a POST request, so use a 303 redirect in
+    % response so that web browser switches to GET.
+    {reply, 303, #{
+        <<"location">> => RedirectURL,
+        % Connection close is required, otherwise chrome/safari can get stuck
+        % stalled waiting for data.
+        <<"connection">> => <<"close">>
+    }}.

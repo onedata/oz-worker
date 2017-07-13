@@ -28,7 +28,7 @@
 
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
+    model_init/0, 'after'/5, before/4, create_or_update/2]).
 -export([record_struct/1, record_upgrade/2]).
 -export([to_string/1]).
 
@@ -193,6 +193,18 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates document with using ID from document. If such object does not exist,
+%% it initialises the object with the document.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_or_update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
+    {ok, datastore:ext_key()} | datastore:generic_error().
+create_or_update(Doc, Diff) ->
+    model:execute_with_default_context(?MODULE, create_or_update, [Doc, Diff]).
 
 
 %%--------------------------------------------------------------------

@@ -114,7 +114,18 @@ record_struct(3) ->
         {name, string},
         {email_list, [string]}
     ]}]},
-    {record, lists:keyreplace(connected_accounts, 1, Struct, LinkedAccStruct)}.
+    {record, lists:keyreplace(connected_accounts, 1, Struct, LinkedAccStruct)};
+record_struct(4) ->
+    {record, Struct} = record_struct(3),
+    LinkedAccStruct = {linked_accounts, [{record, [
+        {provider_id, atom},
+        {user_id, string},
+        {login, string},
+        {name, string},
+        {email_list, [string]},
+        {groups, [string]}
+    ]}]},
+    {record, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct)}.
 
 %%%===================================================================
 %%% model_behaviour callbacks
@@ -196,7 +207,7 @@ model_init() ->
     Hooks = record_location_hooks:get_hooks(),
     Config = ?MODEL_CONFIG(od_user_bucket, Hooks, ?GLOBALLY_CACHED_LEVEL),
     Config#model_config{
-        version = 2,
+        version = 4,
         list_enabled = {true, return_errors},
         sync_enabled = true
     }.
@@ -416,18 +427,87 @@ record_upgrade(2, User) ->
     } = User,
 
     LinkedAccounts = lists:map(
-        fun({oauth_account, ProviderId, UserId, Login, Name, Emails}) ->
-            #linked_account{
-                provider_id = ProviderId,
-                user_id = UserId,
-                login = Login,
-                name = Name,
-                email_list = Emails
-            }
+        fun({oauth_account, ProviderId, UserId, OALogin, OAName, OAEmails}) ->
+            {linked_account, ProviderId, UserId, OALogin, OAName, OAEmails}
         end, ConnectedAccounts
     ),
 
     {3, #od_user{
+        name = Name,
+        login = Login,
+        alias = Alias,
+        email_list = EmailList,
+        basic_auth_enabled = BasicAuthEnabled,
+        linked_accounts = LinkedAccounts,
+
+        default_space = DefaultSpace,
+        default_provider = DefaultProvider,
+        chosen_provider = ChosenProvider,
+        client_tokens = ClientTokens,
+        space_aliases = SpaceAliases,
+
+        oz_privileges = OzPrivileges,
+        eff_oz_privileges = EffOzPrivileges,
+
+        groups = Groups,
+        spaces = Spaces,
+        handle_services = HandleServices,
+        handles = Handles,
+
+        eff_groups = EffGroups,
+        eff_spaces = EffSpaces,
+        eff_providers = EffProviders,
+        eff_handle_services = EffHandleServices,
+        eff_handles = EffHandles,
+
+        top_down_dirty = TopDownDirty
+    }};
+record_upgrade(3, User) ->
+    {od_user,
+        Name,
+        Login,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        ConnectedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    LinkedAccounts = lists:map(
+        fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails}) ->
+            #linked_account{
+                provider_id = ProviderId,
+                user_id = UserId,
+                login = OALogin,
+                name = OAName,
+                email_list = OAEmails,
+                groups = []
+            }
+        end, ConnectedAccounts
+    ),
+
+    {4, #od_user{
         name = Name,
         login = Login,
         alias = Alias,

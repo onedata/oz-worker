@@ -27,6 +27,8 @@
     get_user/2,
     get_user_oz_privileges/2,
     get_user_eff_oz_privileges/2,
+    get_user_groups/2,
+    get_user_eff_groups/2,
     list_users/1,
     set_user_oz_privileges/4,
     set_user_default_space/3,
@@ -51,7 +53,10 @@
     add_user_to_group/3,
     add_group_to_group/3,
     group_remove_user/3,
-    group_leave_space/3
+    group_leave_space/3,
+
+    get_group_user_privileges/3,
+    get_group_eff_user_privileges/3
 ]).
 -export([
     create_space/3,
@@ -215,6 +220,32 @@ get_user_oz_privileges(Config, UserId) ->
     {ok, [privileges:oz_privilege()]}.
 get_user_eff_oz_privileges(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, user_logic, get_eff_oz_privileges, [
+        ?ROOT, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns groups of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_groups(Config :: term(), UserId :: od_user:id()) ->
+    {ok, [od_group:id()]}.
+get_user_groups(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_groups, [
+        ?ROOT, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns effective groups of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_eff_groups(Config :: term(), UserId :: od_user:id()) ->
+    {ok, [od_group:id()]}.
+get_user_eff_groups(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_eff_groups, [
         ?ROOT, UserId
     ])).
 
@@ -485,6 +516,32 @@ group_leave_space(Config, GroupId, SpaceId) ->
     ?assertMatch(ok, call_oz(
         Config, group_logic, leave_space, [?ROOT, GroupId, SpaceId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns privileges of a user in given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_user_privileges(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:oz_privilege()]}.
+get_group_user_privileges(Config, GroupId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, get_user_privileges, [
+        ?ROOT, GroupId, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns effective privileges of a user in given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_eff_user_privileges(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:oz_privilege()]}.
+get_group_eff_user_privileges(Config, GroupId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_user_privileges, [
+        ?ROOT, GroupId, UserId
+    ])).
 
 
 %%--------------------------------------------------------------------

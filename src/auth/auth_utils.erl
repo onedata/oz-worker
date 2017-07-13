@@ -24,6 +24,7 @@
 % Authentication flow handling
 -export([
     get_all_idps/0,
+    get_super_group/1,
     get_redirect_url/2,
     get_saml_redirect_url/2,
     validate_oidc_login/0,
@@ -101,6 +102,20 @@ get_all_idps() ->
 
 
 %%--------------------------------------------------------------------
+%% @doc
+%% Returns super group identifier for given IdP, or undefined.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_super_group(ProviderId :: atom()) ->
+    undefined | idp_group_mapping:group_spec().
+get_super_group(ProviderId) ->
+    case lists:member(ProviderId, auth_config:get_auth_providers()) of
+        true -> auth_config:get_super_group(ProviderId);
+        false -> saml_config:get_super_group(ProviderId)
+    end.
+
+
+%%--------------------------------------------------------------------
 %% @doc Returns full URL, where the user will be redirected for authorization
 %% (either via SAML or OIDC) based on provider id as specified in
 %% auth.config and saml.config.
@@ -151,20 +166,18 @@ validate_oidc_login() ->
         StateToken = proplists:get_value(<<"state">>, ParamsProplist),
         StateProps = validate_state_token(StateToken),
         Module = proplists:get_value(module, StateProps),
-        RedirectAfterLogin = proplists:get_value(redirect_after_login, StateProps),
 
         % Validate the request and gather user info
         case Module:validate_login() of
+            {ok, LinkedAccount} ->
+                validate_login_by_linked_account(LinkedAccount, StateProps);
+            {error, bad_access_token} ->
+                {error, ?error_auth_access_token_invalid};
             {error, Reason} ->
                 % The request could not be validated
                 ?warning("Invalid login request via OIDC. Reason:~p~nRequest params:~n~p~nPOST params:~n~p",
                     [Reason, ParamsProplist, gui_ctx:get_form_params()]),
-                {error, ?error_auth_invalid_request};
-            {ok, LinkedAccount} ->
-                ConnectAccount = proplists:get_value(connect_account, StateProps),
-                validate_login_by_linked_account(
-                    LinkedAccount, ConnectAccount, RedirectAfterLogin
-                )
+                {error, ?error_auth_invalid_request}
         end
     catch
         throw:{error, E} ->
@@ -194,7 +207,6 @@ validate_saml_login() ->
         StateToken = proplists:get_value(<<"RelayState">>, PostVals),
         StateProps = validate_state_token(StateToken),
         IdPId = proplists:get_value(module, StateProps),
-        RedirectAfterLogin = proplists:get_value(redirect_after_login, StateProps),
 
         IdP = saml_config:get_idp_config(IdPId),
 
@@ -204,11 +216,10 @@ validate_saml_login() ->
                     [Reason1, PostVals]),
                 {error, ?error_auth_invalid_request};
             Xml ->
-                ConnectAccount = proplists:get_value(connect_account, StateProps),
                 case esaml_sp:validate_assertion(Xml, SP, IdP) of
                     {ok, #esaml_assertion{attributes = Attributes}} ->
                         LinkedAccount = saml_assertions_to_linked_account(IdPId, IdP, Attributes),
-                        validate_login_by_linked_account(LinkedAccount, ConnectAccount, RedirectAfterLogin);
+                        validate_login_by_linked_account(LinkedAccount, StateProps);
                     {error, Reason2} ->
                         % The request could not be validated
                         ?warning("Invalid login request via SAML. Reason:~p~nPOST params:~n~p",
@@ -233,18 +244,11 @@ validate_saml_login() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_login_by_linked_account(OriginalLinkedAccount :: #linked_account{},
-    ConnectAccount :: boolean(), RedirectAfterLogin :: binary()) ->
+    StateProps :: proplists:proplist()) ->
     new_user | {redirect, URL :: binary()} | {error, term()}.
-validate_login_by_linked_account(OriginalLinkedAccount, ConnectAccount, RedirectAfterLogin) ->
-    #linked_account{
-        email_list = OriginalEmails
-    } = OriginalLinkedAccount,
-    Emails = lists:map(fun(Email) ->
-        http_utils:normalize_email(Email)
-    end, OriginalEmails),
-    LinkedAccount = OriginalLinkedAccount#linked_account{
-        email_list = Emails
-    },
+validate_login_by_linked_account(LinkedAccount, StateProps) ->
+    ConnectAccount = proplists:get_value(connect_account, StateProps),
+    RedirectAfterLogin = proplists:get_value(redirect_after_login, StateProps),
     case ConnectAccount of
         false ->
             case gui_session:is_logged_in() of
@@ -253,10 +257,12 @@ validate_login_by_linked_account(OriginalLinkedAccount, ConnectAccount, Redirect
             end,
             % Standard login, check if there is an account belonging to the user
             case acquire_user_by_linked_account(LinkedAccount) of
-                {exists, UserId} ->
+                {exists, #document{key = UserId}} ->
+                    user_logic:merge_linked_account(UserId, LinkedAccount),
                     gui_session:log_in(UserId),
                     {redirect, RedirectAfterLogin};
-                {created, UserId} ->
+                {created, #document{key = UserId}} ->
+                    user_logic:merge_linked_account(UserId, LinkedAccount),
                     gui_session:log_in(UserId),
                     gui_session:put_value(firstLogin, true),
                     new_user
@@ -268,10 +274,13 @@ validate_login_by_linked_account(OriginalLinkedAccount, ConnectAccount, Redirect
             case get_user_by_linked_account(LinkedAccount) of
                 {ok, #document{key = OtherUser}} when OtherUser /= UserId ->
                     % The account is used on some other profile, cannot proceed
-                    {error, ?error_auth_account_already_connected};
+                    {error, ?error_auth_account_already_linked_to_another_user};
+                {ok, #document{key = UserId}} ->
+                    % The account is used on some other profile, cannot proceed
+                    {error, ?error_auth_account_already_linked_to_current_user};
                 _ ->
                     % Not found = ok, get the user and add new provider info
-                    ok = user_logic:add_linked_account(UserId, LinkedAccount),
+                    user_logic:merge_linked_account(UserId, LinkedAccount),
                     {redirect, <<?PAGE_AFTER_LOGIN, "?expand_accounts=true">>}
             end
     end.
@@ -312,12 +321,23 @@ saml_assertions_to_linked_account(IdPId, IdP, Attributes) ->
         Val ->
             Val
     end,
+    Groups = case saml_config:has_group_mapping_enabled(IdPId) of
+        false ->
+            [];
+        true ->
+            GroupsStrings = proplists:get_value(
+                maps:get(groups, AttributeMapping, undefined),
+                Attributes, []
+            ),
+            [str_utils:unicode_list_to_binary(G) || G <- GroupsStrings]
+    end,
     #linked_account{
         provider_id = IdPId,
         user_id = UserId,
         email_list = extract_emails(maps:get(email, AttributeMapping, undefined), Attributes),
         name = get_value_binary(maps:get(name, AttributeMapping, undefined), Attributes),
-        login = get_value_binary(maps:get(login, AttributeMapping, undefined), Attributes)
+        login = get_value_binary(maps:get(login, AttributeMapping, undefined), Attributes),
+        groups = saml_config:normalize_membership_specs(IdPId, Groups)
     }.
 
 
@@ -348,15 +368,16 @@ get_user_by_linked_account(LinkedAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec acquire_user_by_linked_account(#linked_account{}) ->
-    {exists | created, UserId :: od_user:id()}.
+    {exists | created, UserDoc :: #document{}}.
 acquire_user_by_linked_account(LinkedAccount) ->
     case get_user_by_linked_account(LinkedAccount) of
-        {ok, #document{key = UserId}} ->
-            {exists, UserId};
+        {ok, #document{} = Doc} ->
+            {exists, Doc};
         {error, not_found} ->
-            {ok, UserId} = create_user_by_linked_account(LinkedAccount),
+            {ok, UserId} = user_logic:create_user_by_linked_account(LinkedAccount),
             entity_graph:ensure_up_to_date(),
-            {created, UserId}
+            {ok, Doc} = od_user:get(UserId),
+            {created, Doc}
     end.
 
 
@@ -370,7 +391,7 @@ acquire_user_by_linked_account(LinkedAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec acquire_user_by_external_access_token(ProviderId :: atom(), AccessToken :: binary()) ->
-    {exists | created, UserId :: od_user:id()} | {error, bad_access_token}.
+    {exists | created, UserDoc :: #document{}} | {error, bad_access_token}.
 acquire_user_by_external_access_token(ProviderId, AccessToken) ->
     Module = auth_config:get_provider_module(ProviderId),
     case Module:get_user_info(AccessToken) of
@@ -379,58 +400,3 @@ acquire_user_by_external_access_token(ProviderId, AccessToken) ->
         {error, bad_access_token} ->
             {error, bad_access_token}
     end.
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Creates a new user based on given linked account. Before creating such user,
-%% it must be ensured that user with such linked account does not exist.
-%% @end
-%%--------------------------------------------------------------------
--spec create_user_by_linked_account(#linked_account{}) ->
-    {ok, UserId :: od_user:id()} | {error, not_found}.
-create_user_by_linked_account(LinkedAccount) ->
-    #linked_account{
-        provider_id = IdPName,
-        user_id = IdPUserId,
-        email_list = Emails
-    } = LinkedAccount,
-    UserInfo = #od_user{
-        email_list = Emails,
-        name = resolve_name_from_linked_account(LinkedAccount),
-        linked_accounts = [LinkedAccount]
-    },
-    UserId = user_logic:idp_uid_to_system_uid(IdPName, IdPUserId),
-    user_logic:create(UserInfo, UserId).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Resolve what name should be set for user based on his linked account.
-%% If user name was send by linked provider, use it.
-%% If not, try this with login.
-%% If not, try using the email (the part before @) as name.
-%% If there is no email, return a generic "unknown" string.
-%% @end
-%%--------------------------------------------------------------------
--spec resolve_name_from_linked_account(#linked_account{}) -> binary().
-resolve_name_from_linked_account(LinkedAccount) ->
-    case LinkedAccount of
-        #linked_account{name = <<"">>, login = <<"">>, email_list = []} ->
-            <<"Unknown Name">>;
-        #linked_account{name = <<"">>, login = <<"">>, email_list = EmailList} ->
-            hd(binary:split(hd(EmailList), <<"@">>));
-        #linked_account{name = <<"">>, login = Login} ->
-            Login;
-        #linked_account{name = Name} ->
-            Name
-    end.
-
-
-

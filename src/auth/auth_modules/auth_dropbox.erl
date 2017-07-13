@@ -108,7 +108,8 @@ get_user_info(AccessToken) ->
         user_id = auth_utils:get_value_binary(<<"uid">>, UserInfoProplist),
         email_list = auth_utils:extract_emails(UserInfoProplist),
         name = auth_utils:get_value_binary(<<"display_name">>, UserInfoProplist),
-        login = auth_utils:get_value_binary(<<"login">>, UserInfoProplist)
+        login = auth_utils:get_value_binary(<<"login">>, UserInfoProplist),
+        groups = []
     },
     {ok, ProvUserInfo}.
 

@@ -108,7 +108,8 @@ get_user_info(AccessToken) ->
         provider_id = ?PROVIDER_ID,
         user_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
         email_list = auth_utils:extract_emails(JSONProplist),
-        name = auth_utils:get_value_binary(<<"name">>, JSONProplist)
+        name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
+        groups = []
     },
     {ok, ProvUserInfo}.
 

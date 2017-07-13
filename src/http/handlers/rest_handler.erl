@@ -534,7 +534,7 @@ authenticate_by_oauth_provider(Req) ->
                     ) of
                         {error, bad_access_token} ->
                             throw(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId));
-                        {_, UserId} ->
+                        {_, #document{key = UserId}} ->
                             {true, #client{type = user, id = UserId}}
                     end
             end

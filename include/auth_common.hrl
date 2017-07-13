@@ -31,8 +31,19 @@
 % Error atom indicating that login request is invalid
 -define(error_auth_invalid_request, invalid_request).
 
-% Error atom indicating that account has already been connected to other profile
--define(error_auth_account_already_connected, account_already_connected).
+% Error atom indicating that login request failed because of invalid
+% access token issued by the IdP
+-define(error_auth_access_token_invalid, access_token_invalid).
+
+% Error atom indicating that account has already been linked to other profile
+-define(error_auth_account_already_linked_to_another_user,
+    account_already_linked_to_another_user
+).
+
+% Error atom indicating that account has already been linked to other profile
+-define(error_auth_account_already_linked_to_current_user,
+    account_already_linked_to_current_user
+).
 
 -endif.
 

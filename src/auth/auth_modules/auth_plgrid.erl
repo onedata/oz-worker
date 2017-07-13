@@ -136,7 +136,8 @@ validate_login() ->
             user_id = str_utils:to_binary(Login),
             login = Login,
             email_list = Emails,
-            name = Name
+            name = Name,
+            groups = []
         },
         {ok, ProvUserInfo}
 

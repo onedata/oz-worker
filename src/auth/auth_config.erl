@@ -23,6 +23,7 @@
 -export([load_auth_config/0, get_auth_config/1, get_auth_providers/0]).
 -export([get_provider_module/1, get_provider_app_id/1, get_provider_app_secret/1]).
 -export([get_providers_with_auth_delegation/0]).
+-export([get_group_mapping_config/1, has_group_mapping_enabled/1, get_super_group/1]).
 
 
 %%%===================================================================
@@ -136,3 +137,34 @@ get_providers_with_auth_delegation() ->
     application:get_env(?APP_NAME, auth_delegation_providers, []).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether given OIDC provider has group mapping enabled.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_mapping_config(ProviderId :: atom()) -> proplists:proplist().
+get_group_mapping_config(ProviderId) ->
+    proplists:get_value(group_mapping, get_auth_config(ProviderId), []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether given OIDC provider has group mapping enabled.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_group_mapping_enabled(ProviderId :: atom()) -> boolean().
+has_group_mapping_enabled(ProviderId) ->
+    proplists:get_value(enabled, get_group_mapping_config(ProviderId), false).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the id of super group per given provider id, if specified,
+%% undefined otherwise. Super group has admin rights in all groups belonging to
+%% given virtual organization.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_super_group(ProviderId :: atom()) ->
+    undefined | idp_group_mapping:group_spec().
+get_super_group(ProviderId) ->
+    proplists:get_value(super_group, get_group_mapping_config(ProviderId), undefined).
