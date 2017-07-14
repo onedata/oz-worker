@@ -52,7 +52,7 @@
        {ref,"ea22638b684a79eba831d2df54666905bd451b15"}},
   2},
  {<<"esaml">>,
-  {git,"https://github.com/lopiola/esaml.git",
+  {git,"https://github.com/onedata/esaml.git",
        {ref,"087c2a78c1f0cc9461709de14286cbf3ac019726"}},
   0},
  {<<"exometer_core">>,
