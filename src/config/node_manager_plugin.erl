@@ -22,9 +22,9 @@
 -include_lib("ctool/include/global_definitions.hrl").
 
 %% node_manager_plugin_behaviour callbacks
--export([before_init/1, after_init/1, on_terminate/2, on_code_change/3,
+-export([before_init/1, after_init/1, on_terminate/2, on_code_change/3, renamed_models/0,
     handle_call_extension/3, handle_cast_extension/2, handle_info_extension/2,
-    modules_with_args/0, listeners/0, cm_nodes/0, db_nodes/0,
+    modules_with_args/0, modules_hooks/0, listeners/0, cm_nodes/0, db_nodes/0,
     check_node_ip_address/0, app_name/0, clear_memory/1]).
 
 %%%===================================================================
@@ -46,7 +46,7 @@ app_name() ->
 %%--------------------------------------------------------------------
 -spec cm_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 cm_nodes() ->
-    application:get_env(?APP_Name, cm_nodes).
+    application:get_env(?APP_NAME, cm_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -55,7 +55,18 @@ cm_nodes() ->
 %%--------------------------------------------------------------------
 -spec db_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 db_nodes() ->
-    application:get_env(?APP_Name, db_nodes).
+    application:get_env(?APP_NAME, db_nodes).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Maps old model name to new one.
+%% @end
+%%--------------------------------------------------------------------
+-spec renamed_models() ->
+    #{OldName :: model_behaviour:model_type() =>
+    {RenameVersion :: datastore_json:record_version(), NewName :: model_behaviour:model_type()}}.
+renamed_models() ->
+    #{}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -63,12 +74,12 @@ db_nodes() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
-listeners() ->  [
+listeners() -> [
     oz_redirector_listener,
     subscriptions_wss_listener,
     rest_listener,
     gui_listener |
-    node_manager:cluster_worker_listeners() -- [redirector_listener]
+        node_manager:cluster_worker_listeners() -- [redirector_listener]
 ].
 
 %%--------------------------------------------------------------------
@@ -79,18 +90,29 @@ listeners() ->  [
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() ->
     Base = node_manager:cluster_worker_modules() ++ [
-        {groups_graph_caches_worker, []},
-        {changes_worker, []},
-        {ozpca_worker, []},
+        {singleton, changes_worker, []},
+        {singleton, ozpca_worker, [
+            {supervisor_flags, ozpca_worker:supervisor_flags()},
+            {supervisor_children_spec, [ozpca_worker:supervisor_children_spec()]}
+        ]},
         {subscriptions_worker, []}
     ],
-    case application:get_env(?APP_Name, location_service_enabled) of
+    case application:get_env(?APP_NAME, location_service_enabled) of
         {ok, false} -> Base;
         {ok, true} -> Base ++ [
             {location_service_worker, []},
             {identity_publisher_worker, []}
         ]
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link node_manager_plugin_behaviour} callback modules_hooks/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec modules_hooks() -> Hooks :: [{{Module :: atom(), early_init | init},
+    {HookedModule :: atom(), Fun :: atom(), Args :: list()}}].
+modules_hooks() -> node_manager:modules_hooks().
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -119,12 +141,14 @@ after_init([]) ->
         %% This cannot be started before all workers are up
         %% and critical section is running
         %% todo: once critical section works in worker init, move it there
-        case application:get_env(?APP_Name, location_service_enabled) of
+        case application:get_env(?APP_NAME, location_service_enabled) of
             {ok, false} ->
                 ok;
             {ok, true} ->
                 identity_publisher_worker:start_refreshing()
         end,
+
+        entity_graph:init_state(),
 
         %% This code will be run on every node_manager, so we need a
         %% transaction here that will prevent duplicates.
@@ -230,7 +254,7 @@ on_code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 -spec check_node_ip_address() -> IPV4Addr :: {A :: byte(), B :: byte(), C :: byte(), D :: byte()}.
 check_node_ip_address() ->
-    case application:get_env(?APP_Name, external_ip, undefined) of
+    case application:get_env(?APP_NAME, external_ip, undefined) of
         undefined ->
             ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
             {127, 0, 0, 1};

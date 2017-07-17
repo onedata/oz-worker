@@ -21,11 +21,19 @@
 
 -define(KEY, <<"current_state">>).
 
--export([init/1, cleanup/0, handle/1]).
+%% worker_plugin_behaviour callbacks
+-export([init/1, handle/1, cleanup/0]).
+
+%% API
+-export([supervisor_flags/0, supervisor_children_spec/0]).
+
+%%%===================================================================
+%%% worker_plugin_behaviour callbacks
+%%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Initialize module
+%% {@link worker_plugin_behaviour} callback init/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Args :: term()) ->
@@ -36,7 +44,7 @@ init(_) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Do your work.
+%% {@link worker_plugin_behaviour} callback handle/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle(Request :: term()) ->
@@ -66,7 +74,7 @@ handle({sign_provider_req, BinProviderId, CSRBin} = Req) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% The module will not be used anymore. Clean up!
+%% {@link worker_plugin_behaviour} callback cleanup/0
 %% @end
 %%--------------------------------------------------------------------
 -spec cleanup() -> ok | {error, Reason :: term()}.
@@ -74,14 +82,47 @@ cleanup() ->
     ok.
 
 %%%===================================================================
-%%% Internal functions
+%%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns a supervisor spec for a ozpca worker supervisor.
+%% @end
+%%--------------------------------------------------------------------
+-spec supervisor_flags() -> supervisor:sup_flags().
+supervisor_flags() ->
+    #{
+        strategy => one_for_one,
+        intensity => 1000,
+        period => 3600
+    }.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a worker child_spec for a ozpca gen_server.
+%% @end
+%%--------------------------------------------------------------------
+-spec supervisor_children_spec() -> supervisor:child_spec().
+supervisor_children_spec() ->
+    #{
+        id => ozpca,
+        start => {ozpca, start_link, []},
+        restart => permanent,
+        shutdown => timer:seconds(10),
+        type => worker,
+        modules => [ozpca]
+    }.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
 %% @private
-%% Pass request to dedicated node
-%% or execute the callback if already at dedicated node.
+%% @doc
+%% Pass a request to a dedicated node or execute the callback if already at
+%% the dedicated node.
 %% @end
 %%--------------------------------------------------------------------
 
@@ -101,9 +142,9 @@ call_dedicated_node(Fun, Req) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc
 %% @private
-%% Get selected dedicated node or try to select one if none is selected yet.
+%% @doc
+%% Returns a dedicated node or tries to select one if none is selected yet.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_dedicated_node() -> {ok, node()} | {error, Reason :: term()}.
@@ -126,9 +167,9 @@ get_dedicated_node() ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc
 %% @private
-%% Selects one node eligible to be dedicated.
+%% @doc
+%% Returns a node dedicated to handle requests.
 %% @end
 %%--------------------------------------------------------------------
 -spec select_dedicated_node() -> {ok, node()} | {error, Reason :: term()}.

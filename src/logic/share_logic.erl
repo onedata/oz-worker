@@ -1,12 +1,13 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc The module implementing the business logic for shares in OneZone.
-%%% This module serves as a buffer between the database and the REST API.
+%%% @doc
+%%% This module encapsulates all share logic functionalities.
+%%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(share_logic).
@@ -15,137 +16,132 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-%% API
--export([create/4, exists/1, modify/2, remove/1]).
--export([get_data/2, get_space/1]).
--export([list/0]).
--export([share_id_to_public_url/1, share_id_to_redirect_url/1]).
+-define(PLUGIN, share_logic_plugin).
+
+-export([
+    create/5, create/2
+]).
+-export([
+    get/2,
+    get_data/2,
+    list/1
+]).
+-export([
+    update/3
+]).
+-export([
+    delete/2
+]).
+-export([
+    exists/1
+]).
+-export([
+    share_id_to_public_url/1,
+    share_id_to_redirect_url/1
+]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Creates a share with given id (ShareId is client side generated).
-%% Throws exception when call to the datastore fails,
-%% or given member doesn't exist.
+%% @doc
+%% Creates a new share document in database based on Share Id, Name,
+%% RootFileId and parent SpaceId.
 %% @end
 %%--------------------------------------------------------------------
--spec create(ShareId :: binary(),
-    Name :: binary(), RootFileId :: binary(), ParentSpaceId :: binary()) ->
-    {ok, ShareId :: binary()} | no_return().
-create(ShareId, Name, RootFileId, ParentSpaceId) ->
-    true = space_logic:exists(ParentSpaceId),
-
-    Share = #od_share{
-        name = Name,
-        space = ParentSpaceId,
-        root_file = RootFileId,
-        public_url = share_id_to_public_url(ShareId)
-    },
-    {ok, ShareId} = od_share:save(#document{key = ShareId, value = Share}),
-
-    {ok, _} = od_space:update(ParentSpaceId, fun(SpaceDoc) ->
-        Shares = SpaceDoc#od_space.shares,
-        {ok, SpaceDoc#od_space{shares = [ShareId | Shares]}}
-    end),
-
-    {ok, ShareId}.
+-spec create(Client :: entity_logic:client(), ShareId :: od_share:id(),
+    Name :: binary(), RootFileId :: binary(), SpaceId :: od_space:id()) ->
+    {ok, od_share:id()} | {error, term()}.
+create(Client, ShareId, Name, RootFileId, SpaceId) ->
+    create(Client, #{
+        <<"shareId">> => ShareId,
+        <<"name">> => Name,
+        <<"rootFileId">> => RootFileId,
+        <<"spaceId">> => SpaceId
+    }).
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns whether a Share exists.
-%% Throws exception when call to the datastore fails.
+%% @doc
+%% Creates a new share document in database. Share Id, Name,
+%% RootFileId and parent SpaceId are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(ShareId :: binary()) -> boolean().
+-spec create(Client :: entity_logic:client(), Data :: #{}) ->
+    {ok, od_share:id()} | {error, term()}.
+create(Client, Data) ->
+    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a share record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
+    {ok, #od_share{}} | {error, term()}.
+get(Client, ShareId) ->
+    entity_logic:get(Client, ?PLUGIN, ShareId, entity).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves information about a share record from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_data(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
+    {ok, #{}} | {error, term()}.
+get_data(Client, ShareId) ->
+    entity_logic:get(Client, ?PLUGIN, ShareId, data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Lists all shares (their ids) in database.
+%% @end
+%%--------------------------------------------------------------------
+-spec list(Client :: entity_logic:client()) ->
+    {ok, [od_share:id()]} | {error, term()}.
+list(Client) ->
+    entity_logic:get(Client, ?PLUGIN, undefined, list).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates information of given share (currently only name is supported).
+%% Has two variants:
+%% 1) Share Name is given explicitly
+%% 2) Share name is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(Client :: entity_logic:client(), ShareId :: od_share:id(),
+    Data :: #{}) -> ok | {error, term()}.
+update(Client, ShareId, NewName) when is_binary(NewName) ->
+    update(Client, ShareId, #{<<"name">> => NewName});
+update(Client, ShareId, Data) ->
+    entity_logic:update(Client, ?PLUGIN, ShareId, entity, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given share from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
+    ok | {error, term()}.
+delete(Client, ShareId) ->
+    entity_logic:delete(Client, ?PLUGIN, ShareId, entity).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether a share exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(ShareId :: od_share:id()) -> boolean().
 exists(ShareId) ->
     od_share:exists(ShareId).
-
-
-%%--------------------------------------------------------------------
-%% @doc Modify share details (currently only name can be modified).
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec modify(ShareId :: binary(), NewName :: binary()) -> ok.
-modify(ShareId, NewName) ->
-    {ok, _} = od_share:update(ShareId, fun(ShareDoc) ->
-        {ok, ShareDoc#od_share{name = NewName}}
-    end),
-    ok.
-
-
-%%--------------------------------------------------------------------
-%% @doc Removes a share.
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec remove(ShareId :: binary()) -> true.
-remove(ShareId) ->
-    {ok, #document{
-        value = #od_share{
-            space = ParentSpaceId
-        }}} = od_share:get(ShareId),
-    ok = od_share:delete(ShareId),
-    {ok, _} = od_space:update(ParentSpaceId, fun(SpaceDoc) ->
-        Shares = SpaceDoc#od_space.shares,
-        {ok, SpaceDoc#od_space{shares = Shares -- [ShareId]}}
-    end),
-    true.
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns details about the Share.
-%% Throws exception when call to the datastore fails, or space doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec get_data(ShareId :: binary(),
-    Client :: {user, UserId :: binary()} | provider) ->
-    {ok, [proplists:property()]}.
-get_data(ShareId, _Client) ->
-    {ok, #document{
-        value = #od_share{
-            name = Name,
-            public_url = PublicURL,
-            root_file = RootFile,
-            space = Space
-        }}} = od_share:get(ShareId),
-    {ok, [
-        {shareId, ShareId},
-        {name, Name},
-        {publicUrl, PublicURL},
-        {rootFileId, RootFile},
-        {spaceId, Space}
-    ]}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns the parent space of given share.
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec get_space(ShareId :: binary()) ->
-    {ok, undefined | binary()} | datastore:get_error().
-get_space(ShareId) ->
-    case od_share:get(ShareId) of
-        {ok, #document{value = #od_share{space = ParentSpaceId}}} ->
-            {ok, ParentSpaceId};
-        Error ->
-            Error
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns a list of all shares (their ids).
-%%--------------------------------------------------------------------
--spec list() -> {ok, [binary()]}.
-list() ->
-    {ok, ShareDocs} = od_share:list(),
-    ShareIds = lists:map(fun(#document{key = ShareId}) ->
-        ShareId
-    end, ShareDocs),
-    {ok, ShareIds}.
 
 
 %%--------------------------------------------------------------------
@@ -155,7 +151,7 @@ list() ->
 %%--------------------------------------------------------------------
 -spec share_id_to_public_url(ShareId :: binary()) -> binary().
 share_id_to_public_url(ShareId) ->
-    OZHostname = dns_query_handler:get_canonical_hostname(),
+    {ok, OZHostname} = application:get_env(oz_worker, http_domain),
     str_utils:format_bin("https://~s/share/~s", [OZHostname, ShareId]).
 
 
@@ -166,16 +162,16 @@ share_id_to_public_url(ShareId) ->
 -spec share_id_to_redirect_url(ShareId :: binary()) -> binary().
 share_id_to_redirect_url(ShareId) ->
     {ok, #document{
-        value = #od_share{
-            space = ParentSpaceId
-        }}} = od_share:get(ShareId),
-    {ok, [{providers, Providers}]} =
-        space_logic:get_providers(ParentSpaceId, provider),
+        value = #od_share{space = ParentSpaceId}
+    }} = od_share:get(ShareId),
+    {ok, #document{
+        value = #od_space{providers = Providers}
+    }} = od_space:get(ParentSpaceId),
     % Prefer online providers
     {Online, Offline} = lists:partition(
         fun(ProviderId) ->
             subscriptions:any_connection_active(ProviderId)
-        end, Providers),
+        end, maps:keys(Providers)),
     % But if there are none, choose one of inactive
     Choice = case length(Online) of
         0 -> Offline;

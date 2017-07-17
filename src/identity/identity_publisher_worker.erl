@@ -33,9 +33,9 @@
 %%--------------------------------------------------------------------
 -spec start_refreshing() -> ok.
 start_refreshing() ->
-    {ok, KeyFile} = application:get_env(?APP_Name, identity_key_file),
-    {ok, CertFile} = application:get_env(?APP_Name, identity_cert_file),
-    {ok, Domain} = application:get_env(?APP_Name, http_domain),
+    {ok, KeyFile} = application:get_env(?APP_NAME, identity_key_file),
+    {ok, CertFile} = application:get_env(?APP_NAME, identity_cert_file),
+    {ok, Domain} = application:get_env(?APP_NAME, http_domain),
     ok = identity_utils:ensure_synced_cert_present(KeyFile, CertFile, Domain),
     refresh(),
     schedule_cert_refresh().
@@ -99,13 +99,13 @@ schedule_cert_refresh() ->
 
 -spec refresh_interval() -> integer().
 refresh_interval() ->
-    {ok, Interval} = application:get_env(?APP_Name, public_key_refresh_interval_seconds),
+    {ok, Interval} = application:get_env(?APP_NAME, public_key_refresh_interval_seconds),
     timer:seconds(Interval).
 
 -spec refresh() -> ok | {error, Reason :: term()}.
 refresh() ->
     ?debug("Refreshing published public key"),
-    {ok, CertFile} = application:get_env(?APP_Name, identity_cert_file),
+    {ok, CertFile} = application:get_env(?APP_NAME, identity_cert_file),
     DecodedCertificate = identity_utils:read_cert(CertFile),
     identity:publish(DecodedCertificate),
 

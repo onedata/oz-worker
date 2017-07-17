@@ -45,7 +45,6 @@ deps:
 
 compile:
 	$(REBAR) compile
-	make -C $(LIB_DIR)/cluster_worker/ priv/sync_gateway
 
 ## Generates a production release
 generate: compile deps
@@ -82,10 +81,9 @@ appmock_rel:
 	make -C appmock/ rel
 
 relclean:
-	rm -rf rel/test_cluster
-	rm -rf rel/oz_worker
-	rm -rf appmock/rel/appmock
-	rm -rf cluster_manager/rel/cluster_manager
+	rm -rf _build/rel/oz_worker
+	rm -rf appmock/_build/rel/appmock
+	rm -rf cluster_manager/_build/rel/cluster_manager
 
 ##
 ## Testing
@@ -97,7 +95,7 @@ eunit:
 	@for tout in `find test -name "TEST-*.xml"`; do awk '/testcase/{gsub("_[0-9]+\"", "_" ++i "\"")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
 
 coverage:
-	$(BASE_DIR)/bamboos/docker/coverage.escript $(BASE_DIR)
+	$(BASE_DIR)/bamboos/docker/coverage.escript $(BASE_DIR) $(on_bamboo)
 
 ##
 ## Dialyzer targets local

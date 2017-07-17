@@ -13,6 +13,7 @@
 
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -76,9 +77,7 @@ optional_response_elements() -> [].
 get_response(<<"record">>, Args) ->
     Id = proplists:get_value(<<"identifier">>, Args),
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-    Metadata = get_metadata(Id),
-    MetadataValue = proplists:get_value(metadata, Metadata),
-    DateTime = proplists:get_value(timestamp, Metadata),
+    #od_handle{metadata = Metadata, timestamp = DateTime} = get_handle_safe(Id),
     %% TODO check if metadataPrefix is available for given identifier
     case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
         true ->
@@ -89,7 +88,7 @@ get_response(<<"record">>, Args) ->
                 },
                 metadata = #oai_metadata{
                     metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
-                    value = MetadataValue
+                    value = Metadata
                 }
             };
         false ->
@@ -107,12 +106,11 @@ get_response(<<"record">>, Args) ->
 %%% If it fails, throws idDoesNotExist
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_metadata(oai_id()) -> any().
-get_metadata(OAIId) ->
+-spec get_handle_safe(oai_id()) -> #od_handle{}.
+get_handle_safe(OAIId) ->
     try
         Id = oai_utils:oai_identifier_decode(OAIId),
-        {ok, Metadata} = handle_logic:get_metadata(Id),
-        Metadata
+        oai_utils:get_handle(Id)
     catch
         throw:{illegalId, OAIId} ->
             throw({illegalId, OAIId});

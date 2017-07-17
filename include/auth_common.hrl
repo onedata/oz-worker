@@ -12,23 +12,38 @@
 -ifndef(AUTH_COMMON_HRL).
 -define(AUTH_COMMON_HRL, 1).
 
+% SAML endpoints
+-define(SAML_METADATA_ENDPOINT, "/saml/sp.xml").
+-define(SAML_CONSUME_ENDPOINT, "/saml/consume").
+
 % Endpoint for OpenID / OAuth validation
 -define(local_auth_endpoint, "/validate_login").
 
 % Endpoint for redirects to providers
 -define(provider_auth_endpoint, "/validate_login.html").
 
+% Error atom indicating that there was an unexpected server error during login
+-define(error_auth_server_error, server_error).
+
+% Error atom indicating that login request state was
+-define(error_auth_invalid_state, invalid_state).
+
 % Error atom indicating that login request is invalid
--define(error_auth_invalid_request, "invalid_request").
+-define(error_auth_invalid_request, invalid_request).
 
-% Error atom indicating that email address is occupied (while creating new acc)
--define(error_auth_new_email_occupied, "new_email_occupied").
+% Error atom indicating that login request failed because of invalid
+% access token issued by the IdP
+-define(error_auth_access_token_invalid, access_token_invalid).
 
-% Error atom indicating that email address is occupied (while connecting an acc)
--define(error_auth_connect_email_occupied, "connect_email_occupied").
+% Error atom indicating that account has already been linked to other profile
+-define(error_auth_account_already_linked_to_another_user,
+    account_already_linked_to_another_user
+).
 
-% Error atom indicating that account has already been connected to other profile
--define(error_auth_account_already_connected, "account_already_connected").
+% Error atom indicating that account has already been linked to other profile
+-define(error_auth_account_already_linked_to_current_user,
+    account_already_linked_to_current_user
+).
 
 -endif.
 

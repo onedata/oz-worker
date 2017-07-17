@@ -16,10 +16,10 @@
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 
--define(PROVIDER_NAME, google).
+-define(PROVIDER_ID, google).
 
 %% API
--export([get_redirect_url/1, validate_login/0]).
+-export([get_redirect_url/1, validate_login/0, get_user_info/1]).
 
 %%%===================================================================
 %%% API functions
@@ -33,7 +33,9 @@
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 get_redirect_url(ConnectAccount) ->
     auth_oauth2_common:get_redirect_url(
-        ConnectAccount, ?PROVIDER_NAME, ?MODULE).
+        ConnectAccount, ?PROVIDER_ID, ?MODULE
+    ).
+
 
 %%--------------------------------------------------------------------
 %% @doc Validates login request that came back from the provider.
@@ -41,6 +43,21 @@ get_redirect_url(ConnectAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_login() ->
-    {ok, #oauth_account{}} | {error, term()}.
+    {ok, #linked_account{}} | {error, term()}.
 validate_login() ->
-    auth_oauth2_common:validate_login(?PROVIDER_NAME, secret_over_http_post).
+    auth_oauth2_common:validate_login(
+        ?PROVIDER_ID, secret_over_http_post, access_token_in_url
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user info from oauth provider based on access token.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_info(AccessToken :: binary()) ->
+    {ok, #linked_account{}} | {error, bad_access_token}.
+get_user_info(AccessToken) ->
+    auth_oauth2_common:get_user_info(
+        ?PROVIDER_ID, access_token_in_url, AccessToken
+    ).

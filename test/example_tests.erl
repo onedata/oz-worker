@@ -32,10 +32,10 @@ example_test_() ->
 %%%===================================================================
 
 setup() ->
-    ok.
+    meck:new(http_client).
 
 teardown(_) ->
-    ok.
+    meck:unload(http_client).
 
 %%%===================================================================
 %%% Tests functions
@@ -43,7 +43,6 @@ teardown(_) ->
 
 mock_example() ->
     ExpectedAns = "<html></html>",
-    meck:new(http_client),
     meck:expect(http_client, get, fun(_, _) -> ExpectedAns end),
     ?assertEqual(ExpectedAns, http_client:get("url", [])).
 

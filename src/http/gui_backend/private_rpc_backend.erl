@@ -14,6 +14,8 @@
 -author("Lukasz Opiola").
 -behaviour(rpc_backend_behaviour).
 
+-include("rest.hrl").
+-include("errors.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -32,24 +34,11 @@
 %%--------------------------------------------------------------------
 -spec handle(FunctionId :: binary(), RequestData :: term()) ->
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
-handle(<<"getUserAlias">>, _) ->
-    UserId = g_session:get_user_id(),
-    {ok, #od_user{
-        alias = Alias
-    }} = user_logic:get_user(UserId),
-    UserAlias = case str_utils:to_binary(Alias) of
-        <<"">> -> null;
-        Bin -> Bin
-    end,
-    {ok, [
-        {<<"userAlias">>, UserAlias}
-    ]};
-
 handle(<<"changePassword">>, Props) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     {ok, #od_user{
         login = Login
-    }} = user_logic:get_user(UserId),
+    }} = user_logic:get(?USER(UserId), UserId),
     OldPassword = proplists:get_value(<<"oldPassword">>, Props),
     NewPassword = proplists:get_value(<<"newPassword">>, Props),
     case user_logic:change_user_password(Login, OldPassword, NewPassword) of
@@ -62,44 +51,27 @@ handle(<<"changePassword">>, Props) ->
                 <<"Cannot change user password - old password incorrect.">>)
     end;
 
-handle(<<"setUserAlias">>, [{<<"userAlias">>, NewAlias}]) ->
-    UserId = g_session:get_user_id(),
-    case user_logic:set_alias(UserId, NewAlias) of
-        ok ->
-            {ok, [
-                {<<"userAlias">>, NewAlias}
-            ]};
-        {error, disallowed_alias_prefix} ->
-            gui_error:report_warning(
-                <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
-        {error, invalid_alias} ->
-            gui_error:report_warning(
-                <<"Alias can contain only lowercase letters and digits, and "
-                "must be at least 5 characters long.">>);
-        {error, alias_occupied} ->
-            gui_error:report_warning(
-                <<"This alias is occupied by someone else. "
-                "Please choose other alias.">>)
-    end;
-
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
-    Provider = binary_to_atom(ProviderBin, utf8),
-    HandlerModule = auth_config:get_provider_module(Provider),
-    {ok, URL} = HandlerModule:get_redirect_url(true),
+    ProviderId = binary_to_atom(ProviderBin, utf8),
+    {ok, URL} = auth_utils:get_redirect_url(ProviderId, true),
     {ok, [
         {<<"url">>, URL}
     ]};
 
 handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
-    Client = #client{type = user, id = g_session:get_user_id()},
-    {ok, Token} = token_logic:create(
-        Client, space_support_token, {space, SpaceId}),
-    {ok, [
-        {<<"token">>, Token}
-    ]};
+    Client = ?USER(gui_session:get_user_id()),
+    case space_logic:create_provider_invite_token(Client, SpaceId) of
+        {ok, Macaroon} ->
+            {ok, Token} = token_utils:serialize62(Macaroon),
+            {ok, [{<<"token">>, Token}]};
+        ?ERROR_UNAUTHORIZED ->
+            gui_error:report_warning(
+                <<"You do not have permissions to issue support tokens.">>
+            )
+    end;
 
 handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
-    UserId = g_session:get_user_id(),
+    UserId = gui_session:get_user_id(),
     % @todo check if provider is online, if not push update of model
     {ok, URL} = auth_logic:get_redirection_uri(UserId, ProviderId),
     {ok, [
@@ -107,42 +79,21 @@ handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     ]};
 
 handle(<<"unsupportSpace">>, Props) ->
+    Client = ?USER(gui_session:get_user_id()),
     SpaceId = proplists:get_value(<<"spaceId">>, Props),
     ProviderId = proplists:get_value(<<"providerId">>, Props),
-    UserId = g_session:get_user_id(),
-    Authorized = space_logic:has_effective_privilege(
-        SpaceId, UserId, space_remove_provider
-    ),
-    case Authorized of
-        true ->
-            true = space_logic:remove_provider(SpaceId, ProviderId),
-            {ok, [{providers, UserProviders}]} =
-                user_logic:get_providers(UserId),
-            {ok, #document{
-                value = #od_user{
-                    space_aliases = SpaceNamesMap,
-                    default_space = DefaultSpaceId,
-                    default_provider = DefaultProvider
-                }}} = od_user:get(UserId),
-            {ok, UserSpaces} = user_logic:get_spaces(UserId),
-            SpaceIds = proplists:get_value(spaces, UserSpaces),
-            SpaceRecord = space_data_backend:space_record(
-                SpaceId, SpaceNamesMap, DefaultSpaceId, UserProviders
+    UserId = gui_session:get_user_id(),
+    case space_logic:leave_provider(Client, SpaceId, ProviderId) of
+        ok ->
+            user_data_backend:push_user_record(UserId),
+            gui_async:push_updated(
+                <<"space">>, space_data_backend:space_record(SpaceId, UserId)
             ),
-            gui_async:push_updated(<<"space">>, SpaceRecord),
-            ProviderRecord = provider_data_backend:provider_record(
-                ProviderId, DefaultProvider, SpaceIds
+            gui_async:push_updated(
+                <<"provider">>, provider_data_backend:provider_record(ProviderId, UserId)
             ),
-            % If the provider no longer supports any of user's spaces, delete
-            % the record in ember cache.
-            case proplists:get_value(<<"spaces">>, ProviderRecord) of
-                [] ->
-                    gui_async:push_deleted(<<"provider">>, ProviderId);
-                _ ->
-                    gui_async:push_updated(<<"provider">>, ProviderRecord)
-            end,
             ok;
-        false ->
+        ?ERROR_UNAUTHORIZED ->
             gui_error:report_warning(
                 <<"You do not have permissions to unsupport this space. "
                 "Those persmissions can be modified in file browser, "
@@ -150,24 +101,48 @@ handle(<<"unsupportSpace">>, Props) ->
             )
     end;
 
-
 handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
-    UserId = g_session:get_user_id(),
-    case token_logic:validate(Token, space_invite_user_token) of
-        false ->
+    UserId = gui_session:get_user_id(),
+    case user_logic:join_space(?USER(UserId), UserId, Token) of
+        ?ERROR_BAD_VALUE_TOKEN(_) ->
             gui_error:report_warning(<<"Invalid token value.">>);
-        {true, Macaroon} ->
-            {ok, SpaceId} = space_logic:join({user, UserId}, Macaroon),
-            % Push the newly joined space to the client's model
-            {ok, #document{
-                value = #od_user{
-                    space_aliases = SpaceNamesMap
-                }}} = od_user:get(UserId),
-            SpaceRecord = space_data_backend:space_record(
-                % DefaultSpaceId and UserProviders do not matter because this is
-                % a new space - it's not default and has no providers
-                SpaceId, SpaceNamesMap, <<"">>, []
-            ),
-            gui_async:push_created(<<"space">>, SpaceRecord),
+        ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(_) ->
+            gui_error:report_warning(<<"Invalid token type.">>);
+        {ok, SpaceId} ->
+            % Push user record with a new space list.
+            user_data_backend:push_user_record_when_synchronized(UserId),
             {ok, [{<<"spaceId">>, SpaceId}]}
+    end;
+
+handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
+    UserId = gui_session:get_user_id(),
+    user_logic:leave_space(?USER(UserId), UserId, SpaceId),
+    % Push user record with a new space list.
+    user_data_backend:push_user_record(UserId),
+    ok;
+
+handle(<<"getTokenUserJoinGroup">>, [{<<"groupId">>, GroupId}]) ->
+    UserId = gui_session:get_user_id(),
+    case group_logic:create_user_invite_token(?USER(UserId), GroupId) of
+        {ok, Token} ->
+            {ok, [{<<"token">>, Token}]};
+        ?ERROR_UNAUTHORIZED ->
+            gui_error:report_warning(
+                <<"You do not have permissions to issue invite tokens for users.">>
+            )
+    end;
+
+
+
+handle(<<"userJoinGroup">>, [{<<"token">>, Token}]) ->
+    UserId = gui_session:get_user_id(),
+    case user_logic:join_group(?USER(UserId), UserId, Token) of
+        ?ERROR_BAD_VALUE_TOKEN(_) ->
+            gui_error:report_warning(<<"Invalid token value.">>);
+        ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(_) ->
+            gui_error:report_warning(<<"Invalid token type.">>);
+        {ok, GroupId} ->
+            % Push user record with a new group list.
+            user_data_backend:push_user_record_when_synchronized(UserId),
+            {ok, [{<<"groupId">>, GroupId}]}
     end.

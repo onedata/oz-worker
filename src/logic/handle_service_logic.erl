@@ -1,441 +1,501 @@
 %%%-------------------------------------------------------------------
-%%% @author Tomasz Lichon
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @author Lukasz Opiola
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc The module implementing the business logic for handle_services in the registry.
-%%% This module serves as a buffer between the database and the REST API.
+%%% @doc
+%%% This module encapsulates all handle service logic functionalities.
+%%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(handle_service_logic).
--author("Tomasz Lichon").
+-author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("ctool/include/logging.hrl").
 
-%% API
--export([exists/1, has_user/2, has_effective_user/2, has_group/2, has_effective_privilege/3]).
--export([create/4, modify/4, set_user_privileges/3, set_group_privileges/3]).
--export([get_data/1, get_users/1, get_effective_users/1, get_groups/1, get_user_privileges/2, get_group_privileges/2, get_effective_user_privileges/2]).
--export([add_user/2, add_group/2]).
--export([remove/1, remove_user/2, remove_group/2, cleanup/1]).
+-define(PLUGIN, handle_service_logic_plugin).
+
+-export([
+    create/4, create/2
+]).
+-export([
+    get/2,
+    get_data/2,
+    list/1
+]).
+-export([
+    update/3
+]).
+-export([
+    delete/2
+]).
+-export([
+
+    add_user/3, add_user/4,
+    add_group/3, add_group/4,
+
+    get_users/2, get_eff_users/2,
+    get_user/3, get_eff_user/3,
+    get_user_privileges/3, get_eff_user_privileges/3,
+
+    get_groups/2, get_eff_groups/2,
+    get_group/3, get_eff_group/3,
+    get_group_privileges/3, get_eff_group_privileges/3,
+
+    get_handles/2, get_handle/3,
+
+    update_user_privileges/5, update_user_privileges/4,
+    update_group_privileges/5, update_group_privileges/4,
+
+    remove_user/3,
+    remove_group/3
+]).
+-export([
+    exists/1,
+    user_has_eff_privilege/3,
+    group_has_eff_privilege/3
+]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Returns whether a handle_service exists.
-%% Throws exception when call to the datastore fails.
+%% @doc
+%% Creates a new handle_service document in database based on Name,
+%% ProxyEndpoint and ServiceProperties.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(HandleServiceId :: od_handle_service:id()) ->
-    boolean().
-exists(HandleServiceId) ->
-    od_handle_service:exists(HandleServiceId).
-
-%%--------------------------------------------------------------------
-%% @doc Returns whether the user identified by UserId is a member of the handle_service.
-%% Shall return false in any other case (handle_service doesn't exist, etc).
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec has_user(HandleServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
-    boolean().
-has_user(HandleServiceId, UserId) ->
-    case od_handle_service:get(HandleServiceId) of
-        {error, {not_found, _}} ->
-            false;
-        {ok, #document{value = #od_handle_service{users = Users}}} ->
-            lists:keymember(UserId, 1, Users)
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Returns whether the user identified by UserId is a member of the handle_service,
-%% either directly or through a group.
-%% Shall return false in any other case (handle_service doesn't exist, etc).
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec has_effective_user(HandleServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
-    boolean().
-has_effective_user(HandleServiceId, UserId) ->
-    case od_handle_service:get(HandleServiceId) of
-        {error, {not_found, _}} ->
-            false;
-        {ok, #document{value = #od_handle_service{users = Users, groups = HandleServiceGroups}}} ->
-            case lists:keymember(UserId, 1, Users) of
-                true ->
-                    true;
-                false ->
-                    case od_user:get(UserId) of
-                        {error, {not_found, _}} ->
-                            false;
-                        {ok, #document{value = #od_user{groups = UserGroups}}} ->
-                            HandleServiceGroupsSet = ordsets:from_list([GroupId || {GroupId, _} <- HandleServiceGroups]),
-                            UserGroupsSet = ordsets:from_list(UserGroups),
-                            not ordsets:is_disjoint(HandleServiceGroupsSet, UserGroupsSet)
-                    end
-            end
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Returns whether the group identified by GroupId is a member of the handle_service.
-%% Shall return false in any other case (handle_service doesn't exist, etc).
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec has_group(HandleServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
-    boolean().
-has_group(HandleServiceId, GroupId) ->
-    case od_handle_service:get(HandleServiceId) of
-        {error, {not_found, _}} ->
-            false;
-        {ok, #document{value = #od_handle_service{groups = Groups}}} ->
-            lists:keymember(GroupId, 1, Groups)
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Returns whether the handle_service's user identified by UserId has privilege
-%% in the handle_service. Shall return false in any other case (handle_service doesn't exist,
-%% user is not handle_service's member, etc).
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec has_effective_privilege(HandleServiceId :: od_handle_service:id(), UserId :: od_user:id(),
-    Privilege :: privileges:handle_service_privilege()) ->
-    boolean().
-has_effective_privilege(HandleServiceId, UserId, Privilege) ->
-    case has_effective_user(HandleServiceId, UserId) of
-        false -> false;
-        true ->
-            {ok, UserPrivileges} = get_effective_user_privileges(HandleServiceId, UserId),
-            ordsets:is_element(Privilege, UserPrivileges)
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Creates a handle_service for a user.
-%% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec create(UserId :: od_user:id(), Name :: od_handle_service:name(),
+-spec create(Client :: entity_logic:client(), Name :: binary(),
     ProxyEndpoint :: od_handle_service:proxy_endpoint(),
     ServiceProperties :: od_handle_service:service_properties()) ->
-    {ok, HandleServiceId :: od_handle_service:id()}.
-create(UserId, Name, ProxyEndpoint, ServiceProperties) ->
-    Privileges = privileges:handle_service_admin(),
-    HandleService = #od_handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_properties = ServiceProperties, users = [{UserId, Privileges}]},
+    {ok, od_handle_service:id()} | {error, term()}.
+create(Client, Name, ProxyEndpoint, ServiceProperties) ->
+    create(Client, #{
+        <<"name">> => Name,
+        <<"proxyEndpoint">> => ProxyEndpoint,
+        <<"serviceProperties">> => ServiceProperties
+    }).
 
-    {ok, HandleServiceId} = od_handle_service:create(#document{value = HandleService}),
-    {ok, _} = od_user:update(UserId, fun(User) ->
-        #od_user{handle_services = UHandleServices} = User,
-        {ok, User#od_user{handle_services = [HandleServiceId | UHandleServices]}}
-    end),
-
-    {ok, HandleServiceId}.
 
 %%--------------------------------------------------------------------
-%% @doc Modifies handle_service's data.
-%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @doc
+%% Creates a new handle_service document in database. Name, ProxyEndpoint
+%% and ServiceProperties are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec modify(HandleServiceId :: od_handle_service:id(), Name :: od_handle_service:name(),
-    ProxyEndpoint :: od_handle_service:proxy_endpoint(),
-    ServiceProperties :: od_handle_service:service_properties()) -> ok.
-modify(HandleServiceId, NewName, NewProxyEndpoint, NewServiceProperties) ->
-    {ok, _} = od_handle_service:update(HandleServiceId,
-        fun(HandleService = #od_handle_service{name = Name, proxy_endpoint = ProxyEndpoint, service_properties = ServiceProperties}) ->
-            FinalName = utils:ensure_defined(NewName, undefined, Name),
-            FinalProxyEndpoint = utils:ensure_defined(NewProxyEndpoint, undefined, ProxyEndpoint),
-            FinalServiceProperties = utils:ensure_defined(NewServiceProperties, undefined, ServiceProperties),
-            {ok, HandleService#od_handle_service{name = FinalName, proxy_endpoint = FinalProxyEndpoint, service_properties = FinalServiceProperties}}
-        end),
-    ok.
+-spec create(Client :: entity_logic:client(), Data :: #{}) ->
+    {ok, od_handle_service:id()} | {error, term()}.
+create(Client, Data) ->
+    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+
 
 %%--------------------------------------------------------------------
-%% @doc Sets privileges for an user member of the handle_service.
-%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @doc
+%% Retrieves a handle_service record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec set_user_privileges(HandleServiceId :: od_handle_service:id(), UserId :: od_user:id(),
-    Privileges :: [privileges:handle_service_privilege()]) ->
-    ok.
-set_user_privileges(HandleServiceId, UserId, Privileges) ->
-    {ok, _} = od_handle_service:update(HandleServiceId,
-        fun(HandleService = #od_handle_service{users = Users}) ->
-            PrivilegesNew = ordsets:from_list(Privileges),
-            UsersNew = lists:keyreplace(UserId, 1, Users, {UserId, PrivilegesNew}),
-            {ok, HandleService#od_handle_service{users = UsersNew}}
-        end),
-    ok.
+-spec get(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+    {ok, #od_handle_service{}} | {error, term()}.
+get(Client, HServiceId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, entity).
+
 
 %%--------------------------------------------------------------------
-%% @doc Sets privileges for a group member of the handle_service.
-%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @doc
+%% Retrieves information about a handle_service record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec set_group_privileges(HandleServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
-    Privileges :: [privileges:handle_service_privilege()]) ->
-    ok.
-set_group_privileges(HandleServiceId, GroupId, Privileges) ->
-    {ok, _} = od_handle_service:update(HandleServiceId,
-        fun(HandleService = #od_handle_service{groups = Groups}) ->
-            PrivilegesNew = ordsets:from_list(Privileges),
-            GroupsNew = lists:keyreplace(GroupId, 1, Groups, {GroupId, PrivilegesNew}),
-            {ok, HandleService#od_handle_service{groups = GroupsNew}}
-        end),
-    ok.
+-spec get_data(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+    {ok, #{}} | {error, term()}.
+get_data(Client, HServiceId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, data).
+
 
 %%--------------------------------------------------------------------
-%% @doc Adds a new user to a handle_service.
+%% @doc
+%% Lists all handle_services (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(HandleServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
-    {ok, HandleServiceId :: od_handle_service:id()}.
-add_user(HandleServiceId, UserId) ->
-    case has_user(HandleServiceId, UserId) of
-        true -> ok;
-        false ->
-            {ok, _} = od_handle_service:update(HandleServiceId, fun(HandleService) ->
-                Privileges = privileges:handle_service_user(),
-                #od_handle_service{users = Users} = HandleService,
-                {ok, HandleService#od_handle_service{users = [{UserId, Privileges} | Users]}}
-            end),
-            {ok, _} = od_user:update(UserId, fun(User) ->
-                #od_user{handle_services = UHandleServices} = User,
-                {ok, User#od_user{handle_services = [HandleServiceId | UHandleServices]}}
-            end)
-    end,
-    {ok, HandleServiceId}.
+-spec list(Client :: entity_logic:client()) ->
+    {ok, [od_handle_service:id()]} | {error, term()}.
+list(Client) ->
+    entity_logic:get(Client, ?PLUGIN, undefined, list).
+
 
 %%--------------------------------------------------------------------
-%% @doc Adds a new group to a handle_service.
+%% @doc
+%% Updates information of given handle_service. Supports updating Name,
+%% ProxyEndpoint and ServiceProperties.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(HandleServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
-    {ok, HandleServiceId :: od_handle_service:id()}.
-add_group(HandleServiceId, GroupId) ->
-    case has_group(HandleServiceId, GroupId) of
-        true -> ok;
-        false ->
-            {ok, _} = od_handle_service:update(HandleServiceId, fun(HandleService) ->
-                Privileges = privileges:handle_service_user(),
-                #od_handle_service{groups = Groups} = HandleService,
-                {ok, HandleService#od_handle_service{groups = [{GroupId, Privileges} | Groups]}}
-            end),
-            {ok, _} = od_group:update(GroupId, fun(Group) ->
-                #od_group{handle_services = HandleServices} = Group,
-                {ok, Group#od_group{handle_services = [HandleServiceId | HandleServices]}}
-            end)
-    end,
-    {ok, HandleServiceId}.
+-spec update(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    Data :: #{}) -> ok | {error, term()}.
+update(Client, HServiceId, Data) ->
+    entity_logic:update(Client, ?PLUGIN, HServiceId, entity, Data).
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns details about the handle_service.
-%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @doc
+%% Deletes given handle_service from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(HandleServiceId :: od_handle_service:id()) -> {ok, [proplists:property()]}.
-get_data(HandleServiceId) ->
-    {ok, #document{value = #od_handle_service{name = Name, proxy_endpoint = Proxy, service_properties = Desc}}} =
-        od_handle_service:get(HandleServiceId),
-    {ok, [
-        {handleServiceId, HandleServiceId},
-        {name, Name},
-        {proxyEndpoint, Proxy},
-        {serviceProperties, Desc}
-    ]}.
+-spec delete(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+    ok | {error, term()}.
+delete(Client, HServiceId) ->
+    entity_logic:delete(Client, ?PLUGIN, HServiceId, entity).
+
 
 %%--------------------------------------------------------------------
-%% @doc Returns details about handle_service's users.
-%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @doc
+%% Adds specified user to given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(HandleServiceId :: od_handle_service:id()) ->
-    {ok, [proplists:property()]}.
-get_users(HandleServiceId) ->
-    {ok, #document{value = #od_handle_service{users = Users}}} = od_handle_service:get(HandleServiceId),
-    {UserIds, _} = lists:unzip(Users),
-    {ok, [{users, UserIds}]}.
+-spec add_user(Client :: entity_logic:client(),
+    HServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
+    {ok, od_user:id()} | {error, term()}.
+add_user(Client, HServiceId, UserId)  ->
+    add_user(Client, HServiceId, UserId, #{}).
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns a list of all effective users of a handle_service.
-%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @doc
+%% Adds specified user to given handle_service.
+%% Allows to specify the privileges of the newly added user. Has two variants:
+%% 1) Privileges are given explicitly
+%% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_users(HandleServiceId :: od_handle_service:id()) ->
-    {ok, [proplists:property()]}.
-get_effective_users(HandleServiceId) ->
-    {ok, #document{
-        value = #od_handle_service{
-            users = UserPerms,
-            groups = GroupPerms
-        }}} = od_handle_service:get(HandleServiceId),
-    {Users, _} = lists:unzip(UserPerms),
-    UsersViaGroups = lists:foldl(
-        fun({GroupId, _}, Acc) ->
-            {ok, [{users, GroupUsers}]} = group_logic:get_effective_users(
-                GroupId
-            ),
-            GroupUsers ++ Acc
-        end, [], GroupPerms),
-    {ok, [{users, ordsets:union(Users, UsersViaGroups)}]}.
+-spec add_user(Client :: entity_logic:client(),
+    HServiceId :: od_handle_service:id(), UserId :: od_user:id(),
+    PrivilegesPrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
+    {ok, od_user:id()} | {error, term()}.
+add_user(Client, HServiceId, UserId, Privileges) when is_list(Privileges) ->
+    add_user(Client, HServiceId, UserId, #{
+        <<"privileges">> => Privileges
+    });
+add_user(Client, HServiceId, UserId, Data) ->
+    entity_logic:create(Client, ?PLUGIN, HServiceId, {user, UserId}, Data).
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns details about handle_service's groups.
-%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @doc
+%% Adds specified group to given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(HandleServiceId :: od_handle_service:id()) ->
-    {ok, [proplists:property()]}.
-get_groups(HandleServiceId) ->
-    {ok, #document{value = #od_handle_service{groups = GroupTuples}}} = od_handle_service:get(HandleServiceId),
-    {Groups, _} = lists:unzip(GroupTuples),
-    {ok, [{groups, Groups}]}.
+-spec add_group(Client :: entity_logic:client(),
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
+    {ok, od_group:id()} | {error, term()}.
+add_group(Client, HServiceId, GroupId)  ->
+    add_group(Client, HServiceId, GroupId, #{}).
+
 
 %%--------------------------------------------------------------------
-%% @doc Returns list of handle_service's member privileges.
-%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @doc
+%% Adds specified group to given handle_service.
+%% Allows to specify the privileges of the newly added group. Has two variants:
+%% 1) Privileges are given explicitly
+%% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_privileges(HandleServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
-    {ok, [{privileges, [privileges:handle_privilege()]}]}.
-get_user_privileges(HandleServiceId, UserId) ->
-    {ok, #document{value = #od_handle_service{users = Users}}} = od_handle_service:get(HandleServiceId),
-    {_, Privileges} = lists:keyfind(UserId, 1, Users),
-    {ok, [{privileges, Privileges}]}.
+-spec add_group(Client :: entity_logic:client(),
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
+    PrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
+add_group(Client, HServiceId, GroupId, Privileges) when is_list(Privileges) ->
+    add_group(Client, HServiceId, GroupId, #{
+        <<"privileges">> => Privileges
+    });
+add_group(Client, HServiceId, GroupId, Data) ->
+    entity_logic:create(Client, ?PLUGIN, HServiceId, {group, GroupId}, Data).
+
 
 %%--------------------------------------------------------------------
-%% @doc Returns list of handle_service's member privileges.
-%% Throws exception when call to the datastore fails, or handle_service doesn't exist.
+%% @doc
+%% Retrieves the list of users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_privileges(HandleServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
-    {ok, [{privileges, [privileges:handle_privilege()]}]}.
-get_group_privileges(HandleServiceId, GroupId) ->
-    {ok, #document{value = #od_handle_service{groups = Groups}}} = od_handle_service:get(HandleServiceId),
-    {_, Privileges} = lists:keyfind(GroupId, 1, Groups),
-    {ok, [{privileges, Privileges}]}.
+-spec get_users(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
+    {ok, [od_user:id()]} | {error, term()}.
+get_users(Client, HServiceId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, users).
+
 
 %%--------------------------------------------------------------------
-%% @doc Removes the handle_service.
-%% Throws exception when call to the datastore fails, or handle_service is already removed.
+%% @doc
+%% Retrieves the list of effective users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(HandleServiceId :: od_handle_service:id()) -> boolean().
-remove(HandleServiceId) ->
-    {ok, #document{value = HandleService}} = od_handle_service:get(HandleServiceId),
-    #od_handle_service{users = Users, groups = Groups} = HandleService,
+-spec get_eff_users(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
+    {ok, [od_user:id()]} | {error, term()}.
+get_eff_users(Client, HServiceId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, eff_users).
 
-    lists:foreach(fun({UserId, _}) ->
-        {ok, _} = od_user:update(UserId, fun(User) ->
-            #od_user{handle_services = UHandleServices} = User,
-            {ok, User#od_user{
-                handle_services = lists:delete(HandleServiceId, UHandleServices)
-            }}
-        end)
-    end, Users),
-
-    lists:foreach(fun({GroupId, _}) ->
-        {ok, _} = od_group:update(GroupId, fun(Group) ->
-            #od_group{handle_services = GHandleServices} = Group,
-            {ok, Group#od_group{handle_services = lists:delete(HandleServiceId, GHandleServices)}}
-        end)
-    end, Groups),
-
-    case od_handle_service:delete(HandleServiceId) of
-        ok -> true;
-        _ -> false
-    end.
 
 %%--------------------------------------------------------------------
-%% @doc Removes user from the handle_service.
-%% Throws exception when call to the datastore fails, or handle_service/user doesn't exist.
+%% @doc
+%% Retrieves the information about specific user among users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(HandleServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
-    true.
-remove_user(HandleServiceId, UserId) ->
-    {ok, _} = od_user:update(UserId, fun(User) ->
-        #od_user{handle_services = UHandleServices} = User,
-        {ok, User#od_user{handle_services = lists:delete(HandleServiceId, UHandleServices)}}
-    end),
-    {ok, _} = od_handle_service:update(HandleServiceId, fun(HandleService) ->
-        #od_handle_service{users = Users} = HandleService,
-        {ok, HandleService#od_handle_service{users = lists:keydelete(UserId, 1, Users)}}
-    end),
-    cleanup(HandleServiceId),
-    true.
+-spec get_user(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+get_user(Client, HServiceId, UserId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {user, UserId}).
+
 
 %%--------------------------------------------------------------------
-%% @doc Removes group from the handle_service.
-%% Throws exception when call to the datastore fails, or handle_service/group doesn't exist.
+%% @doc
+%% Retrieves the information about specific effective user among
+%% effective users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(HandleServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
-    true.
-remove_group(HandleServiceId, GroupId) ->
-    {ok, _} = od_group:update(GroupId, fun(Group) ->
-        #od_group{handle_services = HandleServices} = Group,
-        {ok, Group#od_group{handle_services = lists:delete(HandleServiceId, HandleServices)}}
-    end),
-    {ok, _} = od_handle_service:update(HandleServiceId, fun(HandleService) ->
-        #od_handle_service{groups = Groups} = HandleService,
-        {ok, HandleService#od_handle_service{groups = lists:keydelete(GroupId, 1, Groups)}}
-    end),
+-spec get_eff_user(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+get_eff_user(Client, HServiceId, UserId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_user, UserId}).
 
-    cleanup(HandleServiceId),
-    true.
 
 %%--------------------------------------------------------------------
-%% @doc Removes the handle_service if empty.
-%% Throws exception when call to the datastore fails, or handle_service is already removed.
+%% @doc
+%% Retrieves the privileges of specific user among users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec cleanup(HandleServiceId :: od_handle_service:id()) -> boolean() | no_return().
-cleanup(_HandleServiceId) ->
-%% Currently, handle_services with no users and groups are not deleted so it is
-%% possible to restore it after accidentally leaving a handle_service.
-%%    {ok, #document{value = #handle_service{groups = Groups, users = Users}}} = handle_service:get(HandleServiceId),
-%%    case {Groups, Users} of
-%%        {[], []} -> remove(HandleServiceId);
-%%        _ -> false
-%%    end.
-    false.
+-spec get_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+get_user_privileges(Client, HServiceId, UserId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {user_privileges, UserId}).
+
 
 %%--------------------------------------------------------------------
-%% @doc Retrieves effective user privileges taking into account any groups
-%% he is a member of that also are members of the handle_service.
-%% Throws exception when call to the datastore fails, or handle_service/user doesn't exist.
+%% @doc
+%% Retrieves the effective privileges of specific effective user
+%% among effective users of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
--spec get_effective_user_privileges(HandleServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
-    {ok, ordsets:ordset(privileges:handle_service_privilege())}.
-get_effective_user_privileges(HandleServiceId, UserId) ->
-    {ok, #document{value = #od_user{groups = UGroups}}} = od_user:get(UserId),
-    {ok, #document{value = #od_handle_service{users = UserTuples, groups = SGroupTuples}}} = od_handle_service:get(HandleServiceId),
+-spec get_eff_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+get_eff_user_privileges(Client, HServiceId, UserId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_user_privileges, UserId}).
 
-    UserGroups = sets:from_list(UGroups),
 
-    PrivilegesSets = lists:filtermap(fun({GroupId, Privileges}) ->
-        case sets:is_element(GroupId, UserGroups) of
-            true -> {true, ordsets:from_list(Privileges)};
-            false -> false
-        end
-    end, SGroupTuples),
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of groups of given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_groups(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+    {ok, [od_group:id()]} | {error, term()}.
+get_groups(Client, HServiceId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, groups).
 
-    UserPrivileges =
-        case lists:keyfind(UserId, 1, UserTuples) of
-            {UserId, Privileges} -> ordsets:from_list(Privileges);
-            false -> ordsets:new()
-        end,
 
-    {ok, ordsets:union([UserPrivileges | PrivilegesSets])}.
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective groups of given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_groups(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+    {ok, [od_group:id()]} | {error, term()}.
+get_eff_groups(Client, HServiceId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, eff_groups).
 
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific group among groups of given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
+get_group(Client, HServiceId, GroupId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {group, GroupId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective group among
+%% effective groups of given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_group(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
+get_eff_group(Client, HServiceId, GroupId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_group, GroupId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the privileges of specific group among groups of given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+get_group_privileges(Client, HServiceId, GroupId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {group_privileges, GroupId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the effective privileges of specific effective group
+%% among effective groups of given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+get_eff_group_privileges(Client, HServiceId, GroupId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {eff_group_privileges, GroupId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of handles of given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handles(Client :: entity_logic:client(), HServiceId :: od_handle_service:id()) ->
+    {ok, [od_handle:id()]} | {error, term()}.
+get_handles(Client, HServiceId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, handles).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific handle among handles of given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    HandleId :: od_handle:id()) -> {ok, #{}} | {error, term()}.
+get_handle(Client, HServiceId, HandleId) ->
+    entity_logic:get(Client, ?PLUGIN, HServiceId, {handle, HandleId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates privileges of specified user of given handle_service.
+%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
+    Privs :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
+update_user_privileges(Client, HServiceId, UserId, Operation, Privs) when is_list(Privs) ->
+    update_user_privileges(Client, HServiceId, UserId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates privileges of specified user of given handle_service.
+%% Privileges must be included in proper Data object, operation is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
+update_user_privileges(Client, HServiceId, UserId, Data) ->
+    entity_logic:update(Client, ?PLUGIN, HServiceId, {user_privileges, UserId}, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates privileges of specified group of given handle_service.
+%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    GroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
+    Privs :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
+update_group_privileges(Client, HServiceId, GroupId, Operation, Privs) when is_list(Privs) ->
+    update_group_privileges(Client, HServiceId, GroupId, #{
+        <<"operation">> => Operation,
+        <<"privileges">> => Privs
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates privileges of specified group of given handle_service.
+%% Privileges must be included in proper Data object, operation is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    GroupId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
+update_group_privileges(Client, HServiceId, GroupId, Data) ->
+    entity_logic:update(Client, ?PLUGIN, HServiceId, {group_privileges, GroupId}, Data).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes specified user from given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_user(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    UserId :: od_user:id()) -> ok | {error, term()}.
+remove_user(Client, HServiceId, UserId) ->
+    entity_logic:delete(Client, ?PLUGIN, HServiceId, {user, UserId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes specified group from given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_group(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
+    GroupId :: od_group:id()) -> ok | {error, term()}.
+remove_group(Client, HServiceId, GroupId) ->
+    entity_logic:delete(Client, ?PLUGIN, HServiceId, {group, GroupId}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns whether a handle service exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(HServiceId :: od_handle_service:id()) -> boolean().
+exists(HServiceId) ->
+    od_handle_service:exists(HServiceId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified effective user has specified
+%% effective privilege in given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_has_eff_privilege(HServiceOrId :: od_handle_service:id() | #od_handle_service{},
+    UserId :: od_user:id(), Privilege :: privileges:handle_service_privileges()) ->
+    boolean().
+user_has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->
+    case od_handle_service:get(HServiceId) of
+        {ok, #document{value = HService}} ->
+            user_has_eff_privilege(HService, UserId, Privilege);
+        _ ->
+            false
+    end;
+user_has_eff_privilege(#od_handle_service{eff_users = UsersPrivileges}, UserId, Privilege) ->
+    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
+    lists:member(Privilege, UserPrivileges).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified effective group has specified
+%% effective privilege in given handle_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_has_eff_privilege(HServiceOrId :: od_handle_service:id() | #od_handle_service{},
+    GroupId :: od_group:id(), Privilege :: privileges:handle_service_privileges()) ->
+    boolean().
+group_has_eff_privilege(HServiceId, GroupId, Privilege) when is_binary(HServiceId) ->
+    case od_handle_service:get(HServiceId) of
+        {ok, #document{value = HService}} ->
+            group_has_eff_privilege(HService, GroupId, Privilege);
+        _ ->
+            false
+    end;
+group_has_eff_privilege(#od_handle_service{eff_groups = GroupsPrivileges}, GroupId, Privilege) ->
+    {GroupPrivileges, _} = maps:get(GroupId, GroupsPrivileges, {[], []}),
+    lists:member(Privilege, GroupPrivileges).

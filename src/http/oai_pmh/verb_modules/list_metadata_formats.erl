@@ -12,6 +12,7 @@
 -author("Jakub Kudzia").
 
 -include("http/handlers/oai.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -79,8 +80,8 @@ get_response(<<"metadataFormat">>, Args) ->
         OAIId ->
             try
                 Id = oai_utils:oai_identifier_decode(OAIId),
-                {ok, MetadataInfo} = handle_logic:get_metadata(Id),
-                case proplists:get_value(metadata, MetadataInfo) of
+                #od_handle{metadata = Metadata} = oai_utils:get_handle(Id),
+                case Metadata of
                     undefined -> throw(noMetadataFormats);
                     _ ->
                         lists:map(fun(MetadataPrefix) ->

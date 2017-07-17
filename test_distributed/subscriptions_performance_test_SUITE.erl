@@ -18,7 +18,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([all/0]).
 -export([init_per_testcase/2, end_per_testcase/2]).
 -export([generate_spaces_test/1, space_update_test/1]).
 -export([generate_spaces_test_base/1, space_update_test_base/1]).
@@ -80,7 +80,7 @@ generate_spaces_test_base(Config) ->
 
         %% when
         PID = subscriptions_test_utils:create_provider(Node, PName, SIDs),
-        Space = #od_space{name = <<"name">>, providers_supports = [{PID, 0}]},
+        Space = #od_space{name = <<"name">>, providers = [{PID, 0}]},
         Context = subscriptions_test_utils:init_messages(Node, PID, []),
 
         lists:map(fun(SID) ->
@@ -189,14 +189,12 @@ space_update_test_base(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-init_per_suite(Config) ->
-    ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
-
 init_per_testcase(_, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_new(Nodes, group_graph),
-    test_utils:mock_expect(Nodes, group_graph, refresh_effective_caches,
-        fun() -> ok end),
+    throw(not_implemented),
+%%    Nodes = ?config(oz_worker_nodes, Config),
+%%    test_utils:mock_new(Nodes, group_graph),
+%%    test_utils:mock_expect(Nodes, group_graph, refresh_effective_caches, fun() ->
+%%        ok end),
     Config.
 
 end_per_testcase(_, Config) ->
@@ -204,9 +202,6 @@ end_per_testcase(_, Config) ->
     test_utils:mock_unload(Nodes),
     subscriptions_test_utils:flush(),
     ok.
-
-end_per_suite(Config) ->
-    test_node_starter:clean_environment(Config).
 
 %%%===================================================================
 %%% Internal functions

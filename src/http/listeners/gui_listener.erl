@@ -33,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec port() -> integer().
 port() ->
-    {ok, Port} = application:get_env(?APP_Name, gui_port),
+    {ok, Port} = application:get_env(?APP_NAME, gui_port),
     Port.
 
 
@@ -45,85 +45,53 @@ port() ->
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
     try
-        % Resolve static files root. First, check if there is a non-empty dir
-        % located in gui_custom_static_root. If not, use default.
-        {ok, CstmRoot} = application:get_env(?APP_Name, gui_custom_static_root),
-        {ok, DefRoot} = application:get_env(?APP_Name, gui_default_static_root),
-        DocRoot = case file:list_dir_all(CstmRoot) of
-            {error, enoent} -> DefRoot;
-            {ok, []} -> DefRoot;
-            {ok, _} -> CstmRoot
-        end,
-
         % Get gui config
         GuiPort = port(),
         {ok, GuiNbAcceptors} =
-            application:get_env(?APP_Name, gui_https_acceptors),
-        {ok, Timeout} = application:get_env(?APP_Name, gui_socket_timeout),
-        {ok, MaxKeepAlive} = application:get_env(?APP_Name, gui_max_keepalive),
-        % Get cert paths
-        {ok, CaCertFile} = application:get_env(?APP_Name, gui_cacert_file),
-        {ok, CertFile} = application:get_env(?APP_Name, gui_cert_file),
-        {ok, KeyFile} = application:get_env(?APP_Name, gui_key_file),
+            application:get_env(?APP_NAME, gui_https_acceptors),
+        {ok, Timeout} = application:get_env(?APP_NAME, gui_socket_timeout),
+        {ok, MaxKeepAlive} = application:get_env(?APP_NAME, gui_max_keepalive),
 
-        % Check if docs proxy is enabled
-        {ok, DocsProxyEnabled} =
-            application:get_env(?APP_Name, gui_docs_proxy_enabled),
-        DocsRoute = case DocsProxyEnabled of
-            false ->
-                % Don't add route for docs
-                [];
-            true ->
-                % Get path to static docs files
-                {ok, DocsPath} =
-                    application:get_env(?APP_Name, gui_docs_static_root),
-                {DocsPath ++ "/[...]", static_docs_handler, []}
-        end,
+        % Get certs
+        {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
+        {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
+        {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
+        {ok, CaCertPems} = file_utils:read_files({dir, CaCertsDir}),
+        CaCerts = lists:map(fun cert_decoder:pem_to_der/1, CaCertPems),
 
-        OZHostname = dns_query_handler:get_canonical_hostname(),
+        % Initialize auth handler
+        auth_config:load_auth_config(),
 
-        % Setup GUI dispatch opts for cowboy
-        GUIDispatch = [
-            % Matching requests will be redirected
-            % to the same address without leading 'www.'
-            % Cowboy does not have a mechanism to match
-            % every hostname starting with 'www.'
-            % This will match hostnames with up to 6 segments
-            % e. g. www.seg2.seg3.seg4.seg5.com
+        Dispatch = cowboy_router:compile([
+            % Matching requests will be redirected to the same address without
+            % leading 'www.'. Cowboy does not have a mechanism to match every
+            % hostname starting with 'www.' This will match hostnames with up
+            % to 6 segments e. g. www.seg2.seg3.seg4.seg5.com
             {"www.:_[.:_[.:_[.:_[.:_]]]]", [
                 % redirector_handler is defined in cluster_worker
                 {'_', redirector_handler, []}
             ]},
-            % Redirect requests in form: alias.onedata.org
-            {":alias." ++ OZHostname, [{'_', client_redirect_handler, [GuiPort]}]},
-            % Proper requests are routed to handler modules
-            % Proper requests are routed to handler modules
             {'_', lists:flatten([
                 {"/nagios/[...]", nagios_handler, []},
                 {"/share/:share_id", public_share_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
-                DocsRoute,
-                {"/[...]", gui_static_handler, {dir, DocRoot}}
+                rest_listener:routes(),
+                static_routes()
             ])}
-        ],
-
-        % Initialize auth handler
-        auth_config:load_auth_config(),
+        ]),
 
         % Call gui init, which will call init on all modules that might need state.
         gui:init(),
         % Start the listener for web gui and nagios handler
         {ok, _} = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
-            ranch_etls, [
-                {ip, {127, 0, 0, 1}},
+            ranch_ssl, [
                 {port, GuiPort},
-                {cacertfile, CaCertFile},
-                {certfile, CertFile},
                 {keyfile, KeyFile},
-                {ciphers, ssl:cipher_suites() -- weak_ciphers()},
-                {versions, ['tlsv1.2', 'tlsv1.1']}
+                {certfile, CertFile},
+                {cacerts, CaCerts},
+                {ciphers, ssl:cipher_suites() -- ssl_utils:weak_ciphers()}
             ], cowboy_protocol, [
-                {env, [{dispatch, cowboy_router:compile(GUIDispatch)}]},
+                {env, [{dispatch, Dispatch}]},
                 {max_keepalive, MaxKeepAlive},
                 {timeout, Timeout},
                 % On every request, add headers that improve
@@ -145,7 +113,7 @@ start() ->
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, Reason :: term()}.
 stop() ->
-    case catch cowboy:stop_listener(?gui_https_listener) of
+    case catch ranch:stop_listener(?gui_https_listener) of
         (ok) ->
             ok;
         (Error) ->
@@ -162,7 +130,7 @@ stop() ->
 -spec healthcheck() -> ok | {error, server_not_responding}.
 healthcheck() ->
     Endpoint = "https://127.0.0.1:" ++ integer_to_list(port()),
-    case http_client:get(Endpoint, [], <<>>, [insecure]) of
+    case http_client:get(Endpoint, #{}, <<>>, [insecure]) of
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
     end.
@@ -172,11 +140,27 @@ healthcheck() ->
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns list of weak ciphers.
+%% @doc Returns a Cowboy-understandable PathList of static routes.
 %% @end
--spec weak_ciphers() -> list().
 %%--------------------------------------------------------------------
-weak_ciphers() ->
-    [{dhe_rsa, des_cbc, sha}, {rsa, des_cbc, sha}].
+-spec static_routes() -> [{Path :: string(), Module :: module(), State :: term()}].
+static_routes() ->
+    % Resolve static files root. First, check if there is a non-empty dir
+    % located in gui_custom_static_root. If not, use default.
+    {ok, CustomRoot} = application:get_env(?APP_NAME, gui_custom_static_root),
+    {ok, DefRoot} = application:get_env(?APP_NAME, gui_default_static_root),
+    DocRoot = case file:list_dir_all(CustomRoot) of
+        {error, enoent} -> DefRoot;
+        {ok, []} -> DefRoot;
+        {ok, _} -> CustomRoot
+    end,
+
+    Routes = [{"/[...]", gui_static_handler, {dir, DocRoot}}],
+
+    case application:get_env(?APP_NAME, gui_docs_proxy_enabled) of
+        {ok, true} ->
+            {ok, DocsPath} = application:get_env(?APP_NAME, gui_docs_static_root),
+            [{DocsPath ++ "/[...]", static_docs_handler, []} | Routes];
+        _ ->
+            Routes
+    end.

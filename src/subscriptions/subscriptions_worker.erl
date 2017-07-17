@@ -138,7 +138,7 @@ fetch_history(ResumeAt, Missing) ->
                     case fetch_from_cache(ToFetch) of
                         [] -> ok;
                         Misses ->
-                            {ok, Backoff} = application:get_env(?APP_Name,
+                            {ok, Backoff} = application:get_env(?APP_NAME,
                                 wait_for_latest_changes_in_cache),
                             {ok, _} = timer:apply_after(Backoff, ?MODULE,
                                 fetch_from_cache_and_db, [Misses]),
@@ -206,30 +206,47 @@ fetch_from_cache(Seqs) ->
 fetch_from_db([]) -> ok;
 fetch_from_db(Seqs) ->
     From = hd(Seqs) - 1,
-    To = lists:last(Seqs),
+    To = lists:last(Seqs) + 1,
 
     spawn(fun() ->
-        {ok, Timeout} = application:get_env(?APP_Name,
-            history_changes_stream_life_limit_seconds),
         process_flag(trap_exit, true),
 
-        {ok, Pid} = couchdb_datastore_driver:changes_start_link(fun
-            (_Seq, stream_ended, _Type) -> ok;
-            (Seq, Doc, Type) ->
-                handle_change(Seq, Doc, Type)
-        end, From, To),
+        Caller = self(),
 
-        receive
-            {'EXIT', Pid, _Reason} ->
-                ignore_all(Seqs)
-        after
-            timer:seconds(Timeout) ->
-                ?warning("Fetch from DB taking too long - kill"),
-                exit(Pid, fetch_taking_too_long),
-                exit(fetch_taking_too_long)
-        end
+        {ok, Pid} = couchbase_changes:stream(subscriptions:bucket(), <<"">>, fun(Feed) ->
+            case Feed of
+                {ok, end_of_stream} ->
+                    Caller ! {self(), end_of_stream},
+                    ok;
+                {ok, Doc} ->
+                    Caller ! {self(), Doc},
+                    ok
+            end
+        end, [{since, From}, {until, To}]),
 
+        {Changes, SeqsNotFetched} = accumulate_changes(Pid, Seqs, []),
+        ignore_all(SeqsNotFetched),
+        handle_change(Changes)
     end), ok.
+
+accumulate_changes(Pid, SeqsToFetch, Changes) ->
+    {ok, Timeout} = application:get_env(?APP_NAME,
+        history_changes_stream_life_limit_seconds),
+    receive
+        {Pid, end_of_stream} ->
+            couchbase_changes:cancel_stream(Pid),
+            {Changes, SeqsToFetch};
+        {Pid, Doc = #document{seq = Seq, value = Value}} ->
+            Type = element(1, Value),
+            accumulate_changes(Pid, SeqsToFetch -- [Seq], [{Seq, Doc, Type} | Changes]);
+        {'EXIT', Pid, _Reason} ->
+            ignore_all(SeqsToFetch)
+    after
+        timer:seconds(Timeout) ->
+            ?warning("Fetch from DB taking too long - kill"),
+            exit(Pid, fetch_taking_too_long),
+            exit(fetch_taking_too_long)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -238,8 +255,10 @@ fetch_from_db(Seqs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec ignore_all(Seqs :: ordsets:ordset(subscriptions:seq())) -> ok.
+ignore_all([]) ->
+    ok;
 ignore_all(Seqs) ->
-    ?warning("Ignoring ~p", [Seqs]),
+    ?debug("Ignoring sequence numbers ~p", [Seqs]),
     Subscriptions = subscriptions:all(),
     lists:foreach(fun(#document{value = #provider_subscription{provider = ID}}) ->
         outboxes:put(ID, fun push_messages/2, lists:map(fun(Seq) ->
@@ -262,6 +281,16 @@ handle_change(Seq, Doc, Model) ->
 -spec handle_change([{Seq :: subscriptions:seq(), Doc :: datastore:document(),
     Model :: atom()}]) -> ok.
 handle_change(Updates) ->
+    {Supported, NotSupported} = lists:partition(fun({_Seq, Doc, Model}) ->
+        lists:member(Model, subscriptions:supported_models())
+    end, Updates),
+    ignore_all([S || {S, _, _} <- NotSupported]),
+    handle_change_filtered(Supported).
+
+
+-spec handle_change_filtered([{Seq :: subscriptions:seq(), Doc :: datastore:document(),
+    Model :: atom()}]) -> ok.
+handle_change_filtered(Updates) ->
     UpdatesWithProviders = utils:pmap(fun({Seq, Doc, Model}) ->
         {Seq, Doc, Model, sets:from_list(eligible:providers(Doc, Model))}
     end, Updates),

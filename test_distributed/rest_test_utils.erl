@@ -19,37 +19,16 @@
 
 
 %% API
--export([set_config/1, check_rest_call/1]).
+-export([get_rest_api_prefix/1, check_rest_call/2]).
+-export([compare_maps/2, contains_map/2]).
 
 
-set_config(Config) ->
-    % Resolve REST URLs of oz-worker nodes
-    Nodes = ?config(oz_worker_nodes, Config),
-    RestURLs = lists:map(fun(Node) ->
-        NodeIP = test_utils:get_docker_ip(Node),
-        {ok, RestPort} = rpc:call(
-            Node, application, get_env, [?APP_Name, rest_port]
-        ),
-        {ok, RestAPIPrefix} = rpc:call(
-            Node, application, get_env, [?APP_Name, rest_api_prefix]
-        ),
-        str_utils:format_bin(
-            "https://~s:~B~s", [NodeIP, RestPort, RestAPIPrefix]
-        )
-    end, Nodes),
-    % Save the config and REST URLs in process dict.
-    put(config, Config),
-    put(rest_urls, RestURLs),
-    ok.
+get_rest_api_prefix(Config) ->
+    {ok, RestApiPrefix} = oz_test_utils:call_oz(
+        Config, application, get_env, [oz_worker, rest_api_prefix]
+    ),
+    list_to_binary(RestApiPrefix).
 
-
-get_config(Key) ->
-    case get(Key) of
-        undefined ->
-            error("Use rest_test_utils:set_config/1 first.");
-        Val ->
-            Val
-    end.
 
 %%--------------------------------------------------------------------
 %% Performs a REST call and check the output if it matches the expected.
@@ -58,63 +37,95 @@ get_config(Key) ->
 %% Args map looks like following:
 %% #{
 %%    request => #{
-%%      method => get, % Optional, default: get
-%%      path => [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>], % Mandatory
-%%      headers => [{<<"key">>, <<"value">>}], % Optional, default: ct=app/json
-%%      body => <<"body content">>, % Optional, default: <<"">>
-%%      auth => <<"uid">> orelse undefined, % Optional, default: undefined
-%%      opts => [http_client_option] % Optional, default: []
+%%      method => % Optional, default: get
+%%          get
+%%          post
+%%          put
+%%          patch
+%%          delete
+%%      path => % Mandatory
+%%          [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>],
+%%      headers => % Optional, default: content-type=app/json
+%%          [{<<"key">>, <<"value">>}]
+%%      body => % Optional, default: <<"">>
+%%          <<"body content">>,
+%%      auth => % Optional, default: undefined
+%%          nobody
+%%          root
+%%          {user, <<"uid">>}
+%%          {provider, <<"id">>, "KeyFile", "CertFile"}
+%%          undefined
+%%      opts => % Optional, default: []
+%%          [http_client_option]
 %%    },
 %%    expect => #{
-%%      code => 200, % Optional, by default not validated
-%%      headers => [{<<"key">>, <<"value">>}], % Optional, by def. not validated
-%%                 {contains, [{<<"key">>, <<"value">>}]} % checks if given
-%%                      (key, value) pair is included in response headers
-%%      body => <<"binary">> orelse #{} % Optional, by default not validated
+%%      code => % Optional, by default not validated
+%%          200
+%%      headers => % Optional, by def. not validated
+%%          #{<<"key">> => <<"value">>}
+%%          fun(Headers) -> boolean() % Verification function
+%%          {contains, #{<<"key">> => <<"value">>}} % checks if given
+%%              (key, value) pair is included in response headers
+%%      body => % Optional, by default not validated
+%%          <<"binary">>
+%%          #{}
+%%          fun(Body) -> boolean() % Verification function
+%%          {check_type, binary}
+%%          {contains, #{}}
 %%      % Specifying a map here will cause validation of JSON content-wise
 %%      % (if the JSON object specified by map is equal to the one in reply)
 %%    }
 %% }
 %%--------------------------------------------------------------------
-check_rest_call(ArgsMap) ->
+check_rest_call(Config, ArgsMap) ->
     try
         RequestMap = maps:get(request, ArgsMap),
         ExpectMap = maps:get(expect, ArgsMap),
 
         ReqMethod = maps:get(method, RequestMap, get),
         ReqPath = case maps:get(path, RequestMap) of
-            Bin when is_binary(Bin) ->
-                [Bin];
+            Bin1 when is_binary(Bin1) ->
+                [Bin1];
             List ->
                 List
         end,
-        ReqHeaders = maps:get(headers, RequestMap, [
-            {<<"content-type">>, <<"application/json">>}
-        ]),
-        ReqBody = case maps:get(body, RequestMap, <<"">>) of
-            Bin2 when is_binary(Bin2) ->
-                Bin2;
+        ReqHeaders = case maps:get(headers, RequestMap, undefined) of
+            undefined ->
+                #{<<"content-type">> => <<"application/json">>};
             Map2 when is_map(Map2) ->
-                json_utils:encode_map(Map2)
+                Map2
         end,
-        ReqAuth = maps:get(auth, RequestMap, undefined),
+        ReqBody = case maps:get(body, RequestMap, undefined) of
+            undefined ->
+                <<"">>;
+            Bin3 when is_binary(Bin3) ->
+                Bin3;
+            Map3 when is_map(Map3) ->
+                json_utils:encode_map(Map3)
+        end,
         ReqOpts = maps:get(opts, RequestMap, []),
-        ReqURL = maps:get(url, RequestMap, get_random_oz_url()),
+        ReqURL = maps:get(url, RequestMap, get_random_oz_url(Config)),
 
         ExpCode = maps:get(code, ExpectMap, undefined),
         ExpHeaders = maps:get(headers, ExpectMap, undefined),
         ExpBody = maps:get(body, ExpectMap, undefined),
 
         URL = str_utils:join_binary([ReqURL | ReqPath], <<"">>),
+        ReqAuth = maps:get(auth, RequestMap, undefined),
         HeadersPlusAuth = case ReqAuth of
             undefined ->
                 ReqHeaders;
-            UserId ->
+            nobody ->
+                ReqHeaders;
+            {provider, _, _, _} ->
+                % Provider authorizes by certs
+                ReqHeaders;
+            {user, UserId} ->
                 % Cache user auth tokens, if none in cache create a new one.
                 Macaroon = case get({macaroon, UserId}) of
                     undefined ->
-                        Mac = oz_test_utils:get_client_token(
-                            get_config(config), UserId
+                        {ok, Mac} = oz_test_utils:create_client_token(
+                            Config, UserId
                         ),
                         put({macaroon, UserId}, Mac),
                         Mac;
@@ -127,11 +138,28 @@ check_rest_call(ArgsMap) ->
                     1 -> <<"macaroon">>;
                     2 -> <<"X-Auth-Token">>
                 end,
-                [{HeaderName, Macaroon} | ReqHeaders]
+                ReqHeaders#{HeaderName => Macaroon}
+        end,
+        ReqOptsPlusAuth = case ReqAuth of
+            undefined ->
+                ReqOpts;
+            nobody ->
+                ReqOpts;
+            {user, _UserId} ->
+                % User authorizes by macaroon
+                ReqOpts;
+            {provider, _ProviderId, KeyFile, CertFile} ->
+                [{ssl_options, [
+                    {keyfile, KeyFile}, {certfile, CertFile}
+                ]} | ReqOpts]
         end,
         % Add insecure option - we do not want the OZ server cert to be checked.
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
-            ReqMethod, URL, HeadersPlusAuth, ReqBody, [insecure | ReqOpts]
+            ReqMethod,
+            URL,
+            HeadersPlusAuth,
+            ReqBody,
+            [{pool, false}, insecure | ReqOptsPlusAuth]
         ),
 
         % Check response code if specified
@@ -143,7 +171,9 @@ check_rest_call(ArgsMap) ->
                     ExpCode ->
                         ok;
                     _ ->
-                        throw({code, RespCode, ExpCode})
+                        throw({code, RespCode, ExpCode, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end
         end,
 
@@ -151,21 +181,43 @@ check_rest_call(ArgsMap) ->
         case ExpHeaders of
             undefined ->
                 ok;
-            {contains, ActualExpHeaders} ->
-                NormExpHeaders = normalize_headers(ActualExpHeaders),
-                NormRespHeaders = normalize_headers(RespHeaders),
-                case NormExpHeaders -- NormRespHeaders of
-                    [] -> ok;
-                    _ -> throw({headers, NormRespHeaders, NormExpHeaders})
+            Fun when is_function(Fun, 1) ->
+                Result = try
+                    Fun(RespHeaders)
+                catch
+                    Type1:Message1 ->
+                        ct:print(
+                            "Headers verification function crashed - ~p:~p~n"
+                            "Stacktrace: ~s", [
+                                Type1, Message1, lager:pr_stacktrace(erlang:get_stacktrace())
+                            ]),
+                        false
+                end,
+                case Result of
+                    true ->
+                        ok;
+                    false ->
+                        throw({headers, RespHeaders, ExpHeaders, {
+                            RespCode, RespHeaders, RespBody
+                        }})
+                end;
+            {contains, ExpContainsHeaders} ->
+                case contains_headers(RespHeaders, ExpContainsHeaders) of
+                    true ->
+                        ok;
+                    false ->
+                        throw({headers_contain, RespHeaders, ExpContainsHeaders, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end;
             _ ->
-                NormExpHeaders = normalize_headers(ExpHeaders),
-                NormRespHeaders = normalize_headers(RespHeaders),
-                case NormRespHeaders of
-                    NormExpHeaders ->
+                case compare_headers(RespHeaders, ExpHeaders) of
+                    true ->
                         ok;
-                    _ ->
-                        throw({headers, NormRespHeaders, NormExpHeaders})
+                    false ->
+                        throw({headers, RespHeaders, ExpHeaders, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end
         end,
 
@@ -173,28 +225,64 @@ check_rest_call(ArgsMap) ->
         case ExpBody of
             undefined ->
                 ok;
-            Bin3 when is_binary(Bin3) ->
+            Fun2 when is_function(Fun2, 1) ->
+                ActualBodyMap = json_utils:decode_map(RespBody),
+                Result2 = try
+                    Fun2(ActualBodyMap)
+                catch
+                    Type2:Message2 ->
+                        ct:print(
+                            "Body verification function crashed - ~p:~p~n"
+                            "Stacktrace: ~s", [
+                                Type2, Message2, lager:pr_stacktrace(erlang:get_stacktrace())
+                            ]),
+                        false
+                end,
+                case Result2 of
+                    true ->
+                        ok;
+                    false ->
+                        throw({body, RespBody, ExpBody, {
+                            RespCode, RespHeaders, RespBody
+                        }})
+                end;
+            {check_type, binary} ->
+                case RespBody of
+                    Bin4 when is_binary(Bin4) ->
+                        ok;
+                    _ ->
+                        throw({body, RespBody, ExpBody, {
+                            RespCode, RespHeaders, RespBody
+                        }})
+                end;
+            Bin5 when is_binary(Bin5) ->
                 case RespBody of
                     ExpBody ->
                         ok;
                     _ ->
-                        throw({body, RespBody, ExpBody})
+                        throw({body, RespBody, ExpBody, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end;
-            Map3 when is_map(Map3) ->
-                RespBodyMap = json_utils:decode_map(RespBody),
-                case compare_maps(RespBodyMap, ExpBody) of
+            Map4 when is_map(Map4) ->
+                ActualBodyMap = json_utils:decode_map(RespBody),
+                case compare_maps(ActualBodyMap, ExpBody) of
                     true ->
                         ok;
                     false ->
-                        throw({body, RespBodyMap, ExpBody})
+                        throw({body, ActualBodyMap, ExpBody, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end;
-            {contains, Map4} when is_map(Map4) ->
-                RespBodyMap = json_utils:decode_map(RespBody),
-                case contains_map(Map4, RespBodyMap) of
+            {contains, ExpContainsMap} when is_map(ExpContainsMap) ->
+                ActualBodyMap = json_utils:decode_map(RespBody),
+                case contains_map(ActualBodyMap, ExpContainsMap) of
                     true ->
                         ok;
                     false ->
-                        throw({body_contains, RespBodyMap, Map4})
+                        throw({body_contains, ActualBodyMap, ExpContainsMap, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end;
             #xmlElement{} = ExpBodyXML ->
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
@@ -202,7 +290,13 @@ check_rest_call(ArgsMap) ->
                     true ->
                         ok;
                     false ->
-                        throw({body, RespBodyXML, ExpBodyXML})
+                        Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
+                        ExpBodyBin = erlang:iolist_to_binary(xmerl:export_simple(
+                            [ExpBodyXML], xmerl_xml, [{prolog, Prolog}]
+                        )),
+                        throw({body, RespBody, ExpBodyBin, {
+                            RespCode, RespHeaders, RespBody
+                        }})
                 end
         end,
 
@@ -211,50 +305,127 @@ check_rest_call(ArgsMap) ->
     catch
         % Something wrong, return details. If assert is used, the test will fail
         % and properly display the point of failure.
-        {Type, Actual, Expected} ->
+        throw:{Type, Actual, Expected, {Code, Headers, Body}} ->
+            BodyMap = try json_utils:decode_map(Body) catch _:_ -> Body end,
             {
                 Type,
                 {got, Actual},
-                {expected, Expected}
-            }
+                {expected, Expected},
+                {response, {Code, Headers, BodyMap}}
+            };
+        % Unexpected error
+        Type:Message ->
+            ct:print(
+                "~p:check_rest_call failed with unexpected result - ~p:~p~n"
+                "Stacktrace: ~s", [
+                    ?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
+                ]),
+            false
     end.
 
 
-get_random_oz_url() ->
-    RestURLs = get_config(rest_urls),
+get_random_oz_url(Config) ->
+    % Resolve REST URLs of oz-worker nodes
+    Nodes = ?config(oz_worker_nodes, Config),
+    RestURLs = lists:map(fun(Node) ->
+        NodeIP = test_utils:get_docker_ip(Node),
+        {ok, RestPort} = rpc:call(
+            Node, application, get_env, [?APP_NAME, rest_port]
+        ),
+        {ok, RestAPIPrefix} = rpc:call(
+            Node, application, get_env, [?APP_NAME, rest_api_prefix]
+        ),
+        str_utils:format_bin(
+            "https://~s:~B~s", [NodeIP, RestPort, RestAPIPrefix]
+        )
+    end, Nodes),
     lists:nth(rand:uniform(length(RestURLs)), RestURLs).
 
 
-% Convert all header keys to lowercase so comparing is easier
-normalize_headers(Headers) ->
-    lists:sort(
+compare_headers(ActualHeadersInput, ExpectedHeadersInput) ->
+    ExpectedMap = normalize_headers(ExpectedHeadersInput),
+    ActualMap = normalize_headers(ActualHeadersInput),
+    case maps:keys(ExpectedMap) =:= maps:keys(ActualMap) of
+        false ->
+            false;
+        true ->
+            lists:all(
+                fun({Key, ExpValue}) ->
+                    ActualValue = maps:get(Key, ActualMap),
+                    case {ExpValue, ActualValue} of
+                        {{match, RegExp}, _} ->
+                            match =:= re:run(ActualValue, RegExp, [{capture, none}]);
+                        {B1, B2} when is_binary(B1) andalso is_binary(B2) ->
+                            B1 =:= B2
+                    end
+                end, maps:to_list(ExpectedMap))
+    end.
+
+
+contains_headers(ActualHeadersInput, ExpectedHeadersInput) ->
+    ExpectedMap = normalize_headers(ExpectedHeadersInput),
+    ActualMap = normalize_headers(ActualHeadersInput),
+    case maps:keys(ExpectedMap) -- maps:keys(ActualMap) =:= [] of
+        false ->
+            false;
+        true ->
+            FilteredActualMap = maps:filter(
+                fun(Key, _Value) ->
+                    lists:member(Key, maps:keys(ExpectedMap))
+                end, ActualMap),
+            compare_headers(FilteredActualMap, ExpectedMap)
+    end.
+
+
+% Convert all header keys to maps with lowercase keys so comparing is easier
+normalize_headers(HeadersList) when is_list(HeadersList) ->
+    normalize_headers(maps:from_list(HeadersList));
+normalize_headers(HeadersMap) ->
+    maps:from_list(
         lists:map(fun({Key, Value}) ->
             KeyLower = list_to_binary(string:to_lower(binary_to_list(Key))),
             {KeyLower, Value}
-        end, Headers)
+        end, maps:to_list(HeadersMap))
     ).
 
 
 % Returns true if two maps have the same contents
-compare_maps(Map1, Map2) ->
-    sort_map(Map1) =:= sort_map(Map2).
+compare_maps(ActualMapInput, ExpectedMapInput) ->
+    ExpectedMap = sort_map(ExpectedMapInput),
+    ActualMap = sort_map(ActualMapInput),
+    case maps:keys(ExpectedMap) =:= maps:keys(ActualMap) of
+        false ->
+            false;
+        true ->
+            lists:all(
+                fun({Key, ExpValue}) ->
+                    ActualValue = maps:get(Key, ActualMap),
+                    case {ExpValue, ActualValue} of
+                        {{check_type, binary}, ActualValue} ->
+                            is_binary(ActualValue);
+                        {{list_contains, ExpContains}, ActualValue} ->
+                                ExpContains -- ActualValue =:= [];
+                        {{list_doesnt_contain, ExpContains}, ActualValue} ->
+                                ActualValue -- ExpContains =:= ActualValue;
+                        {_, _} ->
+                            ExpValue =:= ActualValue
+                    end
+                end, maps:to_list(ExpectedMap))
+    end.
 
 % Returns true if second map has all the mappings of the first map with
 % same values.
-contains_map(Map1, Map2) ->
-    SortedMap1 = sort_map(Map1),
-    SortedMap2 = sort_map(Map2),
-    lists:all(
-        fun(Key) ->
-            Value1 = maps:get(Key, SortedMap1),
-            case maps:is_key(Key, SortedMap2) of
-                false ->
-                    false;
-                true ->
-                    Value2 = maps:get(Key, SortedMap2),
-                    Value1 =:= Value2
-            end
-        end, maps:keys(SortedMap1)).
+contains_map(ActualMap, ExpectedMap) ->
+    case maps:keys(ExpectedMap) -- maps:keys(ActualMap) =:= [] of
+        false ->
+            false;
+        true ->
+            FilteredActualMap = maps:filter(
+                fun(Key, _Value) ->
+                    lists:member(Key, maps:keys(ExpectedMap))
+                end, ActualMap),
+            compare_maps(ExpectedMap, FilteredActualMap)
+    end.
 
 
 % Sorts all nested lists in a map and returns the result map
@@ -271,6 +442,7 @@ sort_map(OriginalMap) ->
             end
         end, OriginalMap, maps:keys(OriginalMap)).
 
+% Compares two XML terms
 compare_xml(_, []) -> true;
 compare_xml(#xmlText{value = V}, #xmlText{value = V}) -> true;
 compare_xml(#xmlText{value = _V1}, #xmlText{value = _V2}) -> false;

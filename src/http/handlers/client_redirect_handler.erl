@@ -26,7 +26,8 @@ init(_Type, Req, [RequestedPort]) ->
     {ok, Req, RequestedPort}.
 
 %%--------------------------------------------------------------------
-%% @doc Handles a request returning a HTTP Redirect (307 - Moved temporarily).
+%% @doc
+%% Handles a request returning a HTTP Redirect (307 - Moved temporarily).
 %% @end
 %%--------------------------------------------------------------------
 -spec handle(term(), term()) -> {ok, term(), term()}.
@@ -39,13 +40,13 @@ handle(Req, RequestedPort = State) ->
         % Find the user and his default provider
         GetUserResult = case Alias of
             <<?NO_ALIAS_UUID_PREFIX, UUID/binary>> ->
-                user_logic:get_user_doc(UUID);
+                od_user:get(UUID);
             _ ->
-                case user_logic:get_user_doc({alias, Alias}) of
+                case od_user:get_by_criterion({alias, Alias}) of
                     {ok, Ans} ->
                         {ok, Ans};
                     _ ->
-                        user_logic:get_user_doc(Alias)
+                        od_user:get(Alias)
                 end
         end,
         {ok, #document{
@@ -54,21 +55,24 @@ handle(Req, RequestedPort = State) ->
                 chosen_provider = ChosenProvider
             }}} = GetUserResult,
         % If default provider is not known, set it.
-        DataProplist =
+        RedirectionPoint =
             try
-                {ok, Data} = provider_logic:get_data(ChosenProvider),
-                Data
+                {ok, #od_provider{
+                    redirection_point = RedPoint
+                }} = provider_logic:get(?ROOT, ChosenProvider),
+                RedPoint
             catch _:_ ->
                 {ok, NewChosenProv} =
                     provider_logic:choose_provider_for_user(UserId),
                 {ok, _} = od_user:update(UserId, #{
                     chosen_provider => NewChosenProv
                 }),
-                {ok, Data2} = provider_logic:get_data(NewChosenProv),
-                Data2
+                {ok, #od_provider{
+                    redirection_point = RedPoint2
+                }} = provider_logic:get(?ROOT, NewChosenProv),
+                RedPoint2
             end,
-        RedirectionPoint = proplists:get_value(redirectionPoint, DataProplist),
-        #hackney_url{host = Host} = hackney_url:parse_url(RedirectionPoint),
+        #{host := Host} = url_utils:parse(RedirectionPoint),
         {Path, _} = cowboy_req:path(Req),
         QueryString = case cowboy_req:qs(Req) of
             {<<"">>, _} ->

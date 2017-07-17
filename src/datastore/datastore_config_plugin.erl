@@ -15,7 +15,7 @@
 -behaviour(datastore_config_behaviour).
 
 %% datastore_config_behaviour callbacks
--export([models/0, throttled_models/0]).
+-export([models/0, throttled_models/0, get_mutator/0]).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -33,14 +33,14 @@ models() -> [
     od_handle_service,
     od_handle,
     owned_identity,
-    groups_graph_caches_state,
+    onedata_auth,
+    session,
+    token,
+    entity_graph_state,
     outbox,
     provider_subscription,
     subscriptions_state,
-    ozpca_state,
-    onedata_auth,
-    session,
-    token
+    ozpca_state
 ].
 
 %%--------------------------------------------------------------------
@@ -50,3 +50,12 @@ models() -> [
 %%--------------------------------------------------------------------
 -spec throttled_models() -> Models :: [model_behaviour:model_type()].
 throttled_models() -> [].
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link datastore_config_behaviour} callback get_mutator/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_mutator() -> datastore:mutator() | undefined.
+get_mutator() ->
+    undefined.

@@ -17,10 +17,10 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
--define(PROVIDER_NAME, plgrid).
+-define(PROVIDER_ID, plgrid).
 
 %% API
--export([get_redirect_url/1, validate_login/0]).
+-export([get_redirect_url/1, validate_login/0, get_user_info/1]).
 
 %%%===================================================================
 %%% API functions
@@ -34,7 +34,7 @@
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 get_redirect_url(ConnectAccount) ->
     try
-        HostName = http_utils:fully_qualified_url(g_ctx:get_requested_hostname()),
+        HostName = http_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
         RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_logic:generate_state_token(?MODULE, ConnectAccount))/binary>>,
 
         ParamsProplist = [
@@ -58,7 +58,7 @@ get_redirect_url(ConnectAccount) ->
     catch
         Type:Message ->
             ?error_stacktrace("Cannot get redirect URL for ~p. ~p:~p",
-                [?PROVIDER_NAME, Type, Message]),
+                [?PROVIDER_ID, Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -68,11 +68,11 @@ get_redirect_url(ConnectAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_login() ->
-    {ok, #oauth_account{}} | {error, term()}.
+    {ok, #linked_account{}} | {error, term()}.
 validate_login() ->
     try
         % Retrieve URL params
-        ParamsProplist = g_ctx:get_url_params(),
+        ParamsProplist = gui_ctx:get_url_params(),
         % Make sure received endpoint is really the PLGrid endpoint
         ReceivedEndpoint = proplists:get_value(<<"openid.op_endpoint">>, ParamsProplist),
         true = (plgrid_endpoint() =:= ReceivedEndpoint),
@@ -91,10 +91,10 @@ validate_login() ->
         NewParamsProplist = lists:map(
             fun(Key) ->
                 Value = case proplists:get_value(Key, ParamsProplist) of
-                            undefined ->
-                                throw("Value for " ++ str_utils:to_list(Key) ++ " not found");
-                            Val -> Val
-                        end,
+                    undefined ->
+                        throw("Value for " ++ str_utils:to_list(Key) ++ " not found");
+                    Val -> Val
+                end,
                 {Key, Value}
             end, SignedArgs),
 
@@ -103,9 +103,9 @@ validate_login() ->
         RequestBody = <<"openid.mode=check_authentication&", Params/binary>>,
 
         % Send validation request
-        {ok, 200, _, Response} = http_client:post(ReceivedEndpoint,
-            [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}],
-            RequestBody),
+        {ok, 200, _, Response} = http_client:post(ReceivedEndpoint, #{
+            <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+        }, RequestBody),
 
         % Check if server responded positively
         Response = <<"is_valid:true\n">>,
@@ -131,12 +131,13 @@ validate_login() ->
                 (X /= [])
             end, [DN1, DN2, DN3]),
 
-        ProvUserInfo = #oauth_account{
-            provider_id = ?PROVIDER_NAME,
+        ProvUserInfo = #linked_account{
+            provider_id = ?PROVIDER_ID,
             user_id = str_utils:to_binary(Login),
             login = Login,
             email_list = Emails,
-            name = Name
+            name = Name,
+            groups = []
         },
         {ok, ProvUserInfo}
 
@@ -145,6 +146,16 @@ validate_login() ->
             ?debug_stacktrace("Error in ~p:validate_login - ~p:~p", [?MODULE, Type, Message]),
             {error, {Type, Message}}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user info from oauth provider based on access token.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_info(AccessToken :: binary()) -> no_return().
+get_user_info(_AccessToken) ->
+    error(unsupported).
 
 %%%===================================================================
 %%% Internal functions
@@ -157,12 +168,13 @@ validate_login() ->
 %%--------------------------------------------------------------------
 -spec plgrid_endpoint() -> binary().
 plgrid_endpoint() ->
-    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_NAME)),
-    {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, [
-        {<<"Accept">>, <<"application/xrds+xml;level=1, */*">>},
-        {<<"Connection">>, <<"close">>}
-    ], <<>>, [{follow_redirect, true}, {max_redirect, 5}]),
+    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_ID)),
+    {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{
+        <<"Accept">> => <<"application/xrds+xml;level=1, */*">>,
+        <<"Connection">> => <<"close">>
+    }, <<>>, [{follow_redirect, true}, {max_redirect, 5}]),
     discover_op_endpoint(XRDS).
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -176,6 +188,7 @@ discover_op_endpoint(XRDS) ->
     {Xml, _} = xmerl_scan:string(binary_to_list(XRDS)),
     list_to_binary(xml_extract_value("URI", Xml)).
 
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -186,6 +199,7 @@ discover_op_endpoint(XRDS) ->
 xml_extract_value(KeyName, Xml) ->
     [#xmlElement{content = [#xmlText{value = Value} | _]}] = xmerl_xpath:string("//" ++ KeyName, Xml),
     Value.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -206,6 +220,7 @@ parse_teams(XMLContent) ->
             binary_to_list(unicode:characters_to_binary(Value, unicode))
         end, TeamList).
 
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -223,6 +238,7 @@ find_XML_node(NodeName, #xmlElement{} = XMLElement) ->
 
 find_XML_node(_NodeName, _) ->
     undefined.
+
 
 %%--------------------------------------------------------------------
 %% @private

@@ -13,6 +13,7 @@
 
 -include("http/handlers/oai.hrl").
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
@@ -73,9 +74,7 @@ get_response(<<"record">>, Args) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     From = proplists:get_value(<<"from">>, Args),
     Until = proplists:get_value(<<"until">>, Args),
-    HarvestingFun = fun(Id, Metadata) ->
-        Timestamp = proplists:get_value(timestamp, Metadata),
-        MetadataValue = proplists:get_value(metadata, Metadata),
+    HarvestingFun = fun(Id, #od_handle{timestamp = Timestamp, metadata = Metadata}) ->
         #oai_record{
             header = #oai_header{
                 identifier = oai_utils:oai_identifier_encode(Id),
@@ -83,7 +82,7 @@ get_response(<<"record">>, Args) ->
             },
             metadata = #oai_metadata{
                 metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
-                value = MetadataValue
+                value = Metadata
             }
         }
     end,

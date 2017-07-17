@@ -5,8 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc: This behaviour should be implemented by modules handling OpenID and OAuth requests.
-%%% It ensures the presence of required callbacks.
+%%% @doc
+%%% This behaviour should be implemented by modules handling OpenID and OAuth
+%%% requests. It ensures the presence of required callbacks.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(auth_module_behaviour).
@@ -30,9 +31,19 @@
 %% Will be called from auth_utils:validate_login/0 when the request
 %% has been pre-validated. Beside validating the request,
 %% the function must retrieve user info from the provider.
-%% Must return oauth_account record upon success,
-%% or error and its desription otherwise.
+%% Must return linked_account record upon success,
+%% or error and its description otherwise.
 %% @end
 %%--------------------------------------------------------------------
 -callback validate_login() ->
-    {ok, #oauth_account{}} | {error, term()}.
+    {ok, #linked_account{}} | {error, term()}.
+
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves user info from oauth provider based on access token.
+%% @end
+%%--------------------------------------------------------------------
+-callback get_user_info(AccessToken :: binary()) ->
+    {ok, #linked_account{}} | {error, bad_access_token}.

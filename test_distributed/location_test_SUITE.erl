@@ -19,8 +19,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
--export([init_per_testcase/2, end_per_testcase/2]).
+-export([all/0]).
 -export([
     restarts_port_after_failure/1,
     location_of_records_are_set_upon_creation/1,
@@ -129,23 +128,6 @@ location_of_records_are_set_upon_creation(Config) ->
     ?assertMatch({ok, Host1}, resolve(Node2, od_space, ID4)),
     ?assertMatch({ok, Host1}, resolve(Node3, od_space, ID4)),
     ok.
-
-
-%%%===================================================================
-%%% Setup/teardown functions
-%%%===================================================================
-
-init_per_suite(Config) ->
-    ?TEST_INIT(Config, ?TEST_FILE(Config, "env_desc.json")).
-
-init_per_testcase(_, _Config) ->
-    _Config.
-
-end_per_testcase(_, _Config) ->
-    ok.
-
-end_per_suite(Config) ->
-    test_node_starter:clean_environment(Config).
 
 
 %%%===================================================================

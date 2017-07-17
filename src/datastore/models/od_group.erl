@@ -20,14 +20,17 @@
 -type doc() :: datastore:document().
 -type info() :: #od_group{}.
 -type id() :: binary().
--type type() :: 'organization' | 'unit' | 'team' | 'role'.
 -export_type([doc/0, info/0, id/0]).
--export_type([type/0]).
+
+-type name() :: binary().
+-type type() :: organization | unit | team | role.
+-export_type([name/0, type/0]).
 
 %% model_behaviour callbacks
 -export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
--export([record_struct/1]).
+    model_init/0, 'after'/5, before/4, create_or_update/2]).
+-export([record_struct/1, record_upgrade/2]).
+-export([to_string/1]).
 
 -define(USER_MODULE, od_user).
 
@@ -59,6 +62,28 @@ record_struct(1) ->
         {eff_handles, [string]},
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
+    ]};
+record_struct(2) ->
+    {record, [
+        {name, string},
+        {type, atom},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
     ]}.
 
 %%%===================================================================
@@ -70,9 +95,10 @@ record_struct(1) ->
 %% {@link model_behaviour} callback save/1.
 %% @end
 %%--------------------------------------------------------------------
--spec save(datastore:document()) -> {ok, datastore:ext_key()} | datastore:generic_error().
+-spec save(datastore:document()) ->
+    {ok, datastore:ext_key()} | datastore:generic_error().
 save(Document) ->
-    datastore:save(?STORE_LEVEL, Document).
+    model:execute_with_default_context(?MODULE, save, [Document]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -82,16 +108,17 @@ save(Document) ->
 -spec update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
     {ok, datastore:ext_key()} | datastore:update_error().
 update(Key, Diff) ->
-    datastore:update(?STORE_LEVEL, ?MODULE, Key, Diff).
+    model:execute_with_default_context(?MODULE, update, [Key, Diff]).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link model_behaviour} callback create/1.
 %% @end
 %%--------------------------------------------------------------------
--spec create(datastore:document()) -> {ok, datastore:ext_key()} | datastore:create_error().
+-spec create(datastore:document()) ->
+    {ok, datastore:ext_key()} | datastore:create_error().
 create(Document) ->
-    datastore:create(?STORE_LEVEL, Document).
+    model:execute_with_default_context(?MODULE, create, [Document]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -100,7 +127,7 @@ create(Document) ->
 %%--------------------------------------------------------------------
 -spec get(datastore:ext_key()) -> {ok, datastore:document()} | datastore:get_error().
 get(Key) ->
-    datastore:get(?STORE_LEVEL, ?MODULE, Key).
+    model:execute_with_default_context(?MODULE, get, [Key]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -109,7 +136,7 @@ get(Key) ->
 %%--------------------------------------------------------------------
 -spec list() -> {ok, [datastore:document()]} | datastore:generic_error() | no_return().
 list() ->
-    datastore:list(?STORE_LEVEL, ?MODEL_NAME, ?GET_ALL, []).
+    model:execute_with_default_context(?MODULE, list, [?GET_ALL, []]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -118,7 +145,7 @@ list() ->
 %%--------------------------------------------------------------------
 -spec delete(datastore:ext_key()) -> ok | datastore:generic_error().
 delete(Key) ->
-    datastore:delete(?STORE_LEVEL, ?MODULE, Key).
+    model:execute_with_default_context(?MODULE, delete, [Key]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -127,7 +154,7 @@ delete(Key) ->
 %%--------------------------------------------------------------------
 -spec exists(datastore:ext_key()) -> datastore:exists_return().
 exists(Key) ->
-    ?RESPONSE(datastore:exists(?STORE_LEVEL, ?MODULE, Key)).
+    ?RESPONSE(model:execute_with_default_context(?MODULE, exists, [Key])).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -136,12 +163,15 @@ exists(Key) ->
 %%--------------------------------------------------------------------
 -spec model_init() -> model_behaviour:model_config().
 model_init() ->
-    % TODO migrate to GLOBALLY_CACHED_LEVEL
-    StoreLevel = application:get_env(?APP_Name, group_store_level, ?DISK_ONLY_LEVEL),
     UserHooks = [{?USER_MODULE, save}, {?USER_MODULE, update}, {?USER_MODULE, create},
         {?USER_MODULE, create_or_opdate}],
     Hooks = [{?MODULE, save}, {?MODULE, update}, {?MODULE, create}, {?MODULE, create_or_opdate}],
-    ?MODEL_CONFIG(od_group_bucket, Hooks ++ UserHooks, StoreLevel).
+    Config = ?MODEL_CONFIG(od_group_bucket, Hooks ++ UserHooks, ?GLOBALLY_CACHED_LEVEL),
+    Config#model_config{
+        version = 2,
+        list_enabled = {true, return_errors},
+        sync_enabled = true
+    }.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -151,10 +181,6 @@ model_init() ->
 -spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
     Level :: datastore:store_level(), Context :: term(),
     ReturnValue :: term()) -> ok.
-'after'(?MODULE, _Method, _Level, _Context, {ok, ID}) ->
-    group_graph:mark_group_changed(ID);
-'after'(?USER_MODULE, _Method, _Level, _Context, {ok, ID}) ->
-    group_graph:mark_user_changed(ID);
 'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
     ok.
 
@@ -167,3 +193,87 @@ model_init() ->
     Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
 before(_ModelName, _Method, _Level, _Context) ->
     ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates document with using ID from document. If such object does not exist,
+%% it initialises the object with the document.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_or_update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
+    {ok, datastore:ext_key()} | datastore:generic_error().
+create_or_update(Doc, Diff) ->
+    model:execute_with_default_context(?MODULE, create_or_update, [Doc, Diff]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the group with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(GroupId :: id()) -> binary().
+to_string(GroupId) ->
+    <<"group:", GroupId/binary>>.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades record from specified version.
+%% @end
+%%--------------------------------------------------------------------
+-spec record_upgrade(datastore_json:record_version(), tuple()) ->
+    {datastore_json:record_version(), tuple()}.
+record_upgrade(1, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        _EffOzPrivileges,
+
+        Parents,
+        Children,
+        _EffParents,
+        _EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        _EffUsers,
+        _EffSpaces,
+        _EffShares,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Group,
+    {2, #od_group{
+        name = Name,
+        type = Type,
+        oz_privileges = OzPrivileges,
+        eff_oz_privileges = [],
+
+        parents = Parents,
+        children = maps:from_list(Children),
+        eff_parents = #{},
+        eff_children = #{},
+
+        users = maps:from_list(Users),
+        spaces = Spaces,
+        handle_services = HandleServices,
+        handles = Handles,
+
+        eff_users = #{},
+        eff_spaces = #{},
+        eff_providers = #{},
+        eff_handle_services = #{},
+        eff_handles = #{},
+
+        top_down_dirty = true,
+        bottom_up_dirty = true
+    }}.

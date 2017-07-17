@@ -18,8 +18,9 @@
 -author("Lukasz Opiola").
 -behaviour(gui_route_plugin_behaviour).
 
--include("registered_names.hrl").
 -include("gui/common.hrl").
+-include("auth_common.hrl").
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("gui/include/gui.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -44,10 +45,22 @@
     page_backend = basic_login_backend
 }).
 
--define(VALIDATE_LOGIN, #gui_route{
+-define(OIDC_CONSUME_ENDPOINT, #gui_route{
     requires_session = ?SESSION_ANY,  % Can be used to log in or connect account
     html_file = undefined,
-    page_backend = validate_login_backend
+    page_backend = oidc_consume_backend
+}).
+
+-define(SAML_METADATA_BACKEND, #gui_route{
+    requires_session = ?SESSION_ANY,  % Can be used to log in or connect account
+    html_file = undefined,
+    page_backend = saml_metadata_backend
+}).
+
+-define(SAML_CONSUME_BACKEND, #gui_route{
+    requires_session = ?SESSION_ANY,  % Can be used to log in or connect account
+    html_file = undefined,
+    page_backend = saml_consume_backend
 }).
 
 -define(INDEX, #gui_route{
@@ -79,19 +92,21 @@
 %% {@link gui_route_plugin_behaviour} callback route/1.
 %% @end
 %%--------------------------------------------------------------------
--spec route(Path :: binary()) -> #gui_route{}.
+-spec route(Path :: binary()) -> #gui_route{} | undefined.
 route(<<"/do_logout">>) -> ?LOGOUT;
 route(<<"/do_login">>) -> ?BASIC_LOGIN;
-route(<<"/validate_login">>) -> ?VALIDATE_LOGIN;
+route(<<"/validate_login">>) -> ?OIDC_CONSUME_ENDPOINT;
+route(<<?SAML_METADATA_ENDPOINT>>) -> ?SAML_METADATA_BACKEND;
+route(<<?SAML_CONSUME_ENDPOINT>>) -> ?SAML_CONSUME_BACKEND;
 route(<<"/dev_login">>) ->
-    case application:get_env(?APP_Name, dev_mode) of
+    case application:get_env(?APP_NAME, dev_mode) of
         {ok, true} ->
             ?DEV_LOGIN;
         _ ->
             ?INDEX
     end;
 route(<<"/validate_dev_login">>) ->
-    case application:get_env(?APP_Name, dev_mode) of
+    case application:get_env(?APP_NAME, dev_mode) of
         {ok, true} ->
             ?VALIDATE_DEV_LOGIN;
         _ ->
@@ -99,7 +114,9 @@ route(<<"/validate_dev_login">>) ->
     end;
 route(<<"/">>) -> ?INDEX;
 route(<<"/index.html">>) -> ?INDEX;
-route(_) -> ?INDEX.
+% Ember-style URLs also point to index file
+route(<<"/#/", _/binary>>) -> ?INDEX;
+route(_) -> undefined.
 
 
 %%--------------------------------------------------------------------
@@ -109,10 +126,11 @@ route(_) -> ?INDEX.
 %%--------------------------------------------------------------------
 -spec data_backend(HasSession :: boolean(), Identifier :: binary()) ->
     HandlerModule :: module().
+data_backend(true, <<"user">>) -> user_data_backend;
+data_backend(true, <<"clienttoken">>) -> client_token_data_backend;
 data_backend(true, <<"space">>) -> space_data_backend;
-data_backend(true, <<"authorizer">>) -> authorizer_data_backend;
-data_backend(true, <<"provider">>) -> provider_data_backend;
-data_backend(true, <<"clienttoken">>) -> client_token_data_backend.
+data_backend(true, <<"group">>) -> group_data_backend;
+data_backend(true, <<"provider">>) -> provider_data_backend.
 
 
 %%--------------------------------------------------------------------
@@ -139,16 +157,14 @@ public_rpc_backend() -> public_rpc_backend.
 -spec session_details() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 session_details() ->
-    {ok, #document{
-        value = #od_user{
-            name = Name,
-            basic_auth_enabled = BasicAuthEnabled
-        }}} = od_user:get(g_session:get_user_id()),
-    FirstLogin = g_session:get_value(firstLogin, false),
+    FirstLogin = gui_session:get_value(firstLogin, false),
+    {_AppId, _AppName, AppVersion} = lists:keyfind(
+        ?APP_NAME, 1, application:loaded_applications()
+    ),
     Res = [
-        {<<"userName">>, Name},
+        {<<"userId">>, gui_session:get_user_id()},
         {<<"firstLogin">>, FirstLogin},
-        {<<"basicAuthEnabled">>, BasicAuthEnabled}
+        {<<"serviceVersion">>, str_utils:to_binary(AppVersion)}
     ],
     {ok, Res}.
 
@@ -200,5 +216,5 @@ error_500_html_file() ->
 %%--------------------------------------------------------------------
 -spec response_headers() -> [{Key :: binary(), Value :: binary()}].
 response_headers() ->
-    {ok, Headers} = application:get_env(?APP_Name, gui_response_headers),
+    {ok, Headers} = application:get_env(?APP_NAME, gui_response_headers),
     Headers.

@@ -10,8 +10,8 @@
 %% ===================================================================
 
 {application, oz_worker, [
-    {description, "Global registry of data."},
-    {vsn, "3.0.0-rc10"},
+    {description, "OneZone worker node."},
+    {vsn, "17.06.0-beta6"},
     {registered, [oz_worker_sup]},
     {applications, [
         kernel,
@@ -23,12 +23,12 @@
         xmerl,
         %% Meck is needed only for development purposes, should be removed before release.
         meck,
+        esaml,
         gui,
         %% ctool already requires those apps below, but they are here
         %% for awareness of them being used in the project and
         %% to make sure they are started before the application.
         lager,
-        etls,
         hackney,
         web_client,
         cowboy

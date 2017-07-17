@@ -16,6 +16,7 @@
 -behaviour(page_backend_behaviour).
 
 -include_lib("ctool/include/logging.hrl").
+-include("datastore/oz_datastore_models_def.hrl").
 
 %% API
 -export([page_init/0]).
@@ -32,27 +33,27 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
-    ParamsProps = g_ctx:get_url_params(),
+    ParamsProps = gui_ctx:get_url_params(),
     UserId = proplists:get_value(<<"user">>, ParamsProps),
-    case g_session:is_logged_in() of
+    case gui_session:is_logged_in() of
         true ->
-            case g_session:get_user_id() of
+            case gui_session:get_user_id() of
                 UserId ->
                     ok;
                 _ ->
-                    g_session:log_out(),
-                    g_session:log_in(UserId)
+                    gui_session:log_out(),
+                    gui_session:log_in(UserId)
             end;
         _ ->
-            g_session:log_in(UserId)
+            gui_session:log_in(UserId)
     end,
     ?info("[DEV MODE] User ~p logged in", [UserId]),
-    case user_logic:get_default_provider(UserId) of
-        {ok, undefined} ->
-            {redirect_relative, <<"/">>};
-        {ok, ProvId} ->
+    case user_logic:get_default_provider_if_online(UserId) of
+        {true, DefaultProv} ->
             ?debug("Automatically redirecting user `~s` "
-            "to default provider `~s`", [UserId, ProvId]),
-            {ok, ProvURL} = auth_logic:get_redirection_uri(UserId, ProvId),
-            {redirect_absolute, ProvURL}
+            "to default provider `~s`", [UserId, DefaultProv]),
+            {ok, ProvURL} = auth_logic:get_redirection_uri(UserId, DefaultProv),
+            {redirect_absolute, ProvURL};
+        false ->
+            {redirect_relative, <<"/">>}
     end.
