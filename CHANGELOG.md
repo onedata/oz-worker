@@ -4,6 +4,16 @@
 CHANGELOG
 ---------
 
+### 17.06.0-beta6
+
+* VFS-3376 Fix a bug making space aliases in subscriptions to not include effective spaces of users
+* VFS-3376 Add support for group mapping via OIDC and SAML
+* VFS-3415 Fix a routing bug causing public share links malfuntion
+* VFS-3224 Make sure that all unicode characters are properly decoded from SAML assertions
+* VFS-3224 Add a fix for Chrome/Safari getting stalled during SAML redirects
+* VFS-3224 Implement SAML login, add better error handling in login process
+
+
 ### 17.06.0-beta4
 
 * VFS-3386 Create new users upon IdP login with id based on IdP name and user id in that IdP
