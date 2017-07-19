@@ -218,8 +218,10 @@ fetch_from_db(Seqs) ->
                 {ok, end_of_stream} ->
                     Caller ! {self(), end_of_stream},
                     ok;
-                {ok, Doc} ->
-                    Caller ! {self(), Doc},
+                {ok, Docs} when is_list(Docs) ->
+                    lists:foreach(fun(Doc) ->
+                        Caller ! {self(), Doc}
+                    end, Docs),
                     ok
             end
         end, [{since, From}, {until, To}]),

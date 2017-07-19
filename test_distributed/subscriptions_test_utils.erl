@@ -397,7 +397,7 @@ verify_messages(Context, Expected, Forbidden) ->
 verify_messages(Context, _, [], []) ->
     Context;
 verify_messages(Context, 0, Expected, _) ->
-    ?assertMatch(Expected, []),
+    ?assertMatch([], Expected),
     Context;
 verify_messages(Context, Retries, Expected, Forbidden) ->
     #subs_ctx{node = Node, provider = ProviderId,
