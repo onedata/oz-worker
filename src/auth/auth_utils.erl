@@ -327,10 +327,15 @@ saml_assertions_to_linked_account(IdPId, IdP, Attributes) ->
         false ->
             [];
         true ->
-            GroupsStrings = proplists:get_value(
+            GroupsAttr = proplists:get_value(
                 maps:get(groups, AttributeMapping, undefined),
                 Attributes, []
             ),
+            % Groups attribute can be either a string or a list of strings
+            GroupsStrings = case GroupsAttr of
+                [Str | _] when is_list(Str) -> GroupsAttr;
+                Str when is_list(Str) -> [Str]
+            end,
             [str_utils:unicode_list_to_binary(G) || G <- GroupsStrings]
     end,
     #linked_account{
