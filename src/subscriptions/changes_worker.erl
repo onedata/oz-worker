@@ -36,15 +36,17 @@
 %% Handles changes & dispatches them to be processed.
 %% @end
 %%--------------------------------------------------------------------
--spec change_callback({ok, stream_ended | datastore:document()}) -> ok.
+-spec change_callback({ok, stream_ended | [datastore:document()]}) -> ok.
 change_callback({error, _, _}) ->
     ok;
 change_callback({ok, end_of_stream}) ->
     gen_server:cast(?MODULE, {stop, stream_ended});
-change_callback({ok, Doc = #document{seq = Seq, value = Value}}) ->
-    Type = element(1, Value),
-    Request = {handle_change, Seq, Doc, Type},
-    worker_proxy:cast(?SUBSCRIPTIONS_WORKER_NAME, Request).
+change_callback({ok, Docs}) when is_list(Docs) ->
+    lists:foreach(fun(#document{seq = Seq, value = Value} = Doc) ->
+        Type = element(1, Value),
+        Request = {handle_change, Seq, Doc, Type},
+        worker_proxy:cast(?SUBSCRIPTIONS_WORKER_NAME, Request)
+    end, Docs).
 
 %%%===================================================================
 %%% gen_server callbacks
