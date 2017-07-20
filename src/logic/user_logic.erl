@@ -19,9 +19,11 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(USER_ID_LENGTH_LIMIT, 249).
-
 -define(PLUGIN, user_logic_plugin).
+
+% (Artificial) identity provider id used for creating user ids for users
+% coming from onepanel.
+-define(ONEZONE_IDP_ID, onezone).
 
 -export([
     create/1, create/2,
@@ -893,24 +895,18 @@ has_eff_provider(#od_user{eff_providers = EffProviders}, ProviderId) ->
 %% Constructs user id based on Identity Provider name and user's id in that IdP.
 %% @end
 %%--------------------------------------------------------------------
--spec idp_uid_to_system_uid(IdPName :: atom(), IdPUserId :: binary()) -> od_user:id().
-idp_uid_to_system_uid(IdPName, IdPUserId) ->
-    % Pipes are not allowed in user name as they are used as special character
-    % in associative IDs in GUI.
-    UserId = base64url:encode(str_utils:format_bin("~p:~s", [IdPName, IdPUserId])),
-    case byte_size(UserId) > ?USER_ID_LENGTH_LIMIT of
-        true -> throw(user_id_too_long);
-        false -> UserId
-    end.
+-spec idp_uid_to_system_uid(IdPId :: atom(), IdPUserId :: binary()) -> od_user:id().
+idp_uid_to_system_uid(IdPId, IdPUserId) ->
+    datastore_utils2:gen_key(<<"">>, str_utils:format_bin("~p:~s", [IdPId, IdPUserId])).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Constructs user id based on Identity Provider name and user's id in that IdP.
+%% Constructs user id based on user id from onepanel.
 %% @end
 %%--------------------------------------------------------------------
 -spec onepanel_uid_to_system_uid(OnepanelUserId :: binary()) -> od_user:id().
 onepanel_uid_to_system_uid(OnepanelUserId) ->
-    <<"onezone:", OnepanelUserId/binary>>.
+    idp_uid_to_system_uid(?ONEZONE_IDP_ID, OnepanelUserId).
 
 
 %%--------------------------------------------------------------------

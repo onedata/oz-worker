@@ -96,7 +96,7 @@ coalesce_groups(IdP, UserId, OldGroups, NewGroups) ->
 %%--------------------------------------------------------------------
 -spec group_spec_to_db_id(group_spec()) -> binary().
 group_spec_to_db_id(GroupSpec) ->
-    base64url:encode(GroupSpec).
+    datastore_utils2:gen_key(<<"">>, GroupSpec).
 
 %%%===================================================================
 %%% Internal functions
