@@ -16,6 +16,7 @@
 -include("datastore/oz_datastore_models_def.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/utils/utils.hrl").
 
 -export([get_ignore_msg/1, as_msg/3]).
 
@@ -75,6 +76,7 @@ get_msg(Seq, Doc, od_user = Model) ->
         name = Name,
         default_space = DefaultSpace,
         space_aliases = SpaceAliases,
+        linked_accounts = LinkedAccounts,
 
         groups = Groups,
         handle_services = HandleServices,
@@ -87,7 +89,7 @@ get_msg(Seq, Doc, od_user = Model) ->
         {name, Name},
         {alias, <<"">>}, % TODO currently always empty
         {email_list, []}, % TODO currently always empty
-        {connected_accounts, []}, % TODO currently always empty
+        {connected_accounts, serialize_linked_accounts(LinkedAccounts)},
         {default_space, DefaultSpace},
         {space_aliases, maps:to_list(translator:calculate_space_aliases(
             eff_relation_to_proplist(EffSpaces), SpaceAliases
@@ -355,6 +357,12 @@ calculate_space_aliases(SpaceIds, SpaceAliases) ->
             end
         end, SpaceNamesMerged),
     UniqueNames.
+
+
+serialize_linked_accounts(LinkedAccounts) ->
+    lists:map(fun(Account) ->
+        ?record_to_list(linked_account, Account)
+    end, LinkedAccounts).
 
 
 % TODO VFS-2918

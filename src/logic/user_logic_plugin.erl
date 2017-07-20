@@ -170,15 +170,14 @@ get(_, UserId, #od_user{default_space = DefaultSpace}, {deprecated_default_space
 get(_, _UserId, #od_user{} = User, data) ->
     #od_user{
         name = Name, login = Login, alias = Alias, email_list = EmailList,
-        linked_accounts = ConnectedAccounts
+        linked_accounts = LinkedAccounts
     } = User,
-    % TODO VFS-2918 do we need connected accounts?
-    ConnectedAccountProplists = lists:map(fun(Account) ->
+    LinkedAccountProplists = lists:map(fun(Account) ->
         ?record_to_list(linked_account, Account)
-    end, ConnectedAccounts),
+    end, LinkedAccounts),
     ConnectedAccountMaps = lists:map(fun(ConnectedAccountProplist) ->
         maps:from_list(ConnectedAccountProplist)
-    end, ConnectedAccountProplists),
+    end, LinkedAccountProplists),
     {ok, #{
         <<"name">> => Name, <<"login">> => Login,
         <<"alias">> => Alias, <<"emailList">> => EmailList,
