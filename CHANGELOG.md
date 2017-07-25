@@ -4,6 +4,17 @@
 CHANGELOG
 ---------
 
+### 17.06.0-rc1
+
+* VFS-3458 Make sure user's connected accounts are popagated through subscriptions, use md5 rather than base64 to encode user and group ids coming from IdPs
+* VFS-3457 User base64 url rather than base64 in user id encoding
+* VFS-3448 Use single 'onedata' bucket
+* VFS-3457 Fix a bug in groups encoding from SAML assertions, do base64 of user ids from IdPs
+* VFS-3429 Update esaml reference to point to repo in onedata's github
+* Reconfigure couchbase pools
+* VFS-3376 Fix exemplary saml.config
+
+
 ### 17.06.0-beta6
 
 * VFS-3376 Fix a bug making space aliases in subscriptions to not include effective spaces of users
