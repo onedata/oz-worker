@@ -58,7 +58,7 @@ create(Doc) ->
 %%--------------------------------------------------------------------
 -spec save(doc()) -> {ok, doc()} | {error, term()}.
 save(Doc) ->
-    datastore_model:create(?CTX, Doc).
+    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -144,7 +144,7 @@ get_prehooks() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -178,6 +178,20 @@ get_record_struct(2) ->
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
         {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(3) ->
+    {record, [
+        {name, string},
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+        {serial, string},
+        {latitude, float},
+        {longitude, float},
+        {spaces, #{string => integer}},
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {bottom_up_dirty, boolean}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -204,20 +218,52 @@ upgrade_record(1, Provider) ->
 
         _BottomUpDirty
     } = Provider,
-    {2, #od_provider{
+    {2, {od_provider,
+        Name,
+        RedirectionPoint,
+        Urls,
+        Serial,
+        Latitude,
+        Longitude,
+
+        % Set support sizes to 0 as there is no access to this information
+        % from here.
+        maps:from_list([{SpaceId, 0} || SpaceId <- Spaces]),
+
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(2, Provider) ->
+    {
+        od_provider,
+        Name,
+        RedirectionPoint,
+        _Urls,
+        Serial,
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = Provider,
+    #{host := Domain} = url_utils:parse(RedirectionPoint),
+    {3, #od_provider{
         name = Name,
-        redirection_point = RedirectionPoint,
-        urls = Urls,
+        domain = Domain,
         serial = Serial,
         latitude = Latitude,
         longitude = Longitude,
 
-        % Set support sizes to 0 as there is no access to this information
-        % from here.
-        spaces = maps:from_list([{SpaceId, 0} || SpaceId <- Spaces]),
+        spaces = Spaces,
 
-        eff_users = #{},
-        eff_groups = #{},
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
 
-        bottom_up_dirty = true
+        bottom_up_dirty = BottomUpDirty
     }}.

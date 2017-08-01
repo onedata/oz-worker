@@ -69,9 +69,11 @@ operation_supported(get, eff_users, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
 operation_supported(get, spaces, private) -> true;
 operation_supported(get, {check_my_ip, _}, private) -> true;
+operation_supported(get, domain_config, private) -> true;
 
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {space, _}, private) -> true;
+operation_supported(update, domain_config, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
@@ -93,21 +95,42 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
         N ->
             N
     end,
-    URLs = maps:get(<<"urls">>, Data),
-    RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
     CSR = maps:get(<<"csr">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
+    SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
 
     ProviderId = datastore_utils:gen_key(),
     case worker_proxy:call(ozpca_worker, {sign_provider_req, ProviderId, CSR}) of
         {error, bad_csr} ->
             ?ERROR_BAD_DATA(<<"csr">>);
         {ok, {ProviderCertPem, Serial}} ->
-            Provider = #od_provider{name = Name, urls = URLs,
-                redirection_point = RedirectionPoint, serial = Serial,
-                latitude = Latitude, longitude = Longitude},
-            od_provider:create(#document{key = ProviderId, value = Provider}),
+            {Domain, Subdomain} = case SubdomainDelegation of
+                false ->
+                    {maps:get(<<"domain">>, Data), undefined};
+                true ->
+                    ReqSubdomain = maps:get(<<"subdomain">>, Data),
+                    IPs = maps:get(<<"ipList">>, Data),
+                    case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
+                        ok ->
+                            {dns_config:build_fqdn_from_subdomain(ReqSubdomain),
+                             ReqSubdomain};
+                        {error, subdomain_exists} ->
+                            throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
+                    end
+                end,
+
+            Provider = #od_provider{
+                name = Name, subdomain_delegation = SubdomainDelegation,
+                domain = Domain, subdomain = Subdomain,
+                serial = Serial, latitude = Latitude, longitude = Longitude},
+
+            case od_provider:create(#document{key = ProviderId, value = Provider}) of
+                {ok, _} -> ok;
+                Error ->
+                    dns_state:remove_delegation_config(ProviderId),
+                    throw(?ERROR_INTERNAL_SERVER_ERROR)
+            end,
             {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, ProviderCertPem}}}
     end;
 
@@ -119,11 +142,10 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
         N ->
             N
     end,
-    URLs = maps:get(<<"urls">>, Data),
-    RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
     CSR = maps:get(<<"csr">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, undefined),
     Longitude = maps:get(<<"longitude">>, Data, undefined),
+    SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     UUID = maps:get(<<"uuid">>, Data, undefined),
 
     ProviderId = UUID,
@@ -131,10 +153,33 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
         {error, bad_csr} ->
             ?ERROR_BAD_DATA(<<"csr">>);
         {ok, {ProviderCertPem, Serial}} ->
-            Provider = #od_provider{name = Name, urls = URLs,
-                redirection_point = RedirectionPoint, serial = Serial,
-                latitude = Latitude, longitude = Longitude},
-            od_provider:create(#document{key = ProviderId, value = Provider}),
+
+            {Domain, Subdomain} = case SubdomainDelegation of
+                false ->
+                    {maps:get(<<"domain">>, Data), undefined};
+                true ->
+                    ReqSubdomain = maps:get(<<"subdomain">>, Data),
+                    IPs = maps:get(<<"ipList">>, Data),
+                    case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
+                        ok ->
+                            {dns_config:build_fqdn_from_subdomain(ReqSubdomain),
+                             ReqSubdomain};
+                        {error, subdomain_exists} ->
+                            throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
+                    end
+                end,
+
+            Provider = #od_provider{
+                name = Name, subdomain_delegation = SubdomainDelegation,
+                domain = Domain, subdomain = Subdomain,
+                serial = Serial, latitude = Latitude, longitude = Longitude},
+
+            case od_provider:create(#document{key = ProviderId, value = Provider}) of
+                {ok, _} -> ok;
+                Error ->
+                    dns_state:remove_delegation_config(ProviderId),
+                    throw(Error)
+            end,
             {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, ProviderCertPem}}}
     end;
 
@@ -180,16 +225,35 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Provider) ->
     {ok, Provider};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Provider) ->
     #od_provider{
-        name = Name, urls = Urls, redirection_point = RedirectionPoint,
+        name = Name, domain = Domain,
         latitude = Latitude, longitude = Longitude
     } = Provider,
     {ok, #{
-        <<"name">> => Name, <<"urls">> => Urls,
-        <<"redirectionPoint">> => RedirectionPoint,
+        <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
         % TODO VFS-2918
         <<"clientName">> => Name
     }};
+
+
+get(#el_req{gri = #gri{aspect = domain_config, id = ProviderId}}, Provider) ->
+    #od_provider{
+        domain = Domain, subdomain_delegation = SubdomainDelegation
+    } = Provider,
+    Response = #{
+        <<"domain">> => Domain,
+        <<"subdomainDelegation">> => SubdomainDelegation
+    },
+    case SubdomainDelegation of
+        true ->
+            {ok, Subdomain, IPs} = dns_state:get_delegation_config(ProviderId),
+            {ok, Response#{
+                <<"subdomain">> => Subdomain,
+                <<"ipList">> => IPs
+            }};
+        false ->
+            {ok, Response}
+    end;
 
 get(#el_req{gri = #gri{aspect = eff_users}}, Provider) ->
     {ok, maps:keys(Provider#od_provider.eff_users)};
@@ -212,19 +276,50 @@ get(#el_req{gri = #gri{aspect = {check_my_ip, ClientIP}}}, _) ->
 update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
         #od_provider{
-            name = Name, urls = URLs, redirection_point = RedPoint,
-            latitude = Latitude, longitude = Longitude
+            name = Name, latitude = Latitude, longitude = Longitude
         } = Provider,
         {ok, Provider#od_provider{
             % TODO VFS-2918
             name = maps:get(<<"name">>, Data, maps:get(<<"clientName">>, Data, Name)),
-            urls = maps:get(<<"urls">>, Data, URLs),
-            redirection_point = maps:get(<<"redirectionPoint">>, Data, RedPoint),
             latitude = maps:get(<<"latitude">>, Data, Latitude),
             longitude = maps:get(<<"longitude">>, Data, Longitude)
         }}
     end),
     ok;
+
+update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}) ->
+    Result = od_provider:update(ProviderId, fun(Provider) ->
+        case maps:get(<<"subdomainDelegation">>, Data) of
+            false ->
+                Domain = maps:get(<<"domain">>, Data),
+                dns_state:remove_delegation_config(ProviderId),
+                {ok, Provider#od_provider{
+                    subdomain_delegation = false,
+                    domain = Domain,
+                    subdomain = undefined
+                }};
+            true ->
+                Subdomain = maps:get(<<"subdomain">>, Data),
+                IPs = maps:get(<<"ipList">>, Data),
+                case dns_state:set_delegation_config(ProviderId, Subdomain, IPs) of
+                    ok ->
+                        FQDN = dns_config:build_fqdn_from_subdomain(Subdomain),
+                        {ok, Provider#od_provider{
+                            subdomain_delegation = true,
+                            domain = FQDN,
+                            subdomain = Subdomain
+                        }};
+                    {error, subdomain_exists} ->
+                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>)
+                end
+        end
+    end),
+    case Result of
+        {ok, _} ->
+            ok;
+        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>) = Error ->
+            Error
+    end;
 
 update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
@@ -240,6 +335,7 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
+    ok = dns_state:remove_delegation_config(ProviderId),
     entity_graph:delete_with_relations(od_provider, ProviderId),
     % Force disconnect the provider (if connected)
     case provider_connection:get_connection_ref(ProviderId) of
@@ -355,7 +451,13 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
     auth_by_self(Req) orelse
         user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_LIST_SPACES);
 
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, _) ->
+    auth_by_self(Req);
+
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, _) ->
+    auth_by_self(Req);
+
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
     auth_by_self(Req);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _) ->
@@ -382,40 +484,72 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
-    required => #{
-        <<"urls">> => {list_of_binaries, non_empty},
-        <<"redirectionPoint">> => {binary, non_empty},
-        <<"csr">> => {binary, non_empty}
-    },
-    optional => #{
-        <<"latitude">> => {float, {between, -90, 90}},
-        <<"longitude">> => {float, {between, -180, 180}}
-    },
-    % TODO VFS-2918
-    at_least_one => #{
-        <<"name">> => {binary, non_empty},
-        <<"clientName">> => {binary, non_empty}
-    }
-};
-
-validate(#el_req{operation = create, gri = #gri{aspect = instance_dev}}) -> #{
-    required => #{
-        <<"urls">> => {list_of_binaries, non_empty},
-        <<"redirectionPoint">> => {binary, non_empty},
+validate(#el_req{operation = create, gri = #gri{aspect = instance},
+                 data = Data}) ->
+    Required = #{
         <<"csr">> => {binary, non_empty},
-        <<"uuid">> => {binary, non_empty}
-    },
-    optional => #{
+        <<"subdomainDelegation">> => {boolean, any}
+       },
+    Common = #{
+      optional => #{
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
-    },
-    % TODO VFS-2918
-    at_least_one => #{
+       },
+      % TODO VFS-2918
+      at_least_one => #{
         <<"name">> => {binary, non_empty},
         <<"clientName">> => {binary, non_empty}
-    }
-};
+       }
+     },
+    case maps:get(<<"subdomainDelegation">>, Data, undefined) of
+        true ->
+            Common#{
+                required => Required#{
+                    <<"subdomain">> => {binary, subdomain},
+                    <<"ipList">> => {list_of_ipv4_addresses, any}
+                }
+             };
+        false ->
+            Common#{
+                required => Required#{<<"domain">> => {binary, domain}}
+            };
+        _ ->
+            Common#{required => Required}
+    end;
+
+validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
+                 data = Data}) ->
+    Required = #{
+        <<"csr">> => {binary, non_empty},
+        <<"uuid">> => {binary, non_empty},
+        <<"subdomainDelegation">> => {boolean, any}
+       },
+    Common = #{
+      optional => #{
+        <<"latitude">> => {float, {between, -90, 90}},
+        <<"longitude">> => {float, {between, -180, 180}}
+       },
+      % TODO VFS-2918
+      at_least_one => #{
+        <<"name">> => {binary, non_empty},
+        <<"clientName">> => {binary, non_empty}
+       }
+     },
+    case maps:get(<<"subdomainDelegation">>, Data, undefined) of
+        true ->
+            Common#{
+                required => Required#{
+                    <<"subdomain">> => {binary, subdomain},
+                    <<"ipList">> => {list_of_ipv4_addresses, any}
+                }
+             };
+        false ->
+            Common#{
+                required => Required#{<<"domain">> => {binary, domain}}
+            };
+        _ ->
+            Common#{required => Required}
+    end;
 
 validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
@@ -440,8 +574,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
         <<"clientName">> => {binary, non_empty},
-        <<"urls">> => {list_of_binaries, non_empty},
-        <<"redirectionPoint">> => {binary, non_empty},
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
     }
@@ -451,7 +583,23 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
     required => #{
         <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
     }
-}.
+};
+
+validate(#el_req{operation = update, gri = #gri{aspect = domain_config},
+                 data = Data}) ->
+    case maps:get(<<"subdomainDelegation">>, Data, undefined) of
+        true -> #{required => #{
+                <<"subdomainDelegation">> => {boolean, any},
+                <<"subdomain">> => {binary, subdomain},
+                <<"ipList">> => {list_of_ipv4_addresses, any}
+            }};
+        false -> #{required => #{
+                <<"subdomainDelegation">> => {boolean, any},
+                <<"domain">> => {binary, domain}
+            }};
+        _ ->
+            #{required => #{<<"subdomainDelegation">> => {boolean, any}}}
+    end.
 
 
 %%%===================================================================

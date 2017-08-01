@@ -21,6 +21,7 @@
 
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("cluster_worker/include/api_errors.hrl").
 
@@ -50,7 +51,7 @@ od_handle_service | od_handle | oz_privileges | owned_identity.
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 
 -type type_validator() :: any | atom | list_of_atoms | binary |
-list_of_binaries | integer | float | json | token.
+list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 {not_lower_than, integer()} | {not_greater_than, integer()} |
@@ -549,6 +550,12 @@ check_type(atom, Key, Binary) when is_binary(Binary) ->
     end;
 check_type(atom, Key, _) ->
     throw(?ERROR_BAD_VALUE_ATOM(Key));
+check_type(boolean, Key, true) ->
+    true;
+check_type(boolean, Key, false) ->
+    false;
+check_type(boolean, Key, _) ->
+    throw(?ERROR_BAD_VALUE_BOOLEAN(Key));
 check_type(list_of_atoms, Key, Values) ->
     try
         lists:map(
@@ -627,6 +634,22 @@ check_type(token, Key, Token) when is_binary(Token) ->
 check_type(token, _Key, Macaroon) ->
     % Accept everything, it will be validated in check_value
     Macaroon;
+check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
+    try
+        lists:map(fun(IP) ->
+            case IP of
+                _ when is_binary(IP) ->
+                    {ok, IPTuple} = inet:parse_ipv4strict_address(
+                        binary_to_list(IP)),
+                    IPTuple;
+                _ when is_tuple(IP) ->
+                    {ok, IPTuple} = inet:getaddr(IP, inet),
+                    IPTuple
+            end
+        end, ListOfIPs)
+    catch _:_ ->
+        throw(?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(Key))
+    end;
 check_type(Rule, Key, _) ->
     ?error("Unknown type rule: ~p for key: ~p", [Rule, Key]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -676,6 +699,33 @@ check_value(_, {between, Low, High}, Key, Value) ->
         false ->
             throw(?ERROR_BAD_VALUE_NOT_IN_RANGE(Key, Low, High))
     end;
+check_value(binary, domain, Key, <<"">>) ->
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+check_value(binary, domain, Key, Value) ->
+    case size(Value) =< ?MAX_DOMAIN_LENGTH of
+        true ->
+            case re:run(Value, ?DOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
+                match -> ok;
+                _ -> throw(?ERROR_BAD_VALUE_DOMAIN(Key))
+            end;
+        _ -> throw(?ERROR_BAD_VALUE_DOMAIN(Key))
+    end;
+
+check_value(binary, subdomain, Key, <<"">>) ->
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+check_value(binary, subdomain, Key, Value) ->
+    case re:run(Value, ?SUBDOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
+        match -> % Check length
+            {ok, OZDomain} = application:get_env(?APP_NAME, http_domain),
+            % + 1 for the dot between subdomain and domain
+            DomainLength = size(Value) + length(OZDomain) + 1,
+            case DomainLength =< ?MAX_DOMAIN_LENGTH of
+                true -> ok;
+                _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
+            end;
+        _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
+    end;
+
 check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
     case ordsets:subtract(ordsets:from_list(Vals), ordsets:from_list(AllowedVals)) of
         [] ->
@@ -716,7 +766,7 @@ check_value(_, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1)
         true ->
             ok;
         false ->
-            throw(?ERROR_BAD_VALUE_ID_OCCUPIED(Key))
+            throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(Key))
     end;
 check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of

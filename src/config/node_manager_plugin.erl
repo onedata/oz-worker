@@ -13,14 +13,22 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
+-include_lib("cluster_worker/include/elements/node_manager/node_manager.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 
 %% node_manager_plugin_default callbacks
 -export([app_name/0, cm_nodes/0, db_nodes/0]).
 -export([listeners/0, modules_with_args/0]).
--export([before_init/1, on_cluster_initialized/0, after_init/1]).
+-export([before_init/1, on_cluster_initialized/1, after_init/1]).
+-export([handle_call/3, handle_cast/2]).
 -export([check_node_ip_address/0]).
+
+-export([trigger_broadcast_dns_config/0]).
+
+-type state() :: #state{}.
+
+-define(DNS_UPDATE_RETRY_INTERVAL, 5000).
 
 %%%===================================================================
 %%% node_manager_plugin_default callbacks
@@ -98,7 +106,6 @@ modules_with_args() ->
 -spec before_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 before_init([]) ->
     try
-        dns_query_handler:load_config(),
         oz_worker_sup:start_link(),
         ok
     catch
@@ -114,10 +121,10 @@ before_init([]) ->
 %% nodes have connected to cluster manager.
 %% @end
 %%--------------------------------------------------------------------
--spec on_cluster_initialized() -> Result :: ok | {error, Reason :: term()}.
-on_cluster_initialized() ->
-    ozpca:ensure_oz_ca_cert_present(),
-    maybe_generate_web_cert().
+-spec on_cluster_initialized(Nodes :: [node()]) -> Result :: ok | {error, Reason :: term()}.
+on_cluster_initialized(Nodes) ->
+    ozpca:ensure_oz_ca_cert_present(Nodes),
+    maybe_generate_web_cert(Nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -139,6 +146,12 @@ after_init([]) ->
 
         entity_graph:init_state(),
 
+        % build dns zone on one node and broadcast to others
+        case get_dns_dedicated_node() =:= node() of
+            true -> ok = broadcast_dns_config();
+            _ -> ok
+        end,
+
         %% This code will be run on every node_manager, so we need a
         %% transaction here that will prevent duplicates.
         critical_section:run(create_predefined_groups, fun() ->
@@ -151,21 +164,118 @@ after_init([]) ->
             {error, cannot_start_node_manager_plugin}
     end.
 
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Overrides {@link node_manager_plugin_default:handle_call/3}.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_call(Request :: term(), From :: {pid(), Tag :: term()},
+    State :: state()) ->
+    {reply, Reply :: term(), NewState :: state()} |
+    {reply, Reply :: term(), NewState :: state(), timeout() | hibernate} |
+    {noreply, NewState :: state()} |
+    {noreply, NewState :: state(), timeout() | hibernate} |
+    {stop, Reason :: term(), Reply :: term(), NewState :: state()} |
+    {stop, Reason :: term(), NewState :: state()}.
+handle_call({update_dns_config, DnsZone}, _From, State) ->
+    Result = dns_config:insert_config(DnsZone),
+    {reply, Result, State};
+handle_call(Request, _From, State) ->
+    ?log_bad_request(Request),
+    {noreply, State}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Overrides {@link node_manager_plugin_default:handle_cast/2}.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_cast(Request :: term(), State :: state()) ->
+    {noreply, NewState :: state()} |
+    {noreply, NewState :: state(), timeout() | hibernate} |
+    {stop, Reason :: term(), NewState :: state()}.
+handle_cast(broadcast_dns_config, State) ->
+    broadcast_dns_config(),
+    {noreply, State};
+handle_cast(Request, State) ->
+    ?log_bad_request(Request),
+    {noreply, State}.
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Overrides {@link node_manager_plugin_default:check_node_ip_address/0}.
 %% @end
 %%--------------------------------------------------------------------
--spec check_node_ip_address() -> IPV4Addr :: {A :: byte(), B :: byte(), C :: byte(), D :: byte()}.
+-spec check_node_ip_address() -> inet:ip4_address().
 check_node_ip_address() ->
     case application:get_env(?APP_NAME, external_ip, undefined) of
         undefined ->
             ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
             {127, 0, 0, 1};
-        Ip ->
-            {ok, Address} = inet_parse:ipv4_address(str_utils:to_list(Ip)),
+        IP ->
+            {ok, Address} = inet_parse:ipv4_address(str_utils:to_list(IP)),
             ?info("External IP: ~p", [Address]),
             Address
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Trigger broadcasting dns update from this node
+%% @end
+%%--------------------------------------------------------------------
+-spec trigger_broadcast_dns_config() -> ok.
+trigger_broadcast_dns_config() ->
+    DedicatedNode = get_dns_dedicated_node(),
+    gen_server2:cast({DedicatedNode, ?NODE_MANAGER_NAME}, broadcast_dns_config).
+
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Get node responsible for building dns zone to prevent race conditions.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_dns_dedicated_node() -> node().
+get_dns_dedicated_node() ->
+    consistent_hasing:get_node(build_dns_zone).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Builds up-to-date dns zone and broadcasts it to all nodes in the cluster.
+%% Returns error and schedules a retry if inserting zone does not succeed
+%% on all nodes.
+%% @end
+%%--------------------------------------------------------------------
+-spec broadcast_dns_config() -> ok | error.
+broadcast_dns_config() ->
+    try
+        {ok, NodesIPs} = node_manager:get_cluster_nodes_ips(),
+        {Nodes, IPs} = lists:unzip(NodesIPs),
+        DnsConfig = dns_config:build_config(IPs),
+
+        lists:map(fun(Node) ->
+            case Node == node() of
+                true -> ok = dns_config:insert_config(DnsConfig);
+                false -> ok = gen_server2:call({?NODE_MANAGER_NAME, Node},
+                                               {update_dns_config, DnsConfig})
+            end
+        end, Nodes),
+        ok
+    catch
+        Type:Message ->
+            ?error_stacktrace(
+                "Error sending dns zone update, scheduling retry after ~p seconds: ~p:~p",
+                [?DNS_UPDATE_RETRY_INTERVAL div 1000, Type, Message]),
+            erlang:send_after(?DNS_UPDATE_RETRY_INTERVAL, self(), {timer, broadcast_dns_config}),
+            error
     end.
 
 %%%===================================================================
@@ -181,9 +291,9 @@ check_node_ip_address() ->
 %% to avoid race conditions across multiple nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec maybe_generate_web_cert() -> ok.
-maybe_generate_web_cert() ->
-    critical_section:run(oz_web_cert, fun maybe_generate_web_cert_unsafe/0).
+-spec maybe_generate_web_cert(Nodes :: [node()]) -> ok.
+maybe_generate_web_cert(Nodes) ->
+    critical_section:run(oz_web_cert, fun () -> maybe_generate_web_cert_unsafe(Nodes) end).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -194,8 +304,8 @@ maybe_generate_web_cert() ->
 %% Should not be called in parallel to prevent race conditions.
 %% @end
 %%--------------------------------------------------------------------
--spec maybe_generate_web_cert_unsafe() -> ok.
-maybe_generate_web_cert_unsafe() ->
+-spec maybe_generate_web_cert_unsafe(Nodes :: [node()]) -> ok.
+maybe_generate_web_cert_unsafe(Nodes) ->
     GenerateIfAbsent = application:get_env(
         ?APP_NAME, generate_web_cert_if_absent, false
     ),
@@ -218,8 +328,7 @@ maybe_generate_web_cert_unsafe() ->
                 "hostname '~s'. Use only for test purposes.",
                 [WebCertPath, Hostname]
             ),
-            NodeList = gen_server2:call({global, ?CLUSTER_MANAGER}, get_nodes),
-            OtherWorkers = NodeList -- [node()],
+            OtherWorkers = Nodes -- [node()],
             {ok, Key} = file:read_file(WebKeyPath),
             {ok, Cert} = file:read_file(WebCertPath),
             ok = utils:save_file_on_hosts(OtherWorkers, WebKeyPath, Key),

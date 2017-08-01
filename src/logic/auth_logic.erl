@@ -65,9 +65,9 @@ authenticate_user(Identifier) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns provider hostname and a full URI to which the user should be
+%% @doc Returns provider domain and a full URI to which the user should be
 %% redirected from the onezone. The redirection is part of the OpenID
-%% flow and the URI contains an Authorization token. The provider hostname
+%% flow and the URI contains an Authorization token. The provider domain
 %% is useful to check connectivity before redirecting.
 %% @end
 %%--------------------------------------------------------------------

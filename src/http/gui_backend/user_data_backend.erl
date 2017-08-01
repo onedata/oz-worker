@@ -123,7 +123,7 @@ update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
             gui_error:report_warning(
                 <<"Alias can contain only lowercase letters and digits, and "
                 "must be at least 5 characters long.">>);
-        ?ERROR_ALIAS_OCCUPIED(_) ->
+        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(_) ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
                 "Please choose other alias.">>)

@@ -267,7 +267,7 @@ update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
                         ok;
                     {ok, #document{}} ->
                         % Alias is occupied by another user
-                        ?ERROR_ALIAS_OCCUPIED(<<"alias">>);
+                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>);
                     _ ->
                         % Alias is not occupied, update user doc
                         {ok, _} = od_user:update(UserId, UserUpdateFun),
