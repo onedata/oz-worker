@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 17.06.0-rc2
+
+* Releasing new version 17.06.0-rc2
+
+
 ### 17.06.0-rc1
 
 * VFS-3458 Make sure user's connected accounts are popagated through subscriptions, use md5 rather than base64 to encode user and group ids coming from IdPs
