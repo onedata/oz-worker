@@ -88,6 +88,7 @@ get_idp_config(IdPId) ->
     #esaml_idp{
         metadata = esaml_util:load_metadata(maps:get(metadata_url, IdPConfig)),
         trusted_fingerprints = esaml_util:convert_fingerprints(maps:get(trusted_fingerprints, IdPConfig)),
+        preferred_sso_binding = maps:get(preferred_sso_binding, IdPConfig),
         encrypts_assertions = maps:get(encrypts_assertions, IdPConfig),
         signs_assertions = maps:get(signs_assertions, IdPConfig),
         signs_envelopes = maps:get(signs_envelopes, IdPConfig),
