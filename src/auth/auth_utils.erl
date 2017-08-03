@@ -121,15 +121,25 @@ get_super_group(ProviderId) ->
 %% @doc Returns full URL, where the user will be redirected for authorization
 %% (either via SAML or OIDC) based on provider id as specified in
 %% auth.config and saml.config.
+%% Returns a map that includes three keys:
+%%      <<"method">>
+%%      <<"url">>
+%%      <<"formData">>
+%% that defines what request should be performed to redirect to login page.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_redirect_url(ProviderId :: atom(), ConnectAccount :: boolean()) ->
-    {ok, binary()} | {error, term()}.
+    {ok, proplists:proplist()} | {error, term()}.
 get_redirect_url(ProviderId, ConnectAccount) ->
     case lists:member(ProviderId, auth_config:get_auth_providers()) of
         true ->
             HandlerModule = auth_config:get_provider_module(ProviderId),
-            HandlerModule:get_redirect_url(ConnectAccount);
+            {ok, Url} = HandlerModule:get_redirect_url(ConnectAccount),
+            {ok, [
+                {<<"method">>, <<"get">>},
+                {<<"url">>, Url},
+                {<<"formData">>, null}
+            ]};
         false ->
             get_saml_redirect_url(ProviderId, ConnectAccount)
     end.
@@ -141,15 +151,40 @@ get_redirect_url(ProviderId, ConnectAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_saml_redirect_url(ProviderId :: atom(), ConnectAccount :: boolean()) ->
-    {ok, binary()} | {error, term()}.
+    {ok, proplists:proplist()} | {error, term()}.
 get_saml_redirect_url(ProviderId, ConnectAccount) ->
-    #esaml_idp{
-        metadata = #esaml_idp_metadata{login_location = LoginLocation}
+    IdpConfig = #esaml_idp{
+        preferred_sso_binding = PreferredSSOBinding
     } = saml_config:get_idp_config(ProviderId),
+    LoginLocation = case PreferredSSOBinding of
+        http_redirect ->
+            IdpConfig#esaml_idp.metadata#esaml_idp_metadata.redirect_login_location;
+        http_post ->
+            IdpConfig#esaml_idp.metadata#esaml_idp_metadata.post_login_location
+    end,
+    case LoginLocation of
+        undefined -> throw({cannot_resolve_sso_url_for_provider, ProviderId});
+        _ -> ok
+    end,
     State = auth_logic:generate_state_token(ProviderId, ConnectAccount),
     SP = saml_config:get_sp_config(),
-    Xml = esaml_sp:generate_authn_request(LoginLocation, SP),
-    {ok, esaml_binding:encode_http_redirect(LoginLocation, Xml, State)}.
+    AuthNReq = esaml_sp:generate_authn_request(LoginLocation, SP),
+    case PreferredSSOBinding of
+        http_redirect ->
+            Url = esaml_binding:encode_http_redirect(LoginLocation, AuthNReq, State),
+            {ok, [
+                {<<"method">>, <<"get">>},
+                {<<"url">>, Url},
+                {<<"formData">>, null}
+            ]};
+        http_post ->
+            FormData = maps:to_list(esaml_binding:encode_http_post_form_data(AuthNReq, State)),
+            {ok, [
+                {<<"method">>, <<"post">>},
+                {<<"url">>, iolist_to_binary(LoginLocation)},
+                {<<"formData">>, FormData}
+            ]}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -220,6 +255,7 @@ validate_saml_login() ->
             Xml ->
                 case esaml_sp:validate_assertion(Xml, SP, IdP) of
                     {ok, #esaml_assertion{attributes = Attributes}} ->
+                        ?info("Login attempt from IdP '~p', attributes: ~n~p~n", [IdPId, Attributes]),
                         LinkedAccount = saml_assertions_to_linked_account(IdPId, IdP, Attributes),
                         validate_login_by_linked_account(LinkedAccount, StateProps);
                     {error, Reason2} ->

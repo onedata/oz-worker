@@ -64,12 +64,11 @@ handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     case application:get_env(?APP_NAME, dev_mode) of
         {ok, true} ->
             {ok, [
-                {<<"url">>, <<"/dev_login">>}
+                {<<"method">>, <<"get">>},
+                {<<"url">>, <<"/dev_login">>},
+                {<<"formData">>, null}
             ]};
         _ ->
             ProviderId = binary_to_atom(ProviderBin, utf8),
-            {ok, URL} = auth_utils:get_redirect_url(ProviderId, false),
-            {ok, [
-                {<<"url">>, URL}
-            ]}
+            auth_utils:get_redirect_url(ProviderId, false)
     end.
