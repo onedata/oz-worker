@@ -248,9 +248,9 @@ init_per_testcase(external_access_token_test, Config) ->
         fun(ProviderId, AccessToken) ->
             case {ProviderId, AccessToken} of
                 {GoogleProvId, GoogleToken} ->
-                    {ok, UserId};
+                    {ok, #document{key = UserId, value = #od_user{}}};
                 {IndigoProvId, IndigoToken} ->
-                    {ok, UserId};
+                    {ok, #document{key = UserId, value = #od_user{}}};
                 {_, _} ->
                     {error, bad_access_token}
             end
